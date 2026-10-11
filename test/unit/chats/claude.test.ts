@@ -20,13 +20,13 @@ const resultOf = (sink: RecSink) => waitFor(() => sink.last('result'), 'result')
 afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); });
 
 describe('ClaudeSession', () => {
-  it('passes the permission mode explicitly and maps resume, fork, model, effort, name, mcp', () => {
+  it('passes the permission mode only when chosen and maps resume, fork, model, effort, name, mcp', () => {
     const base = { chatId: 'c', cwd: '.', sessionId: 'abc12345' };
     const a = new ClaudeSession(base, recSink()).args();
     expect(a.join(' ')).toContain('--input-format stream-json');
     expect(a.join(' ')).toContain('--include-partial-messages');
     expect(a.join(' ')).toContain('--permission-prompt-tool stdio');
-    expect(a.slice(a.indexOf('--permission-mode'), a.indexOf('--permission-mode') + 2)).toEqual(['--permission-mode', 'default']);
+    expect(a).not.toContain('--permission-mode'); // no choice: the user's settings.json decides (ADR 0002)
     expect(a).toContain('--session-id=abc12345');
     const b = new ClaudeSession({ ...base, resume: true, fork: true, model: 'sonnet', effort: 'high', title: 'T', permissionMode: 'plan', mcpConfig: '{"mcpServers":{}}', worktree: true }, recSink()).args();
     expect(b.join(' ')).toContain('--resume=abc12345 --fork-session'); // `=`: an id can never be read as a flag

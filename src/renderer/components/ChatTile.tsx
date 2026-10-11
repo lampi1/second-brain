@@ -136,7 +136,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
             <MenuSep />
             <MenuLabel>Permessi</MenuLabel>
             {PERMISSION_MODES.map(p => (
-              <MenuItem key={p} checked={(chat.permissionMode ?? 'default') === p} danger={p === 'bypassPermissions'} onSelect={() => { void setChat(chatId, { permissionMode: p }); setMenu(false); }} testid={`chat-perm-${chatId}-${p}`}>{permissionLabel(p)}</MenuItem>
+              <MenuItem key={p} checked={chat.permissionMode === p} danger={p === 'bypassPermissions'} onSelect={() => { void setChat(chatId, { permissionMode: p }); setMenu(false); }} testid={`chat-perm-${chatId}-${p}`}>{permissionLabel(p)}</MenuItem>
             ))}
           </>
         )}

@@ -146,7 +146,9 @@ export class ClaudeSession implements HarnessSession {
   args(): string[] {
     const op = this.opts;
     const a = ['-p', '--output-format', 'stream-json', '--verbose', '--input-format', 'stream-json', '--include-partial-messages',
-      '--permission-prompt-tool', 'stdio', '--permission-mode', op.permissionMode ?? 'default'];
+      '--permission-prompt-tool', 'stdio'];
+    // no choice = the user's settings.json decides (defaultMode, e.g. auto); the CLI reports the mode at init (ADR 0002)
+    if (op.permissionMode) a.push('--permission-mode', op.permissionMode);
     // `--flag=<id>`: an id can never be read as another flag (ids are UUIDs, checked by the manager)
     if (op.resume && op.sessionId) { a.push(`--resume=${op.sessionId}`); if (op.fork) a.push('--fork-session'); }
     else if (op.sessionId) a.push(`--session-id=${op.sessionId}`);

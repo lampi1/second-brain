@@ -17,7 +17,10 @@ and pulls `@anthropic-ai/sdk`, `@modelcontextprotocol/sdk` and `zod` as peers. C
   the SDK speaks, in `src/main/chats/claude.ts`. Proven live on 2026-10-11 (AskUserQuestion answered by the host,
   Write executed, cost 0.26 $ reported).
 - Spawn `agent acp` for Cursor chats, in `src/main/chats/cursor.ts`.
-- Pass `--permission-mode` explicitly (the CLI default may be `auto`).
+- ~~Pass `--permission-mode` explicitly~~ (superseded 2026-10-11): `--permission-mode` is passed only when the user
+  chose a mode for that chat; with no choice ("Come da impostazioni") the CLI applies `defaultMode` from the user's
+  `settings.json` (e.g. `auto`), and the mode shown is the one the CLI reports at `system/init`. A forced `default`
+  overrode the user's settings and made every command ask ("perchè tutti questi comandi mi proponi non va in automode?").
 
 ## Consequences
 - Same version, login, settings, hooks, skills, agents, CLAUDE.md and output style as the user's terminal; zero

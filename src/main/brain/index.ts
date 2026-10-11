@@ -34,6 +34,8 @@ const FEED_MAX = 500;
 export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const env = ctx.env ?? process.env;
   const testing = env.SB_TEST === '1';
+  // a hidden run (SB_HIDDEN=1: tests, the agents' dev instance) never pops Windows toasts nor raises the window
+  const quiet = testing || env.SB_HIDDEN === '1';
   const cfg = new ConfigStore(ctx.userData, env);
   // first run (or an unreadable config): a single brain folder found by its signature is used at once (brain/detect.ts),
   // before any listener exists: no restart races with the first start (two live feeds were seen in the stable test)
@@ -50,12 +52,12 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const ledger = new Ledger(new FileJobStore(file('jobs.jsonl')), file('jobs-meta.json'));
 
   // ── toasts ──
-  let toastsOk = !testing && Notification.isSupported();
-  if (!testing && !toastsOk) log.warn('notify', 'Windows notifications not supported here: in-app feed only');
+  let toastsOk = !quiet && Notification.isSupported();
+  if (!quiet && !toastsOk) log.warn('notify', 'Windows notifications not supported here: in-app feed only');
   let lastToast: Notification | null = null;
   const focusWindow = () => {
     const w = ctx.window();
-    if (!w || w.isDestroyed()) return;
+    if (!w || w.isDestroyed() || quiet) return;
     if (w.isMinimized()) w.restore();
     w.show(); w.focus();
     ctx.emitter.emit('focus:next', undefined);

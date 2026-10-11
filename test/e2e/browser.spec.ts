@@ -243,7 +243,6 @@ test.describe.serial('internal browser over MCP', () => {
     await page.waitForTimeout(500);
     const png = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
       const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
-      win.focus();
       const size = win.getContentSize();
       const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: size[0]!, height: size[1]! } });
       const src = sources.find(s => s.id === win.getMediaSourceId()) ?? sources.find(s => s.name === 'second-brain');

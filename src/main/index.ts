@@ -3,7 +3,7 @@ import { app, dialog, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createWindow } from './window';
+import { createWindow, hiddenRun } from './window';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
 import { log } from './log';
@@ -106,4 +106,4 @@ app.whenReady().then(async () => {
   app.on('will-quit', () => s.killNow());
 });
 
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+app.on('second-instance', () => { if (win && !hiddenRun()) { if (win.isMinimized()) win.restore(); win.focus(); } });

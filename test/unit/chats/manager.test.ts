@@ -29,7 +29,7 @@ describe('ChatManager', () => {
     const e = env();
     const { m, em } = manager(e);
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there', model: 'sonnet', effort: 'high' });
-    expect(c).toMatchObject({ origin: 'app', harness: 'claude', title: 'hello there', model: 'sonnet', permissionMode: 'default', isRegia: false });
+    expect(c).toMatchObject({ origin: 'app', harness: 'claude', title: 'hello there', model: 'sonnet', permissionMode: null, isRegia: false });
     await waitFor(() => results(m, c.id).length === 1, 'first result');
     const items = m.items(c.id);
     expect(items[0]).toMatchObject({ kind: 'user', text: 'hello there' });
@@ -43,7 +43,7 @@ describe('ChatManager', () => {
     expect(a.join(' ')).toContain(`--session-id=${c.sessionId}`);
     expect(a.join(' ')).toContain('--model sonnet');
     expect(a.join(' ')).toContain('--effort high');
-    expect(a.join(' ')).toContain('--permission-mode default');
+    expect(a).not.toContain('--permission-mode');
     const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; sessionId: string; costTotalUsd: number }[] };
     expect(stored.chats[0]).toMatchObject({ id: c.id, sessionId: c.sessionId, costTotalUsd: 0.01 });
   });
@@ -222,6 +222,38 @@ describe('ChatManager', () => {
     expect(r.m.list()[0]).toMatchObject({ sessionId: null });
   });
 
+  // "perchè tutti questi comandi mi proponi non va in automode?": a forced --permission-mode default beat settings.json
+  it('with no mode chosen leaves the mode to settings.json, shows what the CLI reports, and keeps it unchosen', async () => {
+    const e = env();
+    const first = manager(e, { env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CLAUDE_SETTINGS_MODE: 'auto' } });
+    const c = await first.m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello' });
+    expect(c.permissionMode).toBe(null);
+    await waitFor(() => first.m.list()[0]?.permissionMode === 'auto', 'mode from init');
+    await waitFor(() => results(first.m, c.id).length === 1, 'first result');
+    await first.m.shutdown();
+    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { version: number; chats: { permissionMode: unknown }[] };
+    expect(stored).toMatchObject({ version: 2, chats: [{ permissionMode: null }] });
+    const { m } = manager(e, { env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CLAUDE_SETTINGS_MODE: 'auto' } });
+    await m.send(c.id, 'again');
+    await waitFor(() => results(m, c.id).length === 1, 'resumed result');
+    for (const a of argvs(e)) expect(a).not.toContain('--permission-mode');
+    expect(m.list()[0]?.permissionMode).toBe('auto');
+  });
+
+  it('reads a v1 chats.json "default" as no choice (v1 wrote it for every chat) and keeps the other modes', async () => {
+    const e = env();
+    const base = { harness: 'claude', cwd: e.cwd, sessionId: null, title: 'T', model: null, effort: null, isRegia: false, createdAt: 1 };
+    fs.writeFileSync(path.join(e.userData, 'chats.json'), JSON.stringify({ version: 1, chats: [{ ...base, id: 'c_a', permissionMode: 'default' }, { ...base, id: 'c_b', permissionMode: 'plan' }] }));
+    const { m } = manager(e);
+    expect(m.list().map(c => [c.id, c.permissionMode]).sort()).toEqual([['c_a', null], ['c_b', 'plan']]);
+    await m.set('c_a', { permissionMode: 'default' }); // chosen now: saved as a real choice (v2)
+    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { version: number; chats: { id: string; permissionMode: unknown }[] };
+    expect(stored.version).toBe(2);
+    expect(stored.chats.find(c => c.id === 'c_a')?.permissionMode).toBe('default');
+    const again = manager(e).m;
+    expect(again.list().find(c => c.id === 'c_a')?.permissionMode).toBe('default');
+  });
+
   // finding B: a mode the CLI took by itself is shown, never saved
   it('shows but never persists a permission mode set by the CLI ("always" with a setMode suggestion)', async () => {
     const e = env();
@@ -233,7 +265,7 @@ describe('ChatManager', () => {
     await waitFor(() => m.list()[0]?.permissionMode === 'acceptEdits', 'mode shown');
     await waitFor(() => results(m, c.id).length === 1, 'result');
     const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { permissionMode: string }[] };
-    expect(stored.chats[0]?.permissionMode).toBe('default');
+    expect(stored.chats[0]?.permissionMode).toBe(null);
     await m.set(c.id, { permissionMode: 'plan' }); // the user's own choice is saved
     expect((JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { permissionMode: string }[] }).chats[0]?.permissionMode).toBe('plan');
   });

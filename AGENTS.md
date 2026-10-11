@@ -12,6 +12,7 @@ questions and permissions as panels, watches internal browsers that agents drive
 | Install (pinned, scripts off) | `npm ci` then `node node_modules/electron/install.js` (npm `ignore-scripts` is on: Electron's binary comes from this step) |
 | Build | `npm run build` (esbuild main + preload, Vite renderer → `out/`) |
 | Run | `npm start` (after a build) · `npm run dev` (dev build + run) |
+| Run as an agent (always) | `SB_HIDDEN=1 npm start` / `SB_HIDDEN=1 npm run dev`: the window renders off screen, out of the taskbar, never takes focus, no Windows toasts; see it with `app_screenshot` (MCP) or `capturePage`. The e2e suite and `test:stable` set it themselves: no test may show a window or take focus (owner, 2026-10-11). The stable copy never sets it. |
 | All checks | `npm run check` = typecheck + lint + unit + e2e. Must pass before every commit. |
 | Unit / e2e only | `npm test` · `npm run test:e2e` (Playwright drives the real Electron app; screenshots in `test-results/shots/`) |
 | Live tests (spend real tokens) | `SB_LIVE=1 npx vitest run test/live` (Claude only; never Cursor from a Claude agent) |

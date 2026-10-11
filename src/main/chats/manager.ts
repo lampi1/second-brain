@@ -75,7 +75,8 @@ export interface TurnEndInfo {
 interface Rec {
   s: ChatSummary;
   createdAt: number;
-  choice: { model: string | null; effort: Effort | null; permissionMode: PermissionMode };
+  /** permissionMode null = no choice: the CLI follows the user's settings.json (ADR 0002) */
+  choice: { model: string | null; effort: Effort | null; permissionMode: PermissionMode | null };
   forkFrom?: string;
   worktree: boolean;
   costTotalUsd: number;
@@ -159,12 +160,12 @@ export class ChatManager implements ChatService {
     const r: Rec = {
       s: {
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || cursor ? null : crypto.randomUUID(),
-        model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? 'default',
+        model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
         state: 'starting', costUsd: 0, pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: now, browserTabIds: [],
         ...(cursor ? { costKnown: false as const } : {}),
       },
       createdAt: now,
-      choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? 'default' },
+      choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
       worktree: !!req.worktree && !cursor,
       costTotalUsd: 0,

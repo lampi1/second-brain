@@ -14,7 +14,8 @@ export async function launch(env: Record<string, string> = {}, userData = fs.mkd
   const app = await electron.launch({
     args: ['.'],
     cwd: path.resolve(import.meta.dirname, '..', '..'),
-    env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', ...env } as Record<string, string>,
+    // SB_HIDDEN: the app runs off screen and never takes focus (the user keeps working while tests run)
+    env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', SB_HIDDEN: '1', ...env } as Record<string, string>,
   });
   await app.firstWindow();
   let page: Page | undefined;
@@ -91,7 +92,6 @@ export async function layerState(app: ElectronApplication): Promise<LayerState> 
 export async function windowShot(app: ElectronApplication, name: string): Promise<string> {
   const b64 = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
     const win = BrowserWindow.getAllWindows()[0]!;
-    win.focus();
     const [w, h] = win.getContentSize();
     const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: w!, height: h! } });
     const src = sources.find(s => s.id === win.getMediaSourceId()) ?? sources.find(s => s.name === 'second-brain');

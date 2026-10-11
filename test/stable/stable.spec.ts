@@ -19,7 +19,7 @@ test('the packaged stable copy finds the brain by itself and every section shows
   const state = JSON.parse(fs.readFileSync(path.join(releases, 'current.json'), 'utf8')) as { current: string };
   const rel = JSON.parse(fs.readFileSync(path.join(releases, 'releases', state.current, 'release.json'), 'utf8')) as { electron: string; claudeEngine: string | null };
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-stable-ud-'));
-  const env: Record<string, string> = { ...(process.env as Record<string, string>), SB_RELEASE: state.current, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1' };
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), SB_RELEASE: state.current, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1', SB_HIDDEN: '1' };
   delete env.SB_TEST; delete env.SB_BRAIN; delete env.ELECTRON_RUN_AS_NODE;
   if (rel.claudeEngine) env.SB_ENGINE_CLAUDE = rel.claudeEngine;
   const app = await electron.launch({ executablePath: path.join(releases, 'electron', rel.electron, 'electron.exe'), args: [path.join(releases, 'releases', state.current)], env });

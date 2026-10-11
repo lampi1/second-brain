@@ -33,7 +33,8 @@ const opt = f => {
 };
 const resumeId = opt('--resume');
 let sessionId = argv.includes('--fork-session') ? crypto.randomUUID() : resumeId ?? opt('--session-id') ?? crypto.randomUUID();
-let permissionMode = opt('--permission-mode') ?? 'default';
+// no --permission-mode: the user's settings.json decides (FAKE_CLAUDE_SETTINGS_MODE stands for its defaultMode)
+let permissionMode = opt('--permission-mode') ?? process.env.FAKE_CLAUDE_SETTINGS_MODE ?? 'default';
 let model = opt('--model') ?? 'claude-fake-1';
 const stateEvents = process.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS === '1' && process.env.FAKE_CLAUDE_NO_STATE_EVENTS !== '1';
 const logLine = obj => { if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ pid: process.pid, ...obj })}\n`); };

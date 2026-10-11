@@ -18,7 +18,8 @@ export interface StoredChat {
   title: string;
   model: string | null;
   effort: Effort | null;
-  permissionMode: PermissionMode;
+  /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
+  permissionMode: PermissionMode | null;
   isRegia: boolean;
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
@@ -29,7 +30,8 @@ const HARNESSES: readonly string[] = ['claude', 'cursor'];
 const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-function valid(x: unknown): StoredChat | null {
+/** v1 files always wrote 'default' even when the user chose nothing: read as "no choice" (v2 writes only real choices). */
+function valid(x: unknown, version: number): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
   if (typeof c.id !== 'string' || !c.id || typeof c.cwd !== 'string' || !HARNESSES.includes(String(c.harness))) return null;
@@ -41,7 +43,7 @@ function valid(x: unknown): StoredChat | null {
     title: typeof c.title === 'string' ? c.title : 'Chat',
     model: typeof c.model === 'string' && c.model ? c.model : null,
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
-    permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : 'default',
+    permissionMode: MODES.includes(String(c.permissionMode)) && !(version < 2 && c.permissionMode === 'default') ? (c.permissionMode as PermissionMode) : null,
     isRegia: c.isRegia === true,
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
@@ -56,8 +58,9 @@ export class ChatStore {
     let text: string;
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     try {
-      const data = JSON.parse(text) as { chats?: unknown };
-      return (Array.isArray(data.chats) ? data.chats : []).map(valid).filter((c): c is StoredChat => !!c);
+      const data = JSON.parse(text) as { version?: unknown; chats?: unknown };
+      const version = typeof data.version === 'number' ? data.version : 1;
+      return (Array.isArray(data.chats) ? data.chats : []).map(c => valid(c, version)).filter((c): c is StoredChat => !!c);
     } catch (e) {
       const bad = `${this.file}.bad-${Date.now()}`;
       try { fs.renameSync(this.file, bad); } catch { /* keep it */ }
@@ -67,7 +70,7 @@ export class ChatStore {
   }
 
   save(chats: StoredChat[]): void {
-    const body = `${JSON.stringify({ version: 1, chats }, null, 2)}\n`;
+    const body = `${JSON.stringify({ version: 2, chats }, null, 2)}\n`;
     const tmp = `${this.file}.tmp`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
