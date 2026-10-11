@@ -1,9 +1,24 @@
 # Tools by harness: the same brain in Claude Code and Cursor
 
 One way for both harnesses wherever both can do it (2026-10-10, Owner: "quasi non serve nemmeno la distinzione"); the
-table keeps only what really differs, with the reason. Read when: you run in Cursor, or a rule must work in both. Write
-when: a tool of either harness changes or a test settles an open point. Cursor gets this file at chat start
+table keeps only what really differs, with the reason. Read when: you run in Cursor, a rule must work in both, or you
+give {{OWNER}} UI steps (where to click, panels, keys, a command to run). Write when: a tool of either harness or of the
+second-brain app changes, or a test settles an open point. Cursor gets this file at chat start
 (`harness/cursor/context-boot.mjs`).
+
+**{{OWNER}} works from the second-brain app** (Electron, repo `{{REPOS}}/second-brain-app`;
+both engines, Claude and Cursor, run inside it; sign: the `mcp__second-brain-app__*` tools; 2026-10-11, "devi essere
+consapevole che sto usando le chat dal second brain"):
+- **Any UI step for him** (menu, button, panel, shortcut, setting): check it first in the app's code
+  (`src/renderer/components/`) or with `app_screenshot`; never steps of Claude Desktop, Cursor or the terminal (the Regia
+  tile has no ⋯ menu nor permissions: wrong step given on 11/10).
+- **A command for him**: the same `bash` block, last thing; in the app it has no Run nor copy button (chat markdown,
+  `src/renderer/lib/markdown.ts`): he selects and copies it.
+- **His terminal**: no `read_terminal`; after "fatto" rerun the read-only check yourself or ask him to paste the output.
+- **Browser**: the app's own (`mcp__second-brain__*`), shown as a tile next to its chat (no Ctrl+Shift+B); a remote
+  sign-in → `handoff_to_user` kind "login", and the chat gives him URL, account and password (`me.md` "Machine").
+- **Claude Desktop-only tools** (chip `spawn_task`, `ccd_*` sidebar, PushNotification, `read_terminal`): only if they
+  are in your tool list; in the app chats are created and messaged with `app_create_chat` and `app_send_to_chat`.
 
 Same in both (rules name only these):
 - **Chats talk through the mailbox**: `node "{{BRAIN}}/ops/tools/inbox.mjs" send --to "<chat>" --from "<me>" --file <text>`,
