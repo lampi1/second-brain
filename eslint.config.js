@@ -1,7 +1,7 @@
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['out/**', 'node_modules/**', 'test-results/**', 'docs/**', 'scripts/shot.cjs'] },
+  { ignores: ['out/**', 'node_modules/**', 'test-results/**', 'docs/**', 'scripts/shot.cjs', 'scripts/make-icon.cjs'] },
   ...tseslint.configs.recommended,
   {
     rules: {

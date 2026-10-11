@@ -166,6 +166,8 @@ export interface FeedEvent {
 export interface AppInfo {
   version: string;
   brainRoot: string | null;
+  /** why the brain folder is missing: config.json unreadable, or the folder lacks the brain tools */
+  brainProblem?: string | null;
   mcpUrl: string;
   /** null until the background check finishes (a few seconds after start): ask cli:status for a fresh one. */
   cli: { claude: CliStatus; cursor: CliStatus } | null;
@@ -337,6 +339,8 @@ export interface InvokeMap {
   'app:usage': [void, Usage];
   'cli:status': [{ harness: Harness; checkLogin?: boolean }, CliStatus];
   'cli:login': [{ harness: Harness }, void];
+  /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
+  'app:pickBrain': [void, string | null];
   'chat:list': [void, ChatSummary[]];
   'chat:items': [{ chatId: string }, ChatItem[]];
   'chat:pending': [void, PendingRequest[]];
@@ -414,7 +418,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:set', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:get', 'estimate:record', 'brain:api',

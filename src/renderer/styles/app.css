@@ -716,3 +716,15 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; h
 .layer-open:hover { border-color: var(--border-3); }
 .layer-hint { align-self: flex-end; display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border-2); font-size: 11px; color: var(--text-3); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
 html.overlay body:focus-within .layer-hint { display: none; }
+
+/* the no-brain banner (components/BrainSetupBanner.tsx) */
+.brain-setup { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--amber-bg); border-bottom: 1px solid var(--amber-line); color: var(--text); font-size: var(--fs-m); }
+.brain-setup-text { flex: 1; min-width: 0; }
+.brain-setup-text b { color: var(--amber); font-weight: 600; }
+.brain-setup-err { color: var(--red); }
+
+/* new chat: the rarely needed fields folded away */
+.modal-newchat details.advanced { border: 1px solid var(--border); border-radius: var(--r-m); padding: 8px 12px; }
+.modal-newchat details.advanced > summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-m); }
+.modal-newchat details.advanced > summary small { color: var(--text-4); margin-left: 6px; }
+.modal-newchat details.advanced[open] { display: flex; flex-direction: column; gap: 10px; }

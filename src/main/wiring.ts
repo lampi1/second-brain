@@ -57,6 +57,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     ...(process.env.SB_CURSOR_PATH ? { cursorPath: process.env.SB_CURSOR_PATH } : {}),
     appVersion: app.getVersion(),
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
+    // the Regia also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
+    appMcpUrl: () => browser.mcpUrlFor(null).replace(/\/mcp$/, '/mcp/app'),
     // brain hooks: plan limits, the job ledger (estimate vs actual), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     estimateFor: req => brain.estimate(req),
@@ -96,7 +98,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
-  if (process.env.SB_RELEASE && !process.env.SB_TEST) {
+  if (process.env.SB_RELEASE && !process.env.SB_TEST && process.env.SB_NO_SYNC !== '1') {
     sync = new ProductSync({ base: path.join(process.env.LOCALAPPDATA ?? ctx.userData, 'second-brain'), brainRoot: () => brain.info().brainRoot, brain, nodeExe: process.execPath });
     sync.start();
   }

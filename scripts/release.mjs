@@ -33,6 +33,9 @@ async function promote() {
   if (!process.argv.includes('--skip-check')) {
     say('npm run check …');
     execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'check'], { cwd: repo, stdio: 'inherit', shell: process.platform === 'win32' });
+    // and the packaged copy itself, as the user opens it, with the real brain (2026-10-11: dev green, stable broken)
+    say('npm run test:stable …');
+    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'test:stable'], { cwd: repo, stdio: 'inherit', shell: process.platform === 'win32' });
   }
   execFileSync(process.execPath, [path.join(repo, 'scripts', 'build.mjs')], { cwd: repo, stdio: 'inherit', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
   const id = `${pkg.version}-${sha}`;
@@ -81,6 +84,7 @@ async function promote() {
 // <base>/sync.json {"command": "<exe>", "args": ["…"], "cwd": "…"}; its outcome lands in <base>/sync/<release>.json
 // {release, startedAt, endedAt, exitCode, ok, blocked, summary} and the stable app shows it as a notification.
 function startSync(id) {
+  if (process.env.SB_NO_SYNC === '1') return; // tests promote into temp folders: never publish from them
   let cfg;
   try { cfg = JSON.parse(fs.readFileSync(path.join(base, 'sync.json'), 'utf8')); } catch { return; }
   if (!cfg?.command) return;

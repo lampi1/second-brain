@@ -33,6 +33,7 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
 - [ ] AI-driven: `npm run check`, `npm run doctor`, logs, app-control MCP (ADR 0006).
 
 ## Backlog (ordered; decided after a week of use)
+0. Any engine (ADR 0011): Codex CLI adapter; generic API adapter (OpenAI/Anthropic-compatible: URL, key in the Windows-protected store, model) with an "Aggiungi motore" screen in 3 fields; classifier engines (e.g. Jev) for small repeated jobs with fallback and an accuracy check on the user's data; then Gemini CLI, OpenCode and other CLIs.
 1. Browser tiles in the workspace and per-environment isolated sessions, saved logins, session status ("browser multipli isolati e sessioni salvate"; the MCP browser module already exists and its password guard stays).
 2. Cursor cost from the usage CSV (exact days + per-model factor) and the `stop` hook token path.
 3. Live changes with change log and undo page (ADR 0008; settings-as-data already in place).

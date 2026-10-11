@@ -16,6 +16,7 @@ import {
   back, copyLink, escapeOne, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia,
 } from './actions';
 import { TopBar } from './components/TopBar';
+import { BrainSetupBanner } from './components/BrainSetupBanner';
 import { Sidebar } from './components/Sidebar';
 import { NeedsLane, LiveRegion } from './components/NeedsLane';
 import { RegiaTile } from './components/RegiaTile';
@@ -211,6 +212,7 @@ export function App() {
   return (
     <div className="app" data-testid="app" data-view={view}>
       <TopBar />
+      <BrainSetupBanner />
       <div className="shell">
         <Sidebar />
         <div className="main-col">

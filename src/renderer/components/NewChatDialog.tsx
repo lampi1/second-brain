@@ -17,7 +17,9 @@ export function NewChatDialog() {
   const hasRegia = useApp(s => Object.values(s.chats).some(c => c.isRegia));
   const recent = useApp(s => [...new Set(s.order.map(id => s.chats[id]?.cwd).filter((x): x is string => !!x))].slice(0, 8), (a, b) => a.join('|') === b.join('|'));
   const [harness, setHarness] = useState<Harness>(last.harness);
-  const [cwd, setCwd] = useState(last.cwd || recent[0] || info?.brainRoot || '');
+  // every chat starts in the brain folder (the user, 2026-10-11: «non voglio sbattermi a scegliere la cartella giusta»):
+  // the AI picks the repo or worktree from the task; another folder only under Avanzate
+  const [cwd, setCwd] = useState(info?.brainRoot || last.cwd || recent[0] || '');
   const [model, setModel] = useState(last.harness === harness ? last.model : '');
   const [effort, setEffort] = useState<Effort | ''>(last.effort);
   const [perm, setPerm] = useState<PermissionMode | ''>(last.permissionMode);
@@ -56,6 +58,10 @@ export function NewChatDialog() {
       <form onSubmit={e => { e.preventDefault(); void create(); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void create(); } }}>
         <div className="modal-head"><h2>Nuova chat</h2><span className="sp" /><Keys combo="Ctrl+Invio" /><span className="modal-head-hint">crea</span></div>
         <div className="modal-body">
+          <label className="field">
+            <span>Cosa deve fare?</span>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} placeholder="Scrivi il lavoro: la chat parte dalla cartella del cervello e sceglie da sola repo e worktree" data-testid="newchat-prompt" autoFocus />
+          </label>
           <div className="harness-pick" role="radiogroup" aria-label="Harness">
             {(['claude', 'cursor'] as Harness[]).map(h => (
               <button key={h} type="button" role="radio" aria-checked={harness === h} className={`harness-card ${harness === h ? 'on' : ''}`} data-testid={`newchat-harness-${h}`}
@@ -65,8 +71,10 @@ export function NewChatDialog() {
               </button>
             ))}
           </div>
+          <details className="advanced" data-testid="newchat-advanced">
+          <summary>Avanzate <small>cartella, modello, permessi, titolo</small></summary>
           <label className="field">
-            <span>Cartella</span>
+            <span>Cartella <small>di base la cartella del cervello</small></span>
             <input value={cwd} onChange={e => { setCwd(e.target.value); setError(null); }} list="sb-recent-cwd" placeholder="C:\percorso\del\progetto" data-testid="newchat-cwd" aria-invalid={!!error && !cwd.trim()} />
             <datalist id="sb-recent-cwd">{recent.map(r => <option key={r} value={r} />)}</datalist>
           </label>
@@ -100,10 +108,7 @@ export function NewChatDialog() {
             <span>Titolo <small>facoltativo</small></span>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Es. QA · Rimborsi" data-testid="newchat-title" />
           </label>
-          <label className="field">
-            <span>Primo messaggio</span>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} placeholder="Cosa deve fare? (puoi anche lasciarlo vuoto e scrivere dopo)" data-testid="newchat-prompt" autoFocus />
-          </label>
+          </details>
           <div className="checks">
             <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} data-testid="newchat-regia" /><span>È la Regia <small>la chat che coordina le altre</small></span></label>
             {harness === 'claude' && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>Worktree separato <small>non tocca il tuo branch</small></span></label>}

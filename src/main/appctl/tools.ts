@@ -100,6 +100,25 @@ export function appControlTools(d: AppCtlDeps): ToolDef[] {
       },
     },
     {
+      name: 'app_create_chat',
+      description: 'Create a work chat in the app and start it with a prompt (the Regia does this instead of the user). Title "Area · cosa". The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      inputSchema: obj({ title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do'), harness: str('claude (default) | cursor'), model: str('optional model id'), cwd: str('optional absolute folder (repo or worktree); default: the brain folder') }, ['title', 'prompt']),
+      run: async a => {
+        const title = String(a.title ?? '').trim().slice(0, 80), prompt = String(a.prompt ?? '').trim();
+        if (!title || !prompt || prompt.length > 8000) throw new Error('title and prompt are required (prompt ≤ 8000 chars)');
+        const harness = a.harness === 'cursor' ? 'cursor' : 'claude';
+        const s = d.brain.settings();
+        if (!s.engines[harness]) throw new Error(`il motore ${harness} è spento nelle impostazioni`);
+        // a Cursor chat spends Cursor credits: an agent may start one only when Claude <-> Cursor is allowed
+        if (harness === 'cursor' && !s.messaging.crossHarness) throw new Error('messaggio bloccato: i messaggi tra Claude e Cursor sono spenti (impostazione "Messaggi tra Claude e Cursor")');
+        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
+        if (!cwd) throw new Error('nessuna cartella: il cervello non è collegato');
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...(typeof a.model === 'string' && a.model ? { model: a.model } : {}) });
+        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title } });
+        return { chatId: chat.id, title: chat.title, harness, cwd };
+      },
+    },
+    {
       name: 'app_send_to_chat', description: 'Send a message to an app chat. It is labelled as written by an agent, not by the user (never an ok or a permission).',
       inputSchema: obj({ chatId: str('chat id'), text: str('message') }, ['chatId', 'text']),
       run: async a => {

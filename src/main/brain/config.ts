@@ -11,6 +11,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, SettingProposal, SettingRequestResult, SettingsPatch } from '../../shared/contract';
 import { SCHEMA, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
+import { log } from '../log';
 
 export { validate, SCHEMA };
 export const DEFAULTS: Settings = defaults();
@@ -57,6 +58,8 @@ export class ConfigStore {
   private saved: Settings;
   private changes: SettingChange[] = [];
   private proposals = new Map<string, SettingProposal>();
+  /** set when config.json exists but could not be read (shown by the UI next to the brain folder chooser) */
+  loadError: string | null = null;
   private listeners = new Set<ChangeListener>();
   private proposalListeners = new Set<(p: SettingProposal) => void>();
 
@@ -64,7 +67,15 @@ export class ConfigStore {
     this.file = path.join(userData, 'config.json');
     this.changesFile = path.join(userData, 'changes.jsonl');
     let raw: unknown = null;
-    try { raw = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { /* first run */ }
+    if (fs.existsSync(this.file)) {
+      // a file that exists but does not parse is NOT a first run: say it loudly, keep a copy, start with defaults
+      // (live check 2026-10-11: a hand-written config with single backslashes made the app start without its brain)
+      try { raw = JSON.parse(fs.readFileSync(this.file, 'utf8').replace(/^﻿/, '')); } catch (e) {
+        this.loadError = `config.json non valido: ${e instanceof Error ? e.message : String(e)}`;
+        try { fs.copyFileSync(this.file, `${this.file}.bad-${Date.now()}`); } catch { /* best effort */ }
+        log.error('settings', 'config.json could not be read: starting with defaults', { cause: this.loadError, hint: 'choose the brain folder again from the app (Scegli la cartella del cervello); the bad file was kept as config.json.bad-<time>' });
+      }
+    }
     this.saved = fromSaved(raw);
     this.loadChanges();
   }

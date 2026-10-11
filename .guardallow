@@ -1,0 +1,5 @@
+# Known false positives of tools/guard/scan.mjs: `<path glob> <rule> [sha256:<hex>]`. A hash pins the exact content.
+# App icon, generated from build/icon.svg by scripts/make-icon.cjs: 10 PNG images (16-256 px), chunks IHDR/IDAT/IEND
+# only, no text or metadata (checked 2026-10-11). A new icon blocks the sync until someone checks it and ADDS a line
+# with its hash; never remove an old line: the public history keeps the old icon and the history scan checks it.
+build/icon.ico unscanned-binary sha256:72db3b5f51cc876de4c697ec6cdaeeb67dc76f4946cc6d1022f216a9e4e3bcc9

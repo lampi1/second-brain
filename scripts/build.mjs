@@ -16,4 +16,6 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], 
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/preload/index.ts')], outfile: path.join(root, 'out/preload/index.cjs'), format: 'cjs', external: ['electron'] });
 // Page scripts injected into browser tabs: plain strings built from TS sources
 await vite({ configFile: path.join(root, 'vite.config.ts'), mode: dev ? 'development' : 'production', logLevel: 'warn' });
+// the app icon (window, taskbar, shortcuts): build/icon.ico from scripts/make-icon.cjs
+for (const f of ['icon.ico', 'icon.png']) fs.copyFileSync(path.join(root, 'build', f), path.join(root, 'out', f));
 console.log(`built ${dev ? '(dev) ' : ''}→ out/`);

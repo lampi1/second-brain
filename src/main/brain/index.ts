@@ -6,6 +6,7 @@
 // the window); the parts are plain Node and unit-tested apart. Never writes into the brain: app state lives in
 // userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json).
 import { Notification, type BrowserWindow } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import type { BudgetAlert, FeedEvent, SettingChange, Settings, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
@@ -13,6 +14,7 @@ import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
 import { ConfigStore } from './config';
 import { readCrossHarness, writeCrossHarness } from './brain-settings';
+import { findBrainCandidates } from './detect';
 import { Live, KINDS, stamp, cut, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
@@ -33,6 +35,13 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const env = ctx.env ?? process.env;
   const testing = env.SB_TEST === '1';
   const cfg = new ConfigStore(ctx.userData, env);
+  // first run (or an unreadable config): a single brain folder found by its signature is used at once (brain/detect.ts),
+  // before any listener exists: no restart races with the first start (two live feeds were seen in the stable test)
+  if (!cfg.get().brainRoot && !testing) {
+    const found = findBrainCandidates();
+    if (found.length === 1) { cfg.set({ brainRoot: found[0]! }); log.info('brain', 'brain folder found by itself', { data: { brainRoot: found[0] } }); }
+    else if (found.length > 1) log.info('brain', 'several brain folders found: the user chooses', { data: { found } });
+  }
   const node = electronNode();
   const file = (f: string) => path.join(ctx.userData, f);
   const feed: FeedEvent[] = [];
@@ -159,7 +168,11 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     feed: () => feed.slice(),
     mute: (kind, muted) => { if (!kindOk(kind) || typeof muted !== 'boolean') throw new Error('feed:mute: tipo e true/false'); cfg.set({ mute: { [kind]: muted } }); },
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
-    info: () => ({ brainRoot: cfg.get().brainRoot }),
+    info: () => {
+      const root = cfg.get().brainRoot;
+      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del cervello scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) ? `la cartella ${root} non ha il server dati del cervello (ops/tools/brain-site.mjs)` : null);
+      return { brainRoot: root, brainProblem: problem };
+    },
     settings: () => cfg.get(),
     setSettings: async patch => cfg.set(patch, { by: 'user' }),
     settingsSchema: () => cfg.schema(),

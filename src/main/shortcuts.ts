@@ -19,7 +19,8 @@ export function ensureShortcuts(): void {
     args: `"${vbs}"`,
     cwd: base,
     description: 'second-brain: la cabina di comando di Claude e Cursor',
-    icon: process.execPath, iconIndex: 0,
+    // the app's own icon (scripts/make-icon.cjs → out/icon.ico), not Electron's
+    icon: fs.existsSync(path.join(app.getAppPath(), 'out', 'icon.ico')) ? path.join(app.getAppPath(), 'out', 'icon.ico') : process.execPath, iconIndex: 0,
     appUserModelId: APP_ID,
   };
   for (const dir of [path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'), app.getPath('desktop')]) {

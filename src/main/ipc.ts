@@ -2,6 +2,9 @@
 // Every invoke is checked: it must come from the app's own page (our file:// renderer, top frame), never from a
 // browser tab or an injected frame.
 import { ipcMain, type WebContents, type IpcMainInvokeEvent } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type InvokeChannel, type InvokeResult } from '../shared/contract';
 
 type Handler<K extends InvokeChannel> = (arg: InvokeArg<K>, e: IpcMainInvokeEvent) => InvokeResult<K> | Promise<InvokeResult<K>>;
@@ -10,8 +13,20 @@ export type Handlers = { [K in InvokeChannel]: Handler<K> };
 /** The exact file:// URL of our renderer page (out/renderer/index.html), set by window.ts. Any other file:// page —
  *  e.g. one reached through an injected link (UNC //host/x.html) — is never an app sender (review 2026-10-11). */
 let appPage: string | null = null;
-export const setAppPage = (url: string): void => { appPage = url; };
-export const isAppPage = (url: string): boolean => !!appPage && url.split('#')[0]!.split('?')[0] === appPage;
+// compared as real file paths, not as URL strings: Chromium may report the same file with another spelling (8.3 short
+// names like ABCDE~1, drive-letter case, percent-encoding) — the stable-copy test caught a strict string compare
+// refusing the app's own page (2026-10-11)
+const fileKey = (url: string): string | null => {
+  try {
+    if (!url.startsWith('file:')) return null;
+    const p = fileURLToPath(url.split('#')[0]!.split('?')[0]!);
+    let real = p;
+    try { real = fs.realpathSync.native(p); } catch { /* not on disk */ }
+    return path.resolve(real).toLowerCase();
+  } catch { return null; }
+};
+export const setAppPage = (url: string): void => { appPage = fileKey(url); };
+export const isAppPage = (url: string): boolean => !!appPage && fileKey(url) === appPage;
 
 export function isAppSender(e: IpcMainInvokeEvent, app: WebContents | null): boolean {
   if (!app || e.sender !== app) return false;

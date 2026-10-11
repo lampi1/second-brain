@@ -9,13 +9,15 @@
 //   node scan.mjs <dir>                         scan the working tree (files tracked or not, minus .git)
 //   node scan.mjs <dir> --history               also every blob, commit message and author of every commit
 //   options: --deny <file>    words/regexes that must never appear (one per line, `#` comment, `re:` prefix = regex)
-//            --allow <file>   default <dir>/.guardallow: lines `<path glob> <rule>` that silence a known false positive
+//            --allow <file>   default <dir>/.guardallow: lines `<path glob> <rule> [sha256:<hex>]` that silence a known false
+//                             positive (with a hash: only that exact file content)
 //            --json           machine output
 // Exit: 0 clean · 2 findings (publish must stop) · 1 error. The matched value is never printed, only file:line + rule.
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep, extname, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const argv = process.argv.slice(2);
 const flag = n => argv.includes(n);
@@ -85,8 +87,15 @@ if (opt('--deny')) {
 }
 const allowFile = opt('--allow') ?? join(root, '.guardallow');
 const allows = existsSync(allowFile) ? readFileSync(allowFile, 'utf8').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'))
-  .map(l => { const [glob, rule] = l.split(/\s+/); return { re: new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$'), rule }; }) : [];
-const allowed = (path, rule) => allows.some(a => a.re.test(path) && (a.rule === '*' || a.rule === rule));
+  .map(l => { const [glob, rule, pin, extra] = l.split(/\s+/);
+    // a malformed pin must never fall back to "any content": refuse the whole allow file
+    if (!rule || extra || (pin !== undefined && !/^sha256:[0-9a-fA-F]{64}$/.test(pin))) { console.error(`guard: bad allow line in ${allowFile}: "${l}"`); process.exit(1); }
+    return { re: new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$'), rule, sha: pin?.startsWith('sha256:') ? pin.slice(7).toLowerCase() : null }; }) : [];
+// An entry with `sha256:<hex>` (e.g. a binary icon a human looked at) holds only for that exact content: a changed
+// file blocks again until someone checks it and ADDS a line with the new hash (old lines stay: the public history
+// keeps the old blobs, and --history checks them).
+const sha256 = buf => createHash('sha256').update(buf).digest('hex');
+const allowed = (path, rule, buf) => allows.some(a => a.re.test(path) && (a.rule === '*' || a.rule === rule) && (!a.sha || (buf && sha256(buf) === a.sha)));
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', 'test-results']);
 const TEXT_MAX = 2_000_000;
@@ -94,7 +103,7 @@ const isBinary = buf => buf.subarray(0, 8000).includes(0);
 
 // ---- scanning ----------------------------------------------------------------------------------------------------
 const findings = [];
-const add = (path, label, line, rule) => { if (!allowed(path, rule)) findings.push({ where: label, line, rule }); };
+const add = (path, label, line, rule, buf) => { if (!allowed(path, rule, buf)) findings.push({ where: label, line, rule }); };
 
 function scanText(path, text, label = path) {
   const lines = text.split(/\r?\n/);
@@ -111,15 +120,15 @@ function scanFile(path, buf, label = path) {
     if (rule === 'personal-memory-file' || rule === 'journal-entry') {
       if (!isBinary(buf) && !TEMPLATE_ENTRY.test(buf.toString('utf8').split(/\r?\n/).filter(l => !l.startsWith('#') && !l.startsWith('>')).join('\n'))) continue;
     }
-    add(path, label, 0, rule);
+    add(path, label, 0, rule, buf);
   }
   // never fail-open: UTF-16 (PowerShell's default) is decoded; anything else unreadable is a finding
   let text;
   if (buf[0] === 0xff && buf[1] === 0xfe) text = buf.subarray(2).toString('utf16le');
   else if (buf[0] === 0xfe && buf[1] === 0xff) text = Buffer.from(buf.subarray(2)).swap16().toString('utf16le');
-  else if (isBinary(buf)) { if (!FORBIDDEN_FILES.some(([re, r]) => r === 'binary-media' && re.test(path))) add(path, label, 0, 'unscanned-binary'); return; }
+  else if (isBinary(buf)) { if (!FORBIDDEN_FILES.some(([re, r]) => r === 'binary-media' && re.test(path))) add(path, label, 0, 'unscanned-binary', buf); return; }
   else text = buf.toString('utf8');
-  if (text.length > TEXT_MAX) { add(path, label, 0, 'too-large-unscanned'); return; }
+  if (text.length > TEXT_MAX) { add(path, label, 0, 'too-large-unscanned', buf); return; }
   scanText(path, text, label);
 }
 

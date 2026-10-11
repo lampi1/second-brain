@@ -1,5 +1,5 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
-import { app, type BrowserWindow } from 'electron';
+import { app, dialog, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +34,13 @@ app.whenReady().then(async () => {
   overlay.start();
   (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
   const handlers: Handlers = {
-    'app:info': () => ({ version: app.getVersion(), brainRoot: s.brain.info().brainRoot, mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli() }),
+    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli() }),
+    'app:pickBrain': async () => {
+      const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
+      const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
+      if (dir) await s.brain.setSettings({ brainRoot: dir });
+      return dir;
+    },
     'app:usage': () => s.brain.usage(),
     'cli:status': a => (a.harness === 'claude' ? claudeStatus() : cursorStatus()),
     'cli:login': a => openLogin(a.harness),

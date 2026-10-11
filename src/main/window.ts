@@ -7,7 +7,7 @@ import { isAppPage, setAppPage } from './ipc';
 export function createWindow(outDir: string): BrowserWindow {
   const win = new BrowserWindow({
     width: 1600, height: 1000, minWidth: 1000, minHeight: 640,
-    title: 'second-brain', backgroundColor: '#0b0d12', autoHideMenuBar: true, show: false,
+    title: 'second-brain', icon: path.join(outDir, 'icon.ico'), backgroundColor: '#0b0d12', autoHideMenuBar: true, show: false,
     webPreferences: {
       preload: path.join(outDir, 'preload', 'index.cjs'),
       contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false,

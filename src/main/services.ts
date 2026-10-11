@@ -50,7 +50,7 @@ export interface BrainService {
   feed(): FeedEvent[];
   mute(kind: string, muted: boolean): void;
   usage(): Usage;
-  info(): Pick<AppInfo, 'brainRoot'>;
+  info(): Pick<AppInfo, 'brainRoot' | 'brainProblem'>;
   settings(): Settings;
   /** The user's own change from the UI (by 'user'). */
   setSettings(patch: SettingsPatch): Promise<Settings>;

@@ -32,6 +32,8 @@ export interface ChatManagerOptions {
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
+  /** the app-control MCP (/mcp/app) for the Regia only: it reads the app and creates the work chats by itself */
+  appMcpUrl?: (() => string | null) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
   maxItems?: number;
@@ -486,7 +488,11 @@ export class ChatManager implements ChatService {
 
   private mcpConfig(chatId: string): string | null {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
-    return url ? JSON.stringify({ mcpServers: { 'second-brain': { type: 'http', url } } }) : null;
+    const app = this.chats.get(chatId)?.s.isRegia ? this.opts.appMcpUrl?.() ?? null : null;
+    const servers: Record<string, { type: 'http'; url: string }> = {};
+    if (url) servers['second-brain'] = { type: 'http', url };
+    if (app) servers['second-brain-app'] = { type: 'http', url: app };
+    return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
   }
 
   private startSession(r: Rec): void {
@@ -500,7 +506,7 @@ export class ChatManager implements ChatService {
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, title: r.s.title,
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
-      ...(this.opts.env ? { env: this.opts.env } : {}), ...(this.opts.extraArgs ? { extraArgs: this.opts.extraArgs } : {}),
+      ...(this.opts.env ? { env: this.opts.env } : {}), ...(this.opts.extraArgs || r.s.isRegia ? { extraArgs: [...(this.opts.extraArgs ?? []), ...(r.s.isRegia && r.s.harness === 'claude' && this.opts.appMcpUrl?.() ? ['--allowedTools', 'mcp__second-brain-app'] : [])] } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
     let sess: HarnessSession | null = null;

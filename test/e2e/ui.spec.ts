@@ -178,6 +178,9 @@ test('Ctrl+N creates a chat: its tile appears with the first message and gets th
   const { page, app } = await launchDemo();
   await page.keyboard.press('Control+N');
   await expect(page.getByTestId('newchat')).toBeVisible();
+  // the folder is not asked: it defaults to the brain folder, the rest lives under Avanzate
+  await expect(page.getByTestId('newchat-cwd')).toBeHidden();
+  await page.getByTestId('newchat-advanced').locator('summary').click();
   await page.getByTestId('newchat-title').fill('Prova nuova chat');
   await page.getByTestId('newchat-prompt').fill('Controlla i log di oggi');
   await shot(page, 'new-chat');

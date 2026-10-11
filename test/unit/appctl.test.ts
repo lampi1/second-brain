@@ -45,6 +45,20 @@ describe('app control tools', () => {
     expect(sent).toEqual(['cur']);
   });
 
+  it('the Regia creates work chats in the brain folder, labelled, and obeys the engine switches', async () => {
+    const made: Record<string, unknown>[] = [];
+    let cross = true, cursorOn = true;
+    const chats = { create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
+    const brain = { settings: () => ({ messaging: { crossHarness: cross }, engines: { claude: true, cursor: cursorOn } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
+    expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain' });
+    expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
+    cross = false;
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/bloccato/);
+    cross = true; cursorOn = false;
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/spento/);
+  });
+
   it('filters logs by level and text and steers the UI', async () => {
     const { tool, ui } = deps();
     log.warn('chats', 'session slow', { chat: 'c9' });
