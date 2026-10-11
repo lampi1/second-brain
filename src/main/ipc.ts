@@ -7,17 +7,27 @@ import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type
 type Handler<K extends InvokeChannel> = (arg: InvokeArg<K>, e: IpcMainInvokeEvent) => InvokeResult<K> | Promise<InvokeResult<K>>;
 export type Handlers = { [K in InvokeChannel]: Handler<K> };
 
+/** The exact file:// URL of our renderer page (out/renderer/index.html), set by window.ts. Any other file:// page —
+ *  e.g. one reached through an injected link (UNC //host/x.html) — is never an app sender (review 2026-10-11). */
+let appPage: string | null = null;
+export const setAppPage = (url: string): void => { appPage = url; };
+export const isAppPage = (url: string): boolean => !!appPage && url.split('#')[0]!.split('?')[0] === appPage;
+
 export function isAppSender(e: IpcMainInvokeEvent, app: WebContents | null): boolean {
   if (!app || e.sender !== app) return false;
   const url = e.senderFrame?.url ?? '';
-  return e.senderFrame === e.sender.mainFrame && url.startsWith('file://');
+  return e.senderFrame === e.sender.mainFrame && isAppPage(url);
 }
 
-export function registerHandlers(handlers: Handlers, appContents: () => WebContents | null): void {
+/** A second page of ours allowed on a few channels only (the global request layer: overlay:* channels). */
+export interface ExtraSender { contents: () => WebContents | null; channels: readonly InvokeChannel[] }
+
+export function registerHandlers(handlers: Handlers, appContents: () => WebContents | null, extra?: ExtraSender): void {
   for (const ch of INVOKE_CHANNELS) {
     ipcMain.removeHandler(ch);
     ipcMain.handle(ch, async (e, arg) => {
-      if (!isAppSender(e, appContents())) throw new Error('forbidden sender');
+      const ok = isAppSender(e, appContents()) || (!!extra && extra.channels.includes(ch) && isAppSender(e, extra.contents()));
+      if (!ok) throw new Error('forbidden sender');
       return (handlers[ch] as Handler<typeof ch>)(arg as never, e);
     });
   }

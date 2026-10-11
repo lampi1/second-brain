@@ -23,7 +23,14 @@ import readline from 'node:readline';
 const argv = process.argv.slice(2);
 if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('2026.07.23-fake000\n'); process.exit(0); }
 const log = obj => { if (process.env.FAKE_CURSOR_LOG) fs.appendFileSync(process.env.FAKE_CURSOR_LOG, `${JSON.stringify({ pid: process.pid, ...obj })}\n`); };
-log({ argv, cwd: process.cwd() });
+log({ argv, cwd: process.cwd(), configDir: process.env.CURSOR_CONFIG_DIR ?? null });
+// like the real CLI (handleInitialModel → updateConfig): a --model is written into the config folder it runs with
+if (process.env.CURSOR_CONFIG_DIR && argv.includes('--model')) {
+  const f = `${process.env.CURSOR_CONFIG_DIR}/cli-config.json`;
+  let cfg = {};
+  try { cfg = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* none yet */ }
+  fs.writeFileSync(f, JSON.stringify({ ...cfg, model: { modelId: argv[argv.indexOf('--model') + 1] }, hasChangedDefaultModel: true }));
+}
 if (argv.at(-1) !== 'acp') { process.stderr.write('fake: only `acp` is supported\n'); process.exit(2); }
 const mi = argv.indexOf('--model');
 let model = mi >= 0 ? argv[mi + 1] : 'auto';
@@ -137,7 +144,8 @@ function request(id, method, p) {
       update(p.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'vecchia risposta' } });
       return out({ id, result: { modes: modesState(), models: modelsState() } });
     }
-    case 'session/set_model': model = p.modelId; return out({ id, result: {} });
+    // the real one writes the user's global CLI config (cli-config.json): second-brain must never call it
+    case 'session/set_model': return out({ id, error: { code: -32602, message: 'fake: session/set_model must never be called by second-brain' } });
     case 'session/set_mode': mode = p.modeId; update(p.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: mode }); return out({ id, result: {} });
     case 'session/prompt':
       if (!sessions.has(p.sessionId)) return out({ id, error: { code: -32602, message: `unknown session ${p.sessionId}` } });

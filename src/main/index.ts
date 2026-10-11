@@ -9,6 +9,7 @@ import { createServices } from './wiring';
 import { log } from './log';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { claudeStatus, cursorStatus, openLogin } from './cli';
+import { OverlayLayer } from './overlay';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 app.setAppUserModelId(APP_ID);
@@ -28,6 +29,10 @@ app.whenReady().then(async () => {
   win = createWindow(outDir);
   const emitter = new Emitter(() => win?.webContents ?? null);
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  // the global request layer: a small top-most view above browser tiles and pages (main/overlay.ts)
+  const overlay = new OverlayLayer(() => win, outDir);
+  overlay.start();
+  (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
   const handlers: Handlers = {
     'app:info': () => ({ version: app.getVersion(), brainRoot: s.brain.info().brainRoot, mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli() }),
     'app:usage': () => s.brain.usage(),
@@ -66,8 +71,12 @@ app.whenReady().then(async () => {
     'estimate:get': a => s.brain.estimate(a),
     'estimate:record': a => s.brain.recordJob(a),
     'brain:api': a => s.brain.api(a?.path),
+    'overlay:model': a => overlay.setModel(a),
+    'overlay:size': a => overlay.setSize(a.width, a.height),
+    'overlay:action': a => overlay.relay(a),
+    'overlay:focus': a => overlay.focus(a.target),
   };
-  registerHandlers(handlers, () => win?.webContents ?? null);
+  registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // the stable launcher (scripts/release.mjs launch) waits for this file to know the release started (ADR 0007)
   win.once('ready-to-show', () => {
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'ready.json'), JSON.stringify({ release: process.env.SB_RELEASE ?? 'dev', pid: process.pid, at: new Date().toISOString() })); } catch (e) { log.warn('app', 'ready file not written', { data: String(e) }); }

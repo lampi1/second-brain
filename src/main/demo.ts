@@ -1,0 +1,694 @@
+// Demo data source (SB_DEMO=1): fake ChatService and BrainService that produce realistic, time-evolving data with no
+// CLI and no tokens: a Regia with a decision, a QA chat waiting on a question, a fix streaming text and running tools
+// (then asking a permission), a Cursor chat driving a browser, a chat waiting on a permission, finished chats, a
+// ticking cost and a live feed. Answering a request resolves it and continues that chat's script.
+// Why: the UI (and the e2e tests, screenshots and visual baselines) can be built and verified while the real services
+// are built in parallel. SB_DEMO_FREEZE=1 = deterministic: fixed clock (FROZEN_EPOCH), no randomness, no timers; the
+// demo sits at one rich state and every action completes instantly. Used by wiring.ts (with demo-browser.ts for tabs)
+// and test/unit/demo.test.ts. The data is fictional: no real people, customers or paths.
+import type {
+  Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, EstimateResult, EventMap, FeedEvent, FileDiff, NewChat, PendingRequest, Priority,
+  SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, Usage,
+} from '../shared/contract';
+import type { BrainService, ChatService, FeedInput } from './services';
+import type { ConfigStore } from './brain/config';
+import { KINDS } from './brain/live';
+import { log } from './log';
+
+/** The fixed "now" of SB_DEMO_FREEZE=1 (2026-10-11 10:30 Rome). The UI receives it through ui:command 'clock'. */
+export const FROZEN_EPOCH = Date.UTC(2026, 9, 11, 8, 30, 0);
+
+export type Emit = <K extends keyof EventMap>(channel: K, payload: EventMap[K]) => void;
+
+/** A browser action in a page of the demo (x, y = percent of the page). */
+export interface DemoAction { label: string; x: number; y: number }
+/** What the chats need from the demo browser (demo-browser.ts; a recorder in unit tests). */
+export interface DemoBrowserHooks { act(tabId: string, action: DemoAction): void; closeOwned(chatId: string): void }
+
+export interface DemoOptions { freeze: boolean; now?: () => number; seed?: number }
+
+const MIN = 60_000;
+/** The fictional brain folder of the demo (shown in the UI, never read). */
+export const DEMO_BRAIN = 'C:\\progetti\\brain';
+const ITEMS_CAP = 300;
+
+/** Small deterministic PRNG (mulberry32): the demo never calls Math.random. */
+export function prng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ---------------------------------------------------------------- seed: the rich state the demo starts from
+
+const patchTotals = `@@ -41,9 +41,12 @@ public decimal Recalculate(Order order)
+ {
+-    var total = order.Lines.Sum(l => l.Amount);
+-    total = Math.Round(total, 2);
+-    return _discounts.Apply(order, total);
++    var gross = order.Lines.Sum(l => l.Amount);
++    // the discount applies to the gross total, then one single rounding
++    var discounted = _discounts.Apply(order, gross);
++    return Math.Round(discounted, 2, MidpointRounding.AwayFromZero);
+ }`;
+const patchDiscount = `@@ -17,4 +17,5 @@ public decimal Apply(Order order, decimal gross)
+-    if (order.Discount is null) return gross;
++    if (order.Discount is null || order.Discount.Value == 0) return gross;
++    if (order.Discount.IsPercent) return gross * (1 - order.Discount.Value / 100m);
+     return gross - order.Discount.Value;`;
+const patchTest = `@@ -0,0 +1,9 @@
++[Fact]
++public void Percent_discount_is_applied_to_the_gross_total()
++{
++    var order = SampleOrder(lines: [80m, 40m], percentDiscount: 10);
++    var total = _service.Recalculate(order);
++    Assert.Equal(108.00m, total);
++}`;
+
+export const DEMO_DIFF: FileDiff[] = [
+  { path: 'src/Shop/Orders/OrderTotalsService.cs', added: 18, removed: 6, patch: patchTotals },
+  { path: 'src/Shop/Orders/DiscountCalculator.cs', added: 9, removed: 1, patch: patchDiscount },
+  { path: 'test/Shop.Tests/Orders/OrderTotalsTests.cs', added: 15, removed: 0, patch: patchTest },
+];
+
+export interface Seed { chats: ChatSummary[]; items: Record<string, ChatItem[]>; pending: PendingRequest[]; tabs: BrowserTab[]; feed: FeedEvent[]; usage: Usage }
+
+export function seed(E: number): Seed {
+  const chat = (c: Partial<ChatSummary> & Pick<ChatSummary, 'id' | 'title'>): ChatSummary => ({
+    harness: 'claude', origin: 'app', cwd: 'C:\\progetti\\brain', sessionId: `demo-${c.id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default',
+    state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
+  });
+  const chats: ChatSummary[] = [
+    chat({ id: 'regia', title: 'Regia', isRegia: true, state: 'waiting', pending: 1, costUsd: 4.12, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
+    chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
+      lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
+    chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
+      lastText: 'Lancio i test del modulo ordini.' }),
+    chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', cwd: 'C:\\progetti\\alfa-e2e',
+      updatedAt: E - 20_000, browserTabIds: ['tab-sms'], lastText: 'Riproduco il bug con il cliente di prova…' }),
+    chat({ id: 'feedback', title: 'App · Feedback', model: 'claude-sonnet-4-5', effort: 'medium', state: 'waiting', pending: 1, costUsd: 0.35, updatedAt: E - 2 * MIN,
+      lastText: 'Lancio la suite e2e completa.' }),
+    chat({ id: 'mappa', title: 'App · Mappa 3D', costUsd: 3.1, updatedAt: E - 25 * MIN, lastText: 'v2 in main (48e6086). 14 test verdi, screenshot nel report.' }),
+    chat({ id: 'review', title: 'Review confronto', model: 'claude-sonnet-4-5', costUsd: 2.4, updatedAt: E - 120 * MIN, lastText: 'Confronto pronto: 3 differenze, nessuna bloccante.' }),
+    chat({ id: 'report', title: 'Report settimanale', model: 'claude-sonnet-4-5', costUsd: 1.2, updatedAt: E - 26 * 60 * MIN, lastText: 'Report pronto: 9 PR, 3 bug chiusi.' }),
+    chat({ id: 'note', title: 'Note personali', model: 'claude-haiku-4-5', effort: 'low', costUsd: 0.8, updatedAt: E - 180 * MIN, lastText: 'Fatto: lista aggiornata.' }),
+  ];
+  const items: Record<string, ChatItem[]> = {
+    regia: [
+      { kind: 'user', id: 'regia-u1', at: E - 9 * MIN, text: 'Che si fa adesso?' },
+      { kind: 'assistant', id: 'regia-a1', at: E - 9 * MIN, text: '**Prima la QA bloccata**: la QA dei rimborsi aspetta te (1 decisione). Poi la PR del totale ordine, poi il bug SMS.' },
+    ],
+    qa: [
+      { kind: 'user', id: 'qa-u1', at: E - 26 * MIN, text: 'Esegui i test case dei rimborsi in ambiente di test e fammi il report.' },
+      { kind: 'system', id: 'qa-s1', at: E - 6 * MIN, level: 'info', text: 'Dove eravamo: 6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' },
+      { kind: 'tool', id: 'qa-t1', at: E - 6 * MIN, name: 'mcp__sb-browser__browser_batch', summary: '14 azioni · 2 screenshot', input: { steps: 14 }, status: 'ok', output: 'navigate · click ×6 · type ×4 · screenshot ×2 · read_page ×2' },
+      { kind: 'assistant', id: 'qa-a1', at: E - 4 * MIN, text: 'Ho rieseguito il **test case 7** su master: stesso errore. Il rimborso non tiene conto dello sconto applicato in origine (totale `120,00 €` invece di `108,00 €`).' },
+    ],
+    fix: [
+      { kind: 'user', id: 'fix-u1', at: E - 14 * MIN, text: 'Il totale dell\'ordine è sbagliato quando c\'è uno sconto: trova la causa e sistema.' },
+      { kind: 'thinking', id: 'fix-th1', at: E - 13 * MIN, text: 'Il totale sbaglia solo con gli sconti percentuali: probabilmente l\'arrotondamento avviene prima dello sconto. Controllo il servizio dei totali e i suoi test.' },
+      { kind: 'tool', id: 'fix-t1', at: E - 13 * MIN, name: 'Read', summary: 'OrderTotalsService.cs', input: { file_path: 'src/Shop/Orders/OrderTotalsService.cs' }, status: 'ok', output: '128 righe' },
+      { kind: 'tool', id: 'fix-t2', at: E - 12 * MIN, name: 'Grep', summary: '"Recalculate" in src/ · 6 risultati', input: { pattern: 'Recalculate', path: 'src/' }, status: 'ok', output: '6 risultati in 3 file' },
+      { kind: 'assistant', id: 'fix-a1', at: E - 8 * MIN, text: 'Ho trovato la causa: il totale si ricalcola **prima** dello sconto in `OrderTotalsService.Recalculate()`. Sposto il calcolo dopo l\'applicazione dello sconto e aggiungo un test per lo sconto percentuale.' },
+      { kind: 'tool', id: 'fix-t3', at: E - 6 * MIN, name: 'Edit', summary: '3 file', input: { files: 3 }, status: 'ok', diff: DEMO_DIFF },
+      { kind: 'assistant', id: 'fix-a2', at: E - 50_000, text: 'Lancio i test del modulo ordini.' },
+      { kind: 'tool', id: 'fix-t4', at: E - 42_000, name: 'Bash', summary: 'dotnet test Shop.Tests --filter Orders', input: { command: 'dotnet test Shop.Tests --filter Orders' }, status: 'running' },
+    ],
+    sms: [
+      { kind: 'user', id: 'sms-u1', at: E - 6 * MIN, text: 'Riproduci il bug degli SMS nelle attività del cliente, in ambiente di test 2.' },
+      { kind: 'tool', id: 'sms-t1', at: E - 5 * MIN, name: 'mcp__sb-browser__browser_navigate', summary: 'test-2.app.example.com/clienti/4711/attivita', input: {}, status: 'ok' },
+      { kind: 'tool', id: 'sms-t2', at: E - 4 * MIN, name: 'mcp__sb-browser__browser_click', summary: 'ref_12 · scheda «Attività»', input: {}, status: 'ok' },
+      { kind: 'assistant', id: 'sms-a1', at: E - 20_000, text: 'Riproduco il bug con il cliente di prova: apro la scheda Attività e controllo', streaming: true },
+    ],
+    feedback: [
+      { kind: 'user', id: 'feedback-u1', at: E - 3 * MIN, text: 'Lancia i test e2e dell\'app e dimmi se passano.' },
+      { kind: 'assistant', id: 'feedback-a1', at: E - 2 * MIN, text: 'Lancio la suite e2e completa (Playwright, circa un minuto).' },
+    ],
+    mappa: [
+      { kind: 'user', id: 'mappa-u1', at: E - 50 * MIN, text: 'Porta la mappa 3D in main con i test.' },
+      { kind: 'assistant', id: 'mappa-a1', at: E - 26 * MIN, text: 'v2 in main (48e6086). **14 test verdi**, screenshot nel report.' },
+      { kind: 'tool', id: 'mappa-t1', at: E - 26 * MIN, name: 'Agent', summary: 'Revisione: 0 problemi bloccanti', input: {}, status: 'ok' },
+      { kind: 'result', id: 'mappa-r1', at: E - 25 * MIN, costUsd: 3.1, durationMs: 24 * MIN, turns: 12, isError: false },
+    ],
+    review: [
+      { kind: 'assistant', id: 'review-a1', at: E - 120 * MIN, text: 'Confronto pronto: 3 differenze, nessuna bloccante.' },
+      { kind: 'result', id: 'review-r1', at: E - 120 * MIN, costUsd: 2.4, durationMs: 9 * MIN, turns: 6, isError: false },
+    ],
+    report: [
+      { kind: 'assistant', id: 'report-a1', at: E - 26 * 60 * MIN, text: 'Report pronto: 9 PR, 3 bug chiusi.' },
+    ],
+    note: [
+      { kind: 'assistant', id: 'note-a1', at: E - 180 * MIN, text: 'Fatto: lista aggiornata.' },
+      { kind: 'result', id: 'note-r1', at: E - 180 * MIN, costUsd: 0.8, durationMs: 2 * MIN, turns: 2, isError: false },
+    ],
+  };
+  const pending: PendingRequest[] = [
+    {
+      id: 'regia-q1', chatId: 'regia', type: 'question', tool: 'AskUserQuestion', title: 'Quale vista vuoi come predefinita?', detail: '', input: {}, at: E - 8 * MIN,
+      questions: [{ header: 'second-brain app', question: 'Quale vista vuoi come predefinita?', multiSelect: false, options: [
+        { label: 'Mosaico', description: 'tessere libere, i browser accanto alle loro chat' },
+        { label: 'Corsie', description: 'colonne per stato: ti aspettano, al lavoro, finite' },
+      ] }],
+    },
+    {
+      id: 'qa-q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Il test case 7 fallisce anche su master: cosa faccio?', detail: '', input: {}, at: E - 4 * MIN,
+      questions: [{ header: 'QA', question: 'Il test case 7 fallisce anche su master: cosa faccio?', multiSelect: false, options: [
+        { label: 'Apro un bug e taggo la QA (consigliato)', description: 'è un difetto già presente su master' },
+        { label: 'Lo segno nel report e vado avanti' },
+        { label: 'Mi fermo qui' },
+      ] }],
+    },
+    {
+      id: 'feedback-p1', chatId: 'feedback', type: 'permission', tool: 'Bash', title: 'Bash · npm run test:e2e', detail: 'npm run test:e2e',
+      input: { command: 'npm run test:e2e', description: 'Lancia la suite end-to-end' }, at: E - 2 * MIN,
+    },
+  ];
+  const tabs: BrowserTab[] = [
+    { id: 'tab-qa', url: 'https://test.app.example.com/ordini/rimborsi/2026-118', title: 'Rimborso 2026/118 · Alfa', loading: false, ownerChatId: 'qa', lastAction: 'screenshot · rimborso' },
+    { id: 'tab-sms', url: 'https://test-2.app.example.com/clienti/4711/attivita', title: 'Attività · Cliente di prova · Alfa', loading: false, ownerChatId: 'sms', lastAction: 'click ref_12 · «Attività»' },
+  ];
+  const ev = (id: string, ago: number, kind: string, label: string, priority: Priority, title: string, detail: string, extra: Partial<FeedEvent> = {}): FeedEvent =>
+    ({ id, at: E - ago, kind, label, priority, title, detail, ...extra });
+  const feed: FeedEvent[] = [
+    ev('f-1', 2 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'App · Feedback', 'Permesso: npm run test:e2e', { chatId: 'feedback' }),
+    ev('f-2', 4 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'QA · Rimborsi', 'Il test case 7 fallisce anche su master', { chatId: 'qa' }),
+    ev('f-3', 7 * MIN, 'idea', 'Idea dell\'IA', 'normal', 'Pausa automatica dei test lenti', 'Fermare i test che superano 2 minuti e chiedere se continuare', { who: 'Regia', file: 'ideas.md' }),
+    ev('f-4', 12 * MIN, 'error', 'Errore registrato', 'normal', '"fatto" senza screenshot', 'Una chat ha detto fatto senza guardare lo screenshot', { file: 'ai-errors.md' }),
+    ev('f-5', 25 * MIN, 'chat-done', 'Chat finita', 'quiet', 'App · Mappa 3D', 'v2 in main, 14 test verdi', { chatId: 'mappa' }),
+    ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
+    ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
+    ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
+  ];
+  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31 };
+  return { chats, items, pending, tabs, feed, usage };
+}
+
+// ---------------------------------------------------------------- the chats
+
+class Aborted extends Error { constructor() { super('aborted'); } }
+
+type Continuation = (run: Run, answer: Answer) => Promise<void>;
+
+/** A script running in one chat: sleeps, streams text, runs tools, asks. Aborting (■) stops it at the next await. */
+export class Run {
+  constructor(private d: DemoChats, readonly chatId: string, readonly signal: AbortSignal) {}
+
+  sleep(ms: number): Promise<void> {
+    if (this.signal.aborted) return Promise.reject(new Aborted());
+    if (this.d.freeze) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { this.signal.removeEventListener('abort', onAbort); resolve(); }, ms);
+      const onAbort = () => { clearTimeout(t); reject(new Aborted()); };
+      this.signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  user(text: string): void { this.d.push(this.chatId, { kind: 'user', id: this.d.nextId(), at: this.d.now(), text }); }
+
+  /** Streams an assistant message word by word (instantly when frozen). `continueId` extends an existing message. */
+  async say(text: string, continueId?: string): Promise<void> {
+    const existing = continueId ? this.d.item(this.chatId, continueId) : undefined;
+    const base = existing && existing.kind === 'assistant' ? existing.text : '';
+    const id = existing ? existing.id : this.d.nextId();
+    const at = existing ? existing.at : this.d.now();
+    const words = text.split(/(\s+)/).filter(Boolean);
+    if (this.d.freeze) {
+      this.d.upsert(this.chatId, { kind: 'assistant', id, at, text: base + text });
+      this.d.patch(this.chatId, { lastText: lastLine(base + text) });
+      return;
+    }
+    let out = base;
+    if (!existing) this.d.push(this.chatId, { kind: 'assistant', id, at, text: '', streaming: true });
+    for (let i = 0; i < words.length;) {
+      const n = 1 + Math.floor(this.d.rand() * 4);
+      out += words.slice(i, i + n).join('');
+      i += n;
+      this.d.upsert(this.chatId, { kind: 'assistant', id, at, text: out, streaming: i < words.length });
+      if (i % 6 < n || i >= words.length) this.d.patch(this.chatId, { lastText: lastLine(out) });
+      await this.sleep(45 + Math.floor(this.d.rand() * 70));
+    }
+  }
+
+  async think(text: string): Promise<void> {
+    this.d.push(this.chatId, { kind: 'thinking', id: this.d.nextId(), at: this.d.now(), text });
+    await this.sleep(900);
+  }
+
+  /** A tool row: running for `ms`, then ok/error with its output or diff. */
+  async tool(name: string, summary: string, input: unknown, ms: number, done: { output?: string; diff?: FileDiff[]; status?: 'ok' | 'error' } = {}): Promise<string> {
+    const id = this.d.nextId();
+    const at = this.d.now();
+    this.d.push(this.chatId, { kind: 'tool', id, at, name, summary, input, status: 'running' });
+    await this.sleep(ms);
+    this.finishTool(id, done);
+    return id;
+  }
+
+  finishTool(id: string, done: { output?: string; diff?: FileDiff[]; status?: 'ok' | 'error' }): void {
+    const it = this.d.item(this.chatId, id);
+    if (!it || it.kind !== 'tool') return;
+    this.d.upsert(this.chatId, { ...it, status: done.status ?? 'ok', ...(done.output !== undefined ? { output: done.output } : {}), ...(done.diff ? { diff: done.diff } : {}) });
+  }
+
+  /** A browser step: a tool row plus the page's cursor moving and the tab's "last action". */
+  async browse(tabId: string, tool: string, summary: string, action: DemoAction, ms = 1400): Promise<void> {
+    const id = this.d.nextId();
+    this.d.push(this.chatId, { kind: 'tool', id, at: this.d.now(), name: `mcp__sb-browser__${tool}`, summary, input: { tabId }, status: 'running' });
+    this.d.browser?.act(tabId, action);
+    await this.sleep(ms);
+    this.finishTool(id, { output: action.label });
+  }
+
+  /** Asks the user (question or permission) and waits for the answer. */
+  ask(req: Omit<PendingRequest, 'id' | 'chatId' | 'at'>): Promise<Answer> {
+    return this.d.ask(this.chatId, req, this.signal);
+  }
+
+  result(costUsd: number, durationMs: number, turns: number): void {
+    this.d.push(this.chatId, { kind: 'result', id: this.d.nextId(), at: this.d.now(), costUsd, durationMs, turns, isError: false });
+  }
+}
+
+const lastLine = (t: string) => {
+  const lines = t.replace(/[*`_#>]/g, '').split('\n').map(l => l.trim()).filter(Boolean);
+  return (lines[lines.length - 1] ?? '').slice(0, 200);
+};
+
+interface Waiter { resolve(a: Answer): void; reject(e: Error): void }
+
+export class DemoChats implements ChatService {
+  readonly freeze: boolean;
+  readonly now: () => number;
+  readonly rand: () => number;
+  browser: DemoBrowserHooks | null = null;
+  /** feed hook (DemoBrain): a chat started waiting / finished */
+  onEvent: ((kind: 'chat-waiting' | 'chat-done', chat: ChatSummary, detail: string) => void) | null = null;
+
+  private chats = new Map<string, ChatSummary>();
+  private itemsOf = new Map<string, ChatItem[]>();
+  private pend: PendingRequest[] = [];
+  private waiters = new Map<string, Waiter>();
+  private continuations = new Map<string, Continuation>();
+  private runs = new Map<string, AbortController>();
+  private sends = new Map<string, string[]>();
+  private timers: ReturnType<typeof setInterval>[] = [];
+  private counter = 0;
+
+  constructor(private emit: Emit, opts: DemoOptions, initial: Seed) {
+    this.freeze = opts.freeze;
+    this.now = opts.now ?? (opts.freeze ? () => FROZEN_EPOCH : () => Date.now());
+    this.rand = prng(opts.seed ?? 7);
+    for (const c of initial.chats) { this.chats.set(c.id, c); this.itemsOf.set(c.id, [...(initial.items[c.id] ?? [])]); }
+    this.pend = [...initial.pending];
+    this.continuations.set('regia-q1', continueRegia);
+    this.continuations.set('qa-q1', continueQa);
+    this.continuations.set('feedback-p1', continueFeedback);
+  }
+
+  /** Live mode: the running chats carry on from the seed and the costs tick. */
+  start(): void {
+    if (this.freeze) return;
+    this.startRun('fix', resumeFix, { keepState: true });
+    this.startRun('sms', resumeSms, { keepState: true });
+    this.timers.push(setInterval(() => this.tickCosts(), 1000));
+  }
+
+  nextId(): string { return `d${++this.counter}`; }
+  item(chatId: string, id: string): ChatItem | undefined { return this.itemsOf.get(chatId)?.find(i => i.id === id); }
+
+  push(chatId: string, item: ChatItem): void {
+    const list = this.itemsOf.get(chatId);
+    if (!list) return;
+    list.push(item);
+    if (list.length > ITEMS_CAP) list.splice(0, list.length - ITEMS_CAP);
+    this.emit('chat:item', { chatId, item });
+    this.patch(chatId, {});
+  }
+
+  upsert(chatId: string, item: ChatItem): void {
+    const list = this.itemsOf.get(chatId);
+    if (!list) return;
+    const i = list.findIndex(x => x.id === item.id);
+    if (i < 0) { this.push(chatId, item); return; }
+    list[i] = item;
+    this.emit('chat:item', { chatId, item, replace: true });
+  }
+
+  patch(chatId: string, p: Partial<ChatSummary>): ChatSummary | undefined {
+    const c = this.chats.get(chatId);
+    if (!c) return undefined;
+    const next: ChatSummary = { ...c, ...p, updatedAt: this.now() };
+    this.chats.set(chatId, next);
+    this.emit('chat:updated', next);
+    return next;
+  }
+
+  // ---- ChatService
+  list(): ChatSummary[] { return [...this.chats.values()]; }
+  items(chatId: string): ChatItem[] { return [...(this.itemsOf.get(chatId) ?? [])]; }
+  pending(): PendingRequest[] { return [...this.pend]; }
+
+  async create(req: NewChat): Promise<ChatSummary> {
+    const id = `c${++this.counter}`;
+    const c: ChatSummary = {
+      id, harness: req.harness, origin: 'app', title: req.title?.trim() || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
+      model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
+      pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
+    };
+    this.chats.set(id, c);
+    this.itemsOf.set(id, []);
+    this.emit('chat:updated', c);
+    log.info('demo', 'chat created', { chat: id, data: { harness: req.harness } });
+    if (req.prompt) { const prompt = req.prompt; this.startRun(id, async run => { await run.sleep(700); this.patch(id, { state: 'running' }); run.user(prompt); await genericReply(run, prompt); }); }
+    return c;
+  }
+
+  async send(chatId: string, text: string): Promise<void> {
+    const c = this.chats.get(chatId);
+    if (!c) throw new Error(`demo: no chat ${chatId}`);
+    if (this.runs.has(chatId)) { this.sends.set(chatId, [...(this.sends.get(chatId) ?? []), text]); return; }
+    this.startRun(chatId, async run => { run.user(text); await (c.isRegia ? regiaReply(run, text, this) : genericReply(run, text)); });
+  }
+
+  /** e2e: the next answer fails like a broken connection (the request stays open). */
+  failNextAnswer = false;
+
+  async answer(chatId: string, requestId: string, answer: Answer): Promise<void> {
+    const req = this.pend.find(p => p.chatId === chatId && p.id === requestId);
+    if (!req) throw new Error('Questa richiesta non è più aperta.');
+    if (this.failNextAnswer) { this.failNextAnswer = false; throw new Error('Rete non disponibile (demo).'); }
+    this.resolvePending(req);
+    const key = `${chatId}/${requestId}`;
+    const w = this.waiters.get(key);
+    log.info('demo', 'request answered', { chat: chatId, data: { requestId, kind: answer.kind } });
+    if (w) { this.waiters.delete(key); this.patch(chatId, { state: 'running' }); w.resolve(answer); return; }
+    const cont = this.continuations.get(requestId);
+    this.continuations.delete(requestId);
+    if (cont) this.startRun(chatId, run => cont(run, answer));
+    else this.patch(chatId, { state: 'idle' });
+  }
+
+  async stop(chatId: string): Promise<void> {
+    const c = this.chats.get(chatId);
+    if (!c || c.state === 'idle' || c.state === 'closed') return;
+    this.runs.get(chatId)?.abort();
+    this.runs.delete(chatId);
+    this.sends.delete(chatId);
+    for (const it of this.itemsOf.get(chatId) ?? []) {
+      if (it.kind === 'tool' && it.status === 'running') this.upsert(chatId, { ...it, status: 'error', output: 'interrotto' });
+      if (it.kind === 'assistant' && it.streaming) this.upsert(chatId, { ...it, streaming: false });
+    }
+    for (const p of this.pend.filter(x => x.chatId === chatId)) { this.resolvePending(p); this.waiters.delete(`${chatId}/${p.id}`); this.continuations.delete(p.id); }
+    this.push(chatId, { kind: 'system', id: this.nextId(), at: this.now(), level: 'warn', text: 'Interrotto da te.' });
+    this.patch(chatId, { state: 'idle' });
+    log.info('demo', 'chat stopped', { chat: chatId });
+  }
+
+  async stopAll(): Promise<number> {
+    const busy = [...this.chats.values()].filter(c => c.state === 'running' || c.state === 'starting');
+    for (const c of busy) await this.stop(c.id);
+    return busy.length;
+  }
+
+  async close(chatId: string): Promise<void> {
+    if (!this.chats.has(chatId)) return;
+    this.runs.get(chatId)?.abort();
+    this.runs.delete(chatId);
+    for (const p of this.pend.filter(x => x.chatId === chatId)) this.resolvePending(p);
+    this.chats.delete(chatId);
+    this.itemsOf.delete(chatId);
+    this.browser?.closeOwned(chatId);
+    this.emit('chat:removed', { chatId });
+  }
+
+  async set(chatId: string, patch: { model?: string; effort?: ChatSummary['effort']; permissionMode?: ChatSummary['permissionMode']; title?: string }): Promise<ChatSummary> {
+    const clean: Partial<ChatSummary> = {};
+    if (patch.model !== undefined) clean.model = patch.model || null;
+    if (patch.effort !== undefined) clean.effort = patch.effort;
+    if (patch.permissionMode !== undefined) clean.permissionMode = patch.permissionMode;
+    if (patch.title !== undefined && patch.title.trim()) clean.title = patch.title.trim();
+    const c = this.patch(chatId, clean);
+    if (!c) throw new Error(`demo: no chat ${chatId}`);
+    return c;
+  }
+
+  async external(): Promise<ChatSummary[]> { return []; }
+
+  async shutdown(): Promise<void> {
+    for (const t of this.timers) clearInterval(t);
+    this.timers = [];
+    for (const r of this.runs.values()) r.abort();
+    this.runs.clear();
+  }
+
+  // ---- internals
+
+  ask(chatId: string, req: Omit<PendingRequest, 'id' | 'chatId' | 'at'>, signal: AbortSignal): Promise<Answer> {
+    const p: PendingRequest = { ...req, id: `req-${this.nextId()}`, chatId, at: this.now() };
+    this.pend.push(p);
+    this.emit('pending:added', p);
+    const c = this.patch(chatId, { state: 'waiting', pending: this.pend.filter(x => x.chatId === chatId).length });
+    if (c) this.onEvent?.('chat-waiting', c, p.title);
+    return new Promise<Answer>((resolve, reject) => {
+      this.waiters.set(`${chatId}/${p.id}`, { resolve, reject });
+      signal.addEventListener('abort', () => reject(new Aborted()), { once: true });
+    });
+  }
+
+  private resolvePending(p: PendingRequest): void {
+    this.pend = this.pend.filter(x => x !== p);
+    this.emit('pending:resolved', { chatId: p.chatId, requestId: p.id });
+    this.patch(p.chatId, { pending: this.pend.filter(x => x.chatId === p.chatId).length });
+  }
+
+  startRun(chatId: string, script: (run: Run) => Promise<void>, opts: { keepState?: boolean } = {}): void {
+    this.runs.get(chatId)?.abort();
+    const ctrl = new AbortController();
+    this.runs.set(chatId, ctrl);
+    const run = new Run(this, chatId, ctrl.signal);
+    if (!opts.keepState) this.patch(chatId, { state: 'running' });
+    void script(run).then(
+      () => {
+        if (this.runs.get(chatId) !== ctrl) return;
+        this.runs.delete(chatId);
+        const c = this.patch(chatId, { state: 'idle' });
+        if (c && !c.isRegia) this.onEvent?.('chat-done', c, c.lastText);
+        const next = this.sends.get(chatId)?.shift();
+        if (next !== undefined) void this.send(chatId, next);
+      },
+      (e: unknown) => {
+        if (e instanceof Aborted) return;
+        log.error('demo', 'demo script failed', { chat: chatId, cause: e instanceof Error ? e.message : String(e), hint: 'a bug in src/main/demo.ts scripts' });
+        if (this.runs.get(chatId) === ctrl) this.runs.delete(chatId);
+        this.patch(chatId, { state: 'error', lastError: 'script demo fallito' });
+      },
+    );
+  }
+
+  private tickCosts(): void {
+    for (const c of this.chats.values()) {
+      if (c.state !== 'running' || c.harness !== 'claude') continue;
+      this.patch(c.id, { costUsd: Math.round((c.costUsd + 0.004 + this.rand() * 0.012) * 1000) / 1000 });
+    }
+  }
+}
+
+const titleFrom = (prompt?: string) => (prompt ? prompt.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 48) : '');
+
+const picked = (a: Answer, question: string): string => {
+  if (a.kind !== 'question') return '';
+  const v = a.answers[question];
+  return Array.isArray(v) ? v.join(', ') : (v ?? '');
+};
+
+// ---------------------------------------------------------------- scripts
+
+async function resumeFix(run: Run): Promise<void> {
+  await run.sleep(4500);
+  run.finishTool('fix-t4', { output: 'Superati: 38 · Falliti: 0 · Ignorati: 0 (12,4 s)' });
+  await run.say('Tutti verdi: **38 test superati**. Preparo il commit sul branch della PR.');
+  const a = await run.ask({
+    type: 'permission', tool: 'Bash', title: 'Bash · git commit sul branch della PR', input: { command: 'git commit -am "fix(ordini): totale dopo lo sconto"' },
+    detail: 'git commit -am "fix(ordini): totale dopo lo sconto"',
+  });
+  if (a.kind === 'permission' && a.allow) {
+    await run.tool('Bash', 'git commit -am "fix(ordini): totale dopo lo sconto"', {}, 1200, { output: '[fix/totale-ordine-sconto 3f2a91c] 3 files changed, 42 insertions(+), 7 deletions(-)' });
+    await run.say('Commit fatto sul branch della PR. Se vuoi aggiorno anche la descrizione della PR.');
+  } else {
+    await run.say(a.kind === 'permission' && a.message ? `Ok, niente commit. Seguo la tua indicazione: «${a.message}».` : 'Ok, niente commit: lascio le modifiche pronte da rivedere.');
+  }
+  run.result(0.31, 7 * MIN, 9);
+}
+
+async function resumeSms(run: Run): Promise<void> {
+  await run.sleep(600);
+  await run.say(' se l\'SMS parte davvero.', 'sms-a1');
+  const steps: [string, string, DemoAction][] = [
+    ['browser_find', '"Invia SMS" · 1 risultato', { label: 'find «Invia SMS»', x: 74, y: 30 }],
+    ['browser_click', 'ref_31 · «Invia SMS»', { label: 'click ref_31 · «Invia SMS»', x: 74, y: 30 }],
+    ['browser_screenshot', 'attività dopo l\'invio', { label: 'screenshot · attività', x: 52, y: 62 }],
+    ['browser_console', '1 errore: 500 su /api/sms/invia', { label: 'console · 1 errore', x: 52, y: 70 }],
+    ['browser_click', 'ref_12 · scheda «Attività»', { label: 'click ref_12 · «Attività»', x: 34, y: 21 }],
+  ];
+  const notes = [
+    'L\'invio risponde 500: il numero del cliente ha uno spazio finale che il servizio SMS rifiuta.',
+    'Riprovo con un numero senza spazi per confermare la causa.',
+    'Confermato: con il numero pulito l\'SMS parte. Preparo i passi per il bug.',
+  ];
+  for (let i = 0; ; i++) {
+    const [tool, summary, action] = steps[i % steps.length]!;
+    await run.browse('tab-sms', tool, summary, action, 1500);
+    await run.sleep(1200);
+    if (i % 5 === 4) await run.say(notes[Math.floor(i / 5) % notes.length]!);
+  }
+}
+
+const continueRegia: Continuation = async (run, a) => {
+  const label = picked(a, 'Quale vista vuoi come predefinita?') || 'Mosaico';
+  await run.say(`Segnato: **${label}** come vista predefinita. Puoi cambiarla quando vuoi con \`Ctrl+Shift+V\`. Adesso la cosa più vecchia che ti aspetta è la QA dei rimborsi.`);
+};
+
+const continueQa: Continuation = async (run, a) => {
+  const label = picked(a, 'Il test case 7 fallisce anche su master: cosa faccio?');
+  if (/^Apro un bug/.test(label)) {
+    await run.say('Apro il bug con i passi e lo screenshot, e taggo la QA.');
+    await run.tool('mcp__tracker__create_bug', 'Bug «Rimborso senza sconto» · non assegnato', { title: 'Rimborso senza sconto' }, 2500, { output: 'Creato · tag ai-found · QA taggata' });
+    await run.say('Fatto. Passo al **test case 8**: rimborso parziale.');
+    await run.browse('tab-qa', 'browser_click', 'ref_7 · «Nuovo rimborso»', { label: 'click ref_7 · «Nuovo rimborso»', x: 30, y: 40 });
+    await run.browse('tab-qa', 'browser_type', 'ref_9 · importo 40,00', { label: 'type ref_9 · 40,00', x: 46, y: 52 });
+    await run.browse('tab-qa', 'browser_click', 'ref_14 · «Emetti rimborso»', { label: 'click ref_14 · «Emetti»', x: 33, y: 78 });
+    await run.say('Test case 8 passato. Restano il 9 e il report.');
+  } else if (/^Lo segno/.test(label)) {
+    await run.say('Lo segno nel report come «fallisce anche su master» e vado avanti con l\'8.');
+    await run.tool('Write', 'report-qa-rimborsi.md', {}, 900, { output: 'report aggiornato' });
+  } else if (/^Mi fermo/.test(label)) {
+    await run.say('Ok, mi fermo qui. Il report è aggiornato fino al test case 7.');
+  } else {
+    await run.say(`Ok: «${label}». Procedo così.`);
+  }
+  run.result(0.42, 3 * MIN, 4);
+};
+
+const continueFeedback: Continuation = async (run, a) => {
+  if (a.kind === 'permission' && a.allow) {
+    await run.tool('Bash', 'npm run test:e2e', { command: 'npm run test:e2e' }, 6000, { output: '12 passed (48.2s)' });
+    await run.say('Tutti verdi: **12 su 12**. Gli screenshot sono in `test-results/shots/`.');
+  } else {
+    await run.say(a.kind === 'permission' && a.message ? `Va bene, non lancio i test. Mi hai scritto: «${a.message}».` : 'Va bene, non lancio i test.');
+  }
+  run.result(0.12, MIN, 2);
+};
+
+async function genericReply(run: Run, text: string): Promise<void> {
+  await run.sleep(500);
+  await run.think('Rileggo la richiesta e controllo i file del progetto prima di rispondere.');
+  await run.say(`Ricevuto: «${text.length > 80 ? `${text.slice(0, 80)}…` : text}». Prima di toccare qualcosa do un'occhiata al progetto: leggo il README, controllo come sono organizzati i file e quali test ci sono già, così ti propongo un piano breve con i passi in ordine e il rischio di ognuno.`);
+  await run.tool('Read', 'README.md', { file_path: 'README.md' }, 1400, { output: '64 righe' });
+  await run.say('Fatto. Il progetto è in ordine: dimmi tu da dove partire.');
+  run.result(0.06, 20_000, 1);
+}
+
+async function regiaReply(run: Run, _text: string, d: DemoChats): Promise<void> {
+  await run.sleep(400);
+  const all = d.list().filter(c => !c.isRegia);
+  const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
+  const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);
+  await run.say(`Ecco il quadro:\n\n- **Ti aspettano ${waiting.length}**: ${waiting.join(', ') || 'nessuna'}\n- **Al lavoro ${working.length}**: ${working.join(', ') || 'nessuna'}\n\nTi consiglio di partire da **${waiting[0] ?? working[0] ?? 'una nuova chat'}**.`);
+}
+
+// ---------------------------------------------------------------- the brain (feed + usage)
+
+const LIVE_FEED: [string, string, Priority, string, string][] = [
+  ['idea', 'Idea dell\'IA', 'normal', 'Riassunto automatico al ritorno', 'Una riga «dove eravamo» su ogni chat quando torni'],
+  ['win', 'Fatto', 'quiet', 'Test e2e verdi su main', '12 test, 4 screenshot guardati'],
+  ['reflection', 'Riflessione', 'quiet', 'Meno notifiche, più fiducia', 'Due avvisi alla volta bastano'],
+  ['error', 'Errore registrato', 'normal', 'Comando lanciato due volte', 'La chat ha ripetuto un comando già fatto'],
+  ['idea', 'Idea dell\'IA', 'normal', 'Un clic per parcheggiare una deviazione', 'Le tangenti diventano attività, non distrazioni'],
+];
+
+export class DemoBrain implements BrainService {
+  private events: FeedEvent[];
+  private muted = new Set<string>();
+  private timers: ReturnType<typeof setInterval>[] = [];
+  private n = 0;
+  private base: number;
+  private startToday: number;
+  private budgetFns = new Set<(a: BudgetAlert) => void>();
+  private offCfg: (() => void)[] = [];
+
+  /** `cfg`: the real settings store (userData/config.json) so settings, undo and proposals behave as in the app. */
+  constructor(private emit: Emit, private chats: DemoChats, private initial: Seed, private cfg: ConfigStore) {
+    this.events = [...initial.feed];
+    const sum = chats.list().reduce((a, c) => a + c.costUsd, 0);
+    this.base = initial.usage.todayUsd - sum;
+    this.startToday = initial.usage.todayUsd;
+    chats.onEvent = (kind, chat, detail) => this.push({
+      id: `fe-${++this.n}`, at: chats.now(), kind, label: kind === 'chat-waiting' ? 'Ti aspetta' : 'Chat finita',
+      priority: kind === 'chat-waiting' ? 'urgent' : 'quiet', title: chat.title, detail, chatId: chat.id,
+    });
+    this.offCfg.push(cfg.onChange((c, now) => this.emit('settings:changed', { ...c, settings: now })));
+    this.offCfg.push(cfg.onProposal(p => this.emit('settings:proposed', p)));
+  }
+
+  start(): void {
+    if (this.chats.freeze) return;
+    let i = 0;
+    this.timers.push(setInterval(() => {
+      const [kind, label, priority, title, detail] = LIVE_FEED[i++ % LIVE_FEED.length]!;
+      this.push({ id: `fe-${++this.n}`, at: this.chats.now(), kind, label, priority, title, detail, file: kind === 'idea' ? 'ideas.md' : undefined });
+    }, 9000));
+    this.timers.push(setInterval(() => this.emit('usage', this.usage()), 3000));
+  }
+
+  private push(e: FeedEvent): void {
+    if (this.muted.has(e.kind)) return;
+    this.events = [e, ...this.events].slice(0, 300);
+    this.emit('feed:events', [e]);
+  }
+
+  feed(): FeedEvent[] { return this.events.filter(e => !this.muted.has(e.kind)); }
+  mute(kind: string, muted: boolean): void { if (muted) this.muted.add(kind); else this.muted.delete(kind); }
+
+  usage(): Usage {
+    const today = Math.round((this.base + this.chats.list().reduce((a, c) => a + c.costUsd, 0)) * 100) / 100;
+    const pct = Math.min(100, Math.round((this.initial.usage.fiveHourPct ?? 0) + (today - this.startToday) * 1.5));
+    return { ...this.initial.usage, todayUsd: today, fiveHourPct: pct, costKnown: true, limitsSource: 'stream', limitsAt: this.chats.now(), at: this.chats.now() };
+  }
+
+  info() { return { brainRoot: this.cfg.get().brainRoot ?? DEMO_BRAIN }; }
+
+  // ---- settings: the real store
+  settings(): Settings { return this.cfg.get(); }
+  async setSettings(patch: SettingsPatch): Promise<Settings> { return this.cfg.set(patch); } // the store's default origin: the user
+  settingsSchema(): SettingDef[] { return this.cfg.schema(); }
+  settingsHistory(limit?: number): SettingChange[] { return this.cfg.history(limit); }
+  undoSetting(changeId: string, by?: ChangeBy): SettingChange { return by ? this.cfg.undo(changeId, { by }) : this.cfg.undo(changeId); }
+  requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string }): SettingRequestResult { return this.cfg.request(key, value, origin); }
+  pendingSettings(): SettingProposal[] { return this.cfg.pending(); }
+  confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null } { return { change: this.cfg.confirm(proposalId, accept) }; }
+  onSettingChange(fn: (c: SettingChange, now: Settings) => void): () => void { return this.cfg.onChange(fn); }
+
+  // ---- estimates, brain data, plan windows, budget: honest "no data" in the demo
+  estimate(): EstimateResult { return { kind: 'other', estimate: null, basis: { count: 0, scope: 'demo', label: 'stima senza dati (demo)' } }; }
+  recordJob(): { id: string } { return { id: `job-${++this.n}` }; }
+  async api(): Promise<BrainApiResult> { return { ok: false, error: 'demo: nessun server del cervello' }; }
+  publish(events: FeedInput[]): void {
+    for (const e of events) {
+      const k = KINDS[e.kind] ?? { label: e.kind, priority: 'quiet' as Priority };
+      this.push({ id: `fe-${++this.n}`, at: this.chats.now(), kind: e.kind, label: k.label, priority: k.priority, title: e.title, detail: e.detail ?? '', ...(e.chatId ? { chatId: e.chatId } : {}), ...(e.file ? { file: e.file } : {}) });
+    }
+  }
+  ingestRateLimits(): void { /* the demo has its own plan meter */ }
+  onBudgetAlert(fn: (a: BudgetAlert) => void): () => void { this.budgetFns.add(fn); return () => { this.budgetFns.delete(fn); }; }
+
+  async shutdown(): Promise<void> {
+    for (const t of this.timers) clearInterval(t);
+    this.timers = [];
+    for (const off of this.offCfg) off();
+  }
+}

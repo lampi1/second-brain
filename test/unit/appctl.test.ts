@@ -30,6 +30,21 @@ describe('app control tools', () => {
     await expect(Promise.resolve(tool('app_send_to_chat').run({ chatId: 'c1', text: '' }))).rejects.toThrow(/empty/);
   });
 
+  it('a Cursor chat gets agent messages only with the switch on and only while it runs', async () => {
+    const sent: string[] = [];
+    let cross = true;
+    const list = [{ id: 'cur', harness: 'cursor', state: 'idle' }, { id: 'off', harness: 'cursor', state: 'closed' }];
+    const chats = { list: () => list, send: async (id: string) => { sent.push(id); } } as unknown as ChatService;
+    const brain = { settings: () => ({ messaging: { crossHarness: cross } }) } as unknown as BrainService;
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_send_to_chat')!;
+    await t.run({ chatId: 'cur', text: 'ciao' });
+    expect(sent).toEqual(['cur']);
+    await expect(Promise.resolve(t.run({ chatId: 'off', text: 'ciao' }))).rejects.toThrow(/non è attiva/);
+    cross = false;
+    await expect(Promise.resolve(t.run({ chatId: 'cur', text: 'ciao' }))).rejects.toThrow(/bloccato/);
+    expect(sent).toEqual(['cur']);
+  });
+
   it('filters logs by level and text and steers the UI', async () => {
     const { tool, ui } = deps();
     log.warn('chats', 'session slow', { chat: 'c9' });

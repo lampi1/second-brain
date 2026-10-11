@@ -1,5 +1,6 @@
 // Builds the services and connects them: chats get their own browser MCP endpoint, app-chat events reach the live feed,
 // the app-control tools are mounted on the same local MCP server. Used by index.ts (one call at start).
+// SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 import type { BrowserWindow } from 'electron';
 import { app } from 'electron';
 import type { CliStatus } from '../shared/contract';
@@ -11,6 +12,7 @@ import { createBrain } from './brain';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { appControlTools, type ToolOut } from './appctl/tools';
+import { createDemoServices } from './demo-wiring';
 import { ProductSync } from './sync';
 import path from 'node:path';
 
@@ -26,7 +28,7 @@ export interface Wired {
 }
 
 /** app-control results → MCP tool output (objects as JSON text, screenshots as images with their captions). */
-function toMcp(out: ToolOut): ToolOutput {
+export function toMcp(out: ToolOut): ToolOutput {
   if (typeof out === 'string') return out;
   if (out && typeof out === 'object' && 'images' in out && Array.isArray((out as { images?: unknown }).images)) {
     const o = out as { text?: string; images: { data: string; mimeType: string; caption?: string }[] };
@@ -36,6 +38,7 @@ function toMcp(out: ToolOut): ToolOutput {
 }
 
 export async function createServices(ctx: Ctx): Promise<Wired> {
+  if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
   let cliCache: { claude: CliStatus; cursor: CliStatus } | null = null;
   // not in e2e tests: a pending CLI check would delay the app exit by seconds
   if (!process.env.SB_TEST) void Promise.all([claudeStatus(), cursorStatus()]).then(([claude, cursor]) => { cliCache = { claude, cursor }; });

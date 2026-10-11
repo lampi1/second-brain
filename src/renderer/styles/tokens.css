@@ -1,20 +1,193 @@
-/* Design tokens (dark default; light follows Windows). One place for colors, radii, type. */
+/* Design tokens: the one place for colors, type, spacing (4/8 px grid), radii, motion. Dark by default; light follows
+   Windows (prefers-color-scheme) unless the user picked a theme (data-theme on <html>); density (data-density) scales
+   paddings. Every component uses these variables (styles/app.css); contrast checked for WCAG 2.2 AA on --surface. */
 :root {
-  --bg: #0b0d12; --panel: #12151c; --panel-2: #171b24; --line: #222836; --line-2: #2c3344;
-  --text: #e8eaf0; --dim: #8b93a7; --faint: #5d6579;
-  --blue: #6d8cff; --green: #4fd18b; --amber: #f4b545; --red: #ff6b7a;
-  --regia: #b78cff; --regia-bg: #1a1526; --regia-line: #3b2d57;
-  --claude: #e8845a; --cursor: #d9dde6;
-  --radius: 12px; --radius-s: 8px;
-  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --mono: "Cascadia Mono", Consolas, monospace;
+  --bg: #0a0b0f;
+  --bg-2: #0e1015;
+  --surface: #121419;
+  --surface-2: #171a21;
+  --surface-3: #1e222a;
+  --surface-4: #262b35;
+  --border: #20242d;
+  --border-2: #2a2f3a;
+  --border-3: #3a404d;
+  --text: #eceef3;
+  --text-2: #b9bfcb;
+  --text-3: #8d94a4;
+  --text-4: #7b8293;
+  --md-text: #d7dae2;
+
+  --blue: #7b93ff;
+  --blue-strong: #9aacff;
+  --blue-bg: rgba(123, 147, 255, 0.13);
+  --blue-line: rgba(123, 147, 255, 0.5);
+  --amber: #f2b64c;
+  --amber-bg: rgba(242, 182, 76, 0.09);
+  --amber-line: rgba(242, 182, 76, 0.5);
+  --green: #4fd18b;
+  --green-bg: rgba(79, 209, 139, 0.11);
+  --red: #ff6b7a;
+  --red-bg: rgba(255, 107, 122, 0.11);
+  --violet: #b892ff;
+  --violet-bg: rgba(184, 146, 255, 0.12);
+  --regia-bg: #141019;
+  --regia-surface: #1c1626;
+  --regia-input: #100c16;
+  --regia-line: #2f2542;
+  --regia-line-2: #46385f;
+  --claude: #e2805a;
+  --claude-fg: #fff6f1;
+  --cursor-bg: #e3e6ed;
+  --cursor-fg: #14161b;
+  --page-bg: #f3f5f9;
+  --focus: #93a8ff;
+  --on-accent: #0b0d14;
+  --add-bg: rgba(79, 209, 139, 0.1);
+  --add-fg: #92e4b6;
+  --del-bg: rgba(255, 107, 122, 0.1);
+  --del-fg: #ffa3ad;
+  --tooltip-bg: #232731;
+  --backdrop: rgba(5, 6, 9, 0.62);
+  --scroll: rgba(255, 255, 255, 0.09);
+  --scroll-hover: rgba(255, 255, 255, 0.16);
+
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-s: 12px;
+  --fs-m: 13px;
+  --fs-l: 14px;
+  --fs-xl: 16px;
+  --fs-2xl: 22px;
+
+  --r-xs: 6px;
+  --r-s: 8px;
+  --r-m: 10px;
+  --r-l: 12px;
+  --r-xl: 14px;
+
+  /* density-dependent spacing */
+  --topbar-h: 52px;
+  --pad: 12px;
+  --pad-s: 8px;
+  --row-gap: 8px;
+  --gap: 8px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 150ms;
+  --dur-slow: 180ms;
+  --shadow-pop: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
+
+:root[data-density="compact"] {
+  --topbar-h: 46px;
+  --pad: 10px;
+  --pad-s: 6px;
+  --row-gap: 6px;
+  --fs-m: 12.5px;
+}
+
+/* light: when Windows is light (and the user did not force dark), or when the user picked light */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f5f6f9; --panel: #ffffff; --panel-2: #f0f2f6; --line: #e1e4eb; --line-2: #d3d8e2;
-    --text: #151922; --dim: #5b6377; --faint: #8b93a7;
-    --regia-bg: #f5effe; --regia-line: #dccbf7; --cursor: #2b2f38;
+    --bg: #f3f4f7;
+    --bg-2: #eceef2;
+    --surface: #ffffff;
+    --surface-2: #f6f7f9;
+    --surface-3: #eceef2;
+    --surface-4: #e2e5eb;
+    --border: #e2e5eb;
+    --border-2: #d5d9e1;
+    --border-3: #c2c8d2;
+    --text: #13161d;
+    --text-2: #3a4050;
+    --text-3: #596173;
+    --text-4: #6b7282;
+    --md-text: #252a35;
+    --blue: #3a5ce0;
+    --blue-strong: #2c4cc8;
+    --blue-bg: rgba(58, 92, 224, 0.09);
+    --blue-line: rgba(58, 92, 224, 0.45);
+    --amber: #93580a;
+    --amber-bg: rgba(214, 140, 22, 0.08);
+    --amber-line: rgba(196, 126, 14, 0.5);
+    --green: #157a45;
+    --green-bg: rgba(21, 122, 69, 0.09);
+    --red: #cc3343;
+    --red-bg: rgba(204, 51, 67, 0.08);
+    --violet: #7246d0;
+    --violet-bg: rgba(114, 70, 208, 0.09);
+    --regia-bg: #faf7ff;
+    --regia-surface: #f2ebff;
+    --regia-input: #ffffff;
+    --regia-line: #e6dcfa;
+    --regia-line-2: #cfbcf4;
+    --cursor-bg: #1d2027;
+    --cursor-fg: #ffffff;
+    --focus: #3a5ce0;
+    --on-accent: #ffffff;
+    --add-bg: rgba(21, 122, 69, 0.08);
+    --add-fg: #0f6136;
+    --del-bg: rgba(204, 51, 67, 0.08);
+    --del-fg: #a3202f;
+    --tooltip-bg: #1d2129;
+    --backdrop: rgba(20, 24, 33, 0.32);
+    --scroll: rgba(0, 0, 0, 0.12);
+    --scroll-hover: rgba(0, 0, 0, 0.22);
+    --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
     color-scheme: light;
   }
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f7;
+  --bg-2: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceef2;
+  --surface-4: #e2e5eb;
+  --border: #e2e5eb;
+  --border-2: #d5d9e1;
+  --border-3: #c2c8d2;
+  --text: #13161d;
+  --text-2: #3a4050;
+  --text-3: #596173;
+  --text-4: #6b7282;
+  --md-text: #252a35;
+  --blue: #3a5ce0;
+  --blue-strong: #2c4cc8;
+  --blue-bg: rgba(58, 92, 224, 0.09);
+  --blue-line: rgba(58, 92, 224, 0.45);
+  --amber: #93580a;
+  --amber-bg: rgba(214, 140, 22, 0.08);
+  --amber-line: rgba(196, 126, 14, 0.5);
+  --green: #157a45;
+  --green-bg: rgba(21, 122, 69, 0.09);
+  --red: #cc3343;
+  --red-bg: rgba(204, 51, 67, 0.08);
+  --violet: #7246d0;
+  --violet-bg: rgba(114, 70, 208, 0.09);
+  --regia-bg: #faf7ff;
+  --regia-surface: #f2ebff;
+  --regia-input: #ffffff;
+  --regia-line: #e6dcfa;
+  --regia-line-2: #cfbcf4;
+  --cursor-bg: #1d2027;
+  --cursor-fg: #ffffff;
+  --focus: #3a5ce0;
+  --on-accent: #ffffff;
+  --add-bg: rgba(21, 122, 69, 0.08);
+  --add-fg: #0f6136;
+  --del-bg: rgba(204, 51, 67, 0.08);
+  --del-fg: #a3202f;
+  --tooltip-bg: #1d2129;
+  --backdrop: rgba(20, 24, 33, 0.32);
+  --scroll: rgba(0, 0, 0, 0.12);
+  --scroll-hover: rgba(0, 0, 0, 0.22);
+  --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
+  color-scheme: light;
 }
 :root[data-theme="dark"] { color-scheme: dark; }

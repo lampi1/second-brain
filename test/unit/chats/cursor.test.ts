@@ -7,17 +7,20 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cursorAllowed, cursorArgv, newestCursorVersion, resolveCursor } from '../../../src/main/chats/cli';
-import { AUTH_HELP, CursorSession, type CursorOptions } from '../../../src/main/chats/cursor';
+import { AUTH_HELP, CursorSession, MODEL_RESTART, cursorConfigDir, type CursorOptions } from '../../../src/main/chats/cursor';
 import { costOf, priceOf } from '../../../src/main/chats/cursor-prices';
 import { cursorStatus, openLogin } from '../../../src/main/cli';
 import { FAKE_CURSOR, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
 
 const open: CursorSession[] = [];
+const logs: string[] = [];
 function start(extra: Partial<CursorOptions> = {}): { s: CursorSession; sink: RecSink; cwd: string; logFile: string } {
   const cwd = tmp('cwd');
   const logFile = path.join(tmp('log'), 'cursor.jsonl');
+  logs.push(logFile);
   const sink = recSink();
-  const s = new CursorSession({ chatId: 'c_cur', cwd, cursorPath: FAKE_CURSOR, ...extra, env: { FAKE_CURSOR_LOG: logFile, ...extra.env } }, sink);
+  // the fake writes --model into CURSOR_CONFIG_DIR like the real CLI: always a temp folder here
+  const s = new CursorSession({ chatId: 'c_cur', cwd, cursorPath: FAKE_CURSOR, ...extra, env: { FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: tmp('cursor-cfg'), ...extra.env } }, sink);
   open.push(s);
   s.start();
   return { s, sink, cwd, logFile };
@@ -25,7 +28,12 @@ function start(extra: Partial<CursorOptions> = {}): { s: CursorSession; sink: Re
 const results = (sink: RecSink) => [...sink.items.values()].filter(i => i.kind === 'result');
 const answerOf = (logFile: string) => cursorLog(logFile).filter(l => 'answer' in l).at(-1)?.answer?.outcome;
 
-afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); });
+afterEach(async () => {
+  await Promise.all(open.splice(0).map(s => s.close(500)));
+  // in every test: session/set_model writes the user's global Cursor config, the app must never send it;
+  // authenticate would open a browser login from a hidden process
+  for (const f of logs.splice(0)) for (const l of cursorLog(f)) expect(['session/set_model', 'authenticate']).not.toContain(l.method);
+});
 
 describe('Cursor engine resolution', () => {
   it('starts the newest CLI version with its own node.exe (no PowerShell launcher)', () => {
@@ -237,20 +245,34 @@ describe('CursorSession', () => {
     expect([...two.sink.items.values()].some(i => i.kind === 'system' && /non riprende/.test(i.text))).toBe(true);
   });
 
-  it('model on spawn and session/set_model; plan mode via session/set_mode; the chat\'s MCP endpoint', async () => {
-    const url = 'http://127.0.0.1:4329/mcp/chat/c_cur/tok12345678';
+  it('model only with --model at spawn (never session/set_model); plan mode via session/set_mode; the chat\'s MCP endpoint', async () => {
+    const url = `http://127.0.0.1:4329/mcp/chat/c_cur/${crypto.randomBytes(8).toString('hex')}`;
     const { s, sink, logFile } = start({ model: 'gpt-5.6-sol', permissionMode: 'plan', mcpUrl: url });
     await waitFor(() => s.state === 'idle', 'ready');
     const a = cursorLog(logFile).find(l => l.argv)?.argv ?? [];
     expect(a).toEqual(['--model', 'gpt-5.6-sol', 'acp']);
+    expect(sink.patch.model).toBe('gpt-5.6-sol');
     expect(cursorLog(logFile).find(l => l.method === 'session/new')?.params?.mcpServers).toEqual([{ type: 'http', name: 'second-brain', url, headers: [] }]);
-    expect(cursorLog(logFile).some(l => l.method === 'session/set_model')).toBe(false); // already the model
     await waitFor(() => sink.patch.permissionMode === 'plan', 'plan mode');
     expect(cursorLog(logFile).find(l => l.method === 'session/set_mode')?.params).toMatchObject({ modeId: 'plan' });
-    await s.setModel('claude-sonnet-5.5');
-    expect(cursorLog(logFile).find(l => l.method === 'session/set_model')?.params).toMatchObject({ modelId: 'claude-sonnet-5.5' });
-    expect(sink.patch.model).toBe('claude-sonnet-5.5');
+    await expect(s.setModel('claude-sonnet-5.5')).rejects.toThrow(MODEL_RESTART); // the manager reopens the session instead
     await expect(s.setEffort('high')).rejects.toThrow(/effort/i);
+  });
+
+  it('runs Cursor with the app\'s own config folder: the user\'s Cursor config is copied, never written', async () => {
+    const userDir = tmp('cursor-user');
+    const userCfg = JSON.stringify({ model: { modelId: 'user-model' }, hasChangedDefaultModel: false, permissions: { allow: ['Shell(ls)'], deny: [] } });
+    fs.writeFileSync(path.join(userDir, 'cli-config.json'), userCfg);
+    fs.writeFileSync(path.join(userDir, 'permissions.json'), '{}');
+    const own = path.join(tmp('ud'), 'cursor-config');
+    const { s, logFile } = start({ model: 'gpt-5.6-sol', configDir: own, env: { CURSOR_CONFIG_DIR: userDir } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    expect(cursorLog(logFile).find(l => l.argv) as { configDir?: string }).toMatchObject({ configDir: own });
+    expect(fs.readFileSync(path.join(userDir, 'cli-config.json'), 'utf8')).toBe(userCfg); // untouched
+    expect(JSON.parse(fs.readFileSync(path.join(own, 'cli-config.json'), 'utf8'))).toMatchObject({ model: { modelId: 'gpt-5.6-sol' }, hasChangedDefaultModel: true, permissions: { allow: ['Shell(ls)'] } });
+    expect(fs.existsSync(path.join(own, 'permissions.json'))).toBe(true);
+    expect(cursorConfigDir({ CURSOR_CONFIG_DIR: userDir })).toBe(userDir);
+    expect(cursorConfigDir({ XDG_CONFIG_HOME: path.join(userDir, 'xdg') })).toBe(path.join(userDir, 'xdg', 'cursor'));
   });
 
   it('tool calls with diffs, plan entries, usage → list-price cost', async () => {

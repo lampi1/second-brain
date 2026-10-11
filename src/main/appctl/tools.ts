@@ -88,9 +88,16 @@ export function appControlTools(d: AppCtlDeps): ToolDef[] {
       },
     },
     {
-      name: 'app_ui', description: 'Steer the UI: action "view" (value mosaico|corsie), "focus" (value chat id), "maximize" (chat id), "restore", "page" (value: workspace|oggi|dafare|idee|costi|qualita|diario|esplora|mappa), "palette".',
-      inputSchema: obj({ action: str('view|focus|maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
-      run: a => { d.emitUi({ action: String(a.action), value: a.value === undefined ? undefined : String(a.value) }); return 'ok'; },
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "view" (value mosaico|corsie), "maximize" (chat id), "restore", "page" (value: workspace|oggi|dafare|idee|costi|qualita|diario|esplora|mappa), "palette".',
+      inputSchema: obj({ action: str('view|maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
+      // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
+      // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)
+      run: a => {
+        const action = String(a.action);
+        if (!['view', 'maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (view|maximize|restore|page|palette)`);
+        d.emitUi({ action, value: a.value === undefined ? undefined : String(a.value) });
+        return 'ok';
+      },
     },
     {
       name: 'app_send_to_chat', description: 'Send a message to an app chat. It is labelled as written by an agent, not by the user (never an ok or a permission).',
@@ -98,6 +105,14 @@ export function appControlTools(d: AppCtlDeps): ToolDef[] {
       run: async a => {
         const text = String(a.text ?? '').trim();
         if (!text || text.length > 4000) throw new Error('text empty or longer than 4000 chars');
+        // A Cursor chat spends Cursor credits: an agent may write to one only when the user allows Claude <-> Cursor
+        // messages (messaging.crossHarness, the same switch inbox.mjs obeys) and only if it is already running — an
+        // agent never starts a stopped Cursor engine (each engine spends only its own; review 2026-10-11).
+        const target = d.chats.list().find(c => c.id === String(a.chatId));
+        if (target?.harness === 'cursor') {
+          if (!d.brain.settings().messaging.crossHarness) throw new Error('messaggio bloccato: i messaggi tra Claude e Cursor sono spenti (impostazione "Messaggi tra Claude e Cursor")');
+          if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error('la chat Cursor non è attiva: un agente non la avvia (spenderebbe crediti Cursor); chiedi all’utente');
+        }
         await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`);
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         return 'sent';

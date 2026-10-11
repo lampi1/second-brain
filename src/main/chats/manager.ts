@@ -89,6 +89,8 @@ interface Rec {
   turnSinceDone: boolean;
   /** a resumed session still opening (sends wait for it) */
   opening?: Promise<void> | undefined;
+  /** Cursor: close the session when this turn ends, so the next message reopens it with the new --model */
+  reopen?: boolean;
 }
 
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
@@ -260,8 +262,14 @@ export class ChatManager implements ChatService {
     }
     if (patch.model !== undefined) {
       const m = patch.model.trim() || null;
+      if (m && !/^[\w.:@/=[\],-]{1,120}$/.test(m)) throw new Error(`Modello non valido: ${m}`);
       r.choice.model = m; r.s.model = m;
-      await apply('modello', sess ? () => sess.setModel(m) : undefined);
+      if (r.s.harness === 'cursor') {
+        // never live (session/set_model writes the user's Cursor config): reopen the session with --model, same history
+        if (sess && !sess.busy) await sess.close();
+        else if (sess) r.reopen = true; // after this turn
+        if (sess) this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), text: `Modello ${m ?? 'predefinito'}: Cursor riparte con questo modello dal prossimo messaggio${r.reopen ? ', finito questo turno' : ''}.`, level: 'info' }, false);
+      } else await apply('modello', sess ? () => sess.setModel(m) : undefined);
     }
     if (patch.effort !== undefined) {
       if (!EFFORTS.includes(patch.effort)) throw new Error(`Effort non valido: ${patch.effort}`);
@@ -532,6 +540,7 @@ export class ChatManager implements ChatService {
       : r.s.harness === 'cursor'
         ? new CursorSession({
           ...opts, mcpConfig: null, mcpUrl: this.opts.mcpUrlFor?.(chatId) ?? null, showReplay: r.items.length === 0,
+          configDir: path.join(this.opts.userData, 'cursor-config'),
           ...(this.opts.cursorPath ? { cursorPath: this.opts.cursorPath } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
         }, sink)
         : new ClaudeSession({ ...opts, ...(this.opts.claudePath ? { claudePath: this.opts.claudePath } : {}) }, sink);
@@ -550,6 +559,11 @@ export class ChatManager implements ChatService {
         r.turnSinceDone = false;
         const on = this.opts.onDone;
         if (on) this.hook('onDone', () => on(r.s.id));
+      }
+      // a Cursor model change asked mid-turn: reopen with the new --model now that the turn is over
+      if (p.state === 'idle' && r.reopen && r.session && !r.session.busy) {
+        r.reopen = false;
+        void r.session.close();
       }
     }
     if (p.sessionId && p.sessionId !== r.s.sessionId) { r.s.sessionId = p.sessionId; delete r.forkFrom; save = true; }

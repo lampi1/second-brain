@@ -1,0 +1,148 @@
+/* Styles of the navigation shell, built on styles/tokens.css: the left navigation with badges, back/forward and the
+   bell in the top bar, the frame of brain pages, the docked Regia, the full-screen map layer, the highlight of an
+   element reached through a link, the notification center, and the event toasts of the global layer.
+   Imported once by main.tsx (after app.css). */
+
+/* ---------------------------------------------------------------- navigation shell */
+.shell { flex: 1; min-height: 0; display: flex; }
+.main-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sidebar {
+  flex: none; width: 196px; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; background: var(--bg-2); border-right: 1px solid var(--border);
+  min-height: 0; transition: width var(--dur) var(--ease);
+}
+.sidebar.collapsed { width: 52px; }
+.nav-group { display: flex; flex-direction: column; gap: 1px; }
+.nav-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.nav-title { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-4); }
+.nav-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px 0 10px; border: 0; border-radius: var(--r-s); background: none;
+  color: var(--text-2); font-size: 13px; cursor: pointer; text-align: left; min-width: 0; white-space: nowrap; transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.on { background: var(--surface-3); color: var(--text); font-weight: 500; }
+.nav-item.on::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--blue); }
+.nav-icon { width: 18px; flex: none; display: grid; place-items: center; color: inherit; }
+.nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 99px; background: var(--blue-bg); color: var(--blue); font-size: 10.5px; font-weight: 700; }
+.nav-badge.amber { background: var(--amber); color: #1b1304; }
+.nav-badge.warn { background: var(--amber-bg); color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber-line); }
+.sidebar.collapsed .nav-item { padding: 0; justify-content: center; }
+.sidebar.collapsed .nav-badge { position: absolute; top: 1px; right: 2px; min-width: 15px; height: 14px; font-size: 9.5px; padding: 0 3px; }
+.nav-collapse { color: var(--text-4); }
+.hist-nav { display: inline-flex; gap: 0; flex: none; }
+.hist-nav .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.hist-nav .icon-btn:disabled:hover { background: none; color: var(--text-3); }
+.bell { position: relative; width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-s); border: 0; background: none; color: var(--text-3); cursor: pointer; }
+.bell:hover, .bell.on { background: var(--surface-2); color: var(--text); }
+.bell-n { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 15px; padding: 0 4px; border-radius: 99px; background: var(--blue); color: var(--on-accent); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.bell-dnd { position: absolute; bottom: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 2px var(--bg-2); }
+.workspace.no-regia { grid-template-columns: minmax(0, 1fr); }
+.workspace.docked { padding-right: calc(var(--gap) + 392px); }
+.regia-dock {
+  position: fixed; z-index: 35; right: 8px; top: calc(var(--topbar-h) + 8px); bottom: 8px; width: 384px; display: flex; border-radius: var(--r-l);
+  box-shadow: var(--shadow-pop); animation: dockIn var(--dur-slow) var(--ease);
+}
+.regia-dock > .tile { flex: 1; }
+@keyframes dockIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+/* ---------------------------------------------------------------- brain pages frame (the pages: src/renderer/brain) */
+.page-frame { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; animation: zoomIn var(--dur-slow) var(--ease); }
+.page-bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.page-bar h2 { margin: 0; font: 600 15px var(--font-display); white-space: nowrap; }
+.page-hint { font-size: 11.5px; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.page-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.page-body > .brain-page { flex: 1; padding: 16px; }
+.map-layer { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; animation: fadeIn var(--dur) var(--ease); }
+.map-layer > * { flex: 1; }
+
+/* an element reached through a link: a short, calm pulse */
+.sb-highlight { animation: sbHighlight 1500ms var(--ease) !important; }
+@keyframes sbHighlight {
+  0%, 60% { box-shadow: 0 0 0 3px var(--blue-line), 0 0 0 7px color-mix(in srgb, var(--blue) 14%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ---------------------------------------------------------------- notification center */
+.center {
+  position: fixed; z-index: 45; top: calc(var(--topbar-h) + 6px); right: 8px; bottom: 8px; width: min(440px, calc(100vw - 24px)); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); animation: dockIn var(--dur-slow) var(--ease); overflow: hidden;
+}
+.nc-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 10px 8px 16px; }
+.nc-head h2 { margin: 0; font: 600 15px var(--font-display); }
+.nc-dnd { position: relative; }
+.nc-dnd-menu { position: absolute; right: 0; top: 30px; z-index: 2; display: flex; flex-direction: column; min-width: 160px; padding: 4px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop); }
+.nc-dnd-menu button { height: 30px; text-align: left; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+.nc-dnd-menu button:hover { background: var(--surface-4); }
+.nc-filters { flex: none; display: flex; gap: 4px; flex-wrap: wrap; padding: 0 14px 10px; border-bottom: 1px solid var(--border); }
+.nc-filters button { height: 24px; padding: 0 9px; border-radius: 99px; border: 1px solid var(--border-2); background: none; color: var(--text-2); font-size: 12px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+.nc-filters button.on { background: var(--blue-bg); border-color: var(--blue-line); color: var(--text); }
+.nc-n { color: var(--text-4); font-size: 11px; }
+.nc-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 6px; }
+.nc-item { position: relative; display: flex; align-items: stretch; border-radius: var(--r-s); }
+.nc-item:hover { background: var(--surface-2); }
+.nc-item.unread::before { content: ""; position: absolute; left: 4px; top: 16px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.nc-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 9px 6px 9px 16px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); }
+.nc-kind { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); margin-top: 1px; color: var(--text-2); }
+.nc-kind.tone-blue { color: var(--blue); }
+.nc-kind.tone-red { color: var(--red); }
+.nc-kind.tone-green { color: var(--green); }
+.nc-kind.tone-amber { color: var(--amber); }
+.nc-kind.tone-violet { color: var(--violet); }
+.nc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nc-text b { font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-item:not(.unread) .nc-text b { color: var(--text-2); }
+.nc-text span { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-age { flex: none; font-size: 11px; color: var(--text-4); padding-top: 2px; }
+.nc-tools { flex: none; display: flex; align-items: center; padding-right: 4px; opacity: 0; transition: opacity var(--dur-fast); }
+.nc-item:hover .nc-tools, .nc-item:focus-within .nc-tools { opacity: 1; }
+.nc-empty { margin: 0; padding: 32px 20px; text-align: center; color: var(--text-3); }
+.nc-foot { flex: none; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+
+/* ---------------------------------------------------------------- event toasts in the global layer (tier b) */
+.ev-toast {
+  display: flex; align-items: center; gap: 10px; padding: 9px 8px 9px 12px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-3);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3); animation: toastIn var(--dur-slow) var(--ease); min-width: 0;
+}
+.ev-toast.tone-err { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.ev-toast.tone-warn { border-color: var(--amber-line); }
+.ev-icon { flex: none; display: grid; place-items: center; color: var(--blue); }
+.ev-toast.tone-ok .ev-icon { color: var(--green); }
+.ev-toast.tone-err .ev-icon { color: var(--red); }
+.ev-toast.tone-warn .ev-icon { color: var(--amber); }
+.ev-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.ev-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.ev-text b { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-detail { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-act { flex: none; height: 28px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--blue-line); background: var(--blue-bg); color: var(--text); font-weight: 600; font-size: 12px; cursor: pointer; }
+.ev-act:hover { background: color-mix(in srgb, var(--blue) 22%, transparent); }
+.ev-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
+.ev-x:hover { background: var(--surface-4); color: var(--text); }
+
+/* ---------------------------------------------------------------- live turn: "sta scrivendo…" */
+.typing { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 2px 2px 0; }
+.typing-dots { display: inline-flex; gap: 3px; }
+.typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); opacity: 0.35; animation: typingDot 1.2s infinite ease-in-out; }
+.typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typingDot { 0%, 80%, 100% { opacity: 0.25; transform: none; } 40% { opacity: 1; transform: translateY(-2px); } }
+
+/* ---------------------------------------------------------------- review fixes */
+/* a long command or question never pushes the layer's buttons out of view */
+.layer-card .ask-cmd { max-height: 160px; overflow: auto; }
+.layer-card .ask-q { max-height: 110px; overflow: auto; }
+.layer-card .ask-opts { max-height: 300px; overflow-y: auto; }
+/* Corsie: older finished chats, collapsed */
+.older { display: flex; flex-direction: column; gap: 6px; }
+.older-head { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.older-head:hover { color: var(--text-2); background: var(--surface-2); }
+.older-head .closed { transform: rotate(-90deg); }
+/* a browser tab without a snapshot (the real browser module has none yet): its title and address, not a spinner */
+.viewport-info { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 16px; text-align: center; color: #4b5568; }
+.viewport-info b { font-size: 13px; color: #1b2433; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewport-info span { font: 11.5px var(--mono); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumb-info { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 10px 12px; color: #4b5568; }
+.thumb-info b { font-size: 12.5px; color: #1b2433; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumb-info span { font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* one toast area: the brain pages' own toasts are relayed into the app's (App.tsx) */
+.app .bx-toast, .map-layer .bx-toast { display: none !important; }

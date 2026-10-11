@@ -36,7 +36,7 @@ describe.skipIf(process.env.SB_LIVE !== '1')('live: real claude CLI', () => {
       expect(sink.last('tool')).toMatchObject({ name: 'AskUserQuestion', status: 'ok' });
       expect(sink.last('assistant')?.text).toMatch(/beta/i);
       expect(sink.events.some(e => e.replace)).toBe(true); // streamed
-      expect(s.state).toBe('idle');
+      await waitFor(() => s.state === 'idle' || undefined, 'the idle state after the result', 10000);
     } finally {
       await s.close();
     }

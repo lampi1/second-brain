@@ -20,6 +20,8 @@ test.describe.serial('internal browser over MCP', () => {
     // Playwright attaches its own CDP session to every page of the app (our tabs too) and auto-dismisses JavaScript
     // dialogs unless someone listens: listen and do nothing, so the dialogs stay for the app's agent to answer.
     app.context().on('dialog', () => {});
+    // this test drives views:layout itself: the UI stops reporting its browser tiles' rects (ui:command layout off)
+    await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.webContents.getURL().startsWith('file:')) w.webContents.send('ui:command', { action: 'layout', value: 'off' }); });
     const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
     expect(info.mcpUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
     agent = new McpClient(info.mcpUrl);

@@ -5,7 +5,10 @@
 //   → initialize {protocolVersion:1, clientCapabilities:{fs:{readTextFile:false,writeTextFile:false},terminal:false}}
 //   → session/new {cwd, mcpServers} | session/load {sessionId, cwd, mcpServers} (resume, when loadSession is advertised)
 //   → session/prompt {sessionId, prompt:[{type:'text'}]} → {stopReason, usage?} · session/cancel (stop, a notification)
-//   → session/set_model {sessionId, modelId} · session/set_mode {sessionId, modeId: agent|plan}
+//   → session/set_mode {sessionId, modeId: agent|plan} (session-only). NEVER session/set_model: it writes the user's
+//     global Cursor CLI config. The model is `--model X` at spawn, and even that is written by the CLI into its config
+//     folder (handleInitialModel → updateConfig), so the app runs Cursor with its own CURSOR_CONFIG_DIR (configDir).
+//     A model change = the manager closes the session and reopens it with the new --model + session/load.
 //   ← session/update: agent_message_chunk (streamed text, replace events), agent_thought_chunk (thinking), tool_call /
 //     tool_call_update (tool rows, diff counts), plan, current_mode_update, usage_update
 //   ← session/request_permission → a permission panel answered allow-once / reject-once only: Cursor's allow-always
@@ -19,6 +22,8 @@
 // Used by manager.ts through the HarnessSession interface.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
 import { lineDiff, resultText, shortPath } from './claude-map';
@@ -35,6 +40,32 @@ export interface CursorOptions extends SessionOptions {
   appVersion?: string;
   /** show the past that session/load replays (a chat restored after an app restart has no items yet) */
   showReplay?: boolean;
+  /** the app's own Cursor config folder (CURSOR_CONFIG_DIR): a fresh copy of the user's cli-config.json and
+   *  permissions.json at every start, so whatever Cursor writes (the --model choice, its startup defaults) never
+   *  reaches the user's global config. Login is unaffected (auth.json lives in %APPDATA%/Cursor). */
+  configDir?: string | null;
+}
+
+/** The message a model change gives: the manager restarts the session with the new --model (session/load). */
+export const MODEL_RESTART = 'Cursor cambia modello riaprendo la sessione.';
+
+/** The user's Cursor CLI config folder, with the CLI's own rule: CURSOR_CONFIG_DIR → XDG_CONFIG_HOME/cursor → ~/.cursor. */
+export function cursorConfigDir(env: NodeJS.ProcessEnv): string {
+  const own = env.CURSOR_CONFIG_DIR?.trim();
+  if (own) return own;
+  const xdg = env.XDG_CONFIG_HOME?.trim();
+  return xdg ? path.join(xdg, 'cursor') : path.join(os.homedir(), '.cursor');
+}
+
+/** Copies the user's Cursor CLI settings into the app's private folder (read-only for the user's side). */
+export function snapshotCursorConfig(from: string, to: string): void {
+  fs.mkdirSync(to, { recursive: true });
+  for (const f of ['cli-config.json', 'permissions.json']) {
+    const src = path.join(from, f), dst = path.join(to, f);
+    if (path.resolve(src) === path.resolve(dst)) continue;
+    if (fs.existsSync(src)) fs.copyFileSync(src, dst);
+    else if (fs.existsSync(dst)) fs.rmSync(dst, { force: true });
+  }
 }
 
 type Obj = Record<string, unknown>;
@@ -142,8 +173,15 @@ export class CursorSession implements HarnessSession {
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
     let argv: ReturnType<typeof cursorArgv>;
     try { argv = cursorArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
+    const env: NodeJS.ProcessEnv = { ...argv.env, ...this.opts.env };
+    if (this.opts.configDir) {
+      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir); } catch (e) {
+        return this.fail(`Impostazioni di Cursor non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
+      }
+      env.CURSOR_CONFIG_DIR = this.opts.configDir;
+    }
     try {
-      this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env: { ...argv.env, ...this.opts.env }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
+      this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
     } catch (e) {
       return this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'check the Cursor CLI install');
     }
@@ -229,12 +267,10 @@ export class CursorSession implements HarnessSession {
     if (s(md.currentModeId) === 'plan') this.sink.changed({ permissionMode: 'plan' });
   }
 
-  /** The user's model and mode for this chat, when the session started with others. */
+  /** The user's mode for this chat (session-only in Cursor). The model came with --model at spawn. */
   private async applyChoices(): Promise<void> {
     const want = this.opts.model;
-    if (want && this.models && this.models.current !== want) {
-      try { await this.setModel(want); } catch (e) { this.sys(`Modello ${want} non applicato: ${cut(errText(e), 160)}`, 'warn'); }
-    }
+    if (want && this.models?.current && this.models.current !== want) log.warn('chats', 'cursor runs another model than asked', { chat: this.opts.chatId, data: { asked: want, running: this.models.current } });
     if (this.opts.permissionMode === 'plan' && this.modes.includes('plan')) {
       try { await this.setPermissionMode('plan'); } catch (e) { log.warn('chats', 'cursor plan mode not applied', { chat: this.opts.chatId, data: errText(e) }); }
     }
@@ -331,13 +367,10 @@ export class CursorSession implements HarnessSession {
     if (!this.prompting) this.setState('idle');
   }
 
-  async setModel(model: string | null): Promise<void> {
-    if (!this.open && !this.sessionId) throw new Error(NOT_ACTIVE);
-    if (!this.models) throw new Error('Questa versione di Cursor non cambia modello durante la sessione.');
-    const id = model ?? 'auto';
-    await this.request('session/set_model', { sessionId: this.sessionId, modelId: id });
-    this.models.current = id;
-    this.sink.changed({ model: id });
+  /** Never live: ACP session/set_model writes the user's global Cursor CLI config (cli-config.json: model,
+   *  selectedModel, hasChangedDefaultModel). The manager reopens the session with --model instead (MODEL_RESTART). */
+  async setModel(_model: string | null): Promise<void> {
+    throw new Error(MODEL_RESTART);
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {

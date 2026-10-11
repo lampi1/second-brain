@@ -93,6 +93,8 @@ export interface BrowserTab {
   loading: boolean;
   ownerChatId: string | null; // the chat that drives it (null = the user's own tab)
   lastAction?: string;        // "click ref_12", for the tile header
+  /** A recent snapshot as a data: URL (JPEG), for thumbnails and the frozen frame shown while the view is hidden under an overlay. */
+  thumb?: string;
   /** Tab group: 'user' (the user's own), 'chat:<chatId>' (an app chat), 'mcp:<session>' (an external MCP client). */
   group?: string;
   active?: boolean;           // the group's current tab (the one its agent acts on when no tabId is given)
@@ -294,6 +296,41 @@ export interface JobRecordInput {
  *  map, files, file, search, version, status). Never throws for a missing brain server: ok false + error. */
 export type BrainApiResult = { ok: true; data: unknown } | { ok: false; error: string };
 
+// ── Global request layer (the user: "se l'IA vuole farmi domande mi compaiano ovunque io stia navigando nell'app") ──
+// Questions and permissions not visible elsewhere on screen float in a small top-most WebContentsView (main/overlay.ts),
+// above browser tiles and pages. The app page decides what it shows (one source of truth), the layer only renders it.
+/** attempt: bumped when an answer failed and the request came back (the layer re-mounts the card, answerable again). */
+export interface OverlayCard { key: string; req: PendingRequest; chatTitle: string; harness: Harness; isRegia: boolean; attempt?: number }
+export interface OverlayModel {
+  cards: OverlayCard[];       // the queue: oldest first; the first is shown in full
+  waiting: number;            // all open requests (badge)
+  theme: ThemeMode;
+  density: 'comfortable' | 'compact';
+  focusKey?: string;          // set with a new nonce when the keyboard moves to the layer (Ctrl+J)
+  nonce?: number;
+  now?: number;               // the app page's clock (frozen in the demo), for "4 min" labels
+  /** important events (chat waiting/done, errors, sync, budget, login…) as short toasts above everything, max 2 */
+  toasts?: OverlayToast[];
+}
+export interface OverlayToast {
+  id: string;                 // group key (kind|chat)
+  kind: string;
+  label: string;              // Italian kind label ("Errore registrato")
+  title: string;
+  detail: string;
+  count: number;              // grouped events of this kind (and chat)
+  action: string;             // the one direct action: "Apri", "Rispondi"
+  tone: 'info' | 'ok' | 'warn' | 'err';
+}
+/** The overlay page only renders the cards: the app page acts on its behalf. */
+export type OverlayAction =
+  | { kind: 'answer'; key: string; answer: Answer }
+  | { kind: 'postpone'; key: string }       // Esc: off the layer, it stays in "Ti aspettano"
+  | { kind: 'open'; key: string }           // show that chat in the app
+  | { kind: 'next'; from?: string }         // Ctrl+J inside the layer (from = the card shown, the cycle goes on from it)
+  | { kind: 'leave' }                       // keyboard back to the app
+  | { kind: 'toast'; id: string; act: 'open' | 'dismiss' }; // an event toast: its action, or ✕
+
 /** renderer → main. Each entry: [argument, result]. */
 export interface InvokeMap {
   'app:info': [void, AppInfo];
@@ -334,6 +371,14 @@ export interface InvokeMap {
   'estimate:get': [{ harness: Harness; model: string | null; effort: Effort | null; prompt: string }, EstimateResult];
   'estimate:record': [JobRecordInput, { id: string }];
   'brain:api': [{ path: string }, BrainApiResult];
+  /** the app page → main: what the global request layer shows now (main attaches/detaches it and forwards the model) */
+  'overlay:model': [OverlayModel, void];
+  /** the layer page → main: the size its cards need (main places the layer bottom-right) */
+  'overlay:size': [{ width: number; height: number }, void];
+  /** the layer page → main → the app page: the user answered / postponed / opened a card, or left the layer */
+  'overlay:action': [OverlayAction, void];
+  /** move the keyboard to the layer (Ctrl+J, a click) or back to the app; never automatic */
+  'overlay:focus': [{ target: 'overlay' | 'app' }, void];
 }
 
 /** main → renderer. */
@@ -356,6 +401,10 @@ export interface EventMap {
   /** a protected change waits for the user (status pending), or was answered (accepted / rejected) */
   'settings:proposed': SettingProposal;
   'budget:alert': BudgetAlert;
+  /** main → the layer page: the cards to show */
+  'overlay:model': OverlayModel;
+  /** main → the app page: what the user did in the layer */
+  'overlay:action': OverlayAction;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -369,11 +418,11 @@ export const INVOKE_CHANNELS = [
   'chat:stopAll', 'chat:close', 'chat:set', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:get', 'estimate:record', 'brain:api',
-  'browser:handoffs', 'browser:handoffResolve', 'browser:envList',
+  'browser:handoffs', 'browser:handoffResolve', 'browser:envList', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'focus:next', 'ui:command',
-  'settings:changed', 'settings:proposed', 'budget:alert', 'browser:handoff', 'browser:envs',
+  'settings:changed', 'settings:proposed', 'budget:alert', 'browser:handoff', 'browser:envs', 'overlay:model', 'overlay:action',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

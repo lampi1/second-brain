@@ -608,6 +608,9 @@ export class ClaudeSession implements HarnessSession {
       this.turnOpen = false;
       // with session state events the CLI says itself when it is idle (after held-back results and background agents)
       if (!this.stateEvents) this.setState(this.calls.size ? 'waiting' : 'idle');
+      // live check 2026-10-11 (CLI 2.1.283): the closing session_state_changed 'idle' may come late or not at all after
+      // the last result; if nothing reopened the turn within 3 s, the chat is idle (else the tile stays "al lavoro")
+      else setTimeout(() => { if (!this.turnOpen && this.state === 'running') this.setState(this.calls.size ? 'waiting' : 'idle'); }, 3000).unref?.();
     }
     log.info('chats', 'turn done', { chat: this.opts.chatId, data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, queued } });
     this.contextUsage().then(u => { if (u) this.sink.changed({ contextTokens: u.totalTokens, contextMaxTokens: u.maxTokens }); }).catch(() => { /* old CLI or gone */ });

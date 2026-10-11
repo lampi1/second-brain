@@ -59,7 +59,8 @@ test('a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const logFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cur-')), 'cursor.jsonl');
   const FAKE_CURSOR = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-cursor-acp.mjs');
-  const { app, page } = await launch({ SB_CURSOR_PATH: FAKE_CURSOR, FAKE_CURSOR_LOG: logFile });
+  const userCursor = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cursor-user-')); // never the real ~/.cursor
+  const { app, page, userData } = await launch({ SB_CURSOR_PATH: FAKE_CURSOR, FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: userCursor });
   await page.evaluate(() => { window.__ev = []; for (const ch of ['pending:added', 'pending:resolved', 'chat:item'] as const) window.sb.on(ch, p => { window.__ev.push({ ch, p }); }); });
   const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Regia Cursor', regia: true }), cwd);
   expect(chat).toMatchObject({ harness: 'cursor', isRegia: true, costKnown: false });
@@ -76,6 +77,9 @@ test('a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the
   const log = fs.readFileSync(logFile, 'utf8');
   expect(log).toContain('"argv":["acp"]');
   expect(log).not.toContain('"method":"authenticate"');
+  expect(log).not.toContain('"method":"session/set_model"'); // it would write the user's global Cursor config
+  // Cursor runs with the app's own config folder, never the user's
+  expect((JSON.parse(log.split('\n')[0] ?? '{}') as { configDir?: string }).configDir).toBe(path.join(userData, 'cursor-config'));
   await shot(page, 'chats-cursor');
   await app.close();
 });
@@ -87,7 +91,7 @@ for (const engine of ['claude', 'cursor'] as const) {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
     fs.writeFileSync(path.join(cwd, 'a.txt'), 'a\nb\nc');
-    const fakes = { SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_DELAY: '40', SB_CURSOR_PATH: path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-cursor-acp.mjs'), FAKE_CURSOR_DELAY: '40' };
+    const fakes = { SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_DELAY: '40', SB_CURSOR_PATH: path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-cursor-acp.mjs'), FAKE_CURSOR_DELAY: '40', CURSOR_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cursor-user-')) };
     const { app, page } = await launch(fakes);
     await page.evaluate(() => { window.__ev = []; window.sb.on('chat:item', p => { window.__ev.push({ ch: `${Date.now()}`, p }); }); });
     const chat: ChatSummary = await page.evaluate(([h, dir]) => window.sb.invoke('chat:create', { harness: h, cwd: dir, prompt: 'edit stream' }), [engine, cwd] as const);

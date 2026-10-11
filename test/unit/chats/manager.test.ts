@@ -259,7 +259,7 @@ describe('ChatManager', () => {
   it('runs a Cursor chat: panel, answer, turn, cost unknown; restored chats resume with session/load', async () => {
     const e = env();
     const curLog = path.join(e.userData, 'cursor.jsonl');
-    const opts = { cursorPath: FAKE_CURSOR, env: { FAKE_CURSOR_LOG: curLog } };
+    const opts = { cursorPath: FAKE_CURSOR, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
     const first = manager(e, opts);
     const c = await first.m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'perm', regia: true });
     expect(c).toMatchObject({ harness: 'cursor', isRegia: true, sessionId: null, costKnown: false });
@@ -282,6 +282,32 @@ describe('ChatManager', () => {
     const seen = m.items(c.id).map(i => `${i.kind}:${'text' in i ? i.text : ''}`);
     expect(seen.slice(0, 3)).toEqual(['user:vecchia domanda', 'assistant:vecchia risposta', 'user:hello']);
     expect(m.items(c.id).some(i => i.kind === 'assistant' && i.text === 'Ciao dal motore')).toBe(true);
+  });
+
+  // Cursor model change: never session/set_model (it writes the user's global Cursor config); the session is reopened
+  // with the new --model and session/load, inside the app's own config folder
+  it('changes a Cursor chat\'s model by reopening its session, never with session/set_model', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const userDir = tmp('cursor-user');
+    const userCfg = JSON.stringify({ model: { modelId: 'user-model' }, hasChangedDefaultModel: false });
+    fs.writeFileSync(path.join(userDir, 'cli-config.json'), userCfg);
+    const { m } = manager(e, { cursorPath: FAKE_CURSOR, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: userDir } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'hello', model: 'gpt-5.6-sol' });
+    await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'first turn');
+    const sid = m.list()[0]?.sessionId;
+    const s = await m.set(c.id, { model: 'claude-sonnet-5.5' });
+    expect(s.model).toBe('claude-sonnet-5.5');
+    await waitFor(() => m.list()[0]?.state === 'closed', 'session closed for the new model');
+    await m.send(c.id, 'again');
+    await waitFor(() => results(m, c.id).length === 2, 'turn with the new model');
+    const starts = cursorLog(curLog).filter(l => l.argv).map(l => l.argv);
+    expect(starts).toEqual([['--model', 'gpt-5.6-sol', 'acp'], ['--model', 'claude-sonnet-5.5', 'acp']]);
+    expect(cursorLog(curLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
+    expect(cursorLog(curLog).some(l => l.method === 'session/set_model')).toBe(false);
+    expect(fs.readFileSync(path.join(userDir, 'cli-config.json'), 'utf8')).toBe(userCfg); // the user's Cursor config: untouched
+    expect(JSON.parse(fs.readFileSync(path.join(e.userData, 'cursor-config', 'cli-config.json'), 'utf8')).model).toEqual({ modelId: 'claude-sonnet-5.5' });
+    expect(m.items(c.id).filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).toEqual(['hello', 'again']); // history kept, no replay twice
   });
 
   // brain hooks (wiring.ts connects them to BrainService)
