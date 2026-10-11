@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Accesso</title></head>
+<body style="font-family: system-ui, sans-serif">
+  <h1>Accesso</h1>
+  <form id="f">
+    <label for="user">Utente</label> <input id="user" name="user" autocomplete="username">
+    <label for="pass">Password</label> <input id="pass" name="pass" type="password" autocomplete="current-password">
+    <button type="button" id="show" onclick="const p = document.getElementById('pass'); p.type = p.type === 'password' ? 'text' : 'password';">Mostra</button>
+    <label for="pin">Codice di sblocco</label> <input id="pin" name="unlock" onfocus="this.type = 'password'">
+    <button type="submit">Entra</button>
+  </form>
+  <p id="msg"></p>
+  <script>
+    document.getElementById('f').addEventListener('submit', async e => {
+      e.preventDefault();
+      const short = new URLSearchParams(location.search).has('short');
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: user.value, pass: pass.value, short }) });
+      if (r.ok) location.href = '/app'; else document.getElementById('msg').textContent = 'Accesso negato';
+    });
+  </script>
+</body>
+</html>

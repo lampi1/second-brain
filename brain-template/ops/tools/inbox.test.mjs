@@ -1,0 +1,247 @@
+// Offline tests of inbox.mjs: temp folders only, never the real ops/state. Usage: node ops/tools/inbox.test.mjs
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { slug, paths, send, take, unread, listening, stats, hookOutput, brainSettings, detectHarness, noteHarness, harnessOf } from './inbox.mjs';
+
+process.removeAllListeners('warning');
+const here = path.dirname(fileURLToPath(import.meta.url));
+const TOOL = path.join(here, 'inbox.mjs');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-inbox-'));
+const P = paths(tmp);
+const fails = [];
+let n = 0;
+const ok = (c, m) => { if (!c) fails.push(m); };
+const T = async (name, fn) => { n++; try { await fn(); } catch (e) { fails.push(`${name}: ${e.stack}`); } };
+const run = (args, input) => spawnSync(process.execPath, [TOOL, ...args, '--root', tmp], { encoding: 'utf8', input, timeout: 120000 }); // hang deadline only
+const delay = ms => new Promise(r => setTimeout(r, ms));
+// No fixed waits (a busy PC made "waiter registered" fail once after 800 ms, 10/10): poll the condition until it holds,
+// the process it depends on is gone, or a generous deadline that only a real hang reaches.
+const waitFor = async (cond, { ms = 60000, stop = () => false } = {}) => {
+  for (const end = Date.now() + ms; Date.now() < end; await delay(25)) { if (cond()) return true; if (stop()) return cond(); }
+  return cond();
+};
+
+await T('slug', () => {
+  ok(slug('OS · Architettura') === 'os-architettura', 'slug middle dot');
+  ok(slug('OS - Architettura') === slug('os-architettura'), 'slug dash');
+  ok(slug('B · Übersicht') === 'b-ubersicht', 'slug accents');
+});
+
+await T('send/take', () => {
+  const { msg, listening: on } = send(P, { to: 'Regia', from: 'OS · Tool', text: 'ciao' });
+  ok(!on, 'nobody listening yet');
+  ok(unread(P, 'regia').length === 1, 'one unread');
+  const got = take(P, 'REGIA', 'test');
+  ok(got.length === 1 && got[0].id === msg.id && got[0].text === 'ciao', 'taken');
+  ok(take(P, 'Regia', 'test').length === 0, 'taken only once');
+  ok(fs.existsSync(path.join(P.box('regia'), 'read', `${msg.id}.json`)), 'moved to read/');
+});
+
+await T('empty and missing args', () => {
+  let e1; try { send(P, { to: 'a', from: 'b', text: '  ' }); } catch (e) { e1 = e; }
+  ok(e1, 'empty text refused');
+  let e2; try { send(P, { to: '', from: 'b', text: 'x' }); } catch (e) { e2 = e; }
+  ok(e2, 'missing --to refused');
+});
+
+await T('reply chain and hop limit', () => {
+  let m = send(P, { to: 'A', from: 'B', text: 'q' }).msg;
+  for (let i = 2; i <= 6; i++) {
+    m = send(P, { to: i % 2 ? 'A' : 'B', from: i % 2 ? 'B' : 'A', text: `r${i}`, replyTo: m.id }).msg;
+    ok(m.hop === i, `hop ${i}`);
+  }
+  let err; try { send(P, { to: 'A', from: 'B', text: 'r7', replyTo: m.id }); } catch (e) { err = e; }
+  ok(err && err.code === 4, 'hop 7 refused');
+  let err2; try { send(P, { to: 'A', from: 'B', text: 'x', replyTo: 'nope' }); } catch (e) { err2 = e; }
+  ok(err2 && err2.code === 4, 'unknown reply id refused');
+  take(P, 'A', 't'); take(P, 'B', 't');
+});
+
+await T('CLI wait wakes on send', async () => {
+  const child = spawn(process.execPath, [TOOL, 'wait', '--me', 'OS - Prova', '--poll', '0.2', '--root', tmp], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = ''; child.stdout.on('data', d => (out += d));
+  let exited = null;
+  const done = new Promise(r => child.on('exit', c => { exited = c; r(c); }));
+  ok(await waitFor(() => listening(P, 'os-prova'), { stop: () => exited !== null }), `waiter registered (exit ${exited}): ${out}`);
+  const again = run(['wait', '--me', 'os prova', '--poll', '0.2']);
+  ok(again.status === 0 && /già in ascolto/.test(again.stdout), `second waiter refused: ${again.stdout}${again.stderr}`);
+  const s = run(['send', '--to', 'OS · Prova', '--from', 'Regia', '--text', 'vai col passo 2']);
+  ok(s.status === 0 && /la chat è in ascolto/.test(s.stdout), `send says listening: ${s.stdout}${s.stderr}`);
+  // a deadline for a hang, not a wait; unref: it must not keep the test process alive once the waiter is done
+  const code = await Promise.race([done, new Promise(r => setTimeout(r, 60000, 'timeout').unref())]);
+  ok(code === 0, `waiter exit ${code}`);
+  ok(/vai col passo 2/.test(out) && /send --to "regia" --from "os-prova" --reply-to/.test(out) && /wait --me "os-prova"/.test(out), `render: ${out}`);
+  // the printed commands name this script and the same --root, so a worktree prototype answers into the same boxes
+  ok(out.includes(TOOL.replace(/\\/g, '/')) && out.includes(`--root "${tmp}"`), `render paths: ${out}`);
+  // and the printed "Rispondi:" command works as is (the live test of 10/10 found it pointing elsewhere)
+  const reply = out.split('\n').find(l => l.startsWith('Rispondi: '));
+  const rf = path.join(tmp, 'reply.txt'); fs.writeFileSync(rf, 'fatto, passo 2 ok');
+  const r = spawnSync(reply.slice('Rispondi: '.length).replace('<testo scritto con Write>', `"${rf}"`), { shell: true, encoding: 'utf8' });
+  ok(r.status === 0, `reply command: ${r.stdout}${r.stderr}`);
+  const back = take(P, 'Regia', 'test');
+  ok(back.length === 1 && back[0].hop === 2 && back[0].text === 'fatto, passo 2 ok', `reply landed: ${JSON.stringify(back)}`);
+  ok(!listening(P, 'os-prova'), 'waiter file removed');
+});
+
+await T('CLI wait gives up', () => {
+  const r = run(['wait', '--me', 'Vuota', '--poll', '0.1', '--max-min', '0.005']);
+  ok(r.status === 2, `exit 2, got ${r.status}`);
+});
+
+await T('CLI read and list', () => {
+  run(['send', '--to', 'Lettore', '--from', 'X', '--text', 'uno']);
+  const l = run(['list']);
+  ok(/lettore: 1 da leggere · non in ascolto/.test(l.stdout), `list: ${l.stdout}`);
+  const r = run(['read', '--me', 'Lettore']);
+  ok(/uno/.test(r.stdout), 'read prints');
+  ok(/nessun messaggio/.test(run(['read', '--me', 'Lettore']).stdout), 'read empty');
+});
+
+await T('hook claude', () => {
+  const tr = path.join(tmp, 'claude.jsonl');
+  fs.writeFileSync(tr, [{ type: 'custom-title', customTitle: 'Vecchio' }, { type: 'user', message: { content: 'x' } }, { type: 'custom-title', customTitle: 'A · Fix login' }].map(r => JSON.stringify(r)).join('\n'));
+  const none = run(['hook', 'claude'], JSON.stringify({ session_id: 's', transcript_path: tr, hook_event_name: 'Stop' }));
+  ok(none.stdout === '', 'no mail, no output');
+  send(P, { to: 'A - Fix login', from: 'Regia', text: '{{OWNER}} dice: ok push' });
+  send(P, { to: 'Altra chat', from: 'Regia', text: 'non per te' });
+  const r = run(['hook', 'claude'], JSON.stringify({ session_id: 's', transcript_path: tr, hook_event_name: 'Stop', stop_hook_active: false }));
+  const o = JSON.parse(r.stdout || '{}');
+  ok(o.decision === 'block' && /ok push/.test(o.reason) && !/non per te/.test(o.reason), `claude hook: ${r.stdout}${r.stderr}`);
+  ok(run(['hook', 'claude'], JSON.stringify({ transcript_path: tr })).stdout === '', 'delivered once');
+  ok(run(['hook', 'claude'], 'not json').status === 0, 'bad input never fails');
+  take(P, 'Altra chat', 't');
+});
+
+await T('hook cursor', async () => {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import('node:sqlite')); } catch { return; } // node without sqlite: skip
+  const dbf = path.join(tmp, 'state.vscdb');
+  const db = new DatabaseSync(dbf);
+  db.exec('CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, value TEXT)');
+  db.prepare('INSERT INTO composerHeaders VALUES (?, ?)').run('c-1', JSON.stringify({ name: 'Regia' }));
+  db.close();
+  send(P, { to: 'Regia', from: 'B · Bug Mario', text: 'domanda per Owner: A o B?' });
+  const r = spawnSync(process.execPath, [TOOL, 'hook', 'cursor', '--root', tmp], { input: '﻿' + JSON.stringify({ conversation_id: 'c-1', hook_event_name: 'stop', status: 'completed', loop_count: 0 }), encoding: 'utf8', env: { ...process.env, BRAIN_CURSOR_DB: dbf } });
+  const o = JSON.parse(r.stdout || '{}');
+  ok(/A o B/.test(o.followup_message || ''), `cursor hook: ${r.stdout}${r.stderr}`);
+});
+
+await T('stale waiter file is not listening', () => {
+  const box = P.box('Morta'); fs.mkdirSync(box, { recursive: true });
+  const wf = path.join(box, '.waiter.json');
+  // a live pid (this test) but no heartbeat for a minute: the waiter was killed and its pid reused
+  fs.writeFileSync(wf, JSON.stringify({ pid: process.pid, since: new Date().toISOString(), me: 'Morta', pollMs: 3000 }));
+  const old = new Date(Date.now() - 60000); fs.utimesSync(wf, old, old);
+  ok(!listening(P, 'Morta'), 'stale heartbeat = not listening');
+  const r = run(['wait', '--me', 'Morta', '--poll', '0.1', '--max-min', '0.005']);
+  ok(r.status === 2 && !/già in ascolto/.test(r.stdout), `a new waiter takes over a stale file: ${r.stdout}`);
+  fs.writeFileSync(wf, JSON.stringify({ pid: 999999, since: new Date().toISOString(), me: 'Morta' }));
+  ok(!listening(P, 'Morta'), 'dead pid = not listening');
+});
+
+await T('cursor hook leaves mail queued past loop limit or on abort', async () => {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import('node:sqlite')); } catch { return; }
+  const dbf = path.join(tmp, 'state2.vscdb');
+  const db = new DatabaseSync(dbf);
+  db.exec('CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, value TEXT)');
+  db.prepare('INSERT INTO composerHeaders VALUES (?, ?)').run('c-2', JSON.stringify({ name: 'Coda' }));
+  db.close();
+  send(P, { to: 'Coda', from: 'X', text: 'resto in coda' });
+  const h = extra => spawnSync(process.execPath, [TOOL, 'hook', 'cursor', '--root', tmp], { input: JSON.stringify({ conversation_id: 'c-2', hook_event_name: 'stop', ...extra }), encoding: 'utf8', env: { ...process.env, BRAIN_CURSOR_DB: dbf } });
+  ok(h({ status: 'completed', loop_count: 3 }).stdout === '', 'loop limit: no output');
+  ok(h({ status: 'aborted', loop_count: 0 }).stdout === '', 'aborted: no output');
+  ok(unread(P, 'Coda').length === 1, 'mail still queued');
+  ok(/resto in coda/.test(JSON.parse(h({ status: 'completed', loop_count: 0 }).stdout || '{}').followup_message || ''), 'delivered on a normal stop');
+});
+
+await T('cursor stop hook correction-log hands over the mail', async () => {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import('node:sqlite')); } catch { return; }
+  const dbf = path.join(tmp, 'state3.vscdb');
+  const db = new DatabaseSync(dbf);
+  db.exec('CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, value TEXT)');
+  db.prepare('INSERT INTO composerHeaders VALUES (?, ?)').run('c-3', JSON.stringify({ name: 'A · QA prova' }));
+  db.close();
+  const tr = path.join(tmp, 'cur.jsonl');
+  fs.writeFileSync(tr, [{ role: 'user', message: { content: [{ type: 'text', text: '<user_query>fai la QA</user_query>' }] } },
+    { role: 'assistant', message: { content: [{ type: 'text', text: 'fatto' }] } }].map(r => JSON.stringify(r)).join('\n'));
+  send(P, { to: 'A - QA prova', from: 'A · Fix', text: 'build PR pronta su test 3' });
+  const cl = path.join(here, '..', '..', 'harness', 'cursor', 'correction-log.mjs');
+  const r = spawnSync(process.execPath, [cl], { input: JSON.stringify({ conversation_id: 'c-3', hook_event_name: 'stop', status: 'completed', loop_count: 0, transcript_path: tr }), encoding: 'utf8',
+    env: { ...process.env, BRAIN_CURSOR_DB: dbf, BRAIN_INBOX_ROOT: tmp, BRAIN_CORRECTIONS_FILE: path.join(tmp, 'corr.json') } });
+  const o = JSON.parse(r.stdout || '{}');
+  ok(/^\[posta\]/.test(o.followup_message || '') && /build PR pronta/.test(o.followup_message), `correction-log + inbox: ${r.stdout}${r.stderr}`);
+  ok((o.followup_message || '').includes(`--root "${tmp}"`), 'reply command keeps the root of BRAIN_INBOX_ROOT');
+});
+
+await T('NO_REPLY wakes nobody', () => {
+  const r = send(P, { to: 'Silenzio', from: 'X', text: ' NO_REPLY ' });
+  ok(r.msg === null && unread(P, 'Silenzio').length === 0, 'NO_REPLY not queued');
+});
+
+await T('hookOutput shapes', () => {
+  ok(hookOutput('claude', 'x').decision === 'block', 'claude shape');
+  ok(hookOutput('cursor', 'x').followup_message === 'x', 'cursor shape');
+});
+
+await T('Claude <-> Cursor switch', () => {
+  const settings = v => fs.writeFileSync(path.join(tmp, 'brain-settings.json'), JSON.stringify({ crossHarnessMessages: v }));
+  ok(detectHarness({ CURSOR_AGENT: '1' }) === 'cursor' && detectHarness({ CLAUDECODE: '1' }) === 'claude' && detectHarness({}) === null, 'detectHarness');
+  ok(brainSettings(tmp).crossHarnessMessages === true, 'default on without a settings file');
+  noteHarness(P, 'Cur · A', 'cursor');
+  noteHarness(P, 'Cla · B', 'claude');
+  ok(harnessOf(P, 'cur-a') === 'cursor', 'box remembers its harness');
+  // on: cross-harness passes
+  ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'on' }).msg, 'cross passes when on');
+  settings(false);
+  ok(brainSettings(tmp).crossHarnessMessages === false, 'off read from brain-settings.json');
+  let err = null;
+  try { send(P, { to: 'Cla · B', from: 'Cur · A', text: 'off' }); } catch (e) { err = e; }
+  ok(err?.code === 5 && /bloccato/.test(err.message), `cross refused when off: ${err?.message}`);
+  try { err = null; send(P, { to: 'Cur · A', from: 'Cla · B', text: 'off', harness: 'claude' }); } catch (e) { err = e; }
+  ok(err?.code === 5, 'refused in the other direction too');
+  noteHarness(P, 'Cur · C', 'cursor');
+  ok(send(P, { to: 'Cur · C', from: 'Cur · A', text: 'same' }).msg, 'same harness always passes');
+  ok(send(P, { to: 'Cla · B', from: 'second-brain', harness: 'app', text: 'app' }).msg, 'the app always passes');
+  ok(send(P, { to: 'Sconosciuta', from: 'Cur · A', text: 'unknown' }).msg, 'unknown receiver harness passes');
+  const log = fs.readFileSync(P.log, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(r => r.action === 'blocked');
+  ok(log.length === 2 && log[0].fromHarness === 'cursor' && log[0].toHarness === 'claude', 'blocked rows logged');
+  // the CLI as a Cursor chat would run it (env CURSOR_AGENT=1, no CLAUDECODE)
+  const cursorEnv = { ...process.env, CURSOR_AGENT: '1' };
+  delete cursorEnv.CLAUDECODE;
+  const runAs = (env, args) => spawnSync(process.execPath, [TOOL, ...args, '--root', tmp], { encoding: 'utf8', env, timeout: 120000 });
+  const r = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'cli']);
+  ok(r.status === 5 && /bloccato/.test(r.stderr), `CLI exit 5: ${r.status} ${r.stderr}`);
+  // review 11/10: a chat can't pass for the app, env wins over --harness, NO_REPLY is never "blocked"
+  const r2 = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'x', '--harness', 'app']);
+  ok(r2.status === 5 && harnessOf(P, 'cur-a') === 'cursor', `--harness app from the CLI is ignored: ${r2.status} ${harnessOf(P, 'cur-a')}`);
+  const r3 = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'NO_REPLY']);
+  ok(r3.status === 0, `NO_REPLY with the switch off: exit 0, got ${r3.status}`);
+  noteHarness(P, 'Cla · D', 'claude');
+  ok(send(P, { to: 'Cla · D', from: 'Cla · B', text: 'same', harness: 'Claude' }).msg, 'invalid --harness value is ignored, same harness passes');
+  // hand-edited files (PowerShell 5.1): BOM and UTF-16 read; unreadable fails closed
+  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), '﻿{"crossHarnessMessages":false}');
+  ok(brainSettings(tmp).crossHarnessMessages === false, 'UTF-8 BOM read');
+  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"crossHarnessMessages":true}', 'utf16le')]));
+  ok(brainSettings(tmp).crossHarnessMessages === true, 'UTF-16 read');
+  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), '{not json');
+  ok(brainSettings(tmp).crossHarnessMessages === false, 'unreadable file fails closed');
+  settings(true);
+  ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'back on' }).msg, 'passes again when switched back on');
+  fs.rmSync(path.join(tmp, 'brain-settings.json'));
+  for (const b of ['cur-a', 'cla-b', 'cla-d', 'cur-c', 'sconosciuta', 'second-brain']) take(P, b, 'test');
+});
+
+await T('stats', () => {
+  const s = stats(P);
+  ok(s['os-tool -> regia']?.sent === 1 && s['os-tool -> regia']?.delivered === 1, `stats: ${JSON.stringify(s['os-tool -> regia'])}`);
+  ok(s['regia -> os-prova']?.via?.wait === 1, 'via wait counted');
+});
+
+fs.rmSync(tmp, { recursive: true, force: true });
+if (fails.length) { console.error(`inbox tests: ${fails.length} failed of ${n}\n- ${fails.join('\n- ')}`); process.exit(1); }
+console.log(`inbox tests: ${n} groups ok`);

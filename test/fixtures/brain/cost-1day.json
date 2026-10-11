@@ -1,0 +1,74 @@
+{
+ "from": "2026-10-11",
+ "to": "2026-10-11",
+ "total": 12.5,
+ "calls": 40,
+ "responses": 30,
+ "byDay": {
+  "2026-10-11": {
+   "usd": 12.5,
+   "calls": 40
+  }
+ },
+ "byModel": {
+  "opus-5-5": {
+   "usd": 12.5,
+   "calls": 40
+  }
+ },
+ "byKind": {},
+ "byArea": {},
+ "chats": {
+  "11111111-1111-4111-8111-111111111111": {
+   "title": "Fix login error",
+   "folder": "C:\repo",
+   "usd": 8.25,
+   "calls": 30,
+   "ctxMax": 120000,
+   "from": 1791698400000,
+   "to": 1791700800000,
+   "longSave": 0
+  },
+  "22222222-2222-4222-8222-222222222222": {
+   "title": "Regia",
+   "folder": "C:\brain",
+   "usd": 4.25,
+   "calls": 10,
+   "ctxMax": 300000,
+   "from": 1791694800000,
+   "to": 1791702000000,
+   "longSave": 0
+  },
+  "33333333-3333-4333-8333-333333333333": {
+   "title": "zero",
+   "folder": "",
+   "usd": 0,
+   "calls": 0,
+   "ctxMax": 0,
+   "from": 0,
+   "to": 0,
+   "longSave": 0
+  }
+ },
+ "long": 0,
+ "longSave": 0,
+ "uncalibrated": [],
+ "cursor": {
+  "total": 1.5,
+  "byDay": {
+   "2026-10-11": {
+    "usd": 1.5,
+    "calls": 3
+   }
+  },
+  "byModel": {},
+  "file": "team-usage-events-1-2026-10-11.csv",
+  "downloaded": "2026-10-11T08:03:05.151Z",
+  "lastRow": "2026-10-11T07:43:19.040Z"
+ },
+ "fixed": {
+  "chars": 0,
+  "usd": 0
+ },
+ "advice": []
+}

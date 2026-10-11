@@ -1,0 +1,9 @@
+# Never commit credentials
+.env
+*.env
+*credentials*
+# Local state of the tools (mailboxes, leases, caches)
+ops/state/
+ops/tools/.watch-state.json*
+.claude/hygiene.txt
+*.log

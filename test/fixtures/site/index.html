@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Fixture QA</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 12px; }
+    form, .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    iframe { border: 2px solid #888; display: block; margin: 6px 0; }
+    h2 { margin: 8px 0 2px; font-size: 16px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Pagina di prova</h1>
+  <form id="f" onsubmit="event.preventDefault(); document.getElementById('result').textContent = 'Inviato: ' + [nome.value, email.value, citta.value, accetto.checked].join(' / ');">
+    <label for="nome">Nome</label> <input id="nome" name="nome">
+    <label for="email">Email</label> <input id="email" type="email" name="email">
+    <label for="citta">Città</label>
+    <select id="citta"><option value="">--</option><option value="rm">Roma</option><option value="mi">Milano</option></select>
+    <label><input type="checkbox" id="accetto"> Accetto</label>
+    <button type="submit">Invia</button>
+  </form>
+  <p id="result"></p>
+  <div class="row">
+    <button id="alert" onclick="alert('Ciao agente')">Mostra alert</button>
+    <button id="confirm" onclick="document.getElementById('confirm-result').textContent = 'Conferma: ' + confirm('Sei sicuro?')">Chiedi conferma</button>
+    <span id="confirm-result"></span>
+  </div>
+  <div class="row">
+    <button id="load" onclick="fetch('/api/data').then(r => r.json()).then(j => { document.getElementById('data').textContent = 'Dati: ' + j.items.join(', '); })">Carica dati</button>
+    <button id="fail" onclick="fetch('/api/fail')">Richiesta fallita</button>
+    <button id="err" onclick="console.error('boom dal pulsante')">Errore console</button>
+    <span id="data"></span>
+  </div>
+  <div class="row">
+    <a id="blank" href="/popup.html" target="_blank">Apri in nuova scheda</a>
+    <button id="popup" onclick="window.open('/popup.html', 'pop', 'width=500,height=400')">Apri popup</button>
+  </div>
+  <h2>Frame interno</h2>
+  <iframe id="same" src="/frame.html" width="440" height="70" title="Frame interno"></iframe>
+  <h2>Frame esterno</h2>
+  <iframe id="cross" src="{{CROSS}}/cross.html" width="440" height="150" title="Frame esterno"></iframe>
+</main>
+</body>
+</html>

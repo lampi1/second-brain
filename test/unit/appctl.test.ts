@@ -1,0 +1,43 @@
+import { describe, expect, it } from 'vitest';
+import { AGENT_LABEL, appControlTools } from '../../src/main/appctl/tools';
+import { log } from '../../src/main/log';
+import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
+
+function deps() {
+  const sent: { chatId: string; text: string }[] = [];
+  const ui: unknown[] = [];
+  const chats = {
+    list: () => [], items: () => [], pending: () => [{ id: 'r1', chatId: 'c1', type: 'permission', tool: 'Bash', title: 'git commit', detail: '', input: {}, at: 0 }],
+    send: async (chatId: string, text: string) => { sent.push({ chatId, text }); },
+  } as unknown as ChatService;
+  const browser = { list: () => [] } as unknown as BrowserService;
+  const brain = { feed: () => [], usage: () => ({ todayUsd: 1, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null }), info: () => ({ brainRoot: null }) } as unknown as BrainService;
+  const tools = appControlTools({ chats, browser, brain, window: () => null, emitUi: c => ui.push(c), version: '0.0.0' });
+  const tool = (n: string) => tools.find(t => t.name === n)!;
+  return { sent, ui, tools, tool };
+}
+
+describe('app control tools', () => {
+  it('can never answer questions or permissions', () => {
+    const { tools } = deps();
+    expect(tools.map(t => t.name).some(n => /answer|approve|allow|permission/i.test(n))).toBe(false);
+  });
+
+  it('labels every message sent to a chat as written by an agent', async () => {
+    const { tool, sent } = deps();
+    await tool('app_send_to_chat').run({ chatId: 'c1', text: 'controlla i test' });
+    expect(sent[0]!.text.startsWith(AGENT_LABEL)).toBe(true);
+    await expect(Promise.resolve(tool('app_send_to_chat').run({ chatId: 'c1', text: '' }))).rejects.toThrow(/empty/);
+  });
+
+  it('filters logs by level and text and steers the UI', async () => {
+    const { tool, ui } = deps();
+    log.warn('chats', 'session slow', { chat: 'c9' });
+    log.info('browser', 'tab opened');
+    const out = await tool('app_logs').run({ level: 'warn', grep: 'slow' }) as { msg: string }[];
+    expect(out.map(e => e.msg)).toContain('session slow');
+    expect(out.every(e => e.msg !== 'tab opened')).toBe(true);
+    await tool('app_ui').run({ action: 'view', value: 'corsie' });
+    expect(ui).toEqual([{ action: 'view', value: 'corsie' }]);
+  });
+});

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Accesso nel componente</title></head>
+<body style="font-family: system-ui, sans-serif">
+  <h1>Accesso nel componente</h1>
+  <x-login></x-login>
+  <script>
+    customElements.define('x-login', class extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' }).innerHTML = '<label>Utente <input id="u"></label> <label>Segreto <input id="p" type="password"></label>';
+      }
+    });
+  </script>
+</body>
+</html>
