@@ -150,6 +150,7 @@ T('chat-prompt', () => {
   const c = buildPrompt({ title: 'A · Review login', kind: 'code', repo: 'my-app', job, words: 'fai la review', date: '2026-10-10' });
   ok(c.includes('Sei la chat di lavoro "A · Review login"') && c.includes('Repo di lavoro: {{REPOS_JS}}\\my-app.') && c.includes('code.md'), 'chat-prompt: claude head');
   ok(c.includes('inbox.mjs" send --to "regia" --from "a-review-login"') && c.includes('(AskUserQuestion)') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Regia, wait-devops, env-lease, now.md)');
+  ok(c.includes('Suite di test pesanti') && c.includes('`sb-tests`') && c.includes('`release` sempre'), 'chat-prompt: heavy-suite turn line missing (code.md "Heavy test suites")');
   ok(c.includes('Parole di {{OWNER}} (2026-10-10): "fai la review"') && c.includes(job), 'chat-prompt: words and job');
   const k = buildPrompt({ title: 'B · QA', kind: 'qa', harness: 'cursor', repo: 'my-app', job });
   ok(k.includes('Questa chat parte in {{BRAIN_JS}}') && k.includes('AskQuestion') && !k.includes('SendMessage') && k.includes('rules\\qa.md'), 'chat-prompt: cursor variant');

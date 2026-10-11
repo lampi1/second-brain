@@ -70,6 +70,8 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   L.push(`- Posta tra chat (Claude e Cursor): appena partita lancia in background \`${INBOX} wait --me "${me}"\` e rilancialo dopo ogni messaggio ricevuto; i passaggi operativi (build pronta, stack libero, fix pronto per la QA) li mandi tu direttamente alla chat interessata con \`${INBOX} send --to "<chat>" --from "${me}" --file <testo>\`; domande e decisioni per {{OWNER}} solo alla Regia.`);
   L.push(`- Tieni la tua riga in now.md, mai a mano: \`node "{{BRAIN}}/ops/tools/mem.mjs" now me --label "${title}" --text "<dove · stato · prossimo passo>"\`; a lavoro chiuso \`now me --label "${title}" --del\`.`);
   L.push('- Se {{OWNER}} ti corregge o scopri un tuo errore: una riga con `node "{{BRAIN}}/ops/tools/mem.mjs" error --text "<riga>"` (formato in ai-errors.md).');
+  // 2026-10-11: 10 chats ran full suites together, CPU 100%, ~1 h lost (code.md "Heavy test suites")
+  L.push('- Suite di test pesanti (check completo, e2e, vitest intero): una alla volta sulla macchina, con lo stesso turno sull\'ambiente dei test del repo (`sb-tests` per second-brain-app): `wait` in background → suite → `release` sempre, anche se fallisce; senza turno solo singoli file di test; un timeout preso a PC carico non prova niente.');
   return L.join('\n');
 }
 
