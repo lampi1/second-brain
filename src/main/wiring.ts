@@ -2,11 +2,15 @@
 // the app-control tools are mounted on the same local MCP server. Used by index.ts (one call at start).
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 import type { BrowserWindow } from 'electron';
-import { app, shell } from 'electron';
+import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
-import type { CliStatus } from '../shared/contract';
+import type { CliStatus, Harness } from '../shared/contract';
 import { NEW_CHAT_RULE } from '../shared/newchat';
-import { claudeStatus, cursorStatus } from './cli';
+import { engineStatuses } from './cli';
+import { enginePathsFromEnv } from './engines/registry';
+import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
+import { createEngines, type EnginesApi } from './engines/service';
+import { safeStorageCipher } from './engines/secrets';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, type TurnEndInfo } from './chats/manager';
 import type { Emitter } from './ipc';
@@ -31,7 +35,7 @@ import { RunResults } from './run/results';
 import { RegiaWake } from './chats/regia-wake';
 import { DevopsService } from './devops/service';
 import { Quality } from './brain/quality';
-import { cleanEnv, findNode, ImproveService } from './improve/service';
+import { cleanEnv, findNode, ImproveService, type ImproveDeps } from './improve/service';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
@@ -40,10 +44,13 @@ import { log, errText } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
+import { COMPACT_WINDOW } from './brain/settings-schema';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
   chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
+  /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
+  engines: EnginesApi;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
   branches?: (cwds: unknown) => Record<string, string | null>;
   /** "Skill e agenti" (ADR 0018) */
@@ -60,7 +67,7 @@ export interface Wired {
   improve: ImproveService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
   later: AnswerLaterStore;
-  cli(): { claude: CliStatus; cursor: CliStatus } | null;
+  cli(): Record<Harness, CliStatus> | null;
   shutdown(): Promise<void>;
   /** synchronous: kills every child process tree now (app quit, belt and braces after shutdown) */
   killNow(): void;
@@ -167,7 +174,7 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
 /** "Migliora l'app" (ADR 0020). Stable = started by the launcher (SB_RELEASE); SB_IMPROVE_STABLE=<release id> makes a
  *  test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_IMPROVE_REPO pointing at temp folders),
  *  and then a restart is only recorded (__sbImprove.restarts), never real. */
-export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'create'>, appRepo: () => string | null): ImproveService {
+export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'create'>, appRepo: () => string | null, routing?: ImproveDeps['routing']): ImproveService {
   const fake = process.env.SB_IMPROVE_STABLE;
   const running = fake ?? releaseId() ?? 'dev';
   const releasesBase = process.env.SB_RELEASES_ROOT ?? path.join(process.env.LOCALAPPDATA ?? path.join(ctx.userData, '..'), 'second-brain');
@@ -178,7 +185,7 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
   (globalThis as Record<string, unknown>).__sbImprove = recorder;
   return new ImproveService({
     userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(),
-    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(),
+    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(), ...(routing ? { routing } : {}),
     emit: st => ctx.emitter.emit('improve:state', st),
     restart: failed => {
       if (!real) { recorder.restarts++; log.info('improve', 'restart asked (test run: not restarting)'); return; }
@@ -206,9 +213,9 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
 
 export async function createServices(ctx: Ctx): Promise<Wired> {
   if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
-  let cliCache: { claude: CliStatus; cursor: CliStatus } | null = null;
+  let cliCache: Record<Harness, CliStatus> | null = null;
   // not in e2e tests: a pending CLI check would delay the app exit by seconds
-  if (!process.env.SB_TEST) void Promise.all([claudeStatus(), cursorStatus()]).then(([claude, cursor]) => { cliCache = { claude, cursor }; ctx.emitter.emit('cli:ready', cliCache); });
+  if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; ctx.emitter.emit('cli:ready', all); });
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
@@ -218,6 +225,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
   const later = createLater(ctx);
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind) });
+  // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
+  const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
   let prices: { at: number; reg: ReturnType<BrainService['routingInfo']>['registry'] } = { at: 0, reg: null };
   setPriceTable(() => { if (Date.now() - prices.at > 30_000) prices = { at: Date.now(), reg: brain.routingInfo().registry }; return prices.reg; });
@@ -231,8 +240,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const manager = new ChatManager({
     emitter: ctx.emitter,
     userData: ctx.userData,
-    ...(process.env.SB_CLAUDE_PATH ? { claudePath: process.env.SB_CLAUDE_PATH } : {}),
-    ...(process.env.SB_CURSOR_PATH ? { cursorPath: process.env.SB_CURSOR_PATH } : {}),
+    enginePaths: enginePathsFromEnv(),
+    // an engine the user switched off never starts, whoever asks (engines/policy.ts)
+    engineOn: h => engineOn(brain.settings(), h),
+    agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
+    // the user's API key, only for its own engine's process or request (engines/secrets.ts)
+    keyFor: h => engines.keyFor(h),
     appVersion: app.getVersion(),
     // one Claude engine started ahead for the next new chat (chats/warm.ts: 10-25 s of CLI start-up measured,
     // 2026-10-13); never with the fake CLI of the e2e tests; SB_PREWARM=0 turns it off
@@ -249,7 +262,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // brain hooks: plan limits, the job ledger (estimate vs actual), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => brain.recordModels(h, list),
-    cursorModelConfig: () => { const r = brain.settings().regiaChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
+    acpModelConfig: () => { const r = brain.settings().regiaChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     estimateFor: req => brain.estimate(req),
     onTurnEnd: info => {
       const job = jobs.get(info.chatId) ?? { usd: 0, turns: 0, prompt: info.firstPrompt, kind: info.kind };
@@ -295,8 +308,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // long chats (ADR 0031): the compaction window of every Claude engine and the invisible continuation of cold chats
     // are settings; a manual hand-off asks to update the brain's now.md. SB_COLD_MS=<idle>,<ttl>,<every> shortens the
     // cold timers for the e2e suite (SB_TEST only)
-    compactWindowTokens: () => brain.settings().compactWindowTokens ?? 300_000,
+    compactWindowTokens: () => brain.settings().compactWindowTokens ?? COMPACT_WINDOW,
     coldHandoff: () => brain.settings().contextHandoff,
+    regiaDayCompact: () => brain.settings().regiaDayCompact !== false,
     coldIdleMs: () => coldTest?.[0] ?? (brain.settings().coldHandoffMin ?? 50) * 60_000,
     ...(coldTest ? { cacheTtlMs: coldTest[1], coldEveryMs: coldTest[2] } : {}),
     memTool: () => {
@@ -334,7 +348,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
   const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData) });
   addChatTools(mailTools({
-    root: () => brain.info().brainRoot, chats: () => chats.list(), crossHarness: () => brain.settings().messaging.crossHarness,
+    root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
+    agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
   }));
   mail.start();
@@ -346,7 +361,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const asks = attachCommandAsks(ctx, runner, brain);
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null);
+  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
   attachAppTools(mcp, { chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -384,10 +399,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines,
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
-    shutdown: async () => { sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

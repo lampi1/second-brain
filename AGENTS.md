@@ -56,8 +56,10 @@ something fails at runtime, `npm run logs -- --level warn --since 15m` → `npm 
 1. **Contract first, typed IPC only.** No `ipcRenderer`/`ipcMain` outside `preload/index.ts` and `main/ipc.ts`.
 2. **Security baseline (never relax):** `contextIsolation`, `sandbox`, no `nodeIntegration`, CSP in `index.html`, IPC
    sender check, browser tabs in their own partition, MCP bound to 127.0.0.1 with Host/Origin checks, no secrets in
-   files or logs, credentials never handled by the app (each CLI logs in itself; one exception: a login hand-off's
-   password, read from the user's brain file only when they click Copia, never stored or logged; ADR 0012).
+   files or logs, credentials never handled by the app (each CLI logs in itself) with two exceptions: a login
+   hand-off's password, read from the user's brain file only when they click Copia, never stored or logged (ADR 0012);
+   the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
+   their own engine's process env or HTTP header (ADR 0046).
 3. **Dependencies:** only well-known packages, exact versions, published ≥ 14 days before install (`npm install
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.

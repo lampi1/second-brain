@@ -30,3 +30,9 @@ export function typingLeft(now = Date.now(), doc: Document = document): number {
 export function startTypingWatch(doc: Document = document): void {
   doc.addEventListener('keydown', e => { if (isEditable(e.target as Element | null) && !(e.target as Element).closest('.qwin')) lastTypedAt = Date.now(); }, true);
 }
+
+/** Measured by the e2e (questions-perf.spec.ts): how often the window and its card render, and how long the last
+ *  opening took from the render that first had the request to the painted frame (ADR 0049: under 100 ms, no render on
+ *  another chat's events). A few counters, always on: cheaper than a profiler build. */
+export const qwinStats = { renders: 0, cardRenders: 0, openMs: -1 };
+(globalThis as unknown as { __sbQwin?: typeof qwinStats }).__sbQwin = qwinStats;

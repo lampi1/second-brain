@@ -3,7 +3,8 @@
 //   {"t":"2026-10-11T09:40:51.123Z","lvl":"info","scope":"chats","msg":"session started","chat":"c_12","data":{...}}
 // Levels: debug < info < warn < error (SB_LOG_LEVEL, default info). Errors carry `cause` and `hint` (the next step).
 // Files rotate daily; files older than 14 days are deleted at start. Secrets are redacted before writing (token-like
-// strings, Authorization headers, ?token= / per-chat MCP tokens). Read them with `node scripts/logs.mjs` (filters by
+// strings, Authorization headers, ?token= / per-chat MCP tokens, and the exact value of every API key the app holds,
+// engines/secrets.ts addRedaction). Read them with `node scripts/logs.mjs` (filters by
 // level, scope, chat, text, since). Used by every main-process module: `import { log } from './log'`.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,8 +24,19 @@ const SECRET_PATTERNS: RegExp[] = [
   /\b([a-z][a-z0-9+.-]{0,15}:\/\/)[^/\s:@"']{1,256}:[^/\s@"']{0,256}(?=@)/gi,  // user:password@ in URLs (bounded: no backtracking blow-up)
 ];
 
+/** The API keys main has read (engines/secrets.ts), as they appear in a JSON line too: replaced whatever their shape. */
+const known = new Set<string>();
+
+/** Redacts this exact value from every later log line (an API key the app stores or reads). */
+export function addRedaction(value: string): void {
+  if (value.length < 8) return; // too short to be a key: redacting it would blank ordinary words
+  known.add(value);
+  known.add(JSON.stringify(value).slice(1, -1));
+}
+
 export function redact(s: string): string {
   let out = s;
+  for (const k of known) if (out.includes(k)) out = out.split(k).join('[redacted]');
   for (const re of SECRET_PATTERNS) out = out.replace(re, (m, p1?: string) => (typeof p1 === 'string' && m.startsWith(p1) && p1 !== m ? `${p1}[redacted]` : '[redacted]'));
   return out;
 }

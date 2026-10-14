@@ -5,6 +5,8 @@
 // in its folder (%LOCALAPPDATA%/second-brain/publish: scan.mjs, deny.txt, guardallow, refreshed at each sync). Without
 // them (a machine that never synced) there is nothing private to check and the test is skipped. Read-only: it scans a
 // temp copy of the files the sync would publish and prints only file:line + rule, never a matched value.
+// SB_GUARD_FILES (newline-separated repo paths): scan only those, the branch's changed files (scripts/check-branch.mjs);
+// the allow file pins paths, so a subset is checked exactly as in the whole scan.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -22,6 +24,7 @@ const EXCLUDE = [/^docs\/research\//, /^docs\/mockups\//, /^test-results\//, /^o
   /^(?!build\/icon\.png$|test\/e2e\/[^/]+-snapshots\/[^/]+\.png$|docs\/screenshots\/[^/]+\.webp$).*\.(png|jpe?g|gif|webp)$/i];
 
 const root = path.resolve(import.meta.dirname, '..', '..');
+const only = process.env.SB_GUARD_FILES ? new Set(process.env.SB_GUARD_FILES.split('\n').map(f => f.trim().replace(/\\/g, '/')).filter(Boolean)) : null;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-publish-guard-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -29,7 +32,7 @@ describe.skipIf(!ready)('publish guard', () => {
   it('the files the product sync would publish carry no finding', () => {
     // tracked files and new ones not yet added (ignored ones never are), as they are on disk now
     const files = execFileSync('git', ['-C', root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
-      .split('\0').filter(f => f && !EXCLUDE.some(re => re.test(f)) && fs.existsSync(path.join(root, f)));
+      .split('\0').filter(f => f && (!only || only.has(f)) && !EXCLUDE.some(re => re.test(f)) && fs.existsSync(path.join(root, f)));
     for (const f of new Set(files)) {
       fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true });
       fs.copyFileSync(path.join(root, f), path.join(tmp, f));

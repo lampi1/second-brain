@@ -6,6 +6,7 @@
 import type { ChatSummary, Harness, ImproveState } from '@shared/contract';
 import { createStore } from './createStore';
 import { askConfirm, toast } from './ui';
+import { engineLabel } from '../lib/engines';
 
 export const improve = createStore<ImproveState | null>(null);
 /** the app chat open next to the section's Regia (null = none) */
@@ -64,7 +65,7 @@ export async function newAppRegia(harness: Harness): Promise<ChatSummary | null>
 export async function createAppRegia(harness: Harness): Promise<void> {
   try {
     const c = await window.sb.invoke('improve:regia', { harness });
-    toast(`Regia dell'app creata (${c.harness === 'cursor' ? 'Cursor' : 'Claude'})`, 'ok');
+    toast(`Regia dell'app creata (${engineLabel(c.harness)})`, 'ok');
   } catch (e) { toast(`Regia dell'app non creata: ${errText(e)}`, 'err'); }
 }
 

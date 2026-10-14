@@ -83,7 +83,7 @@ function setup(extra: Partial<ChatManagerOptions> = {}) {
   const userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), log = path.join(userData, 'fake.jsonl');
   const make = (more: Partial<ChatManagerOptions> = {}) => {
     const m = new ChatManager({
-      emitter: recEmitter(), userData, claudePath: FAKE, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log },
+      emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log },
       compactWindowTokens: () => 300_000, coldHandoff: () => true, coldIdleMs: () => 0, cacheTtlMs: 1500, coldEveryMs: 0, ...extra, ...more,
     });
     managers.push(m);

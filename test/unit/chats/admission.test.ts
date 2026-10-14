@@ -1,13 +1,17 @@
-// The CPU-aware queue (admission.ts, ADR 0036) with a fake load sampler: FIFO, hysteresis (two samples under), one
+// The CPU-aware queue (admission.ts, ADR 0036) with a fake load sampler: FIFO, the app's chats behind the work chats,
+// hysteresis (two samples under), one
 // admission per sample, "Avvia ora", the switch; then ChatManager against the fake CLI: an agent's new chat and an
 // agent's message to an idle chat wait while the load is high, the user's own message never waits (and takes the
-// queued one with it), a queued chat closed by hand drops its work, no warm engine starts while busy.
+// queued one with it), a queued chat closed by hand drops its work, no warm engine starts while busy; a queued chat
+// never looks busy, so the Regia is never told it "finished" a turn it did not run (2026-10-14).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { AdmissionQueue, MAIL_WAITS, forcedSampler, type AdmissionLimits, type LoadSample } from '../../../src/main/chats/admission';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
+import { RegiaWake } from '../../../src/main/chats/regia-wake';
+import type { ChatSummary } from '../../../src/shared/contract';
 import { FAKE, fakeLog, recEmitter, tmp, waitFor } from './helpers';
 
 function fakeLoad(cpu = 90, freeRam = 50) {
@@ -56,6 +60,23 @@ describe('AdmissionQueue', () => {
     q.tick(); q.tick();
     expect(ran).toEqual(['a', 'b', 'c']);
     expect(q.list()).toEqual([]);
+  });
+
+  it("the app's chats wait behind every work chat, each in order of arrival; a running one is never stopped", () => {
+    const f = fakeLoad();
+    const q = new AdmissionQueue({ sampler: f.sampler, limits: () => ON, autoTick: false });
+    const ran: string[] = [];
+    const req = (k: string, app: boolean) => q.request(k, 'start', () => ran.push(k), app);
+    req('app1', true); req('app2', true);
+    expect(req('work1', false)?.position).toBe(1);
+    expect(req('work2', false)?.position).toBe(2);
+    expect(req('app3', true)?.position).toBe(5);
+    expect(q.list().map(e => [e.key, !!e.app])).toEqual([['work1', false], ['work2', false], ['app1', true], ['app2', true], ['app3', true]]);
+    q.request('app1', 'turn', () => ran.push('app1+'), false); // a later message of a waiting key joins its entry
+    expect(q.entry('app1')?.position).toBe(3);
+    f.load.cpu = 50;
+    for (let i = 0; i < 10; i++) q.tick();
+    expect(ran).toEqual(['work1', 'work2', 'app1', 'app1+', 'app2', 'app3']);
   });
 
   it('a key already waiting keeps its messages in order behind one entry', () => {
@@ -107,7 +128,7 @@ describe('ChatManager with the CPU queue', () => {
     const argLog = `${ud}/argv.jsonl`;
     const f = fakeLoad();
     const m = new ChatManager({
-      emitter: recEmitter(), userData: ud, claudePath: FAKE, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog },
+      emitter: recEmitter(), userData: ud, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog },
       admission: { sampler: f.sampler, limits: () => ON, autoTick: false }, ...extra,
     });
     managers.push(m);
@@ -128,6 +149,32 @@ describe('ChatManager with the CPU queue', () => {
     await waitFor(() => users(c.id).includes('do it'), 'the queued prompt delivered');
     expect(m.list().find(x => x.id === c.id)?.queued).toBeUndefined();
     await waitFor(() => starts() === 1, 'its engine');
+  });
+
+  it('a queued chat never looks busy: no "ha finito il turno" to the Regia before its first turn ran', async () => {
+    const emitter = recEmitter();
+    const { m, cwd, users } = setup({ emitter });
+    const sent: string[] = [];
+    const wake = new RegiaWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => m.list(), groupMs: 50, perChatMs: 0 });
+    const regia = await m.create({ harness: 'claude', cwd, regia: true });
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'screenshot nelle PR' }, 'agent');
+    for (const e of emitter.events) wake.observe(e.channel, e.payload);
+    const states = (emitter.of('chat:updated') as ChatSummary[]).filter(x => x.id === c.id).map(x => x.state);
+    expect(states.length).toBeGreaterThan(0);
+    expect(states.every(s => s === 'idle')).toBe(true); // never 'starting': nothing started
+    expect(m.workMs(c.id)).toBe(0); // no work time while it waits
+    await new Promise(r => setTimeout(r, 200));
+    expect(wake.queued()).toEqual([]);
+    expect(sent).toEqual([]);
+    // admitted, its real turn runs and ends: that one is told
+    const seen = emitter.events.length;
+    m.admitNow(c.id);
+    await waitFor(() => users(c.id).includes('screenshot nelle PR') && m.list().find(x => x.id === c.id)?.lastResult !== undefined, 'its first turn');
+    await waitFor(() => m.list().find(x => x.id === c.id)?.state === 'idle', 'turn over');
+    for (const e of emitter.events.slice(seen)) wake.observe(e.channel, e.payload);
+    expect(wake.queued().map(e => [e.chatId, e.kind])).toEqual([[c.id, 'done']]);
+    wake.stop();
+    void regia;
   });
 
   it("the user's own chat and message never wait; the user's message takes the queued one with it, in order", async () => {
@@ -177,6 +224,22 @@ describe('ChatManager with the CPU queue', () => {
     expect(m.queueState()?.waiting.map(w => [w.chatId, w.kind, w.position])).toEqual([['c_a', 'start', 1], ['c_b', 'start', 2]]);
     await new Promise(r => setTimeout(r, 300));
     expect(starts()).toBe(0);
+  });
+
+  it("an app chat's queued work goes after a work chat's that came later", async () => {
+    const { m, f, cwd, users } = setup();
+    const app = await m.create({ harness: 'claude', cwd, prompt: 'fix the app', title: 'App · coda' }, 'agent');
+    const pers = await m.create({ harness: 'claude', cwd, prompt: 'pers app', title: 'Pers · App: tile' }, 'agent');
+    const improve = await m.create({ harness: 'claude', cwd, prompt: 'improve', title: 'Qualcosa', space: 'app' }, 'agent');
+    const work = await m.create({ harness: 'claude', cwd, prompt: 'plan it', title: 'Shop · sprint' }, 'agent');
+    expect(m.queueState()?.waiting.map(w => w.chatId)).toEqual([work.id, app.id, pers.id, improve.id]);
+    expect(m.list().find(x => x.id === work.id)?.queued?.position).toBe(1);
+    expect(m.list().find(x => x.id === app.id)?.queued?.position).toBe(2);
+    f.load.cpu = 30;
+    const q = (m as unknown as { admission: AdmissionQueue }).admission;
+    q.tick(); q.tick();
+    await waitFor(() => users(work.id).includes('plan it'), 'the work chat admitted first');
+    expect(users(app.id)).toEqual([]);
   });
 
   it('chat mail is never held in the queue: it fails, so the mail stays unread', async () => {

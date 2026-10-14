@@ -9,7 +9,7 @@ import { FAKE, alive, fakeLog, recEmitter, tmp, waitFor } from './helpers';
 
 const managers: ChatManager[] = [];
 function setup(userData: string, home: string, argLog: string, delayMs = 50) {
-  const m = new ChatManager({ emitter: recEmitter(), userData, claudePath: FAKE, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog, FAKE_CLAUDE_DELAY: String(delayMs) } });
+  const m = new ChatManager({ emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog, FAKE_CLAUDE_DELAY: String(delayMs) } });
   managers.push(m);
   return m;
 }

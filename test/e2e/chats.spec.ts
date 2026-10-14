@@ -140,7 +140,18 @@ for (const guard of [false, true]) test(`quitting the app leaves no claude proce
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const logFile = path.join(home, 'fake.jsonl');
-  const { app, page, userData } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: logFile, FAKE_CLAUDE_DELAY: '100', ...(guard ? { SB_JOBGUARD: '1' } : {}) });
+  const reapDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-reap-')); // the quit reaper's <pid>.done markers
+  // the busy CLI's child lives 5 min: only a kill ends it within the test, never its own timer (40 s by default)
+  const { app, page, userData } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: logFile, FAKE_CLAUDE_DELAY: '100', FAKE_CLAUDE_CHILD_MS: '300000', SB_QUIT_REAP_DONE: reapDir, ...(guard ? { SB_JOBGUARD: '1' } : {}) });
+  if (!guard) test.setTimeout(300000); // the quit reaper may need minutes on a loaded box (below: 180 s after the app)
+  const logDir = path.join(userData, 'logs');
+  const appLogText = () => (fs.existsSync(logDir) ? fs.readdirSync(logDir).map(f => fs.readFileSync(path.join(logDir, f), 'utf8')).join('\n') : '');
+  // a fresh profile compiles the helper first (3-13 s, longer under load): until it is ready the engines are not in
+  // jobs yet and a quit takes the taskkill path, so the chats start once it is up (quitting earlier tested the fallback)
+  if (guard) {
+    test.setTimeout(120000);
+    await expect.poll(() => appLogText().includes('"msg":"job guard ready"'), { timeout: 45000 }).toBe(true);
+  }
   const busy: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'slow' }), cwd); // a 20 s turn
   await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir }), cwd); // an idle one
   // the fake CLIs append one JSON line per write while we read: a last line without its '\n' is still being written,
@@ -165,22 +176,46 @@ for (const guard of [false, true]) test(`quitting the app leaves no claude proce
   await app.evaluate(({ BrowserWindow }) => { setTimeout(() => BrowserWindow.getAllWindows()[0]?.close(), 50); }).catch(() => {});
   const goneAt = await exited;
   expect(alive(electronPid)).toBe(false);
-  await expect.poll(() => started.filter(alive).length, { timeout: 6000 }).toBe(0);
+  // a survivor is named (which engine, or the busy one's own child) so a failure says what the quit missed
+  const role = (p: number) => (lines().some(l => l.grandchild === p) ? `child ${p} of the busy CLI` : lines().some(l => l.pid === p && l.grandchild) ? `busy CLI ${p}` : `idle CLI ${p}`);
+  const busyPid = lines().find(l => l.grandchild)?.pid ?? 0;
+  const t6 = Date.now() + 6000;
+  while (Date.now() < t6 && started.some(alive)) await new Promise(r => setTimeout(r, 100));
+  const late = started.filter(alive);
+  // Within 6 s of the app: everything with the job guard, and the engines without it. Without it, the busy CLI's child
+  // may outlive that: when the CLI is still alive at the quit's cap and the process list (WMI) has not come back, the
+  // app terminates the CLI directly and leaves its children to the quit reaper (proctree.ts reapAfterQuit), a
+  // PowerShell that outlives the app and took 11-22 s under load (2026-10-14; a full check saw the child alive at 6 s).
+  // Then the child must be gone once that reaper is done: a reaper that never ends or misses it fails here (owner's
+  // choice, 2026-10-14).
+  if (!guard && late.length) {
+    expect(late.filter(p => !lines().some(l => l.grandchild === p)).map(role), 'alive 6 s after the app (only the busy CLI\'s child may wait for the reaper)').toEqual([]);
+    await expect.poll(() => fs.existsSync(path.join(reapDir, `${busyPid}.done`)), { message: `the quit reaper done for busy CLI ${busyPid} (was it started?)`, timeout: 180000 }).toBe(true);
+    await expect.poll(() => started.filter(alive).map(role), { message: 'what the quit reaper left alive', timeout: 5000 }).toEqual([]);
+  } else expect(late.map(role)).toEqual([]);
   expect(read().partial, 'a fake CLI log line left incomplete').toBe(''); // its writers are gone: nothing may be half written
   // the idle CLI too: its tree is killed at quit, not left to end by itself (its MCP servers would outlive the app;
   // owner, 2026-10-12); the manager finished its shutdown
-  const logDir = path.join(userData, 'logs');
-  const appLog = fs.readdirSync(logDir).map(f => fs.readFileSync(path.join(logDir, f), 'utf8')).join('\n');
+  const appLog = appLogText();
   expect(appLog).toContain('"msg":"manager stopped"');
-  if (guard) expect(appLog).toContain('"msg":"job guard ready"'); // the engines really ran in the guard's jobs
-  // timed from the app's own log: our shutdown (capped at 6 s, plus one sync taskkill if needed) apart from Electron's
-  // teardown after app.exit, which takes 3-7 s on a loaded machine and is not ours to cap (owner, 2026-10-12)
+  if (guard) { // the engines really ran in the guard's jobs: each CLI says so itself (a helper gone after "ready" or a
+    // failed add logs nothing on some paths, so only a positive line per engine proves the job path was tested)
+    expect(appLog).toContain('"msg":"job guard ready"');
+    expect(appLog).not.toContain('"msg":"engine not put in a job"');
+    const inJob = appLog.split('\n').filter(l => l.includes('"msg":"engine in a job"')).map(l => (JSON.parse(l) as { data: { pid: number } }).data.pid);
+    for (const pid of lines().filter(l => l.argv).map(l => l.pid)) expect(inJob, `CLI ${pid} in a job`).toContain(pid);
+  }
+  // timed from the app's own log: our shutdown (capped at 6 s, plus one sync taskkill if needed), then our Node ending
+  // right after app.exit (0-1 ms measured), apart from Electron's own teardown after it, not ours to cap (owner,
+  // 2026-10-12): Chromium closing its profile (Session Storage, Preferences, Network state, DIPS, GPU caches) took
+  // 0.3-6 s over 13 quits and once past 12 s under the full check's load (2026-10-14); its bound only catches a hang
   const at = (msg: string) => {
     const line = appLog.split('\n').find(l => l.includes('"scope":"app"') && l.includes(`"msg":"${msg}"`));
     expect(line, `the "${msg}" log line`).toBeTruthy();
     return Date.parse((JSON.parse(line!) as { t: string }).t);
   };
   expect(at('exit') - at('quit started')).toBeLessThan(12000);
-  expect(goneAt - at('exit')).toBeLessThan(12000);
+  expect(at('node exit') - at('exit')).toBeLessThan(1000);
+  expect(goneAt - at('exit')).toBeLessThan(30000);
   await app.close().catch(() => {});
 });

@@ -1,6 +1,6 @@
 # ADR 0035 · One request popup at a time, never in the Regia; "Rispondi dopo" and the "Da rispondere" queue
 
-Date: 2026-10-13 · Status: accepted · Supersedes: ADR 0021's "Domande alla Regia" (setting `regiaDriven`, the Regia
+Date: 2026-10-13 · Status: accepted (the waiting strip removed by ADR 0044) · Supersedes: ADR 0021's "Domande alla Regia" (setting `regiaDriven`, the Regia
 hosting the work chats' questions, permissions and commands)
 
 ## Context

@@ -3,11 +3,11 @@
 // with selectors, so streaming one chat re-renders only that chat's tile. The actions here are the only place the UI
 // calls main (invoke), with optimistic updates and an error toast with the cause on failure.
 // Used by every component; App.tsx calls startStore() once.
-import type { Answer, ChatSummary, CliStatus, Effort, HandoffInfo, Harness, ImageAttachment, NewChat, PendingRequest, PermissionMode, SettingsPatch } from '@shared/contract';
+import type { Answer, ChatSummary, CliStatus, Effort, HandoffInfo, Harness, ImageAttachment, NewChat, PendingRequest, PermissionMode, RoutedNewChat, SettingsPatch } from '@shared/contract';
 import { sb } from '../sb';
 import { createStore } from './createStore';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
-import { announce, hideChat, setPrefs, toast, ui } from './ui';
+import { announce, hideChat, hideTab, setPrefs, toast, ui } from './ui';
 import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
 import { setMark, type Mark } from '../lib/marks';
 import { now as clockNow } from '../lib/clock';
@@ -71,6 +71,7 @@ export function startStore(): void {
   sb.on('feed:events', events => put({ type: 'feed:events', events }));
   sb.on('usage', usage => put({ type: 'usage', usage }));
   sb.on('cli:ready', cli => put({ type: 'cli', cli }));
+  sb.on('engines:changed', engines => put({ type: 'engines', engines }));
   const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
   syncSettings();
   void Promise.all([
@@ -335,6 +336,16 @@ export async function createChat(req: NewChat): Promise<ChatSummary | null> {
   } catch (e) { fail('Chat non creata')(e); return null; }
 }
 
+/** A chat whose engine, model and effort the routing table picks in main (DevOps "Apri chat", ADR 0032). */
+export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary | null> {
+  try {
+    const c = await sb.invoke('chat:createRouted', req);
+    dispatch({ type: 'chat:updated', chat: c });
+    void loadItems(c.id);
+    return c;
+  } catch (e) { fail('Chat non creata')(e); return null; }
+}
+
 export async function setChat(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string }): Promise<void> {
   const c = app.get().chats[chatId];
   if (c) dispatch({ type: 'chat:updated', chat: { ...c, ...patch, model: patch.model !== undefined ? patch.model || null : c.model } as ChatSummary });
@@ -412,6 +423,29 @@ export function closeChat(chatId: string): void {
   } }, 6000);
 }
 
+/** Close a browser tab like a chat (✕, Ctrl+W, Ctrl+W inside its page): its tile disappears at once, the tab really
+ *  closes when the 6-second undo toast expires (its agent then gets "The user closed tab …" at its next call, main
+ *  browser/closed.ts). A tab already closing is left alone; a maximized or Corsie-paired tab leaves that view, Annulla
+ *  puts it back unless another tile took it meanwhile. */
+export function closeTab(tabId: string): void {
+  const t = app.get().tabs.find(x => x.id === tabId);
+  const u = ui.get();
+  if (!t || u.hiddenTabs.includes(tabId)) return;
+  const wasMax = u.maximized === `browser:${tabId}` ? u.maximized : null;
+  const wasPair = u.pair === tabId ? tabId : null;
+  if (wasMax || wasPair) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, pair: wasPair ? null : s.pair }));
+  hideTab(tabId, true);
+  let undone = false;
+  const timer = setTimeout(() => {
+    if (undone) return;
+    void sb.invoke('browser:close', { tabId }).catch(e => { hideTab(tabId, false); fail('Scheda non chiusa')(e); }).then(() => hideTab(tabId, false));
+  }, 6000);
+  toast(`Chiusa la scheda «${t.title || t.url}»`, 'info', { label: 'Annulla', run: () => {
+    undone = true; clearTimeout(timer); hideTab(tabId, false);
+    if ((wasMax || wasPair) && !ui.get().maximized && !ui.get().pair) ui.set(s => ({ ...s, maximized: wasMax, pair: wasPair }));
+  } }, 6000);
+}
+
 export async function navigateTab(tabId: string, url: string): Promise<void> {
   try { await sb.invoke('browser:navigate', { tabId, url }); } catch (e) { fail('Pagina non aperta')(e); }
 }
@@ -419,13 +453,17 @@ export async function goTab(tabId: string, dir: 'back' | 'forward' | 'reload'): 
   try { await sb.invoke('browser:go', { tabId, dir }); } catch (e) { fail('Comando non riuscito')(e); }
 }
 
-export async function cliLogin(harness: 'claude' | 'cursor'): Promise<void> {
-  try { await sb.invoke('cli:login', { harness }); toast(`Login ${harness === 'claude' ? 'Claude' : 'Cursor'} aperto in un terminale`, 'info'); }
+/** The engines app:info lists (empty before it arrives); read here, not through lib/engines.ts, which imports this module. */
+const knownEngines = () => app.get().info?.engines ?? [];
+
+export async function cliLogin(harness: Harness): Promise<void> {
+  const label = knownEngines().find(e => e.id === harness)?.label ?? harness;
+  try { await sb.invoke('cli:login', { harness }); toast(`Login ${label} aperto in un terminale`, 'info'); }
   catch (e) { fail('Login non aperto')(e); }
 }
 
 /** One CLI's status when app:info has none yet (the check at start still running, or its event missed): asks
- *  cli:status; null = no answer within ms or a failed check ("non verificato"). Once both CLIs answered, app:info
+ *  cli:status; null = no answer within ms or a failed check ("non verificato"). Once every engine's CLI answered, app:info
  *  keeps them (the top bar's login warning reads it too). Used by the Nuova chat dialog. */
 const fetched: Partial<Record<Harness, CliStatus>> = {};
 export async function cliFetch(harness: Harness, ms = 20000): Promise<CliStatus | null> {
@@ -436,15 +474,17 @@ export async function cliFetch(harness: Harness, ms = 20000): Promise<CliStatus 
   if (st) keepCli(harness, st);
   return st;
 }
-/** A fresh status into app:info; while it has none, only once both CLIs answered (never one CLI's for the other). */
+/** A fresh status into app:info; while it has none, only once every engine app:info lists answered (never one CLI's
+ *  status standing in for another's). */
 function keepCli(harness: Harness, st: CliStatus): void {
   fetched[harness] = st;
   const cli = app.get().info?.cli;
-  const { claude, cursor }: Partial<Record<Harness, CliStatus>> = { ...(cli ?? fetched), [harness]: st };
-  if (claude && cursor) dispatch({ type: 'cli', cli: { claude, cursor } });
+  if (cli) { dispatch({ type: 'cli', cli: { ...cli, [harness]: st } }); return; }
+  const ids = knownEngines().map(e => e.id);
+  if (ids.length && ids.every(h => fetched[h])) dispatch({ type: 'cli', cli: Object.fromEntries(ids.map(h => [h, fetched[h]!])) });
 }
 
-export async function cliCheck(harness: 'claude' | 'cursor'): Promise<void> {
+export async function cliCheck(harness: Harness): Promise<void> {
   try {
     keepCli(harness, await sb.invoke('cli:status', { harness, checkLogin: true }));
   } catch (e) { fail('Controllo non riuscito')(e); }

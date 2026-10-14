@@ -5,6 +5,7 @@
 import type { LiveSnapshot, LiveSource, LiveTool } from '../brain';
 import { FADE_MS } from '../brain';
 import { app } from '../store/store';
+import { engineLabel } from './engines';
 import { now } from './clock';
 
 const ACTIVE = new Set(['starting', 'running', 'waiting']);
@@ -20,7 +21,7 @@ export function liveSnapshot(): LiveSnapshot {
   const t = now();
   if (t - lastLook > FADE_MS) running.clear();
   lastLook = t;
-  const chats = s.order.map(id => s.chats[id]).filter(c => !!c).map(c => ({ id: c.id, title: c.title, harness: c.harness, state: c.state, isRegia: c.isRegia, cwd: c.cwd }));
+  const chats = s.order.map(id => s.chats[id]).filter(c => !!c).map(c => ({ id: c.id, title: c.title, harness: c.harness, engine: engineLabel(c.harness), state: c.state, isRegia: c.isRegia, cwd: c.cwd }));
   const tools: LiveTool[] = [];
   for (const [chatId, items] of Object.entries(s.items)) {
     const c = s.chats[chatId];

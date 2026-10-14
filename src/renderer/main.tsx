@@ -23,6 +23,7 @@ import './styles/app.css';
 import './styles/shell.css';
 import './styles/code.css';
 import './styles/genui.css';
+import './styles/qwin.css';
 
 const root = createRoot(document.getElementById('root')!);
 startBeat(); // every page: the alive marks (dots, spinners, pulses) step 5 times a second instead of animating

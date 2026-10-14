@@ -105,8 +105,12 @@ export interface BrainService {
   recordPrediction(p: PredictionInput): boolean;
   /** Model routing (brain/routing.ts, ADR 0032): the table and registry for the settings page. */
   routingInfo(): RoutingInfo;
-  /** The user saves the table from the settings page: a new version, refused (throws, Italian) on a broken hard rule. */
-  saveRouting(routes: RoutingRow[], reason: string | null): RoutingInfo;
+  /** A new version of the table, refused (throws, Italian) on a broken hard rule: from the user's settings page, or from
+   *  an agent (`by` "agente: …" and the data behind the change, `evidence`; app_routing_save). `base` = the version the
+   *  edit started from; exploration and costWeight omitted = kept. */
+  saveRouting(routes: RoutingRow[], reason: string | null, o?: { exploration?: number; costWeight?: number; by?: string; evidence?: string | null; base?: number }): RoutingInfo;
+  /** An older version back in force, as a new version (`by` defaults to the user's page). */
+  restoreRouting(version: number, by?: string): RoutingInfo;
   /** Harness, model and effort for a chat an agent opens: the table's row, else `defaults`; an override needs a reason. */
   route(req: RouteRequest): RouteResult;
   /** One line of the improvement loop's shared ledger (ops/state/improve/outcomes.jsonl): a routed chat's prediction or

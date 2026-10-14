@@ -4,7 +4,7 @@
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
 // every page load (ui:command 'clock').
-import { app } from 'electron';
+import { app, safeStorage } from 'electron';
 import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from './demo';
@@ -21,6 +21,9 @@ import { recordMcpPort } from './health';
 import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createImprove, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
 import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
+import { agentsMayOpen, engineOn } from './engines/policy';
+import { createEngines } from './engines/service';
+import { safeStorageCipher } from './engines/secrets';
 import fs from 'node:fs';
 
 const demoCli = (version: string, account: string): CliStatus => ({ found: true, path: '(demo)', version, loggedIn: true, account });
@@ -40,6 +43,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const brain = new DemoBrain(emit, chats, s, new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT }));
   chats.start();
   brain.start();
+  // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
+  const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => null, settings: brain });
   const devopsRun = demoDevopsRun(now);
   const devops = new DevopsService({
     file: path.join(ctx.userData, 'devops-demo.json'), brainRoot: () => 'demo', locate: () => 'devops-me.mjs (demo)', locateQa: () => 'qa-status.mjs (demo)',
@@ -64,7 +69,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null);
+  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
   // show_ui's visuals (ADR 0033): the demo has no chat endpoints, __sbDemo.show calls the same store
   const artifacts = attachArtifacts(ctx, chats, now);
   attachAppTools(mcp, { chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
@@ -123,11 +128,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later: createLater(ctx),
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, engines, later: createLater(ctx),
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(devops.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(devops.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

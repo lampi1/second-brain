@@ -86,6 +86,7 @@ export interface UiState {
   flash: { key: string; n: number } | null;
   focusReq: { chatId: string; n: number } | null;
   hidden: string[];              // chats being closed (undo toast running)
+  hiddenTabs: string[];          // browser tabs being closed (undo toast running)
   closing: string[];             // chats fading out before they are archived (auto-close)
   regiaFirst: string | null;     // the request the Regia widget shows first (Ctrl+J asked for it), else the oldest
   layerHeld: string | null;      // the global layer's card that has the keyboard (Ctrl+J took it there): the one popup until answered, "Rispondi dopo" or the app is back
@@ -153,7 +154,7 @@ function readPrefs(): Prefs {
 
 export const ui = createStore<UiState>({
   prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: null, pair: null, open: {},
-  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], closing: [], regiaFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
+  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], regiaFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
   map: false, pageArg: null, mapArg: null, history: [{ page: 'workspace' }], hist: 0, center: false, newChatRegia: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
@@ -233,6 +234,7 @@ export const setLayerHeld = (key: string | null) => ui.set(s => (s.layerHeld ===
 export const setLater = (on: boolean) => ui.set(s => (s.later === on ? s : { ...s, later: on }));
 export const setClosing = (chatId: string, on: boolean) => ui.set(s => ({ ...s, closing: on ? [...new Set([...s.closing, chatId])] : s.closing.filter(id => id !== chatId) }));
 export const hideChat = (chatId: string, hidden: boolean) => ui.set(s => ({ ...s, hidden: hidden ? [...s.hidden, chatId] : s.hidden.filter(id => id !== chatId) }));
+export const hideTab = (tabId: string, hidden: boolean) => ui.set(s => ({ ...s, hiddenTabs: hidden ? [...s.hiddenTabs, tabId] : s.hiddenTabs.filter(id => id !== tabId) }));
 
 /** Is something covering the whole window (browser views must hide)? A dialog or the full-screen map. */
 export const coversWorkspace = (s: UiState) => s.modal !== null || s.map;

@@ -9,7 +9,7 @@
 // Used by browser/tools.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WebFrameMain } from 'electron';
+import type { NativeImage, WebFrameMain } from 'electron';
 import { errText, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, fieldFacts, hasPasswordField,
@@ -17,16 +17,28 @@ import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, select
 import { parseRef, parseFrame, refPrefix } from './refs';
 import { charKey, parseKeys, parseModifiers, strokeEvents, MOD } from './keys';
 import { evidencePath, stampName } from './evidence';
+import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
 import { globMatch } from './glob';
 import { changesInputType, hostOf, isLocalHost, passwordRefusal, urlCredentials } from './guard';
 import { isLoginUrl } from './envs';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+/** A call whose tab went away while it ran: who closed it, so the agent knows not to reopen it blindly. */
+const goneText = (tab: Tab) => (tab.closedByUser ? `The user closed tab ${tab.id} in the app while this call ran: call tabs_list.` : 'The tab was closed: call tabs_list.');
 type Step = [string, Record<string, unknown>];
 
 export interface Before { url: string; console: number; t0: number; tabs: Set<string>; downloads: number; dialogs: number }
-export interface Shot { png: Buffer; width: number; height: number; note: string }
+/** A capture: png = full size (evidence), width/height its pixels; scale = image px per CSS px and origin = the CSS
+ *  point of its top-left corner (a region), so tools can tell the agent how its image maps to click coordinates. */
+export interface Shot { png: Buffer; width: number; height: number; note: string; scale: number; origin: { x: number; y: number }; page?: boolean }
+
+/** A PNG's real size (IHDR): CDP may return device px (a display at 150%), so scale is measured, never assumed. */
+function cdpShot(data: string, css: { width: number; height: number }): Pick<Shot, 'png' | 'width' | 'height' | 'scale'> {
+  const png = Buffer.from(data, 'base64');
+  const width = png.length >= 24 ? png.readUInt32BE(16) : css.width, height = png.length >= 24 ? png.readUInt32BE(20) : css.height;
+  return { png, width, height, scale: width / Math.max(1, css.width) };
+}
 
 export function normalizeUrl(input: string): string {
   const s = String(input ?? '').trim();
@@ -44,13 +56,14 @@ export function dialogText(tab: Tab): string {
 }
 
 export class BrowserActions {
-  constructor(private readonly tabs: BrowserTabs) {}
+  /** decode: PNG bytes → NativeImage (service.ts passes nativeImage.createFromBuffer; absent in unit tests) */
+  constructor(private readonly tabs: BrowserTabs, private readonly decode?: (png: Buffer) => NativeImage) {}
 
   // ---------- plumbing ----------
 
   /** Throws an actionable error when the tab cannot take actions now. */
   guard(tab: Tab, { allowDialog = false }: { allowDialog?: boolean } = {}): void {
-    if (tab.wc.isDestroyed()) throw new Error('The tab was closed: call tabs_list.');
+    if (tab.wc.isDestroyed()) throw new Error(goneText(tab));
     if (tab.dialog && !allowDialog) throw new Error(`${dialogText(tab)} The page is blocked until you call handle_dialog (accept: true = OK, false = Cancel).`);
   }
 
@@ -67,7 +80,7 @@ export class BrowserActions {
     try {
       return await Promise.race([
         frame.executeJavaScript(script) as Promise<T>,
-        d.promise.then(() => { throw new Error(tab.dialog ? `${dialogText(tab)} Call handle_dialog first.` : 'The tab was closed: call tabs_list.'); }),
+        d.promise.then(() => { throw new Error(tab.dialog ? `${dialogText(tab)} Call handle_dialog first.` : goneText(tab)); }),
         new Promise<T>((_, rej) => { timer = setTimeout(() => rej(new Error(`the page did not answer within ${ms / 1000}s (a long-running script?)`)), ms); }),
       ]);
     } finally {
@@ -81,6 +94,7 @@ export class BrowserActions {
     if (tab.dialog) return 'dialog';
     const cdp = this.cdp(tab);
     const d = this.tabs.dialogOpened(tab);
+    tab.agentInput = (tab.agentInput ?? 0) + 1;         // a Ctrl+W among these keys is the agent's, never the user's (tabs.ts)
     try {
       for (const [method, raw] of steps) {
         // CDP mouse input is in view px: an agent tab shown scaled in its tile (tabs.ts emulate) gets its CSS px scaled
@@ -103,6 +117,7 @@ export class BrowserActions {
       }
       return 'ok';
     } finally {
+      tab.agentInput = (tab.agentInput ?? 1) - 1;
       d.cancel();
     }
   }
@@ -142,7 +157,7 @@ export class BrowserActions {
       for (let i = 0; i < 40 && !t.wc.isDestroyed() && (t.wc.isLoading() || t.wc.getURL() === '' || t.wc.getURL() === 'about:blank'); i++) await sleep(75);
     }
     if (tab.wc.isDestroyed()) {
-      lines.push(`Tab ${tab.id} closed itself.${this.tabs.activeOf(tab.group) ? ` Your active tab is now ${this.tabs.activeOf(tab.group)!.id}.` : ''}`);
+      lines.push(tab.closedByUser ? goneText(tab) : `Tab ${tab.id} closed itself.${this.tabs.activeOf(tab.group) ? ` Your active tab is now ${this.tabs.activeOf(tab.group)!.id}.` : ''}`);
       return lines.join('\n');
     }
     const url = tab.wc.getURL();
@@ -556,7 +571,7 @@ export class BrowserActions {
   // ---------- seeing ----------
 
   async screenshot(tab: Tab, o: { region?: unknown; full_page?: unknown }): Promise<Shot> {
-    if (tab.wc.isDestroyed()) throw new Error('The tab was closed: call tabs_list.');
+    if (tab.wc.isDestroyed()) throw new Error(goneText(tab));
     const b = this.tabs.viewport(tab);
     if (o.full_page === true) {
       const cdp = this.cdp(tab);
@@ -564,7 +579,7 @@ export class BrowserActions {
       const cs = m.cssContentSize ?? m.contentSize ?? { width: b.width, height: b.height };
       const width = Math.ceil(Math.min(Math.max(cs.width, 1), 4000)), height = Math.ceil(Math.min(Math.max(cs.height, 1), 16000));
       const r = await withTimeout(cdp.send<{ data: string }>('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width, height, scale: 1 } }), 20_000, 'full-page screenshot');
-      return { png: Buffer.from(r.data, 'base64'), width, height, note: `full page ${width}x${height} CSS px${cs.height > 16000 ? ' (cut at 16000 px)' : ''}` };
+      return { ...cdpShot(r.data, { width, height }), note: `full page ${width}x${height} CSS px${cs.height > 16000 ? ' (cut at 16000 px)' : ''}`, origin: { x: 0, y: 0 }, page: true };
     }
     let rect: { x: number; y: number; width: number; height: number } | undefined;
     if (o.region !== undefined) {
@@ -583,22 +598,30 @@ export class BrowserActions {
       const clip = rect ?? { x: 0, y: 0, width: b.width, height: b.height };
       const zoom = rect ? 2 : 1;
       const r = await withTimeout(tab.cdp.send<{ data: string }>('Page.captureScreenshot', { format: 'png', clip: { x: clip.x + vv.pageX, y: clip.y + vv.pageY, width: clip.width, height: clip.height, scale: zoom } }), 8000, 'screenshot');
-      const note = rect ? `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height}) at ${zoom}.00x` : `${b.width}x${b.height} CSS px (image pixels = click coordinates)`;
-      return { png: Buffer.from(r.data, 'base64'), width: clip.width * zoom, height: clip.height * zoom, note };
+      const note = rect ? `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height})` : `viewport ${b.width}x${b.height} CSS px`;
+      return { ...cdpShot(r.data, clip), note, origin: { x: clip.x, y: clip.y } };
     }
     let img = await withTimeout(rect ? tab.wc.capturePage(rect) : tab.wc.capturePage(), 8000, 'screenshot').catch(() => null);
     if (!img || img.isEmpty()) {
       if (!tab.cdp) throw new Error('The tab could not be captured (not rendered).');
       const clip = rect ?? { x: 0, y: 0, width: b.width, height: b.height };
       const r = await withTimeout(tab.cdp.send<{ data: string }>('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: 1 } }), 8000, 'screenshot');
-      return { png: Buffer.from(r.data, 'base64'), width: clip.width, height: clip.height, note: `${clip.width}x${clip.height} CSS px` };
+      return { ...cdpShot(r.data, clip), note: rect ? `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height})` : `viewport ${clip.width}x${clip.height} CSS px`, origin: { x: clip.x, y: clip.y } };
     }
     if (rect) {
       const s = img.getSize();
-      return { png: img.toPNG(), width: s.width, height: s.height, note: `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height}) at ${(s.width / rect.width).toFixed(2)}x` };
+      return { png: img.toPNG(), width: s.width, height: s.height, note: `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height})`, scale: s.width / rect.width, origin: { x: rect.x, y: rect.y } };
     }
     if (img.getSize().width !== b.width) img = img.resize({ width: b.width, height: b.height });
-    return { png: img.toPNG(), width: b.width, height: b.height, note: `${b.width}x${b.height} CSS px (image pixels = click coordinates)` };
+    return { png: img.toPNG(), width: b.width, height: b.height, note: `viewport ${b.width}x${b.height} CSS px`, scale: 1, origin: { x: 0, y: 0 } };
+  }
+
+  /** The image the agent sees of a shot (previewOf: long side ~1000 px, JPEG); the evidence file keeps the PNG. */
+  preview(shot: Shot): Preview {
+    if (!this.decode) throw new Error('screenshot preview needs the image decoder (only inside the app)');
+    const img = this.decode(shot.png);
+    if (img.isEmpty()) throw new Error('The screenshot could not be decoded.');
+    return previewOf(img);
   }
 
   saveShot(tab: Tab, shot: Shot, name: unknown): string {
@@ -655,7 +678,7 @@ export class BrowserActions {
   // ---------- dialogs, network, console, js ----------
 
   async handleDialog(tab: Tab, accept: boolean, promptText?: string): Promise<string> {
-    if (tab.wc.isDestroyed()) throw new Error('The tab was closed: call tabs_list.');
+    if (tab.wc.isDestroyed()) throw new Error(goneText(tab));
     const d = tab.dialog;
     if (!d) {
       const last = tab.lastDialog;

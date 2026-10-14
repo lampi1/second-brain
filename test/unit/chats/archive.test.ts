@@ -10,7 +10,7 @@ import { FAKE, recEmitter, tmp, waitFor } from './helpers';
 const managers: ChatManager[] = [];
 function setup(userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), env: Record<string, string> = {}) {
   const em = recEmitter();
-  const m = new ChatManager({ emitter: em, userData, claudePath: FAKE, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env } });
+  const m = new ChatManager({ emitter: em, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env } });
   managers.push(m);
   return { m, em, userData, home, cwd };
 }

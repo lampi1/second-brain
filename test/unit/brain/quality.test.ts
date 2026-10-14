@@ -9,20 +9,22 @@ import type { DevopsDetail, DevopsPr } from '../../../src/shared/contract';
 import type { RunResult } from '../../../src/main/brain/node';
 import { tmpDir } from './helpers';
 
-const line = (t: string, msg: string) => JSON.stringify({ t, lvl: 'info', scope: 'chats', msg, chat: 'c_1', data: {} });
+const line = (t: string, msg: string, data: object = {}) => JSON.stringify({ t, lvl: 'info', scope: 'chats', msg, chat: 'c_1', data });
 
 describe('turnsByDay', () => {
   it('counts Claude and Cursor finished turns per Rome day, skipping other lines and broken JSON', () => {
     const rows = turnsByDay([
       line('2026-10-11T09:00:00Z', 'turn done'),
       line('2026-10-11T21:59:00Z', 'turn done'),          // 23:59 in Rome: still the 11th
-      line('2026-10-11T22:30:00Z', 'cursor turn done'),   // 00:30 in Rome: the 12th
+      line('2026-10-11T22:30:00Z', 'cursor turn done'),   // 00:30 in Rome: the 12th (the line before ADR 0046)
+      line('2026-10-12T09:00:00Z', 'acp turn done', { engine: 'cursor' }),
+      line('2026-10-12T09:30:00Z', 'acp turn done', { engine: 'kimi' }), // another ACP engine: not Cursor's
       line('2026-10-12T08:00:00Z', 'session started'),
       '{"msg":"turn done", broken',
       line('nope', 'turn done'),
       '',
     ]);
-    expect(rows).toEqual([{ date: '2026-10-11', claude: 2, cursor: 0 }, { date: '2026-10-12', claude: 0, cursor: 1 }]);
+    expect(rows).toEqual([{ date: '2026-10-11', claude: 2, cursor: 0 }, { date: '2026-10-12', claude: 0, cursor: 2 }]);
   });
 });
 

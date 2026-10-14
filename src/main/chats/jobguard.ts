@@ -14,7 +14,7 @@
 // The helper is a normal child of the app, so libuv kills it with the app (quit or crash): its handles close and every
 // job not released dies with it. No helper (not Windows, Add-Type blocked, tests) = the taskkill paths alone.
 // Also the engines' common end (killEngineTree, closePipes) and the forced-kill count for app_state's health.
-// Used by claude.ts, cursor.ts, proctree.ts, manager.ts and index.ts (start).
+// Used by claude.ts, acp.ts, proctree.ts, manager.ts and index.ts (start).
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -229,7 +229,7 @@ export class JobGuard {
     if (!pid || this.st === 'off' || this.st === 'failed') return null;
     const job = ++this.nextJob;
     const r = await this.call('add', job, pid);
-    if (r === 'ok') { this.jobs.add(job); return job; }
+    if (r === 'ok') { this.jobs.add(job); log.info('chats', 'engine in a job', { chat: chatId, data: { pid, job } }); return job; }
     // the helper may still assign it later: queued after the add, this release keeps a forgotten job from killing on quit
     if (r === 'err timeout') void this.call('release', job);
     if (r !== 'err off') log.warn('chats', 'engine not put in a job', { chat: chatId, data: { pid }, cause: r, hint: 'its children are killed with taskkill /T and the reap instead' });

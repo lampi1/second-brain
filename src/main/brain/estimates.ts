@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import type { Effort, Estimate, EstimateResult, Harness, JobActual, JobKind, JobRecordInput } from '../../shared/contract';
 import { log } from '../log';
 import { runNode, type NodeRunner } from './node';
+import { engineOf, engines } from '../engines/registry';
 
 export const MIN_SAMPLES = 5;
 export const KIND_LABELS: Record<JobKind, string> = {
@@ -168,7 +169,7 @@ function checkActual(a: unknown): JobActual | null {
   const x = a as Record<string, unknown>;
   return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), tokensIn: n0(x.tokensIn, 'actual.tokensIn'), tokensOut: n0(x.tokensOut, 'actual.tokensOut'), turns: n0(x.turns, 'actual.turns') };
 }
-export function checkHarness(h: unknown): Harness { if (h !== 'claude' && h !== 'cursor') throw new Error('harness: claude | cursor'); return h; }
+export function checkHarness(h: unknown): Harness { if (typeof h !== 'string' || !engineOf(h)) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`); return h; }
 export function checkModel(m: unknown): string | null { if (m === null || m === undefined || m === '') return null; if (typeof m !== 'string' || m.length > 120) throw new Error('model: testo breve o null'); return m; }
 export function checkEffort(e: unknown): Effort | null { if (e === null || e === undefined) return null; if (!EFFORTS.includes(e as Effort)) throw new Error('effort: low | medium | high | xhigh | max'); return e as Effort; }
 

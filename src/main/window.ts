@@ -14,6 +14,8 @@ import { recordRenderer } from './health';
 
 /** True when this instance must never appear in front of the user (SB_HIDDEN=1). */
 export const hiddenRun = (env: NodeJS.ProcessEnv = process.env): boolean => env.SB_HIDDEN === '1';
+/** What a hidden run would have opened outside the app (files, Explorer, the system browser): e2e reads it (__sbOpened). */
+export const hiddenOpened: string[] = [];
 
 export function createWindow(outDir: string): BrowserWindow {
   const hidden = hiddenRun();
@@ -30,7 +32,12 @@ export function createWindow(outDir: string): BrowserWindow {
   const page = path.join(outDir, 'renderer', 'index.html');
   setAppPage(pathToFileURL(page).href);
   const wc = win.webContents;
-  wc.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) void shell.openExternal(url); return { action: 'deny' }; });
+  // a link the page opens (a chat's DevOps chips, a question's context links, "Apri fuori") goes to the system browser;
+  // an agent's run (SB_HIDDEN, the e2e suite) never opens one: it records it (hiddenOpened)
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) { if (hidden) hiddenOpened.push(`external ${url}`); else void shell.openExternal(url); }
+    return { action: 'deny' };
+  });
   // the window only ever shows our own page: any navigation elsewhere (even another file:// URL) is blocked
   wc.on('will-navigate', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });
   wc.on('will-redirect', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });

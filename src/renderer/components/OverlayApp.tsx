@@ -1,8 +1,8 @@
 // The global layer page (index.html#overlay, shown by main/overlay.ts in a small top-most view above browser tiles and
 // every page). Tier a: the first open question or permission in full (who asks, the context in one line, the options
 // right there), a badge with how many wait, and the queue behind it. Tier b: at most two short grouped toasts for
-// important events, each with one action ("Apri", "Rispondi") and ✕. Tier c: with no card, while requests wait
-// ("Rispondi dopo" or shown elsewhere), a small strip "N in attesa · Ctrl+J"; a click is Ctrl+J (the queue). It only renders the model the app page sends
+// important events, each with one action ("Apri", "Rispondi") and ✕. No waiting strip: the top bar's "Da rispondere"
+// counts what waits (the user, 2026-10-14). It only renders the model the app page sends
 // (overlay:model) and relays what the user does (overlay:action): 1-9 / Enter answer, Esc or "Rispondi dopo" turns
 // "Rispondi dopo" on (every card goes to "Da rispondere", lib/later.ts),
 // Ctrl+J goes to the next one. It never takes the keyboard by itself: only on a click or Ctrl+J (focusKey). No sounds.
@@ -11,7 +11,7 @@ import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@sh
 import { sb } from '../sb';
 import { ago } from '../lib/format';
 import { freezeClock } from '../lib/clock';
-import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconInfo, IconQuestion, IconX } from './Icons';
+import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconInfo, IconX } from './Icons';
 import { RequestPanel } from './RequestPanel';
 import { Keys } from './ui';
 
@@ -35,7 +35,7 @@ function LayerCard({ card, queue, waiting, now }: { card: OverlayCard; queue: Ov
         <span className="sp" />
         <span className="layer-badge" data-testid="layer-badge" aria-label={`${waiting} ti aspettano`}>{waiting}</span>
       </header>
-      <RequestPanel key={`${card.key}#${card.attempt ?? 0}`} req={card.req} variant="tile" chatTitle={card.chatTitle} harness={card.harness} testid={`layer-request-${card.req.chatId}-${card.req.id}`}
+      <RequestPanel key={`${card.key}#${card.attempt ?? 0}`} req={card.req} variant="tile" chatTitle={card.chatTitle} harness={card.harness} engine={card.engine} testid={`layer-request-${card.req.chatId}-${card.req.id}`}
         onAnswer={answer => act({ kind: 'answer', key: card.key, answer })} onEscape={() => act({ kind: 'postpone', key: card.key })} onLater={() => act({ kind: 'postpone', key: card.key })}
         command={{ onRun: confirmProd => { act({ kind: 'run', key: card.key, confirmProd }); return true; }, onDismiss: () => act({ kind: 'dismiss', key: card.key }), onOpen: () => act({ kind: 'open', key: card.key }) }} />
       <footer className="layer-foot">
@@ -61,18 +61,6 @@ function EventToast({ t }: { t: OverlayToast }) {
       <button type="button" className="ev-act" onClick={() => act({ kind: 'toast', id: t.id, act: 'open' })} data-testid={`ev-toast-open-${t.kind}`}>{t.action}</button>
       <button type="button" className="ev-x" aria-label="Chiudi" onClick={() => act({ kind: 'toast', id: t.id, act: 'dismiss' })} data-testid={`ev-toast-close-${t.kind}`}><IconX size={12} /></button>
     </div>
-  );
-}
-
-function WaitStrip({ s }: { s: NonNullable<OverlayModel['strip']> }) {
-  const n = s.count === 1 ? 'Una richiesta' : `${s.count} richieste`;
-  return (
-    <button type="button" className={`layer-strip ${s.queued ? 'queued' : ''}`} onClick={() => act({ kind: 'next' })} data-testid="layer-strip"
-      aria-label={`${n} ${s.queued ? 'da rispondere' : 'in attesa'}, la prima da ${s.first}: Ctrl+J per rispondere`}>
-      <IconQuestion size={14} />
-      <span className="layer-strip-t"><b>{n} {s.queued ? 'da rispondere' : 'in attesa'}</b><span>{s.first}</span></span>
-      <Keys combo="Ctrl+J" />
-    </button>
   );
 }
 
@@ -133,9 +121,8 @@ export function OverlayApp() {
   const cards = model?.cards ?? [];
   const toasts = model?.toasts ?? [];
   return (
-    <div className={`layer ${!cards[0] && !toasts.length && model?.strip ? 'strip-only' : ''}`} ref={ref} data-testid="layer" role="region" aria-label="Richieste e avvisi per te" aria-live="polite">
+    <div className="layer" ref={ref} data-testid="layer" role="region" aria-label="Richieste e avvisi per te" aria-live="polite">
       {toasts.map(t => <EventToast key={t.id} t={t} />)}
-      {!cards[0] && model?.strip && <WaitStrip s={model.strip} />}
       {cards[0] && <LayerCard card={cards[0]} queue={cards.slice(1)} waiting={model?.waiting ?? cards.length} now={model?.now ?? Date.now()} />}
       {cards[0] && <div className="layer-hint" aria-hidden="true"><Keys combo="Ctrl+J" /> per rispondere da tastiera</div>}
     </div>

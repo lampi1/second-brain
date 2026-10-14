@@ -281,7 +281,7 @@ export class Live {
     for (const line of text.split('\n')) {
       let r: { action?: string; from?: string; to?: string; fromHarness?: string; toHarness?: string };
       try { r = JSON.parse(line) as typeof r; } catch { continue; }
-      if (r.action === 'blocked') blocked.push({ kind: 'mail-blocked', title: `${r.from ?? '?'} → ${r.to ?? '?'}`, detail: 'Le chat Claude e Cursor non possono scriversi: l’interruttore "Messaggi tra Claude e Cursor" è spento.' });
+      if (r.action === 'blocked') blocked.push({ kind: 'mail-blocked', title: `${r.from ?? '?'} → ${r.to ?? '?'}`, detail: 'Messaggio bloccato tra chat di motori diversi: «Chat tra motori diversi» è spento (Impostazioni → Motori).' });
     }
     return blocked.length ? blocked : [{ kind: 'mail', title: 'nuovi messaggi tra chat', detail: '' }];
   }

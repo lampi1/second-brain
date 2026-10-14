@@ -22,7 +22,7 @@ import { Kpi, Pill, Section, Seg } from '../components/ui';
 import { HelpTip } from '../../components/HelpTip';
 import { DiscussBar } from '../components/Discuss';
 import { Reading } from '../components/Stats';
-import { useAppChats } from '../components/Composer';
+import { useAppChats, useEngineLabels } from '../components/Composer';
 
 const PERIODS = [1, 7, 30, 90] as const;
 /** the brain's cost API reads at most 90 days: the period before is known up to 45 */
@@ -175,10 +175,11 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
 interface EstRow { title: string; harness: string; model: string; stima: string; reale: number; esito: string; low: number; high: number }
 function Estimates() {
   const chats = useAppChats();
+  const engineLabel = useEngineLabels();
   const rows: EstRow[] = (chats ?? []).filter(c => c.estimate !== undefined).map(c => {
     const e = c.estimate;
     const esito = !e ? 'stima senza dati' : c.costUsd > e.usdHigh ? 'sopra la stima' : c.costUsd < e.usdLow ? 'sotto la stima' : 'dentro la stima';
-    return { title: chatName(c), harness: c.harness === 'cursor' ? 'Cursor' : 'Claude', model: c.model ?? 'predefinito', stima: e ? `${fmt.usd(e.usdLow)} – ${fmt.usd(e.usdHigh)}` : 'stima senza dati', reale: c.costUsd, esito, low: e?.usdLow ?? 0, high: e?.usdHigh ?? 0 };
+    return { title: chatName(c), harness: engineLabel(c.harness), model: c.model ?? 'predefinito', stima: e ? `${fmt.usd(e.usdLow)} – ${fmt.usd(e.usdHigh)}` : 'stima senza dati', reale: c.costUsd, esito, low: e?.usdLow ?? 0, high: e?.usdHigh ?? 0 };
   });
   const over = rows.filter(r => r.esito === 'sopra la stima').length;
   const cols: Col<EstRow>[] = [

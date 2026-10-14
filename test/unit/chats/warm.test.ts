@@ -16,7 +16,7 @@ function env(): Env {
   return e;
 }
 function manager(e: Env, extra: Partial<ChatManagerOptions> = {}): ChatManager {
-  const m = new ChatManager({ emitter: recEmitter(), userData: e.userData, claudePath: FAKE, claudeHome: e.home, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog }, prewarm: true, prewarmDelayMs: 0, ...extra });
+  const m = new ChatManager({ emitter: recEmitter(), userData: e.userData, enginePaths: { claude: FAKE }, claudeHome: e.home, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog }, prewarm: true, prewarmDelayMs: 0, ...extra });
   managers.push(m);
   return m;
 }

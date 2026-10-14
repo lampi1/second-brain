@@ -4,9 +4,8 @@
 // button on a card, lib/later.ts: they wait in "Da rispondere") or while another request popup is on screen (the Regia widget's card, the questions window): at most one popup at a
 // time (the user, 2026-10-13: two popups of questions at once, one of them "appeso" on the Regia). Tier b: important events
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
-// leave after 8 s. Tier c: while requests wait and no card shows them here, a small strip "N in attesa · Ctrl+J"
-// (always on screen, every page, over the browser views; a click is Ctrl+J; not over the questions window). All stay
-// off the Regia widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
+// leave after 8 s. No waiting strip: what waits is counted by the top bar's "Da rispondere" (the user, 2026-10-14:
+// "c'è già in alto il «da rispondere» che va benissimo quello"). All stay off the Regia widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
 // lib/chime.ts, setting devops.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
 // as overlay:action and goes through the same actions as everywhere else. Started by main.tsx; Ctrl+J uses focusLayer().
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
@@ -20,12 +19,11 @@ import { reserveOf, sizeIn, viewport } from './regia-dock';
 import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
+import { engineOf } from './engines';
 
 const TOAST_MS = 8000;
 /** requests arriving within this window ring once */
 const REQUEST_RING_MS = 400;
-/** px the strip alone keeps above the window's bottom: a tile's composer (input + its bar) stays free */
-const STRIP_LIFT = 120;
 /** events already there when the app opened never toast (they are in the center): only what arrives while it is open */
 let atStart: Set<string> | null = null;
 let groups: ToastGroup[] = [];
@@ -85,7 +83,7 @@ export function computeModel(ignorePopup = false): OverlayModel {
     const key = keyOf(req);
     if (u.hidden.includes(req.chatId) || visible.has(key)) continue;
     const c = s.chats[req.chatId];
-    cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', isRegia: !!c?.isRegia, attempt: attemptOf(key) });
+    cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', engine: (c && engineOf(c.harness)) ?? null, isRegia: !!c?.isRegia, attempt: attemptOf(key) });
   }
   if (focusKey && !cards.some(c => c.key === focusKey)) focusKey = undefined;
   // the card the keyboard is sent to (Ctrl+J) is the one shown in full
@@ -101,16 +99,8 @@ export function computeModel(ignorePopup = false): OverlayModel {
     action: g.kind === 'chat-waiting' ? 'Rispondi' : 'Apri',
   }));
   const v = viewport();
-  let avoid = reserveOf(u.prefs.regiaOpen, sizeIn(u.prefs.regiaSize, v.W, v.H, v.top, v.left));
-  // the strip: requests wait and no card here shows them (the user, 2026-10-13: "sempre presenti tipo in overlay"),
-  // unless all of them are on screen right now (inline in their tiles); not over the questions window
-  const waits = s.pending.filter(p => !u.hidden.includes(p.chatId));
-  const oldest = waits[0] && s.chats[waits[0].chatId];
-  const strip = !cards.length && !u.qwin.shown && waits.length && (u.later || waits.some(p => !visible.has(keyOf(p))))
-    ? { count: waits.length, first: oldest ? chatName(oldest) : 'Chat', queued: u.later } : null;
-  // alone, the strip sits higher than a tile's composer (it must never cover where the user writes)
-  if (strip && !cards.length && !toasts.length) avoid = { ...avoid, bottom: avoid.bottom + STRIP_LIFT };
-  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts, ...(strip ? { strip } : {}) };
+  const avoid = reserveOf(u.prefs.regiaOpen, sizeIn(u.prefs.regiaSize, v.W, v.H, v.top, v.left));
+  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts };
 }
 
 function push(): void {

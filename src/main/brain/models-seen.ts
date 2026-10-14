@@ -1,10 +1,11 @@
-// The models a CLI itself offered, kept in userData (cursor-models.json): Cursor's ACP answer to session/new and
-// session/load carries models.availableModels ({modelId, name}), the exact ids `agent --model` accepts. The Settings
+// The models each engine's CLI itself offered, kept in userData by engine id (cursor-models.json: the name is the one
+// of when only Cursor reported, so the list it already holds stays): an ACP answer to session/new and session/load
+// carries models.availableModels ({modelId, name}), the exact ids `--model` accepts. The Settings
 // page offers these for "Chat aperte dalla Regia" instead of a list typed by hand (the Regia, 2026-10-11: "l'elenco
 // vero dei modelli della CLI ... mai inventato"). The app never starts a CLI only to ask: the list is the one of the
-// last Cursor chat that opened. Written by wiring.ts (ChatManager onModels), read by 'models:seen'.
+// engine's last chat that opened. Written by wiring.ts (ChatManager onModels), read by 'models:seen'.
 import fs from 'node:fs';
-import type { ModelsSeen } from '../../shared/contract';
+import type { Harness, ModelsSeen } from '../../shared/contract';
 import { log } from '../log';
 
 type Model = { id: string; name: string };
@@ -31,25 +32,26 @@ export class ModelsSeenStore {
 
   get(): ModelsSeen {
     if (this.cache) return this.cache;
-    let c: ModelsSeen = { cursor: null };
+    const c: ModelsSeen = {};
     try {
-      const raw = JSON.parse(fs.readFileSync(this.file, 'utf8')) as { cursor?: { ids?: unknown; at?: unknown } };
-      const ids = cleanModels(raw.cursor?.ids);
-      if (ids.length) c = { cursor: { ids, at: typeof raw.cursor?.at === 'number' ? raw.cursor.at : 0 } };
-    } catch { /* no Cursor chat yet, or a broken file: the UI uses its own list */ }
+      const raw = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Record<string, { ids?: unknown; at?: unknown } | null>;
+      for (const [engine, v] of Object.entries(raw)) {
+        const ids = cleanModels(v?.ids);
+        if (ids.length && ID.test(engine)) c[engine] = { ids, at: typeof v?.at === 'number' ? v.at : 0 };
+      }
+    } catch { /* no ACP chat yet, or a broken file: the UI uses its own list */ }
     return (this.cache = c);
   }
 
-  /** A Cursor session listed its models: saved only when the list changed. */
-  record(harness: 'claude' | 'cursor', list: Model[]): void {
-    if (harness !== 'cursor') return;
+  /** An engine's session listed its models: saved only when the list changed. */
+  record(harness: Harness, list: Model[]): void {
     const ids = cleanModels(list);
-    if (!ids.length) return;
-    const was = this.get().cursor;
+    if (!ids.length || !ID.test(harness)) return;
+    const was = this.get()[harness];
     if (was && JSON.stringify(was.ids) === JSON.stringify(ids)) return;
-    this.cache = { cursor: { ids, at: Date.now() } };
+    this.cache = { ...this.get(), [harness]: { ids, at: Date.now() } };
     try { fs.writeFileSync(this.file, JSON.stringify(this.cache)); } catch (e) {
-      log.warn('brain', 'cursor models not saved', { cause: String(e), hint: 'check that userData is writable; the list stays in memory until restart' });
+      log.warn('brain', 'engine models not saved', { cause: String(e), hint: 'check that userData is writable; the list stays in memory until restart' });
     }
   }
 }

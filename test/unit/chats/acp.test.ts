@@ -1,26 +1,46 @@
-// CursorSession over ACP against the fake agent (test/fixtures/fake-cursor-acp.mjs): engine resolution and the test
-// guard, streaming, permissions (allow once / always / reject, no "always"), cursor/ask_question (free text as the skip reason), cursor/create_plan,
-// cancel, queued prompts, login missing, resume with session/load, model and mode, MCP, diffs, usage → cost.
-// The real Cursor engine never runs here.
+// AcpSession against the fake ACP agent (test/fixtures/fake-cursor-acp.mjs), run as Cursor: engine resolution and the
+// test guard, streaming, permissions (allow once / always / reject, no "always"), cursor/ask_question (free text as the
+// skip reason), cursor/create_plan, cancel, queued prompts, login missing, resume with session/load, model and mode, MCP,
+// diffs, usage → cost. Then the same fake run as another ACP engine (Kimi): its own harness, argv, texts, and none of
+// Cursor's options unless given (ADR 0046). No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { cursorAllowed, cursorArgv, newestCursorVersion, resolveCursor } from '../../../src/main/chats/cli';
-import { AUTH_HELP, CursorSession, MODEL_RESTART, NET_RETRY_PROMPT, cursorConfigDir, isCursorNetError, type CursorOptions } from '../../../src/main/chats/cursor';
+import { cliArgv, engineAllowed, newestCursorVersion, resolveAcp, resolveCursor } from '../../../src/main/chats/cli';
+import { AcpSession, authHelp, cursorConfigDir, isNetError, modelRestart, netRetryPrompt, type AcpOptions } from '../../../src/main/chats/acp';
 import { costOf, priceOf } from '../../../src/main/chats/cursor-prices';
-import { cursorStatus, openLogin } from '../../../src/main/cli';
+import { engineStatus, openLogin } from '../../../src/main/cli';
 import { FAKE_CURSOR, PNG_1PX, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
 
-const open: CursorSession[] = [];
+/** The Cursor entry's options, as engines/sessions.ts passes them. */
+const CURSOR = {
+  engineId: 'cursor', label: 'Cursor', args: ['acp'], modelFlag: '--model', acpCommand: 'agent', loginCommand: 'agent login',
+  subagentHooks: true, priceFallback: true,
+} satisfies Partial<AcpOptions>;
+/** Another ACP engine: only its identity and start shape, none of Cursor's options. */
+const KIMI = { engineId: 'kimi', label: 'Kimi', args: ['acp'], acpCommand: 'kimi' } satisfies Partial<AcpOptions>;
+
+const open: AcpSession[] = [];
 const logs: string[] = [];
-function start(extra: Partial<CursorOptions> = {}): { s: CursorSession; sink: RecSink; cwd: string; logFile: string } {
+function start(extra: Partial<AcpOptions> = {}): { s: AcpSession; sink: RecSink; cwd: string; logFile: string } {
   const cwd = tmp('cwd');
   const logFile = path.join(tmp('log'), 'cursor.jsonl');
   logs.push(logFile);
   const sink = recSink();
   // the fake writes --model into CURSOR_CONFIG_DIR like the real CLI: always a temp folder here
-  const s = new CursorSession({ chatId: 'c_cur', cwd, cursorPath: FAKE_CURSOR, ...extra, env: { FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: tmp('cursor-cfg'), ...extra.env } }, sink);
+  const s = new AcpSession({ ...CURSOR, chatId: 'c_cur', cwd, pathOverride: FAKE_CURSOR, ...extra, env: { FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: tmp('cursor-cfg'), ...extra.env } }, sink);
+  open.push(s);
+  s.start();
+  return { s, sink, cwd, logFile };
+}
+/** The fake as the Kimi engine: no CURSOR_CONFIG_DIR in its env from the test either. */
+function startKimi(extra: Partial<AcpOptions> = {}): { s: AcpSession; sink: RecSink; cwd: string; logFile: string } {
+  const cwd = tmp('cwd');
+  const logFile = path.join(tmp('log'), 'kimi.jsonl');
+  logs.push(logFile);
+  const sink = recSink();
+  const s = new AcpSession({ ...KIMI, chatId: 'c_kimi', cwd, pathOverride: FAKE_CURSOR, ...extra, env: { FAKE_CURSOR_LOG: logFile, ...extra.env } }, sink);
   open.push(s);
   s.start();
   return { s, sink, cwd, logFile };
@@ -33,6 +53,13 @@ afterEach(async () => {
   // in every test: session/set_model writes the user's global Cursor config, the app must never send it;
   // authenticate would open a browser login from a hidden process
   for (const f of logs.splice(0)) for (const l of cursorLog(f)) expect(['session/set_model', 'authenticate']).not.toContain(l.method);
+});
+
+describe('authHelp', () => {
+  it('names the login command, or the key in Settings when the engine has none', () => {
+    expect(authHelp('Kimi', 'kimi login')).toContain('`kimi login`');
+    expect(authHelp('Gemini', null)).toContain('Impostazioni → Motori');
+  });
 });
 
 describe('Cursor engine resolution', () => {
@@ -50,28 +77,28 @@ describe('Cursor engine resolution', () => {
     const c = resolveCursor(null, { LOCALAPPDATA: local });
     expect(c).toMatchObject({ kind: 'node', command: path.join(v, '2026.07.23-10-11-12-abc123', 'node.exe'), prefix: [path.join(v, '2026.07.23-10-11-12-abc123', 'index.js')] });
     expect(c?.env).toMatchObject({ CURSOR_INVOKED_AS: 'agent.cmd', NODE_COMPILE_CACHE: path.join(local, 'cursor-compile-cache') });
-    expect(cursorArgv(c!, ['--model', 'gpt-5', 'acp']).args).toEqual([path.join(v, '2026.07.23-10-11-12-abc123', 'index.js'), '--model', 'gpt-5', 'acp']);
+    expect(cliArgv(c!, ['--model', 'gpt-5', 'acp']).args).toEqual([path.join(v, '2026.07.23-10-11-12-abc123', 'index.js'), '--model', 'gpt-5', 'acp']);
   });
 
   it('falls back to agent.cmd through cmd.exe with safe arguments only', () => {
     const c = resolveCursor('C:\\Tools\\agent.cmd', {});
     expect(c?.kind).toBe('cmd');
-    expect(cursorArgv(c!, ['--model', 'claude-opus-4-8[effort=high]', 'acp'])).toMatchObject({ verbatim: true, args: ['/d', '/s', '/c', '""C:\\Tools\\agent.cmd" --model claude-opus-4-8[effort=high] acp"'] });
-    expect(() => cursorArgv(c!, ['--model', 'x & calc', 'acp'])).toThrow(/non sicuro/);
+    expect(cliArgv(c!, ['--model', 'claude-opus-4-8[effort=high]', 'acp'])).toMatchObject({ verbatim: true, args: ['/d', '/s', '/c', '""C:\\Tools\\agent.cmd" --model claude-opus-4-8[effort=high] acp"'] });
+    expect(() => cliArgv(c!, ['--model', 'x & calc', 'acp'])).toThrow(/non sicuro/);
   });
 
   it('never starts the real Cursor engine under tests', async () => {
     const real = { kind: 'node' as const, command: 'C:\\x\\node.exe', prefix: ['C:\\x\\index.js'], env: {}, verbatim: false, display: 'C:\\x' };
-    expect(cursorAllowed(real, { VITEST: 'true' })).toBe(false);
-    expect(cursorAllowed(real, { SB_TEST: '1' })).toBe(false);
-    expect(cursorAllowed(real, {})).toBe(true);
-    expect(cursorAllowed(resolveCursor(FAKE_CURSOR, {})!, { SB_TEST: '1' })).toBe(true);
+    expect(engineAllowed(real, { VITEST: 'true' })).toBe(false);
+    expect(engineAllowed(real, { SB_TEST: '1' })).toBe(false);
+    expect(engineAllowed(real, {})).toBe(true);
+    expect(engineAllowed(resolveCursor(FAKE_CURSOR, {})!, { SB_TEST: '1' })).toBe(true);
     // a script that is not a .mjs fake, or that lives in Cursor's install, is the real engine run as a script
-    expect(cursorAllowed(resolveCursor('C:\\x\\cursor-agent\\versions\\v\\index.js', {})!, { SB_TEST: '1' })).toBe(false);
-    expect(cursorAllowed(resolveCursor('C:\\x\\cursor-agent\\versions\\v\\evil.mjs', {})!, { VITEST: 'true' })).toBe(false);
-    expect(cursorAllowed(resolveCursor('C:\\x\\other.cjs', {})!, { VITEST: 'true' })).toBe(false);
+    expect(engineAllowed(resolveCursor('C:\\x\\cursor-agent\\versions\\v\\index.js', {})!, { SB_TEST: '1' })).toBe(false);
+    expect(engineAllowed(resolveCursor('C:\\x\\cursor-agent\\versions\\v\\evil.mjs', {})!, { VITEST: 'true' })).toBe(false);
+    expect(engineAllowed(resolveCursor('C:\\x\\other.cjs', {})!, { VITEST: 'true' })).toBe(false);
     const sink = recSink();
-    const s = new CursorSession({ chatId: 'c', cwd: tmp('cwd') }, sink, real);
+    const s = new AcpSession({ ...CURSOR, chatId: 'c', cwd: tmp('cwd') }, sink, real);
     s.start();
     expect(s.state).toBe('error');
     expect(s.pid).toBeNull(); // nothing spawned
@@ -82,14 +109,14 @@ describe('Cursor engine resolution', () => {
     const prev = process.env.SB_CURSOR_PATH;
     delete process.env.SB_CURSOR_PATH;
     try {
-      const st = await cursorStatus(); // resolves the installed CLI if any, but does not run it
+      const st = await engineStatus('cursor'); // resolves the installed CLI if any, but does not run it
       expect(st.version).toBeNull();
       expect(() => openLogin('cursor')).toThrow(/Nei test/);
     } finally { if (prev !== undefined) process.env.SB_CURSOR_PATH = prev; }
   });
 });
 
-describe('CursorSession', () => {
+describe('AcpSession as Cursor', () => {
   it('streams thought and text, ends the turn, reports no cost (ACP gives no usage)', async () => {
     const { s, sink, logFile } = start();
     await waitFor(() => s.state === 'idle', 'session ready');
@@ -298,20 +325,20 @@ describe('CursorSession', () => {
 
   it('tells Cursor\'s network errors from the model\'s words', () => {
     // what the CLI appends: "\n\nError: " + String(error)
-    expect(isCursorNetError('\n\nError: RetriableError: [aborted] read ECONNRESET')).toBe(true);
-    expect(isCursorNetError('Sto lavorando\n\nError: RetriableError: [aborted] read ECONNRESET\n')).toBe(true);
-    expect(isCursorNetError('Leggo.\n\nError: RetriableError: [unavailable] PING timed out')).toBe(true);
-    expect(isCursorNetError('Leggo.\n\nError: RetriableError: [unavailable]')).toBe(true);
-    expect(isCursorNetError('Leggo.\n\nError: RetriableError: Stream ended without turnEnded — connection likely dropped mid-stream')).toBe(true);
-    expect(isCursorNetError('Leggo.\n\nError: [unavailable] PING timed out')).toBe(true);
+    expect(isNetError('\n\nError: RetriableError: [aborted] read ECONNRESET')).toBe(true);
+    expect(isNetError('Sto lavorando\n\nError: RetriableError: [aborted] read ECONNRESET\n')).toBe(true);
+    expect(isNetError('Leggo.\n\nError: RetriableError: [unavailable] PING timed out')).toBe(true);
+    expect(isNetError('Leggo.\n\nError: RetriableError: [unavailable]')).toBe(true);
+    expect(isNetError('Leggo.\n\nError: RetriableError: Stream ended without turnEnded — connection likely dropped mid-stream')).toBe(true);
+    expect(isNetError('Leggo.\n\nError: [unavailable] PING timed out')).toBe(true);
     // the model quoting the error is not one
-    expect(isCursorNetError('Nei log c\'è Error: RetriableError: [aborted] read ECONNRESET')).toBe(false);
-    expect(isCursorNetError('Ecco il log:\nError: RetriableError: [aborted] read ECONNRESET')).toBe(false);
-    expect(isCursorNetError('Riga dal log:\n\n[unavailable] PING timed out')).toBe(false);
-    expect(isCursorNetError('\n\nError: RetriableError: x\nquindi ho corretto il retry.')).toBe(false);
-    expect(isCursorNetError('\n\nError: NonRetriableError: bad request')).toBe(false);
-    expect(isCursorNetError('\n\nError: [unauthenticated] Backend rejected authentication')).toBe(false);
-    expect(isCursorNetError('')).toBe(false);
+    expect(isNetError('Nei log c\'è Error: RetriableError: [aborted] read ECONNRESET')).toBe(false);
+    expect(isNetError('Ecco il log:\nError: RetriableError: [aborted] read ECONNRESET')).toBe(false);
+    expect(isNetError('Riga dal log:\n\n[unavailable] PING timed out')).toBe(false);
+    expect(isNetError('\n\nError: RetriableError: x\nquindi ho corretto il retry.')).toBe(false);
+    expect(isNetError('\n\nError: NonRetriableError: bad request')).toBe(false);
+    expect(isNetError('\n\nError: [unauthenticated] Backend rejected authentication')).toBe(false);
+    expect(isNetError('')).toBe(false);
   });
 
   it('a network error at the end of a turn: "continua" goes by itself, with a visible line, and the chat stays running', async () => {
@@ -320,7 +347,7 @@ describe('CursorSession', () => {
     s.send('neterr please');
     await waitFor(() => results(sink).length === 2 && s.state === 'idle', 'turn + automatic retry');
     const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
-    expect(prompts).toEqual(['neterr please', NET_RETRY_PROMPT]);
+    expect(prompts).toEqual(['neterr please', netRetryPrompt('Cursor')]);
     expect(results(sink).map(r => r.isError)).toEqual([true, false]);
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo la rete');
     const sys = [...sink.items.values()].filter(i => i.kind === 'system').map(i => i.text);
@@ -385,7 +412,7 @@ describe('CursorSession', () => {
     s.send('hello');
     await waitFor(() => results(sink).length === 3 && s.state === 'idle', 'retry, then the message');
     const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
-    expect(prompts).toEqual(['neterr', NET_RETRY_PROMPT, 'hello']);
+    expect(prompts).toEqual(['neterr', netRetryPrompt('Cursor'), 'hello']);
   });
 
   it('"Invia subito" while the retry waits sends the kept message now, without the retry', async () => {
@@ -405,7 +432,7 @@ describe('CursorSession', () => {
     const { s, sink, logFile } = start({ env: { FAKE_CURSOR_NO_AUTH: '1' } });
     await waitFor(() => sink.exited, 'stopped');
     expect(s.state).toBe('error');
-    expect(sink.exited?.error).toBe(AUTH_HELP);
+    expect(sink.exited?.error).toBe(authHelp('Cursor', CURSOR.loginCommand!));
     expect(cursorLog(logFile).some(l => l.method === 'authenticate')).toBe(false);
     expect(() => s.send('x')).toThrow(/non è attiva/);
   });
@@ -438,7 +465,7 @@ describe('CursorSession', () => {
     expect(cursorLog(logFile).find(l => l.method === 'session/new')?.params?.mcpServers).toEqual([{ type: 'http', name: 'second-brain', url, headers: [] }]);
     await waitFor(() => sink.patch.permissionMode === 'plan', 'plan mode');
     expect(cursorLog(logFile).find(l => l.method === 'session/set_mode')?.params).toMatchObject({ modeId: 'plan' });
-    await expect(s.setModel('claude-sonnet-5.5')).rejects.toThrow(MODEL_RESTART); // the manager reopens the session instead
+    await expect(s.setModel('claude-sonnet-5.5')).rejects.toThrow(modelRestart('Cursor')); // the manager reopens the session instead
     await expect(s.setEffort('high')).rejects.toThrow(/effort/i);
   });
 
@@ -586,5 +613,82 @@ describe('cursor prices', () => {
     s.send('acpcost');
     await waitFor(() => results(sink).length === 2, 'second turn');
     expect(results(sink)[1]).toMatchObject({ costUsd: 0 });
+  });
+});
+
+// ADR 0046: the same adapter runs any ACP CLI; here the fake plays Kimi (`kimi acp`, no model flag)
+describe('AcpSession as another ACP engine (Kimi)', () => {
+  it('resolves its own command: SB_KIMI_PATH or the given override, a .cmd shim through cmd.exe, refused under tests unless a .mjs fake', () => {
+    expect(resolveAcp('kimi', 'kimi', null, { SB_KIMI_PATH: FAKE_CURSOR })).toMatchObject({ kind: 'fake', prefix: [FAKE_CURSOR] });
+    expect(resolveAcp('kimi', 'kimi', 'C:\\Tools\\kimi.cmd', {})).toMatchObject({ kind: 'cmd', display: 'C:\\Tools\\kimi.cmd' });
+    const exe = resolveAcp('kimi', 'kimi', 'C:\\Tools\\kimi.exe', {});
+    expect(exe).toMatchObject({ kind: 'exe', command: 'C:\\Tools\\kimi.exe' });
+    expect(cliArgv(exe!, ['acp']).args).toEqual(['acp']);
+    expect(engineAllowed(exe!, { VITEST: 'true' })).toBe(false);
+    expect(engineAllowed(exe!, { SB_TEST: '1' })).toBe(false);
+    expect(engineAllowed(resolveAcp('kimi', 'kimi', 'C:\\x\\kimi.cjs', {})!, { VITEST: 'true' })).toBe(false);
+    expect(engineAllowed(resolveAcp('kimi', 'kimi', FAKE_CURSOR, {})!, { VITEST: 'true' })).toBe(true);
+    expect(engineAllowed(exe!, {})).toBe(true);
+    // the session refuses the real one before spawning anything, in the engine's own words
+    const sink = recSink();
+    const s = new AcpSession({ ...KIMI, chatId: 'c', cwd: tmp('cwd') }, sink, exe);
+    s.start();
+    expect(s.pid).toBeNull();
+    expect(sink.exited?.error).toMatch(/^Nei test il motore Kimi reale non parte mai: serve il fake \(SB_KIMI_PATH=/);
+  });
+
+  it('a CLI that is not installed: the message names the engine and its command', () => {
+    const sink = recSink();
+    const s = new AcpSession({ ...KIMI, acpCommand: 'kimi-not-installed-0046', chatId: 'c', cwd: tmp('cwd') }, sink);
+    s.start();
+    expect(s.state).toBe('error');
+    expect(sink.exited?.error).toBe('Kimi CLI non trovato: installa la CLI di Kimi (kimi-not-installed-0046) e fai login.');
+  });
+
+  it('runs as harness kimi with `acp` alone (no --model), none of Cursor\'s options, and its own name in what the user reads', async () => {
+    const hooksFile = path.join(tmp('hooks'), 'hooks.json'); // given, but without subagentHooks no hook runs
+    const { s, sink, logFile } = startKimi({ model: 'claude-sonnet-5.5', hooksFile });
+    expect(s.harness).toBe('kimi');
+    expect(s.args()).toEqual(['acp']);
+    await waitFor(() => s.state === 'idle', 'ready');
+    const first = cursorLog(logFile).find(l => l.argv) as { argv?: string[]; configDir?: string | null } | undefined;
+    expect(first?.argv).toEqual(['acp']);
+    expect(first?.configDir).toBe(process.env.CURSOR_CONFIG_DIR ?? null); // the session set no CURSOR_CONFIG_DIR
+    expect(cursorLog(logFile).some(l => l.method === 'session/set_config_option')).toBe(false); // no modelConfig
+    // the model was not asked on the command line: what runs is no "other model than asked"
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.level === 'warn')).toBe(false);
+    s.send('subagent');
+    await waitFor(() => results(sink).length === 1, 'subagent turn');
+    expect(s.hookRuns).toHaveLength(0);
+    await expect(s.setModel('x')).rejects.toThrow(modelRestart('Kimi'));
+    await expect(s.setEffort('high')).rejects.toThrow('L’effort non si imposta con Kimi');
+  });
+
+  it('usage tokens are priced with Cursor\'s list only with priceFallback', async () => {
+    // a model the list prices (the Cursor-shaped start, so the fake runs it), but without the option
+    const { sink } = start({ model: 'claude-sonnet-5.5', priceFallback: false });
+    const s = open.at(-1)!;
+    s.send('edit todo usage');
+    await waitFor(() => results(sink).length === 1, 'usage turn');
+    expect(results(sink)[0]).toMatchObject({ costUsd: 0 });
+    expect(sink.patch.costKnown).toBe(false);
+  });
+
+  it('a network error: the retry lines and the resume prompt name Kimi', async () => {
+    const { s, sink, logFile } = startKimi({ netRetryDelaysMs: [30, 60] });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('neterr please');
+    await waitFor(() => results(sink).length === 2 && s.state === 'idle', 'turn + automatic retry');
+    const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
+    expect(prompts).toEqual(['neterr please', netRetryPrompt('Kimi')]);
+    expect([...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { text: string }).text)).toEqual(['Ripartita da sola dopo un errore di rete di Kimi (tentativo 1 di 2).']);
+  });
+
+  it('not logged in: "Accedi a Kimi" with its own login command', async () => {
+    const { s, sink } = startKimi({ env: { FAKE_CURSOR_NO_AUTH: '1' } });
+    await waitFor(() => sink.exited, 'stopped');
+    expect(s.state).toBe('error');
+    expect(sink.exited?.error).toBe(authHelp('Kimi', 'kimi login'));
+    expect(sink.exited?.error).toBe('Accedi a Kimi: premi “Accedi a Kimi” (apre `kimi login` in un terminale), completa il login e riprova.');
   });
 });

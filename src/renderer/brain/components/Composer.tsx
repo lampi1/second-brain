@@ -8,6 +8,17 @@ import { chatName } from '@shared/regia';
 import { toast } from './ui';
 
 /** The app's chats, live (chat:list once, then chat:updated / chat:removed). */
+/** The engines' short names by id ("kimi" → "Kimi"), from app:info; an id it does not know shows as itself. */
+export function useEngineLabels(): (h: string) => string {
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    window.sb.invoke('app:info', undefined).then(i => { if (alive) setLabels(Object.fromEntries(i.engines.map(e => [e.id, e.label]))); }, () => { /* ids as names */ });
+    return () => { alive = false; };
+  }, []);
+  return h => labels[h] ?? h;
+}
+
 export function useAppChats(): ChatSummary[] | null {
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
   useEffect(() => {

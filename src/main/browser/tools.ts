@@ -6,8 +6,9 @@
 import type { CallCtx, McpTool, ToolOutput } from '../mcp/server';
 import { log, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
-import { normalizeUrl, type BrowserActions } from './actions';
+import { normalizeUrl, type BrowserActions, type Shot } from './actions';
 import { envForUrl } from './envs';
+import { fmtFactor } from './preview';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
@@ -31,6 +32,15 @@ const target = {
 const schema = (props: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties: { ...props, ...tabId }, required });
 const RO = { readOnlyHint: true, openWorldHint: true };
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: true };
+
+/** How the agent's image maps back to CSS px: k = CSS px per image px (the capture's zoom and the preview's factor). */
+export function shotMapping(shot: Pick<Shot, 'scale' | 'origin' | 'page'>, img: { width: number; height: number; factor: number; mimeType: string }): string {
+  const k = fmtFactor(img.factor / shot.scale);
+  const head = `Image ${img.width}x${img.height} ${img.mimeType === 'image/jpeg' ? 'JPEG' : 'PNG'}`;
+  if (shot.page) return `${head}: page point = image px × ${k} (page coordinates: scroll it into view before clicking)`;
+  if (shot.origin.x || shot.origin.y) return `${head}: click coordinate = (${shot.origin.x} + image x × ${k}, ${shot.origin.y} + image y × ${k})`;
+  return `${head}: click coordinate = image px × ${k}`;
+}
 
 export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf: (ctx: CallCtx) => Scope): McpTool[] {
   const queues = new Map<string, Promise<unknown>>();
@@ -57,6 +67,8 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
   };
   const ensureTab = (scope: Scope, a: Args): Tab => {
     if (a.tabId) return tabs.tabFor(scope.group, a.tabId);
+    const closed = tabs.activeOf(scope.group) ? null : tabs.closedError(scope.group, null);
+    if (closed) throw new Error(closed);              // the user closed its active tab: never reopen a page silently
     return tabs.activeOf(scope.group) ?? tabs.create(scope.group, scope.owner, undefined, a.env ? { env: String(a.env) } : {});
   };
   const envProp = { env: { type: 'string', description: 'Environment = its own session (cookies, storage). Default from the host (test-3.example.com → example-test-3, localhost → local); name one to share a session on purpose or to keep two users apart.' } };
@@ -125,18 +137,26 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
     },
     {
       name: 'screenshot', annotations: RO,
-      description: 'PNG of the tab viewport: image pixels = CSS pixels = click coordinates. region [x0,y0,x1,y1] zooms on an area (sharper), full_page captures the whole scrollable page. save_to "name.png" stores it as QA evidence (returns the absolute path); return_image: false then skips the image.',
+      description: 'See the tab when text is not enough (try read_page, find or get_page_text first: far fewer tokens). The image is scaled to a long side of ~1000 px; its text gives the factor (click coordinate = image px × factor). region [x0,y0,x1,y1] zooms on an area (sharper), full_page captures the whole scrollable page. save_to "name.png" stores the full-size PNG as QA evidence and returns only its path and size, no image; add view: true to see it too.',
       inputSchema: schema({
         region: { type: 'array', items: { type: 'number' }, minItems: 4, maxItems: 4 }, full_page: { type: 'boolean' },
-        save_to: { type: 'string', description: 'File name inside the evidence folder of your chat, e.g. "TC-12/step-3.png"' }, return_image: { type: 'boolean' },
+        save_to: { type: 'string', description: 'File name inside the evidence folder of your chat, e.g. "TC-12/step-3.png"' },
+        view: { type: 'boolean', description: 'with save_to: return the image too (default false)' },
       }),
       run: async (a, ctx): Promise<ToolOutput> => {
         const tab = tabOf(ctx, a);
         const shot = await actions.screenshot(tab, { region: a.region, full_page: a.full_page });
         const saved = a.save_to !== undefined && a.save_to !== '' ? actions.saveShot(tab, shot, a.save_to) : null;
-        const text = `Tab ${tab.id}: ${shot.note}${saved ? `\nSaved: ${saved}` : ''}${tab.dialog ? `\nDialog open: ${tab.dialog.type} "${tab.dialog.message}" (handle_dialog)` : ''}`;
-        if (saved && a.return_image === false) return text;
-        return { text, images: [{ data: shot.png.toString('base64'), mimeType: 'image/png' }] };
+        const dialog = tab.dialog ? `
+Dialog open: ${tab.dialog.type} "${tab.dialog.message}" (handle_dialog)` : '';
+        if (saved && a.view !== true) return `Tab ${tab.id}: ${shot.note}
+Saved: ${saved}
+PNG ${shot.width}x${shot.height}, not shown (view: true to see it)${dialog}`;
+        const img = actions.preview(shot);
+        return { text: `Tab ${tab.id}: ${shot.note}
+${shotMapping(shot, img)}${saved ? `
+Saved: ${saved}
+PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mimeType: img.mimeType }] };
       },
     },
     {

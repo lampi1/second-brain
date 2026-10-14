@@ -1,22 +1,21 @@
 // The DevOps link chips in a chat tile's header: the PRs, work items, test plans, pipelines and releases the chat
 // talked about (lib/devlinks.ts, found locally, no model), newest first, at most four; the rest in a small "+N" menu.
 // Each chip shows the title when known (tool result or the DevOps page's cached data), else the type and the id; a
-// click opens the link in the internal browser. Why: "dammi il link alla PR" without asking the chat (and re-reading
-// its whole context). Used by ChatTile.
+// click opens the link in the system browser, where the user is signed in to DevOps (the internal browser has no
+// DevOps session: a click landed on the Microsoft sign-in; the user, 2026-10-14, as the question's context links since
+// 2026-10-12). Why: "dammi il link alla PR" without asking the chat (and re-reading its whole context). Used by ChatTile.
 import { memo, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '@shared/contract';
 import { extractDevLinks, linkKindLabel, linkLabel, type DevLink } from '../lib/devlinks';
 import { useDevops } from '../store/devops';
-import { toast } from '../store/ui';
 import { MenuItem, Popover } from './ui';
 
 const MAX_CHIPS = 4;
 
-function openLink(l: DevLink): void {
-  void window.sb.invoke('browser:open', { url: l.url, ownerChatId: null }).catch((e: unknown) => toast(`Link non aperto: ${e instanceof Error ? e.message : String(e)}`, 'err'));
-}
+// window.open: main's window-open handler hands an http(s) URL to the system browser (window.ts), never a new window
+const openLink = (l: DevLink): void => { window.open(l.url, '_blank', 'noopener'); };
 
-const tipOf = (l: DevLink) => `${linkKindLabel(l)} ${l.id}${l.title ? `: ${l.title}` : ''}\n${l.url}\nSi apre nel browser interno`;
+const tipOf = (l: DevLink) => `${linkKindLabel(l)} ${l.id}${l.title ? `: ${l.title}` : ''}\n${l.url}\nSi apre nel browser di sistema`;
 
 export const ChatLinkChips = memo(function ChatLinkChips({ chatId, items }: { chatId: string; items: readonly ChatItem[] | undefined }) {
   const devops = useDevops(s => s);

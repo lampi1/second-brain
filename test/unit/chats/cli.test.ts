@@ -68,13 +68,14 @@ describe('quit kill', () => {
     await waitFor(() => ps.every(p => p.pid && alive(p.pid)), 'both running');
     const calls: { pids: number[]; at: number }[] = [];
     const t0 = Date.now();
-    // the caller's taskkill already runs (here: none): nothing lands before the cap, both are terminated directly
-    await killTreesWithin(ps.map(p => p.pid), 400, { started: { spawnMs: 0 }, after: (pids, at) => { calls.push({ pids, at }); } });
+    // the caller's taskkill already runs (here: none): nothing lands before the cap, both are terminated directly; 600 ms
+    // = a 100 ms wait, then the reserve
+    await killTreesWithin(ps.map(p => p.pid), 600, { started: { spawnMs: 0 }, after: (pids, at) => { calls.push({ pids, at }); } });
     const took = Date.now() - t0;
     expect(calls).toHaveLength(1);
     expect([...calls[0]!.pids].sort()).toEqual(ps.map(p => p.pid!).sort());
-    expect(calls[0]!.at).toBeLessThanOrEqual(t0 + 400);
-    expect(took).toBeLessThan(400 + 150); // the reserve (300 ms at least) absorbs late timers
+    expect(calls[0]!.at).toBeLessThanOrEqual(t0 + 600);
+    expect(took).toBeLessThan(600 + 150); // the reserve (500 ms at least) absorbs late timers
     for (const p of ps) await waitFor(() => !alive(p.pid!), 'terminated', 3000);
   });
 });

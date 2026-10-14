@@ -5,7 +5,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch } from './helpers';
-import { startSites, McpClient, refOf, pngSize, type Sites } from './fixture-server';
+import { startSites, McpClient, refOf, pngSize, imageSize, type Sites } from './fixture-server';
 
 let app: ElectronApplication;
 let page: Page;
@@ -71,7 +71,7 @@ test.describe.serial('internal browser over MCP', () => {
     expect(found).toMatch(/\(in iframe f\d+ http:\/\/localhost:\d+\)/);
   });
 
-  test('Ctrl+W in a page never closes the app (the default menu would; in the app Ctrl+W closes a chat)', async () => {
+  test('Ctrl+W in a page never closes the app (the default menu would; in the app it closes that tab, with Annulla)', async () => {
     // the tab on screen in the app window, where its unhandled keys reach the window's menu
     const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
     const id = tabs.find(t => t.group?.startsWith('mcp:') && t.url.endsWith('/index.html'))!.id;
@@ -83,6 +83,10 @@ test.describe.serial('internal browser over MCP', () => {
     });
     await page.waitForTimeout(800);
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
+    // the user's Ctrl+W in a page closes its tile like a chat (ADR 0048): Annulla keeps the tab for the next tests
+    const undo = page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' });
+    await expect(undo).toBeVisible();
+    await undo.getByTestId('toast-action').click();
     expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
     await page.evaluate(() => window.sb.invoke('views:layout', []));
   });
@@ -185,22 +189,34 @@ test.describe.serial('internal browser over MCP', () => {
     await agent.ok('tabs_select', { tabId: first });
   });
 
-  test('screenshots are CSS-pixel PNGs and can be saved as evidence', async () => {
+  test('screenshots: a scaled JPEG for the agent, the full-size PNG only on file', async () => {
     const shot = await agent.call('screenshot');
-    expect(shot.images[0]?.mimeType).toBe('image/png');
-    expect(pngSize(shot.images[0]!.data)).toEqual({ width: 1920, height: 1080 });   // agent tabs: fixed desktop size
-    const saved = await agent.ok('screenshot', { save_to: 'TC-1/home.png', return_image: false });
-    const file = /Saved: (.+)$/m.exec(saved)?.[1] ?? '';
+    expect(shot.images[0]?.mimeType).toBe('image/jpeg');
+    expect(imageSize(shot.images[0]!.data)).toEqual({ width: 960, height: 540 });   // agent tabs: 1920x1080 CSS px, halved
+    expect(shot.text).toContain('click coordinate = image px × 2');
+    // save_to: evidence on file, no image back (fewer tokens), unless view: true
+    const saved = await agent.call('screenshot', { save_to: 'TC-1/home.png' });
+    expect(saved.isError).toBe(false);
+    expect(saved.images).toHaveLength(0);
+    expect(saved.text).toContain('PNG 1920x1080, not shown');
+    const file = /Saved: (.+)$/m.exec(saved.text)?.[1] ?? '';
     expect(fs.existsSync(file)).toBe(true);
     expect(file).toContain(path.join('evidence', `external-${agent.sessionId.slice(0, 8)}`, 'TC-1', 'home.png'));
+    expect(pngSize(fs.readFileSync(file).toString('base64'))).toEqual({ width: 1920, height: 1080 });
+    const viewed = await agent.call('screenshot', { save_to: 'TC-1/home-seen.png', view: true });
+    expect(viewed.images).toHaveLength(1);
+    expect(imageSize(viewed.images[0]!.data)).toEqual({ width: 960, height: 540 });
     const escape = await agent.call('screenshot', { save_to: '../../outside.png' });
     expect(escape.isError).toBe(true);
     const full = await agent.call('screenshot', { full_page: true });
-    expect(pngSize(full.images[0]!.data).width).toBe(1920);
-    const region = await agent.call('screenshot', { region: [0, 0, 200, 100] });
-    expect(region.text).toContain('region (0,0)-(200,100)');
+    expect(Math.max(...Object.values(imageSize(full.images[0]!.data)))).toBeLessThanOrEqual(1100);
+    expect(full.text).toContain('page point = image px ×');
+    const region = await agent.call('screenshot', { region: [100, 50, 300, 150] });
+    expect(region.text).toContain('region (100,50)-(300,150)');
+    expect(region.text).toMatch(/click coordinate = \(100 \+ image x × [\d.]+, 50 \+ image y × [\d.]+\)/);
     fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
-    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab.png'), Buffer.from(shot.images[0]!.data, 'base64'));
+    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab.png'), fs.readFileSync(file));
+    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab-preview.jpg'), Buffer.from(shot.images[0]!.data, 'base64'));
   });
 
   test('each MCP session only sees its own tabs', async () => {
@@ -263,9 +279,9 @@ test.describe.serial('internal browser over MCP', () => {
     const near = (got: string, x: number, y: number) => { const [gx, gy] = got.split(',').map(Number); return Math.abs(gx! - x) <= 3 && Math.abs(gy! - y) <= 3; };
     expect(near(await agent.ok('javascript', { code: '__downs[0]' }), 1500, 900)).toBe(true);   // a view px is ~2.4 CSS px here
     const small = await agent.call('screenshot', { tabId: shown[1]!.id });
-    expect(pngSize(small.images[0]!.data)).toEqual({ width: 1920, height: 1080 });
+    expect(imageSize(small.images[0]!.data)).toEqual({ width: 960, height: 540 });   // the desktop viewport, not the tile
     fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
-    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab-small-tile.png'), Buffer.from(small.images[0]!.data, 'base64'));
+    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab-small-tile.jpg'), Buffer.from(small.images[0]!.data, 'base64'));
     // the user's own click in the scaled tile lands on the same page point (the view maps it back)
     await app.evaluate(({ webContents }, url) => {
       const wc = webContents.getAllWebContents().find(w => w.getURL() === url);

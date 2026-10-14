@@ -1,0 +1,160 @@
+/* The questions window (components/QuestionsWindow.tsx, RequestPanel.tsx and CommandRequest.tsx size `window`,
+   AskContext.tsx layout `window`; ADR 0049). One page read top to bottom: who asks (small), the question (large), two
+   lines of why, the text to approve as a document, the options as large cards, the keys in the footer; the other
+   waiting requests in a rail on the left. Anchored near the top like a command palette, so content that loads late
+   grows downward and nothing already on screen moves. Lines stay under ~72 characters. Tokens: styles/tokens.css. */
+
+/* above the Regia overlay (35), under the dialogs (40) */
+.qwin-backdrop {
+  position: fixed; inset: 0; z-index: 38; display: flex; justify-content: center; align-items: flex-start;
+  padding: clamp(20px, 7vh, 88px) 24px 24px; background: var(--backdrop); animation: fadeIn var(--dur-fast) var(--ease);
+}
+.qwin-backdrop[hidden] { display: none; }
+.qwin {
+  --qwin-top: clamp(20px, 7vh, 88px);
+  width: min(760px, 100%); max-height: calc(100vh - var(--qwin-top) - 24px); display: flex; min-height: 0;
+  border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop);
+  overflow: hidden; contain: layout paint; animation: qwinIn var(--dur) var(--ease);
+}
+/* the rail grows the window to the left: the request stays where it was when a second one arrives (room permitting) */
+.qwin.with-rail { position: relative; left: calc(-1 * min(125px, max(0px, (100% - 1010px) / 2))); width: min(1010px, 100%); min-height: min(440px, calc(100vh - var(--qwin-top) - 24px)); }
+@keyframes qwinIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .qwin, .qwin-backdrop { animation: none; } }
+
+/* the rail: every waiting request, in the order they came; the shown one marked, the others one click away */
+.qwin-rail { flex: none; width: 250px; display: flex; flex-direction: column; min-height: 0; background: var(--bg-2); border-right: 1px solid var(--border); }
+.qwin-rail-k { flex: none; padding: 16px 16px 8px; font-size: 12px; font-weight: 600; color: var(--text-3); letter-spacing: 0.02em; }
+.qwin-rail-k b { margin-left: 4px; padding: 0 6px; border-radius: 99px; background: var(--amber-bg); color: var(--amber); font-variant-numeric: tabular-nums; }
+.qwin-rail-list { flex: 1; min-height: 0; contain: size; /* the rail never makes the window taller: the request does */ overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+.qwin-rail-item {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 9px 10px; border-radius: var(--r-s); border: 1px solid transparent;
+  background: transparent; color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
+}
+.qwin-rail-item > svg, .qwin-rail-item > .harness-mark, .qwin-rail-item > :first-child { flex: none; margin-top: 2px; }
+.qwin-rail-item:hover { background: var(--surface-3); }
+.qwin-rail-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.qwin-rail-item.cur { background: var(--surface); border-color: var(--border-2); color: var(--text); cursor: default; box-shadow: inset 3px 0 0 var(--amber); }
+.qwin-rail-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.qwin-rail-t b { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qwin-rail-t span { font-size: 12.5px; line-height: 1.4; color: var(--text-3); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.qwin-rail-item.cur .qwin-rail-t span { color: var(--text-2); }
+
+.qwin-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.qwin-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 14px 0 24px; min-height: 44px; }
+.qwin-chat { font: 600 13px var(--font); color: var(--text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qwin-age { flex: none; font-size: 12px; color: var(--text-4); }
+.qwin-age::before { content: "·"; margin-right: 8px; }
+.qwin-note { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 24px 0; padding: 7px 12px; border-radius: var(--r-s); font-size: 12.5px; color: var(--amber); background: var(--amber-bg); }
+.qwin-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 24px 20px; scrollbar-width: thin; scrollbar-gutter: stable; }
+.qwin-foot {
+  flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 24px; border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.qwin-keys { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); }
+.qwin-keys .kbd { margin-left: 6px; }
+.qwin-keys .kbd:first-child, .qwin-keys .kbd + .kbd { margin-left: 0; }
+
+/* ---------- the request itself (size `window`) */
+.wq { display: flex; flex-direction: column; gap: 16px; outline: none; }
+.wq.sent { opacity: 0.45; pointer-events: none; }
+.wq-kicker { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: -8px; }
+.wq.perm .wq-kicker, .wq.cmd-ask .wq-kicker { color: var(--blue); }
+.wq-step { font-weight: 500; color: var(--text-3); }
+.wq-step::before { content: "·"; margin-right: 7px; }
+.wq-q { margin: 0; max-width: 62ch; font: 600 21px/1.35 var(--font-display); letter-spacing: -0.01em; color: var(--text); overflow-wrap: anywhere; text-wrap: pretty; }
+.wq-label { font-size: 12px; font-weight: 600; color: var(--text-3); margin-bottom: 6px; }
+
+/* the context: two lines of why that unfold, the links, the text to approve as a document */
+.wctx { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wctx-why {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; padding: 0; border: 0; background: none;
+  color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
+}
+.wctx-text { max-width: 72ch; font-size: 14px; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.wctx-more { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--blue-strong); }
+.wctx-why:hover .wctx-more { text-decoration: underline; }
+.wctx-why:focus-visible, .wctx-less:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); border-radius: 4px; }
+.wctx-body { display: flex; flex-direction: column; gap: 12px; max-width: 72ch; font-size: 14px; line-height: 1.6; color: var(--md-text); user-select: text; }
+.wctx-body .md { font-size: 14px; line-height: 1.6; }
+.wctx-less { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: 600 12.5px var(--font); color: var(--blue-strong); cursor: pointer; }
+.wctx-less .up { transform: rotate(180deg); }
+.wctx .ctx-link { font-size: 12.5px; padding: 3px 10px; }
+.wdoc .codeblock { border-color: var(--border-2); background: var(--bg-2); border-radius: var(--r-m); }
+.wdoc .cb-head { min-height: 40px; padding: 0 8px 0 16px; background: transparent; }
+.wdoc .cb-lang { font-size: 12px; font-weight: 600; color: var(--text-2); letter-spacing: 0; }
+.wdoc .cb-btn { height: 30px; padding: 0 12px; font-size: 13px; }
+.wdoc .cb-btn[data-testid="cb-copy"] { color: var(--on-accent); background: var(--blue); font-weight: 600; }
+.wdoc .cb-btn[data-testid="cb-copy"]:hover:not(:disabled) { background: var(--blue-strong); color: var(--on-accent); }
+.wdoc .cb-rich, .wdoc .cb-code { max-width: 72ch; padding: 16px 20px 18px; }
+.wdoc .cb-rich { font-size: 14.5px; line-height: 1.65; color: var(--md-text); }
+.wdoc .cb-code { font-size: 13px; }
+:root[data-theme="light"] .wdoc .codeblock { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .wdoc .codeblock { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); } }
+
+/* the options: large cards, the number on the left, the recommended one marked three ways (border, fill, label) */
+.wq-opts { display: flex; flex-direction: column; gap: 8px; }
+.wq-opt {
+  position: relative; display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 16px; border-radius: var(--r-m);
+  border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.wq-opt:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-3); }
+.wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 2px var(--focus); }
+.wq-key {
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; margin-top: -2px;
+  font: 600 13px/1 var(--mono); color: var(--text-2); background: var(--surface-3); border: 1px solid var(--border-3); border-bottom-width: 2px;
+}
+.wq-opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wq-opt-label { font-size: 15px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.wq-opt-desc { max-width: 68ch; font-size: 13.5px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+.wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--on-accent); background: var(--blue); }
+.wq-opt.rec { border-color: var(--blue-line); background: color-mix(in srgb, var(--blue) 9%, var(--surface-2)); }
+.wq-opt.rec .wq-key { color: var(--on-accent); background: var(--blue); border-color: var(--blue); }
+.wq-opt.picked { border-color: var(--blue); background: var(--blue-bg); }
+.wq-opt.picked .wq-key { color: var(--on-accent); background: var(--blue); border-color: var(--blue); }
+.wq-other { padding-top: 10px; padding-bottom: 10px; border-style: dashed; background: transparent; align-items: center; }
+.wq-other .wq-opt-label { font-size: 14px; font-weight: 500; color: var(--text-3); }
+.wq-other:hover .wq-opt-label { color: var(--text); }
+.wq-other .wq-key { margin-top: 0; }
+.wq .other-box { padding: 12px; border-radius: var(--r-m); border: 1px solid var(--blue-line); background: var(--surface-2); }
+.wq .other-input { font-size: 14px; }
+.wq-confirm { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.wq-count { font-size: 13px; color: var(--text-3); }
+.wq-cmds { display: flex; flex-direction: column; }
+
+/* a permission's and a command's actions: large buttons, the safe answer last and apart */
+.btn-l { height: 38px; padding: 0 16px; font-size: 14px; }
+.wq-perm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wq .ask-cmd { font-size: 13px; line-height: 1.6; padding: 10px 14px; border-radius: var(--r-m); background: var(--bg-2); color: var(--text); max-height: 40vh; }
+.wq .ask-raw { gap: 6px; }
+.wq-raw { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.wq-code .ask-cmd { white-space: pre-wrap; word-break: break-word; }
+
+@media (max-width: 1100px) {
+  .qwin-rail { width: 210px; }
+  .wq-q { font-size: 19px; }
+}
+
+/* the images a question names (AskImages.tsx): thumbnails with their caption, a click opens them large */
+.ask-imgs { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ask-imgs-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.ask-img { margin: 0; display: flex; flex-direction: column; gap: 5px; width: 150px; min-width: 0; }
+.ask-imgs-l .ask-img { width: 210px; }
+.ask-img-open {
+  display: block; width: 100%; height: 96px; padding: 0; border: 1px solid var(--border-2); border-radius: var(--r-s);
+  background: var(--surface-3); overflow: hidden; cursor: zoom-in; transition: border-color var(--dur-fast);
+}
+.ask-imgs-l .ask-img-open { height: 132px; }
+.ask-img-open:hover, .ask-img-open:focus-visible { border-color: var(--blue); outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.ask-img-open img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.ask-img-wait { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--surface-3), var(--surface-4), var(--surface-3)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.ask-img figcaption { font-size: 12.5px; line-height: 1.35; color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.ask-img-bad { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.modal.ask-img-viewer { display: flex; flex-direction: column; }
+.modal.ask-img-viewer img { display: block; max-width: calc(100vw - 64px); max-height: calc(100vh - 120px); object-fit: contain; }
+.ask-img-bar { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 6px 12px; background: var(--surface); border-top: 1px solid var(--border); }
+.ask-img-cap { font-size: 13px; font-weight: 600; color: var(--text); }
+.img-viewer-nav { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); cursor: pointer; }
+.img-viewer-nav:hover { background: var(--surface-3); }
+.img-viewer-nav:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }

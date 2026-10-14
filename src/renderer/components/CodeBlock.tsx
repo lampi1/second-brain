@@ -7,7 +7,8 @@
 // production asks a second click that says why (me.md "Safety": production commands are the user's alone). On a text
 // to send, Copia leaves "Copiato hh:mm" (the chat hears it with the user's next message: copying is not sending) and
 // Mandato leaves "Mandato ✓ hh:mm" and, after a few seconds to undo it, tells the chat "[Mandato] <first words…>"
-// (store/store.ts markSent). Used by ChatItems.tsx (assistant messages), RegiaTile.tsx and AskContext.tsx.
+// (store/store.ts markSent). A text tagged md / mail / teams / comment shows formatted and Copia copies it formatted
+// (lib/richtext.ts). Used by ChatItems.tsx (assistant messages), RegiaTile.tsx and AskContext.tsx.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RunInfo } from '@shared/contract';
 import { isRunnable, MAX_RUN_CODE, prodRisk, runReport } from '@shared/runnable';
@@ -19,6 +20,8 @@ import { duration, folderName } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { markCopied, markSent, send, undoSent, useApp } from '../store/store';
 import { copyText } from '../brain/components/ui';
+import { renderMarkdown } from '../lib/markdown';
+import { clipboardHtml, copyRich, isRich } from '../lib/richtext';
 import { IconAlert, IconCheck, IconCopy, IconPlay, IconSend, IconSpinner, IconStop, IconTerminal, IconX } from './Icons';
 
 /** Did the automatic outcome of this run reach the chat (main/run/results.ts labels it "[esito di Esegui")? */
@@ -80,7 +83,8 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
   );
 }
 
-export function CodeBlock({ chatId, itemId, lang, code, streaming }: { chatId: string | null; itemId: string; lang: string; code: string; streaming?: boolean }) {
+/** `label`: what the header calls the block instead of its language (the questions window: "Testo da approvare"). */
+export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { chatId: string | null; itemId: string; lang: string; code: string; streaming?: boolean; label?: string }) {
   const run = useBlockRun(chatId, itemId, code);
   const [copied, setCopied] = useState(false);
   const [armed, setArmed] = useState(false);
@@ -108,6 +112,8 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming }: { chatId: s
     }, UNDO_MS);
     return () => clearTimeout(t);
   }, [undoable]);
+  const rich = isRich(lang);
+  const doCopy = () => (rich ? copyRich(clipboardHtml(code), code) : copyText(code));
   const runnable = !!chatId && isRunnable(lang) && !streaming && !!code.trim();
   const tooLong = code.length > MAX_RUN_CODE;
   const running = run?.state === 'running';
@@ -126,10 +132,10 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming }: { chatId: s
   return (
     <div className={`codeblock ${risk ? 'prod' : ''}`} data-testid="codeblock" data-lang={lang}>
       <div className="cb-head" ref={head}>
-        <span className="cb-lang">{Object.hasOwn(LANG, lang.toLowerCase()) ? LANG[lang.toLowerCase()] : (lang || 'testo')}</span>
+        <span className="cb-lang">{label ?? (rich ? 'testo formattato' : Object.hasOwn(LANG, lang.toLowerCase()) ? LANG[lang.toLowerCase()] : (lang || 'testo'))}</span>
         {risk && <span className="cb-prod" data-testid="cb-prod" title={`Sembra un comando di produzione: ${risk}`}><IconAlert size={11} /> produzione</span>}
         <span className="sp" />
-        <button type="button" className="cb-btn" onClick={() => { void copyText(code).then(ok => { setCopied(ok); if (ok && key && chatId) markCopied(chatId, key, code); }); }} data-testid="cb-copy"
+        <button type="button" className="cb-btn" onClick={() => { void doCopy().then(ok => { setCopied(ok); if (ok && key && chatId) markCopied(chatId, key, code); }); }} data-testid="cb-copy"
           aria-label={key ? 'Copia il testo' : 'Copia il codice'} data-mark={mark?.kind === 'copied' ? 'copied' : undefined}>
           {copied ? <><IconCheck size={12} /> Copiato</>
             : mark?.kind === 'copied' ? <><IconCheck size={12} /> Copiato {hhmm(mark.at)}</> : <><IconCopy size={12} /> Copia</>}
@@ -152,7 +158,9 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming }: { chatId: s
           </button>
         ))}
       </div>
-      <pre className="cb-code"><code>{code}</code></pre>
+      {rich
+        ? <div className="cb-rich md" data-testid="cb-rich" dangerouslySetInnerHTML={{ __html: renderMarkdown(code, !streaming) }} />
+        : <pre className="cb-code"><code>{code}</code></pre>}
       {err && <div className="cb-err" role="alert" data-testid="cb-err">{err}</div>}
       {run && chatId && <RunPanel run={run} chatId={chatId} />}
     </div>

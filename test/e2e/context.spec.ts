@@ -1,5 +1,5 @@
 // End to end, long chats (fakes only, ADR 0014 + 0031): a long Claude chat turns its meter amber near its compaction
-// window (300k, passed per process) with no "Riprendi" notice, a long Cursor chat keeps the amber notice; on both the
+// window (200k by default, passed per process) with no "Riprendi" notice, a long Cursor chat keeps the amber notice; on both the
 // hand-off dialog writes the note and "Riprendi in chat nuova" opens a new linked chat. A cold Claude chat writes its
 // note invisibly and a message after the (shortened) cache expiry goes on in a fresh session of the SAME tile: old
 // session folded above "Continua da qui", the note one click away. Plus the demo for the look.
@@ -30,9 +30,9 @@ for (const engine of ['claude', 'cursor'] as const) {
     await expect(meter).toHaveClass(/long/, { timeout: 20_000 });
     const list = () => page.evaluate(() => window.sb.invoke('chat:list', undefined));
     if (engine === 'claude') {
-      // 250k of the 300k window the app passed: amber near the compaction, no notice (it compacts by itself)
-      await expect.poll(async () => (await list()).find(c => c.id === chat.id)?.contextMaxTokens).toBe(300_000);
-      await expect(meter).toHaveAttribute('data-tip', /Compatta da sola vicino a 300k/);
+      // 250k on the 200k window the app passed (the fake never compacts by itself): amber, compaction near, no notice (it compacts by itself)
+      await expect.poll(async () => (await list()).find(c => c.id === chat.id)?.contextMaxTokens).toBe(200_000);
+      await expect(meter).toHaveAttribute('data-tip', /Compatta da sola vicino a 200k/);
       await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toHaveCount(0);
       await page.getByTestId(`chat-menu-${chat.id}`).click();
       await page.getByTestId(`chat-handoff-${chat.id}`).click();
@@ -108,7 +108,7 @@ test('claude: a cold chat writes its note invisibly and the next message goes on
 test('demo: the meter near the compaction, a cold continuation, the hand-off dialog (look)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1000 });
   await page.getByTestId('chat-max-mappa').click();
-  await expect(page.getByTestId('chat-ctx-mappa')).toHaveText('252k');
+  await expect(page.getByTestId('chat-ctx-mappa')).toHaveText('172k');
   await expect(page.getByTestId('chat-ctx-mappa')).toHaveClass(/long/);
   await expect(page.getByTestId('ctx-bar-mappa')).toHaveCount(0); // a Claude chat compacts by itself: no notice
   await shot(page, 'context-demo-meter');

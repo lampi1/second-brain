@@ -3,7 +3,7 @@
 // does, a chat gets a real cost, otherwise ChatSummary.costKnown = false and the UI shows the estimate only (ADR 0010).
 // Source: https://cursor.com/docs/models, read 2026-10-11 (docs/research/research-cursor-cost.md §5.5; the page shows
 // no date). USD per 1M tokens. "Auto" bills at the routed model's price, which the CLI does not say: unknown → null.
-// Used by cursor.ts and brain/cursor-ledger.ts.
+// Used by acp.ts (the Cursor entry's priceFallback) and brain/cursor-ledger.ts.
 
 export const PRICES_READ_ON = '2026-10-11';
 

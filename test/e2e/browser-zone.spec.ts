@@ -6,7 +6,7 @@
 // Screenshots in test-results/shots/zones-*.png.
 import { expect, test } from '@playwright/test';
 import { launch, launchDemo, shot, waitThumbs } from './helpers';
-import { McpClient, pngSize, startSites } from './fixture-server';
+import { McpClient, imageSize, startSites } from './fixture-server';
 
 test('chats left, browsers right; Nascondi browser hides them, the chats grow, the choice is remembered', async () => {
   const { app, page } = await launchDemo();
@@ -76,14 +76,22 @@ test('with the browsers hidden, an agent tab keeps working off screen at the sam
     await agent.ok('navigate', { url: `${sites.a}/index.html` });
     await expect(page.getByTestId('zone-browsers').locator('[data-testid^="tile-browser-"]')).toHaveCount(1);
     await expect.poll(async () => agent.ok('tabs_list'), { timeout: 10_000 }).toMatch(/\[on screen\]/);
-    const onScreen = pngSize((await agent.call('screenshot')).images[0]!.data);
+    const onScreen = imageSize((await agent.call('screenshot')).images[0]!.data);
+    // app_screenshot: the UI and the tab on screen, each scaled for the agent (long side ~1000 px) with its factor
+    const appCtl = new McpClient(new URL('/mcp/app', info.mcpUrl).href);
+    await appCtl.init();
+    const ui = await appCtl.call('app_screenshot');
+    expect(ui.images.length).toBeGreaterThanOrEqual(2);
+    for (const im of ui.images) { expect(im.mimeType).toBe('image/jpeg'); expect(Math.max(...Object.values(imageSize(im.data)))).toBeLessThanOrEqual(1100); }
+    expect(ui.text).toMatch(/image 1: app UI \d+x\d+, image \d+x\d+ \(UI px = image px × [\d.]+\)/);
+    expect(ui.text).toMatch(/image 2: browser tab http:\/\/\S+\/index\.html at x=/);
 
     await page.keyboard.press('Control+Shift+B');
     await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
     await expect.poll(async () => agent.ok('tabs_list'), { timeout: 10_000 }).not.toMatch(/\[on screen\]/);
     // parked, still alive: reads, acts and screenshots like before, at the size it had on screen
     expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
-    const parked = pngSize((await agent.call('screenshot')).images[0]!.data);
+    const parked = imageSize((await agent.call('screenshot')).images[0]!.data);
     expect(parked).toEqual(onScreen);
     await shot(page, 'zones-agente-nascosto');
 

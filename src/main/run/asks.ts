@@ -33,7 +33,8 @@ export interface CommandAsksDeps {
 
 interface Turn { last: { id: string; text: string } | null; ids: Set<string> }
 
-const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
+/** a turn ran: 'starting' alone is an engine booting (a reopen, a queued chat), its idle has no new message to read */
+const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
 
 export class CommandAsks {
   private asks = new Map<string, Map<string, PendingRequest>>();
@@ -115,7 +116,7 @@ export class CommandAsks {
     }
     if (c.state === 'running' && was !== 'running' && !this.appTurn.has(c.id)) this.clear(c.id, 'new turn');
     // the turn is over: read its last message once the last streaming updates have landed
-    if (c.state === 'idle' && was && BUSY.has(was) && !c.handoffBusy) this.schedule(c.id);
+    if (c.state === 'idle' && was && IN_TURN.has(was) && !c.handoffBusy) this.schedule(c.id);
   }
 
   private schedule(chatId: string): void {

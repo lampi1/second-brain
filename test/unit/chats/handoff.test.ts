@@ -16,7 +16,7 @@ function setup(extra: Partial<ChatManagerOptions> = {}, envExtra: Record<string,
   const userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), log = path.join(userData, 'fake.jsonl');
   const make = () => {
     const m = new ChatManager({
-      emitter: recEmitter(), userData, claudePath: FAKE, cursorPath: FAKE_CURSOR, claudeHome: home,
+      emitter: recEmitter(), userData, enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, claudeHome: home,
       env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log, FAKE_CURSOR_LOG: log, CURSOR_CONFIG_DIR: tmp('cursor-user'), ...envExtra }, ...extra,
     });
     managers.push(m);

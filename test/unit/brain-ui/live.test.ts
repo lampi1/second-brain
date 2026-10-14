@@ -22,7 +22,7 @@ const VIEW: MapNode[] = [
 ];
 const ALL: MapNode[] = [...VIEW, N('skill:stato', 'agenti', 'skill', '/stato', 'skills/stato.md')];
 const NOW = 1_000_000;
-const chat = (o: Partial<LiveChat> & Pick<LiveChat, 'id'>): LiveChat => ({ title: o.id, harness: 'claude', state: 'running', isRegia: false, cwd: ROOT, ...o });
+const chat = (o: Partial<LiveChat> & Pick<LiveChat, 'id'>): LiveChat => ({ title: o.id, harness: 'claude', engine: 'Claude', state: 'running', isRegia: false, cwd: ROOT, ...o });
 const tool = (o: Partial<LiveTool> & Pick<LiveTool, 'chatId' | 'name'>): LiveTool => ({ id: `${o.chatId}-${o.name}-${Math.random()}`, input: {}, summary: '', startAt: NOW - 1000, endAt: null, ...o });
 const snap = (chats: LiveChat[], tools: LiveTool[] = [], tabs: LiveSnapshot['tabs'] = []): LiveSnapshot => ({ now: NOW, chats, tools, tabs });
 const g = (s: LiveSnapshot) => liveGraph(s, VIEW, ALL, ROOT);
@@ -105,7 +105,7 @@ describe('liveGraph', () => {
     expect(m.links.get(edgeKey('live:chat:w', 'chat:regia', 'vivo'))?.running).toBe(false);
   });
   it("the app's own tools are no browser; Cursor's Shell counts as a command; the live set comes sorted", () => {
-    const l = g(snap([chat({ id: 'r', isRegia: true }), chat({ id: 'c', harness: 'cursor' })], [
+    const l = g(snap([chat({ id: 'r', isRegia: true }), chat({ id: 'c', harness: 'cursor', engine: 'Cursor' })], [
       tool({ chatId: 'r', name: 'mcp__second-brain-app__app_state', input: {} }),
       tool({ chatId: 'c', name: 'Shell', input: { command: 'node ops/tools/mem.mjs now me' } }),
       tool({ chatId: 'c', name: 'Write', input: { file_path: `${ROOT}/b.md` }, startAt: NOW - 10 }),

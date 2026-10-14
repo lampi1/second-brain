@@ -41,6 +41,7 @@ export type Action =
   | { type: 'usage'; usage: Usage }
   | { type: 'info'; info: AppInfo }
   | { type: 'cli'; cli: NonNullable<AppInfo['cli']> }
+  | { type: 'engines'; engines: AppInfo['engines'] }
   /** front: back at the head of the queue (a send that failed keeps its place) */
   | { type: 'queue'; chatId: string; msg: QueuedMsg; front?: boolean }
   | { type: 'unqueue'; chatId: string; id: string }
@@ -75,6 +76,7 @@ export function reduce(s: AppState, a: Action): AppState {
     }
     case 'info': return { ...s, info: a.info };
     case 'cli': return s.info ? { ...s, info: { ...s.info, cli: a.cli } } : s;
+    case 'engines': return s.info ? { ...s, info: { ...s.info, engines: a.engines } } : s;
     case 'items': {
       const have = s.items[a.chatId] ?? [];
       const loaded = new Map(a.items.map(i => [i.id, i]));

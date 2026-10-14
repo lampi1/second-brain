@@ -66,3 +66,17 @@ describe('recordChat', () => {
     expect(t.prompt).toContain('come eseguirlo o verificarlo');
   });
 });
+
+describe('recordChat route (ADR 0032)', () => {
+  it('the record says the kind of work and the area; the rest is read from the type and title, never the fixed lines', () => {
+    expect(recordChat({ kind: 'workitem', item: item() }).route).toEqual({ kind: 'bug-fix', area: 'Shop', routeText: 'Bug Rimborso sbagliato con sconto' });
+    expect(recordChat({ kind: 'pr', pr: pr() }).route).toEqual({ kind: 'review', area: 'shop-web', routeText: 'Rimborso: lo sconto entra nel totale' });
+    expect(recordChat({ kind: 'testplan', plan, pr: pr() }).route).toMatchObject({ kind: 'qa-run', area: 'shop-web' });
+    expect(recordChat({ kind: 'testcase', point, plan, pr: null }).route).toEqual({ kind: 'qa-run', routeText: 'Reso parziale con sconto' });
+    expect(recordChat({ kind: 'workitem', item: item({ type: 'Test Case' }) }).route.kind).toBe('qa-run');
+    // a task: no kind of its own (the brain's rules decide on "Task <title>"), never on the first message
+    const task = recordChat({ kind: 'workitem', item: item({ type: 'Task', title: 'Esporta il listino' }) });
+    expect(task.route).toEqual({ area: 'Shop', routeText: 'Task Esporta il listino' });
+    expect(task.prompt).toContain('test case');
+  });
+});

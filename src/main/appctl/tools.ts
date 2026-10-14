@@ -11,16 +11,20 @@
 // - It can close a chat like the user's ✕ (app_close_chat), never a Regia nor a chat waiting for the user.
 // - Several Regie (ADR 0021): each calls on its own endpoint, so the tools know the caller (appControlTools callerId).
 // - Long chats: it can ask a chat's hand-off and "Riprendi" it in a new chat (app_handoff_chat, app_continue_chat),
-//   under the same Cursor rules as messages (an agent never starts a stopped Cursor engine).
+//   under the same rule for chats across engines as messages (engines/policy.ts; an agent never starts a stopped
+//   chat on another engine).
 // - Two mounts (wiring.ts): /mcp/app for the work Regia, /mcp/improve (space 'app') for the Regia of "Migliora l'app":
 //   each sees and creates only the chats of its own space; the app's Regia also reads the branches (app_improve_state)
 //   but can never promote nor restart (only the user's click on "Aggiorna", ADR 0007/0020).
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSpace, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSpace, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
-import { EFFORTS, modelRow } from '../brain/routing';
+import { EFFORTS, isFable, modelRow } from '../brain/routing';
+import { engineLabel, engineOf, engines } from '../engines/registry';
+import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
+import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { chatName, regiaOfChat } from '../../shared/regia';
 import { isLongChat } from '../../shared/context';
@@ -28,7 +32,7 @@ import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
 
-export type ToolOut = string | { text?: string; images?: { data: string; mimeType: 'image/png'; caption?: string }[] } | object;
+export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
@@ -77,7 +81,7 @@ export function recentClosed(list: ChatSummary[], now = Date.now()): ChatSummary
 }
 
 /** The per-Regia endpoint /mcp/app/r/:chatId/:token answers only an open work Regia presenting its own token (ADR
- *  0021): the id names the caller, whose engine decides the Claude <-> Cursor rule, so it may not be picked by anyone else. */
+ *  0021): the id names the caller, whose engine decides the rule for chats across engines, so it may not be picked by anyone else. */
 export function regiaEndpointAuth(tokens: { check(key: string, token: string): boolean }, list: () => Pick<ChatSummary, 'id' | 'isRegia'>[]) {
   return (p: Record<string, string>): boolean => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token) && list().some(c => c.id === p.chatId && c.isRegia);
 }
@@ -235,14 +239,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_screenshot', description: 'Screenshot of the app window (the UI) plus each browser tab visible on screen with its position.',
+      name: 'app_screenshot', description: 'Screenshot of the app window (the UI) plus each browser tab visible on screen with its position. Images scaled to a long side of ~1000 px (the text gives each factor). To know what the app shows, try app_state, app_chats or app_chat_items first (far fewer tokens); take a screenshot only to really see the UI.',
       inputSchema: obj(),
       run: async () => {
         const win = d.window();
         if (!win) return 'no window';
-        const images: { data: string; mimeType: 'image/png'; caption?: string }[] = [];
+        const images: { data: string; mimeType: string; caption: string }[] = [];
         const ui = await win.webContents.capturePage();
-        images.push({ data: ui.toPNG().toString('base64'), mimeType: 'image/png', caption: `app UI ${ui.getSize().width}x${ui.getSize().height}` });
+        const p = previewOf(ui);
+        images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
         for (const v of win.contentView.children) {
           const wc = (v as { webContents?: Electron.WebContents }).webContents;
           if (!wc) continue;
@@ -251,7 +256,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           // an agent tab drawn scaled (browser/tabs.ts emulate) captures a desktop-size surface with the view in its corner
           const k = ui.getSize().width / Math.max(1, win.getContentSize()[0]!), s = img.getSize();
           if (s.width > Math.round(b.width * k) + 1) img = img.crop({ x: 0, y: 0, width: Math.min(s.width, Math.round(b.width * k)), height: Math.min(s.height, Math.round(b.height * k)) });
-          images.push({ data: img.toPNG().toString('base64'), mimeType: 'image/png', caption: `browser tab ${wc.getURL()} at x=${b.x} y=${b.y} ${b.width}x${b.height}` });
+          const t = previewOf(img);
+          images.push({ data: t.data, mimeType: t.mimeType, caption: `browser tab ${redact(wc.getURL())} at x=${b.x} y=${b.y} ${b.width}x${b.height}, image ${t.width}x${t.height} (capture px = image px × ${fmtFactor(t.factor)})` });
         }
         return { text: `${images.length} images`, images };
       },
@@ -295,31 +301,31 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
         const askedEffort = text(a.effort);
         if (askedEffort && !(EFFORTS as readonly string[]).includes(askedEffort)) throw new Error(`effort: ${EFFORTS.join(' | ')}`);
-        let said: Harness | undefined = a.harness === 'cursor' || a.harness === 'claude' ? a.harness : undefined;
-        if (a.harness !== undefined && a.harness !== null && a.harness !== '' && !said) throw new Error('harness: claude | cursor');
+        let said: Harness | undefined = typeof a.harness === 'string' && engineOf(a.harness) ? a.harness : undefined;
+        if (a.harness !== undefined && a.harness !== null && a.harness !== '' && !said) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`);
         const askedModel = text(a.model);
         // a model id belongs to one engine: without harness, the registry says which; an unknown one needs harness
         if (askedModel && !said) {
           const row = modelRow(askedModel, d.brain.routingInfo().registry);
-          if (row?.harness !== 'claude' && row?.harness !== 'cursor') throw new Error('model without harness: say harness too (claude or cursor), or omit both to let the routing table decide');
+          if (!row || !engineOf(row.harness)) throw new Error('model without harness: say harness too, or omit both to let the routing table decide');
           said = row.harness;
         }
-        // the caller is the Regia (the only chat given these tools), on either engine: a chat on the other engine spends
-        // that engine's tokens, so it starts only when Claude <-> Cursor is allowed
+        // the caller is the Regia (the only chat given these tools), on any engine: a chat on another engine spends that
+        // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
         const regia = caller();
         const from = regia?.harness ?? 'claude';
         // what nobody names comes from the routing table, else from the user's "Chat aperte dalla Regia" (read now); a
         // row on an engine this Regia may not start now leaves the choice to the defaults
         const routed = d.brain.route({
-          canRun: h => s.engines[h] !== false && (h === from || s.messaging.crossHarness !== false),
+          canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appSpace: d.space === 'app',
           ask: { ...(said ? { harness: said } : {}), ...(askedModel ? { model: askedModel } : {}), ...(askedEffort ? { effort: askedEffort as Effort } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
           defaults: { harness: s.regiaChats.harness, models: { claude: s.regiaChats.claudeModel || null, cursor: s.regiaChats.cursorModel || null }, effort: s.regiaChats.claudeEffort || null },
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
         const { harness, model, effort, route } = routed;
-        if (!s.engines[harness]) throw new Error(`il motore ${harness} è spento nelle impostazioni`);
-        if (harness !== from && !s.messaging.crossHarness) throw new Error('messaggio bloccato: i messaggi tra Claude e Cursor sono spenti (impostazione "Messaggi tra Claude e Cursor")');
+        const refused = openRefusal(s, from, harness);
+        if (refused) throw new Error(`bloccato: ${refused}`);
         // the app's Regia works on the app's code: its chats start there and belong to its space
         const app = d.space === 'app';
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : app ? d.improve?.repo() ?? null : d.brain.info().brainRoot;
@@ -340,17 +346,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const text = String(a.text ?? '').trim();
         if (!text || text.length > 4000) throw new Error('text empty or longer than 4000 chars');
-        // A chat on the other engine than the caller (the Regia, on Claude or Cursor) spends that engine's tokens: an
-        // agent may write to one only when the user allows Claude <-> Cursor messages (messaging.crossHarness, the same
-        // switch inbox.mjs obeys) and only if it is already running — an agent never starts a stopped engine of the
-        // other kind (each engine spends only its own; review 2026-10-11).
+        // A chat on another engine than the caller's (the Regia's) spends that engine's tokens: an agent may write to one
+        // only when the user allows chats across engines (engines/policy.ts; inbox.mjs obeys the same switch) and only if
+        // it is already running — an agent never starts a stopped engine of another kind (review 2026-10-11).
         const target = d.chats.list().find(c => c.id === String(a.chatId));
         if (target && !mine(target)) throw new Error(`chat non trovata: ${target.id} (vedi app_chats)`);
         const regia = caller();
         const from = regia?.harness ?? 'claude';
         if (target && target.harness !== from) {
-          const name = target.harness === 'cursor' ? 'Cursor' : 'Claude';
-          if (!d.brain.settings().messaging.crossHarness) throw new Error('messaggio bloccato: i messaggi tra Claude e Cursor sono spenti (impostazione "Messaggi tra Claude e Cursor")');
+          const name = engineLabel(target.harness);
+          const refused = crossRefusal(d.brain.settings(), from, target.harness);
+          if (refused) throw new Error(`messaggio bloccato: ${refused}`);
           if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
         }
         await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, regia?.title ?? 'Regia');
@@ -366,7 +372,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const target = need(String(a.chatId));
         // an engine switched off in the settings is never started for this: the app builds the note itself
-        const allowStart = cursorRule(target, 'leggere') && d.brain.settings().engines[target.harness] !== false;
+        const allowStart = crossRule(target, 'leggere') && agentsMayOpen(d.brain.settings(), target.harness);
         const h = await d.chats.handoff(target.id, { reason: 'manual', allowStart });
         log.info('appctl', 'agent asked a hand-off', { chat: target.id, data: { source: h.source } });
         return { chatId: h.chatId, path: h.path, source: h.source, at: new Date(h.at).toISOString(), text: h.text };
@@ -378,11 +384,46 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
       run: async a => {
         const target = need(String(a.chatId));
-        if (!d.brain.settings().engines[target.harness]) throw new Error(`il motore ${target.harness} è spento nelle impostazioni`);
-        const allowStart = cursorRule(target, 'riprendere');
+        // the engine first (on, and the Regie allowed there), then the rule across engines with the engine named
+        const st = d.brain.settings();
+        if (!agentsMayOpen(st, target.harness)) throw new Error(`bloccato: ${openRefusal(st, target.harness, target.harness)}`);
+        const allowStart = crossRule(target, 'riprendere');
         const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: AGENT_LABEL });
         log.info('appctl', 'agent continued a chat in a new one', { chat: target.id, data: { next: chat.id } });
         return { chatId: chat.id, title: chat.title, harness: chat.harness, continuedFrom: target.id };
+      },
+    },
+    {
+      name: 'app_routing',
+      description: 'The model routing table in force (rows: kind, area, model, effort, why; exploration rate), the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
+      inputSchema: obj(),
+      run: () => {
+        const i = d.brain.routingInfo();
+        const auto = (i.registry?.models ?? []).filter(m => m.routing === 'auto' && i.registry?.harnesses[m.harness]?.routing === 'auto' && !isFable(m));
+        return { table: i.table, error: i.error, kinds: i.kinds, pickable: auto.map(m => ({ id: m.id, harness: m.harness, efforts: m.efforts.filter(e => e !== 'max'), price: m.price })),
+          appChats: i.registry?.appChats ?? null, history: i.history.slice(0, 10) };
+      },
+    },
+    {
+      name: 'app_routing_save',
+      description: 'Write a new version of the model routing table by yourself (the user, 2026-10-14: the AI decides the models of new chats and sub-agents in full autonomy; he sees and edits the same table in Impostazioni → «Instradamento modelli» and restores any version with one click). Send the WHOLE table (every row, as app_routing returns it, with your changes), why you change it and the data behind it (outcomes, costs, counts). Refused when it breaks a hard rule: unknown or manual model, a model on another engine, an app chat on an engine other than the appChats model one, an app row other than the registry\'s appChats model and effort, no "any kind" row for the app\'s areas, a table changed since baseVersion, a row the user locked (locked: true; keep it as is, never lock or unlock one), Fable, max effort, a row without its why (you always write it; the user may leave it out), exploration outside 0-0.5.',
+      inputSchema: obj({
+        routes: { type: 'array', description: 'every row: { kind (task kind or "*"), area? (string or list), harness, model, effort (or null), why, since?, evidence? }', items: { type: 'object' } },
+        // the cost weight (costWeight) is the user's: not a parameter, a save keeps it
+        exploration: num('optional share of chats that try a little-sampled model of the same engine, 0 to 0.5; omitted = unchanged'),
+        reason: str('why this change (shown to the user in the table\'s history)'),
+        evidence: str('the data behind it: outcomes, costs, counts, the ledger lines you read'),
+        baseVersion: num('the table version you read with app_routing: refused when another version is in force since (reload, redo the change)'),
+      }, ['routes', 'reason', 'evidence', 'baseVersion']),
+      run: a => {
+        const reason = String(a.reason ?? '').trim().slice(0, 300), evidence = String(a.evidence ?? '').trim().slice(0, 300);
+        if (!reason || !evidence) throw new Error('reason ed evidence sono obbligatori: perché cambi e con quali dati');
+        if (!Array.isArray(a.routes)) throw new Error('routes: la tabella intera (vedi app_routing)');
+        if (!Number.isInteger(a.baseVersion)) throw new Error('baseVersion: la versione letta con app_routing');
+        const who = caller()?.title ?? (d.space === 'app' ? 'Regia dell’app' : 'Regia');
+        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { ...(a.exploration === undefined || a.exploration === null ? {} : { exploration: Number(a.exploration) }), by: `agente: ${who}`, evidence, base: a.baseVersion as number });
+        log.info('appctl', 'agent saved the routing table', { data: { version: i.table?.version ?? null, by: who, reason } });
+        return { version: i.table?.version ?? null, exploration: i.table?.exploration ?? null, rows: i.table?.routes.length ?? 0 };
       },
     },
   ];
@@ -409,14 +450,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     return c;
   }
 
-  /** A chat of the other engine than the caller's (the Regia's, as in app_send_to_chat) spends that engine's credits:
-   *  allowed only with Claude <-> Cursor messages on, and a stopped one is never started for its hand-off (false = the
-   *  app writes a token-free note). Chats of the caller's own engine: true. */
-  function cursorRule(c: ChatSummary, verb: string): boolean {
+  /** A chat on another engine than the caller's (the Regia's, as in app_send_to_chat) spends that engine's credits:
+   *  allowed only as engines/policy.ts says, and a stopped one is never started (false = only if already running; the
+   *  hand-off then gets a token-free note from the app). Chats of the caller's own engine: true. */
+  function crossRule(c: ChatSummary, verb: string): boolean {
     const from = caller()?.harness ?? 'claude';
     if (c.harness === from) return true;
-    const name = c.harness === 'cursor' ? 'Cursor' : 'Claude';
-    if (!d.brain.settings().messaging.crossHarness) throw new Error(`bloccato: un agente non può ${verb} una chat ${name} con i messaggi tra Claude e Cursor spenti (impostazione "Messaggi tra Claude e Cursor")`);
+    const refused = crossRefusal(d.brain.settings(), from, c.harness);
+    if (refused) throw new Error(`bloccato: un agente non può ${verb} una chat ${engineLabel(c.harness)}: ${refused}`);
     return ['running', 'waiting', 'idle'].includes(c.state);
   }
 }

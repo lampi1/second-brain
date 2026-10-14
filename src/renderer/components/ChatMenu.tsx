@@ -1,13 +1,14 @@
-// The ⋯ menu of a chat tile: model, effort and permissions (Claude), rename, copy link, focus mode, the context size
+// The ⋯ menu of a chat tile: model, effort and permissions (engines that take them), rename, copy link, focus mode, the context size
 // with "Passaggio di consegne…" and "Riprendi in chat nuova" (not on the Regia: it renews instead), close. The same
 // menu serves a Regia, which adds "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
-// "Cambia motore" (Claude ↔ Cursor): both open the "Nuova Regia" confirm (RegiaRenewDialog); the old Regia goes on as
+// "Cambia motore" (to the first other engine): both open the "Nuova Regia" confirm (RegiaRenewDialog); the old Regia goes on as
 // a normal chat, history kept; the overlay's opacity (setting regiaOpacity, ADR 0021). "Chiudi la Regia" only while another Regia stays.
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and RegiaTile.
 import type { RefObject } from 'react';
-import type { ChatSummary, Harness } from '@shared/contract';
+import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
 import { EFFORTS, effortLabel, permissionLabel, PERMISSION_MODES, tokensShort } from '../lib/format';
-import { MODELS } from '../lib/models';
+import { engineCan, engineName, otherEngine } from '../lib/engines';
+import { modelOptions, useModelsSeen } from '../lib/models';
 import { makeLink } from '../lib/notify';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, setChat, setSetting, useApp } from '../store/store';
@@ -17,25 +18,32 @@ import { regieIdsOf } from '../lib/regia-route';
 import { OPEN_NEXT_LABEL, RESUME_LABEL, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 
-export const harnessName = (h: Harness): string => (h === 'claude' ? 'Claude Code' : 'Cursor');
-const otherHarness = (h: Harness): Harness => (h === 'claude' ? 'cursor' : 'claude');
-
-/** Why the Regia cannot move to this engine now (null = it can). */
-export function useEngineBlock(h: Harness): string | null {
-  const off = useApp(s => s.settings?.engines[h] === false);
-  const missing = useApp(s => s.info?.cli?.[h]?.found === false);
-  if (off) return `${harnessName(h)} è spento nelle impostazioni.`;
-  if (missing) return `La CLI di ${harnessName(h)} non è installata.`;
+/** Why the Regia cannot move to an engine now (null = it can): switched off in the settings, the Regie may not use it
+ *  (a Regia is an agent itself), or its CLI missing. */
+function engineBlock(h: Harness, s: Pick<Settings, 'engineOn' | 'engines'> | undefined, cli: AppInfo['cli'] | undefined): string | null {
+  if (s && s.engineOn[h] !== true) return `${engineName(h)} è spento nelle impostazioni.`;
+  if (s && s.engines[h] !== true) return `«Le Regie possono usare ${engineName(h)}» è spento nelle impostazioni.`;
+  if (cli?.[h]?.found === false) return `La CLI di ${engineName(h)} non è installata.`;
   return null;
+}
+
+/** engineBlock for any engine, from one read of the settings and the CLI status (no hook per engine). */
+export function useEngineBlocks(): (h: Harness) => string | null {
+  const on = useApp(s => s.settings?.engineOn);
+  const regie = useApp(s => s.settings?.engines);
+  const cli = useApp(s => s.info?.cli);
+  return h => engineBlock(h, on && regie ? { engineOn: on, engines: regie } : undefined, cli);
 }
 
 export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
   chat: ChatSummary; anchor: RefObject<HTMLElement | null>; open: boolean; onClose: () => void; onRename: () => void; regia?: boolean;
 }) {
   const id = chat.id;
-  const to = otherHarness(chat.harness);
-  const block = useEngineBlock(to);
+  const to = otherEngine(chat.harness);
+  const blockOf = useEngineBlocks();
+  const block = to ? blockOf(to) : null;
   const next = useContinuedBy(chat);
+  const seen = useModelsSeen(open);
   const pick = (fn: () => void) => () => { fn(); onClose(); };
   const opacity = useApp(s => s.settings?.regiaOpacity ?? 100);
   const regie = useApp(s => regieIdsOf(s), sameList);
@@ -48,10 +56,14 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
           {!chat.appRegia && (
             <>
               <MenuItem onSelect={pick(() => askRenewRegia(chat.harness))} shortcut="Ctrl+Shift+R" testid={`chat-renew-${id}`}>Ricomincia da capo…</MenuItem>
-              <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
-                Cambia motore → {harnessName(to)}…
-              </MenuItem>
-              {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
+              {to && (
+                <>
+                  <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
+                    Cambia motore → {engineName(to)}…
+                  </MenuItem>
+                  {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
+                </>
+              )}
             </>
           )}
           <label className="menu-range" data-testid="regia-opacity">
@@ -63,16 +75,20 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
         </>
       )}
       <MenuLabel>Modello</MenuLabel>
-      {MODELS[chat.harness].map(m => (
+      {modelOptions(chat.harness, seen, chat.model ?? '').map(m => (
         <MenuItem key={m.id || 'default'} checked={(chat.model ?? '') === m.id} onSelect={pick(() => void setChat(id, { model: m.id }))} testid={`chat-model-${id}-${m.id || 'default'}`}>{m.label}</MenuItem>
       ))}
-      {chat.harness === 'claude' && (
+      {engineCan(chat.harness, 'effort') && (
         <>
           <MenuSep />
           <MenuLabel>Ragionamento</MenuLabel>
           {EFFORTS.map(e => (
             <MenuItem key={e} checked={chat.effort === e} onSelect={pick(() => void setChat(id, { effort: e }))} testid={`chat-effort-${id}-${e}`}>{effortLabel(e)}</MenuItem>
           ))}
+        </>
+      )}
+      {engineCan(chat.harness, 'permissionMode') && (
+        <>
           <MenuSep />
           <MenuLabel>Permessi</MenuLabel>
           {PERMISSION_MODES.map(p => (

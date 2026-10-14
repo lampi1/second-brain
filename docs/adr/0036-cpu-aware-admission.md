@@ -9,15 +9,22 @@ every cut turn, and each start is a CLI process with its MCP servers (10-25 s of
 or killed, and the user must never wait for their own messages.
 
 ## Decision
-- **A FIFO queue in main** (`chats/admission.ts`, used by `ChatManager`). Before an agent's work wakes the machine
+- **A queue in main, FIFO within two priorities** (`chats/admission.ts`, used by `ChatManager`). Before an agent's work wakes the machine
   it asks the queue: a new chat's engine (`app_create_chat`, `create(req, 'agent')`) or a message that would start a
   turn of an idle chat (`send` with `from` set: the Regia's `app_send_to_chat`, chat mail; or `resumed`: the app's own
   resume after a restart). Under the thresholds with nobody waiting it runs at once; otherwise it waits.
+- **Work chats first** (2026-10-14, the user: "hanno sempre la precedenza le chat di lavoro rispetto a quelle
+  dell'app"): the queued work of a chat on the app itself (space "Migliora l'app", or a title in an app area, `App · …`
+  / `Pers · App: …`: `isAppChat` in `brain/routing.ts`, the same `APP_AREAS` as the routing) waits behind every other
+  chat's queued work; within each group the order of arrival holds. It applies only while something waits (the machine
+  over the thresholds): with the PC free an app chat starts at once, and there is no cap on how many app chats run
+  together (the user chose "solo in coda", 2026-10-14: a cap would hold app chats back on an idle PC). Nothing running
+  is paused; a key already waiting keeps its later messages in its entry and its place.
 - **Load, zero tokens, no dependency:** CPU busy % from `os.cpus()` deltas sampled every 2 s, averaged over the last
   3 intervals (~6 s); free RAM from `os.freemem()/os.totalmem()`. Over = CPU > `loadQueueCpu` (default 75 %) or free
   RAM < `loadQueueRam` (default 15 %). `SB_LOAD_FORCE="cpu,freeRam"` fixes the load (e2e).
 - **Admission with hysteresis:** while something waits, a sample every 2 s; two samples in a row under admit the head,
-  one per sample, then the count restarts (the started engine needs seconds to show in the load). A chat already
+  one per sample (work chats first), then the count restarts (the started engine needs seconds to show in the load). A chat already
   waiting keeps its later messages behind its one entry, in order.
 - **Never waits:** the user's own messages and chats (IPC `chat:send`/`chat:create`); a message to a chat in the middle
   of a turn (it joins the running work); the Regia's wake-ups and command results (`regia-wake.ts`, `run/results.ts`:

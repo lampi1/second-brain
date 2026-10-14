@@ -5,7 +5,9 @@
 // - ChatMail.tick() delivers the unread mail of every app chat that is live (running, waiting, idle) through
 //   chats.send: Claude reads it within the running turn (stream-json input is injected at its next step, live
 //   2026-10-12), Cursor right after its turn (ACP runs one prompt at a time). A chat that is not live keeps its mail
-//   for the hook, a `wait` or the next look: the app never starts an engine for mail;
+//   for the hook, a `wait` or the next look: the app never starts an engine for mail; a chat whose engine was released
+//   for idleness gets it (its engine resumes), unless the Regie may not use that engine (engines/policy.ts): then it
+//   waits, unread, until the user resumes the chat;
 // - sendMail() is `inbox.mjs send` for the send_to_chat tool every chat gets on its own MCP endpoint (wiring.ts): same
 //   files, same log, same hop limit and Claude <-> Cursor switch, no Bash command
 //   (the auto-mode classifier sometimes blocked `inbox.mjs send`, 12/10);
@@ -19,7 +21,9 @@ import crypto from 'node:crypto';
 import type { ChatSummary, Harness } from '../../shared/contract';
 import { log, errText } from '../log';
 import { MAIL_WAITS } from './admission';
+import { AgentMayNotWake } from '../engines/policy';
 import { regiaOfChat } from '../../shared/regia';
+import { engineOf } from '../engines/registry';
 
 export const MAX_HOPS = 6; // as inbox.mjs: a thread of replies longer than this is refused (no endless ping-pong)
 export const MAX_SENDS_PER_MINUTE = 6; // send_to_chat of one chat: a message that says "forward me to everyone" stops here
@@ -130,17 +134,18 @@ export function noteHarness(dir: string, box: string, harness: Harness): void {
 
 export class MailError extends Error {}
 
-/** `inbox.mjs send` for the app's send_to_chat tool. crossHarness = the user's "Messaggi tra Claude e Cursor" switch. */
+/** `inbox.mjs send` for the app's send_to_chat tool. refusal = engines/policy.ts crossRefusal on the user's settings. */
 /** chain = the thread of the mail the sender received just before (ChatMail.chainOf): a send without reply_to
  *  continues it, so "forward this to everyone" cannot restart the hop count at 1 forever. */
-export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; replyTo?: string; chain?: { thread: string; hop: number } | null; crossHarness: boolean; now?: Date }): MailMsg | null {
+export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; replyTo?: string; chain?: { thread: string; hop: number } | null; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
   const text = o.text.trim();
   if (!text) throw new MailError('messaggio vuoto');
   if (/^NO_REPLY$/.test(text)) { appendLog(dir, { action: 'no-reply', from: o.from, to: o.to, replyTo: o.replyTo ?? null }); return null; }
   const toH = o.toHarness;
-  if (toH && toH !== 'app' && toH !== o.fromHarness && !o.crossHarness) {
+  const refused = toH && toH !== 'app' && toH !== o.fromHarness ? o.refusal(o.fromHarness, toH) : null;
+  if (refused) {
     appendLog(dir, { action: 'blocked', from: o.from, to: o.to, fromHarness: o.fromHarness, toHarness: toH });
-    throw new MailError('messaggio bloccato: i messaggi tra chat Claude e chat Cursor sono spenti (impostazione "Messaggi tra Claude e Cursor"). Non riprovare: dillo alla Regia o all’utente.');
+    throw new MailError(`messaggio bloccato: ${refused}. Non riprovare: dillo alla Regia o all’utente.`);
   }
   let thread: string | undefined, hop = 1;
   if (o.replyTo) {
@@ -284,7 +289,7 @@ export class ChatMail {
         noteHarness(dir, box, chat.harness);
         // Cursor queues a message sent during a turn in memory, and Stop or the process's end drops that queue: it gets
         // mail only between turns (Claude's CLI keeps it in its own input)
-        if (chat.harness === 'cursor' && chat.state !== 'idle') continue;
+        if (engineOf(chat.harness)?.kind === 'acp' && chat.state !== 'idle') continue;
         const waiting = unread(dir, box);
         if (!waiting.length) continue;
         if (this.regiaHolds(chat, waiting.map(u => u.msg), now)) continue;
@@ -301,6 +306,8 @@ export class ChatMail {
           undo();
           // the machine is busy (CPU queue, ADR 0036): retried on the next check, no warning each time
           if (errText(e) === MAIL_WAITS) { log.debug('mail', 'mail held: the machine is busy', { chat: chat.id }); continue; }
+          // a stopped chat on an engine the Regie may not use: an agent's mail never wakes it, it waits for the user
+          if (e instanceof AgentMayNotWake) { log.debug('mail', 'mail held: the chat is stopped and the Regie may not use its engine', { chat: chat.id }); continue; }
           log.warn('mail', 'mail not delivered: left unread', { chat: chat.id, cause: errText(e), hint: 'the chat closed or failed to start; the hook or a wait delivers it later' });
         }
       }
@@ -322,7 +329,10 @@ export class ChatMail {
 export interface MailToolDeps {
   root: () => string | null;
   chats: () => ChatSummary[];
-  crossHarness: () => boolean;
+  /** why a chat on `from` may not write to one on `to` (engines/policy.ts crossRefusal), null = it may */
+  crossRefusal: (from: Harness, to: Harness) => string | null;
+  /** may an agent's mail wake a stopped chat on this engine (engines/policy.ts agentsMayOpen); absent = yes */
+  agentsMayOpen?: (h: Harness) => boolean;
   /** deliver now (ChatMail.tick): the message reaches a live chat without waiting for the next round */
   deliver: () => void;
   /** ChatMail.chainOf: the thread a send without reply_to continues */
@@ -363,14 +373,16 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         if (box === slug(from.title)) throw new MailError('è la tua stessa chat');
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
-        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), crossHarness: d.crossHarness() });
+        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
         sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';
         log.info('mail', 'chat sent mail', { chat: from.id, data: { to: msg.to, id: msg.id, hop: msg.hop } });
         d.deliver();
         const live = target && LIVE.has(target.state);
         const wait = target && live && isRegiaChat(target) && target.state === 'idle' ? regiaWait(text) : 0;
+        const asleep = target && live && target.state === 'idle' && d.agentsMayOpen?.(target.harness) === false;
         const when = !live ? 'la chat non è attiva nell’app: lo riceve a fine del suo prossimo turno o con il suo wait'
+          : asleep ? `se la chat è ferma lo riceve solo quando l’utente la riprende (le Regie non possono usare ${engineOf(target.harness)?.label ?? target.harness})`
           : wait === REGIA_HOLD_MS ? 'la Regia è ferma e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra 30 minuti'
             : wait ? 'la Regia è ferma: l’app glielo consegna entro un minuto, insieme alle altre novità' : 'l’app glielo consegna adesso';
         return `inviato a "${msg.to}" (id ${msg.id}${msg.hop > 1 ? `, risposta ${msg.hop}/${MAX_HOPS}` : ''}): ${when}`;

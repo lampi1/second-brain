@@ -5,10 +5,11 @@
 // dedicated work chat ("Idea · <titolo>", "Errore · <tipo>", "Procedura · <titolo>": a chat that follows the
 // procedure), editable, created with Ctrl+Invio. After either, the topic shows "Discussa" with a link to the chat.
 // The app passes the Regia and chat actions through DiscussBridge (BrainPage prop → context); without it (the
-// standalone test route) the draft is sent from an inline box and the chat is created through 'chat:create'.
+// standalone test route) the draft is sent from an inline box and the chat is created through 'chat:createRouted'.
 // The idea's state in ideas.md is never changed here. Used by pages/Idee.tsx, Qualita.tsx, Costi.tsx, Confronto.tsx,
 // Procedure.tsx and components/Charts.tsx.
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { RoutedNewChat } from '@shared/contract';
 import { brainClient } from '../api';
 import { normFile } from '../types';
 import { fmt } from '../lib/format';
@@ -19,14 +20,17 @@ import {
 import { useAppChats } from './Composer';
 import { toast, useEsc } from './ui';
 
+/** What a record tells the routing table about its chat: the kind of work, the area, the text the kind is read from. */
+export type ChatRoute = Pick<RoutedNewChat, 'kind' | 'area' | 'routeText'>;
+
 /** What the app does for the brain pages (actions.ts builds it). */
 export interface DiscussBridge {
   /** Open the Regia next to the page with `text` as a draft in its input, not sent. `onSent` runs when the user sends
    *  it. False when no Regia is open. */
   draftToRegia(text: string, onSent: (chat: { id: string; title: string }) => void): boolean;
   /** Create a work chat that starts with `prompt` (in `opts.cwd`, else the brain folder) and say so with a toast; null
-   *  when it was not created. */
-  newChat(title: string, prompt: string, opts?: { cwd?: string }): Promise<{ id: string; title: string } | null>;
+   *  when it was not created. The routing table picks its engine, model and effort (ADR 0032), with what `opts.route` says. */
+  newChat(title: string, prompt: string, opts?: { cwd?: string; route?: ChatRoute }): Promise<{ id: string; title: string } | null>;
   /** Bring a chat on screen (the Regia docks next to the page). */
   showChat(chatId: string): void;
 }
@@ -189,11 +193,12 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
 /** The local calendar day of a time (not the UTC one: 01:00 in Rome is still today). */
 const localDay = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-/** Without the app's bridge: the chat is created in the brain folder through 'chat:create'. */
+/** Without the app's bridge: the chat is created in the brain folder through 'chat:createRouted'. */
 async function createDirect(title: string, prompt: string): Promise<{ id: string; title: string } | null> {
   const info = await window.sb.invoke('app:info', undefined).catch(() => null);
   const cwd = info?.brainRoot;
   if (!cwd) return null;
-  const c = await window.sb.invoke('chat:create', { harness: 'claude', cwd, title, prompt });
+  // through the routing table too (ADR 0032); no row: Claude with its default model, as before
+  const c = await window.sb.invoke('chat:createRouted', { title, prompt, cwd, defaults: { harness: 'claude' } });
   return { id: c.id, title: c.title };
 }

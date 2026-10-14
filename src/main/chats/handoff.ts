@@ -14,6 +14,7 @@ import path from 'node:path';
 import type { ChatItem, ChatSummary, HandoffInfo } from '../../shared/contract';
 import { errText, log } from '../log';
 import { cut } from './session';
+import { engineLabel } from '../engines/registry';
 
 export const HANDOFF_START = '<<<PASSAGGIO';
 export const HANDOFF_END = 'PASSAGGIO>>>';
@@ -89,7 +90,7 @@ export function autoHandoff(chat: Pick<ChatSummary, 'title' | 'cwd' | 'harness' 
     '> non ci sono: se servono, leggile nella chat precedente.',
     '',
     '## Stato',
-    `Chat «${chat.title}» (${chat.harness === 'cursor' ? 'Cursor' : 'Claude'}) nella cartella ${chat.cwd}.`,
+    `Chat «${chat.title}» (${engineLabel(chat.harness)}) nella cartella ${chat.cwd}.`,
     ...(lastA ? ['Ultima risposta:', ...quote(cut(lastA.text, 1200))] : chat.lastText ? [`Ultima riga: ${chat.lastText}`] : []),
     '',
     '## Richiesta iniziale',

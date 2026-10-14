@@ -1,14 +1,15 @@
 // The top bar: brand, back/forward (Alt+←/→) and the recent places, the Regia button (RegiaOverlay.tsx, Ctrl+R), search/palette trigger (Ctrl+K), view toggle
 // Mosaico/Corsie (Ctrl+Shift+V), "Nascondi browser" (Ctrl+Shift+B: browser tiles off, the tabs keep working), "Credenziali" (CredentialsDialog.tsx), the
-// "Domande in finestra" switch, the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status (Claude/Cursor found,
+// "Domande in finestra" switch, the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status (each engine's CLI found,
 // version, login, "Accedi"), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi dopo" is on, "Da rispondere":
 // the queue's counter, it opens the queue, lib/later.ts), "＋ Nuova chat" (Ctrl+N), "■ Ferma tutto"
 // (confirm only with >1 running), the notification bell (Ctrl+Shift+N) and the settings menu. Used by App.tsx.
 // On a bar too full for its width (useFit) the labels go first, then the lesser actions move to a "…" menu; the bell and
 // the settings sit in an end group that never shrinks, so they stay on screen at any width (2026-10-13).
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import type { CliStatus, Harness } from '@shared/contract';
+import type { CliStatus, EngineInfo } from '@shared/contract';
 import { useNow } from '../lib/clock';
+import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, setSetting, useApp } from '../store/store';
 import { EVERY_CHOICES, refreshDevops } from '../store/devops';
@@ -23,8 +24,7 @@ import { UsageBar } from './UsageBar';
 import { StatoButton } from './RegiaOverlay';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover, Segmented } from './ui';
 
-function CliRow({ harness, st }: { harness: Harness; st: CliStatus | undefined }) {
-  const name = harness === 'claude' ? 'Claude Code' : 'Cursor';
+function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
   const ok = !!st?.found && st.loggedIn !== false;
   return (
     <div className="cli-row" data-testid={`cli-${harness}`}>
@@ -43,14 +43,19 @@ function CliRow({ harness, st }: { harness: Harness; st: CliStatus | undefined }
 
 function CliStatusButton() {
   const cli = useApp(s => s.info?.cli ?? null);
+  const engines = useEngines();
+  const on = useApp(s => s.settings?.engineOn);
+  // on the bar only the engines that are on (Kimi, Gemini and the brain's ship off: they would only widen it); the
+  // menu lists every engine
+  const shown = engines.filter(e => on?.[e.id] === true && e.trusted);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const bad = cli ? [cli.claude, cli.cursor].some(c => c.found && c.loggedIn === false) : false;
+  const bad = shown.some(e => { const c = cli?.[e.id]; return !!c?.found && c.loggedIn === false; });
   const label = !cli ? 'CLI: controllo in corso' : bad ? 'CLI: serve un accesso' : 'CLI pronte';
   return (
     <>
       <button ref={ref} type="button" className={`cli-btn ${bad ? 'bad' : ''}`} onClick={() => setOpen(o => !o)} aria-label={label} data-tip={label} aria-expanded={open} data-testid="cli-status">
-        {(['claude', 'cursor'] as Harness[]).map(h => {
+        {shown.map(({ id: h }) => {
           const st = cli?.[h];
           return (
             <span key={h} className="cli-mark">
@@ -62,8 +67,7 @@ function CliStatusButton() {
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="cli-pop" width={320}>
         <MenuLabel>Le CLI che l'app usa (ognuna con il tuo accesso)</MenuLabel>
-        <CliRow harness="claude" st={cli?.claude} />
-        <CliRow harness="cursor" st={cli?.cursor} />
+        {engines.map(e => <CliRow key={e.id} engine={e} st={cli?.[e.id]} />)}
         <p className="menu-note">L'app non vede mai le tue credenziali: «Accedi» apre il login ufficiale in un terminale.</p>
       </Popover>
     </>
@@ -91,7 +95,7 @@ function SettingsButton() {
         <MenuSep />
         <MenuSep />
         <MenuLabel>Chat</MenuLabel>
-        <MenuItem checked={cross} onSelect={() => { setOpen(false); void setSetting({ messaging: { crossHarness: !cross } }); }} testid="settings-cross-harness">Messaggi tra Claude e Cursor</MenuItem>
+        <MenuItem checked={cross} onSelect={() => { setOpen(false); void setSetting({ messaging: { crossHarness: !cross } }); }} testid="settings-cross-harness">Chat tra motori diversi</MenuItem>
         <MenuSep />
         <MenuLabel>DevOps (zero token)</MenuLabel>
         <MenuItem checked={dvOn} onSelect={() => { setOpen(false); void setSetting({ devops: { enabled: !dvOn } }); }} testid="settings-devops-auto">Aggiornamento automatico</MenuItem>

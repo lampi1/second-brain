@@ -7,11 +7,12 @@
 // reopens), the chats' git branches and the brain's markdown files, grouped by kind with snippet and date, after the
 // quick matches above. Used by App.tsx.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Harness, SearchHit, SearchResult } from '@shared/contract';
+import type { SearchHit, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { chatName } from '@shared/regia';
 import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
+import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
 import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPair, setPrefs, setRegiaOpen, toggleView, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
@@ -28,9 +29,6 @@ import {
   IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
-
-const ENGINE: Record<Harness, string> = { claude: 'Claude Code', cursor: 'Cursor' };
-const other = (h: Harness): Harness => (h === 'claude' ? 'cursor' : 'claude');
 
 interface Cmd {
   id: string; group: string; title: string; sub?: string; shortcut?: string; icon: ReactNode; run: () => void; text?: string;
@@ -56,8 +54,8 @@ function buildCommands(): Cmd[] {
     if (!c || u.hidden.includes(id) || c.closedAt) continue;
     const st = stateInfo(c);
     out.push({
-      id: `chat:${id}`, group: 'Chat', title: chatName(c), sub: `${ENGINE[c.harness]} · ${st.label} · ${folderName(c.cwd)}${c.lastText ? ` · ${c.lastText}` : ''}`,
-      icon: <HarnessMark harness={c.harness} regia={c.isRegia} size={18} />, run: () => focusChat(id), text: `${c.title} ${ENGINE[c.harness]} ${c.cwd} ${c.lastText}`,
+      id: `chat:${id}`, group: 'Chat', title: chatName(c), sub: `${engineName(c.harness)} · ${st.label} · ${folderName(c.cwd)}${c.lastText ? ` · ${c.lastText}` : ''}`,
+      icon: <HarnessMark harness={c.harness} regia={c.isRegia} size={18} />, run: () => focusChat(id), text: `${c.title} ${engineName(c.harness)} ${c.cwd} ${c.lastText}`,
     });
   }
   for (const c of closedChats(s.chats)) {
@@ -67,6 +65,7 @@ function buildCommands(): Cmd[] {
     });
   }
   for (const t of s.tabs) {
+    if (u.hiddenTabs.includes(t.id)) continue;
     const owner = t.ownerChatId ? s.chats[t.ownerChatId]?.title : null;
     out.push({
       id: `tab:${t.id}`, group: 'Browser', title: t.title || t.url, sub: owner ? `guidato da ${owner} · ${t.url}` : t.url, icon: <IconGlobe />, text: `${t.title} ${t.url} ${owner ?? ''}`,
@@ -77,6 +76,7 @@ function buildCommands(): Cmd[] {
   // the Regia of the tab shown in the overlay (ADR 0021)
   const rid = regiaId();
   const regia = rid ? s.chats[rid] : undefined;
+  const to = regia && otherEngine(regia.harness);
   const actions: Omit<Cmd, 'group'>[] = [
     { id: 'stato', title: 'Stato: a che punto siamo', sub: 'chat, domande in attesa, rami e le tue PR, senza token', shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: 'Prossima cosa che ti aspetta', shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
@@ -86,12 +86,12 @@ function buildCommands(): Cmd[] {
     { id: 'view', title: view === 'mosaico' ? 'Passa alla vista Corsie' : 'Passa alla vista Mosaico', shortcut: 'Ctrl+Shift+V', icon: view === 'mosaico' ? <IconColumns /> : <IconGrid />, run: toggleView },
     { id: 'focus', title: u.focusMode ? 'Esci dalla modalità focus' : 'Modalità focus sulla chat selezionata', shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
     { id: 'max', title: 'Ingrandisci / ripristina la tessera selezionata', shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
-    { id: 'regia', title: 'Vai alla Regia', sub: regia ? `su ${ENGINE[regia.harness]}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
+    { id: 'regia', title: 'Vai alla Regia', sub: regia ? `su ${engineName(regia.harness)}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
     ...(regia ? [
       { id: 'regiaclear', title: `Regia: pulisci «${regia.title}»`, sub: 'riparte vuota dalla memoria, la conversazione resta tra le chat chiuse', icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera regia' },
       { id: 'regianew', title: 'Nuova Regia', sub: 'una tab in più, es. «App»', icon: <IconPlus />, run: openNewRegia },
-      { id: 'regiarenew', title: 'Regia: ricomincia da capo', sub: `nuova Regia su ${ENGINE[regia.harness]}, la vecchia resta tra le chat`, shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
-      { id: 'regiaengine', title: `Regia: passa a ${ENGINE[other(regia.harness)]}`, sub: `cambia motore, la Regia su ${ENGINE[regia.harness]} resta tra le chat`, icon: <HarnessMark harness={other(regia.harness)} size={18} />, run: () => askRenewRegia(other(regia.harness)) },
+      { id: 'regiarenew', title: 'Regia: ricomincia da capo', sub: `nuova Regia su ${engineName(regia.harness)}, la vecchia resta tra le chat`, shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
+      ...(to ? [{ id: 'regiaengine', title: `Regia: passa a ${engineName(to)}`, sub: `cambia motore, la Regia su ${engineName(regia.harness)} resta tra le chat`, icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
     ] : []),
     { id: 'qwin', title: questionsModalOn(s) ? 'Domande in finestra: spegni' : 'Domande in finestra: accendi',
       sub: questionsModalOn(s) ? 'ora le domande compaiono in primo piano, una alla volta' : 'ora le domande restano nelle chat e nella Regia',

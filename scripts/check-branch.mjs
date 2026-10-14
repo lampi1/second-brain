@@ -1,6 +1,7 @@
 // `npm run check:branch`, the light check of a branch (ADR 0027): typecheck, lint of the changed files, the unit tests
 // related to the changes (vitest --changed against the merge base with main) and only the e2e specs that touch the
-// changed area (mapped below; a small smoke set when nothing maps; never the whole e2e). Green on a clean tree, it
+// changed area (mapped below; a small smoke set when nothing maps; never the whole e2e), plus the publish guard on the
+// changed files (test/unit/publish-guard.test.ts with SB_GUARD_FILES). Green on a clean tree, it
 // records the tip as "tested (light)" through scripts/check-pass.mjs --kind light. The full `npm run check` stays the
 // gate of main and of `npm run promote`: a branch needs only this one to be merged. Used by package.json
 // "check:branch"; changedSpecs() is unit-tested in test/unit/check-branch.test.ts.
@@ -98,8 +99,8 @@ function main() {
   if (branch === mainRef) { console.log(`check:branch is for branches: on ${mainRef} run the full \`npm run check\``); process.exit(1); }
   const base = git('merge-base', 'HEAD', mainRef);
   const changed = [...new Set([
-    ...git('diff', '--name-only', base).split('\n'),
-    ...git('ls-files', '--others', '--exclude-standard').split('\n'),
+    ...git('-c', 'core.quotePath=false', 'diff', '--name-only', base).split('\n'),
+    ...git('-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard').split('\n'),
   ].filter(Boolean))];
   console.log(`check:branch on ${branch} (base ${mainRef} ${base.slice(0, 7)}): ${changed.length} changed files`);
   const dir = path.join(repo, 'test', 'e2e');
@@ -115,6 +116,13 @@ function main() {
   if (lintAll) run('lint', 'npx', ['eslint', '.']);
   else if (lintable.length) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...lintable]);
   run('unit', 'npx', ['vitest', 'run', '--changed', base, '--passWithNoTests']);
+  // the product sync publishes the changed files too: the publish guard on them (seconds), so a private name blocks
+  // the branch, not main after the merge (2026-10-14); the full scan stays in `npm run check`
+  const present = changed.filter(f => fs.existsSync(f));
+  if (present.length) {
+    process.env.SB_GUARD_FILES = present.join('\n');
+    run('publish guard', 'npx', ['vitest', 'run', 'test/unit/publish-guard.test.ts']);
+  }
   if (plan.specs.length) {
     run('build', 'node', ['scripts/build.mjs']);
     run('e2e', 'node', ['scripts/e2e.mjs', ...plan.specs.map(s => `test/e2e/${s}`)]);

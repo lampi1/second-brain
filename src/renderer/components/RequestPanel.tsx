@@ -14,21 +14,28 @@
 // in the chat's own tile, open in a work chat's Regia card and in the questions window (`ctxOpen`).
 // With `onLater` a "Rispondi dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
+// The questions window has its own size (`window`, ADR 0049): the question large on top, two lines of why, a text to
+// approve as a document, the options as large cards (the recommended one marked by color, border and a label), the
+// keys in the window's footer.
 // Used by NeedsLane, ChatTile, RegiaTile, OverlayApp, QuestionsWindow.
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { explainTool } from '@shared/explain';
-import type { Answer, Harness, PendingRequest } from '@shared/contract';
+import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
 import { answerText, cleanDescription, cleanLabel, confirmPicks, initialDraft, markedRecommended, PERMISSION_OPTIONS, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
 import { useNow } from '../lib/clock';
-import { answer } from '../store/store';
+import { engineOf } from '../lib/engines';
+import { answer, app } from '../store/store';
 import { claimFocus, focusChat, reqKey } from '../actions';
 import { CommandRequest, type CommandHandlers } from './CommandRequest';
 import { AskContext } from './AskContext';
+import { qwinStats } from '../lib/questions';
+import { withoutImages } from '../lib/askImages';
 import { HarnessMark, IconCheck, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
 
-type Variant = 'lane' | 'tile' | 'regia' | 'compact';
+type Variant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
 
 /** The raw command of a permission: its first line, the rest unfolded with a click (never hidden: the user approves it). */
 function RawCommand({ raw, testBase, onToggle }: { raw: string; testBase: string; onToggle: () => void }) {
@@ -48,7 +55,10 @@ function RawCommand({ raw, testBase, onToggle }: { raw: string; testBase: string
 }
 
 type PanelProps = {
-  req: PendingRequest; variant: Variant; chatTitle?: string; harness?: Harness; onAnswered?: () => void; onAnswer?: (a: Answer) => void; onEscape?: () => void; testid?: string;
+  req: PendingRequest; variant: Variant; chatTitle?: string; harness?: Harness;
+  /** the chat's engine when this page has no app:info (the global layer); else looked up by harness */
+  engine?: EngineInfo | null;
+  onAnswered?: () => void; onAnswer?: (a: Answer) => void; onEscape?: () => void; testid?: string;
   /** a command card's actions through someone else (the global layer) */
   command?: Omit<CommandHandlers, 'onEscape'>;
   /** the asking chat's commands of this turn (code blocks with "Esegui"), below the choices */
@@ -57,6 +67,8 @@ type PanelProps = {
   ctxOpen?: boolean;
   /** "Rispondi dopo": a button that sets the request aside without answering */
   onLater?: () => void;
+  /** where the questions window wants a question's keys (its footer): written here, for the step shown */
+  keysTo?: HTMLElement | null;
 };
 
 /** onAnswer: answer through someone else (the global layer relays to the app page); onEscape: what Esc does instead of
@@ -69,27 +81,38 @@ export function RequestPanel(p: PanelProps) {
   return <CommandRequest req={p.req} variant={p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;
 }
 
-function AskPanel({ req, variant, chatTitle, harness = 'claude', onAnswered, onAnswer, onEscape, onLater, testid, commands, ctxOpen }: {
-  req: PendingRequest; variant: Variant; chatTitle?: string; harness?: Harness; onAnswered?: () => void; onAnswer?: (a: Answer) => void; onEscape?: () => void; testid?: string;
+/** A half-given answer (a step of several, a free text being written) per request: it survives the panel going away
+ *  while the request still waits (the questions window shows another one first: "Altre in attesa", ADR 0044). */
+const drafts = new Map<string, { draft: Draft; other: string | null }>();
+
+function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswered, onAnswer, onEscape, onLater, testid, commands, ctxOpen, keysTo }: {
+  req: PendingRequest; variant: Variant; chatTitle?: string; harness?: Harness; engine?: EngineInfo | null; onAnswered?: () => void; onAnswer?: (a: Answer) => void; onEscape?: () => void; testid?: string;
   /** the asking chat's commands of this turn (code blocks with "Esegui"), below the choices */
   commands?: ReactNode;
   /** the context block starts open (default: folded) */
   ctxOpen?: boolean;
   onLater?: () => void;
+  keysTo?: HTMLElement | null;
 }) {
-  const [draft, setDraft] = useState<Draft>(() => initialDraft(req));
+  const key = reqKey(req);
+  const eng = engine ?? engineOf(harness);
+  const [draft, setDraft] = useState<Draft>(() => drafts.get(key)?.draft ?? initialDraft(req));
   const [sent, setSent] = useState(false);
-  const [other, setOther] = useState<string | null>(null);
+  const [other, setOther] = useState<string | null>(() => drafts.get(key)?.other ?? null);
+  useEffect(() => {
+    if (sent) drafts.delete(key); else drafts.set(key, { draft, other });
+  }, [key, draft, other, sent]);
+  // gone with the request (answered elsewhere, the chat stopped): nothing kept
+  useEffect(() => () => { if (!app.get().pending.some(p => reqKey(p) === key)) drafts.delete(key); }, [key]);
   const ref = useRef<HTMLDivElement>(null);
   const now = useNow(15_000);
-  const key = reqKey(req);
   // Ctrl+J asked for this card before it was drawn: the keyboard comes here as it mounts (actions.ts claimFocus)
   useLayoutEffect(() => { if (claimFocus(key)) ref.current?.focus({ preventScroll: true }); }, [key]);
   const q = req.questions?.[draft.step];
   const testBase = testid ?? (variant === 'lane' ? `lane-card-${req.chatId}-${req.id}` : `request-${req.chatId}-${req.id}`);
   const isPerm = req.type === 'permission';
   // free text on every question; Cursor gets it as a skip with the text as the reason (its ACP answer has room only
-  // for option ids: cursor.ts freeTextReason), so the box says so
+  // for option ids: acp.ts freeTextReason), so the box says so
   const canOther = !isPerm && !!q;
   const otherKey = q && q.options.length < 9 ? String(q.options.length + 1) : null;
 
@@ -150,7 +173,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', onAnswered, onA
   // the raw part: the command (or path, url) first, then the detail lines that say something more (reason, path)
   const rawFull = isPerm ? [ex?.raw ?? '', ...req.detail.split('\n').filter(l => l.trim() && !(ex?.raw ?? '').includes(l.trim()) && l.trim().toLowerCase() !== ex?.line.toLowerCase())].filter(Boolean).join('\n') : '';
   const age = ago(req.at, now);
-  const title = isPerm ? (ex?.line ?? req.title) : (q?.question ?? req.title);
+  // a question's markdown images show as thumbnails (AskImages.tsx), never as ![](…) in the title
+  const title = isPerm ? (ex?.line ?? req.title) : withoutImages(q?.question ?? req.title);
   const total = req.questions?.length ?? 0;
   const stepBadge = total > 1 ? <span className="step" data-testid={`${testBase}-step`}>{draft.step + 1} di {total}</span> : null;
   const recIdx = q ? markedRecommended(q.options) : -1;
@@ -168,7 +192,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', onAnswered, onA
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendOther(); }
           if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOther(); }
         }} />
-      {harness === 'cursor' && !compact && <div className="other-note" data-testid={`${testBase}-other-note`}>Cursor la riceve come risposta scritta da te, al posto delle opzioni.</div>}
+      {eng?.kind === 'acp' && !compact && <div className="other-note" data-testid={`${testBase}-other-note`}>{`${eng.label} la riceve come risposta scritta da te, al posto delle opzioni.`}</div>}
       <div className="other-actions">
         <span className="other-hint"><Kbd>Invio</Kbd> invia · <Kbd>Esc</Kbd> torna alle scelte</span>
         <span className="sp" />
@@ -222,6 +246,73 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', onAnswered, onA
       </>
     );
   };
+
+  // ---------- the questions window (ADR 0049): one page, read top to bottom
+  if (variant === 'window') {
+    qwinStats.cardRenders++;
+    const kicker = isPerm ? `Permesso · ${toolLabel(req.tool)}` : (q?.header ?? 'Domanda');
+    return (
+      <div {...common} className={`wq ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
+        {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd> scegli <Kbd>↑</Kbd><Kbd>↓</Kbd> muovi <Kbd>Invio</Kbd> conferma</>, keysTo)}
+        <div className="wq-kicker">
+          {isPerm ? <IconShield size={13} /> : <IconQuestion size={13} />}
+          <span data-testid={isPerm ? undefined : `${testBase}-header`}>{kicker}</span>
+          {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>domanda {draft.step + 1} di {total}</span>}
+          {q?.multiSelect && <span className="wq-step">più scelte</span>}
+        </div>
+        <h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{title}</h2>
+        <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} layout="window" />
+        {isPerm ? (
+          <>
+            {/* the whole command, wrapped: it is what the user approves */}
+            {rawFull && <pre className="ask-cmd wq-raw" data-testid={`${testBase}-raw`}>{rawFull}</pre>}
+            <div className="wq-perm">
+              <button type="button" className="btn btn-primary btn-l" onClick={() => finish(permissionAnswer(0))} disabled={sent} data-testid={`${testBase}-opt-1`}>Consenti <Kbd>Invio</Kbd></button>
+              {!req.noAlways && (
+                <button type="button" className="btn btn-ghost btn-l" onClick={() => finish(permissionAnswer(1))} disabled={sent} data-testid={`${testBase}-opt-2`}
+                  data-tip={req.alwaysRules?.length ? `Per questa sessione: ${req.alwaysRules.join(', ')}` : 'Per questa sessione'}>Consenti sempre <Kbd>2</Kbd></button>
+              )}
+              <span className="sp" />
+              <button type="button" className="btn btn-danger btn-l" onClick={() => finish(permissionAnswer(2))} disabled={sent} data-testid={`${testBase}-opt-3`}>Rifiuta <Kbd>3</Kbd></button>
+            </div>
+          </>
+        ) : q ? (
+          <>
+            {commands && <div className="wq-cmds"><div className="wq-label">Comandi che la chat ti propone</div>{commands}</div>}
+            <div className="wq-opts" role={q.multiSelect ? 'group' : undefined}>
+              {q.options.map((o, i) => {
+                const picked = draft.picks.includes(i);
+                const desc = o.description ? cleanDescription(withoutImages(o.description)) : '';
+                return (
+                  <button key={i} type="button" className={`wq-opt ${i === recIdx ? 'rec' : ''} ${picked ? 'picked' : ''} ${i === draft.cursor ? 'cur' : ''}`}
+                    onClick={() => apply(pickOption(req, draft, i))} disabled={sent} role={q.multiSelect ? 'checkbox' : undefined} aria-checked={q.multiSelect ? picked : undefined} data-testid={`${testBase}-opt-${i + 1}`}>
+                    <span className="wq-key" aria-hidden="true">{q.multiSelect && picked ? <IconCheck size={13} /> : i + 1}</span>
+                    <span className="wq-opt-text">
+                      <span className="wq-opt-label">{cleanLabel(o.label)}</span>
+                      {desc && <span className="wq-opt-desc">{desc}</span>}
+                    </span>
+                    {i === recIdx && <span className="wq-rec">Consigliata</span>}
+                  </button>
+                );
+              })}
+              {canOther && (other === null ? (
+                <button type="button" className="wq-opt wq-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>
+                  <span className="wq-key" aria-hidden="true">{otherKey ?? '…'}</span>
+                  <span className="wq-opt-text"><span className="wq-opt-label">Rispondi a parole tue…</span></span>
+                </button>
+              ) : otherBox(false))}
+            </div>
+            {q.multiSelect && (
+              <div className="wq-confirm">
+                <span className="wq-count" data-testid={`${testBase}-count`}>{draft.picks.length === 0 ? 'Nessuna scelta' : draft.picks.length === 1 ? '1 scelta' : `${draft.picks.length} scelte`}</span>
+                <button type="button" className="btn btn-primary btn-l" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>Conferma <Kbd>Invio</Kbd></button>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    );
+  }
 
   if (variant === 'lane' || variant === 'compact') {
     return (
@@ -305,7 +396,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', onAnswered, onA
                     : <Kbd>{i + 1}</Kbd>}
                   <span className="ask-opt-text">
                     <span className="ask-opt-label">{cleanLabel(o.label)}{i === recIdx && <span className="rec-tag">Consigliata</span>}</span>
-                    {o.description && cleanDescription(o.description) && <span className="ask-opt-desc">{cleanDescription(o.description)}</span>}
+                    {o.description && cleanDescription(withoutImages(o.description)) && <span className="ask-opt-desc">{cleanDescription(withoutImages(o.description))}</span>}
                   </span>
                   {q.multiSelect && <span className="ask-opt-num"><Kbd>{i + 1}</Kbd></span>}
                 </button>

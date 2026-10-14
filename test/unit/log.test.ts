@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { log, redact } from '../../src/main/log';
+import { addRedaction, log, redact } from '../../src/main/log';
 
 describe('log', () => {
   it('redacts secrets and per-chat MCP tokens', () => {
@@ -23,5 +23,15 @@ describe('log', () => {
     expect(lines.at(-2)).toMatchObject({ lvl: 'info', scope: 'test', msg: 'hello', chat: 'c1', data: { n: 1 } });
     expect(lines.at(-1)).toMatchObject({ lvl: 'error', cause: 'claude.exe not found', hint: expect.stringContaining('SB_CLAUDE_PATH') });
     expect(log.recent.at(-1)?.msg).toBe('boom');
+  });
+});
+
+describe('log redaction of known values', () => {
+  it('hides a value added at run time, raw and JSON-escaped; ignores short ones', () => {
+    addRedaction('Zq9"opaque-vendor-secret');
+    expect(redact('got Zq9"opaque-vendor-secret here')).toBe('got [redacted] here');
+    expect(redact(JSON.stringify({ k: 'Zq9"opaque-vendor-secret' }))).not.toContain('opaque-vendor-secret');
+    addRedaction('short');
+    expect(redact('a short word')).toBe('a short word');
   });
 });

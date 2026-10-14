@@ -1,7 +1,11 @@
-// One Cursor chat run by the app through the user's installed Cursor CLI over ACP (ADR 0010: the only external
-// engine; its chats spend only Cursor credits). Protocol: Agent Client Protocol, JSON-RPC 2.0, one JSON per line on
-// stdio (https://agentclientprotocol.com, https://cursor.com/docs/cli/acp; shapes checked against the bundled ACP code
-// of CLI 2026.07.23):
+// One chat run by the app through an ACP CLI the user installed (ADR 0010, ADR 0046: one adapter for every ACP engine,
+// Cursor `agent acp`, Kimi `kimi acp`, Gemini `gemini --acp`…; each chat spends only that engine's credits). The engine
+// comes in the options (engineId, label, args, modelFlag); what only Cursor has (its CURSOR_CONFIG_DIR snapshot, the
+// subagent hooks, the list-price fallback, the model options from Settings) runs only when the Cursor entry passes its
+// option (engines/sessions.ts), never by the engine's name. The cursor/* extension requests below are answered for any
+// engine (others simply never send them). Protocol: Agent Client Protocol, JSON-RPC 2.0, one JSON per line on stdio
+// (https://agentclientprotocol.com, https://cursor.com/docs/cli/acp; shapes checked against the bundled ACP code of the
+// Cursor CLI 2026.07.23):
 //   → initialize {protocolVersion:1, clientCapabilities:{fs:{readTextFile:false,writeTextFile:false},terminal:false}}
 //   → session/new {cwd, mcpServers} | session/load {sessionId, cwd, mcpServers} (resume, when loadSession is advertised)
 //   → session/prompt {sessionId, prompt:[{type:'image',mimeType,data}…, {type:'text'}]} → {stopReason, usage?} (images as
@@ -27,11 +31,11 @@
 // Network drops: Cursor ends the turn normally (end_turn, no JSON-RPC error) with its transport error as the last
 // assistant text ("Error: RetriableError: [aborted] read ECONNRESET", "[unavailable] PING timed out"; seen 2026-10-12 on
 // every Cursor chat at once, hourly). The session sends "continue" by itself, at most twice per user message (5 s,
-// then 20 s), with a visible line; still failing → it stops with a clear warning (isCursorNetError, retryNet).
-// Login: the CLI's own `agent login` (cli:login). No login → session/new fails with auth required (-32000) and the
-// chat shows "Accedi a Cursor"; the app never calls `authenticate` (it would start a browser login from a hidden
-// process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts cursorAllowed).
-// Used by manager.ts through the HarnessSession interface.
+// then 20 s), with a visible line; still failing → it stops with a clear warning (isNetError, retryNet).
+// Login: the CLI's own login (cli:login; loginCommand, e.g. `agent login`). No login → session/new fails with auth
+// required (-32000) and the chat shows "Accedi a <label>"; the app never calls `authenticate` (it would start a browser
+// login from a hidden process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts
+// engineAllowed). Used by manager.ts through the HarnessSession interface (built by engines/sessions.ts).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -39,7 +43,7 @@ import path from 'node:path';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
 import { lineDiff, resultText, shortPath } from './claude-map';
-import { CLOSE_GRACE_MS, cursorAllowed, cursorArgv, killTrees, resolveCursor, type CursorCommand } from './cli';
+import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { runSubagentHooks, userHooksFile } from './cursor-hooks';
 import { reapEnabled, reapEngine, type Root } from './proctree';
@@ -48,9 +52,22 @@ import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
 import { cut, lastLine, nextId, stripAnsi, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 
-export interface CursorOptions extends SessionOptions {
-  /** Cursor engine override (tests: a .mjs fake); default: the installed CLI (cli.ts resolveCursor) */
-  cursorPath?: string;
+export interface AcpOptions extends SessionOptions {
+  /** the engine's id (registry): the session's harness, SB_<ID>_PATH, the logs' `engine` */
+  engineId: string;
+  /** the engine's short name in every text the user reads ("Cursor", "Kimi") */
+  label: string;
+  /** the ACP command and its flags, after the model flag and extraArgs (Cursor and Kimi ['acp'], Gemini ['--acp']) */
+  args: string[];
+  /** the flag that passes the chat's model at spawn, before everything else (Cursor '--model'); absent or null = the
+   *  model is not passed on the command line */
+  modelFlag?: string | null;
+  /** the CLI's name on PATH (resolveAcp; default: the engine id) and in hints ("agent", "kimi") */
+  acpCommand?: string;
+  /** the engine's own login, named in the login help (Cursor 'agent login'); default: `<acpCommand> login`; null = none */
+  loginCommand?: string | null;
+  /** command override (tests: a .mjs fake); default: the installed CLI (cli.ts resolveAcp) */
+  pathOverride?: string;
   /** the chat's own browser MCP endpoint (passed when the agent supports http MCP) */
   mcpUrl?: string | null;
   /** the Regia only: the app-control MCP endpoint (/mcp/app: app_create_chat, app_state…), passed as second-brain-app */
@@ -59,29 +76,35 @@ export interface CursorOptions extends SessionOptions {
   appVersion?: string;
   /** show the past that session/load replays (a chat restored after an app restart has no items yet) */
   showReplay?: boolean;
-  /** the app's own Cursor config folder (CURSOR_CONFIG_DIR): a fresh copy of the user's cli-config.json and
-   *  permissions.json at every start, so whatever Cursor writes (the --model choice, its startup defaults) never
+  /** Cursor only: the app's own Cursor config folder (CURSOR_CONFIG_DIR): a fresh copy of the user's cli-config.json
+   *  and permissions.json at every start, so whatever Cursor writes (the --model choice, its startup defaults) never
    *  reaches the user's global config. Login is unaffected (auth.json lives in %APPDATA%/Cursor). */
   configDir?: string | null;
-  /** hooks file whose subagentStart/subagentStop commands the app runs (ACP never fires them): default
-   *  ~/.cursor/hooks.json, none under tests unless given */
+  /** Cursor only: run the subagentStart/subagentStop hooks of hooksFile (ACP never fires them). Default false: none */
+  subagentHooks?: boolean;
+  /** with subagentHooks, the hooks file those commands come from: default ~/.cursor/hooks.json, none under tests
+   *  unless given */
   hooksFile?: string | null;
-  /** the user's reasoning and fast for every Cursor chat (settings regiaChats.cursorReasoning/cursorFast); params the
-   *  chat's own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
+  /** Cursor only: the user's reasoning and fast for every Cursor chat (settings regiaChats.cursorReasoning/cursorFast);
+   *  params the chat's own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
   modelConfig?: { reasoning: CursorReasoning | ''; fast: boolean } | null;
-  /** waits before each automatic retry after a Cursor network error (default 5 s, 20 s: two retries); tests: short */
+  /** Cursor only: price the prompt's token usage with Cursor's list prices (cursor-prices.ts). Default false: the
+   *  cost is only what the engine reports (usage_update.cost) */
+  priceFallback?: boolean;
+  /** waits before each automatic retry after a network error (default 5 s, 20 s: two retries); tests: short */
   netRetryDelaysMs?: readonly number[];
 }
 
-/** The prompt that resumes a turn Cursor's network error cut. */
-export const NET_RETRY_PROMPT = 'Il turno si è interrotto per un errore di rete di Cursor: continua da dove eri, senza rifare quello già fatto.';
+/** The prompt that resumes a turn the engine's network error cut. */
+export const netRetryPrompt = (label: string): string =>
+  `Il turno si è interrotto per un errore di rete di ${label}: continua da dove eri, senza rifare quello già fatto.`;
 const NET_RETRY_DELAYS = [5000, 20000];
 
-/** Whether a turn's last assistant text is Cursor's transport error, not the model's words. The CLI's ACP handler
+/** Whether a turn's last assistant text is the engine's transport error, not the model's words. Cursor's ACP handler
  *  appends "\n\nError: " + String(error) (CLI 2026.07.23): the text ends with its own paragraph "Error: RetriableError: …"
  *  ("[aborted] read ECONNRESET", "[unavailable] PING timed out", "Connection stalled"…) or "Error: [unavailable] …". The
  *  error quoted inside a sentence or a longer paragraph is not one. */
-export function isCursorNetError(text: string): boolean {
+export function isNetError(text: string): boolean {
   return /(?:^|\n[ \t]*\n)[ \t]*Error: (?:RetriableError: |\[(?:aborted|unavailable|deadline_exceeded)\])[^\n]*$/.test(text.trimEnd());
 }
 
@@ -105,8 +128,8 @@ export function pinnedParams(model: string | null | undefined): Set<string> {
   return new Set((m?.[1] ?? '').split(',').map(x => x.split('=')[0]!.trim()).filter(Boolean));
 }
 
-/** The message a model change gives: the manager restarts the session with the new --model (session/load). */
-export const MODEL_RESTART = 'Cursor cambia modello riaprendo la sessione.';
+/** The message a model change gives: the manager restarts the session with the new model (session/load). */
+export const modelRestart = (label: string): string => `${label} cambia modello riaprendo la sessione.`;
 
 /** The user's Cursor CLI config folder, with the CLI's own rule: CURSOR_CONFIG_DIR → XDG_CONFIG_HOME/cursor → ~/.cursor. */
 export function cursorConfigDir(env: NodeJS.ProcessEnv): string {
@@ -133,7 +156,10 @@ const s = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
-export const AUTH_HELP = 'Accedi a Cursor: premi “Accedi a Cursor” (apre `agent login` in un terminale), completa il login e riprova.';
+/** The help a chat shows when the engine says it is not logged in. */
+export const authHelp = (label: string, loginCommand: string | null): string => (loginCommand
+  ? `Accedi a ${label}: premi “Accedi a ${label}” (apre \`${loginCommand}\` in un terminale), completa il login e riprova.`
+  : `Accedi a ${label}: salva la sua chiave API in Impostazioni → Motori, oppure accedi dentro la sua CLI, e riprova.`);
 const NOT_ACTIVE = 'La sessione non è attiva.';
 
 class RpcError extends Error {
@@ -182,8 +208,8 @@ function uniq(list: string[]): string[] {
   return list.map(x => { const n = (seen.get(x) ?? 0) + 1; seen.set(x, n); return n === 1 ? x : `${x} (${n})`; });
 }
 
-export class CursorSession implements HarnessSession {
-  readonly harness = 'cursor' as const;
+export class AcpSession implements HarnessSession {
+  readonly harness: string;
   state: ChatState = 'starting';
   sessionId: string | null;
   private proc: ChildProcessWithoutNullStreams | null = null;
@@ -204,7 +230,7 @@ export class CursorSession implements HarnessSession {
   private params: ModelParam[] = [];
   private modes: string[] = [];
   private msg: Stream | null = null;
-  private lastAnswer = '';       // the turn's last assistant message (a Cursor network error shows up there)
+  private lastAnswer = '';       // the turn's last assistant message (a network error shows up there)
   private netRetries = 0;        // automatic retries of the current user message after a network error
   private retryTimer: NodeJS.Timeout | null = null;
   private retryItemId: string | null = null;
@@ -220,10 +246,10 @@ export class CursorSession implements HarnessSession {
   private todosItemId: string | null = null;
   private context: ContextUsage | null = null;
   /** characters of the conversation seen on the wire (prompts, answers, thoughts, tool input/output, a load's replay):
-   *  the context estimate while Cursor sends no usage_update (research-cursor-cost.md: CLI 2026.07 never does) */
+   *  the context estimate while the engine sends no usage_update (research-cursor-cost.md: Cursor's CLI 2026.07 never does) */
   private chars = 0;
   private turnStart = 0;
-  private sessionCost: number | null = null;   // ACP usage_update.cost (cumulative USD), when Cursor sends it
+  private sessionCost: number | null = null;   // ACP usage_update.cost (cumulative USD), when the engine sends it
   private costAtTurnStart: number | null = null;
   private closing = false;
   private keepChildren = false;
@@ -242,9 +268,17 @@ export class CursorSession implements HarnessSession {
   /** resolves when the session is open (or failed): the manager waits for it before adding a message to a resumed chat */
   readonly ready = new Promise<void>(r => { this.readyDone = r; });
 
-  constructor(private readonly opts: CursorOptions, private readonly sink: SessionSink, private readonly command?: CursorCommand | null) {
+  constructor(private readonly opts: AcpOptions, private readonly sink: SessionSink, private readonly command?: CliCommand | null) {
+    this.harness = opts.engineId;
     this.sessionId = opts.resume ? opts.sessionId ?? null : null;
   }
+
+  private get label(): string { return this.opts.label; }
+  private get cliName(): string { return this.opts.acpCommand ?? this.opts.engineId; }
+  /** null = the engine has no login command (a key in Settings, or a login inside its CLI) */
+  private get loginCommand(): string | null { return this.opts.loginCommand === undefined ? `${this.cliName} login` : this.opts.loginCommand; }
+  /** the engine id every log line of this session carries in its data */
+  private get engine(): string { return this.opts.engineId; }
 
   get pid(): number | null { return this.proc?.pid ?? null; }
   get jobHandle(): number | null { return this.job; }
@@ -255,23 +289,27 @@ export class CursorSession implements HarnessSession {
   get alive(): boolean { return !!this.proc && !this.exited; }
   get busy(): boolean { return !this.exited && (this.prompting || !!this.retryTimer || this.queue.length > 0 || this.asks.size > 0 || this.state === 'starting'); }
 
-  /** Root flags before the `acp` command (`agent --model X acp`). */
+  /** The command line after the CLI itself: the model flag first, then extraArgs, then the ACP command
+   *  (`agent --model X acp`, `kimi acp`). */
   args(): string[] {
-    return [...(this.opts.model ? ['--model', this.opts.model] : []), ...(this.opts.extraArgs ?? []), 'acp'];
+    const flag = this.opts.modelFlag, model = this.opts.model;
+    // a model starting with '-' would be read as a flag of the CLI (manager.ts refuses it too)
+    return [...(flag && model && !model.startsWith('-') ? [flag, model] : []), ...(this.opts.extraArgs ?? []), ...this.opts.args];
   }
 
   start(): void {
-    const chat = this.opts.chatId;
-    const cmd = this.command ?? resolveCursor(this.opts.cursorPath ?? null);
-    if (!cmd) return this.fail('Cursor CLI non trovato: installa la CLI di Cursor (agent) e fai login.', 'cursor CLI not found (%LOCALAPPDATA%/cursor-agent, PATH)', 'install the Cursor CLI, run `agent login`, or set SB_CURSOR_PATH');
-    if (!cursorAllowed(cmd)) return this.fail('Nei test il motore Cursor reale non parte mai: serve il fake (SB_CURSOR_PATH=…/fake-cursor-acp.mjs).', `refused to start the real Cursor engine under tests (${cmd.display})`, 'point SB_CURSOR_PATH to test/fixtures/fake-cursor-acp.mjs');
+    const chat = this.opts.chatId, label = this.label, engine = this.engine;
+    const envName = `SB_${engine.toUpperCase().replace(/-/g, '_')}_PATH`;
+    const cmd = this.command ?? resolveAcp(engine, this.cliName, this.opts.pathOverride ?? null);
+    if (!cmd) return this.fail(`${label} CLI non trovato: installa la CLI di ${label} (${this.cliName}) e fai login.`, `${engine} CLI not found (${engine === 'cursor' ? '%LOCALAPPDATA%/cursor-agent, ' : ''}PATH)`, `install the ${label} CLI, log in (${this.loginCommand ?? 'its own login or an API key'}), or set ${envName}`);
+    if (!engineAllowed(cmd)) return this.fail(`Nei test il motore ${label} reale non parte mai: serve il fake (${envName}=…/fake-cursor-acp.mjs).`, `refused to start the real ${label} engine under tests (${cmd.display})`, `point ${envName} to test/fixtures/fake-cursor-acp.mjs`);
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
-    let argv: ReturnType<typeof cursorArgv>;
-    try { argv = cursorArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
+    let argv: ReturnType<typeof cliArgv>;
+    try { argv = cliArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
     const env: NodeJS.ProcessEnv = { ...argv.env, ...this.opts.env };
     if (this.opts.configDir) {
       try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir); } catch (e) {
-        return this.fail(`Impostazioni di Cursor non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
+        return this.fail(`Impostazioni di ${label} non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
       }
       env.CURSOR_CONFIG_DIR = this.opts.configDir;
     }
@@ -280,16 +318,16 @@ export class CursorSession implements HarnessSession {
     try {
       this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
     } catch (e) {
-      return this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'check the Cursor CLI install');
+      return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check the ${label} CLI install`);
     }
     const p = this.proc;
-    log.info('chats', 'cursor session start', { chat, data: { pid: p.pid, kind: cmd.kind, engine: cmd.display, cwd: this.opts.cwd, args: this.args() } });
+    log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: this.args() } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => this.onStdout(d));
     p.stderr.setEncoding('utf8');
-    p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'cursor stderr', { chat, data: cut(d, 500) }); });
-    p.stdin.on('error', e => log.warn('chats', 'cursor stdin error', { chat, data: errText(e) }));
-    p.on('error', e => this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'check that `agent --version` works in a terminal'));
+    p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
+    p.stdin.on('error', e => log.warn('chats', 'acp stdin error', { chat, data: { engine, error: errText(e) } }));
+    p.on('error', e => this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check that \`${this.cliName} --version\` works in a terminal`));
     p.on('close', (code: number | null) => this.onClose(code));
     // a clean exit leaves its MCP servers and shells running: kill what still descends from it ('exit', not 'close': a leftover
     // holding the inherited stdout would delay 'close' until it ends by itself)
@@ -297,7 +335,7 @@ export class CursorSession implements HarnessSession {
       this.procExited = true;
       if (!p.pid) return;
       this.exitedRoot = { pid: p.pid, created: startedAt, exited: Date.now(), job: this.job };
-      if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: 'Cursor' });
+      if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: label });
     });
     // its own job before it starts anything (MCP servers come seconds later): later children, orphans too, stay in it
     void jobGuard.add(p.pid, chat).then(job => {
@@ -315,7 +353,7 @@ export class CursorSession implements HarnessSession {
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
       }, 60000);
       this.caps = o(init.agentCapabilities);
-      log.info('chats', 'cursor initialized', { chat: this.opts.chatId, data: { protocolVersion: init.protocolVersion, loadSession: this.caps.loadSession === true, mcp: this.caps.mcpCapabilities, agent: init.agentInfo } });
+      log.info('chats', 'acp initialized', { chat: this.opts.chatId, data: { engine: this.engine, protocolVersion: init.protocolVersion, loadSession: this.caps.loadSession === true, mcp: this.caps.mcpCapabilities, agent: init.agentInfo } });
       await this.openSession();
       await this.applyChoices();
       this.open = true;
@@ -324,8 +362,8 @@ export class CursorSession implements HarnessSession {
     } catch (e) {
       if (this.exited) return;
       const auth = e instanceof RpcError && (e.code === -32000 || /auth/i.test(e.message));
-      if (auth) this.stopWith(AUTH_HELP, `cursor not logged in: ${errText(e)}`, 'the user runs `agent login` (cli:login), then sends again');
-      else this.stopWith(`Cursor non è partito: ${errText(e)}`, errText(e), 'see the stderr lines in the log; run `agent --version` in a terminal');
+      if (auth) this.stopWith(authHelp(this.label, this.loginCommand), `${this.engine} not logged in: ${errText(e)}`, `the user logs in (${this.loginCommand ?? 'API key in Settings → Motori'}), then sends again`);
+      else this.stopWith(`${this.label} non è partito: ${errText(e)}`, errText(e), `see the stderr lines in the log; run \`${this.cliName} --version\` in a terminal`);
     } finally { this.readyDone(); }
   }
 
@@ -351,7 +389,7 @@ export class CursorSession implements HarnessSession {
           return;
         } catch (e) {
           if (e instanceof RpcError && (e.code === -32000 || /auth/i.test(e.message))) throw e;
-          this.sys(`Cursor non ha ripreso la sessione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');
+          this.sys(`${this.label} non ha ripreso la sessione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');
         } finally {
           this.loading = false;
           this.reportEstimate();
@@ -359,7 +397,7 @@ export class CursorSession implements HarnessSession {
           this.replayUser = null;
           this.tools.clear(); // replayed tool rows keep the status they were replayed with
         }
-      } else this.sys('Questa versione di Cursor non riprende le sessioni: ne apro una nuova.', 'warn');
+      } else this.sys(`Questa versione di ${this.label} non riprende le sessioni: ne apro una nuova.`, 'warn');
     }
     const r = await this.request('session/new', base, 120000);
     const id = s(r.sessionId);
@@ -384,11 +422,11 @@ export class CursorSession implements HarnessSession {
     if (s(md.currentModeId) === 'plan') this.sink.changed({ permissionMode: 'plan' });
   }
 
-  /** The user's mode for this chat (session-only in Cursor). The model came with --model at spawn. */
+  /** The user's mode for this chat (session-only in ACP). The model came with the model flag at spawn. */
   private async applyChoices(): Promise<void> {
     await this.applyModelConfig();
     if (this.opts.permissionMode === 'plan' && this.modes.includes('plan')) {
-      try { await this.setPermissionMode('plan'); } catch (e) { log.warn('chats', 'cursor plan mode not applied', { chat: this.opts.chatId, data: errText(e) }); }
+      try { await this.setPermissionMode('plan'); } catch (e) { log.warn('chats', 'acp plan mode not applied', { chat: this.opts.chatId, data: { engine: this.engine, error: errText(e) } }); }
     }
   }
 
@@ -398,7 +436,8 @@ export class CursorSession implements HarnessSession {
     const chat = this.opts.chatId, current = this.models?.current;
     if (!current) return;
     const misses: string[] = [];
-    const asked = this.opts.model?.replace(/\[.*\]$/, '');
+    // the model asked at spawn (no model flag: the engine was not told, so a different model is no surprise)
+    const asked = this.opts.modelFlag ? this.opts.model?.replace(/\[.*\]$/, '') : undefined;
     if (asked && asked !== current) misses.push(`modello chiesto ${asked}`);
     const mc = this.opts.modelConfig, pinned = pinnedParams(this.opts.model);
     const want: [ModelParam, string][] = [];
@@ -415,15 +454,15 @@ export class CursorSession implements HarnessSession {
         if (this.params.find(x => x.id === p.id)?.value !== value) misses.push(`${p.name} ${value} non applicato`);
       } catch (e) {
         misses.push(`${p.name} ${value} rifiutato`);
-        log.warn('chats', 'cursor model option refused', { chat, data: { option: p.id, value, error: errText(e) } });
+        log.warn('chats', 'acp model option refused', { chat, data: { engine: this.engine, option: p.id, value, error: errText(e) } });
       }
     }
     const variant = variantOf(current, this.params);
     this.sink.changed({ model: variant });
-    log.info('chats', 'cursor model variant', { chat, data: { asked: this.opts.model ?? null, config: mc ?? null, running: variant } });
+    log.info('chats', 'acp model variant', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant } });
     if (misses.length) {
-      log.warn('chats', 'cursor runs another model than asked', { chat, data: { asked: this.opts.model ?? null, config: mc ?? null, running: variant, misses } });
-      this.sys(`Cursor gira ${variant} (${misses.join('; ')}).`, 'warn');
+      log.warn('chats', 'acp runs another model than asked', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant, misses } });
+      this.sys(`${this.label} gira ${variant} (${misses.join('; ')}).`, 'warn');
     }
   }
 
@@ -443,7 +482,7 @@ export class CursorSession implements HarnessSession {
     this.lastAnswer = '';
     let prompt: Obj[];
     try { prompt = this.promptOf(next.text, next.images); } catch (e) {
-      this.sys(`Immagini non inviate a Cursor: ${cut(errText(e), 200)}`, 'error');
+      this.sys(`Immagini non inviate a ${this.label}: ${cut(errText(e), 200)}`, 'error');
       prompt = [{ type: 'text', text: next.text || '(immagini non inviate)' }];
     }
     this.prompting = true;
@@ -466,7 +505,7 @@ export class CursorSession implements HarnessSession {
     }
     const files = writeImageFiles(path.join(os.tmpdir(), 'second-brain-images', this.opts.chatId.replace(/[^\w-]/g, '_')), images);
     this.turnFiles = files;
-    log.info('chats', 'cursor: images saved as files (no image prompt support)', { chat: this.opts.chatId, data: { files } });
+    log.info('chats', 'acp: images saved as files (no image prompt support)', { chat: this.opts.chatId, data: { engine: this.engine, files } });
     const list = files.map(f => `- ${f}`).join('\n');
     return [{ type: 'text', text: `${text ? `${text}\n\n` : ''}Immagini allegate (aprile dai file):\n${list}` }];
   }
@@ -480,24 +519,26 @@ export class CursorSession implements HarnessSession {
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
     this.tools.clear();
     const stop = s(r.stopReason);
-    const net = (!err && stop === 'end_turn' && isCursorNetError(this.lastAnswer)) || (!!err && isCursorNetError(errText(err)));
+    const net = (!err && stop === 'end_turn' && isNetError(this.lastAnswer)) || (!!err && isNetError(errText(err)));
     const stopped = this.stopping;
     this.stopping = null;
     const interrupted = !err && stop === 'cancelled' && !!stopped;
-    if (err) this.sys(`Errore di Cursor: ${cut(stripAnsi(errText(err)), 400)}`, 'error');
+    if (err) this.sys(`Errore di ${this.label}: ${cut(stripAnsi(errText(err)), 400)}`, 'error');
     else if (stop === 'refusal') this.sys('Il modello ha rifiutato la richiesta.', 'warn');
-    else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sys(`Turno interrotto da Cursor (${stop}).`, 'warn');
+    else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sys(`Turno interrotto da ${this.label} (${stop}).`, 'warn');
     else if (interrupted) this.sys(stopped.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
     else if (stop === 'cancelled') this.sys('Interrotto.', 'info');
     const usage = Object.keys(o(r.usage)).length ? (o(r.usage) as AcpUsage) : null;
-    // tokens in the prompt response (priced at list price); else the session cost ACP's usage_update reported, if any
+    // tokens in the prompt response (priced at Cursor's list price, priceFallback); else the session cost ACP's
+    // usage_update reported, if any
     const live = this.sessionCost !== null ? Math.max(0, this.sessionCost - (this.costAtTurnStart ?? 0)) : null;
-    const cost = costOf(this.models?.current ?? this.opts.model ?? null, usage) ?? live;
+    const listed = this.opts.priceFallback ? costOf(this.models?.current ?? this.opts.model ?? null, usage) : null;
+    const cost = listed ?? live;
     // the user's own interrupt (12/10: "quando faccio Invia subito vedo sempre un errore") is no error
     const isError = !!err || net || (stop === 'cancelled' && !interrupted) || stop === 'refusal';
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
     this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0 });
-    log.info('chats', 'cursor turn done', { chat: this.opts.chatId, data: { stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
+    log.info('chats', 'acp turn done', { chat: this.opts.chatId, data: { engine: this.engine, stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
     this.reportEstimate();
     this.prompting = false;
     if (net && !this.retryOff && this.retryNet(err ? errText(err) : this.lastAnswer)) return;
@@ -505,29 +546,29 @@ export class CursorSession implements HarnessSession {
     else this.setState(this.asks.size ? 'waiting' : 'idle');
   }
 
-  /** A turn cut by a Cursor network error: "continue" goes by itself after a growing wait (the chat stays running, queued
-   *  messages wait behind it); false when the retries are used up (a clear warning, the chat stops as usual). */
+  /** A turn cut by the engine's network error: "continue" goes by itself after a growing wait (the chat stays running,
+   *  queued messages wait behind it); false when the retries are used up (a clear warning, the chat stops as usual). */
   private retryNet(errorText: string): boolean {
-    const chat = this.opts.chatId, delays = this.opts.netRetryDelaysMs ?? NET_RETRY_DELAYS, n = this.netRetries;
+    const chat = this.opts.chatId, engine = this.engine, label = this.label, delays = this.opts.netRetryDelaysMs ?? NET_RETRY_DELAYS, n = this.netRetries;
     const error = cut(stripAnsi(lastLine(errorText)), 200);
     if (n >= delays.length) {
-      log.warn('chats', 'cursor network error: retries used up', { chat, data: { retries: n, error } });
-      this.sys(`Cursor si è fermata di nuovo per un errore di rete (${error}) dopo ${n} ripartenze automatiche: scrivi «continua» quando la rete è tornata.`, 'error');
+      log.warn('chats', 'acp network error: retries used up', { chat, data: { engine, retries: n, error } });
+      this.sys(`${label} si è fermata di nuovo per un errore di rete (${error}) dopo ${n} ripartenze automatiche: scrivi «continua» quando la rete è tornata.`, 'error');
       return false;
     }
     this.netRetries = n + 1;
     const wait = delays[n]!, attempt = `tentativo ${n + 1} di ${delays.length}`;
-    log.warn('chats', 'cursor network error: retrying', { chat, data: { attempt: n + 1, waitMs: wait, error } });
+    log.warn('chats', 'acp network error: retrying', { chat, data: { engine, attempt: n + 1, waitMs: wait, error } });
     const id = nextId('s');
     this.retryItemId = id;
-    this.sink.item({ kind: 'system', id, at: Date.now(), text: `Errore di rete di Cursor: riparto da sola tra ${Math.round(wait / 1000)} s (${attempt}).`, level: 'warn' }, false);
+    this.sink.item({ kind: 'system', id, at: Date.now(), text: `Errore di rete di ${label}: riparto da sola tra ${Math.round(wait / 1000)} s (${attempt}).`, level: 'warn' }, false);
     this.setState(this.asks.size ? 'waiting' : 'running');
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.retryItemId = null;
       if (this.exited) return;
-      this.sink.item({ kind: 'system', id, at: Date.now(), text: `Ripartita da sola dopo un errore di rete di Cursor (${attempt}).`, level: 'info' }, true);
-      this.queue.unshift({ text: NET_RETRY_PROMPT, images: [], retry: true });
+      this.sink.item({ kind: 'system', id, at: Date.now(), text: `Ripartita da sola dopo un errore di rete di ${label} (${attempt}).`, level: 'info' }, true);
+      this.queue.unshift({ text: netRetryPrompt(label), images: [], retry: true });
       this.drain();
     }, wait);
     this.retryTimer.unref();
@@ -557,8 +598,9 @@ export class CursorSession implements HarnessSession {
       if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di permesso: rispondi consenti o rifiuta.');
       const opts = ask.options ?? [];
       const pick = (kinds: string[]): AcpOption | undefined => kinds.map(k => opts.find(x => x.kind === k)).find(Boolean);
-      // allow-always / reject-always would be written into the user's Cursor config: only the once options are used
-      if (answer.allow && answer.always) log.warn('chats', '"always" ignored for Cursor: it would change Cursor\'s own config', { chat: this.opts.chatId, data: { requestId } });
+      // allow-always / reject-always would be written into the engine's own config (Cursor's permissions): only the once
+      // options are used
+      if (answer.allow && answer.always) log.warn('chats', '"always" ignored for an ACP engine: it would change the engine\'s own config', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
       const chosen = answer.allow ? pick(['allow_once']) : pick(['reject_once']);
       result = chosen ? { outcome: { outcome: 'selected', optionId: chosen.optionId } } : { outcome: { outcome: 'cancelled' } };
     } else if (ask.method === 'cursor/ask_question') {
@@ -584,7 +626,7 @@ export class CursorSession implements HarnessSession {
     }
     this.respond(ask.rpcId, result);
     this.asks.delete(requestId);
-    log.info('chats', 'cursor request answered', { chat: this.opts.chatId, data: { requestId, method: ask.method, outcome: o(result.outcome).outcome, optionId: o(result.outcome).optionId } });
+    log.info('chats', 'acp request answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId, method: ask.method, outcome: o(result.outcome).outcome, optionId: o(result.outcome).optionId } });
     this.sink.resolved(requestId);
     this.setState(this.asks.size ? 'waiting' : this.prompting || this.queue.length ? 'running' : 'idle');
     return true;
@@ -594,7 +636,7 @@ export class CursorSession implements HarnessSession {
    *  unless keepQueued ("Invia subito"): then they were already sent by the user and run next, as drain goes on. */
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (this.exited || !this.proc) return;
-    log.info('chats', 'cursor cancel', { chat: this.opts.chatId, data: { queued: this.queue.length, open: this.asks.size, keepQueued: !!opts?.keepQueued } });
+    log.info('chats', 'acp cancel', { chat: this.opts.chatId, data: { engine: this.engine, queued: this.queue.length, open: this.asks.size, keepQueued: !!opts?.keepQueued } });
     this.cancelRetry('interrotta');
     if (this.queue.length && !opts?.keepQueued) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
     if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued }; // only a prompt in flight ends with a result
@@ -609,21 +651,21 @@ export class CursorSession implements HarnessSession {
     if (!this.prompting) { this.setState(this.queue.length ? 'running' : 'idle'); this.drain(); }
   }
 
-  /** Never live: ACP session/set_model writes the user's global Cursor CLI config (cli-config.json: model,
-   *  selectedModel, hasChangedDefaultModel). The manager reopens the session with --model instead (MODEL_RESTART). */
+  /** Never live: in Cursor, ACP session/set_model writes the user's global CLI config (cli-config.json: model,
+   *  selectedModel, hasChangedDefaultModel). The manager reopens the session with the new model instead (modelRestart). */
   async setModel(_model: string | null): Promise<void> {
-    throw new Error(MODEL_RESTART);
+    throw new Error(modelRestart(this.label));
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     const modeId = mode === 'plan' ? 'plan' : 'agent';
-    if (!this.modes.includes(modeId)) throw new Error(`Cursor non ha la modalità ${modeId}.`);
+    if (!this.modes.includes(modeId)) throw new Error(`${this.label} non ha la modalità ${modeId}.`);
     await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
     this.sink.changed({ permissionMode: mode });
   }
 
   async setEffort(_effort: Effort | null): Promise<void> {
-    throw new Error('L’effort non si imposta con Cursor: scegli un modello (es. con [effort=high]).');
+    throw new Error(`L’effort non si imposta con ${this.label}: scegli un modello (es. con [effort=high]).`);
   }
 
   async rename(_title: string): Promise<void> { /* the title lives in the app */ }
@@ -643,7 +685,7 @@ export class CursorSession implements HarnessSession {
     const t = setTimeout(() => {
       if (this.exited) return;
       if (this.procExited) return this.releasePipes();
-      log.warn('chats', 'cursor did not exit, killing', { chat: this.opts.chatId, data: { pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
+      log.warn('chats', 'acp session did not exit, killing', { chat: this.opts.chatId, data: { engine: this.engine, pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
       this.killAfterGrace();
     }, graceMs);
     t.unref();
@@ -664,7 +706,7 @@ export class CursorSession implements HarnessSession {
   /** It exited, but a leftover holds the pipes it inherited, so 'close' never comes: let go of our side. */
   private releasePipes(): void {
     if (this.exited || !this.proc) return;
-    log.info('chats', 'cursor exited, a leftover still holds its output: closing the pipes', { chat: this.opts.chatId, data: { pid: this.proc.pid } });
+    log.info('chats', 'acp engine exited, a leftover still holds its output: closing the pipes', { chat: this.opts.chatId, data: { engine: this.engine, pid: this.proc.pid } });
     closePipes(this.proc);
   }
 
@@ -697,12 +739,12 @@ export class CursorSession implements HarnessSession {
     if (this.exited || !this.proc) return Promise.reject(new Error(NOT_ACTIVE));
     const id = this.rpcSeq++;
     return new Promise<Obj>((resolve, reject) => {
-      const timer = timeoutMs ? setTimeout(() => { this.rpcs.delete(id); reject(new Error(`${method}: nessuna risposta da Cursor`)); }, timeoutMs) : null;
+      const timer = timeoutMs ? setTimeout(() => { this.rpcs.delete(id); reject(new Error(`${method}: nessuna risposta da ${this.label}`)); }, timeoutMs) : null;
       timer?.unref();
       this.rpcs.set(id, { resolve, reject, method, timer });
       try { this.write({ jsonrpc: '2.0', id, method, params }); }
       catch (e) { if (timer) clearTimeout(timer); this.rpcs.delete(id); reject(e as Error); }
-      log.debug('chats', 'acp request', { chat: this.opts.chatId, data: { id, method } });
+      log.debug('chats', 'acp request', { chat: this.opts.chatId, data: { engine: this.engine, id, method } });
     });
   }
 
@@ -726,7 +768,7 @@ export class CursorSession implements HarnessSession {
       this.out = this.out.slice(i + 1);
       if (line) this.line(line);
     }
-    if (this.out.length > 50_000_000) { log.warn('chats', 'cursor stdout line too long, dropped', { chat: this.opts.chatId }); this.out = ''; }
+    if (this.out.length > 50_000_000) { log.warn('chats', 'acp stdout line too long, dropped', { chat: this.opts.chatId, data: { engine: this.engine } }); this.out = ''; }
   }
 
   /** One stdout line. Never throws. */
@@ -734,12 +776,12 @@ export class CursorSession implements HarnessSession {
     let m: unknown;
     try { m = JSON.parse(raw); } catch {
       this.badLines += 1;
-      if (this.badLines <= 20) log.warn('chats', 'non-JSON line from Cursor', { chat: this.opts.chatId, data: cut(raw, 300) });
+      if (this.badLines <= 20) log.warn('chats', 'non-JSON line from an ACP engine', { chat: this.opts.chatId, data: { engine: this.engine, line: cut(raw, 300) } });
       return;
     }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     try { this.onMessage(m as Obj); } catch (e) {
-      log.error('chats', 'ACP message not understood', { chat: this.opts.chatId, cause: errText(e), hint: 'protocol drift? compare with agentclientprotocol.com schema and the Cursor CLI ACP docs, update cursor.ts', data: cut(raw, 500) });
+      log.error('chats', 'ACP message not understood', { chat: this.opts.chatId, cause: errText(e), hint: `protocol drift? compare with the agentclientprotocol.com schema and the ${this.label} CLI's ACP docs, update chats/acp.ts`, data: { engine: this.engine, line: cut(raw, 500) } });
     }
   }
 
@@ -753,7 +795,7 @@ export class CursorSession implements HarnessSession {
       if (rpc.timer) clearTimeout(rpc.timer);
       if (m.error !== undefined) {
         const e = o(m.error);
-        log.warn('chats', 'acp error response', { chat: this.opts.chatId, data: { method: rpc.method, code: e.code, message: e.message } });
+        log.warn('chats', 'acp error response', { chat: this.opts.chatId, data: { engine: this.engine, method: rpc.method, code: e.code, message: e.message } });
         rpc.reject(new RpcError(s(e.message) || `${rpc.method} fallito`, num(e.code) ?? -32603));
       } else rpc.resolve(o(m.result));
       return;
@@ -806,14 +848,14 @@ export class CursorSession implements HarnessSession {
       this.flushAll(true);
       this.pending({
         id: rid, type: 'question', tool: 'CreatePlan', title: PLAN_Q, detail: cut(detail, 8000), input: trimInput(p), at,
-        questions: [{ question: PLAN_Q, header: 'Piano', options: [{ label: PLAN_YES, description: 'Cursor procede con il piano' }, { label: PLAN_NO, description: 'Cursor non lo esegue' }], multiSelect: false }],
+        questions: [{ question: PLAN_Q, header: 'Piano', options: [{ label: PLAN_YES, description: `${this.label} procede con il piano` }, { label: PLAN_NO, description: `${this.label} non lo esegue` }], multiSelect: false }],
       });
       return;
     }
     // Cursor sends these "non-blocking" extensions as requests (extMethod): show them and acknowledge
     if (method === 'cursor/update_todos' || method === 'cursor/task') { this.showExt(method, p); this.respond(id, {}); return; }
     // fs/* and terminal/* are not offered in our capabilities; anything else is unknown
-    log.warn('chats', 'unsupported ACP request from Cursor', { chat: this.opts.chatId, data: { method } });
+    log.warn('chats', 'unsupported ACP request', { chat: this.opts.chatId, data: { engine: this.engine, method } });
     this.respondError(id, -32601, `Method not found: ${method}`);
   }
 
@@ -834,7 +876,7 @@ export class CursorSession implements HarnessSession {
   }
 
   private pending(req: Omit<PendingRequest, 'chatId'>): void {
-    log.info('chats', 'cursor asks', { chat: this.opts.chatId, data: { requestId: req.id, type: req.type, tool: req.tool } });
+    log.info('chats', 'acp asks', { chat: this.opts.chatId, data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
     this.setState('waiting');
     this.sink.pending(req);
   }
@@ -844,7 +886,7 @@ export class CursorSession implements HarnessSession {
     if (method === 'cursor/update_todos' || method === 'cursor/task') this.showExt(method, p); // older CLIs: as notifications
   }
 
-  /** The estimate (characters / 4), until Cursor reports a real usage_update. */
+  /** The estimate (characters / 4), until the engine reports a real usage_update. */
   private reportEstimate(): void {
     if (this.context || !this.chars) return;
     this.sink.changed({ contextTokens: estimateTokens(this.chars), contextEstimated: true });
@@ -983,8 +1025,10 @@ export class CursorSession implements HarnessSession {
     this.subagentHooks(id, u, item.status);
   }
 
-  /** subagentStart when a Task tool call shows up, subagentStop when it ends (ACP never fires these hooks). */
+  /** subagentStart when a Task tool call shows up, subagentStop when it ends (ACP never fires these hooks). Cursor only
+   *  (subagentHooks). */
   private subagentHooks(id: string, u: Obj, status: ToolItem['status']): void {
+    if (!this.opts.subagentHooks) return;
     const file = this.opts.hooksFile !== undefined ? this.opts.hooksFile : process.env.SB_TEST || process.env.VITEST ? null : userHooksFile();
     if (!file || this.loading) return;
     const sid = this.sessionId ?? '';
@@ -1011,15 +1055,15 @@ export class CursorSession implements HarnessSession {
     this.flushAll(true);
     const clean = this.closing || code === 0;
     const tail = stripAnsi(this.errTail).trim().split(/\r?\n/).slice(-4).join(' · ');
-    const error = clean ? null : cut(tail || `Cursor è uscito con codice ${code ?? '?'}`, 600);
-    if (error) log.error('chats', 'cursor exited with an error', { chat: this.opts.chatId, cause: `exit ${code}: ${tail || 'no stderr'}`, hint: 'run `agent --version` and `agent status` in a terminal; resume with a new message' });
-    else log.info('chats', 'cursor session exit', { chat: this.opts.chatId, data: { code } });
+    const error = clean ? null : cut(tail || `${this.label} è uscito con codice ${code ?? '?'}`, 600);
+    if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${tail || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
+    else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
     this.end(clean ? 'closed' : 'error', code, error);
   }
 
   private fail(error: string, cause: string, hint: string): void {
     if (this.exited) return;
-    log.error('chats', 'cursor session failed', { chat: this.opts.chatId, cause, hint });
+    log.error('chats', 'acp session failed', { chat: this.opts.chatId, data: { engine: this.engine }, cause, hint });
     this.end('error', null, error);
   }
 

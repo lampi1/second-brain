@@ -188,6 +188,18 @@ describe('RegiaWake', () => {
     expect(sent).toEqual([]);
   });
 
+  it('an engine that boots and goes idle ran no turn: nothing told (a new chat, a reopen, a chat leaving for the CPU queue)', async () => {
+    const { sent, up, finish } = make();
+    up({ id: 'os', state: 'starting' });
+    up({ id: 'os', state: 'idle' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent).toEqual([]);
+    // its first real turn still is
+    finish('os', 'Fatto.');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent).toHaveLength(1);
+  });
+
   it('a hand-off turn is not a turn of the chat', async () => {
     const { sent, up } = make();
     up({ id: 'qa', state: 'idle' });

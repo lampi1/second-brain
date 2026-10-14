@@ -3,7 +3,57 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 
-export type Harness = 'claude' | 'cursor';
+/** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
+export type Harness = string;
+/** The protocol an engine speaks; each kind has one adapter (claude: Claude Code stream-json · acp: Agent Client
+ *  Protocol over stdio · api: an HTTP model endpoint, OpenAI- or Anthropic-compatible, text only). */
+export type EngineKind = 'claude' | 'acp' | 'api';
+/** What an engine can do. The app asks these, never the engine's name. */
+export interface EngineCaps {
+  /** an effort level per chat (Claude's --effort) */
+  effort: boolean;
+  /** the model changes inside a running session (false: the session reopens with the new model) */
+  liveModel: boolean;
+  /** a chat can be copied with its history (fork) */
+  fork: boolean;
+  /** an engine started ahead for the next new chat (warm.ts) */
+  warm: boolean;
+  /** a chat may run in its own git worktree */
+  worktree: boolean;
+  /** the user picks the permission mode (plan, auto, …) */
+  permissionMode: boolean;
+  /** true: the app picks the session id and reads the past from the engine's transcript files; false: the engine gives
+   *  the id and replays the past itself when a session is loaded */
+  transcript: boolean;
+  /** the engine reports each turn's cost */
+  cost: boolean;
+  /** the engine answers the plan's usage windows (get_usage) */
+  usage: boolean;
+  /** the engine takes a list of pre-allowed tools at start (--allowedTools) */
+  preAllow: boolean;
+  /** the engine works with tools (files, shell, MCP: the browser, the app's tools); false = text only (api) */
+  tools: boolean;
+}
+/** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
+export interface EngineInfo {
+  id: Harness; label: string; name: string; kind: EngineKind; caps: EngineCaps;
+  /** app = built in or one of the app's presets; brain = an entry of the brain's harness/models.json */
+  source: 'app' | 'brain';
+  /** whether it takes the user's API key: required (api), optional (a CLI that also has its own login), none */
+  key: 'required' | 'optional' | 'none';
+  /** how it starts, as Settings shows it ("kimi acp", an endpoint URL) */
+  runs: string;
+  /** false: its start definition is not the one the user turned on (changed in the brain, or never on): it does not start */
+  trusted: boolean;
+}
+/** The stored API keys as the renderer sees them (engines/secrets.ts): never a key, only its mask. */
+export interface SecretsStatus {
+  /** false: this machine offers no safe encryption (why says so); no key can be stored */
+  available: boolean;
+  why?: string;
+  /** stale: the engine's start changed since the key was saved, so it is not used */
+  keys: Record<Harness, { mask: string; stale: boolean }>;
+}
 
 /** running: the model is working · waiting: a question/permission needs the user · idle: turn ended, input open ·
  *  starting: process booting · error: the process failed (see lastError) · closed: process gone (can be resumed). */
@@ -212,6 +262,11 @@ export type PeekResult =
   | { kind: 'other'; path: string; size: number; what: string }
   | { kind: 'missing'; reason: string; path: string }
   | { kind: 'refused'; reason: string };
+/** app:askImage: an image a question names, as a data: URL (main/ask-image.ts: allowed folders, magic bytes, size), or why not */
+export type AskImageResult =
+  | { kind: 'image'; path: string; dataUrl: string }
+  | { kind: 'missing'; reason: string; path: string }
+  | { kind: 'refused'; reason: string; path?: string };
 
 export type Answer =
   | { kind: 'permission'; allow: boolean; always?: boolean; message?: string }
@@ -255,6 +310,37 @@ export interface NewChat {
   space?: ChatSpace;          // 'app': a chat of the "Migliora l'app" section
   appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
+}
+
+/** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Regia
+ *  from Ricomincia / Cambia motore / Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
+ *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). "Nuova chat" too. */
+export interface RoutedNewChat {
+  /** empty = from the prompt (a Regia: "Regia · <regiaName>"), as chat:create */
+  title: string;
+  /** required, except for a Regia (it may start empty and read its memory by itself) */
+  prompt?: string;
+  cwd: string;
+  regiaOf?: string;
+  /** what the user named themselves (the engine of Cambia motore, a model or effort of "Nuova chat"): it beats the
+   *  table's row, recorded as an override with `reason` */
+  ask?: { harness?: Harness; model?: string; effort?: Effort; reason?: string };
+  /** "Nuova chat"'s «Worktree separato» (only on an engine that has it) */
+  worktree?: boolean;
+  /** a Regia: its role (`replaces` the one it takes over, `regiaName` its tab label); its kind of work is `regia` */
+  regia?: boolean;
+  regiaName?: string;
+  replaces?: string;
+  /** the kind of work when the record says it (a bug → bug-fix, a PR → review, a test → qa-run); else read from the
+   *  title and `routeText` by the brain's rules */
+  kind?: TaskKind;
+  /** the record's area (its project or repo); else the title's label */
+  area?: string;
+  /** what the kind is read from besides the title (default: the prompt, whose fixed lines can mislead the rules) */
+  routeText?: string;
+  /** what starts when no row matches: the user's last "Nuova chat" choice */
+  defaults: { harness: Harness; model?: string; effort?: Effort };
+  permissionMode?: PermissionMode;
 }
 
 export interface BrowserTab {
@@ -486,7 +572,9 @@ export interface AppInfo {
   /** the app's own health since it started (main/health.ts); a fallen-back MCP port shows a banner */
   health?: AppHealth;
   /** null until the background check finishes (a few seconds after start): ask cli:status for a fresh one. */
-  cli: { claude: CliStatus; cursor: CliStatus } | null;
+  cli: Record<Harness, CliStatus> | null;
+  /** the engines the app knows, in display order */
+  engines: EngineInfo[];
 }
 /** Since the app started: the MCP port (fallback = the configured one was taken, external clients lose the browser),
  *  main-window renderer crashes/hangs (each reloads it; chats keep running), engines killed by force, Job Object guard. */
@@ -541,8 +629,12 @@ export interface Settings {
   theme: ThemeMode;
   dnd: boolean;                    // do not disturb: no toasts at all
   dndUntil: number | null;         // timed do not disturb (epoch ms): no toasts until then
-  engines: { claude: boolean; cursor: boolean }; // harnesses the app may start
-  /** Claude <-> Cursor chat mail (inbox.mjs); mirrored in the brain's brain-settings.json so it holds outside the app */
+  /** engines anything may start on (ADR 0046; absent = off): the user's own chats too */
+  engineOn: Partial<Record<Harness, boolean>>;
+  /** engines the Regie may open or resume chats on (absent = off); the user's own chats are free */
+  engines: Partial<Record<Harness, boolean>>;
+  /** crossHarness = «Chat tra motori diversi» (ADR 0046): agents may open, resume and write to chats on another engine
+   *  than their own; mirrored in the brain's brain-settings.json for inbox.mjs. Key kept for older releases. */
   messaging: { crossHarness: boolean };
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
@@ -554,6 +646,9 @@ export interface Settings {
   /** the auto-compact window of every Claude chat the app starts (passed per process, it beats a folder's own
    *  settings); 0 = whatever the user's Claude settings say (ADR 0031) */
   compactWindowTokens?: number;
+  /** «Regie corte» (ADR 0051): a Regia whose context began on an earlier day compacts it once, the first time it is idle
+   *  on a new day (same chat: its queue and the chats it follows stay); its window is compactWindowTokens as for every chat */
+  regiaDayCompact?: boolean;
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
@@ -597,9 +692,10 @@ export interface RegiaChatDefaults {
   cursorFast: boolean;
 }
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engines' | 'messaging' | 'regiaChats' | 'devops'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'regiaChats' | 'devops'>> & {
   engines?: Partial<Settings['engines']>;
   devops?: Partial<Settings['devops']>;
+  engineOn?: Partial<Settings['engineOn']>;
   messaging?: Partial<Settings['messaging']>;
   regiaChats?: Partial<RegiaChatDefaults>;
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
@@ -608,7 +704,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("view", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | 'engines.claude' | 'engines.cursor' | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam';
 export interface SettingDef {
@@ -694,11 +790,9 @@ export interface JobRecordInput {
 /** The task kinds the routing table decides on: the brain's estimates.mjs taskOf (its rules travel in estimates.json). */
 export const TASK_KINDS = ['qa-run', 'review', 'bug-fix', 'ops-read', 'writing', 'triage', 'research-web', 'investigation', 'app-feature', 'regia', 'altro'] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
-/** Harnesses of the model registry: 'api' = later, private or OpenAI-compatible endpoints (never started by the app yet). */
-export type RegistryHarness = Harness | 'api';
 /** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
 export interface RegistryModel {
-  id: string; harness: RegistryHarness; provider: string; aliases?: string[];
+  id: string; harness: Harness; provider: string; aliases?: string[];
   /** auto = the routing table may pick it; manual = only when named */
   routing: 'auto' | 'manual'; tier?: string;
   price: { input: number; cacheWrite5m: number; cacheWrite1h: number; cacheRead: number; output: number };
@@ -707,22 +801,36 @@ export interface RegistryModel {
   efforts: Effort[]; defaultEffort: Effort | null;
 }
 export interface ModelRegistry {
-  harnesses: Partial<Record<RegistryHarness, { routing: 'auto' | 'manual'; note?: string }>>;
+  harnesses: Partial<Record<Harness, { routing: 'auto' | 'manual'; note?: string }>>;
   defaultModel: string;
   models: RegistryModel[];
   modifiers?: { usGeo?: number; webSearchPerRequest?: number };
+  /** the only model and effort a row for the app's chats may name (the user, 2026-10-14: "i lavori sull'app sempre in
+   *  opus medio"); other models reach them only through exploration. Absent = no such rule. */
+  appChats?: { model: string; effort: Effort | null };
 }
 /** A row of the routing table: kind '*' = any; area = the title's label ("IT", "Pers · App"), one or several; no area = any. */
 export interface RoutingRow {
   kind: TaskKind | '*'; area?: string | string[];
-  harness: RegistryHarness; model: string; effort: Effort | null;
+  harness: Harness; model: string; effort: Effort | null;
   why: string; since: string; evidence: string;
+  /** the user's switch «L'AI può cambiarla» off: an agent may neither change nor remove this row (absent = it may) */
+  locked?: boolean;
 }
 /** The table in force: <brain>/ops/state/improve/routing/v<version>.json, current.json says which (versioned: every save
  *  is a new version + a line in audit.jsonl; old versions stay for rollback). */
-export interface RoutingTable { version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[] }
-/** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not. */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null }
+export interface RoutingTable {
+  version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[];
+  /** how much cost weighs against quality when the loop compares models: 0 = only quality, 10 = only cost (the user's
+   *  λ, 7 on 2026-10-14; like OpenRouter's cost_quality_tradeoff); only the user changes it */
+  costWeight: number;
+}
+/** One change of the table (a line of <brain>/ops/state/improve/audit.jsonl, domain routing): who, when, why, with what
+ *  data; stored = its v<to>.json is still on disk (it can be restored). */
+export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
+/** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
+ *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
 /** How a chat's engine was chosen: table = its row; default = no row, the user's "Chat aperte dalla Regia"; override =
  *  the agent named something else, with a reason. */
 export interface RouteDecision {
@@ -733,6 +841,9 @@ export interface RouteDecision {
   /** how many hand-offs led to this chat */
   handoffs?: number;
 }
+/** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
+ *  why; error = what chat:createRouted would refuse (Italian). */
+export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
 
 /** The brain's own data server (ops/tools/brain-site.mjs), read-only: GET paths under /api/ (tables, now, cost, day,
  *  map, files, file, search, version, status). Never throws for a missing brain server: ok false + error. */
@@ -782,9 +893,9 @@ export interface ProcedureSummary {
 /** /api/procedure?id=…: the procedure's markdown with every line that may hold a credential replaced (`masked` lines),
  *  `path` = the file's full path. Read-only: the page only renders and copies it. */
 export interface Procedure extends ProcedureSummary { path: string; markdown: string; masked: number }
-/** The models a CLI itself offered (Cursor: availableModels of its last session/new or session/load), kept in userData;
- *  null = no Cursor chat ran yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
-export interface ModelsSeen { cursor: { ids: { id: string; name: string }[]; at: number } | null }
+/** Per engine, the models its CLI offered at its last session (ACP's availableModels), kept in userData; absent = none
+ *  seen yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
+export type ModelsSeen = Partial<Record<Harness, { ids: { id: string; name: string }[]; at: number }>>;
 
 // ── "Rispondi dopo" (the user, 2026-10-13: "a volte sono concentrato e non ho tempo per rispondere"; ADR 0035) ──
 /** On after "Rispondi dopo" on any question or permission: every open request waits in the "Da rispondere" queue and
@@ -796,7 +907,8 @@ export interface AnswerLater { on: boolean }
 // Questions and permissions not visible elsewhere on screen float in a small top-most WebContentsView (main/overlay.ts),
 // above browser tiles and pages. The app page decides what it shows (one source of truth), the layer only renders it.
 /** attempt: bumped when an answer failed and the request came back (the layer re-mounts the card, answerable again). */
-export interface OverlayCard { key: string; req: PendingRequest; chatTitle: string; harness: Harness; isRegia: boolean; attempt?: number }
+/** engine = the asking chat's engine as app:info describes it (the layer's page has no app:info of its own) */
+export interface OverlayCard { key: string; req: PendingRequest; chatTitle: string; harness: Harness; engine: EngineInfo | null; isRegia: boolean; attempt?: number }
 export interface OverlayModel {
   cards: OverlayCard[];       // the queue: oldest first; the first is shown in full
   waiting: number;            // all open requests (badge)
@@ -809,9 +921,6 @@ export interface OverlayModel {
   toasts?: OverlayToast[];
   /** the Regia widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
   avoid?: { right: number; bottom: number };
-  /** requests wait but no card is shown (ADR 0035): one small strip, always on screen; a click is Ctrl+J. queued =
-   *  "Rispondi dopo" is on (they wait in "Da rispondere"); first = the oldest one's chat */
-  strip?: { count: number; first: string; queued: boolean };
 }
 export interface OverlayToast {
   id: string;                 // group key (kind|chat)
@@ -900,10 +1009,13 @@ export interface InvokeMap {
   'app:openPath': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
+  /** an image named in a question (main/ask-image.ts) */
+  'app:askImage': [{ path: string }, AskImageResult];
   'chat:list': [void, ChatSummary[]];
   'chat:items': [{ chatId: string }, ChatItem[]];
   'chat:pending': [void, PendingRequest[]];
   'chat:create': [NewChat, ChatSummary];
+  'chat:createRouted': [RoutedNewChat, ChatSummary];
   /** text may be empty when images are attached */
   'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[] }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
@@ -944,6 +1056,12 @@ export interface InvokeMap {
   'feed:list': [void, FeedEvent[]];
   'feed:mute': [{ kind: string; muted: boolean }, void];
   'settings:get': [void, Settings];
+  /** the stored API keys' masks; set and delete answer the same (a key never comes back, engines/secrets.ts) */
+  'secrets:status': [void, SecretsStatus];
+  'secrets:set': [{ engine: Harness; key: string }, SecretsStatus];
+  'secrets:delete': [{ engine: Harness }, SecretsStatus];
+  /** the user's "Riaccendi" on an engine whose definition changed: trust its definition of now and turn it on */
+  'engines:trust': [{ engine: Harness }, void];
   /** The user's own change from the UI (each key logged as a change by 'user'); all keys validated first, all or none */
   'settings:set': [SettingsPatch, Settings];
   'settings:schema': [void, SettingDef[]];
@@ -964,8 +1082,13 @@ export interface InvokeMap {
   'models:seen': [void, ModelsSeen];
   /** the routing table and the model registry (Impostazioni → «Instradamento modelli») */
   'routing:get': [void, RoutingInfo];
-  /** the user saves the table from the settings page: checked against the hard rules, written as a new version */
-  'routing:save': [{ routes: RoutingRow[]; reason?: string }, RoutingInfo];
+  /** the user saves the table from the settings page: checked against the hard rules, written as a new version;
+   *  exploration = the share of chats (0 to 0.5) that try a little-sampled model, omitted = unchanged */
+  'routing:save': [{ routes: RoutingRow[]; reason?: string; exploration?: number; costWeight?: number; baseVersion?: number }, RoutingInfo];
+  /** the user brings back an older version: a new version with its rows and exploration (history stays linear) */
+  'routing:restore': [{ version: number }, RoutingInfo];
+  /** "Nuova chat": what chat:createRouted would start for this request now, without starting it (no exploration) */
+  'routing:preview': [RoutedNewChat, RoutePreview];
   'devops:get': [void, DevopsState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
   'devops:refresh': [void, DevopsState];
@@ -1032,12 +1155,14 @@ export interface EventMap {
   'feed:events': FeedEvent[];
   'usage': Usage;
   /** the background CLI check at start finished (app:info had cli null until now) */
-  'cli:ready': { claude: CliStatus; cursor: CliStatus };
+  'cli:ready': Record<Harness, CliStatus>;
   'focus:next': void;
   /** app-control MCP or a notification asks the UI to do something (switch view, focus a chat, open a page). */
   'ui:command': { action: string; value?: string };
   /** one key changed (by the user or an agent), applied live; `settings` = the full effective settings after it */
   'settings:changed': SettingChange & { settings: Settings };
+  /** the engines changed (the brain's models.json, a definition turned on): the new list */
+  'engines:changed': EngineInfo[];
   /** a protected change waits for the user (status pending), or was answered (accepted / rejected) */
   'settings:proposed': SettingProposal;
   'budget:alert': BudgetAlert;
@@ -1061,20 +1186,20 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:get', 'estimate:record', 'brain:api',
   'devops:get', 'devops:refresh', 'devops:markRead', 'chat:branches',
-  'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save',
+  'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
-  'search:query', 'later:get', 'later:set',
+  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

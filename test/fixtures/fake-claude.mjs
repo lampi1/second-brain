@@ -167,6 +167,15 @@ async function runTurn(text) {
     turn = null;
     return;
   }
+  // the built-in /compact (as the real CLI: a compact_boundary with the sizes, then a success result)
+  if (text.startsWith('/compact')) {
+    const pre = ctxTokens;
+    ctxTokens = 30000;
+    out({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'manual', pre_tokens: pre, post_tokens: ctxTokens }, session_id: sessionId, uuid: crypto.randomUUID() });
+    result('', false, t0);
+    turn = null;
+    return;
+  }
   if (/crash/.test(text)) { process.stderr.write('fatal: fake crash for tests\n'); process.exit(3); }
   if (/expired/.test(text)) {
     // like an expired login: an error result whose running total reads 0

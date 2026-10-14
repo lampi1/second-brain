@@ -2,7 +2,8 @@
 // (SB_LOAD_FORCE="95,40": CPU 95%, RAM 40% free). A chat whose turn the last quit cut resumes by itself (the app's own
 // message, not the user's): with the machine busy that resume waits, its tile (ChatTile.tsx) shows "In coda · CPU 95%"
 // and "Avvia ora", the top bar (TopBar.tsx) counts it; "Avvia ora" starts it at once. The three settings show in
-// Impostazioni (SettingsPage.tsx). Screenshots: test-results/shots/admission-1-queued.png, -2-started.png, -3-settings.png.
+// Impostazioni (SettingsPage.tsx). A work chat waits ahead of a chat on the app that was queued first (the user,
+// 2026-10-14). Screenshots: test-results/shots/admission-1-queued.png, -2-started.png, -3-settings.png, -4-work-first.png.
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -51,5 +52,27 @@ test('a resume after a restart waits while the machine is busy; "Avvia ora" star
   await expect(page.getByTestId('st-load-queue-ram')).toContainText('15%');
   await page.getByTestId('st-load-queue').scrollIntoViewIfNeeded();
   await shot(page, 'admission-3-settings');
+  await app.close();
+});
+
+test("a work chat's resume waits ahead of a chat on the app queued before it", async () => {
+  const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+  const userData = tmp('sb-e2e-');
+  const cwd = tmp('sb-e2e-cwd-');
+  const cut = (id: string, title: string) => ({
+    id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title, model: null, effort: null, permissionMode: null,
+    isRegia: false, createdAt: Date.now() - 60_000, working: true,
+  });
+  // the app's chat comes first in the file, so its resume asks the queue first
+  fs.writeFileSync(path.join(userData, 'chats.json'), JSON.stringify({ version: 2, chats: [cut('c_appchat01', 'App · coda'), cut('c_workchat1', 'Shop · sprint')] }));
+  const { app, page } = await launch({
+    SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_LOAD_FORCE: '95,40',
+  }, userData);
+  await setSize(app, 1400, 900);
+  await expect(page.getByTestId('chat-queued-c_workchat1')).toContainText('la prossima', { timeout: 15000 });
+  await expect(page.getByTestId('chat-queued-c_appchat01')).toContainText('2ª in fila');
+  await expect(page.getByTestId('topbar-queue')).toContainText('2');
+  await page.mouse.move(2, 2);
+  await shot(page, 'admission-4-work-first');
   await app.close();
 });

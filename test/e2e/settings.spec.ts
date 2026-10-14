@@ -3,7 +3,10 @@
 // the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
 // 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
 // test/unit/brain/compare.test.ts); "Chat aperte dalla Regia" saves engine, models and effort and "Nuova chat" starts
-// from them. Screenshots: test-results/shots/settings-*.png.
+// from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
+// (ADR 0046). Screenshots: test-results/shots/settings-*.png.
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
@@ -39,7 +42,7 @@ test('Impostazioni: groups, theme live, mail switch, model comparison switches w
   await expect(s.getByTestId('st-agent-cursor-vs-claude-reviewer')).toHaveClass(/dim/);
   await expect(exp).toContainText("valgono solo con l'interruttore sopra acceso");
 
-  // the mail switch is a real setting
+  // the one switch for chats across engines is a real setting (ADR 0046)
   const cross = s.getByTestId('st-cross-switch');
   await expect(cross).toHaveAttribute('aria-checked', 'true');
   await cross.click();
@@ -107,11 +110,21 @@ test('spending limits, Windows notifications, the engines the Regia may use, the
   await s.getByTestId('st-toasts-choice-off').click();
   await expect.poll(async () => (await get()).osToasts).toBe('off');
 
-  // the engines the Regia may use
-  const cur = s.getByTestId('st-engine-cursor-switch');
+  // each engine on or off, and whether the Regie may use it (ADR 0046)
+  const eng = s.getByTestId('st-group-engines');
+  await eng.scrollIntoViewIfNeeded();
+  const cur = eng.getByTestId('st-engine-claude-switch');
   await cur.click();
   await expect(cur).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(async () => (await get()).engines.claude).toBe(false);
+  // an engine off closes «Le Regie possono usare» too (the only key an older release reads) and dims it
+  const off = eng.getByTestId('st-engine-on-cursor-switch');
+  await off.click();
+  await expect.poll(async () => (await get()).engineOn.cursor).toBe(false);
   await expect.poll(async () => (await get()).engines.cursor).toBe(false);
+  await expect(eng.getByTestId('st-engine-cursor-switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(eng.getByTestId('st-engine-cursor')).toHaveClass(/dim/);
+  await shot(page, 'settings-engines');
 
   // the brain folder and the MCP port: read only
   const info = s.getByTestId('st-group-app');
@@ -165,6 +178,73 @@ test('Chat aperte dalla Regia: engine, models (Cursor\'s own list), effort; save
   await shot(page, 'settings-regia-chats-newchat');
   await d.getByTestId('newchat-harness-claude').click();
   await expect(d.getByTestId('newchat-model')).toHaveValue('claude-opus-5-5');
-  await expect(d.getByTestId('newchat-effort-high')).toHaveAttribute('aria-checked', 'true');
+  // the effort stays "automatico" (the table's, ADR 0051) until the user picks one
+  await expect(d.getByTestId('newchat-effort-default')).toHaveAttribute('aria-checked', 'true');
   await app.close();
+});
+
+test('Impostazioni: the Claude chats compact at 200k by default and «Regie corte» is on; both saved at once', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
+    const s = page.getByTestId('settings-page');
+    const row = s.getByTestId('st-compact');
+    await row.scrollIntoViewIfNeeded();
+    await expect(row.getByRole('radio', { name: '200k' })).toHaveAttribute('aria-checked', 'true');
+    const day = s.getByTestId('st-regia-day-switch');
+    await expect(day).toHaveAttribute('aria-checked', 'true');
+    await page.mouse.move(2, 2);
+    await shot(page, 'settings-compact');
+    await row.getByRole('radio', { name: '150k' }).click();
+    await day.click();
+    await expect(day).toHaveAttribute('aria-checked', 'false');
+    await expect.poll(() => page.evaluate(async () => {
+      const st = await window.sb.invoke('settings:get', undefined);
+      return [st.compactWindowTokens, st.regiaDayCompact];
+    })).toEqual([150_000, false]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('Motori: a new engine turns on by the user\'s click, its API key is saved encrypted and shown only as a mask', async () => {
+  const { app, page, userData } = await launchDemo();
+  await page.getByTestId('settings').click();
+  await page.getByTestId('settings-all').click();
+  const eng = page.getByTestId('settings-page').getByTestId('st-group-engines');
+  await eng.scrollIntoViewIfNeeded();
+  const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
+
+  // Gemini ships off; how it starts is shown before the user turns it on, and only their click turns it on
+  const on = eng.getByTestId('st-engine-on-gemini-switch');
+  await expect(on).toHaveAttribute('aria-checked', 'false');
+  await expect(eng.getByTestId('st-engine-on-gemini-runs')).toHaveText('Avvio: gemini --acp');
+  await on.click();
+  await expect(on).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(async () => (await get()).engineOn.gemini).toBe(true);
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).gemini).toMatch(/^[0-9a-f]{16}$/);
+
+  // the key: typed once, sent, the field emptied, then only its mask
+  const KEY = 'AIzaE2eTestKeyNotReal0123456789wxyz';
+  const row = eng.getByTestId('st-key-gemini');
+  await expect(row.getByTestId('st-key-gemini-input')).toHaveAttribute('type', 'password');
+  await row.getByTestId('st-key-gemini-input').fill(KEY);
+  await row.getByTestId('st-key-gemini-save').click();
+  await expect(row.getByTestId('st-key-gemini-mask')).toHaveText('Salvata: …wxyz');
+  await expect(row.getByTestId('st-key-gemini-input')).toHaveValue('');
+  const status = await page.evaluate(async () => window.sb.invoke('secrets:status', undefined));
+  expect(JSON.stringify(status)).not.toContain('0123456789');
+  expect(fs.readFileSync(path.join(userData, 'secrets.json'), 'utf8')).not.toContain(KEY);
+  // an engine that logs in by itself has no key field
+  await expect(eng.getByTestId('st-key-kimi')).toHaveCount(0);
+  await expect(eng.getByTestId('st-key-claude')).toHaveCount(0);
+  await row.scrollIntoViewIfNeeded();
+  await shot(page, 'settings-engines-keys');
+
+  await row.getByTestId('st-key-gemini-delete').click();
+  await expect(row.getByTestId('st-key-gemini-mask')).toHaveCount(0);
+  await app.close();
+  const logs = path.join(userData, 'logs');
+  for (const f of fs.readdirSync(logs)) expect(fs.readFileSync(path.join(logs, f), 'utf8')).not.toContain(KEY);
 });

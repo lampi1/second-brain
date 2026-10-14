@@ -96,7 +96,12 @@ describe('proctree', () => {
       expect(alive(child)).toBe(true);
       parent.kill();
       reapAfterQuit([{ pid: parent.pid ?? 0, created, exited: Date.now() }]); // what killTreesWithin does at the cap: the kill, then the reaper
-      await waitFor(() => fs.existsSync(path.join(dir, `${parent.pid}.done`)), 'the reaper done', 180000);
+      // a reaper that never ends says how far it got (its PowerShell never ran, the WMI list never came back, or the
+      // kills hung): 11-22 s at 85% CPU plus 8 WMI loops (2026-10-14), one full check still waited 183 s for nothing
+      const at = (ph: string) => fs.existsSync(path.join(dir, `${parent.pid}.${ph}`));
+      await waitFor(() => at('done'), 'the reaper done', 180000).catch((e: Error) => {
+        throw new Error(`${e.message}: ${at('listed') ? 'process list taken, the kills did not end' : at('started') ? 'its PowerShell ran, the WMI process list never came back' : 'its PowerShell never ran (not started, or killed)'}`);
+      });
       await waitFor(() => !alive(child), 'the orphan killed', 5000);
     } finally {
       if (was === undefined) delete process.env.SB_QUIT_REAP_DONE; else process.env.SB_QUIT_REAP_DONE = was;

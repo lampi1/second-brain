@@ -9,7 +9,7 @@
 // Limit: a process whose launcher already exited (`Start-Process` from a shell that ended, `cmd /c start`) has a parent
 // id that points to nothing we can see, so it is not found. Hence reapEngine: when the engine ran in a Job Object
 // (jobguard.ts) its job lists every process it started, orphans included, in milliseconds; this walk is the fallback.
-// Used by claude.ts, cursor.ts and manager.ts when an engine exits or its chat really closes.
+// Used by claude.ts, acp.ts and manager.ts when an engine exits or its chat really closes.
 import { execFile, spawn } from 'node:child_process';
 import { errText, log } from '../log';
 import { killTrees } from './cli';
@@ -124,10 +124,13 @@ export function quitReapScript(roots: { pid: number; created: number; /** when i
     // load: a short-lived process that took the pid meanwhile could have started tools that would pass the guards)
     // (the unary comma keeps one engine an array of one triple: @(@(a, b, c)) would flatten into three numbers)
     `$roots = @(${roots.map(r => `,@(${r.pid}, ${r.created}, ${r.exited})`).join('; ')}); $tool = ${q(TOOL.source)}`,
+    // tests (doneDir): a marker per phase, so a reaper that never ends says where it stopped
+    doneDir ? `$mark = { param($ph) foreach ($r in $roots) { Set-Content -LiteralPath (Join-Path ${q(doneDir)} ('{0}.{1}' -f $r[0], $ph)) -Value $ph } }; & $mark 'started'` : '',
     // the engines are being terminated as this starts: wait for them, so a live process holding a pid is a reuser
     "$t = [DateTime]::UtcNow.AddSeconds(15); while ((@($roots | Where-Object { Get-Process -Id $_[0] -ErrorAction SilentlyContinue }).Count) -and [DateTime]::UtcNow -lt $t) { Start-Sleep -Milliseconds 100 }",
     "try {",
     "  $all = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { [pscustomobject]@{ Id = [int]$_.ProcessId; Pp = [int]$_.ParentProcessId; Made = ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds(); Name = [string]$_.Name } })",
+    doneDir ? "  & $mark 'listed'" : '',
     "  foreach ($r in $roots) {",
     "    $root = [int]$r[0]",
     `    $until = $r[2] + ${CHILD_SLACK_MS}; $reuser = $all | Where-Object { $_.Id -eq $root } | Select-Object -First 1; if ($reuser -and $reuser.Made -lt $until) { $until = $reuser.Made }`,

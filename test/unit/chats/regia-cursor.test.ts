@@ -21,11 +21,11 @@ async function setup(cross = true) {
   const mcp = new McpServer({ name: 'second-brain', version: '0' });
   const port = await mcp.listen(0);
   const m = new ChatManager({
-    emitter: recEmitter(), userData, claudePath: FAKE, claudeHome: home, cursorPath: FAKE_CURSOR,
+    emitter: recEmitter(), userData, enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, claudeHome: home,
     appMcpUrl: () => `http://127.0.0.1:${port}/mcp/app`,
     env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: claudeLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') },
   });
-  const brain = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null), settings: () => ({ messaging: { crossHarness: cross }, engines: { claude: true, cursor: true }, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }), info: () => ({ brainRoot: cwd }) } as unknown as BrainService;
+  const brain = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null), settings: () => ({ messaging: { crossHarness: cross }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }), info: () => ({ brainRoot: cwd }) } as unknown as BrainService;
   const tools = appControlTools({ chats: m, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });
   mcp.mount('/mcp/app', { name: 'app', instructions: 'app', tools: tools.map((t): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => JSON.stringify(await t.run(a)) })) });
   live.push({ m, mcp });

@@ -25,10 +25,11 @@ import { NetLog } from './netlog';
 import { Handoffs } from './handoffs';
 import { Credentials } from './logins';
 import { groupFolder } from './evidence';
+import { UserClosed } from './closed';
 import { EnvStore, computeSession, envColor, envForUrl, envPartition, envSlug, isAuthCookie, isLoginUrl } from './envs';
 import { cookieEncryptionEnabled } from './fuses';
 import { hasPasswordField, pageCall } from './page';
-import { swallowCloseKey } from '../keyguard';
+import { isCloseKey, swallowCloseKey } from '../keyguard';
 import { DESKTOP, fitDesktop } from './desktop';
 
 const DEFAULT_SIZE = { width: 1280, height: 800 };
@@ -81,6 +82,8 @@ export interface Tab {
   downloads: DownloadEntry[];
   openedBy: string | null;
   createdAt: number;
+  closedByUser?: { url: string };             // the user closed it in the app (✕ / Ctrl+W on its tile): its agent is told so
+  agentInput?: number;                        // CDP input of an agent running on it (actions.ts): its keys are not the user's
 }
 
 interface Group { key: string; owner: string | null; active: string | null }
@@ -91,6 +94,7 @@ export interface TabsOptions { emitter: Emitter; window: () => BrowserWindow | n
 export class BrowserTabs {
   readonly tabs = new Map<string, Tab>();
   private readonly groups = new Map<string, Group>();
+  private readonly userClosed = new UserClosed();
   private readonly byWc = new Map<number, Tab>();
   private readonly sessions = new Map<string, Session>();
   private readonly envRt = new Map<string, EnvRuntime>();
@@ -242,25 +246,32 @@ export class BrowserTabs {
   tabFor(group: string, tabId?: unknown): Tab {
     if (tabId !== undefined && tabId !== null && tabId !== '') {
       const t = this.tabs.get(String(tabId));
-      if (!t || t.group !== group) throw new Error(`No tab "${String(tabId)}" among your tabs: call tabs_list (you only see the tabs you opened).`);
+      if (!t || t.group !== group) throw new Error(this.closedError(group, String(tabId)) ?? `No tab "${String(tabId)}" among your tabs: call tabs_list (you only see the tabs you opened).`);
       return t;
     }
     const t = this.activeOf(group);
-    if (!t) throw new Error('You have no open tab: call navigate with a url (it opens one) or tabs_create.');
+    if (!t) throw new Error(this.closedError(group, null) ?? 'You have no open tab: call navigate with a url (it opens one) or tabs_create.');
     return t;
   }
 
   select(group: string, tabId: string): Tab {
     const t = this.tabFor(group, tabId);
     this.group(group, t.owner).active = t.id;
+    this.userClosed.picked(group);
     this.emitTabs();
     return t;
+  }
+
+  /** The error for an agent call on a tab the user closed (tabId, or null = its active one); null = not such a tab. */
+  closedError(group: string, tabId: string | null): string | null {
+    return this.userClosed.errorFor(group, tabId, this.tabsOf(group).map(t => t.id));
   }
 
   closeGroup(group: string): number {
     const mine = this.tabsOf(group);
     for (const t of mine) this.close(t.id);
     this.groups.delete(group);
+    this.userClosed.forget(group);
     return mine.length;
   }
 
@@ -288,7 +299,10 @@ export class BrowserTabs {
     };
     this.tabs.set(id, tab);
     this.byWc.set(wc.id, tab);
-    this.group(group, owner).active = id;
+    // a new tab the agent opened is its pick; a rebind keeps the id; a popup never takes the place of the active tab the
+    // user closed (the agent's next call without tabId still hears about it)
+    if (!opts.webContents || !this.userClosed.closedActive(group)) this.group(group, owner).active = id;
+    if (!opts.id && !opts.webContents) this.userClosed.picked(group);
     view.setBackgroundColor('#ffffff');
     this.wire(tab);
     if (agent) {
@@ -341,9 +355,12 @@ export class BrowserTabs {
     return { tab, note: '' };
   }
 
-  close(tabId: string): void {
+  /** Close a tab; by 'user' = from the app (✕ / Ctrl+W on its tile, browser:close): an agent's next call on it, or
+   *  without tabId while it was the active one, gets "The user closed tab …" (closed.ts) instead of another tab. */
+  close(tabId: string, by?: 'user'): void {
     const t = this.tabs.get(tabId);
     if (!t) return;
+    if (by === 'user' && t.agent) t.closedByUser = { url: t.wc.isDestroyed() ? '' : redact(t.wc.getURL()) };   // before wc.close: its 'destroyed' may run remove() first
     if (!t.wc.isDestroyed()) t.wc.close({ waitForBeforeUnload: false });
     this.remove(t);
   }
@@ -359,11 +376,14 @@ export class BrowserTabs {
     for (const w of t.dialogWaiters) w();
     this.handoffs.cancelTab(t.id);
     const g = this.groups.get(t.group);
-    if (g && g.active === t.id) {
+    const wasActive = !!g && g.active === t.id;
+    if (t.closedByUser) this.userClosed.mark(t.group, t.id, t.closedByUser.url, wasActive);
+    if (g && wasActive) {
       const rest = this.tabsOf(t.group);
-      g.active = (t.openedBy && this.tabs.has(t.openedBy) ? t.openedBy : rest[rest.length - 1]?.id) ?? null;
+      // closed by the user: no active tab until the agent picks one (a call without tabId must not land on another page)
+      g.active = t.closedByUser ? null : (t.openedBy && this.tabs.has(t.openedBy) ? t.openedBy : rest[rest.length - 1]?.id) ?? null;
     }
-    log.info('browser', 'tab closed', { chat: t.owner ?? undefined, data: { tab: t.id } });
+    log.info('browser', 'tab closed', { chat: t.owner ?? undefined, data: { tab: t.id, ...(t.closedByUser ? { by: 'user' } : {}) } });
     this.emitTabs();
     this.emitEnvs();
   }
@@ -394,6 +414,11 @@ export class BrowserTabs {
       this.setPointer(tab, ev.type !== 'mouseLeave' && (process.env.SB_TEST === '1' || this.cursorOver(tab)));
     });
     swallowCloseKey(wc); // Ctrl+W in a page would reach the default menu and quit the app (keyguard.ts)
+    // ... and the user's Ctrl+W in a page closes its tile, like Ctrl+W on a chat (renderer closeTab, with the undo). Only
+    // with the keyboard really in this page (window and page focused): an agent's synthetic keys never close a tab.
+    wc.on('before-input-event', (_e, input) => {
+      if (isCloseKey(input) && !tab.agentInput && (process.env.SB_TEST === '1' || this.userTyping(tab))) this.opts.emitter.emit('ui:command', { action: 'closeTab', value: tab.id });
+    });
     wc.on('console-message', e => {
       const d = e as unknown as { level: string; message: string; lineNumber: number; sourceId: string; frame?: WebFrameMain | null };
       tab.console.push({ seq: ++tab.consoleSeq, at: Date.now(), level: d.level, text: redact(String(d.message)).slice(0, 2000), source: `${d.sourceId ?? ''}:${d.lineNumber ?? ''}`, frame: safeFrameUrl(d.frame) });
@@ -508,6 +533,11 @@ export class BrowserTabs {
   }
 
   /** Is the OS cursor over this tab's page in the main window? */
+  private userTyping(t: Tab): boolean {
+    const win = this.opts.window();
+    return t.host === 'main' && !!win && !win.isDestroyed() && win.isFocused() && !t.wc.isDestroyed() && t.wc.isFocused();
+  }
+
   private cursorOver(t: Tab): boolean {
     const win = this.opts.window();
     if (t.host !== 'main' || !win || win.isDestroyed()) return false;

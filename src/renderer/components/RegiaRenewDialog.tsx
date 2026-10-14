@@ -1,5 +1,6 @@
-// "Nuova Regia" confirm (Ctrl+Shift+R, the palette, the Regia's ⋯ menu): pick the engine (the same one = "Ricomincia
-// da capo", the other = "Cambia motore"), choose whether the new Regia starts from a summary of the old one, confirm.
+// "Nuova Regia" confirm (Ctrl+Shift+R, the palette, the Regia's ⋯ menu): pick the engine among the registry's (the
+// same one = "Ricomincia da capo", another = "Cambia motore"), choose whether the new Regia starts from a summary of
+// the old one, confirm.
 // The old Regia stays among the chats, closed, with its history (renewRegia in actions.ts does the work). Why one
 // dialog for both: same mechanism, one place to learn. Used by App.tsx (modal 'regiaRenew').
 import { useState } from 'react';
@@ -7,22 +8,24 @@ import type { Harness } from '@shared/contract';
 import { useApp } from '../store/store';
 import { closeModal, ui } from '../store/ui';
 import { renewRegia } from '../actions';
-import { harnessName, useEngineBlock } from './ChatMenu';
+import { engineName, useEngines } from '../lib/engines';
+import { useEngineBlocks } from './ChatMenu';
 import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
 
 export function RegiaRenewDialog() {
   const spec = ui.use(s => s.regiaRenew);
   const chat = useApp(s => (spec ? s.chats[spec.chatId] ?? null : null));
-  const [to, setTo] = useState<Harness>(spec?.to ?? 'claude');
+  const [to, setTo] = useState<Harness>(spec?.to ?? '');
   const [summary, setSummary] = useState(true);
   const [busy, setBusy] = useState(false);
-  const blocks = { claude: useEngineBlock('claude'), cursor: useEngineBlock('cursor') };
+  const engines = useEngines();
+  const blockOf = useEngineBlocks();
   // a Cursor Regia restored after a restart has no exchanges until it is reopened: the summary would carry only now.md
   const loaded = useApp(s => !!spec && (s.items[spec.chatId] ?? []).some(i => i.kind === 'user' || i.kind === 'assistant'));
   if (!spec || !chat) return null;
   const same = to === chat.harness;
-  const block = blocks[to];
+  const block = blockOf(to);
   const go = async () => {
     if (busy || block) return;
     setBusy(true);
@@ -30,7 +33,7 @@ export function RegiaRenewDialog() {
     setBusy(false);
     if (ok) closeModal();
   };
-  const action = same ? 'Ricomincia da capo' : `Passa a ${harnessName(to)}`;
+  const action = same ? 'Ricomincia da capo' : `Passa a ${engineName(to)}`;
   return (
     <Modal onClose={closeModal} label="Nuova Regia" testid="regia-renew" className="modal-renew">
       <form onSubmit={e => { e.preventDefault(); void go(); }}>
@@ -40,11 +43,11 @@ export function RegiaRenewDialog() {
         </div>
         <div className="modal-body">
           <div className="harness-pick" role="radiogroup" aria-label="Motore della nuova Regia">
-            {(['claude', 'cursor'] as Harness[]).map(h => (
-              <button key={h} type="button" role="radio" aria-checked={to === h} className={`harness-card ${to === h ? 'on' : ''}`} disabled={!!blocks[h]}
+            {engines.map(({ id: h, name }) => (
+              <button key={h} type="button" role="radio" aria-checked={to === h} className={`harness-card ${to === h ? 'on' : ''}`} disabled={!!blockOf(h)}
                 onClick={() => setTo(h)} data-testid={`regia-renew-${h}`}>
                 <HarnessMark harness={h} size={28} />
-                <span><b>{harnessName(h)}</b><small>{blocks[h] ?? (h === chat.harness ? 'ricomincia da capo' : 'cambia motore')}</small></span>
+                <span><b>{name}</b><small>{blockOf(h) ?? (h === chat.harness ? 'ricomincia da capo' : 'cambia motore')}</small></span>
               </button>
             ))}
           </div>

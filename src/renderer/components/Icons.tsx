@@ -92,6 +92,10 @@ export function HarnessMark({ harness, regia, size = 20 }: { harness: Harness; r
       </span>
     );
   }
+  if (harness !== 'claude') {
+    // any other engine (Kimi, Gemini, one from the brain): its initial, never another vendor's mark
+    return <span className="mark mark-engine" style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }} aria-hidden="true">{harness.charAt(0).toUpperCase()}</span>;
+  }
   return (
     <span className="mark mark-claude" style={{ width: size, height: size }} aria-hidden="true">
       <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">

@@ -105,7 +105,7 @@ export function seed(E: number): Seed {
       updatedAt: E - 20_000, browserTabIds: ['tab-sms'], lastText: 'Riproduco il bug con il cliente di prova…' }),
     chat({ id: 'feedback', title: 'App · Feedback', model: 'claude-sonnet-4-5', effort: 'medium', state: 'waiting', pending: 1, costUsd: 0.35, updatedAt: E - 2 * MIN,
       lastText: 'Lancio la suite e2e completa.' }),
-    chat({ id: 'mappa', title: 'App · Mappa 3D', costUsd: 3.1, contextTokens: 252_000, contextMaxTokens: 300_000, updatedAt: E - 25 * MIN, lastText: 'v2 in main (48e6086). 14 test verdi, screenshot nel report.' }),
+    chat({ id: 'mappa', title: 'App · Mappa 3D', costUsd: 3.1, contextTokens: 172_000, contextMaxTokens: 200_000, updatedAt: E - 25 * MIN, lastText: 'v2 in main (48e6086). 14 test verdi, screenshot nel report.' }),
     // finished long ago: closed by the auto-close, as in the real app (found with Ctrl+K, reopened with their history)
     chat({ id: 'review', title: 'Review confronto', model: 'claude-sonnet-4-5', costUsd: 2.4, updatedAt: E - 120 * MIN, ...closedBy(E - 118 * MIN), lastText: 'Confronto pronto: 3 differenze, nessuna bloccante.' }),
     chat({ id: 'report', title: 'Report settimanale', model: 'claude-sonnet-4-5', costUsd: 1.2, updatedAt: E - 26 * 60 * MIN, ...closedBy(E - 26 * 60 * MIN + 2 * MIN), lastText: 'Report pronto: 9 PR, 3 bug chiusi.' }),
@@ -830,7 +830,10 @@ export class DemoBrain implements BrainService {
   private routing: DemoRouting | null = null;
   private routingNow(): DemoRouting { return (this.routing ??= new DemoRouting(new Date(this.chats.now() - 2 * 3600_000).toISOString())); }
   routingInfo(): RoutingInfo { return this.routingNow().info(); }
-  saveRouting(routes: RoutingRow[]): RoutingInfo { return this.routingNow().save(routes, new Date(this.chats.now()).toISOString()); }
+  saveRouting(routes: RoutingRow[], reason: string | null, o: { exploration?: number; costWeight?: number; by?: string; evidence?: string | null; base?: number } = {}): RoutingInfo {
+    return this.routingNow().save(routes, new Date(this.chats.now()).toISOString(), { ...o, by: o.by ?? 'utente (Impostazioni)', reason });
+  }
+  restoreRouting(version: number, by?: string): RoutingInfo { return this.routingNow().restore(version, new Date(this.chats.now()).toISOString(), by); }
   route(req: RouteRequest): RouteResult { return this.routingNow().route(req, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }

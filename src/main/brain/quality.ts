@@ -1,6 +1,7 @@
 // The app's half of the Qualità page (/api/quality, answered by main, not by the brain's server): what only the app
 // knows. Turns: the finished turns of the chats run in this app, per Rome day, from its own logs ('turn done' of Claude,
-// 'cursor turn done' of Cursor; the logs keep 14 days), the denominator of "errors you had to catch per 100 turns".
+// 'acp turn done' with engine cursor, earlier 'cursor turn done', of Cursor; the logs keep 14 days), the denominator of
+// "errors you had to catch per 100 turns".
 // PRs: the user's active PRs at the last DevOps read (devops/service.ts) that a failed build or QA holds (a linked
 // test case Failed/Blocked, a reviewer's "rifiutata" or "in attesa dell'autore"). Reopened bugs: the brain's
 // read-only ops/tools/bug-reopen.mjs (his resolved bugs sent back to an open state), run in the background at most every
@@ -26,9 +27,11 @@ export function turnsByDay(lines: Iterable<string>): AppQuality['turns']['byDay'
   const m = new Map<string, { date: string; claude: number; cursor: number }>();
   for (const l of lines) {
     if (!l.includes('turn done')) continue;
-    let e: { t?: unknown; msg?: unknown };
-    try { e = JSON.parse(l) as { t?: unknown; msg?: unknown }; } catch { continue; }
-    const kind = e.msg === 'turn done' ? 'claude' : e.msg === 'cursor turn done' ? 'cursor' : null;
+    let e: { t?: unknown; msg?: unknown; data?: { engine?: unknown } };
+    try { e = JSON.parse(l) as typeof e; } catch { continue; }
+    // 'cursor turn done' = Cursor's line before the ACP adapter was shared (ADR 0046); now 'acp turn done' + data.engine
+    const cursorTurn = e.msg === 'cursor turn done' || (e.msg === 'acp turn done' && e.data?.engine === 'cursor');
+    const kind = e.msg === 'turn done' ? 'claude' : cursorTurn ? 'cursor' : null;
     const t = typeof e.t === 'string' ? Date.parse(e.t) : NaN;
     if (!kind || Number.isNaN(t)) continue;
     const d = romeDay(t);

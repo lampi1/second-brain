@@ -4,16 +4,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initRelease } from './release';
-import { createWindow, hiddenRun } from './window';
+import { createWindow, hiddenOpened, hiddenRun } from './window';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
 import { log } from './log';
 import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
-import { claudeStatus, cursorStatus, openLogin } from './cli';
+import { engineStatus, openLogin } from './cli';
+import { engineInfos, engineOf } from './engines/registry';
+import { withApiModels } from './engines/sessions';
+import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
 import { openLocal, type Shell } from './open-path';
 import { peekFile } from './peek-file';
+import { askImageRoots, readAskImage } from './ask-image';
 import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
 import { clipReader, readClipboardImage } from './clipboard-image';
@@ -21,6 +25,7 @@ import { gitBranches } from './chats/branch';
 import { SearchService, demoBranchOf } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
+import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,7 +56,7 @@ app.whenReady().then(async () => {
   const overlay = new OverlayLayer(() => win, outDir);
   overlay.start();
   (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
-  const opened: string[] = [];
+  const opened = hiddenOpened;
   const hiddenShell: Shell = { openPath: async p => { opened.push(`open ${p}`); return ''; }, showItemInFolder: p => { opened.push(`folder ${p}`); } };
   (globalThis as Record<string, unknown>).__sbOpened = opened; // e2e: what a hidden run would have opened
   const clip = clipReader();
@@ -66,7 +71,7 @@ app.whenReady().then(async () => {
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   const handlers: Handlers = {
-    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), health: healthSnapshot() }),
+    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot() }),
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
       const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
@@ -76,13 +81,20 @@ app.whenReady().then(async () => {
     // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
     'app:openPath': a => openLocal(a.path, hiddenRun() ? hiddenShell : shell),
     'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
+    'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
+      userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,
+      repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
+    })),
     'app:usage': () => s.brain.usage(),
-    'cli:status': a => (a.harness === 'claude' ? claudeStatus() : cursorStatus()),
+    'cli:status': a => engineStatus(a.harness),
     'cli:login': a => openLogin(a.harness),
     'chat:list': () => s.chats.list(),
     'chat:items': a => s.chats.items(a.chatId),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
     'chat:create': a => s.chats.create(a),
+    // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
+    'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
+    'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': a => s.chats.send(a.chatId, a.text, a.images),
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
@@ -110,6 +122,11 @@ app.whenReady().then(async () => {
     'feed:list': () => s.brain.feed(),
     'feed:mute': a => s.brain.mute(a.kind, a.muted),
     'settings:get': () => s.brain.settings(),
+    // API keys: write-only from the page, never returned (engines/secrets.ts); no MCP tool reaches these
+    'secrets:status': () => s.engines.secretsStatus(),
+    'secrets:set': a => s.engines.setSecret(a.engine, a.key),
+    'secrets:delete': a => s.engines.deleteSecret(a.engine),
+    'engines:trust': a => s.engines.trust(a.engine),
     'settings:set': a => s.brain.setSettings(a),
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
@@ -124,10 +141,13 @@ app.whenReady().then(async () => {
     'compare:list': () => s.brain.compareList(),
     'compare:set': a => s.brain.compareSet(a?.experiment, a?.on, a?.agent),
     'learn:act': a => s.brain.learnAct(a),
-    'models:seen': () => s.brain.modelsSeen(),
+    'models:seen': () => withApiModels(s.brain.modelsSeen()),
     'routing:get': () => s.brain.routingInfo(),
     // the renderer is the user's (sender check in ipc.ts): agents never reach this write, they only propose in chat
-    'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null),
+    'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null,
+      { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
+        ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
+    'routing:restore': a => s.brain.restoreRouting(Number(a?.version)),
     'devops:get': () => s.devops.get(),
     'devops:refresh': () => s.devops.refresh(),
     // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
@@ -159,7 +179,7 @@ app.whenReady().then(async () => {
     // "Migliora l'app" (ADR 0020): promote and restart only on the user's click, never from an agent's tool
     'improve:get': a => (a?.refresh || !s.improve.state().at ? s.improve.refresh() : s.improve.state()),
     'improve:promote': () => s.improve.promote(),
-    'improve:regia': a => s.improve.createRegia(a?.harness === 'cursor' ? 'cursor' : 'claude', typeof a?.model === 'string' && a.model ? a.model : undefined),
+    'improve:regia': a => s.improve.createRegia(typeof a?.harness === 'string' && engineOf(a.harness) ? a.harness : 'claude', typeof a?.model === 'string' && a.model ? a.model : undefined),
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
@@ -198,6 +218,9 @@ app.whenReady().then(async () => {
         // the last seconds would be lost without this
         session.defaultSession.flushStorageData();
         log.info('app', 'exit');
+        // our last moment (the log writes synchronously): what comes after is Electron's and Chromium's own teardown
+        // (profile files, GPU caches; 0.3-6 s, longer under load), which no code of ours can hold or shorten
+        process.once('exit', () => log.info('app', 'node exit'));
         app.exit(0);
       });
   });

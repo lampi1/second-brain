@@ -3,9 +3,12 @@
 // none: "DevOps"); the first message has the link, the type and state
 // and the right first step (a bug or task: read it with comments and links, then a plan; a PR: review and QA; a test
 // plan or case: run or check it); the folder is the repo's local clone when main found one (DevopsState.repoDirs), else
-// none (the app's default: the brain folder). Why: the user, 2026-10-13, "su devops vorrei un pulsantino comodo per far
+// none (the app's default: the brain folder). What the routing table needs (ADR 0032): the kind of work when the record
+// says it (a bug → bug-fix, a PR → review, a test plan or case → qa-run; else the brain's rules on the item's type and
+// title, never on the first message's fixed lines, which name test cases and PRs) and the area (project or repo).
+// Why: the user, 2026-10-13, "su devops vorrei un pulsantino comodo per far
 // partire una chat da un record devops". Used by pages/Devops.tsx and pages/DevopsQa.tsx; test/unit/devops-chat.test.ts.
-import type { DevopsItem, DevopsPrRef, QaPlan, QaPoint } from '@shared/contract';
+import type { DevopsItem, DevopsPrRef, QaPlan, QaPoint, RoutedNewChat, TaskKind } from '@shared/contract';
 
 export type DevopsRecord =
   | { kind: 'workitem'; item: DevopsItem }
@@ -13,7 +16,19 @@ export type DevopsRecord =
   | { kind: 'testplan'; plan: QaPlan; pr: DevopsPrRef | null }
   | { kind: 'testcase'; point: QaPoint; plan: QaPlan; pr: DevopsPrRef | null };
 
-export interface RecordChat { title: string; prompt: string; cwd?: string }
+export interface RecordChat { title: string; prompt: string; cwd?: string; route: Pick<RoutedNewChat, 'kind' | 'area' | 'routeText'> }
+
+/** The kind of work a record says by itself; null = the brain's rules decide (on `routeText`). */
+export function recordKind(r: DevopsRecord): TaskKind | null {
+  switch (r.kind) {
+    case 'pr': return 'review';
+    case 'testplan': case 'testcase': return 'qa-run';
+    case 'workitem': {
+      const t = (r.item.type ?? '').trim().toLowerCase();
+      return t === 'bug' ? 'bug-fix' : /^test (case|plan|suite)$/.test(t) ? 'qa-run' : null;
+    }
+  }
+}
 
 /** The area of a repo or project name: the name itself, else "DevOps". */
 export function areaOf(name: string | null | undefined): string {
@@ -77,5 +92,10 @@ export function recordChat(r: DevopsRecord, repoDirs: Readonly<Record<string, st
     ]; break;
   }
   const cwd = p.repo ? repoDirs[p.repo] : undefined;
-  return { title, prompt: lines.join('\n'), ...(cwd ? { cwd } : {}) };
+  const kind = recordKind(r);
+  const route = {
+    ...(kind ? { kind } : {}), ...(p.area !== 'DevOps' ? { area: p.area } : {}),
+    routeText: r.kind === 'workitem' ? `${r.item.type ?? ''} ${p.title}`.trim() : p.title,
+  };
+  return { title, prompt: lines.join('\n'), ...(cwd ? { cwd } : {}), route };
 }

@@ -6,9 +6,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { ChatSummary, ImproveState, NewChat } from '../../src/shared/contract';
+import type { ChatSummary, ImproveState, NewChat, RoutingTable } from '../../src/shared/contract';
 import { branchStages, checkAt, launchOutcome, nextSeen, promoteGate, promoteStep, reasonText, shaOfRelease } from '../../src/main/improve/stages';
-import { appRegiaPrompt, cleanEnv, ImproveService } from '../../src/main/improve/service';
+import { appRegiaPrompt, cleanEnv, ImproveService, type ImproveDeps } from '../../src/main/improve/service';
+import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
+import { DEMO_REGISTRY } from '../../src/main/brain/routing-demo';
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-10-12T10:00:00Z');
@@ -168,7 +170,7 @@ function repoWithHistory(): { dir: string; base: string; m1: string; m2: string;
   return { dir, base, m1, m2, b1 };
 }
 
-function service(o: { dir: string; base: string; running: string; stable?: boolean; env?: Record<string, string>; restartFails?: boolean }) {
+function service(o: { dir: string; base: string; running: string; stable?: boolean; env?: Record<string, string>; restartFails?: boolean; routing?: ImproveDeps['routing'] }) {
   const states: ImproveState[] = [];
   const created: NewChat[] = [];
   let restarts = 0;
@@ -177,6 +179,7 @@ function service(o: { dir: string; base: string; running: string; stable?: boole
     userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: null,
     chats: { list: () => [] as ChatSummary[], create: async (r: NewChat) => { created.push(r); return { id: 'x', harness: r.harness } as ChatSummary; } },
     emit: st => states.push(st), restart: failed => { restarts++; if (o.restartFails) failed(); }, node: process.execPath,
+    ...(o.routing ? { routing: o.routing } : {}),
   });
   return { s, states, created, restarts: () => restarts, userData };
 }
@@ -291,5 +294,21 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, space: 'app', appRegia: true, model: 'claude-opus-5-5', title: "Regia dell'app" });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
     expect(appRegiaPrompt(r.dir)).toMatch(/Non aggiorni e non riavvii mai/);
+  });
+
+  it('with the routing table: kind regia, area App, the engine the user picked; the route on the chat', async () => {
+    const r = fresh();
+    const table: RoutingTable = { version: 5, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
+      { kind: '*', area: ['App', 'Pers · App'], harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'app: Opus medio', since: '2026-10-14', evidence: 'regola' },
+    ] };
+    const routing = { route: (req: RouteRequest) => routeChat(req, table, DEMO_REGISTRY, null, 9), engineOn: () => true, agentsMayOpen: () => true };
+    const { s, created } = service({ dir: r.dir, base: r.base, running: 'dev', stable: false, routing });
+    await s.createRegia('claude');
+    expect(created[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', space: 'app', appRegia: true, cwd: r.dir,
+      route: { source: 'table', kind: 'regia', area: 'App', version: 5 } });
+    expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
+    // the app's chats only on appChats's engine (ADR 0032 hard rule, ADR 0046): refused on Cursor, nothing created
+    await expect(s.createRegia('cursor')).rejects.toThrow(/sull’app vanno solo su Claude/);
+    expect(created).toHaveLength(1);
   });
 });

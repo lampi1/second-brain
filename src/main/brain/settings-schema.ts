@@ -3,10 +3,19 @@
 // accorga nemmeno, fare modifiche deve essere molto figo vederle live"). Protected keys (engines on/off, spending
 // limits, notifications off, security: the brain folder whose tools the app runs, the MCP port) can only be PROPOSED by
 // an agent and need the user's click; the others an agent may change directly (logged, undoable). validate() is the one
-// pure check used for the user's UI changes, agent requests and the saved file alike. Used by config.ts (store, history,
-// undo, proposals) and served to the UI by 'settings:schema'.
+// pure check used for the user's UI changes, agent requests and the saved file alike. The engines' keys follow the
+// engine registry (engines/registry.ts), which the brain can extend at run time: `engineOn.<id>` and `engines.<id>` are
+// valid for any engine id, like `mute.<kind>`. Used by config.ts (store, history, undo, proposals) and served to the UI
+// by 'settings:schema'.
 import path from 'node:path';
 import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shared/contract';
+import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
+
+/** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
+ *  token di contesto»; 300000 before, ADR 0051). */
+export const COMPACT_WINDOW = 200_000;
+/** the default before 2026-10-14: a saved value equal to it that the user never set follows the new one (config.ts) */
+export const OLD_COMPACT_WINDOW = 300_000;
 
 const H = { claude: 'Claude', cursor: 'Cursor' } as const;
 const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
@@ -21,7 +30,7 @@ const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
     description: h === 'claude' ? 'Quanto una sola chat spende oggi. Vuoto = nessun limite.' : 'Cursor non dice il costo per chat: per ora non avvisa.' },
 ];
 
-export const SCHEMA: readonly SettingDef[] = [
+const BASE: readonly SettingDef[] = [
   { key: 'brainRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella del cervello',
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
@@ -30,8 +39,10 @@ export const SCHEMA: readonly SettingDef[] = [
     description: 'Mosaico: le chat come riquadri. Corsie: le chat in colonne per stato.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come Windows.' },
-  { key: 'compactWindowTokens', type: 'int', min: 0, max: 1_000_000, default: 300_000, protected: false, label: 'Compatta le chat Claude a (token)',
-    description: 'Ogni chat Claude dell’app compatta da sola il suo contesto vicino a questa finestra (a circa il 90%), anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
+  { key: 'compactWindowTokens', type: 'int', min: 0, max: 1_000_000, default: COMPACT_WINDOW, protected: false, label: 'Compatta le chat Claude a (token)',
+    description: 'Ogni chat Claude dell’app, Regia compresa, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
+  { key: 'regiaDayCompact', type: 'boolean', default: true, protected: false, label: 'Regie corte: compatta a inizio giornata',
+    description: 'Una Regia con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è ferma da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
   { key: 'contextWarnTokens', type: 'int', min: 10_000, max: 2_000_000, default: 200_000, protected: false, label: 'Soglia del contesto lungo per Cursor (token)',
     description: 'Il misuratore del contesto diventa ambra sopra questa dimensione nelle chat che non dicono la loro finestra (Cursor); le chat Claude diventano ambra vicino alla loro compattazione.' },
   { key: 'contextHandoff', type: 'boolean', default: true, protected: false, label: 'Continua le chat fredde in una sessione nuova',
@@ -57,12 +68,9 @@ export const SCHEMA: readonly SettingDef[] = [
     description: 'Nessuna notifica di Windows; tutto resta nel feed.' },
   { key: 'mute.*', type: 'boolean', default: false, protected: true, label: 'Silenzia un tipo di novità',
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
-  { key: 'engines.claude', type: 'boolean', default: true, protected: true, label: 'La Regia può usare Claude',
-    description: 'Spento: la Regia (app_create_chat) non apre chat Claude. Le tue chat da "Nuova chat" restano possibili.' },
-  { key: 'engines.cursor', type: 'boolean', default: true, protected: true, label: 'La Regia può usare Cursor',
-    description: 'Spento: la Regia (app_create_chat) non apre chat Cursor. Le tue chat da "Nuova chat" restano possibili.' },
-  { key: 'messaging.crossHarness', type: 'boolean', default: true, protected: true, label: 'Messaggi tra Claude e Cursor',
-    description: 'Le chat Claude e le chat Cursor possono scriversi (posta tra chat). Spento: i messaggi tra motori diversi sono bloccati; tra chat dello stesso motore passano sempre. Vale anche fuori dall’app.' },
+  // the engines' own keys (engineOn.<id>, engines.<id>, regiaChats.harness) come from engineDefs below
+  { key: 'messaging.crossHarness', type: 'boolean', default: true, protected: true, label: 'Chat tra motori diversi',
+    description: 'Una chat o una Regia può aprire, riprendere o scrivere a chat su un altro motore, che spendono i crediti di quel motore. Spento: solo sul proprio motore; le tue chat da Nuova chat restano libere. Vale anche per la posta tra chat fuori dall’app.' },
   { key: 'devops.enabled', type: 'boolean', default: false, protected: true, label: 'Aggiornamento DevOps automatico',
     description: 'Rilegge da sola i tuoi work item, le PR e le novità sui ticket che segui, con gli script del cervello (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
   { key: 'devops.everyMin', type: 'int', min: 5, max: 720, default: 30, protected: false, label: 'DevOps: ogni quanti minuti',
@@ -75,8 +83,6 @@ export const SCHEMA: readonly SettingDef[] = [
   ...budgetDefs('cursor'),
   // the chats the Regia opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
   // chooses whose credits and how many are spent
-  { key: 'regiaChats.harness', type: 'enum', values: ['claude', 'cursor'], default: 'claude', protected: true, label: 'Chat aperte dalla Regia: motore',
-    description: 'Con cosa la Regia apre le chat di lavoro quando non lo dice lei. Anche il punto di partenza di "Nuova chat".' },
   { key: 'regiaChats.claudeModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Claude',
     description: 'Il modello delle chat Claude aperte dalla Regia. Vuoto = il predefinito di Claude Code.' },
   { key: 'regiaChats.claudeEffort', type: 'enum', values: ['', 'low', 'medium', 'high', 'xhigh', 'max'], default: '', protected: true, label: 'Effort per le chat Claude',
@@ -109,10 +115,36 @@ export const SCHEMA: readonly SettingDef[] = [
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
 
 const MUTE_KEY = /^mute\.([a-z][a-z-]{0,40})$/;
+const ENGINE_KEY = /^(engineOn|engines)\.(.+)$/;
+
+// the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Regie may use it; engines.* keeps the key
+// older releases read, with the same meaning (safe rollback). Default: on only for the built-ins (registry defaultOn)
+function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
+  const label = engineLabel(id), on = engineOf(id)?.defaultOn ?? false;
+  return group === 'engineOn'
+    ? { key: `engineOn.${id}`, type: 'boolean', default: on, protected: true, label: `${label} acceso`,
+      description: `Spento: nessuna chat parte su ${label}, né quelle che apri tu né quelle delle Regie; si spegne anche «Le Regie possono usare ${label}».` }
+    : { key: `engines.${id}`, type: 'boolean', default: on, protected: true, label: `Le Regie possono usare ${label}`,
+      description: `Spento: nessuna Regia apre o riprende chat su ${label}; tu sì, da Nuova chat.` };
+}
+
+/** The engine a Regia's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
+function regiaEngineDef(): SettingDef {
+  return { key: 'regiaChats.harness', type: 'enum', values: engines().filter(e => e.caps.tools).map(e => e.id), default: 'claude', protected: true, label: 'Chat aperte dalla Regia: motore',
+    description: 'Con cosa la Regia apre le chat di lavoro quando non lo dice lei. Anche il punto di partenza di "Nuova chat".' };
+}
+
+/** Every setting, the engines' ones for the engines in the registry now. */
+export function schema(): SettingDef[] {
+  return [...BASE, regiaEngineDef(), ...engines().flatMap(e => [engineDef('engineOn', e.id), engineDef('engines', e.id)])];
+}
 
 export function defOf(key: string): SettingDef | null {
-  if (MUTE_KEY.test(key)) return SCHEMA.find(d => d.key === 'mute.*')!;
-  return SCHEMA.find(d => d.key === key && d.key !== 'mute.*') ?? null;
+  if (MUTE_KEY.test(key)) return BASE.find(d => d.key === 'mute.*')!;
+  const eng = ENGINE_KEY.exec(key);
+  if (eng) return ENGINE_ID.test(eng[2]!) ? engineDef(eng[1] as 'engineOn' | 'engines', eng[2]!) : null;
+  if (key === 'regiaChats.harness') return regiaEngineDef();
+  return BASE.find(d => d.key === key && d.key !== 'mute.*') ?? null;
 }
 
 export type Checked = { ok: true; key: SettingKey; value: unknown } | { ok: false; error: string };
@@ -152,8 +184,9 @@ export function validate(key: unknown, value: unknown): Checked {
 export function defaults(): Settings {
   return {
     brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', dnd: false, dndUntil: null,
-    contextWarnTokens: 200_000, contextHandoff: true, compactWindowTokens: 300_000, coldHandoffMin: 50,
-    engines: { claude: true, cursor: true },
+    contextWarnTokens: 200_000, contextHandoff: true, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, coldHandoffMin: 50,
+    engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
+    engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     messaging: { crossHarness: true },
     devops: { enabled: false, everyMin: 30, sound: true },
     budget: { enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } },
@@ -193,7 +226,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((key === 'mute' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'devops' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
+      if ((key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'devops' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

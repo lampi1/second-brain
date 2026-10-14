@@ -3,6 +3,7 @@
 // except when main says the request is no longer open; "Invia subito" interrupts and the message goes exactly once.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppInfo, ChatSummary, CliStatus, PendingRequest } from '@shared/contract';
+import { engineInfos } from '../../src/main/engines/registry';
 
 const invoke = vi.fn();
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: (...a: unknown[]) => invoke(...a), on: () => () => {} } }));
@@ -171,7 +172,7 @@ describe('answer', () => {
 
 describe('cliFetch (Nuova chat while the check at start has not reported)', () => {
   const st = (version: string): CliStatus => ({ found: true, path: 'x', version, loggedIn: true });
-  const info: AppInfo = { version: '1', brainRoot: null, mcpUrl: 'u', cli: null };
+  const info: AppInfo = { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: engineInfos().filter(e => e.id === 'claude' || e.id === 'cursor') }; // the two this test asks; every listed one must answer
 
   it('a failed check, or one with no answer in time, is null ("non verificato") and leaves app:info alone', async () => {
     dispatch({ type: 'info', info });

@@ -13,6 +13,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import type { FeedEvent } from '@shared/contract';
 import { ago, chatCost, effortLabel, prettyModel } from '../lib/format';
 import { useNow } from '../lib/clock';
+import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { stop, useApp } from '../store/store';
 import { openModal, setFocused, setPrefs, ui } from '../store/ui';
@@ -22,7 +23,7 @@ import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
-import { ChatMenu, harnessName, TitleInput } from './ChatMenu';
+import { ChatMenu, TitleInput } from './ChatMenu';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -130,7 +131,7 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
           <IconButton ref={menuBtn} label="Motore, modello, Pulisci e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="regia-menu"><IconMore /></IconButton>
         </div>
         <div className="th-sub" data-testid="regia-sub">
-          <span className="th-engine" data-tip={`Motore: ${harnessName(chat.harness)}`} aria-label={`Motore: ${harnessName(chat.harness)}`} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
+          <span className="th-engine" data-tip={`Motore: ${engineName(chat.harness)}`} aria-label={`Motore: ${engineName(chat.harness)}`} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[chat.title.trim() !== 'Regia' ? chat.title : '', prettyModel(chat.model, chat.harness), effortLabel(chat.effort), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>

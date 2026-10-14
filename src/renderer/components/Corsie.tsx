@@ -62,7 +62,8 @@ function Column({ col, title, hint, chats, maxOpen, empty, indexBase }: { col: C
 
 function BrowserStrip({ only }: { only: string[] | null }) {
   const hidden = ui.use(s => s.hidden, sameList);
-  const tabs = useApp(s => s.tabs.filter(t => (!t.ownerChatId || (!hidden.includes(t.ownerChatId) && s.chats[t.ownerChatId]?.space !== 'app')) && (!only || only.includes(t.id))), sameList);
+  const hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
+  const tabs = useApp(s => s.tabs.filter(t => !hiddenTabs.includes(t.id) && (!t.ownerChatId || (!hidden.includes(t.ownerChatId) && s.chats[t.ownerChatId]?.space !== 'app')) && (!only || only.includes(t.id))), sameList);
   const owners = useApp(s => tabs.map(t => (t.ownerChatId ? s.chats[t.ownerChatId]?.title ?? '' : '')), sameList);
   const colors = useApp(s => tabs.map(t => pairOf(s, t.ownerChatId) ?? -1), sameList);
   if (!tabs.length) return null;

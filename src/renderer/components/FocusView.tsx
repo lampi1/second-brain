@@ -14,7 +14,8 @@ import { Kbd, Keys } from './ui';
 
 export function FocusView({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
-  const all = useApp(s => s.tabs.filter(t => t.ownerChatId === chatId).map(t => t.id), sameList);
+  const hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
+  const all = useApp(s => s.tabs.filter(t => t.ownerChatId === chatId && !hiddenTabs.includes(t.id)).map(t => t.id), sameList);
   const hide = ui.use(s => s.prefs.browsersHidden);
   const waiting = useHandoffTabs();
   const tabs = hide ? all.filter(t => waiting.includes(t)) : all;

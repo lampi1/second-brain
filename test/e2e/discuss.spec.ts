@@ -93,7 +93,8 @@ test('Idee · Dall\'IA: Apri una chat shows the editable first message; Ctrl+Inv
   await expect(card.getByTestId('bx-discuss-mark')).toContainText('in «Idea · Le domande in fila, una alla volta»');
   await expect(page.getByTestId('page-idee')).toBeVisible();
   const created = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
-  expect(created.some(c => c.title === 'Idea · Le domande in fila, una alla volta')).toBe(true);
+  // through the routing table (ADR 0032): the chat carries its route for the ledger
+  expect(created.find(c => c.title === 'Idea · Le domande in fila, una alla volta')).toMatchObject({ route: { policy: 'routing' } });
 
   // the mark leads to the chat
   await card.getByTestId('bx-discuss-open').click();

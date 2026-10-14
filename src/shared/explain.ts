@@ -2,7 +2,7 @@
 // item"), plus the raw command shown folded under it. Why: the user (2026-10-11) "la ui dei comandi non mi spiega cosa
 // fanno ... vorrei una riga di spiegazione come avviene su claude desktop, il tutto compatibile anche quando userò la
 // cursor cli". Claude tools by name and input (Bash/PowerShell: the `description` the model writes); Cursor tools by ACP
-// kind (Shell, Read, Edit, … as cursor.ts names them) with their title and raw input; MCP tools by a readable server and
+// kind (Shell, Read, Edit, … as acp.ts names them) with their title and raw input; MCP tools by a readable server and
 // action. Pure, no I/O: used by the chat tool rows (ChatItems.tsx) and the permission panels (RequestPanel.tsx).
 
 type Obj = Record<string, unknown>;

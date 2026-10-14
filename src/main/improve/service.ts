@@ -11,6 +11,7 @@ import path from 'node:path';
 import type { ChatSummary, Harness, ImproveLaunch, ImprovePromote, ImproveState } from '../../shared/contract';
 import type { ChatService } from '../services';
 import { errText, log } from '../log';
+import { createRoutedChat, type RoutedChatDeps } from '../chats/routed';
 import { branchStages, checkAt, launchOutcome, nextSeen, promoteGate, promoteStep, shaOfRelease, type Checks, type LaunchResult, type RefRow, type ReleaseState, type Seen } from './stages';
 
 export interface ImproveDeps {
@@ -30,6 +31,8 @@ export interface ImproveDeps {
   restart: (failed: () => void) => void;
   /** the Node that runs release.mjs (null = none found: "Aggiorna" stays off) */
   node: string | null;
+  /** the routing table (ADR 0032): the section's Regia gets its model from it; none (tests) = the engine's default */
+  routing?: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>;
 }
 
 const LOG_MAX = 6000;
@@ -225,11 +228,17 @@ export class ImproveService {
     return this.st;
   }
 
-  /** The section's Regia, in the code folder, with its role. */
+  /** The section's Regia, in the code folder, with its role; its model from the routing table (kind regia, area App),
+   *  the engine the user picked beating the row (createRoutedChat). */
   async createRegia(harness: Harness, model?: string): Promise<ChatSummary> {
     const repo = this.repo();
     if (!repo || !fs.existsSync(repo)) throw new Error("Imposta prima la cartella del codice dell'app (Impostazioni).");
-    return this.d.chats.create({ harness, cwd: repo, title: "Regia dell'app", space: 'app', appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) });
+    const req = { harness, cwd: repo, title: "Regia dell'app", space: 'app' as const, appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) };
+    if (!this.d.routing) return this.d.chats.create(req);
+    const { route, engineOn, agentsMayOpen } = this.d.routing;
+    return createRoutedChat({ route, engineOn, agentsMayOpen, create: r => this.d.chats.create(r) },
+      { title: req.title, prompt: req.prompt, cwd: repo, defaults: { harness }, ask: { harness, ...(model ? { model } : {}), reason: 'motore scelto dall’utente' } },
+      { space: 'app', appRegia: true });
   }
 
   private push(): void {

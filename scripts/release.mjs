@@ -103,11 +103,13 @@ function startSync(id) {
   const out = path.join(dir, `${id}.json`);
   const startedAt = new Date().toISOString();
   fs.writeFileSync(out, JSON.stringify({ release: id, startedAt, running: true }));
-  // a detached Node-ish runner keeps going after this script exits and records the outcome
+  // a detached Node-ish runner keeps going after this script exits and records the outcome; its summary = the last 6
+  // lines plus the first error line above them (a crash ends with the error object; same as src/main/sync.ts summarize)
   const runner = `const {spawn}=require('node:child_process');const fs=require('node:fs');const c=JSON.parse(process.argv[1]);let log='';` +
     `const p=spawn(c.command,c.args||[],{cwd:c.cwd||undefined,windowsHide:true,env:{...process.env,SB_RELEASE_ID:c.id}});` +
     `p.stdout.on('data',d=>{log+=d});p.stderr.on('data',d=>{log+=d});` +
-    `p.on('close',code=>{const tail=log.trim().split(/\\r?\\n/).slice(-6).join('\\n');fs.writeFileSync(c.out,JSON.stringify({release:c.id,startedAt:c.startedAt,endedAt:new Date().toISOString(),exitCode:code,ok:code===0,blocked:code===2,summary:tail}))});` +
+    `p.on('close',code=>{const ls=log.trim().split(/\\r?\\n/),cause=ls.slice(0,-6).find(l=>/^\\s*(?:\\w*Error\\b|fatal: |error: )/.test(l));` +
+    `const tail=(cause?[cause.trim(),'…',...ls.slice(-6)]:ls.slice(-6)).join('\\n');fs.writeFileSync(c.out,JSON.stringify({release:c.id,startedAt:c.startedAt,endedAt:new Date().toISOString(),exitCode:code,ok:code===0,blocked:code===2,summary:tail}))});` +
     `p.on('error',e=>fs.writeFileSync(c.out,JSON.stringify({release:c.id,startedAt:c.startedAt,endedAt:new Date().toISOString(),exitCode:-1,ok:false,blocked:false,summary:String(e.message)})));`;
   const child = spawn(process.execPath, ['-e', runner, JSON.stringify({ ...cfg, id, out, startedAt })], { detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
   child.unref();

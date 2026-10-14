@@ -7,7 +7,8 @@
 // Esegui runs the block in the chat that proposed it (run:start with that chat and message: the run, its output and
 // "Manda l'esito alla chat" stay under the block in that chat); a block that looks like production asks a second click
 // that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the layer:
-// later). Used by RequestPanel.tsx (it hands over every request of type 'command').
+// later). In the questions window (`window`, ADR 0049) the chat's explanation is the large title and the command a
+// readable block under it. Used by RequestPanel.tsx (it hands over every request of type 'command').
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { copyText } from '../brain/components/ui';
@@ -19,7 +20,7 @@ import { AskContext } from './AskContext';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconTerminal } from './Icons';
 import { Kbd } from './ui';
 
-export type CommandVariant = 'lane' | 'tile' | 'regia' | 'compact';
+export type CommandVariant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
 
 export interface CommandHandlers {
   /** Esegui through someone else (the layer relays to the app page); resolves false when it did not start */
@@ -88,6 +89,37 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   const age = ago(req.at, now);
   const prodBadge = <span className="cb-prod" data-testid={`${testBase}-prod`} title={`Sembra un comando di produzione: ${prod}`}><IconAlert size={11} /> produzione</span>;
   const cls = variant === 'regia' ? 'decision cmd-ask' : small ? 'need-card cmd-ask cmd-small' : 'ask cmd-ask';
+
+  if (variant === 'window') {
+    return (
+      <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`wq cmd-ask ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
+        aria-busy={busy} aria-label={`Comando da eseguire da ${chatTitle ?? 'una chat'}: ${lines[0] ?? ''}`}>
+        <div className="wq-kicker"><IconTerminal size={13} /><span>Comando da eseguire</span>{prod && prodBadge}</div>
+        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || 'Lo lanci?'}</h2>
+        <div className={`ask-raw wq-code ${open ? 'open' : ''}`}>
+          <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{open ? code : lines.slice(0, 6).join('\n')}</pre>
+          {lines.length > 6 && (
+            <button type="button" className="ask-raw-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`${testBase}-code-toggle`}>
+              {open ? 'Mostra meno' : `Mostra tutto il comando (${lines.length} righe)`}
+            </button>
+          )}
+        </div>
+        {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} layout="window" onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
+        <div className="wq-perm">
+          <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
+            data-tip={armed ? undefined : 'Lo esegue PowerShell 5.1 qui nell’app, nella cartella della chat; l’output resta sotto il blocco nella chat'}>
+            {armed ? <><IconAlert size={13} /> Confermi? {prod}</> : <><IconPlay size={12} /> Esegui <Kbd>Invio</Kbd></>}
+          </button>
+          <button type="button" className="btn btn-ghost btn-l" onClick={copy} data-testid={`${testBase}-copy`}>
+            {copied ? <><IconCheck size={13} /> Copiato</> : <><IconCopy size={13} /> Copia</>}
+          </button>
+          <span className="sp" />
+          <button type="button" className="btn btn-ghost btn-l cmd-dismiss" onClick={dismiss} disabled={busy} data-testid={`${testBase}-dismiss`}
+            data-tip="Toglie la richiesta: il blocco resta nella chat con il suo Esegui">Non serve</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`${cls} ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"

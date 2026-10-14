@@ -9,6 +9,7 @@
 import type { ChatSummary, DevopsState, PendingRequest, RunInfo } from '../../shared/contract';
 import { chatName } from '../../shared/regia';
 import { redact } from '../log';
+import { engineLabel } from '../engines/registry';
 
 export interface DigestInput {
   chats: ChatSummary[];
@@ -34,7 +35,7 @@ export function ago(ms: number): string {
   const h = Math.round(m / 60);
   return h < 24 ? `${h} h` : `${Math.round(h / 24)} g`;
 }
-const engine = (c: ChatSummary) => (c.harness === 'cursor' ? 'Cursor' : 'Claude');
+const engine = (c: ChatSummary) => engineLabel(c.harness);
 const k = (n: number) => `${Math.round(n / 1000)}k`;
 
 /** What an open request asks, in one line. */
@@ -92,7 +93,9 @@ export function digest(inp: DigestInput): string {
     if (rs.length) { for (const r of rs) wait.push(line(c, `aspetta l'utente da ${ago(now - r.at)}: ${askLine(r)}`, false)); continue; }
     if (c.state === 'error') { err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
     if (!changed(c)) { same.push(`«${c.title}»`); continue; }
-    if (c.state === 'running' || c.state === 'starting' || c.state === 'waiting') run.push(line(c, `al lavoro (aggiornata ${ago(now - c.updatedAt)} fa)`));
+    // waiting in the CPU queue (ADR 0036): no turn ran yet, so never "turno finito"
+    if (c.queued) run.push(line(c, `in coda per il carico della macchina (posizione ${c.queued.position}, da ${ago(now - c.queued.since)})`, false));
+    else if (c.state === 'running' || c.state === 'starting' || c.state === 'waiting') run.push(line(c, `al lavoro (aggiornata ${ago(now - c.updatedAt)} fa)`));
     else {
       const r = c.lastResult;
       const how = !r ? 'nessun turno ancora' : r.interrupted ? 'fermata dall\'utente' : r.isError ? 'turno finito con errore' : 'turno finito';

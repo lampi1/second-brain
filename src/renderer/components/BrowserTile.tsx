@@ -1,4 +1,5 @@
-// A browser tab as a tile: header (address, back/forward/reload, ⤢), sub-line ("di: <chat>" chip in the pair color →
+// A browser tab as a tile: header (address, back/forward/reload, ⤢, ✕ close: Ctrl+W too, also inside the page, with the
+// same 6-second undo as a chat; its agent is told at its next call), sub-line ("di: <chat>" chip in the pair color →
 // jumps to that chat, and the agent's last action; the tile shares the chat's accent and hover, lib/pairs.ts), and an empty placeholder whose screen rect is reported to main
 // (lib/viewports.ts), where the real page (a native WebContentsView) is drawn on top. Under the view, the tab's last
 // snapshot fills the placeholder, so overlays and screenshots show the page instead of a hole. An open hand-off (the
@@ -6,14 +7,14 @@
 // Used by Mosaico, Corsie (the big browser next to its chat) and the focus view.
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { registerView } from '../lib/viewports';
-import { goTab, navigateTab, useApp } from '../store/store';
+import { closeTab, goTab, navigateTab, useApp } from '../store/store';
 import { setFocused, ui } from '../store/ui';
 import { focusChat, toggleMaximize } from '../actions';
-import { useFlash } from './ChatTile';
+import { closeFromX, useFlash } from './ChatTile';
 import { HandoffBanner } from './HandoffBanner';
 import { useHandoff } from '../store/handoffs';
 import { pairHover, usePair } from '../lib/pairs';
-import { IconArrowLeft, IconArrowRight, IconGlobe, IconMaximize, IconMinimize, IconRefresh, IconSpinner } from './Icons';
+import { IconArrowLeft, IconArrowRight, IconGlobe, IconMaximize, IconMinimize, IconRefresh, IconSpinner, IconX } from './Icons';
 import { IconButton } from './ui';
 
 function splitUrl(url: string): { host: string; rest: string } {
@@ -63,6 +64,7 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
           <IconButton label={maximized ? 'Ripristina' : 'Ingrandisci'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
           </IconButton>
+          <IconButton label="Chiudi scheda" shortcut="Ctrl+W" onClick={() => closeFromX(() => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
         </div>
         <div className="th-sub">
           {owner ? (

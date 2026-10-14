@@ -1,5 +1,6 @@
 // ChatManager = the ChatService of the app (src/main/services.ts): every chat the user runs inside the cockpit, on one of
-// the two engines (ADR 0010): Claude (embedded binary, claude.ts) or Cursor (the installed CLI over ACP, cursor.ts).
+// the engines of the registry (engines/registry.ts, ADR 0046; today Claude, embedded binary, and Cursor over ACP): it
+// asks an engine's caps, never its name, and gets the session from engines/sessions.ts.
 // It owns the chat records (summary, items capped at ~2000, open questions/permissions), starts one engine session per
 // chat on demand, turns session reports into contract events (chat:updated, chat:item with replace for streaming,
 // pending:added/resolved, chat:removed), persists the chats (store.ts) and restores them as 'closed' on start; the
@@ -24,11 +25,10 @@ import { checkImages } from './images';
 import type { Emitter } from '../ipc';
 import { errText, log } from '../log';
 import type { ChatService } from '../services';
-import { ClaudeSession } from './claude';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit, reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
-import { CursorSession } from './cursor';
+import { REGIA_COMPACT, regiaDayDue, romeDay } from './regia-day';
 import { AFTER_CALLS, autoHandoff, CACHE_TTL_MS, coldArmed, coldAsk, coldPrompt, coldRoute, type ColdView, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
 import { ContextCounters } from './context-stats';
 
@@ -38,16 +38,24 @@ import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type Ses
 import { ChatStore, type PastSession, type StoredChat } from './store';
 import { BufferedSink, WarmPool, type WarmEngine } from './warm';
 import { AdmissionQueue, MAIL_WAITS, type AdmissionLimits, type LoadSampler } from './admission';
+import { AgentMayNotWake } from '../engines/policy';
+import { isAppChat } from '../brain/routing';
+import { engineOf, engineOrThrow } from '../engines/registry';
+import { sessionFor } from '../engines/sessions';
 import { cleanRegiaName, regieOf } from '../../shared/regia';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 
 export interface ChatManagerOptions {
   emitter: Pick<Emitter, 'emit'>;
   userData: string;
-  /** Claude engine override (a .mjs fake for tests); default: the embedded binary (cli.ts resolveClaude) */
-  claudePath?: string;
-  /** Cursor engine override (a .mjs fake for tests); default: the installed CLI (cli.ts resolveCursor) */
-  cursorPath?: string;
+  /** per engine, its command override (a .mjs fake for tests); absent = the installed one (cli.ts) */
+  enginePaths?: Partial<Record<Harness, string>>;
+  /** may a chat start on this engine now (the user's engineOn.* switches); absent = every engine may */
+  engineOn?: (h: Harness) => boolean;
+  /** may an agent's message wake a stopped chat on this engine («Le Regie possono usare X», engines/policy.ts) */
+  agentsMayOpen?: (h: Harness) => boolean;
+  /** the user's API key for this engine (engines/service.ts keyFor), read only when its process or request starts */
+  keyFor?: (h: Harness) => string | null;
   /** app version, for the engines' clientInfo */
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
@@ -84,8 +92,8 @@ export interface ChatManagerOptions {
   onCrash?: (chatId: string, error: string) => void;
   /** cost/time estimate at the first send of a job (→ BrainService.estimate); shown as ChatSummary.estimate */
   estimateFor?: (req: { harness: Harness; model: string | null; effort: Effort | null; prompt: string; title?: string }) => EstimateResult | null;
-  /** the user's reasoning and fast for every Cursor chat, read at each session start (settings regiaChats.*) */
-  cursorModelConfig?: () => { reasoning: CursorReasoning | ''; fast: boolean } | null;
+  /** the user's reasoning and fast for every ACP chat, read at each session start (settings regiaChats.*) */
+  acpModelConfig?: () => { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** min ms between two get_usage asks after turns (default 60 s) */
   usageEveryMs?: number;
 
@@ -94,6 +102,9 @@ export interface ChatManagerOptions {
   compactWindowTokens?: () => number;
   /** the invisible continuation of cold chats (ADR 0031; default off here, wiring reads the setting) */
   coldHandoff?: () => boolean;
+  /** «Regie corte» (ADR 0051): a Regia with a context from an earlier day compacts it once on a new day (default off
+   *  here, wiring reads the setting regiaDayCompact) */
+  regiaDayCompact?: () => boolean;
   /** ms after the last call before an idle long chat writes its cold note (default 50 min) */
   coldIdleMs?: () => number;
   /** how long the prompt cache lives after its last use (default 55 min; tests shorten it) */
@@ -184,6 +195,10 @@ interface Rec {
   coldNoteAt?: number | undefined;
   /** the lastTurnAt the cold note was asked for (once per idle stretch, even when it failed) */
   coldAskedFor?: number | undefined;
+  /** when the context in force began: the first real turn since the session start or the last compaction (persisted) */
+  ctxSince?: number | undefined;
+  /** the Rome day a Regia was last asked for its day compaction (once a day, even when it failed) */
+  dayCompactOn?: string | undefined;
   /** the sessions before its cold continuations, oldest first (persisted; their transcripts show folded above) */
   pastSessions?: PastSession[];
   /** a cold continuation switching sessions: a second message waits for it */
@@ -212,6 +227,8 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+/** A model id as the CLIs take it; never starting with '-', which an ACP CLI would read as one of its flags. */
+const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 
 export class ChatManager implements ChatService {
   private chats = new Map<string, Rec>();
@@ -235,7 +252,7 @@ export class ChatManager implements ChatService {
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
-  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !this.admission?.busy() });
+  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
     this.store = new ChatStore(opts.userData);
@@ -257,11 +274,11 @@ export class ChatManager implements ChatService {
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
     if ((opts.coldEveryMs ?? 60_000) > 0) { this.coldTimer = setInterval(() => this.coldTick(), opts.coldEveryMs ?? 60_000); this.coldTimer.unref?.(); }
     if (opts.prewarm) {
-      const last = [...this.chats.values()].filter(r => r.s.harness === 'claude' && r.s.origin === 'app' && !r.s.isRegia && !r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isRegia && !r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
     }
-    const claude = resolveClaude(opts.claudePath ?? null);
-    log.info('chats', 'manager ready', { data: { restored: this.chats.size, claude: claude ? `${claude.source}: ${claude.path}` : 'not found', cursorOverride: opts.cursorPath ?? null } });
+    const claude = resolveClaude(opts.enginePaths?.claude ?? null);
+    log.info('chats', 'manager ready', { data: { restored: this.chats.size, claude: claude ? `${claude.source}: ${claude.path}` : 'not found', overrides: opts.enginePaths ?? null } });
   }
 
   // ---- ChatService ----
@@ -287,23 +304,24 @@ export class ChatManager implements ChatService {
   }
 
   async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
-    if (req.harness !== 'claude' && req.harness !== 'cursor') throw new Error('Harness sconosciuto.');
+    const engine = engineOrThrow(req.harness);
+    this.needOn(engine.id);
+    const caps = engine.caps;
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     if (!cwd || !path.isAbsolute(cwd) || !fs.existsSync(cwd)) throw new Error(`Cartella non valida: ${cwd || '(vuota)'}`);
-    const cursor = req.harness === 'cursor';
     if (req.permissionMode && !MODES.includes(req.permissionMode)) throw new Error(`Modalità permessi non valida: ${req.permissionMode}`);
     if (req.effort && !EFFORTS.includes(req.effort)) throw new Error(`Effort non valido: ${req.effort}`);
-    if (cursor && req.effort) throw new Error('L’effort non si imposta con Cursor: scegli il modello.');
-    if (req.model !== undefined && !/^[\w.:@/=[\],-]{1,120}$/.test(req.model)) throw new Error(`Modello non valido: ${req.model}`);
+    if (!caps.effort && req.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
+    if (req.model !== undefined && !MODEL_ID.test(req.model)) throw new Error(`Modello non valido: ${req.model}`);
     // only a copy of one of the app's own Claude chats (ADR 0010: no sessions from other apps; never two writers)
     const forkOf = req.resumeSessionId?.trim() || null;
     if (forkOf) {
       const src = [...this.chats.values()].find(r => r.s.sessionId === forkOf);
-      if (!req.fork || cursor || !isUuid(forkOf) || !src || src.s.harness !== 'claude') throw new Error('Si può solo duplicare (fork) una chat Claude dell’app.');
+      if (!req.fork || !caps.fork || !isUuid(forkOf) || !src || src.s.harness !== req.harness) throw new Error('Si può solo duplicare (fork) una chat dell’app, sullo stesso motore, se il motore lo permette.');
     }
 
     // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
-    const warm = req.harness === 'claude' && !forkOf && !req.worktree && !req.regia && !(req.space === 'app' && req.appRegia === true) && req.permissionMode !== 'bypassPermissions'
+    const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !(req.space === 'app' && req.appRegia === true) && req.permissionMode !== 'bypassPermissions'
       ? this.warm.take(cwd) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
@@ -319,22 +337,28 @@ export class ChatManager implements ChatService {
     const appRegia = !!space && req.appRegia === true && !req.regia;
     const oldApp = appRegia ? [...this.chats.values()].filter(x => x.s.appRegia) : [];
     const title = req.title?.trim() || (req.regia && regiaName && !old ? `Regia · ${regiaName}` : '') || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
+    // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
+    // already running: adopting it is no new start (its first turn still asks the queue)
+    const prompt = req.prompt?.trim() ? req.prompt : null;
+    const viaQueue = by === 'agent' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
-        id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || cursor ? null : warm?.sessionId ?? crypto.randomUUID(),
+        id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
         model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
-        state: 'starting', costUsd: 0, pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: now, browserTabIds: [],
+        // a chat that goes through the queue has started nothing yet: 'starting' only with an engine on its way (a queued
+        // chat that went starting → idle read as a finished turn: the Regia was told "ha finito il turno", 2026-10-14)
+        state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: now, browserTabIds: [],
         ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
         ...(req.regia ? { regiaSince: old?.s.regiaSince ?? now } : {}),
-        ...(cursor ? { costKnown: false as const } : {}),
+        ...(caps.cost ? {} : { costKnown: false as const }),
         ...(space ? { space, ...(appRegia ? { appRegia: true } : {}) } : {}),
         ...(req.route ? { route: req.route } : {}),
       },
       createdAt: now,
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
-      worktree: !!req.worktree && !cursor,
-      ...(req.worktree && !cursor ? { inWorktree: true } : {}),
+      worktree: !!req.worktree && caps.worktree,
+      ...(req.worktree && caps.worktree ? { inWorktree: true } : {}),
       costTotalUsd: 0,
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
@@ -346,12 +370,8 @@ export class ChatManager implements ChatService {
     this.persist();
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, regia: r.s.isRegia, warm: !!warm } });
     this.updated(r);
-    // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
-    // already running: adopting it is no new start (its first turn still asks the queue)
-    const prompt = req.prompt?.trim() ? req.prompt : null;
-    const viaQueue = by === 'agent' && !!prompt && !!this.admission;
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
-    if (!cursor) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000);
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt)) : this.send(id, prompt)); } catch (e) {
@@ -368,6 +388,7 @@ export class ChatManager implements ChatService {
    *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one */
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
     const r = this.need(chatId);
+    this.needAgentMay(r, from);
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
@@ -397,14 +418,14 @@ export class ChatManager implements ChatService {
     if (!adm || (this.midTurn(r) && !adm.entry(r.s.id))) return deliver();
     let now: Promise<void> | undefined;
     let late = false;
+    // a chat on the app itself waits behind the work chats' (the user, 2026-10-14)
     const q = adm.request(r.s.id, r.session ? 'turn' : 'start', () => {
       const p = deliver();
       if (late) p.catch(e => this.lateFailed(r, e)); else now = p;
-    });
+    }, isAppChat(r.s.title, r.s.space));
     if (!q) return now ?? Promise.resolve();
     late = true;
-    if (!r.session && r.s.state === 'starting') { r.s.state = 'idle'; this.updated(r); } // nothing started: no spinner, no work time
-    log.info('chats', 'agent work queued: the machine is busy', { chat: r.s.id, data: { kind: q.kind, position: q.position, ...adm.load() } });
+    log.info('chats', 'agent work queued: the machine is busy', { chat: r.s.id, data: { kind: q.kind, position: q.position, app: !!q.app, ...adm.load() } });
     return Promise.resolve();
   }
 
@@ -457,6 +478,7 @@ export class ChatManager implements ChatService {
     if (!resumed && r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
     this.ensureHistory(r);
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
+    this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
     // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
     const cold = await this.coldSwitch(r);
@@ -630,18 +652,20 @@ export class ChatManager implements ChatService {
     }
     if (patch.model !== undefined) {
       const m = patch.model.trim() || null;
-      if (m && !/^[\w.:@/=[\],-]{1,120}$/.test(m)) throw new Error(`Modello non valido: ${m}`);
+      if (m && !MODEL_ID.test(m)) throw new Error(`Modello non valido: ${m}`);
       r.choice.model = m; r.s.model = m;
-      if (r.s.harness === 'cursor') {
-        // never live (session/set_model writes the user's Cursor config): reopen the session with --model, same history
+      const engine = engineOrThrow(r.s.harness);
+      if (!engine.caps.liveModel) {
+        // never live (Cursor's session/set_model writes the user's config): reopen the session with --model, same history
         if (sess && !sess.busy) await this.closeKeeping(r, sess);
         else if (sess) r.reopen = true; // after this turn
-        if (sess) this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), text: `Modello ${m ?? 'predefinito'}: Cursor riparte con questo modello dal prossimo messaggio${r.reopen ? ', finito questo turno' : ''}.`, level: 'info' }, false);
+        if (sess) this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), text: `Modello ${m ?? 'predefinito'}: ${engine.label} riparte con questo modello dal prossimo messaggio${r.reopen ? ', finito questo turno' : ''}.`, level: 'info' }, false);
       } else await apply('modello', sess ? () => sess.setModel(m) : undefined);
     }
     if (patch.effort !== undefined) {
       if (!EFFORTS.includes(patch.effort)) throw new Error(`Effort non valido: ${patch.effort}`);
-      if (r.s.harness === 'cursor') throw new Error('L’effort non si imposta con Cursor: scegli il modello.');
+      const engine = engineOrThrow(r.s.harness);
+      if (!engine.caps.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
       const e = patch.effort;
       r.choice.effort = e; r.s.effort = e;
       await apply('effort', sess ? () => sess.setEffort(e) : undefined);
@@ -672,7 +696,7 @@ export class ChatManager implements ChatService {
    *  token-free note built by the app (source 'auto'). Refused while the chat works or waits for the user. */
   async handoff(chatId: string, opts: HandoffOptions = {}): Promise<HandoffInfo> {
     const r = this.need(chatId);
-    if (r.handoffTurn) throw new Error('La chat sta già scrivendo il passaggio di consegne.');
+    if (r.handoffTurn) throw new Error('La chat sta già facendo un turno breve dell’app (passaggio di consegne o riassunto): riprova tra poco.');
     this.ensureHistory(r);
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (hasTurns && (r.session?.busy || r.pending.size > 0)) throw new Error('La chat sta lavorando o ti aspetta: il passaggio si scrive quando ha finito il turno.');
@@ -777,11 +801,12 @@ export class ChatManager implements ChatService {
    *  an archived chat kept for its note whose chance passed ends its engine. Returns how many were asked. */
   coldTick(now = Date.now()): number {
     if (this.quitting) return 0;
-    const on = this.coldOn(), idle = this.opts.coldIdleMs?.() ?? 50 * 60_000;
+    const on = this.coldOn(), idle = this.opts.coldIdleMs?.() ?? 50 * 60_000, day = !!this.opts.regiaDayCompact?.();
     let n = 0;
     for (const r of this.chats.values()) {
       const v = this.coldView(r);
       if (on && coldAsk(v, now, idle, this.ttl())) { n++; void this.coldNote(r); continue; }
+      if (day && regiaDayDue({ ...v, lastTurnAt: r.lastTurnAt, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now)) { n++; void this.regiaCompact(r, now); continue; }
       if (r.closeAfterCold && !r.handoffTurn && (!on || !coldArmed(v, now, this.ttl()))) void this.endKept(r);
     }
     return n;
@@ -808,6 +833,23 @@ export class ChatManager implements ChatService {
       this.updated(r);
     } else log.info('chats', 'cold note not written', { chat: r.s.id, data: { stopped: !!r.handoffStopped } });
     if (r.closeAfterCold) await this.endKept(r);
+  }
+
+  /** A Regia's day compaction (regia-day.ts): one quiet `/compact` turn with what to keep; the engine's compact_boundary
+   *  shows in the tile («Contesto compattato») and starts its context's day again. Same chat, same session. */
+  private async regiaCompact(r: Rec, now: number): Promise<void> {
+    r.dayCompactOn = romeDay(now);
+    const sess = r.session;
+    if (!sess) return;
+    log.info('chats', 'Regia: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
+    this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: 'Giorno nuovo: compatto il contesto della Regia in un riassunto (le chat che segue e la coda restano).' }, false);
+    const out = await this.quietTurn(r, sess, REGIA_COMPACT, true).catch((e: unknown) => {
+      log.warn('chats', 'Regia day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
+      return null;
+    });
+    if (out !== null) return;
+    log.info('chats', 'Regia day compaction did not finish', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null } });
+    this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'warn', text: 'Non sono riuscito a riassumere il contesto della Regia: ci riprovo domani; intanto si compatta da sola al limite impostato.' }, false);
   }
 
   /** The engine an auto-close kept for the cold note ends now (the chat stays archived). */
@@ -975,7 +1017,7 @@ export class ChatManager implements ChatService {
 
   /** Claude engine status: found, path, version (from a session or the background `claude --version`). */
   cliStatus(): CliStatus {
-    const p = resolveClaude(this.opts.claudePath ?? null)?.path ?? null;
+    const p = resolveClaude(this.opts.enginePaths?.claude ?? null)?.path ?? null;
     const found = !!p && fs.existsSync(p);
     if (found && !this.version && !this.probing) {
       this.probing = true;
@@ -1021,10 +1063,11 @@ export class ChatManager implements ChatService {
   private async ensureSession(r: Rec): Promise<void> {
     if (r.releasing) await r.releasing; // never into an engine released for idleness: it ends, then this resumes
     if (!r.session) {
+      this.needOn(r.s.harness);
       this.startSession(r);
-      // a resumed Cursor chat replays its past while it opens: let it land before this message, in order
+      // a resumed chat on an engine that replays its past while it opens (ACP): let it land before this message, in order
       const started = r.session as HarnessSession | null;
-      if (started?.ready && r.s.harness === 'cursor' && isUuid(r.s.sessionId)) r.opening = started.ready;
+      if (started?.ready && engineOf(r.s.harness)?.caps.transcript === false && isUuid(r.s.sessionId)) r.opening = started.ready;
     }
     if (r.opening) { await r.opening; r.opening = undefined; }
   }
@@ -1037,6 +1080,19 @@ export class ChatManager implements ChatService {
     if (!sess) return null;
     // a cold note never runs a tool (no now.md line): one short answer on a warm cache
     const text = handoffRequest({ title: r.s.title, reason, contextTokens: r.s.contextTokens ?? null, memTool: quiet ? null : this.opts.memTool?.() ?? null });
+    const out = await this.quietTurn(r, sess, text, quiet, () => {
+      if (quiet) return;
+      r.s.handoffBusy = true;
+      this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: 'Chiedo alla chat il passaggio di consegne (un turno breve).' }, false);
+      this.updated(r);
+    });
+    return out === null ? null : extractHandoff(out);
+  }
+
+  /** One turn of the app's own (a hand-off, a Regia's day compaction), not of the job: its assistant texts come back
+   *  joined, null when it was stopped, failed or timed out (then interrupted, its late items still swallowed); `quiet` =
+   *  its items stay out of the tile but the system lines. `before` runs once the turn is armed, before the text goes. */
+  private quietTurn(r: Rec, sess: HarnessSession, text: string, quiet: boolean, before?: () => void): Promise<string | null> {
     const answer = new Promise<string | null>(resolve => {
       // no answer in time (e.g. a permission nobody answers): the turn is stopped, so a late answer is never taken as a real turn
       const timer = setTimeout(() => {
@@ -1060,14 +1116,9 @@ export class ChatManager implements ChatService {
       };
       r.handoffTurn = { texts: new Map(), done: finish, ...(quiet ? { quiet } : {}) };
     });
-    if (!quiet) {
-      r.s.handoffBusy = true;
-      this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: 'Chiedo alla chat il passaggio di consegne (un turno breve).' }, false);
-      this.updated(r);
-    }
-    try { sess.send(text); } catch (e) { r.handoffTurn?.done(null); throw e; }
-    const out = await answer;
-    return out === null ? null : extractHandoff(out);
+    before?.();
+    try { sess.send(text); } catch (e) { r.handoffTurn?.done(null); return Promise.reject(e); }
+    return answer;
   }
 
   /** A result arrived: the job ledger gets the turn; the plan windows are refreshed now and then. */
@@ -1082,6 +1133,7 @@ export class ChatManager implements ChatService {
       return; // not a turn of the job: no ledger entry, no estimate calibration
     }
     r.turnSinceDone = true; r.lastTurnAt = item.at;
+    r.ctxSince ??= item.at;
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     const first = r.firstPrompt;
     r.firstPrompt = null;
@@ -1102,7 +1154,7 @@ export class ChatManager implements ChatService {
   private askUsage(prefer?: Rec): void {
     const rate = this.opts.onRateLimit;
     if (!rate || Date.now() - this.lastUsageAt < (this.opts.usageEveryMs ?? 60000)) return;
-    const live = (x: Rec | undefined): x is Rec => !!x?.session?.alive && x.s.harness === 'claude';
+    const live = (x: Rec | undefined): x is Rec => !!x?.session?.alive && !!engineOf(x.s.harness)?.caps.usage;
     const all = [...this.chats.values()].filter(live);
     const busy = all.filter(x => x.session?.busy);
     const next = busy.length ? busy[(busy.findIndex(x => x.s.id === this.lastUsageChat) + 1) % busy.length] : undefined;
@@ -1164,7 +1216,7 @@ export class ChatManager implements ChatService {
         permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isRegia: c.isRegia, lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(c.regiaName ? { regiaName: c.regiaName } : {}), ...(c.regiaOf ? { regiaOf: c.regiaOf } : {}),
         ...(c.regiaSince !== undefined ? { regiaSince: c.regiaSince } : {}),
-        ...(c.harness === 'cursor' ? { costKnown: false as const } : {}),
+        ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
@@ -1183,6 +1235,8 @@ export class ChatManager implements ChatService {
       jobNew: false, firstPrompt: null, turnSinceDone: false, // a restored chat continues a job begun in an earlier run
       lastTurnAt: c.lastTurnAt ?? 0,
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
+      // saved before ctxSince existed: its last turn is the latest its context can have begun
+      ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
     };
   }
@@ -1196,6 +1250,7 @@ export class ChatManager implements ChatService {
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
+      ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),
@@ -1277,7 +1332,7 @@ export class ChatManager implements ChatService {
   private ensureHistory(r: Rec): void {
     if (r.historyLoaded) return;
     r.historyLoaded = true;
-    if (r.s.harness !== 'claude') return;
+    if (!engineOf(r.s.harness)?.caps.transcript) return;
     // the sessions before its cold continuations come first, each closed by its divider (ADR 0031)
     const past: ChatItem[] = [];
     for (const p of r.pastSessions ?? []) {
@@ -1326,7 +1381,8 @@ export class ChatManager implements ChatService {
     const chatId = r.s.id;
     let sessionId = r.s.sessionId;
     let resume = false, fork = false;
-    if (r.s.harness === 'cursor') resume = isUuid(sessionId); // session/load; a new one gets its id from session/new
+    const engine = engineOrThrow(r.s.harness);
+    if (!engine.caps.transcript) resume = isUuid(sessionId); // session/load; a new one gets its id from session/new
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
     else if (!isUuid(sessionId)) { sessionId = crypto.randomUUID(); r.s.sessionId = sessionId; this.persist(); }
@@ -1343,18 +1399,7 @@ export class ChatManager implements ChatService {
     r.s.state = 'starting';
     r.activeAt = Date.now();
     delete r.s.lastError;
-    sess = this.opts.sessionFactory
-      ? this.opts.sessionFactory(r.s.harness, opts, sink)
-      : r.s.harness === 'cursor'
-        ? new CursorSession({
-          ...opts, mcpConfig: null, mcpUrl: this.opts.mcpUrlFor?.(chatId) ?? null, showReplay: r.items.length === 0,
-          // the Regia on Cursor gets the app-control tools too (app_create_chat…), like the Claude one
-          appMcpUrl: this.appMcpFor(r),
-          configDir: path.join(this.opts.userData, 'cursor-config'),
-          modelConfig: this.cursorModelConfig(),
-          ...(this.opts.cursorPath ? { cursorPath: this.opts.cursorPath } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
-        }, sink)
-        : new ClaudeSession({ ...opts, ...(this.opts.claudePath ? { claudePath: this.opts.claudePath } : {}) }, sink);
+    sess = this.newSession(engine.id, opts, sink, r);
     r.session = sess;
     this.updated(r);
     sess.start();
@@ -1364,11 +1409,35 @@ export class ChatManager implements ChatService {
    *  chats (text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never a Regia. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
-    const allowed = harness !== 'claude' ? [] : [
+    const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) ? ['mcp__second-brain__send_to_chat', 'mcp__second-brain__list_chats'] : []),
     ];
     return this.opts.extraArgs || allowed.length ? [...(this.opts.extraArgs ?? []), ...(allowed.length ? ['--allowedTools', allowed.join(',')] : [])] : null;
+  }
+
+  /** An agent's message (from = its sender) never wakes a stopped chat (closed, or its engine released for idleness) on
+   *  an engine the Regie may not use: it would resume that engine for an agent. A running chat gets it as before. */
+  private needAgentMay(r: Rec, from: string | undefined): void {
+    if (from === undefined || r.session || this.opts.agentsMayOpen?.(r.s.harness) !== false) return;
+    throw new AgentMayNotWake(r.s.harness);
+  }
+
+  /** Refuses an engine the user switched off (Impostazioni → Motori): nothing starts on it, whoever asks. */
+  private needOn(h: Harness): void {
+    if (this.opts.engineOn?.(h) === false) throw new Error(`${engineOrThrow(h).label} è spento nelle impostazioni: riaccendilo in Impostazioni → Motori.`);
+  }
+
+  /** A session on an engine: the test factory if given, else the engine's own adapter (engines/sessions.ts). The Regia
+   *  on any engine gets the app-control tools (app_create_chat…); r = undefined: a warm engine, never a Regia. */
+  private newSession(harness: Harness, opts: SessionOptions, sink: SessionSink, r: Rec | undefined): HarnessSession {
+    if (this.opts.sessionFactory) return this.opts.sessionFactory(harness, opts, sink);
+    const override = this.opts.enginePaths?.[harness];
+    return sessionFor(engineOrThrow(harness), opts, sink, {
+      userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
+      showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null,
+      ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
+    });
   }
 
   /** A Claude engine for the next new chat in cwd: its chat id, session id and MCP endpoint are chosen now; no model,
@@ -1383,9 +1452,7 @@ export class ChatManager implements ChatService {
       ...(this.opts.env ? { env: this.opts.env } : {}), ...(extraArgs ? { extraArgs } : {}),
     };
     const sink = new BufferedSink();
-    const session = this.opts.sessionFactory
-      ? this.opts.sessionFactory('claude', opts, sink)
-      : new ClaudeSession({ ...opts, ...(this.opts.claudePath ? { claudePath: this.opts.claudePath } : {}) }, sink);
+    const session = this.newSession('claude', opts, sink, undefined);
     session.start();
     return { chatId, sessionId, cwd, session, sink, at: Date.now() };
   }
@@ -1484,8 +1551,8 @@ export class ChatManager implements ChatService {
     try { return this.opts.compactWindowTokens?.() ?? 0; } catch { return 0; }
   }
 
-  private cursorModelConfig(): { reasoning: CursorReasoning | ''; fast: boolean } | null {
-    try { return this.opts.cursorModelConfig?.() ?? null; } catch (e) { log.warn('chats', 'cursor model settings not read', { data: errText(e) }); return null; }
+  private acpModelConfig(): { reasoning: CursorReasoning | ''; fast: boolean } | null {
+    try { return this.opts.acpModelConfig?.() ?? null; } catch (e) { log.warn('chats', 'ACP model settings not read', { data: errText(e) }); return null; }
   }
 
   private applyPatch(r: Rec, p: SessionPatch): void {
@@ -1542,6 +1609,8 @@ export class ChatManager implements ChatService {
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);
       r.after = { kind: 'compaction', left: AFTER_CALLS };
+      // the context starts again from its summary: a Regia's next day compaction counts from now
+      r.ctxSince = Date.now(); save = true;
     }
     if (p.contextTokens !== undefined && p.contextTokens > 0) save = true; // the meter of a closed chat survives a restart
     if (save) this.persist();

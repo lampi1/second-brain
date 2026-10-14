@@ -6,6 +6,7 @@
 // the user's click. Used by ChatItems.tsx (the list of a chat's items); pinned by test/e2e/link-peek.spec.ts.
 import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { PeekResult } from '@shared/contract';
+import { openInAppBrowser } from '../actions';
 import { copyText } from '../brain/components/ui';
 import { sb } from '../sb';
 import { useApp } from '../store/store';
@@ -84,7 +85,7 @@ function LinkBody({ url, close }: { url: string; close: () => void }) {
       <div className="peek-acts">
         <Act icon={<IconGlobe size={12} />} testid="peek-open-app" onSelect={() => {
           close();
-          void sb.invoke('browser:open', { url, ownerChatId: null }).catch((e: unknown) => toast(`Link non aperto: ${e instanceof Error ? e.message : String(e)}`, 'err'));
+          void openInAppBrowser(url);
         }}>Apri nel browser dell'app</Act>
         <Act icon={<IconGlobe size={12} />} testid="peek-open-out" onSelect={() => { close(); window.open(url, '_blank', 'noopener'); }}>Apri fuori</Act>
         <Act icon={<IconCopy size={12} />} testid="peek-copy" onSelect={() => { close(); void copyText(url).then(ok => toast(ok ? 'Link copiato' : 'Copia non riuscita', ok ? 'ok' : 'err')); }}>Copia</Act>

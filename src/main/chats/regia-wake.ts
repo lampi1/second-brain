@@ -17,6 +17,7 @@
 import type { ChatState, ChatSummary, EventMap, Harness, PendingRequest } from '../../shared/contract';
 import { regieOf } from '../../shared/regia';
 import { errText, log } from '../log';
+import { engineLabel } from '../engines/registry';
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
@@ -43,13 +44,15 @@ export interface RegiaWakeDeps {
 
 type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isRegia' | 'space' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending'>;
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
+/** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
+const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
 /** the Regia can take a message: idle or closed (a message resumes it), not waiting for the user, not in a hand-off */
 const free = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy'>) => (r.state === 'idle' || r.state === 'closed') && !r.pending && !r.handoffBusy;
 const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
 /** One line per chat, in Italian (the Regia speaks Italian with the user). */
 export function wakeLine(e: WakeEvent): string {
-  const who = `«${e.title}» (${e.harness === 'cursor' ? 'Cursor' : 'Claude'})`;
+  const who = `«${e.title}» (${engineLabel(e.harness)})`;
   const d = cut(e.detail, 200);
   switch (e.kind) {
     case 'done': return `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
@@ -106,7 +109,7 @@ export class RegiaWake {
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
     if (!was || c.closedAt) return;
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
-    else if (c.state === 'idle' && BUSY.has(was.state) && c.pending === 0) {
+    else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
       if (c.lastResult?.interrupted && c.lastResult.at !== was.lastResult?.at) return;
       const failed = !!c.lastResult?.isError && c.lastResult.at !== was.lastResult?.at;

@@ -160,9 +160,14 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     usage.start();
     api = new BrainApi(root, node, undefined, localApi);
     if (!root) { log.warn('brain', 'no brain folder configured', { data: { hint: 'settings:set { brainRoot } or SB_BRAIN' } }); return; }
-    // the brain's own switches win at start (the file may have been edited by hand): brain-settings.ts
+    // the brain's file (brain-settings.ts) is in a folder agents write to: at start it may only close the switch (edited
+    // by hand), never open it; a file that would open it is put back to the app's value
     const cross = readCrossHarness(root);
-    if (cross !== null && cross !== cfg.get().messaging.crossHarness) cfg.set({ messaging: { crossHarness: cross } });
+    if (cross === false && cfg.get().messaging.crossHarness) cfg.set({ messaging: { crossHarness: false } });
+    else if (cross === true && !cfg.get().messaging.crossHarness) {
+      log.warn('settings', 'brain-settings.json opens chats across engines: ignored', { data: { hint: 'only the user opens it, in Impostazioni → Motori' } });
+      try { writeCrossHarness(root, false); } catch (e) { log.error('settings', 'brain-settings.json not written', { cause: errText(e), hint: 'check the brain folder is writable; inbox.mjs keeps the old value' }); }
+    }
     live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile, ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
     // estimates from day one: past chats from cost.mjs, a little after boot (it reads 30 days of transcripts)
@@ -230,9 +235,15 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     recordPrediction: p => brainEst.recordPrediction(p),
     recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
     routingInfo: () => routing.info(),
-    saveRouting: (routes, reason) => {
-      const info = routing.save(routes, 'utente (Impostazioni)', reason);
-      log.info('brain', 'routing table saved', { data: { version: info.table?.version ?? null, rows: info.table?.routes.length ?? 0, reason } });
+    saveRouting: (routes, reason, o = {}) => {
+      const by = o.by ?? 'utente (Impostazioni)';
+      const info = routing.save(routes, by, reason, Date.now(), { exploration: o.exploration, costWeight: o.costWeight, evidence: o.evidence ?? null, base: o.base });
+      log.info('brain', 'routing table saved', { data: { version: info.table?.version ?? null, rows: info.table?.routes.length ?? 0, exploration: info.table?.exploration ?? null, by, reason } });
+      return info;
+    },
+    restoreRouting: (version, by = 'utente (Impostazioni)') => {
+      const info = routing.restore(version, by);
+      log.info('brain', 'routing table restored', { data: { from: version, version: info.table?.version ?? null, by } });
       return info;
     },
     route: req => routeChat({ counts: k => routing.armCounts(k), ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),

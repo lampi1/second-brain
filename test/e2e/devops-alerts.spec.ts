@@ -2,7 +2,8 @@
 // "Aggiorna ora" is the baseline (no alert, no chime); the second brings a new mention, which shows a DevOps toast in
 // the global layer and plays the chime once on arrival (counted on <html data-chimes>; a hidden run is muted); the page's head
 // turns the sound off. "Apri chat" on a work item row starts a work chat "Shop · <title>" in one click (the row does not
-// open) with a toast "Chat aperta: …"; PRs and test plans have the same button. Screenshots in test-results/shots/.
+// open) with a toast "Chat aperta: …", its engine, model and effort from the routing table (a bug: the bug-fix row); PRs
+// and test plans have the same button. Screenshots in test-results/shots/.
 import { expect, test } from '@playwright/test';
 import { launchDemo, layerPage, shot, windowShot } from './helpers';
 
@@ -47,7 +48,13 @@ test('DevOps: a new mention alerts with a chime (never on the first read); Apri 
     const chats = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
     const made = chats.find(c => c.title === 'Shop · Il totale del rimborso ignora lo sconto applicato');
     expect(made).toBeTruthy();
+    // through the routing table (ADR 0032): a bug is bug-fix, the demo table's row says Opus, high effort, and the chat
+    // carries the route for the ledger (before: the last "Nuova chat" choice, no route)
+    expect(made).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high', route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'Shop', version: 3 } });
     await shot(page, 'devops-apri-chat-toast');
+    await page.getByTestId('toasts').getByRole('button', { name: 'Vai alla chat' }).click();
+    await expect(page.getByTestId(`chat-sub-${made!.id}`)).toContainText('Opus');
+    await shot(page, 'devops-apri-chat-routed');
   } finally {
     await app.close();
   }

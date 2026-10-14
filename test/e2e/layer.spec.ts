@@ -20,7 +20,7 @@ test('requests not on screen float above a page, without taking the keyboard', a
   const { app, page } = await launchDemo();
   await expect.poll(async () => (await layerState(app)).cards).toBe(1); // the Regia reduced: her own question floats
   await page.getByTestId('regia-pill').click();
-  await expect.poll(async () => (await layerState(app)).attached).toBe(false); // Mosaico + the Regia open: the tiles show them all (no strip either)
+  await expect.poll(async () => (await layerState(app)).attached).toBe(false); // Mosaico + the Regia open: the tiles show them all (nothing waits off screen)
   await closeRegia(page); // reduced again
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('devops');
@@ -85,6 +85,7 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
   await expect(page.getByTestId('brain-page-costi')).toBeVisible(); // answered without leaving the page
   await layer.keyboard.press('Escape'); // "Rispondi dopo": off the layer, still waiting, in "Da rispondere"
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // (a "chat finita" toast may stay: the QA chat just ended)
+  await expect(layer.getByText(/da rispondere|in attesa/)).toHaveCount(0); // no waiting strip: the top bar counts them
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
   await page.getByTestId('page-back').click(); // back to the workspace: the tile says "Da rispondere", no panel, no layer card
   await expect(page.getByTestId('chat-queued-feedback')).toBeVisible();

@@ -120,3 +120,16 @@ export function pngSize(b64: string): { width: number; height: number } {
   const b = Buffer.from(b64, 'base64');
   return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
 }
+
+/** Width and height of a PNG or a baseline/progressive JPEG (its SOF0/SOF2 segment). */
+export function imageSize(b64: string): { width: number; height: number } {
+  const b = Buffer.from(b64, 'base64');
+  if (b[0] !== 0xff || b[1] !== 0xd8) return pngSize(b64);
+  for (let i = 2; i + 9 < b.length;) {
+    if (b[i] !== 0xff) throw new Error(`bad JPEG marker at ${i}`);
+    const marker = b[i + 1]!;
+    if (marker === 0xc0 || marker === 0xc2) return { width: b.readUInt16BE(i + 7), height: b.readUInt16BE(i + 5) };
+    i += 2 + b.readUInt16BE(i + 2);
+  }
+  throw new Error('JPEG without a size segment');
+}

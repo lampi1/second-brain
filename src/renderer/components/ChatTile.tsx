@@ -29,13 +29,13 @@ import { HarnessMark, IconAlert, IconMaximize, IconMinimize, IconMore, IconStop,
 import { IconButton, StatePill, useSize } from './ui';
 
 const EMPTY_ITEMS: readonly ChatItem[] = [];
-// the ✕ is ignored for half a second after a close: the grid reflows and the next tile's ✕ lands under the pointer, so a
-// double click would close two chats
+// the ✕ (of a chat or a browser tile) is ignored for half a second after a close: the grid reflows and the next tile's
+// ✕ lands under the pointer, so a double click would close two tiles
 let lastXAt = 0;
-function closeFromX(chatId: string): void {
+export function closeFromX(close: () => void): void {
   if (Date.now() - lastXAt < 500) return;
   lastXAt = Date.now();
-  closeChat(chatId);
+  close();
 }
 const EMPTY_REQS: readonly PendingRequest[] = [];
 export const pendingOf = (list: readonly PendingRequest[], chatId: string) => {
@@ -124,7 +124,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
               {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
             </IconButton>
           )}
-          {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={() => closeFromX(chatId)} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={() => closeFromX(() => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
         </div>
         <div className="th-sub" data-testid={`chat-sub-${chatId}`}>
           <span className={`pill pill-${st.tone} pill-sub`} aria-hidden="true">{st.label}</span>
@@ -155,7 +155,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       ))}
       {chat.queued && !chat.closedAt && (
         <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
-          <span className="queued-text" data-tip={`Il PC è sotto sforzo (CPU ${chat.queued.cpu}%, RAM libera ${chat.queued.freeRam}%): ${chat.queued.kind === 'start' ? 'questa chat parte' : 'il messaggio della Regia o di un’altra chat parte'} quando il carico scende, una alla volta. I tuoi messaggi partono sempre subito.`}>
+          <span className="queued-text" data-tip={`Il PC è sotto sforzo (CPU ${chat.queued.cpu}%, RAM libera ${chat.queued.freeRam}%): ${chat.queued.kind === 'start' ? 'questa chat parte' : 'il messaggio della Regia o di un’altra chat parte'} quando il carico scende, una alla volta: prima le chat di lavoro, poi quelle sull’app. I tuoi messaggi partono sempre subito.`}>
             In coda · {queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? 'la prossima' : `${chat.queued.position}ª in fila`}
           </span>
           <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>Avvia ora</button>

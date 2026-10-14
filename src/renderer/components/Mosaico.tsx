@@ -23,9 +23,10 @@ const sameTiles = (a: TileRef[], b: TileRef[]) => sameList(a.map(tileKey), b.map
 
 function useMosaicTiles(): TileRef[] {
   const hidden = ui.use(s => s.hidden, sameList);
+  const hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
   return useApp(s => {
     const visibleOrder = s.order.filter(id => !hidden.includes(id));
-    return mosaicTiles(visibleOrder, s.chats, s.tabs.filter(t => !t.ownerChatId || !hidden.includes(t.ownerChatId)));
+    return mosaicTiles(visibleOrder, s.chats, s.tabs.filter(t => !hiddenTabs.includes(t.id) && (!t.ownerChatId || !hidden.includes(t.ownerChatId))));
   }, sameTiles);
 }
 

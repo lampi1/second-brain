@@ -2,7 +2,8 @@
 // the product holds no personal data (ADR 0004), so the brain folder is a setting; and the user wants agents to change
 // settings for them live and visibly (settings-schema.ts): every change is one dot key, logged with who made it
 // ('user' | 'agent', chat id), applied at once (listeners), undoable ("Annulla"). An agent may change only the
-// non-protected keys; a protected key becomes a proposal that waits for the user's click (confirm). Env overrides for
+// non-protected keys; a protected key becomes a proposal that waits for the user's click (confirm). An engine switched
+// off closes «Le Regie possono usare» for it too (ADR 0046: the key an older release reads). Env overrides for
 // tests and agents: SB_BRAIN, SB_MCP_PORT are effective and locked, never written back. Never secrets. Used by
 // brain/index.ts for the settings:* channels and by the parts that read settings live (notify, budget, feed restart);
 // scripts/doctor.mjs reads config.json too (same nested shape).
@@ -10,10 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, SettingProposal, SettingRequestResult, SettingsPatch } from '../../shared/contract';
-import { SCHEMA, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
+import { COMPACT_WINDOW, OLD_COMPACT_WINDOW, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
+import { ENGINE_ID } from '../engines/registry';
 import { log } from '../log';
 
-export { validate, SCHEMA };
+export { validate, schema };
 export const DEFAULTS: Settings = defaults();
 
 type Env = Record<string, string | undefined>;
@@ -24,8 +26,8 @@ const newId = (p: string) => `${p}_${crypto.randomUUID().slice(0, 12)}`;
 export function fromSaved(raw: unknown): Settings {
   let s = defaults();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return s;
-  for (const d of SCHEMA) {
-    if (d.key === 'mute.*') continue;
+  for (const d of schema()) {
+    if (d.key === 'mute.*' || /^(engineOn|engines)\./.test(d.key)) continue;
     const v = d.key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), raw);
     if (v === undefined) continue;
     const c = validate(d.key, v);
@@ -33,6 +35,14 @@ export function fromSaved(raw: unknown): Settings {
   }
   const mute = (raw as { mute?: unknown }).mute;
   if (mute && typeof mute === 'object') for (const [k, v] of Object.entries(mute)) { const c = validate(`mute.${k}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
+  // every engine the file names, also one the brain defines later (its registry entry comes after the settings load)
+  for (const group of ['engineOn', 'engines'] as const) {
+    const o = (raw as Record<string, unknown>)[group];
+    if (o && typeof o === 'object' && !Array.isArray(o)) for (const [id, v] of Object.entries(o)) { const c = validate(`${group}.${id}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
+  }
+  // the Regia's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
+  const regiaEngine = (raw as { regiaChats?: { harness?: unknown } }).regiaChats?.harness;
+  if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
   return s;
 }
 
@@ -78,6 +88,26 @@ export class ConfigStore {
     }
     this.saved = fromSaved(raw);
     this.loadChanges();
+    this.migrateCompactWindow(raw !== undefined && raw !== null);
+  }
+
+  /** The compaction window's default went from 300000 to 200000 (ADR 0051): a saved 300000 nobody set (no change in the
+   *  log: the old default written out with the rest) follows it; a value the user or an agent chose stays. Once per
+   *  userData (a marker file): the change log keeps only its last entries, a later start must not undo a choice. */
+  private migrateCompactWindow(hadFile: boolean): void {
+    const mark = path.join(this.userData, 'migrated-compact-200k');
+    if (fs.existsSync(mark)) return;
+    try {
+      if (hadFile && this.saved.compactWindowTokens === OLD_COMPACT_WINDOW && !this.changes.some(c => c.key === 'compactWindowTokens')) {
+        this.saved = { ...this.saved, compactWindowTokens: COMPACT_WINDOW };
+        this.save(this.saved);
+        log.info('settings', 'compaction window moved to the new default', { data: { from: OLD_COMPACT_WINDOW, to: COMPACT_WINDOW } });
+      }
+      fs.mkdirSync(this.userData, { recursive: true });
+      fs.writeFileSync(mark, `${new Date().toISOString()}\n`);
+    } catch (e) {
+      log.warn('settings', 'compaction window migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'it applies for this run; the next start tries again' });
+    }
   }
 
   private lockedKeys(): ('brainRoot' | 'mcpPort')[] {
@@ -97,7 +127,7 @@ export class ConfigStore {
     return s;
   }
 
-  schema(): SettingDef[] { return SCHEMA.map(d => ({ ...d })); }
+  schema(): SettingDef[] { return schema(); }
 
   /** The user's patch from the UI: every key validated first (all or none), then each applied and logged. */
   set(patch: SettingsPatch, origin: Origin = { by: 'user' }): Settings {
@@ -198,6 +228,9 @@ export class ConfigStore {
     this.appendChange(ch);
     const now = this.get();
     for (const fn of this.listeners) fn({ ...ch }, now, before);
+    // an engine switched off also closes «Le Regie possono usare X» (ADR 0046): an older release (rollback) reads only that key
+    const off = /^engineOn\.(.+)$/.exec(key)?.[1];
+    if (off && value === false && now.engines[off] === true) this.apply(`engines.${off}` as SettingKey, false, origin);
     return ch;
   }
 

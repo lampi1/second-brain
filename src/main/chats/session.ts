@@ -1,7 +1,6 @@
 // The harness-neutral contract between ChatManager and one running CLI process (one chat = at most one session).
-// Why: the manager must not know whether a chat runs on Claude Code (claude.ts, stream-json control protocol) or on
-// Cursor (cursor.ts later, `agent acp` JSON-RPC); each harness implements HarnessSession and reports through a
-// SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
+// Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
+// ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
 import type { Root } from './proctree';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 

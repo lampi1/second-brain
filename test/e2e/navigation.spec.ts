@@ -83,6 +83,18 @@ test('section badges count new events and clear when the section is visited', as
   await app.close();
 });
 
+test('a blocked GitHub sync toasts, with since when GitHub is behind and what blocks it', async () => {
+  const { app } = await launchDemo();
+  const detail = 'Ultimo aggiornamento riuscito di GitHub: 11/10 20:22\nguard: BLOCKED, 2 findings (deny-list 2)\ntest/unit/a.test.ts:3  deny-list';
+  await event(app, { kind: 'sync-blocked', title: 'GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel cervello)', detail });
+  const layer = await layerPage(app);
+  const toast = layer.getByTestId('ev-toast-sync-blocked');
+  await expect(toast).toContainText('GitHub fermo: pubblicazione bloccata dal controllo');
+  await expect(toast).toContainText('Ultimo aggiornamento riuscito di GitHub: 11/10 20:22');
+  await windowShot(app, 'sync-blocked-toast');
+  await app.close();
+});
+
 test('the bell counts only what needs the user; the center keeps everything else as a list to read', async () => {
   const { app, page } = await launchDemo();
   // the frozen demo stamps every event at the same time: no "read all" (it would cover the new ones too), a baseline

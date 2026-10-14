@@ -20,6 +20,7 @@ export const EXCLUSIVE: Record<string, string> = {
   'navigation.spec.ts': 'system clipboard',
   'link-peek.spec.ts': 'system clipboard',
   'procedure.spec.ts': 'system clipboard',
+  'codeblocks.spec.ts': 'system clipboard',
 };
 const exclusive = Object.keys(EXCLUSIVE).map(f => `**/${f}`);
 
@@ -29,6 +30,8 @@ export default defineConfig({
   workers: Math.max(1, Number(process.env.SB_E2E_WORKERS) || 1),
   reporter: process.env.SB_E2E_JSON ? [['list'], ['json', { outputFile: process.env.SB_E2E_JSON }]] : [['list']],
   outputDir: 'test-results',
+  // the fake CLIs' children left suspended by this run are ended at its end (test/fixtures/sweep-suspended.mjs)
+  globalSetup: './test/fixtures/sweep-suspended.mjs',
   // without the project name: one baseline per screenshot whichever project runs it
   snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}{-snapshotSuffix}{ext}',
   projects: [

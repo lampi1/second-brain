@@ -3,6 +3,7 @@
 // last exchanges, a link to it, now.md), and renames the old one with a unique "Regia precedente" name.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary } from '@shared/contract';
+import { engineInfos } from '../../src/main/engines/registry';
 
 const invoke = vi.fn();
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: (...a: unknown[]) => invoke(...a), on: () => () => {} } }));
@@ -22,7 +23,7 @@ const items: ChatItem[] = [
 
 beforeEach(() => {
   invoke.mockReset();
-  dispatch({ type: 'init', chats: [chat('r', { title: 'Regia', isRegia: true })], pending: [], tabs: [], feed: [], usage: null, info: { brainRoot: 'C:/brain' } as never });
+  dispatch({ type: 'init', chats: [chat('r', { title: 'Regia', isRegia: true })], pending: [], tabs: [], feed: [], usage: null, info: { brainRoot: 'C:/brain', engines: engineInfos() } as never });
   dispatch({ type: 'items', chatId: 'r', items });
 });
 
@@ -46,22 +47,23 @@ describe('renewRegia', () => {
   it('moves to the other engine with the summary and renames the old one uniquely', async () => {
     dispatch({ type: 'chat:updated', chat: chat('x', { title: 'Regia precedente · Claude · 01/01 00:00' }) });
     invoke.mockImplementation(async (ch: string, req: Record<string, unknown>) => {
-      if (ch === 'chat:create') return chat('n', { harness: req.harness as 'cursor', isRegia: true, title: 'Regia' });
+      if (ch === 'chat:createRouted') return chat('n', { harness: (req.defaults as { harness: 'cursor' }).harness, isRegia: true, title: 'Regia' });
       if (ch === 'chat:set') return { ...app.get().chats[req.chatId as string]!, title: req.title as string };
       return [];
     });
     expect(await renewRegia('r', 'cursor', true)).toBe(true);
-    const create = invoke.mock.calls.find(c => c[0] === 'chat:create')![1] as Record<string, unknown>;
+    const create = invoke.mock.calls.find(c => c[0] === 'chat:createRouted')![1] as Record<string, unknown>;
     // main moves the role (replaces) and sends the old one's update; the new one keeps the mail address "Regia"
-    expect(create).toMatchObject({ harness: 'cursor', cwd: 'C:/brain', regia: true, replaces: 'r', title: 'Regia' });
+    // through the routing table (ADR 0032): the engine the user picked is the ask, kind 'regia' is main's
+    expect(create).toMatchObject({ defaults: { harness: 'cursor' }, ask: { harness: 'cursor' }, cwd: 'C:/brain', regia: true, replaces: 'r', title: 'Regia' });
     expect(String(create.prompt)).toContain('Passaggio di consegne');
     expect(app.get().chats.r?.title).toMatch(/^Regia precedente · Claude · /);
   });
 
   it('without the summary the new Regia starts empty; a chat that is not the Regia is refused', async () => {
-    invoke.mockImplementation(async (ch: string) => (ch === 'chat:create' ? chat('n', { isRegia: true, title: 'Regia' }) : chat('r')));
+    invoke.mockImplementation(async (ch: string) => (ch === 'chat:createRouted' ? chat('n', { isRegia: true, title: 'Regia' }) : chat('r')));
     await renewRegia('r', 'claude', false);
-    expect((invoke.mock.calls.find(c => c[0] === 'chat:create')![1] as Record<string, unknown>).prompt).toBeUndefined();
+    expect((invoke.mock.calls.find(c => c[0] === 'chat:createRouted')![1] as Record<string, unknown>).prompt).toBeUndefined();
     invoke.mockClear();
     expect(await renewRegia('n2', 'claude', false)).toBe(false);
     expect(invoke).not.toHaveBeenCalled();
@@ -69,13 +71,13 @@ describe('renewRegia', () => {
 
   it('"Pulisci" (archive) closes the old one too, after the new one took the role', async () => {
     invoke.mockImplementation(async (ch: string, req: Record<string, unknown>) => {
-      if (ch === 'chat:create') return chat('n', { isRegia: true, title: 'Regia' });
+      if (ch === 'chat:createRouted') return chat('n', { isRegia: true, title: 'Regia' });
       if (ch === 'chat:archive') return { ...app.get().chats[req.chatId as string]!, closedAt: 5 };
       return { ...app.get().chats[req.chatId as string]!, ...(req.title ? { title: req.title as string } : {}) };
     });
     expect(await renewRegia('r', 'claude', false, true)).toBe(true);
     const order = invoke.mock.calls.map(c => c[0]);
-    expect(order.indexOf('chat:archive')).toBeGreaterThan(order.indexOf('chat:create'));
+    expect(order.indexOf('chat:archive')).toBeGreaterThan(order.indexOf('chat:createRouted'));
     expect(invoke.mock.calls.find(c => c[0] === 'chat:archive')![1]).toEqual({ chatId: 'r', auto: false });
   });
 });

@@ -131,7 +131,7 @@ export async function layerPage(app: ElectronApplication): Promise<Page> {
   throw new Error('layer page not found');
 }
 
-export type LayerState = { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; cards: number; toasts: number; strip: number };
+export type LayerState = { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; cards: number; toasts: number };
 export async function layerState(app: ElectronApplication): Promise<LayerState> {
   return app.evaluate(() => (globalThis as unknown as { __sbOverlay: { state(): LayerState } }).__sbOverlay.state());
 }

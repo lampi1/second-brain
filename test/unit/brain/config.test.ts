@@ -4,13 +4,13 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ConfigStore, DEFAULTS, applyPatch, fromSaved } from '../../../src/main/brain/config';
-import { SCHEMA, defOf, flattenPatch, validate } from '../../../src/main/brain/settings-schema';
+import { schema, defOf, flattenPatch, validate } from '../../../src/main/brain/settings-schema';
 import type { SettingChange } from '../../../src/shared/contract';
 import { tmpDir } from './helpers';
 
 describe('settings schema and validate()', () => {
   it('every key has a type, a default that passes validate(), an Italian label and description', () => {
-    for (const d of SCHEMA) {
+    for (const d of schema()) {
       expect(d.label.length, d.key).toBeGreaterThan(2);
       expect(d.description.length, d.key).toBeGreaterThan(10);
       const key = d.key === 'mute.*' ? 'mute.idea' : d.key;
@@ -19,8 +19,8 @@ describe('settings schema and validate()', () => {
   });
 
   it('protects engines, spending limits, notifications off and security keys; view and theme are free', () => {
-    const prot = SCHEMA.filter(d => d.protected).map(d => d.key);
-    for (const k of ['engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
+    const prot = schema().filter(d => d.protected).map(d => d.key);
+    for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'messaging.crossHarness', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
     expect(defOf('view')!.protected).toBe(false);
     expect(defOf('devops.enabled')!.protected).toBe(true);
@@ -54,20 +54,54 @@ describe('settings schema and validate()', () => {
 });
 
 describe('flattenPatch', () => {
-  it('turns the nested UI patch of every group into dot keys (messaging too: the Claude <-> Cursor mail switch)', () => {
-    expect(flattenPatch({ messaging: { crossHarness: false }, engines: { cursor: false }, view: 'corsie' }))
-      .toEqual([['messaging.crossHarness', false], ['engines.cursor', false], ['view', 'corsie']]);
+  it('turns the nested UI patch of every group into dot keys (the engines and chats across engines too)', () => {
+    expect(flattenPatch({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, view: 'corsie' }))
+      .toEqual([['messaging.crossHarness', false], ['engineOn.cursor', false], ['engines.cursor', false], ['view', 'corsie']]);
     expect(flattenPatch({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
       .toEqual([['regiaChats.harness', 'cursor'], ['regiaChats.cursorModel', 'grok-4.7']]);
   });
 });
 
 describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
+  it('a config from before the engine switches keeps its keys and meaning; every engine starts on', () => {
+    // the user's real file: the Regie may not use Cursor, chats across engines on (older releases read the same keys)
+    expect(fromSaved({ messaging: { crossHarness: true }, engines: { claude: true, cursor: false } })).toMatchObject({
+      engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: false }, messaging: { crossHarness: true } });
+  });
+
   it('an older config with regiaDriven loads without it; the key is no setting any more', () => {
     expect('regiaDriven' in DEFAULTS).toBe(false);
     expect(defOf('regiaDriven' as never)).toBeNull();
     expect('regiaDriven' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
     expect(fromSaved({ view: 'corsie', regiaDriven: false }).view).toBe('corsie');
+  });
+});
+
+describe('engine switches (ADR 0046)', () => {
+  it('an engine switched off closes «Le Regie possono usare» too, by the same hand, events in order; on again leaves it closed', () => {
+    const dir = tmpDir();
+    const store = new ConfigStore(dir, {});
+    const seen: string[] = [];
+    store.onChange((c, now) => seen.push(`${c.key}=${String(c.after)} by ${c.by} (engines.cursor ${String(now.engines.cursor)})`));
+    store.set({ engineOn: { cursor: false } });
+    expect(seen).toEqual(['engineOn.cursor=false by user (engines.cursor true)', 'engines.cursor=false by user (engines.cursor false)']);
+    // the key an older release reads is in the file
+    expect(new ConfigStore(dir, {}).get()).toMatchObject({ engineOn: { cursor: false }, engines: { cursor: false } });
+    store.set({ engineOn: { cursor: true } });
+    expect(store.get()).toMatchObject({ engineOn: { cursor: true }, engines: { cursor: false } });
+  });
+
+  it('every engine of the registry has its protected switches; a new one ships off; an id from a later brain survives a restart', () => {
+    for (const k of ['engineOn.kimi', 'engines.gemini', 'engineOn.qwen-2']) expect(defOf(k)?.protected, k).toBe(true);
+    for (const k of ['engineOn.Kimi', 'engines.../x', 'engineOn.']) expect(defOf(k), k).toBeNull();
+    expect(DEFAULTS.engineOn).toMatchObject({ claude: true, cursor: true, kimi: false, gemini: false });
+    expect(validate('engineOn.kimi', 'yes').ok).toBe(false);
+    // an engine the brain defines after the settings were loaded: its saved switch is kept
+    expect(fromSaved({ engineOn: { qwen: true, 'Bad id': true }, engines: { qwen: false } })).toMatchObject({ engineOn: { qwen: true }, engines: { qwen: false } });
+    expect(fromSaved({ engineOn: { 'Bad id': true } }).engineOn).not.toHaveProperty('Bad id');
+    // the Regia's engine too: Settings and "Nuova chat" do not fall back to Claude on a restart
+    expect(fromSaved({ regiaChats: { harness: 'qwen' } }).regiaChats.harness).toBe('qwen');
+    expect(fromSaved({ regiaChats: { harness: '../x' } }).regiaChats.harness).toBe('claude');
   });
 });
 
@@ -233,5 +267,21 @@ describe('settings store', () => {
     expect(again.find(x => x.id === 'chg_old1')).toMatchObject({ by: 'user', undone: true });
     expect(again.every(x => x.by === 'user' || x.by === 'agent')).toBe(true);
     expect(fs.readFileSync(path.join(dir, 'changes.jsonl'), 'utf8').split('\n').filter(Boolean).slice(2).some(l => l.includes(legacy))).toBe(false);
+  });
+});
+
+describe('compaction window 300k → 200k (ADR 0051)', () => {
+  it('a saved 300000 nobody set follows the new default; a value the user set stays; a new install gets 200000', () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ ...DEFAULTS, compactWindowTokens: 300_000 }));
+    expect(new ConfigStore(dir, {}).get().compactWindowTokens).toBe(200_000);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')).compactWindowTokens).toBe(200_000);
+    // the user sets 300000 again: it stays across restarts
+    new ConfigStore(dir, {}).set({ compactWindowTokens: 300_000 });
+    expect(new ConfigStore(dir, {}).get().compactWindowTokens).toBe(300_000);
+    // once per userData: a choice that has left the change log (it keeps only its last entries) is not undone
+    fs.rmSync(path.join(dir, 'changes.jsonl'));
+    expect(new ConfigStore(dir, {}).get().compactWindowTokens).toBe(300_000);
+    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, regiaDayCompact: true });
   });
 });

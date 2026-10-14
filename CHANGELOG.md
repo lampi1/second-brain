@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- Texts for colleagues (blocks tagged md, mail, teams, comment) show formatted in the chat, and Copia copies them
+  formatted: bold, lists and links survive a paste into Outlook, Teams or DevOps (ADR 0043).
+
 ## [0.1.0] - 2026-10-13
 
 First public version.

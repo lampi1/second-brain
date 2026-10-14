@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type DemoAction } from '../../src/main/demo';
 import { ConfigStore } from '../../src/main/brain/config';
+import { NEAR_COMPACTION } from '../../src/shared/context';
 
 type Ev = { ch: keyof EventMap; p: unknown };
 
@@ -105,9 +106,11 @@ describe('demo chats (frozen)', () => {
     expect(events.some(e => e.ch === 'chat:removed')).toBe(true);
   });
 
-  it('long chats: the seed has one over 200k; hand-off and "Riprendi" link the old and the new chat', async () => {
+  it('long chats: the seed has one near its compaction (200k window); hand-off and "Riprendi" link the old and the new chat', async () => {
     const { chats } = make();
-    expect(chats.list().find(c => c.id === 'mappa')?.contextTokens).toBeGreaterThan(200_000);
+    const mappa = chats.list().find(c => c.id === 'mappa')!;
+    expect(mappa.contextMaxTokens).toBe(200_000);
+    expect(mappa.contextTokens).toBeGreaterThanOrEqual(200_000 * NEAR_COMPACTION);
     expect(chats.list().find(c => c.id === 'sms')?.contextEstimated).toBe(true);
     expect(chats.readHandoff('mappa')).toBeNull();
     const h = await chats.handoff('mappa');

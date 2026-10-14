@@ -1,15 +1,17 @@
-// The two engines the app drives (ADR 0010: Claude embedded, Cursor CLI): where they are, which version, whether the
-// user is logged in, and opening the OFFICIAL login in a visible terminal. The app never sees, stores or types
-// credentials: the engine's own login flow runs in a console window the user works in. Cursor's login state is checked
-// only on the user's request (a click), never automatically: no call to Cursor's service happens unless asked (each
-// engine spends only its own; agents testing the app must not trigger Cursor). Resolution and process primitives (the
+// The engines the app drives (ADR 0010: Claude embedded; ADR 0046: any ACP CLI or HTTP model of the registry): where
+// they are, which version, whether the user is logged in, and opening the OFFICIAL login in a visible terminal. The app
+// never sees, stores or types a login: the engine's own login flow runs in a console window the user works in (API keys
+// are the one exception, typed in Settings: engines/secrets.ts). An ACP CLI's login state is checked only on the
+// user's request (a click), never automatically: no call to its service happens unless asked (each engine spends only
+// its own; agents testing the app must not trigger another vendor's CLI). Resolution and process primitives (the
 // embedded binary, Cursor's node.exe, fake .mjs engines for tests, kill tree) live in chats/cli.ts; used by index.ts,
 // wiring.ts.
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CliStatus, Harness } from '../shared/contract';
-import { commandFor, cursorAllowed, findCli, resolveClaude, resolveCursor } from './chats/cli';
+import { commandFor, engineAllowed, findCli, resolveAcp, resolveClaude, resolveCursor } from './chats/cli';
+import { engineOrThrow, engines, type EngineDef } from './engines/registry';
 import { log } from './log';
 
 /** The same Claude engine the chats run (embedded binary, ADR 0010), so status and login match what chats use. */
@@ -35,7 +37,7 @@ function runFixed(exe: string, args: string[], timeout = 20000): Promise<{ stdou
 }
 const version = (out: string) => out.match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? (out.trim() || null);
 
-export async function claudeStatus(): Promise<CliStatus> {
+async function claudeStatus(): Promise<CliStatus> {
   const p = claudePath();
   if (!p) return { found: false, path: null, version: null, loggedIn: null };
   const v = await runFixed(p, ['--version']);
@@ -47,24 +49,52 @@ export async function claudeStatus(): Promise<CliStatus> {
   return { found: true, path: p, version: version(v.stdout), loggedIn, account };
 }
 
-/** Under tests the real Cursor CLI is never run, not even `--version` (only the .mjs fake). */
-const cursorRunnable = (): boolean => { const c = resolveCursor(); return !!c && cursorAllowed(c); };
+/** An ACP engine's command for status and login: Cursor's launcher, else its CLI as chats resolve it. */
+function acpPath(e: EngineDef): string | null {
+  return e.id === 'cursor' ? cursorPath() : resolveAcp(e.id, e.command ?? e.id)?.display ?? null;
+}
 
-export async function cursorStatus(): Promise<CliStatus> {
-  const p = cursorPath();
+/** May the app run this ACP CLI at all, even `--version`? Never a real one under tests (only a .mjs fake), and an
+ *  engine that is not built in only with the definition the user turned on (registry trusted): a command an agent
+ *  wrote into models.json never runs before the user's click. */
+function acpRunnable(e: EngineDef): boolean {
+  const c = e.id === 'cursor' ? resolveCursor() : resolveAcp(e.id, e.command ?? e.id);
+  return !!c && engineAllowed(c) && e.trusted;
+}
+
+async function acpStatus(e: EngineDef): Promise<CliStatus> {
+  const p = acpPath(e);
   if (!p) return { found: false, path: null, version: null, loggedIn: null };
-  if (!cursorRunnable()) return { found: true, path: p, version: null, loggedIn: null };
+  if (!acpRunnable(e)) return { found: true, path: p, version: null, loggedIn: null };
   const v = await runFixed(p, ['--version']);
   return { found: true, path: p, version: version(v.stdout), loggedIn: null };
 }
 
+/** One engine's status (found, version, login when it can be read without spending). An HTTP engine has no program:
+ *  "found", with its endpoint as the path. */
+export function engineStatus(id: Harness): Promise<CliStatus> {
+  const e = engineOrThrow(id);
+  if (e.kind === 'claude') return claudeStatus();
+  if (e.kind === 'api') return Promise.resolve({ found: true, path: e.baseUrl ?? null, version: null, loggedIn: null });
+  return acpStatus(e);
+}
+
+/** Every engine's status, by id. */
+export async function engineStatuses(): Promise<Record<Harness, CliStatus>> {
+  const all = engines();
+  const list = await Promise.all(all.map(e => engineStatus(e.id)));
+  return Object.fromEntries(all.map((e, i) => [e.id, list[i] as CliStatus]));
+}
+
 /** Opens a visible console window running the engine's own login; returns at once (the user completes it there). */
 export function openLogin(harness: Harness): void {
-  if (harness === 'cursor' && !cursorRunnable()) throw new Error('Nei test il login di Cursor non si apre mai.');
-  const p = harness === 'claude' ? claudePath() : cursorPath();
-  if (!p) { log.error('cli', 'login requested but the CLI is missing', { cause: `${harness} CLI not found on PATH`, hint: harness === 'claude' ? 'install Claude Code' : 'install the Cursor CLI' }); throw new Error(`${harness} CLI not found`); }
-  const args = harness === 'claude' ? 'auth login' : 'login';
-  const title = harness === 'claude' ? 'Accesso Claude' : 'Accesso Cursor';
+  const e = engineOrThrow(harness);
+  if (e.kind === 'api' || !e.login.length) throw new Error(`${e.label} non ha un comando di accesso: usa una chiave API (Impostazioni → Motori) o accedi dentro la sua CLI.`);
+  if (e.kind === 'acp' && !acpRunnable(e)) throw new Error(e.trusted ? `Nei test il login di ${e.label} non si apre mai.` : `Accendi prima ${e.label} in Impostazioni → Motori.`);
+  const p = e.kind === 'claude' ? claudePath() : acpPath(e);
+  if (!p) { log.error('cli', 'login requested but the CLI is missing', { cause: `${e.label} CLI not found on PATH`, hint: `install the ${e.label} CLI` }); throw new Error(`${e.label} CLI not found`); }
+  const args = e.login.join(' ');
+  const title = `Accesso ${e.label}`;
   // `start "<title>" cmd /k ""<exe>" <args>"`: a new window that stays open after the login
   spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', `start "${title}" cmd /k ""${p}" ${args}"`], { detached: true, stdio: 'ignore', windowsHide: false, windowsVerbatimArguments: true }).unref();
   log.info('cli', 'official login opened in a terminal', { data: { harness } });

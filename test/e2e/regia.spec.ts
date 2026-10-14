@@ -60,6 +60,10 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   await expect(first).toContainText('Regia precedente · Claude');
   await expect(page.getByTestId('toasts')).toContainText('Regia nuova su Claude');
   await expect(page.getByTestId('regia-input')).toBeFocused();
+  // through the routing table (ADR 0032): a Regia's work is 'regia', its route reaches the ledger
+  const renewed = await regiaIdOf(page);
+  const listed = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
+  expect(listed.find(c => c.id === renewed)).toMatchObject({ harness: 'claude', route: { policy: 'routing', kind: 'regia' } });
 
   // from the menu: Cambia motore → Cursor, without the summary (starts empty)
   const second = await regiaIdOf(page);

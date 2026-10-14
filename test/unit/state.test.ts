@@ -18,7 +18,7 @@ describe('reduce', () => {
   it('cli:ready fills the CLI status into app:info, and waits for app:info when it comes first', () => {
     const cli = { claude: { found: true, path: 'c', version: '2', loggedIn: true }, cursor: { found: false, path: null, version: null, loggedIn: null } };
     expect(reduce(init(), { type: 'cli', cli }).info).toBeNull();
-    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null } });
+    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: [] } });
     expect(reduce(s, { type: 'cli', cli }).info?.cli).toEqual(cli);
   });
 
@@ -39,7 +39,7 @@ describe('reduce', () => {
   it('cli:ready fills the CLI status into app:info, and waits for app:info when it comes first', () => {
     const cli = { claude: { found: true, path: 'c', version: '2', loggedIn: true }, cursor: { found: false, path: null, version: null, loggedIn: null } };
     expect(reduce(init(), { type: 'cli', cli }).info).toBeNull();
-    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null } });
+    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: [] } });
     expect(reduce(s, { type: 'cli', cli }).info?.cli).toEqual(cli);
   });
 

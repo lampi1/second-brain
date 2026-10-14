@@ -1,22 +1,25 @@
 // The Settings page (Impostazioni, Ctrl+, or the gear menu → "Tutte le impostazioni"): every switch the user may want,
 // grouped, each with one line that says what it does, applied at once (the user, 2026-10-11: "vorrei più cose
 // configurabili ad esempio dove sta l'abilitazione e disabilitazione del confronto tra modelli"). Groups: Aspetto
-// (theme, density, view: the same prefs as the gear menu), Chat (Claude <-> Cursor mail; after how many minutes a
-// finished chat closes by itself, autoCloseMin), Instradamento modelli (RoutingGroup.tsx: the routing table), Confronto tra modelli (the brain's A/B experiments, through the main
+// (theme, density, view: the same prefs as the gear menu), Motori (each engine on/off and the one switch for chats
+// across engines, ADR 0046: engineOn.*, engines.*, messaging.crossHarness), Chat (after how many minutes a finished chat closes by itself,
+// autoCloseMin; the compaction window of the Claude chats and «Regie corte», ADR 0051; the load queue), Instradamento modelli (RoutingGroup.tsx: the routing table), Confronto tra modelli (the brain's A/B experiments, through the main
 // process's 'compare:*' channels, which run the harness's own switch.mjs: the app never writes switch.json), Chat
 // aperte dalla Regia (engine, model, effort of the chats the Regia opens; settings regiaChats.*,
-// engines.*, regiaOpacity, regiaEvents, runResults), Limiti di
+// regiaOpacity, regiaEvents, runResults), Limiti di
 // spesa (budget.*: warnings only), Notifiche (osToasts; do-not-disturb stays in the notification center), App (brain
 // folder and MCP port, read only: changing them is a setup step, not a switch).
 // Claude Code's own settings (~/.claude/settings.json: permissions, hooks) stay out by design (AGENTS.md rule 6).
 // Rendered by App.tsx PageFrame for the 'impostazioni' place, inside the brain page frame (.bx classes).
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { BudgetLimits, BudgetMode, CompareExperiment, CompareState, CursorReasoning, Effort, Harness, RegiaChatDefaults, ToastLevel } from '@shared/contract';
+import type { BudgetLimits, BudgetMode, CompareExperiment, CompareState, CursorReasoning, Effort, EngineInfo, Harness, RegiaChatDefaults, SecretsStatus, ToastLevel } from '@shared/contract';
 import { PageHead } from '../brain/components/States';
 import { AGENT, autoLine, costLine, toolName } from '../lib/compare';
 import { EFFORTS, effortLabel } from '../lib/format';
 import { modelOptions, useModelsSeen } from '../lib/models';
+import { useEngines } from '../lib/engines';
 import { parseUsd, portOf } from '../lib/settings-page';
+import { errText } from '../actions';
 import { setSetting, useApp } from '../store/store';
 import { setPrefs, setView, toast, ui, type Density, type Theme } from '../store/ui';
 import { questionsModalOn } from '../lib/questions';
@@ -140,7 +143,8 @@ function CompareGroup() {
  *  "Nuova chat" starts. Saved as settings (regiaChats.*): main reads them at each new chat, so a change applies at once. */
 function RegiaChatsGroup() {
   const d = useApp(s => s.settings?.regiaChats);
-  const engines = useApp(s => s.settings?.engines);
+  const list = useEngines();
+  const off = useApp(s => s.settings?.engines?.[d?.harness ?? ''] !== true);
   const opacity = useApp(s => s.settings?.regiaOpacity ?? 100);
   const events = useApp(s => s.settings?.regiaEvents !== false);
   const results = useApp(s => s.settings?.runResults !== false);
@@ -159,8 +163,8 @@ function RegiaChatsGroup() {
       desc={'Con cosa la Regia apre le chat di lavoro quando non lo dice lei. Anche "Nuova chat" parte da qui. Vale dalla prossima chat.'}>
       <Row title="Motore" desc="Le chat di lavoro partono con questo motore e i suoi crediti." testid="st-rc-harness"
         control={<Choice<Harness> value={d.harness} onChange={h => put({ harness: h })} label="Motore delle chat aperte dalla Regia" testid="st-rc-harness-choice"
-          options={[{ value: 'claude', label: 'Claude' }, { value: 'cursor', label: 'Cursor' }]} />}>
-        {engines && !engines[d.harness] && <div className="st-meta" data-testid="st-rc-engine-off">«La Regia può usare {d.harness === 'claude' ? 'Claude' : 'Cursor'}» è spento qui sotto: finché resta spento la Regia non apre chat se non sceglie lei l'altro motore.</div>}
+          options={list.filter(e => e.caps.tools).map(e => ({ value: e.id, label: e.label }))} />}>
+        {off && <div className="st-meta" data-testid="st-rc-engine-off">{`«Le Regie possono usare ${list.find(e => e.id === d.harness)?.label ?? d.harness}» è spento in «Motori»: finché resta spento la Regia apre chat solo se sceglie lei un altro motore.`}</div>}
       </Row>
       <Row title="Modello Claude" desc="Per le chat Claude. Predefinito = quello di Claude Code." testid="st-rc-claude-model"
         control={select(d.claudeModel, modelOptions('claude', seen, d.claudeModel), v => put({ claudeModel: v }), 'Modello delle chat Claude', 'st-rc-claude-model-select')} />
@@ -197,11 +201,92 @@ function RegiaChatsGroup() {
         </HelpTip>}
         desc="Acceso: ogni domanda e permesso compare in una finestra in primo piano, una alla volta, con il contesto e i link. Mentre scrivi aspetta che ti fermi e non ti prende la tastiera. Anche dal pulsante in alto."
         control={<Switch on={qwin} onChange={on => void setSetting({ questionsModal: on })} label={`Domande in finestra: ${qwin ? 'accese' : 'spente'}`} testid="st-qwin-switch" />} />
-      {engines && (['claude', 'cursor'] as const).map(h => (
-        <Row key={h} title={`La Regia può usare ${h === 'claude' ? 'Claude' : 'Cursor'}`} testid={`st-engine-${h}`}
-          desc="Spento: la Regia non apre chat con questo motore (tu sì, da Nuova chat)."
-          control={<Switch on={engines[h]} onChange={on => void setSetting({ engines: { [h]: on } })} label={`La Regia può usare ${h === 'claude' ? 'Claude' : 'Cursor'}: ${engines[h] ? 'sì' : 'no'}`} testid={`st-engine-${h}-switch`} />} />
+    </Group>
+  );
+}
+
+// ── Motori ──
+/** An engine's API key: typed once, then only its mask (main never sends a key back). Saved encrypted on this PC by
+ *  main (engines/secrets.ts); the field is cleared as soon as it is sent. */
+function KeyRow({ e, st, onStatus }: { e: EngineInfo; st: SecretsStatus; onStatus: (s: SecretsStatus) => void }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const saved = st.keys[e.id];
+  const run = async (p: Promise<SecretsStatus>, done: string) => {
+    setBusy(true);
+    try { onStatus(await p); toast(done, 'ok'); } catch (err) { toast(errText(err), 'err'); } finally { setBusy(false); }
+  };
+  const save = () => {
+    const key = text.trim();
+    setText('');
+    if (key) void run(window.sb.invoke('secrets:set', { engine: e.id, key }), `Chiave di ${e.label} salvata`);
+  };
+  return (
+    <Row title={`Chiave API di ${e.label}`} testid={`st-key-${e.id}`} dim={!st.available}
+      desc={e.key === 'required'
+        ? `Serve per usare ${e.label}. Va solo nelle sue richieste; resta cifrata su questo PC e nessuno la rivede, nemmeno tu.`
+        : `Facoltativa: senza, ${e.label} usa il suo login. Resta cifrata su questo PC e va solo nel suo processo, dove il suo agente può leggerla come legge i suoi file di login.`}
+      control={<span className="st-key">
+        <input className="st-input" type="password" autoComplete="off" spellCheck={false} value={text} disabled={!st.available || busy}
+          placeholder={saved ? 'sostituisci' : 'incolla la chiave'} aria-label={`Chiave API di ${e.label}`} data-testid={`st-key-${e.id}-input`}
+          onChange={ev => setText(ev.target.value)} onKeyDown={ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } }} />
+        <button type="button" className="btn btn-ghost btn-s" disabled={!st.available || busy || !text.trim()} onClick={save} data-testid={`st-key-${e.id}-save`}>Salva</button>
+        {saved && <button type="button" className="btn btn-ghost btn-s" disabled={busy} data-testid={`st-key-${e.id}-delete`}
+          onClick={() => void run(window.sb.invoke('secrets:delete', { engine: e.id }), `Chiave di ${e.label} eliminata`)}>Elimina</button>}
+      </span>}>
+      {!st.available && <div className="st-meta" data-testid={`st-key-${e.id}-unavailable`}>{`Le chiavi non si possono salvare: ${st.why ?? 'cifratura non disponibile'}.`}</div>}
+      {saved && <div className="st-meta" data-testid={`st-key-${e.id}-mask`}>{saved.stale
+        ? `Salvata (${saved.mask}) ma non usata: il modo di avviare ${e.label} è cambiato dopo. Incollala di nuovo.`
+        : `Salvata: ${saved.mask}`}</div>}
+    </Row>
+  );
+}
+
+/** Each engine on or off (with how it starts), its API key when it takes one, whether the Regie may use it, and the one
+ *  switch for chats across engines (ADR 0046). Protected settings: an agent can only propose them. An engine that is
+ *  not built in counts as on only while it starts as it did when the user turned it on (main's trust): if its
+ *  definition changed, the switch shows it off and turning it on again trusts the new one. */
+function EnginesGroup() {
+  const list = useEngines();
+  const on = useApp(s => s.settings?.engineOn);
+  const regie = useApp(s => s.settings?.engines);
+  const cross = useApp(s => s.settings?.messaging?.crossHarness);
+  const [keys, setKeys] = useState<SecretsStatus | null>(null);
+  useEffect(() => {
+    let alive = true;
+    window.sb.invoke('secrets:status', undefined).then(s => { if (alive) setKeys(s); }, err => toast(errText(err), 'err'));
+    return () => { alive = false; };
+  }, [list]);
+  if (!on || !regie || cross === undefined) return null;
+  const turn = (e: EngineInfo, v: boolean) => {
+    if (v && !e.trusted) window.sb.invoke('engines:trust', { engine: e.id }).catch(err => toast(errText(err), 'err'));
+    else void setSetting({ engineOn: { [e.id]: v } });
+  };
+  return (
+    <Group title="Motori" testid="st-group-engines" desc="Con quali CLI o API girano le chat, le loro chiavi, e cosa possono farne le Regie.">
+      {list.map(e => {
+        const live = on[e.id] === true && e.trusted;
+        return [
+          <Row key={e.id} title={`${e.name} acceso`} testid={`st-engine-on-${e.id}`}
+            desc={`Spento: nessuna chat parte su ${e.label}, né quelle che apri tu né quelle delle Regie; si spegne anche «Le Regie possono usare ${e.label}».`}
+            control={<Switch on={live} onChange={v => turn(e, v)} label={`${e.label}: ${live ? 'acceso' : 'spento'}`} testid={`st-engine-on-${e.id}-switch`} />}>
+            <div className="st-meta" data-testid={`st-engine-on-${e.id}-runs`}>{`Avvio: ${e.runs}${e.source === 'brain' ? ' · dal brain (harness/models.json)' : ''}`}</div>
+            {on[e.id] === true && !e.trusted && <div className="st-meta" data-testid={`st-engine-on-${e.id}-changed`}>{`Non parte: il modo di avviarlo è cambiato da quando l'hai acceso. Riaccendilo se l'avvio qui sopra va bene.`}</div>}
+          </Row>,
+          e.key !== 'none' && keys && <KeyRow key={`${e.id}-key`} e={e} st={keys} onStatus={setKeys} />,
+        ];
+      })}
+      {list.map(e => (
+        <Row key={e.id} dim={on[e.id] !== true || !e.trusted} title={`Le Regie possono usare ${e.label}`} testid={`st-engine-${e.id}`}
+          desc={`Spento: nessuna Regia apre o riprende chat su ${e.label}; tu sì, da Nuova chat.`}
+          control={<Switch on={regie[e.id] === true} onChange={v => void setSetting({ engines: { [e.id]: v } })} label={`Le Regie possono usare ${e.label}: ${regie[e.id] === true ? 'sì' : 'no'}`} testid={`st-engine-${e.id}-switch`} />} />
       ))}
+      <Row title="Chat tra motori diversi" testid="st-cross"
+        help={<HelpTip label="Chat tra motori diversi" title="Chi spende i crediti">
+          Una Regia su un motore può aprire, riprendere o scrivere a chat su un altro, che lavorano con i crediti di quel motore. Spegnilo se vuoi che ogni chat resti sul proprio.
+        </HelpTip>}
+        desc="Una chat o una Regia può aprire, riprendere o scrivere a chat su un altro motore. Spento: solo sul proprio; le tue chat da Nuova chat restano libere. Vale anche per la posta tra chat fuori dall'app."
+        control={<Switch on={cross} onChange={v => void setSetting({ messaging: { crossHarness: v } })} label={`Chat tra motori diversi: ${cross ? 'accese' : 'spente'}`} testid="st-cross-switch" />} />
     </Group>
   );
 }
@@ -332,33 +417,38 @@ function AppRepoInput({ value }: { value: string }) {
 
 /** The delays offered, plus the stored one when it is another (set in the file or by an agent: still shown, selected). */
 const closeDelays = (cur: number) => [...new Set([2, 5, 10, 30, ...(cur > 0 ? [cur] : [])])].sort((a, b) => a - b);
+/** The compaction windows offered (tokens), plus the stored one when it is another. */
+const compactWindows = (cur: number) => [...new Set([150_000, 200_000, 300_000, 500_000, ...(cur > 0 ? [cur] : [])])].sort((a, b) => a - b);
 
 export function SettingsPage() {
   const theme = ui.use(s => s.prefs.theme);
   const density = ui.use(s => s.prefs.density);
   const view = ui.use(s => s.prefs.view);
-  const cross = useApp(s => s.settings?.messaging?.crossHarness ?? true);
   const closeMin = useApp(s => s.settings?.autoCloseMin ?? 2);
   const lq = useApp(s => s.settings?.loadQueue ?? true);
   const lqCpu = useApp(s => s.settings?.loadQueueCpu ?? 75);
   const lqRam = useApp(s => s.settings?.loadQueueRam ?? 15);
+  const compactAt = useApp(s => s.settings?.compactWindowTokens ?? 200_000);
+  const regiaDay = useApp(s => s.settings?.regiaDayCompact !== false);
   return (
     <div className="st-page" data-testid="settings-page">
       <PageHead title="Impostazioni" lead="Come lavora l'app. Ogni modifica vale subito e resta salvata." />
       <CompareGroup />
+      <EnginesGroup />
       <RegiaChatsGroup />
       <RoutingGroup />
       <Group title="Chat" testid="st-group-chat">
-        <Row title="Messaggi tra Claude e Cursor" testid="st-cross"
-          help={<HelpTip label="Messaggi tra Claude e Cursor" title="Posta tra chat">
-            Una chat può mandare un messaggio a un'altra, per esempio per passarle un risultato. Spegnilo se non vuoi che una chat Claude faccia lavorare Cursor con i suoi crediti, o il contrario.
-          </HelpTip>}
-          desc="Le chat Claude e Cursor possono scriversi con la posta tra chat. Spento: bloccati solo i messaggi tra motori diversi. Vale anche fuori dall'app."
-          control={<Switch on={cross} onChange={on => void setSetting({ messaging: { crossHarness: on } })} label={`Messaggi tra Claude e Cursor: ${cross ? 'accesi' : 'spenti'}`} testid="st-cross-switch" />} />
         <Row title="Chiudi le chat finite dopo" testid="st-autoclose"
           desc="Una chat che ha finito bene e che non tocchi si chiude da sola; la ritrovi con Ctrl+K e la riapri con Invio. Mai chiuse: la Regia, le chat con una domanda, un comando o un browser che ti aspetta."
           control={<Choice<string> value={String(closeMin)} onChange={v => void setSetting({ autoCloseMin: Number(v) })} label="Chiudi le chat finite dopo" testid="st-autoclose-choice"
             options={[...closeDelays(closeMin).map(m => ({ value: String(m), label: `${m} min` })), { value: '0', label: 'Mai' }]} />} />
+        <Row title="Compatta le chat Claude a" testid="st-compact"
+          desc="Sopra questa dimensione del contesto una chat Claude dell’app, Regia compresa, riassume da sola la sua storia e va avanti dal riassunto, nella stessa chat. Ogni passo rilegge tutto il contesto: a 400k costa il doppio che a 200k. Vale dal prossimo avvio del motore di ogni chat."
+          control={<Choice<string> value={String(compactAt)} onChange={v => void setSetting({ compactWindowTokens: Number(v) })} label="Compatta le chat Claude a" testid="st-compact-choice"
+            options={[...compactWindows(compactAt).map(n => ({ value: String(n), label: `${Math.round(n / 1000)}k` })), { value: '0', label: 'Impostazioni di Claude' }]} />} />
+        <Row title="Regie corte" testid="st-regia-day"
+          desc="La prima volta che una Regia è ferma in un giorno nuovo, se il suo contesto è di ieri ed è di 50k o più lo riassume. Resta la stessa chat: la coda e le chat che segue non cambiano."
+          control={<Switch on={regiaDay} onChange={on => void setSetting({ regiaDayCompact: on })} label={`Regie corte: ${regiaDay ? 'accese' : 'spente'}`} testid="st-regia-day-switch" />} />
         <Row title="Coda per carico" testid="st-load-queue"
           desc="Con il PC sotto sforzo, le chat e i messaggi aperti dalla Regia o da altre chat aspettano in coda e partono uno alla volta quando il carico scende. I tuoi messaggi partono sempre subito; niente viene fermato."
           control={<Switch on={lq} onChange={on => void setSetting({ loadQueue: on })} label={`Coda per carico: ${lq ? 'accesa' : 'spenta'}`} testid="st-load-queue-switch" />} />

@@ -33,7 +33,7 @@ and the focused input is gone; Mosaico and Regia kept the focus in all the cases
   `QuestionsWindow.tsx`): every question and permission shows in one window in front, one at a time with the queue
   under it and its context open; tiles and the Regia keep one line, the layer only toasts. It never takes the user's
   text: while they type (a key less than 2 s ago in a field) it waits as a pill; when it shows, it takes the keyboard
-  only if no other field has it; then it is not modal (no backdrop, on the half of the screen away from that field,
+  only if no other field has it; then it is not modal (no backdrop, on the half of the screen away from that field; since ADR 0044 always the centered modal,
   a note says Ctrl+J or a click moves the keyboard; then it turns modal, Tab stays inside). When it closes the
   keyboard goes back to the field it came from. While it is in front only Ctrl+K, Ctrl+J and Esc act (nothing hidden
   under it). Esc / "Più tardi" sets the current ones aside; a new request opens it again. Under a dialog it stays

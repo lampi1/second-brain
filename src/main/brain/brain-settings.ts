@@ -1,7 +1,8 @@
 // The brain's own settings file (<brain>/brain-settings.json), read by the brain's tools too (today inbox.mjs: the
-// Claude <-> Cursor mail switch; the user, 2026-10-11: "vorrei che le chat di claude potessero parlare con quelle di cursor
-// e viceversa però disattivabile con un'opzione per sicurezza"). The app mirrors its setting `messaging.crossHarness`
-// into this file; the file wins at start (it may have been edited by hand). Same reading rules as inbox.mjs: UTF-8 with
+// mail switch between chats on different engines; the user, 2026-10-11: "vorrei che le chat di claude potessero parlare con quelle di cursor
+// e viceversa però disattivabile con un'opzione per sicurezza"). The app mirrors its setting `messaging.crossHarness` («Chat
+// tra motori diversi», ADR 0046) into this file as `crossHarnessMessages`; at start the file may only close it, never
+// open it (agents write to the brain). Same reading rules as inbox.mjs: UTF-8 with
 // or without BOM, UTF-16 LE; unreadable = switch off (fail closed). Used by brain/index.ts.
 import fs from 'node:fs';
 import path from 'node:path';

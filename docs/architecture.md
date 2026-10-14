@@ -4,7 +4,7 @@
 ┌──────────────────────────── Electron main (Node) ─────────────────────────────┐
 │ index.ts ── wiring.ts ── services: ChatService · BrowserService · BrainService │
 │   chats/   ClaudeSession (claude -p stream-json, control protocol)            │
-│            CursorSession (agent acp, JSON-RPC)      ChatManager · External     │
+│            AcpSession (any ACP CLI, JSON-RPC)      ChatManager · External     │
 │   browser/ Tabs = WebContentsView (a partition per environment), page scripts │
 │   mcp/     MCP server 127.0.0.1 (Streamable HTTP): /mcp (external clients),    │
 │            /mcp/chat/<id>/<token> (one per app chat: its own tabs)            │

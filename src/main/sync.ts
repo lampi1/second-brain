@@ -5,8 +5,11 @@
 // brain change (paths from `product-sync.mjs paths --json`), after 10 minutes of quiet, never two at once.
 // Stable instance only (SB_RELEASE set, not in tests): a dev build never syncs. Exit codes: 0 ok (or paused / nothing
 // to do), 2 blocked by the check, anything else = error. A block or error with the same findings as the last one is
-// published once (one item that stays until a sync goes through; 40 identical red toasts were seen on 12/10). Used
-// by wiring.ts.
+// published once (one item that stays until a sync goes through; 40 identical red toasts were seen on 12/10). What was
+// already notified survives a restart (<base>/sync-state.json): an outcome written while the app was closed (a release
+// sync ends after the promotion restarted the app) is notified at the next start, not marked as old (on 14/10 a crash
+// and three days of blocks went unseen). A failure says since when GitHub is behind (the last ok outcome). Used by
+// wiring.ts.
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,12 +33,35 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${re}$`, 'i');
 }
 
-export function outcomeEvent(o: SyncOutcome): { kind: string; title: string; detail: string } | null {
+/** "11/10 20:22" in the machine's time zone. */
+const when = (iso: string): string => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+};
+
+/** An outcome → its feed event. lastOkAt: when GitHub was last updated (null = never; undefined = not known, no line). */
+export function outcomeEvent(o: SyncOutcome, lastOkAt?: string | null): { kind: string; title: string; detail: string } | null {
   if (o.running || !o.endedAt) return null;
   const what = o.release.startsWith('brain-') ? 'prodotto nel cervello' : `versione ${o.release}`;
   if (o.ok) return { kind: 'sync-ok', title: `GitHub aggiornato (${what})`, detail: o.summary?.split('\n').at(-1) ?? '' };
-  if (o.blocked) return { kind: 'sync-blocked', title: `Pubblicazione bloccata (${what})`, detail: o.summary ?? '' };
-  return { kind: 'sync-error', title: `Pubblicazione non riuscita (${what})`, detail: o.summary ?? `codice ${o.exitCode}` };
+  const since = lastOkAt === undefined ? '' : `Ultimo aggiornamento riuscito di GitHub: ${lastOkAt ? when(lastOkAt) : 'mai'}\n`;
+  if (o.blocked) {
+    // the count line ("guard: BLOCKED, 110 findings (…)") is the last one: it goes first, under the date
+    const lines = (o.summary ?? '').split('\n');
+    const count = lines.findLast(l => /\bBLOCKED\b/.test(l));
+    const body = count ? [count, ...lines.filter(l => l !== count)].join('\n') : (o.summary ?? '');
+    return { kind: 'sync-blocked', title: `GitHub fermo: pubblicazione bloccata dal controllo (${what})`, detail: `${since}${body}` };
+  }
+  return { kind: 'sync-error', title: `GitHub fermo: pubblicazione non riuscita (${what})`, detail: `${since}${o.summary ?? `codice ${o.exitCode}`}` };
+}
+
+/** The output of a sync → its summary: the last lines, plus the first error line when it scrolled above them (a Node
+ *  crash ends with a stack and the error object, its message is higher up). */
+export function summarize(out: string, keep = 6): string {
+  const lines = out.trim().split(/\r?\n/);
+  const tail = lines.slice(-keep);
+  const cause = lines.slice(0, -keep).find(l => /^\s*(?:\w*Error\b|fatal: |error: )/.test(l));
+  return (cause ? [cause.trim(), '…', ...tail] : tail).join('\n');
 }
 
 /** What a failure is about, without what changes from run to run (release ids, timestamps): same signature = same
@@ -50,7 +76,7 @@ export function failureSignature(ev: { kind: string; detail: string }): string {
 
 /** Outcome events → the ones to publish: a failure only when it differs from the open one; an ok closes it. */
 export class FailureDedup {
-  private open: string | null = null;
+  constructor(public open: string | null = null) {}
   pass(ev: { kind: string; detail: string }): boolean {
     if (ev.kind === 'sync-ok') { this.open = null; return true; }
     const sig = failureSignature(ev);
@@ -60,9 +86,15 @@ export class FailureDedup {
   }
 }
 
+interface SyncState { seenUntil: number; open: string | null }
+
 export class ProductSync {
   private dedup = new FailureDedup();
   private dir: string;
+  private stateFile: string;
+  private seenUntil = 0;
+  private lastOkAt: string | null = null;
+  private firstScan: NodeJS.Timeout | null = null;
   private seen = new Set<string>();
   private watchers: fs.FSWatcher[] = [];
   private brainWatcher: fs.FSWatcher | null = null;
@@ -71,38 +103,71 @@ export class ProductSync {
   private again = false;
   private patterns: RegExp[] = [];
 
-  constructor(private o: { base: string; brainRoot: () => string | null; brain: BrainService; nodeExe: string }) {
+  /** firstScanMs: the outcomes that ended while the app was closed are read this long after start, once the window is
+   *  up (an event already in the feed when the renderer loads never toasts, lib/layer.ts); tests pass 0. */
+  constructor(private o: { base: string; brainRoot: () => string | null; brain: BrainService; nodeExe: string; firstScanMs?: number }) {
     this.dir = path.join(o.base, 'sync');
+    this.stateFile = path.join(o.base, 'sync-state.json');
   }
 
   start(): void {
     fs.mkdirSync(this.dir, { recursive: true });
-    const old = fs.readdirSync(this.dir);
-    for (const f of old) this.seen.add(`${f}:${this.mtime(f)}`); // old outcomes: no notification
-    // the last outcome before this start: a failure still open is not published again after a restart
-    const last = old.filter(n => n.endsWith('.json')).sort((a, b) => this.mtime(b) - this.mtime(a))[0];
-    if (last) { try { const ev = outcomeEvent(JSON.parse(fs.readFileSync(path.join(this.dir, last), 'utf8')) as SyncOutcome); if (ev) this.dedup.pass(ev); } catch { /* unreadable: nothing open */ } }
+    const files = this.outcomeFiles();
+    let state: SyncState | null = null;
+    try { state = JSON.parse(fs.readFileSync(this.stateFile, 'utf8')) as SyncState; } catch { /* first start with this version */ }
+    // with a state: what was notified before the restart stays quiet, what came while the app was closed goes through
+    // scanOutcomes; without one: old outcomes are not replayed, except the newest when it failed (seen once)
+    const last = files.at(-1);
+    const old = state ? files.filter(f => this.mtime(f) <= state.seenUntil) : files.filter(f => f !== last || this.read(f)?.ok !== false);
+    if (state) { this.dedup.open = state.open; this.seenUntil = state.seenUntil; }
+    for (const f of old) {
+      this.seen.add(`${f}:${this.mtime(f)}`);
+      const o = this.read(f);
+      if (o?.ok && o.endedAt) this.lastOkAt = o.endedAt;
+    }
+    // the watcher first: an outcome written during the first scan is not missed
     this.watchers.push(fs.watch(this.dir, () => this.scanOutcomes()));
+    const first = this.o.firstScanMs ?? 30e3;
+    if (first > 0) { this.firstScan = setTimeout(() => this.scanOutcomes(), first); this.firstScan.unref(); } else this.scanOutcomes();
     void this.loadPaths();
     const hourly = setInterval(() => void this.loadPaths(), 3600e3);
     hourly.unref();
   }
 
-  stop(): void { for (const w of this.watchers) w.close(); this.brainWatcher?.close(); if (this.timer) clearTimeout(this.timer); }
+  stop(): void { for (const w of this.watchers) w.close(); this.brainWatcher?.close(); if (this.timer) clearTimeout(this.timer); if (this.firstScan) clearTimeout(this.firstScan); }
 
   private mtime(f: string): number { try { return fs.statSync(path.join(this.dir, f)).mtimeMs; } catch { return 0; } }
 
+  /** Outcome files, oldest first (the order they ended in). */
+  private outcomeFiles(): string[] {
+    return fs.readdirSync(this.dir).filter(n => n.endsWith('.json')).map(f => ({ f, t: this.mtime(f) })).sort((a, b) => a.t - b.t).map(x => x.f);
+  }
+
+  private read(f: string): SyncOutcome | null {
+    try { return JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')) as SyncOutcome; } catch { return null; }
+  }
+
   private scanOutcomes(): void {
-    for (const f of fs.readdirSync(this.dir).filter(n => n.endsWith('.json'))) {
-      const key = `${f}:${this.mtime(f)}`;
+    let changed = false;
+    for (const f of this.outcomeFiles()) {
+      const t = this.mtime(f);
+      const key = `${f}:${t}`;
       if (this.seen.has(key)) continue;
+      const o = this.read(f);
+      if (!o) continue; // half written: the next change event reads it
       this.seen.add(key);
-      let o: SyncOutcome;
-      try { o = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')) as SyncOutcome; } catch { continue; }
-      const ev = outcomeEvent(o);
-      if (ev && !this.dedup.pass(ev)) { log.info('sync', 'same failure as before: not published again', { data: { file: f, kind: ev.kind } }); continue; }
-      if (ev) { this.o.brain.publish([ev]); log.info('sync', 'outcome', { data: { file: f, kind: ev.kind } }); }
+      const ev = outcomeEvent(o, this.lastOkAt);
+      if (!ev) continue; // still running: its final write gets a new mtime
+      if (o.ok && o.endedAt) this.lastOkAt = o.endedAt;
+      this.seenUntil = Math.max(this.seenUntil, t);
+      changed = true;
+      if (!this.dedup.pass(ev)) { log.info('sync', 'same failure as before: not published again', { data: { file: f, kind: ev.kind } }); continue; }
+      this.o.brain.publish([ev]);
+      log.info('sync', 'outcome', { data: { file: f, kind: ev.kind } });
     }
+    if (!changed) return;
+    const state: SyncState = { seenUntil: this.seenUntil, open: this.dedup.open };
+    try { fs.writeFileSync(this.stateFile, JSON.stringify(state)); } catch (e) { log.warn('sync', 'sync state not saved: a restart may notify an outcome again', { cause: e instanceof Error ? e.message : String(e), hint: `check that ${this.stateFile} is writable` }); }
   }
 
   private config(): { command: string; args?: string[]; cwd?: string } | null {
@@ -143,7 +208,7 @@ export class ProductSync {
     p.stdout.on('data', d => { buf += String(d); });
     p.stderr.on('data', d => { buf += String(d); });
     const finish = (code: number, err?: string) => {
-      const o: SyncOutcome = { release: id, startedAt, endedAt: new Date().toISOString(), exitCode: code, ok: code === 0, blocked: code === 2, summary: err ?? buf.trim().split(/\r?\n/).slice(-6).join('\n') };
+      const o: SyncOutcome = { release: id, startedAt, endedAt: new Date().toISOString(), exitCode: code, ok: code === 0, blocked: code === 2, summary: err ?? summarize(buf) };
       fs.writeFileSync(outFile, JSON.stringify(o));
       this.running = false;
       if (this.again) { this.again = false; this.timer = setTimeout(() => this.run(), QUIET_MS); }

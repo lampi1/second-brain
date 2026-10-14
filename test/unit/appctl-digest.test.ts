@@ -42,6 +42,12 @@ describe('app_digest', () => {
     expect(t).toContain('DevOps: non letto dall\'app');
   });
 
+  it('a chat waiting in the CPU queue is queued, never "turno finito" (no turn ran yet)', () => {
+    const t = digest({ ...base, chats: [chat('os', { queued: { kind: 'start', position: 3, since: NOW - 20 * MIN, cpu: 86, freeRam: 23 } })] });
+    expect(t).toContain('- «Web · os» (Claude, os): in coda per il carico della macchina (posizione 3, da 20 min)');
+    expect(t).not.toContain('turno');
+  });
+
   it('since: unchanged chats in one line, waiting and failed ones always listed', () => {
     const t = digest({ ...base, since: NOW - 3 * MIN,
       chats: [chat('old', { updatedAt: NOW - 60 * MIN }), chat('new', { updatedAt: NOW - MIN, lastText: 'Fatto.' }), chat('err', { state: 'error', updatedAt: NOW - 60 * MIN, lastError: 'x' }), chat('wait', { updatedAt: NOW - 60 * MIN })],

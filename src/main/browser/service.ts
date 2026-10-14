@@ -6,7 +6,7 @@
 // hand-off's user name or password on the clipboard (the password read from the credentials file at the click, cleared
 // after 30 s if still there: logins.ts, ADR 0012); the "Credenziali" panel copies the same way (credentials:copy).
 // Used by wiring.ts.
-import { app, clipboard } from 'electron';
+import { app, clipboard, nativeImage } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type { BrowserService } from '../services';
 import type { Emitter } from '../ipc';
@@ -25,7 +25,8 @@ const INSTRUCTIONS = [
   "Internal browser of the user's second-brain app (Electron, persistent profile: logins survive restarts).",
   'You see and drive only your own tabs. Read with read_page (tree with refs: e12 in the page, f1e7 inside iframe f1, cross-origin iframes included), find, get_page_text.',
   'Act with click, type, key, fill_form, select_option, scroll, hover, drag: trusted input, like a real user. Every action returns what changed (URL, dialogs, console errors, failed requests, new tabs, downloads).',
-  'screenshot: image pixels = CSS pixels = click coordinates; save_to stores QA evidence and returns the path.',
+  'To know what is on the page, try read_page, find or get_page_text first: text costs far fewer tokens than an image. Take a screenshot only when you must really see the page (layout, colours, a chart, something the text does not show).',
+  'screenshot: the image you get is scaled (long side ~1000 px); its text says the factor: click coordinate = image px × factor. save_to stores a full-size PNG as QA evidence and returns only its path and size, no image (add view: true to see it too).',
   'A JavaScript alert/confirm blocks the page until you call handle_dialog. Popups and target=_blank links open as new tabs of yours.',
   'Each tab lives in an environment (its own cookies and storage; default from the host, e.g. example-test-3, local); environments shows them with their sign-in status.',
   'HARD LIMIT: you never type a password on a remote host (the tools refuse it). On a sign-in page call handoff_to_user with kind "login": the user signs in once and the environment keeps the session. On local stacks (localhost, 127.0.0.1, *.localhost, *.test) you may sign in with the project\'s test accounts.',
@@ -61,7 +62,7 @@ export const CLIPBOARD_CLEAR_MS = 30_000;
 export async function createBrowserModule(o: { emitter: Emitter; window: () => BrowserWindow | null; userData: string; port: number; brainRoot?: () => string | null }): Promise<BrowserModule> {
   const tabs = new BrowserTabs({ emitter: o.emitter, window: o.window, userData: o.userData });
   if (o.brainRoot) tabs.credentials.setRoot(o.brainRoot);
-  const actions = new BrowserActions(tabs);
+  const actions = new BrowserActions(tabs, png => nativeImage.createFromBuffer(png));
   const tokens = new EndpointTokens();
   const mcp = new McpServer({ name: 'second-brain-browser', version: app.getVersion() });
 
@@ -157,7 +158,7 @@ ${SHOW_UI_HINT}`, tools: () => [...chatBrowserTools, ...chatTools],
       else if (dir === 'forward' && t.wc.navigationHistory.canGoForward()) t.wc.navigationHistory.goForward();
       else if (dir === 'reload') t.wc.reload();
     },
-    close: tabId => tabs.close(tabId),
+    close: tabId => tabs.close(tabId, 'user'),       // the app's ✕ / Ctrl+W: the tab's agent is told at its next call
     layout: views => tabs.layout(views),
     mcpUrlFor: chatId => (chatId ? mcp.url(`/mcp/chat/${encodeURIComponent(chatId)}/${tokens.tokenFor(chatId)}`) : mcp.url('/mcp')),
     handoffs: () => tabs.handoffs.list(),

@@ -1,9 +1,10 @@
-// Finding and starting the two engines (ADR 0010) without a shell, so arguments are never re-parsed and nothing is
-// injected: Claude = the official binary embedded in the app (dependency @anthropic-ai/claude-agent-sdk-win32-x64; a
+// Finding and starting the engines (ADR 0010, ADR 0046) without a shell, so arguments are never re-parsed and nothing
+// is injected: Claude = the official binary embedded in the app (dependency @anthropic-ai/claude-agent-sdk-win32-x64; a
 // release passes its copy in SB_ENGINE_CLAUDE), Cursor = the user's installed CLI started as its own `node.exe
-// index.js` (no PowerShell launcher). A .mjs/.js path runs with Electron as Node: that is how tests swap in the fake
-// engines, and under tests the real Cursor engine is refused (never spend Cursor credits). Also: kill whole process
-// trees on app exit (Windows keeps the engines' children alive). Used by claude.ts, cursor.ts, manager.ts, ../cli.ts.
+// index.js` (no PowerShell launcher), any other ACP CLI = its command on PATH (resolveAcp). A .mjs/.js path runs with
+// Electron as Node: that is how tests swap in the fake engines, and under tests a real engine is refused (never spend
+// the user's credits). Also: kill whole process trees on app exit (Windows keeps the engines' children alive). Used by
+// claude.ts, acp.ts, manager.ts, ../cli.ts.
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,9 +45,9 @@ export function resolveClaude(override?: string | null): { path: string; source:
   return p ? { path: p, source: 'path' } : null;
 }
 
-/** How to start the Cursor engine. kind fake = a .mjs test double (Electron as Node), node = the CLI's own node.exe
- *  + index.js of the newest version, cmd = agent.cmd through cmd.exe (fallback), exe = a given executable. */
-export interface CursorCommand { kind: 'fake' | 'node' | 'cmd' | 'exe'; command: string; prefix: string[]; env: NodeJS.ProcessEnv; verbatim: boolean; display: string }
+/** How to start a CLI engine. kind fake = a .mjs test double (Electron as Node), node = the CLI's own node.exe
+ *  + index.js of the newest version (Cursor), cmd = a .cmd/.bat shim through cmd.exe, exe = a given executable. */
+export interface CliCommand { kind: 'fake' | 'node' | 'cmd' | 'exe'; command: string; prefix: string[]; env: NodeJS.ProcessEnv; verbatim: boolean; display: string }
 
 const VERSION_DIR = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-(\d{2})-(\d{2})-(\d{2}))?-[a-f0-9]+$/;
 
@@ -61,15 +62,12 @@ export function newestCursorVersion(versionsDir: string): string | null {
   return ok[0] ? path.join(versionsDir, ok[0].n) : null;
 }
 
-export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env): CursorCommand | null {
+/** The Cursor CLI: SB_CURSOR_PATH (tests) → the newest version under %LOCALAPPDATA%/cursor-agent → its shim on PATH. */
+export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env): CliCommand | null {
   const o = override ?? env.SB_CURSOR_PATH;
   const base: NodeJS.ProcessEnv = { ...env, CURSOR_INVOKED_AS: env.CURSOR_INVOKED_AS ?? 'agent.cmd' };
   delete base.ELECTRON_RUN_AS_NODE;
-  if (o) {
-    if (isScript(o)) return { kind: 'fake', command: process.execPath, prefix: [o], env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, verbatim: false, display: o };
-    if (/\.(cmd|bat)$/i.test(o)) return cmdShim(o, base);
-    return { kind: 'exe', command: o, prefix: [], env: base, verbatim: false, display: o };
-  }
+  if (o) return commandAt(o, env, base);
   const local = env.LOCALAPPDATA;
   const dir = local ? newestCursorVersion(path.join(local, 'cursor-agent', 'versions')) : null;
   if (dir) {
@@ -77,23 +75,46 @@ export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv =
     return { kind: 'node', command: path.join(dir, 'node.exe'), prefix: [path.join(dir, 'index.js')], env: { ...base, NODE_COMPILE_CACHE: cache }, verbatim: false, display: dir };
   }
   const shim = findCli('agent');
-  return shim ? (/\.(cmd|bat)$/i.test(shim) ? cmdShim(shim, base) : { kind: 'exe', command: shim, prefix: [], env: base, verbatim: false, display: shim }) : null;
+  return shim ? installed(shim, base) : null;
 }
 
-function cmdShim(p: string, env: NodeJS.ProcessEnv): CursorCommand {
+/** An ACP engine's command: Cursor keeps its own install rule (resolveCursor); any other engine = the override (its
+ *  SB_<ID>_PATH: the tests' fake), else `command` on PATH. null = not installed. */
+export function resolveAcp(engineId: string, command: string, override?: string | null, env: NodeJS.ProcessEnv = process.env): CliCommand | null {
+  if (engineId === 'cursor') return resolveCursor(override, env);
+  const base: NodeJS.ProcessEnv = { ...env };
+  delete base.ELECTRON_RUN_AS_NODE; // never leak the Node switch into the real CLI's own children
+  const o = override ?? env[`SB_${engineId.toUpperCase().replace(/-/g, '_')}_PATH`];
+  if (o) return commandAt(o, env, base);
+  const onPath = findCli(command);
+  return onPath ? installed(onPath, base) : null;
+}
+
+/** An override as a command: a script = a fake run by Electron as Node, else like an installed CLI. */
+function commandAt(p: string, env: NodeJS.ProcessEnv, base: NodeJS.ProcessEnv): CliCommand {
+  if (isScript(p)) return { kind: 'fake', command: process.execPath, prefix: [p], env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, verbatim: false, display: p };
+  return installed(p, base);
+}
+
+/** An installed CLI: a .cmd/.bat shim runs through cmd.exe, anything else as an executable. */
+function installed(p: string, base: NodeJS.ProcessEnv): CliCommand {
+  return /\.(cmd|bat)$/i.test(p) ? cmdShim(p, base) : { kind: 'exe', command: p, prefix: [], env: base, verbatim: false, display: p };
+}
+
+function cmdShim(p: string, env: NodeJS.ProcessEnv): CliCommand {
   return { kind: 'cmd', command: env.ComSpec ?? process.env.ComSpec ?? 'cmd.exe', prefix: [], env, verbatim: true, display: p };
 }
 
-/** Full argv for a Cursor command. cmd.exe gets one verbatim line: only plain flag-safe arguments may pass. */
-export function cursorArgv(c: CursorCommand, args: string[]): { command: string; args: string[]; env: NodeJS.ProcessEnv; verbatim: boolean } {
+/** Full argv for a CLI command. cmd.exe gets one verbatim line: only plain flag-safe arguments may pass. */
+export function cliArgv(c: CliCommand, args: string[]): { command: string; args: string[]; env: NodeJS.ProcessEnv; verbatim: boolean } {
   if (c.kind !== 'cmd') return { command: c.command, args: [...c.prefix, ...args], env: c.env, verbatim: false };
   for (const a of args) if (!/^[\w.:@/=[\],-]+$/.test(a)) throw new Error(`argomento non sicuro per cmd.exe: ${a}`);
   return { command: c.command, args: ['/d', '/s', '/c', `""${c.display}" ${args.join(' ')}"`], env: c.env, verbatim: true };
 }
 
-/** Tests never start the real Cursor engine (SB_TEST: e2e, VITEST: unit tests): only a .mjs fake that does not live in
- *  Cursor's own install folder (its index.js run as a script would be the real engine). */
-export function cursorAllowed(c: CursorCommand, env: NodeJS.ProcessEnv = process.env): boolean {
+/** Tests never start a real engine (SB_TEST: e2e, VITEST: unit tests): only a .mjs fake that does not live in a
+ *  vendor's install folder (Cursor's index.js run as a script would be the real engine). */
+export function engineAllowed(c: CliCommand, env: NodeJS.ProcessEnv = process.env): boolean {
   if (!(env.SB_TEST || env.VITEST)) return true;
   return c.kind === 'fake' && /\.mjs$/i.test(c.display) && !/[\\/]cursor-agent[\\/]/i.test(c.display);
 }
@@ -185,8 +206,10 @@ export async function killTreesWithin(pids: (number | null | undefined)[], ms: n
   if (killed.length) opts.after?.(killed, Date.now());
 }
 
-/** What the steps after killTreesWithin's wait cost at least (direct kills, one reaper spawn, the manager's last writes). */
-const QUIT_RESERVE_MIN_MS = 300;
+/** What the steps after killTreesWithin's wait cost at least (direct kills, one reaper spawn, the manager's last writes),
+ *  the wait's own last timer included: with the process-spawning unit files all running, it fired over 300 ms late
+ *  (2026-10-14, the reserve was 300 then). */
+const QUIT_RESERVE_MIN_MS = 500;
 
 function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }

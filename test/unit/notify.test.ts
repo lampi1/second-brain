@@ -8,8 +8,8 @@ const ev = (id: string, kind: string, at: number, extra: Partial<FeedEvent> = {}
 
 describe('notify', () => {
   it('tiers: only what needs the user now toasts (policy 2026-10-13), the rest stays quiet', () => {
-    for (const k of ['chat-waiting', 'chat-failed', 'login']) expect(tierOf(k)).toBe('toast');
-    for (const k of ['chat-done', 'error', 'win', 'idea', 'sync-blocked', 'sync-error', 'sync-ok', 'mail-blocked', 'reflection', 'playbook', 'proposal', 'done', 'decision', 'now', 'mail']) expect(tierOf(k)).toBe('quiet');
+    for (const k of ['chat-waiting', 'chat-failed', 'login', 'sync-blocked', 'sync-error']) expect(tierOf(k)).toBe('toast');
+    for (const k of ['chat-done', 'error', 'win', 'idea', 'sync-ok', 'mail-blocked', 'reflection', 'playbook', 'proposal', 'done', 'decision', 'now', 'mail']) expect(tierOf(k)).toBe('quiet');
     // budget: a toast only at 100 % (priority urgent)
     expect(tierOf(ev('b1', 'budget', 1, { priority: 'urgent' }))).toBe('toast');
     expect(tierOf(ev('b2', 'budget', 1, { priority: 'normal' }))).toBe('quiet');

@@ -9,6 +9,7 @@ import type { ChatLink, ChatSpace, Effort, HandoffSource, Harness, PermissionMod
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
+import { ENGINE_ID } from '../engines/registry';
 
 export interface StoredChat {
   id: string;
@@ -40,6 +41,9 @@ export interface StoredChat {
   /** its saved hand-off is a cold note (ADR 0031) written at this time: a message after the cache expired continues
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
+  /** when the context in force began (first turn since the session start or the last compaction): a Regia's day
+   *  compaction (regia-day.ts) */
+  ctxSince?: number;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
   pastSessions?: PastSession[];
   /** "Riprendi" links: this chat continues another one / is continued by another one */
@@ -74,6 +78,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),
     ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
+    ...(num(c.ctxSince) ? { ctxSince: c.ctxSince } : {}),
     ...(Array.isArray(c.pastSessions) ? { pastSessions: c.pastSessions.flatMap(p => { const x = p as Record<string, unknown>; return isUuid(x?.sessionId) && num(x.at) && typeof x.notePath === 'string' ? [{ sessionId: x.sessionId, at: x.at, notePath: x.notePath }] : []; }).slice(-20) } : {}),
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
@@ -82,7 +87,6 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
   };
 }
 
-const HARNESSES: readonly string[] = ['claude', 'cursor'];
 const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -90,7 +94,7 @@ const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 function valid(x: unknown, version: number): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
-  if (typeof c.id !== 'string' || !c.id || typeof c.cwd !== 'string' || !HARNESSES.includes(String(c.harness))) return null;
+  if (typeof c.id !== 'string' || !c.id || typeof c.cwd !== 'string' || !ENGINE_ID.test(String(c.harness))) return null;
   return {
     id: c.id, harness: c.harness as Harness, cwd: c.cwd,
     // only UUIDs ever reach --resume / --session-id: anything else in the file is dropped

@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { ChatCommand, Harness, MdIssue, SkillCatalog, SkillDoc, SkillEntry, SkillKind, SkillPlace, SkillSave, SkillSaveResult, SkillScope } from '../../shared/contract';
 import { checkMd, field, generatedBy, parseMd } from '../../shared/skillmd';
 import { errText, log } from '../log';
+import { engineOrThrow } from '../engines/registry';
 import { checkWrite, type GuardInput, type HookRefusal } from './guard';
 
 export interface SkillsOptions {
@@ -22,9 +23,9 @@ export interface SkillsOptions {
   trash: (p: string) => Promise<void>;
 }
 
-const HOME_DIR: Record<Harness, string> = { claude: '.claude', cursor: '.cursor' };
+/** the engines with skill and agent folders, and where they keep them */
+const HOME_DIR: Partial<Record<Harness, string>> = { claude: '.claude', cursor: '.cursor' };
 const SUB: Record<SkillKind, string> = { skill: 'skills', agent: 'agents' };
-const ENGINE: Record<Harness, string> = { claude: 'Claude', cursor: 'Cursor' };
 /** plugin and built-in skill folders: not the user's to edit */
 const SKIP_DIRS = new Set(['synced', 'skills-cursor']);
 const norm = (p: string) => path.resolve(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -53,9 +54,11 @@ export class SkillsService {
 
   places(): SkillPlace[] {
     const out: SkillPlace[] = [];
-    for (const kind of ['skill', 'agent'] as const) for (const harness of ['claude', 'cursor'] as const) {
-      out.push({ kind, harness, scope: 'user', root: null, dir: path.join(this.o.home, HOME_DIR[harness], SUB[kind]), label: `${ENGINE[harness]} · tutti i progetti (~/${HOME_DIR[harness]})` });
-      for (const root of this.projectRoots()) out.push({ kind, harness, scope: 'project', root, dir: path.join(root, HOME_DIR[harness], SUB[kind]), label: `${ENGINE[harness]} · progetto ${path.basename(root)}` });
+    for (const kind of ['skill', 'agent'] as const) for (const [harness, home] of Object.entries(HOME_DIR)) {
+      if (!home) continue;
+      const engine = engineOrThrow(harness).label;
+      out.push({ kind, harness, scope: 'user', root: null, dir: path.join(this.o.home, home, SUB[kind]), label: `${engine} · tutti i progetti (~/${home})` });
+      for (const root of this.projectRoots()) out.push({ kind, harness, scope: 'project', root, dir: path.join(root, home, SUB[kind]), label: `${engine} · progetto ${path.basename(root)}` });
     }
     return out;
   }

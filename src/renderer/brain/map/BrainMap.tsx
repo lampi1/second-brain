@@ -202,7 +202,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
                       <li key={w.id}>
                         <button type="button" onClick={() => onOpenChat?.(w.id)} disabled={!onOpenChat} title="Apri la chat" data-testid="bx-map-live-chat">
                           <i className={`bx-live-dot${w.running ? ' run' : ''}`} style={{ opacity: 0.35 + 0.65 * w.level }} aria-hidden="true" />
-                          <span className="grow"><span>{w.title}</span><small>{w.harness === 'cursor' ? 'Cursor' : 'Claude'} · {short(w.doing, 60)}</small></span>
+                          <span className="grow"><span>{w.title}</span><small>{w.engine} · {short(w.doing, 60)}</small></span>
                         </button>
                       </li>
                     ))}

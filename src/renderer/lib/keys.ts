@@ -45,7 +45,7 @@ export const KEYMAP: readonly { keys: string; what: string }[] = [
   { keys: 'Ctrl N', what: 'Nuova chat' },
   { keys: 'Ctrl ,', what: 'Impostazioni' },
   { keys: 'Ctrl .', what: 'Ferma la chat selezionata' },
-  { keys: 'Ctrl W', what: 'Chiudi la chat selezionata (Annulla per 6 secondi; non la Regia)' },
+  { keys: 'Ctrl W', what: 'Chiudi la chat o la scheda del browser selezionata (Annulla per 6 secondi; non la Regia)' },
   { keys: 'Ctrl Shift .', what: 'Ferma tutto' },
   { keys: 'Ctrl Shift V', what: 'Cambia vista (Mosaico / Corsie)' },
   { keys: 'Ctrl Shift B', what: 'Nascondi / mostra i browser (continuano a lavorare)' },

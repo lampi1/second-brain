@@ -16,7 +16,7 @@ function env(): Env {
 }
 function manager(e: Env, extra: Partial<ChatManagerOptions> = {}): { m: ChatManager; em: RecEmitter } {
   const em = recEmitter();
-  const m = new ChatManager({ emitter: em, userData: e.userData, claudePath: FAKE, claudeHome: e.home, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog }, ...extra });
+  const m = new ChatManager({ emitter: em, userData: e.userData, enginePaths: { claude: FAKE }, claudeHome: e.home, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog }, ...extra });
   managers.push(m);
   return { m, em };
 }
@@ -135,6 +135,8 @@ describe('ChatManager', () => {
     await expect(m.create({ harness: 'claude', cwd: e.cwd, permissionMode: 'yolo' as never })).rejects.toThrow(/permessi/);
     await expect(m.create({ harness: 'claude', cwd: e.cwd, resumeSessionId: '../x', fork: true })).rejects.toThrow(/duplicare/);
     await expect(m.create({ harness: 'claude', cwd: e.cwd, model: 'x" & calc' })).rejects.toThrow(/Modello non valido/);
+    // a model an ACP CLI would read as one of its flags (gemini -m --yolo)
+    await expect(m.create({ harness: 'cursor', cwd: e.cwd, model: '--yolo' })).rejects.toThrow(/Modello non valido/);
     await expect(m.create({ harness: 'cursor', cwd: e.cwd, effort: 'high' })).rejects.toThrow(/effort/i);
     await expect(m.send('nope', 'x')).rejects.toThrow(/non trovata/);
     expect(m.items('nope')).toEqual([]);
@@ -155,6 +157,31 @@ describe('ChatManager', () => {
     expect(em.of('chat:removed')).toEqual([{ chatId: c.id }]);
     expect(m.list()).toEqual([]);
     expect((JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: object[] }).chats).toEqual([]);
+  });
+
+  it('never starts an engine the user switched off: neither a new chat nor a stopped one resuming', async () => {
+    const e = env();
+    const { m } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello' });
+    await waitFor(() => results(m, c.id).length === 1, 'first result');
+    await m.shutdown();
+    const { m: off } = manager(e, { engineOn: h => h !== 'claude' });
+    await expect(off.create({ harness: 'claude', cwd: e.cwd, prompt: 'x' })).rejects.toThrow(/Claude è spento nelle impostazioni/);
+    await expect(off.send(c.id, 'again')).rejects.toThrow(/Claude è spento/);
+    expect(argvs(e)).toHaveLength(1); // only the first chat's engine ever started
+  });
+
+  it('an agent never wakes a stopped chat on an engine the Regie may not use; the user still can', async () => {
+    const e = env();
+    const { m } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello' });
+    await waitFor(() => results(m, c.id).length === 1, 'first result');
+    await m.shutdown();
+    const { m: again } = manager(e, { agentsMayOpen: () => false });
+    await expect(again.send(c.id, 'from an agent', undefined, false, 'Regia')).rejects.toThrow(/Le Regie possono usare Claude/);
+    expect(argvs(e)).toHaveLength(1);
+    await again.send(c.id, 'from the user');
+    await waitFor(() => results(again, c.id).length === 1, 'the user resumed it');
   });
 
   it('stops running chats and recovers from a crash by resuming', async () => {
@@ -187,7 +214,7 @@ describe('ChatManager', () => {
   it('survives a corrupt chats.json and reports a missing CLI on send', async () => {
     const e = env();
     fs.writeFileSync(path.join(e.userData, 'chats.json'), '{not json');
-    const { m } = manager(e, { claudePath: path.join(e.userData, 'no-claude.exe') });
+    const { m } = manager(e, { enginePaths: { claude: path.join(e.userData, 'no-claude.exe') } });
     expect(m.list()).toEqual([]);
     expect(fs.readdirSync(e.userData).some(f => f.startsWith('chats.json.bad-'))).toBe(true);
     const c = await m.create({ harness: 'claude', cwd: e.cwd });
@@ -392,7 +419,7 @@ describe('ChatManager', () => {
   it('runs a Cursor chat: panel, answer, turn, cost unknown; restored chats resume with session/load', async () => {
     const e = env();
     const curLog = path.join(e.userData, 'cursor.jsonl');
-    const opts = { cursorPath: FAKE_CURSOR, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
+    const opts = { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
     const first = manager(e, opts);
     const c = await first.m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'perm', regia: true });
     expect(c).toMatchObject({ harness: 'cursor', isRegia: true, sessionId: null, costKnown: false });
@@ -425,7 +452,7 @@ describe('ChatManager', () => {
     const userDir = tmp('cursor-user');
     const userCfg = JSON.stringify({ model: { modelId: 'user-model' }, hasChangedDefaultModel: false });
     fs.writeFileSync(path.join(userDir, 'cli-config.json'), userCfg);
-    const { m } = manager(e, { cursorPath: FAKE_CURSOR, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: userDir } });
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: userDir } });
     const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'hello', model: 'gpt-5.6-sol' });
     await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'first turn');
     const sid = m.list()[0]?.sessionId;
@@ -562,7 +589,7 @@ describe('ChatManager', () => {
     const curLog = path.join(e.userData, 'cursor.jsonl');
     const appUrl = (id: string) => `http://127.0.0.1:4329/mcp/app/r/${id}/tok`;
     const browserUrl = (id: string) => `http://127.0.0.1:4329/mcp/chat/${id}/tok`;
-    const opts = { cursorPath: FAKE_CURSOR, appMcpUrl: appUrl, mcpUrlFor: browserUrl, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
+    const opts = { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, appMcpUrl: appUrl, mcpUrlFor: browserUrl, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
     const { m, em } = manager(e, opts);
     const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello', title: 'Regia', regia: true, regiaName: 'Lavoro' });
     await waitFor(() => results(m, old.id).length === 1 && m.list()[0]?.state === 'idle', 'claude regia turn');

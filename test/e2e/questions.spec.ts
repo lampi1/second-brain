@@ -2,13 +2,15 @@
 // question (the turn's prose, even when the model wrote it only in its reasoning; web and file links; a click on a file
 // opens it through app:openPath, recorded in a hidden run), the reasoning before a question shown open in the
 // transcript, no "Ti aspettano" strip in the Mosaico, the focus kept when a Corsie tile changes column, and the
-// questions window ("Domande in finestra"): it waits while the user types, never takes their field, Ctrl+J brings it,
+// questions window ("Domande in finestra"): it waits while the user types, never takes their field, it is always the one
+// modal in the middle (anchored near the top, ADR 0049) (never a second, backdrop-less copy beside the field: the user, 2026-10-14), Ctrl+J brings it,
 // 1 answers and the next card takes the keyboard, Esc is "Rispondi dopo" (closed until the queue is opened: a new
-// question then waits silently, answer-later.spec.ts covers the queue). Screenshots: test-results/shots/questions-*.png.
+// question then waits silently, answer-later.spec.ts covers the queue), any waiting request can be answered first.
+// Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
-type Demo = { __sbDemo: { stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
+type Demo = { __sbDemo: { answers(): { chatId: string }[]; stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: Demo['__sbDemo'], ...a: A) => void, ...a: A) =>
   app.evaluate((_e, [src, args]) => { const d = (globalThis as unknown as Demo).__sbDemo; return new Function('d', 'a', `return (${src})(d, ...a)`)(d, args); }, [fn.toString(), a] as const);
 const question = (q: string, opts: string[], extra: object = {}) => ({
@@ -70,8 +72,8 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(page.getByTestId('qwin')).toBeVisible();
   await expect(page.getByTestId('chat-in-window-qa')).toBeVisible();
   await expect(page.getByTestId('qwin-card')).toBeFocused(); // nobody was typing: it takes the keyboard
-  await expect(page.getByTestId('qwin-count')).toHaveText('poi altre 2');
-  await expect(page.getByTestId('qwin')).not.toHaveAttribute('data-free'); // modal: the backdrop is there
+  await expect(page.getByTestId('qwin-count')).toHaveText('3'); // the rail: every waiting request, this one too
+  await expect(page.getByTestId('qwin-pick')).toHaveCount(2); // the other two, each a button
   await shot(page, 'questions-window');
   await page.keyboard.press('Escape'); // "Rispondi dopo": closed, no pill, the top bar counts them
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -93,23 +95,24 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(page.getByTestId('qwin-pill')).toContainText('compare quando smetti di scrivere');
   await page.keyboard.type('vendo');
   await expect(field).toHaveValue('sto scrivendo');
-  // stopped typing: the window shows, the keyboard stays in the field (a note says how to answer)
+  // stopped typing: the window shows, the same modal in the middle, the keyboard stays in the field (a note says so)
   await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('qwin-chat')).toHaveText('Fix totale ordine');
   await expect(page.getByTestId('qwin-elsewhere')).toBeVisible();
   await expect(field).toBeFocused();
-  // not modal while the keyboard is in the field: no backdrop, and the field is not under the window
-  await expect(page.getByTestId('qwin')).toHaveAttribute('data-free', '');
-  const fb = (await field.boundingBox())!;
+  await expect(page.locator('.qwin-backdrop')).toHaveCount(1);
+  const vp = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   const wb = (await page.getByTestId('qwin').boundingBox())!;
-  expect(fb.y >= wb.y + wb.height || fb.y + fb.height <= wb.y).toBe(true);
+  expect(Math.abs(wb.x + wb.width / 2 - vp.width / 2)).toBeLessThan(4); // centered, whatever the field and the Regia
+  // anchored near the top like a command palette (ADR 0049): content that loads late grows downward, nothing jumps
+  expect(Math.abs(wb.y - Math.min(88, Math.max(20, vp.height * 0.07)))).toBeLessThan(2);
   await page.keyboard.type('!');
   await expect(field).toHaveValue('sto scrivendo!');
   await shot(page, 'questions-window-typing');
-  // a click on the window's surface gives the card the keyboard (and the window turns modal); Esc gives it back
-  await page.getByTestId('qwin-elsewhere').click();
+  // a click on the backdrop (or the window) gives the card the keyboard and closes nothing; Esc gives it back
+  await page.mouse.click(8, vp.height / 2);
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('qwin')).not.toHaveAttribute('data-free');
+  await expect(page.getByTestId('qwin')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await expect(field).toBeFocused(); // the keyboard went back to the field it came from
@@ -142,7 +145,8 @@ test('the questions window, two questions in a row: the second shows once, with 
   const q = question('Il pezzo 1 ti è chiaro?', ['Chiaro, vai avanti', 'Rispiegamelo diverso']);
   await demo(app, (d, id, req) => { d.think(id, 'Pezzo 1: la casella di posta passa i messaggi tra le chat.'); d.ask(id, req); }, 'fix', q);
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('la casella di posta');
+  // the why in two lines, folded (ADR 0049): here the reasoning before the question
+  await expect(page.getByTestId('qwin-card-ctx-toggle')).toContainText('la casella di posta');
   await expect(page.getByTestId('qwin-card-ctx-again')).toHaveCount(0);
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -153,10 +157,42 @@ test('the questions window, two questions in a row: the second shows once, with 
     d.ask(id, req);
   }, 'fix', q);
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('qwin-count')).toHaveCount(0); // one card, not two
+  await expect(page.getByTestId('qwin-queue')).toHaveCount(0); // one card, not two: no rail
   await expect(page.getByTestId('qwin-card-ctx-again')).toContainText('avevi risposto «su tutte le piattaforme?»');
+  await page.getByTestId('qwin-card-ctx-toggle').click(); // "Contesto completo": the whole prose, the keyboard stays on the card
   await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('Solo su questo PC');
   await expect(page.getByTestId('qwin-card-ctx-body')).not.toContainText('la casella di posta'); // never the previous question's reasoning
+  await expect(page.getByTestId('qwin-card')).toBeFocused();
   await shot(page, 'questions-window-asked-again');
+  await app.close();
+});
+
+test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
+  const { app, page } = await launchDemo();
+  await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Regia's question first, QA and Feedback under it
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  const picks = page.getByTestId('qwin-pick');
+  await expect(picks).toHaveCount(2);
+  await expect(picks.nth(0)).toContainText('QA · Rimborsi');
+  await expect(picks.nth(1)).toContainText('App · Feedback');
+  await page.mouse.move(2, 2);
+  await shot(page, 'questions-any-order');
+  // a free answer half written on the Regia's, then QA now: its card, with the keyboard; the Regia's waits among the others
+  await page.keyboard.press('3');
+  await page.getByTestId('qwin-card-other-input').fill('ci penso');
+  await picks.nth(0).click();
+  await expect(page.getByTestId('qwin-chat')).toHaveText('QA · Rimborsi');
+  await expect(page.getByTestId('qwin-card')).toBeFocused();
+  await expect(picks).toHaveCount(2);
+  await expect(picks.nth(0)).toContainText('Regia');
+  await page.keyboard.press('1');
+  await expect.poll(() => app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.answers().map(a => a.chatId))).toEqual(['qa']);
+  // answered: back to the oldest still waiting, the Regia's, with the half-written answer; Feedback can still go first
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  await expect(page.getByTestId('qwin-card-other-input')).toHaveValue('ci penso');
+  await expect(picks).toHaveCount(1);
+  await picks.click();
+  await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
+  await expect(picks).toContainText('Regia');
   await app.close();
 });

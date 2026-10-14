@@ -9,8 +9,10 @@
 import type { FeedEvent } from '@shared/contract';
 
 /** Kinds that deserve a toast (tier b): the user is needed now. A budget event only at 100 % (priority urgent);
- *  chat-failed = a chat's turn ended with an error. Everything else is tier c (center only). */
-export const TOAST_KINDS = new Set(['chat-waiting', 'chat-failed', 'budget', 'login', 'devops-alert']);
+ *  chat-failed = a chat's turn ended with an error; sync-blocked / sync-error = GitHub is behind (once per problem:
+ *  main/sync.ts FailureDedup; as quiet items they went unseen for three days, 2026-10-14). Everything else is tier c
+ *  (center only). */
+export const TOAST_KINDS = new Set(['chat-waiting', 'chat-failed', 'budget', 'login', 'devops-alert', 'sync-blocked', 'sync-error']);
 
 /** Kinds that need an action from the user: the only ones the bell counts. */
 export const ACTIONABLE_KINDS = new Set([...TOAST_KINDS, 'question', 'sync-blocked', 'sync-error', 'mail-blocked']);

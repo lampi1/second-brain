@@ -2,7 +2,7 @@
 // trusted: only png/jpeg/gif/webp whose first bytes match the type, real base64 of at most IMAGE_MAX_BYTES, at most
 // IMAGE_MAX_COUNT per message, previews only as small data:image URLs. Also writes them to files for an engine that
 // cannot take image blocks (Cursor without promptCapabilities.image): the message then carries their paths.
-// Used by manager.ts (checkImages) and cursor.ts (writeImageFiles).
+// Used by manager.ts (checkImages) and acp.ts (writeImageFiles).
 import fs from 'node:fs';
 import path from 'node:path';
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, IMAGES_MAX_TOTAL, THUMB_MAX_CHARS, type ImageAttachment } from '../../shared/contract';

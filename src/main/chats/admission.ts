@@ -2,9 +2,11 @@
 // in base alla CPU, a costo zero, con una coda"). Before an agent (the Regia, another chat's mail, the app's own resume
 // after a restart) starts a chat's engine or wakes an idle chat with a new turn, ChatManager asks this queue: with the
 // machine under the thresholds (CPU averaged over a few seconds, free RAM) and nobody waiting, it goes at once; else it
-// waits here, FIFO, and is admitted when the load drops (two samples in a row under, one admission per sample, so the
+// waits here, FIFO within its priority, and is admitted when the load drops (two samples in a row under, one admission per sample, so the
 // queue never starts all together). The user's own messages never wait (manager.ts bypasses), nothing running is ever
-// paused or killed. Zero tokens and no dependency: the load is os.cpus() deltas and os.freemem(). Who: wiring.ts builds
+// paused or killed. Work for the app's own chats (`app`) waits behind every other chat's work (the user, 2026-10-14:
+// "hanno sempre la precedenza le chat di lavoro rispetto a quelle dell'app"); only the order changes, and only while
+// something waits. Zero tokens and no dependency: the load is os.cpus() deltas and os.freemem(). Who: wiring.ts builds
 // it (OsLoadSampler, or a forced one from SB_LOAD_FORCE for tests/demo), ChatManager uses it.
 import os from 'node:os';
 
@@ -75,6 +77,8 @@ export interface QueuedEntry {
   /** start = a new chat's engine; turn = a message that wakes an idle chat */
   kind: 'start' | 'turn';
   since: number;
+  /** a chat on the app itself: waits behind every other chat's work */
+  app?: boolean;
   /** 1 = the next one admitted */
   position: number;
 }
@@ -93,7 +97,7 @@ export interface AdmissionOptions {
   now?: () => number;
 }
 
-interface Entry { key: string; kind: 'start' | 'turn'; since: number; runs: (() => void)[] }
+interface Entry { key: string; kind: 'start' | 'turn'; since: number; app: boolean; runs: (() => void)[] }
 
 export class AdmissionQueue {
   private q: Entry[] = [];
@@ -126,12 +130,15 @@ export class AdmissionQueue {
   }
 
   /** run now (returns null) or queue it (returns its place). A key already waiting queues behind its own entry,
-   *  in order; with the queue switched off everything runs at once. */
-  request(key: string, kind: 'start' | 'turn', run: () => void): QueuedEntry | null {
+   *  in order; with the queue switched off everything runs at once. app = a chat on the app itself: it goes behind
+   *  every other chat's work, which goes ahead of all the app's (each in order of arrival). */
+  request(key: string, kind: 'start' | 'turn', run: () => void, app = false): QueuedEntry | null {
     const mine = this.q.find(e => e.key === key);
     if (mine) { mine.runs.push(run); return this.entry(key); }
     if (!this.o.limits().enabled || (!this.q.length && !this.over(this.refresh()))) { run(); return null; }
-    this.q.push({ key, kind, since: this.o.now?.() ?? Date.now(), runs: [run] });
+    const e: Entry = { key, kind, since: this.o.now?.() ?? Date.now(), app, runs: [run] };
+    const firstApp = app ? -1 : this.q.findIndex(x => x.app);
+    if (firstApp < 0) this.q.push(e); else this.q.splice(firstApp, 0, e);
     this.arm();
     this.o.onChange?.();
     return this.entry(key);
@@ -160,11 +167,11 @@ export class AdmissionQueue {
     const i = this.q.findIndex(e => e.key === key);
     if (i < 0) return null;
     const e = this.q[i]!;
-    return { key, kind: e.kind, since: e.since, position: i + 1 };
+    return { key, kind: e.kind, since: e.since, ...(e.app ? { app: true } : {}), position: i + 1 };
   }
 
   list(): QueuedEntry[] {
-    return this.q.map((e, i) => ({ key: e.key, kind: e.kind, since: e.since, position: i + 1 }));
+    return this.q.map((e, i) => ({ key: e.key, kind: e.kind, since: e.since, ...(e.app ? { app: true } : {}), position: i + 1 }));
   }
 
   /** One sample: under the thresholds `underNeeded` times in a row admits the head (one per sample). The switch

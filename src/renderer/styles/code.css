@@ -21,6 +21,9 @@
 .cb-run-btn.armed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, transparent); background: var(--red-bg); }
 .cb-code { margin: 0; padding: 9px 12px; font: 12px/1.55 var(--mono); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .cb-code code { font: inherit; background: none; border: 0; padding: 0; }
+.cb-rich { padding: 9px 12px; user-select: text; overflow-wrap: anywhere; }
+.cb-rich > :first-child { margin-top: 0; }
+.cb-rich > :last-child { margin-bottom: 0; }
 .cb-err { padding: 6px 12px; font-size: 12px; color: var(--red); background: var(--red-bg); border-top: 1px solid var(--border); }
 
 /* the run: a terminal look that stays readable in both themes */
