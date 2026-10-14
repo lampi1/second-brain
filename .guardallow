@@ -3,3 +3,26 @@
 # only, no text or metadata (checked 2026-10-11). A new icon blocks the sync until someone checks it and ADDS a line
 # with its hash; never remove an old line: the public history keeps the old icon and the history scan checks it.
 build/icon.ico unscanned-binary sha256:72db3b5f51cc876de4c697ec6cdaeeb67dc76f4946cc6d1022f216a9e4e3bcc9
+# prodRisk tests: a made-up server "x" on the Azure SQL and Kudu domains proves that a production command asks a
+# second click; no real host (checked 2026-10-13). A changed file blocks again. Comments here never spell a host: this
+# file is published and the history scan reads it too (2026-10-14).
+test/unit/runner.test.ts internal-host sha256:ce2a98829d67f4655b51dde1c9c6847a5d302a4f7a9d1644aadeddbd0d1cfc0a
+# devlinks tests: the legacy DevOps host shape on a made-up org ("acme", "o") and the new host with org "o"; no real
+# org (checked 2026-10-13; second hash 2026-10-14, the linkKey test added, same made-up orgs, owner ok). A changed
+# file blocks again.
+test/unit/devlinks.test.ts internal-host sha256:128d7a93c6830392ddd97e4783cfcee729b526874b72955e64bbb53f0cad6470
+test/unit/devlinks.test.ts internal-host sha256:a054b1641bd592db1e477cdf1eea0ff18e377c9e13d33b286e4e4fa57cf9fee9
+# Images the product needs, each looked at by a human (2026-10-13): the app icon PNG (build/icon.svg rendered by
+# scripts/make-icon.cjs, chunks IHDR/IDAT/IEND only), the e2e visual baselines and the README screenshots (frozen demo,
+# fictional data). `npm run shots` prints the lines for new screenshots; never remove an old line (history scan).
+build/icon.png binary-media sha256:0691c84c8ed70ceccdeb0fbcc5e11dbd8338b91d3ae8df4c2320df513608890d
+test/e2e/ui.spec.ts-snapshots/corsie-win32.png binary-media sha256:97793138e68c6c56f785faa6fe8097e0d6989a1426180c8486a32dfe7d07078b
+test/e2e/ui.spec.ts-snapshots/maximized-win32.png binary-media sha256:ca70e6a40fdefe37117d16a811ea0f82cad98654c11f711ec0fe04dff6ec0670
+test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:35964be95b689c1334aff2b7aad08b85301fb03780191872522d86bd821585c9
+test/e2e/ui.spec.ts-snapshots/palette-win32.png binary-media sha256:762bc2f1d639e52311f28c9e946623969eff7209da2252e0a7909cc98d382984
+docs/screenshots/brain-map.webp binary-media sha256:b47268a640c164a57126221c600ac305612e9c76cbaf78407d4a1ba5349551fe
+docs/screenshots/browser.webp binary-media sha256:0abaf335da43a77f4b45ee355ea3093a45e0b1c8cd0d27e2d40c8535a4d33ada
+docs/screenshots/devops.webp binary-media sha256:2b5964949e48f74e3ef170a3275d30bceb1202ca00145bde003b33945070075f
+docs/screenshots/mosaic.webp binary-media sha256:2a6c7ab702f263fb64556cc1f706bfb2b119a941a8160070e9d29191848345b2
+docs/screenshots/quality.webp binary-media sha256:30a801b0dcc8b617854a6623bd165b580567f07b4baae1ef772df54055cd61a7
+docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42eb3e06e72439883bc4b6af75c872421c

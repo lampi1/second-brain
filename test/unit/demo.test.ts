@@ -29,8 +29,8 @@ describe('demo seed', () => {
   it('is a rich, deterministic state', () => {
     const a = seed(FROZEN_EPOCH);
     expect(seed(FROZEN_EPOCH)).toEqual(a);
-    expect(a.chats.filter(c => c.isRegia)).toHaveLength(1);
-    expect(new Set(a.chats.map(c => c.state))).toEqual(new Set(['waiting', 'running', 'idle']));
+    expect(a.chats.filter(c => c.isRegia).map(c => c.regiaName ?? 'Lavoro')).toEqual(['Lavoro']); // the work Regia; the app's one is made in "Migliora l'app" (ADR 0020)
+    expect(new Set(a.chats.map(c => c.state))).toEqual(new Set(['waiting', 'running', 'idle', 'closed'])); // closed: the old finished ones (auto-close)
     expect(a.pending.map(p => p.type).sort()).toEqual(['permission', 'question', 'question']);
     expect(a.tabs.every(t => t.ownerChatId && a.chats.some(c => c.id === t.ownerChatId))).toBe(true);
     expect(a.items.fix!.some(i => i.kind === 'tool' && i.status === 'running')).toBe(true);
@@ -88,6 +88,14 @@ describe('demo chats (frozen)', () => {
     expect(last && 'text' in last ? last.text : '').toMatch(/Ti aspettano \d/);
   });
 
+  it('a Regia in place of one (replaces) takes the role: the old one goes on as a normal chat', async () => {
+    const { chats, events } = make();
+    const c = await chats.create({ harness: 'cursor', cwd: 'C:\lavoro\brain', title: 'Regia', regia: true, replaces: 'regia' });
+    expect(chats.list().filter(x => x.isRegia).map(x => x.id)).toEqual([c.id]);
+    expect(chats.list().find(x => x.id === 'regia')?.isRegia).toBe(false);
+    expect(events.some(e => e.ch === 'chat:updated' && (e.p as { id: string; isRegia: boolean }).id === 'regia' && !(e.p as { isRegia: boolean }).isRegia)).toBe(true);
+  });
+
   it('set changes model/effort/title and close removes the chat', async () => {
     const { chats, events } = make();
     const c = await chats.set('fix', { model: 'claude-sonnet-4-5', effort: 'low', title: 'Fix totale' });
@@ -95,6 +103,21 @@ describe('demo chats (frozen)', () => {
     await chats.close('mappa');
     expect(chats.list().some(x => x.id === 'mappa')).toBe(false);
     expect(events.some(e => e.ch === 'chat:removed')).toBe(true);
+  });
+
+  it('long chats: the seed has one over 200k; hand-off and "Riprendi" link the old and the new chat', async () => {
+    const { chats } = make();
+    expect(chats.list().find(c => c.id === 'mappa')?.contextTokens).toBeGreaterThan(200_000);
+    expect(chats.list().find(c => c.id === 'sms')?.contextEstimated).toBe(true);
+    expect(chats.readHandoff('mappa')).toBeNull();
+    const h = await chats.handoff('mappa');
+    expect(h.text).toContain('## Prossimo passo');
+    expect(chats.list().find(c => c.id === 'mappa')).toMatchObject({ handoffAt: h.at, handoffSource: 'chat' });
+    const n = await chats.continueChat('mappa');
+    expect(n).toMatchObject({ title: 'App · Mappa 3D (2)', continuedFrom: { id: 'mappa' } });
+    expect(chats.list().find(c => c.id === 'mappa')).toMatchObject({ continuedBy: { id: n.id }, state: 'closed' });
+    expect((await chats.continueChat('mappa')).id).toBe(n.id);
+    await expect(chats.continueChat('regia')).rejects.toThrow(/Regia/);
   });
 
   it('brain: feed, mute and usage that follows the chats\' cost', () => {

@@ -14,3 +14,6 @@ Regole: ogni proposta dichiara quale numero muove (di default "interventi forzat
 rifiutata = non si ripropone senza prove nuove; si misura solo quando {{OWNER}} lo chiede.
 
 ## Registro
+
+Vuoto il primo giorno: la prima proposta nasce dalla prima revisione ("fai la revisione", `routines.md`) o da un
+errore che torna due volte in `ai-errors.md`. La pagina Qualità dell'app conta le proposte e i loro esiti da qui.

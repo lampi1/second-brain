@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { slug, paths, send, take, unread, listening, stats, hookOutput, brainSettings, detectHarness, noteHarness, harnessOf } from './inbox.mjs';
+import { slug, paths, send, take, unread, listening, stats, hookOutput, brainSettings, detectHarness, noteHarness, harnessOf, appServes } from './inbox.mjs';
 
 process.removeAllListeners('warning');
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -234,6 +234,22 @@ await T('Claude <-> Cursor switch', () => {
   ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'back on' }).msg, 'passes again when switched back on');
   fs.rmSync(path.join(tmp, 'brain-settings.json'));
   for (const b of ['cur-a', 'cla-b', 'cla-d', 'cur-c', 'sconosciuta', 'second-brain']) take(P, b, 'test');
+});
+
+await T('the second-brain app serves a box: send says it delivers at once; a stale heartbeat does not count', () => {
+  const beat = path.join(P.dir, '.app-second-brain.json');
+  fs.writeFileSync(beat, JSON.stringify({ pid: process.pid, at: new Date().toISOString(), boxes: ['pers-app'] }));
+  const s = run(['send', '--to', 'Pers · App', '--from', 'Regia', '--text', 'subito']);
+  ok(s.status === 0 && /aperta nell’app second-brain/.test(s.stdout), `send says the app delivers: ${s.stdout}${s.stderr}`);
+  ok(!appServes(P, 'Altra chat'), 'a box the app does not list');
+  // a wait in an app chat ends at once and says not to relaunch it (the app takes the mail before any wait could)
+  const w = run(['wait', '--me', 'Pers · App', '--poll', '0.1', '--max-min', '0.01']);
+  ok(w.status === 0 && /non rilanciarlo/.test(w.stdout) && !listening(P, 'pers-app'), `wait in an app chat: ${w.status} ${w.stdout}${w.stderr}`);
+  const old =new Date(Date.now() - 60000);
+  fs.utimesSync(beat, old, old);
+  ok(!appServes(P, 'Pers · App'), 'stale heartbeat (app closed) ignored');
+  fs.rmSync(beat);
+  take(P, 'pers-app', 'test');
 });
 
 await T('stats', () => {

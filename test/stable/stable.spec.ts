@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
-const SECTIONS = ['home', 'adesso', 'fatto', 'dafare', 'idee', 'spunti', 'costi', 'qualita', 'collabora', 'confronto', 'esplora'];
+const SECTIONS = ['fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'esplora'];
 
 test('the packaged stable copy finds the brain by itself and every section shows data', async () => {
   test.setTimeout(600000);

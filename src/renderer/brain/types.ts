@@ -1,7 +1,9 @@
 // Shapes of the brain's data API (the brain's own server, proxied by main as 'brain:api'): /api/tables (every parsed
-// table), /api/now (live chats), /api/cost, /api/day (report or brief), /api/map, /api/files, /api/file, /api/search,
-// /api/version. The server is another program that may be older or newer than the app, so every read goes through a
-// normalizer that fills what is missing (lists → [], text → '') instead of trusting the shape. Used by the pages.
+// table), /api/cost, /api/day (report or brief), /api/map, /api/files, /api/file, /api/search, /api/version; plus
+// /api/quality and /api/procedures, /api/procedure, answered by main itself (AppQuality, Procedure). The server is another program that may be older
+// or newer than the app, so every read goes through a normalizer that fills what is missing (lists → [], text → '')
+// instead of trusting the shape. Used by the pages.
+import type { AppQuality, Procedure, ProcedureSummary } from '@shared/contract';
 
 export interface ErrorRow { data: string; ora: string; chi: string; area: string; tipo: string; detto: string; vero: string; visto: string; regola: string; riga?: string }
 export interface WinRow { data: string; ora: string; harness: string; chat: string; area: string; esito: string; parole: string; consegnato: string }
@@ -15,17 +17,24 @@ export interface Reflection { data: string; chat: string; titolo: string; notato
 export interface Proposal { id: string; data: string; proposta: string; tipo: string; stato: string; dettaglio: string }
 export interface BugRow { data: string; area: string; bug: string; pattern: string; fonte: string; rif: string }
 export interface Measure { date: string; metric: string; value: number; breakdown?: Record<string, number>; human?: number; model?: string; brain?: string }
-export interface EnvEvent { ts: string; env: string; chat: string; action: string; heldMin?: number; why?: string }
 export interface Playbook { agent: string; punti: number; proposti: string[]; size: number; review: string[] }
 export interface RuleRow { date: string; type: string; area: string; rule: string; again: number }
-export interface Box { box: string; unread: number; listening: boolean; since: string | null }
-export interface MailEvent { ts: string; action: string; from: string; to: string; via?: string; hop?: number }
+/** recurrence.mjs quality(): ai-errors.md as the Qualità page needs it (canonical types, unreadable lines, who saw them). */
+export type RuleStatus = 'tornato' | 'non-tornato' | 'troppo-presto' | 'senza-tipo';
+export interface QRule { date: string; type: string; area: string; rule: string; status: RuleStatus; ageDays: number | null; again: { date: string; line: string }[] }
+export interface SeenDay { date: string; owner: number; other: number; unknown: number }
+export interface ErrQuality {
+  today: string; windowDays: number; from: string; to: string; lines: number; typed: number;
+  unparsed: { date: string; line: string }[]; invalid: { date: string; type: string; line: string }[];
+  seenByDay: SeenDay[]; totals: [string, number][]; rules: QRule[];
+}
 export interface Tables {
   today: string;
   errors: ErrorRow[]; wins: WinRow[]; journal: JournalRow[]; now: NowRow[]; ideas: Idea[]; reflections: Reflection[];
-  proposals: Proposal[]; bugs: BugRow[]; measures: Measure[]; envs: EnvEvent[]; briefs: string[];
+  proposals: Proposal[]; bugs: BugRow[]; measures: Measure[]; briefs: string[];
   playbooks: Playbook[]; recurrence: { totals: [string, number][]; rules: RuleRow[] };
-  inbox: { boxes: Box[]; stats: Record<string, { sent: number; delivered: number }>; log: MailEvent[] };
+  /** null = a brain whose recurrence.mjs has no quality() yet */
+  quality: ErrQuality | null;
 }
 
 export interface LiveChat {
@@ -34,7 +43,6 @@ export interface LiveChat {
   box: { name: string; listening: boolean; unread: number } | null;
   now: NowRow | null;
 }
-export interface NowData { chats: LiveChat[]; boxes: Box[] }
 
 export interface Money { usd: number; calls: number }
 export interface CostChat { title: string; folder: string; usd: number; calls: number; ctxMax: number; from: number; to: number; longSave: number }
@@ -51,6 +59,8 @@ export interface WorkItemRef { type: string; title: string; state: string; assig
 export interface DayRow {
   kind: string; title: string; area: string; url?: string; state?: string; type?: string; tag?: string; time?: string;
   target?: string; from?: string; to?: string; his?: number; last?: string;
+  /** a chat's project folder (day.mjs ≥ 2026-10-13; '' or absent before) */
+  cwd?: string;
 }
 export interface DayReport { date: string; day: string; devops: boolean | null; areas: string[]; rows: DayRow[]; commits: string[]; text: string }
 export interface BriefPr { title: string; target: string; draft?: boolean; url: string; area: string; items: WorkItemRef[]; votes?: string; build?: string; buildUrl?: string; autocomplete?: boolean }
@@ -59,9 +69,10 @@ export interface BriefItem { type: string; title: string; state: string; url: st
 export interface BriefThread { section: string; label: string; date: string; next: string; stale: boolean; done: boolean; area: string }
 export interface Brief { date: string; day: string; devops: boolean | null; areas: string[]; prs: BriefPr[]; items: BriefItem[]; threads: BriefThread[]; text: string }
 
-export interface MapMember { id: string; label: string; what?: string; uses?: number }
+/** label: the speaking name ("Coda dei test"); name: the technical one (file, agent, /skill), when the brain sends it */
+export interface MapMember { id: string; label: string; name?: string; what?: string; uses?: number }
 export interface MapNode {
-  id: string; layer: string; kind: string; label: string; short?: string; what?: string; file?: string; modified?: string; degree?: number;
+  id: string; layer: string; kind: string; label: string; name?: string; short?: string; what?: string; file?: string; modified?: string; degree?: number;
   members?: MapMember[]; uses?: number; reads?: number; events?: string[]; fields?: { model?: string; effort?: string }; playbook?: { punti: number };
 }
 export interface MapEdge { from: string; to: string; kind: string; label: string; source?: { file: string; text: string }; count?: number }
@@ -97,7 +108,7 @@ const money = (v: unknown): Record<string, Money> => Object.fromEntries(Object.e
 
 export function normTables(v: unknown): Tables {
   const o = obj(v);
-  const rec = obj(o.recurrence), inbox = obj(o.inbox);
+  const rec = obj(o.recurrence);
   return {
     today: str(o.today),
     errors: rows(o.errors, ['data', 'ora', 'chi', 'area', 'tipo', 'detto', 'vero', 'visto', 'regola', 'riga']),
@@ -109,38 +120,57 @@ export function normTables(v: unknown): Tables {
     proposals: rows(o.proposals, ['id', 'data', 'proposta', 'tipo', 'stato', 'dettaglio']),
     bugs: rows(o.bugs, ['data', 'area', 'bug', 'pattern', 'fonte', 'rif']),
     measures: arr(o.measures).filter(isObj).map(m => ({ ...m, date: str(m.date), metric: str(m.metric), value: num(m.value), breakdown: isObj(m.breakdown) ? Object.fromEntries(Object.entries(m.breakdown).map(([k, x]) => [k, num(x)])) : {} })) as Measure[],
-    envs: arr(o.envs).filter(isObj).map(e => ({ ...e, ts: str(e.ts), env: str(e.env), chat: str(e.chat), action: str(e.action), heldMin: e.heldMin == null ? undefined : num(e.heldMin) })) as EnvEvent[],
     briefs: arr(o.briefs).map(str),
     playbooks: arr(o.playbooks).filter(isObj).map(p => ({ agent: str(p.agent), punti: num(p.punti), proposti: arr(p.proposti).map(str), size: num(p.size), review: arr(p.review).map(str) })),
     recurrence: {
       totals: arr(rec.totals).filter(Array.isArray).map(t => [str((t as unknown[])[0]), num((t as unknown[])[1])] as [string, number]),
       rules: arr(rec.rules).filter(isObj).map(r => ({ date: str(r.date), type: str(r.type), area: str(r.area), rule: str(r.rule), again: num(r.again) })),
     },
-    inbox: {
-      boxes: normBoxes(inbox.boxes),
-      stats: Object.fromEntries(Object.entries(obj(inbox.stats)).map(([k, s]) => [k, { sent: num(obj(s).sent), delivered: num(obj(s).delivered) }])),
-      log: arr(inbox.log).filter(isObj).map(x => ({ ...x, ts: str(x.ts), action: str(x.action), from: str(x.from), to: str(x.to) })) as MailEvent[],
-    },
+    quality: normErrQuality(o.quality),
   };
 }
 
-const normBoxes = (v: unknown): Box[] => arr(v).filter(isObj).map(b => ({ box: str(b.box), unread: num(b.unread), listening: !!b.listening, since: b.since ? str(b.since) : null }));
-
-export function normNow(v: unknown): NowData {
-  const o = obj(v);
+const STATUSES: readonly RuleStatus[] = ['tornato', 'non-tornato', 'troppo-presto', 'senza-tipo'];
+export function normErrQuality(v: unknown): ErrQuality | null {
+  if (!isObj(v)) return null;
+  const lines = (x: unknown) => arr(x).filter(isObj).map(l => ({ date: str(l.date), line: str(l.line) }));
   return {
-    chats: arr(o.chats).filter(isObj).map(c => {
-      // the owner's last message comes as "last<Name>" (the server names it after the brain's owner)
-      const ownerKey = Object.keys(c).find(k => k.length > 4 && k.startsWith('last') && /^[A-Z]/.test(k.slice(4)));
-      const box = isObj(c.box) ? { name: str(c.box.name), listening: !!c.box.listening, unread: num(c.box.unread) } : null;
-      return {
-        harness: str(c.harness), title: str(c.title), folder: str(c.folder), when: str(c.when), state: str(c.state), id: str(c.id),
-        ageMin: typeof c.ageMin === 'number' ? c.ageMin : null, last: str(c.last), lastOwner: ownerKey ? str(c[ownerKey]) : '',
-        box, now: isObj(c.now) ? strs<NowRow>(c.now, ['sezione', 'filo', 'dove', 'prossimo', 'stato', 'aggiornato']) : null,
-      };
-    }),
-    boxes: normBoxes(o.boxes),
+    today: str(v.today), windowDays: num(v.windowDays) || 14, from: str(v.from), to: str(v.to), lines: num(v.lines), typed: num(v.typed),
+    unparsed: lines(v.unparsed), invalid: arr(v.invalid).filter(isObj).map(l => ({ date: str(l.date), type: str(l.type), line: str(l.line) })),
+    seenByDay: arr(v.seenByDay).filter(isObj).map(d => ({ date: str(d.date), owner: num(d.owner), other: num(d.other), unknown: num(d.unknown) })),
+    totals: arr(v.totals).filter(Array.isArray).map(t => [str((t as unknown[])[0]), num((t as unknown[])[1])] as [string, number]),
+    rules: arr(v.rules).filter(isObj).map(r => ({ date: str(r.date), type: str(r.type), area: str(r.area), rule: str(r.rule),
+      status: STATUSES.includes(r.status as RuleStatus) ? r.status as RuleStatus : 'senza-tipo', ageDays: r.ageDays == null ? null : num(r.ageDays), again: lines(r.again) })),
   };
+}
+
+/** /api/quality (main's own half: turns, PRs, reopened bugs); every field filled. */
+export function normAppQuality(v: unknown): AppQuality {
+  const o = obj(v), t = obj(o.turns), p = obj(o.prs), r = obj(o.reopen);
+  const nul = (x: unknown) => (typeof x === 'string' && x ? x : null);
+  return {
+    turns: { from: nul(t.from), to: nul(t.to), byDay: arr(t.byDay).filter(isObj).map(d => ({ date: str(d.date), claude: num(d.claude), cursor: num(d.cursor) })) },
+    prs: { at: p.at == null ? null : num(p.at), total: num(p.total), error: nul(p.error),
+      blocked: arr(p.blocked).filter(isObj).map(b => ({ id: num(b.id), title: str(b.title), repo: str(b.repo), url: str(b.url), reasons: arr(b.reasons).map(str) })) },
+    reopen: { at: nul(r.at), days: num(r.days) || 90, resolved: num(r.resolved), reopened: num(r.reopened), error: nul(r.error), refreshing: r.refreshing === true,
+      bugs: arr(r.bugs).filter(isObj).map(b => ({ id: num(b.id), title: str(b.title), state: str(b.state), url: str(b.url),
+        reopened: arr(b.reopened).filter(isObj).map(x => ({ resolvedAt: str(x.resolvedAt), reopenedAt: str(x.reopenedAt), by: str(x.by), to: str(x.to) })) })) },
+  };
+}
+
+/** /api/procedures: the procedures found in the brain; a row without id or file is dropped. */
+export function normProcedures(v: unknown): { root: string | null; procedures: ProcedureSummary[] } {
+  const o = obj(v);
+  return { root: str(o.root) || null, procedures: arr(o.procedures).filter(isObj).map(procedureOf).filter(p => p.id && p.file) };
+}
+const procedureOf = (p: Obj): ProcedureSummary => ({
+  id: str(p.id), title: str(p.title), purpose: str(p.purpose), area: str(p.area), group: p.group ? str(p.group) : null, file: str(p.file),
+  line: num(p.line), source: str(p.source), tags: arr(p.tags).filter((t): t is string => typeof t === 'string'), changedAt: p.changedAt ? str(p.changedAt) : null,
+});
+/** /api/procedure?id=…: one procedure with its text (credentials already masked by main). */
+export function normProcedure(v: unknown): Procedure {
+  const o = obj(v);
+  return { ...procedureOf(o), path: str(o.path), markdown: str(o.markdown), masked: num(o.masked) };
 }
 
 export function normCost(v: unknown): CostData {

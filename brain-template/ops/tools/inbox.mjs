@@ -12,6 +12,9 @@
 //   2. the Stop hook (`hook claude` / `hook cursor`, installed only by {{OWNER}}) hands unread messages to a chat at the
 //      end of its turn, so a busy chat gets them without a waiter;
 //   3. otherwise the message stays queued: `read` shows it, `list` shows who is not listening.
+//   0. when the second-brain app is open and the chat is one of its live chats, the app itself delivers it within ~2 s,
+//      even mid-turn (src/main/chats/mail.ts in second-brain-app; its heartbeat .app-<instance>.json lists those boxes).
+//      Inside the app a chat can also write with its MCP tool send_to_chat (same files, no Bash command).
 // Usage (--file = text written with the Write tool, for anything with backslashes or quotes):
 //   node "{{BRAIN}}/ops/tools/inbox.mjs" send --to "<chat>" --from "<my chat>" --text "<msg>" [--reply-to <id>] [--harness claude|cursor]
 //   node .../inbox.mjs wait --me "<my chat>"     (run in background; exit 0 = messages printed, 2 = gave up after --max-min)
@@ -149,7 +152,7 @@ export function send(P, { to, from, text, replyTo, harness = null, now = new Dat
   fs.writeFileSync(tmp, JSON.stringify(msg, null, 2));
   fs.renameSync(tmp, path.join(box, `${id}.json`)); // a waiter never sees half a file
   appendLog(P, { action: 'sent', id, from: msg.from, to: msg.to, hop });
-  return { msg, listening: on };
+  return { msg, listening: on, app: appServes(P, to) };
 }
 
 // A waiter is live only if its pid exists AND it touched .waiter.json recently: a waiter killed from outside
@@ -163,6 +166,18 @@ const liveWaiter = file => {
 };
 export function listening(P, who) {
   return !!liveWaiter(path.join(P.box(who), '.waiter.json'));
+}
+
+// The second-brain app delivers this box's mail itself: one of its heartbeats (rewritten every ~2 s) is fresh and lists it.
+const APP_BEAT_MS = 15000;
+export function appServes(P, who) {
+  try {
+    return fs.readdirSync(P.dir).filter(f => /^\.app-.*\.json$/.test(f)).some(f => {
+      const file = path.join(P.dir, f);
+      if (Date.now() - fs.statSync(file).mtimeMs > APP_BEAT_MS) return false;
+      return (readJson(file)?.boxes ?? []).includes(slug(who));
+    });
+  } catch { return false; }
 }
 
 // What the receiving chat sees: who wrote, the text, and the exact commands to answer and to listen again.
@@ -189,6 +204,9 @@ export function wait(P, me, { pollMs = 3000, maxMin = 120, sleep } = {}) {
   const wfile = path.join(box, '.waiter.json');
   const prev = liveWaiter(wfile);
   if (prev && prev.pid !== process.pid) return 'already'; // one waiter per chat is enough
+  // the app delivers this box itself and moves the mail to read/ first: a wait here would only wake the chat for
+  // nothing after maxMin and be relaunched, forever (2026-10-13 zero-token audit: 115 waits a week)
+  if (appServes(P, me)) return 'app';
   const h = detectHarness();
   if (h) noteHarness(P, me, h);
   const mine = JSON.stringify({ pid: process.pid, since: new Date().toISOString(), me, pollMs });
@@ -290,18 +308,20 @@ if (isMain) {
   try {
     if (cmd === 'send') {
       const text = arg('--file') ? fs.readFileSync(arg('--file'), 'utf8') : arg('--text');
-      const { msg, listening: on } = send(P, { to: arg('--to'), from: arg('--from'), text, replyTo: arg('--reply-to'),
+      const { msg, listening: on, app } = send(P, { to: arg('--to'), from: arg('--from'), text, replyTo: arg('--reply-to'),
         // the shell env wins; --harness only fills in when the env says nothing, and only claude|cursor ("app" is
         // reserved to the site's own direct call: a chat can't pass for the app and skip the switch, review 11/10)
         harness: detectHarness() ?? (['claude', 'cursor'].includes(arg('--harness')) ? arg('--harness') : null) });
       if (!msg) { console.log('NO_REPLY: niente inviato, nessuna chat svegliata'); process.exit(0); }
       console.log(`inviato a "${msg.to}" (id ${msg.id}, thread ${msg.thread}, ${msg.hop}/${MAX_HOPS}): ` +
-        (on ? 'la chat è in ascolto, la sveglia adesso' : 'la chat non è in ascolto: lo riceve a fine turno (hook) o con read/wait'));
+        (app ? 'la chat è aperta nell’app second-brain: l’app glielo consegna adesso, anche a metà turno'
+          : on ? 'la chat è in ascolto, la sveglia adesso' : 'la chat non è in ascolto: lo riceve a fine turno (hook) o con read/wait'));
     } else if (cmd === 'wait' || cmd === 'read') {
       const me = arg('--me');
       if (!slug(me)) usage('--me "<my chat title>" is required');
       const msgs = cmd === 'read' ? take(P, me, 'read')
         : wait(P, me, { pollMs: Number(arg('--poll') ?? 3) * 1000, maxMin: Number(arg('--max-min') ?? 120), sleep });
+      if (msgs === 'app') { console.log(`"${me}" è una chat dell'app second-brain: l'app ti consegna la posta da sé, anche a metà turno. Niente wait: non rilanciarlo.`); process.exit(0); }
       if (msgs === 'already') { console.log(`"${me}" è già in ascolto (un altro wait è attivo): niente da fare`); process.exit(0); }
       if (msgs === null) { console.log(`nessun messaggio in ${arg('--max-min') ?? 120} minuti: rilancia ${TOOL} wait --me "${slug(me)}"${ROOTARG}`); process.exit(2); }
       console.log(msgs.length ? render(msgs, me) : `nessun messaggio per "${me}"`);

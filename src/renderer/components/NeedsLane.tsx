@@ -1,11 +1,13 @@
 // "Ti aspettano · N": every open question and permission, oldest first, as small cards answerable in place with
 // 1-9 / Enter / Esc (focus a card with Ctrl+J or a click). Answering here never opens the chat. Hidden when nothing
-// waits. A polite live region announces new requests to screen readers. Used by App.tsx (Mosaico, focus-mode peek).
+// waits, and while "Rispondi dopo" is on (they wait in "Da rispondere", lib/later.ts). A polite live region announces new requests to screen readers. Used by App.tsx (focus mode's Ctrl+J peek only: the Mosaico dropped it on 2026-10-12).
 import { memo } from 'react';
 import type { PendingRequest } from '@shared/contract';
+import { chatName } from '@shared/regia';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { ui } from '../store/ui';
+import { answerLater } from '../lib/later';
 import { RequestPanel } from './RequestPanel';
 import { Kbd, Keys } from './ui';
 
@@ -13,15 +15,17 @@ const LaneCard = memo(function LaneCard({ req }: { req: PendingRequest }) {
   const chat = useApp(s => s.chats[req.chatId]);
   return (
     <div role="listitem" className="lane-item">
-      <RequestPanel req={req} variant="lane" chatTitle={chat?.isRegia ? 'Regia' : (chat?.title ?? 'Chat')} harness={chat?.harness ?? 'claude'} />
+      <RequestPanel req={req} variant="lane" chatTitle={chat ? chatName(chat) : 'Chat'} harness={chat?.harness ?? 'claude'} onLater={answerLater} />
     </div>
   );
 });
 
 export function NeedsLane({ peek }: { peek?: boolean }) {
   const hidden = ui.use(s => s.hidden, sameList);
-  const pending = useApp(s => s.pending.filter(p => !hidden.includes(p.chatId)), sameList);
-  if (pending.length === 0) return null;
+  const later = ui.use(s => s.later);
+  // the chats of "Migliora l'app" ask in their own section (and in the global layer when it is not on screen)
+  const pending = useApp(s => s.pending.filter(p => !hidden.includes(p.chatId) && s.chats[p.chatId]?.space !== 'app'), sameList);
+  if (pending.length === 0 || later) return null;
   return (
     <section className={`lane ${peek ? 'peek' : ''}`} aria-label={`Ti aspettano: ${pending.length}`} data-testid="needs-lane">
       <div className="lane-label">

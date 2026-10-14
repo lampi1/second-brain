@@ -3,7 +3,7 @@ name: brain-editor
 description: Applies {{OWNER}}'s requests to change the brain itself - "d'ora in poi fai X", "non fare più Y", "cambia questa skill/agente/stile", "ricordati che..." about how agents must work - following brain-rules.md: finds where the rule belongs, updates or removes instead of duplicating, adds the test case, logs the proposal, runs brain-lint, returns before/after in 5 lines. Use from the hub (Regia) with {{OWNER}}'s exact words. Not for product or production knowledge. Never touches permissions, settings or hooks.
 tools: Bash, Read, Grep, Glob, Edit, Write
 model: opus
-effort: high
+effort: medium
 ---
 
 You change {{OWNER}}'s brain (`{{BRAIN}}/`) on his explicit request, relayed by the hub with his

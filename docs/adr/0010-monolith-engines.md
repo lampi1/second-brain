@@ -22,9 +22,21 @@ utilizzabile anche con la cli di cursor però, anzi sarà proprio con quella che
   `session/request_permission` and `cursor/ask_question` become panels, `session/cancel` = stop). It is the only
   external program the app depends on, because Cursor ships no embeddable engine; its chats spend only Cursor credits.
   It is started directly through the CLI's own `node.exe index.js` of the newest version (no PowerShell launcher).
-- **Cost**: Claude from each `result` (list-price USD on a subscription). Cursor: ACP reports no tokens today (a bug
-  confirmed by Cursor): usage when present in the prompt response, otherwise "stima senza dati"; the CSV correction is
-  backlog.
+- **Cost**: Claude from each `result` (list-price USD on a subscription); while a turn runs (work chats stay in one
+  turn for hours), a live figure (`ChatSummary.costLiveUsd`, shown "≈"): every `assistant` message's `usage` priced
+  with `cost.mjs` weights, corrected by `get_usage`'s `session.total_cost_usd` (the CLI's real running total; the
+  manager asks it every minute, busy chats in turn), replaced by the result (2026-10-11). Cursor: ACP reports no tokens
+  today (a bug confirmed by Cursor): usage when present in the prompt response, or ACP `usage_update.cost` if Cursor
+  starts sending it, otherwise "stima senza dati". Cursor's plan usage has no legitimate
+  source (no personal usage API, internal endpoints barred by its ToS): the top bar says "n/d" with that reason.
+- **Cursor cost ledger** (the user's choice "Stima + correzione CSV", 2026-10-11; research-cursor-cost.md §5.1-5.2):
+  a Cursor `stop` hook script the app installs in `%LOCALAPPDATA%/second-brain/hooks/cursor-usage.mjs` appends each
+  turn's tokens to `cursor-ledger.jsonl` beside it (shared by the stable and the dev app; an `agent -p` runner can pipe
+  its result line into the same script). Priced at list price (+ Cursor Token Rate on third-party models) × a factor
+  per model from the newest `team-usage-events-*.csv` in Downloads; the days the CSV covers take its exact $. Shown
+  "≈ $ ±x%" (margin = worst day after the factor, ±20% before any CSV) until a CSV confirms it; Cursor chats get their
+  session's estimate. `~/.cursor/hooks.json` is the user's: the app never edits it (rule 6), it only ships the script.
+  No new dependency.
 - **Process inventory** (each one justified): Electron main + renderer; one engine process per running chat; the brain
   tools run on demand as Electron-node children (chats.mjs, cost.mjs) and the brain data server child (to be folded
   in-process later, backlog). Nothing else.

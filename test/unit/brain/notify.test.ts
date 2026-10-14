@@ -1,5 +1,5 @@
 // Calm notifications (src/main/brain/notify.ts) on a fake clock: who may toast, grouping, the 20 s throttle, urgent
-// bypass, focus, mutes, do-not-disturb, disabled toasts.
+// bypass, focus, mutes, do-not-disturb, disabled toasts, requests held while "Rispondi dopo" is on.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Notifier, compose, loud, type Toast } from '../../../src/main/brain/notify';
 import { stamp } from '../../../src/main/brain/live';
@@ -20,6 +20,23 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T10:
 afterEach(() => { vi.useRealTimers(); });
 
 describe('notify', () => {
+  it('"Rispondi dopo": a held request never toasts, the rest still does; off again, requests toast', () => {
+    const shown: Toast[] = [];
+    const later = { on: true };
+    const n = new Notifier({ settings: () => ({ osToasts: 'urgent', mute: {}, dnd: false, dndUntil: null }), isFocused: () => false,
+      show: t => shown.push(t), enabled: () => true, held: e => later.on && e.kind === 'question' });
+    n.push([ev('question', 'Quale ambiente?')]);
+    vi.advanceTimersByTime(2000);
+    expect(shown).toEqual([]);
+    n.push([ev('question', 'Apro la PR?'), ev('chat-waiting', 'OS · Prova')]);
+    vi.advanceTimersByTime(2000);
+    expect(shown.map(t => t.title)).toEqual(['Chat che ti aspetta: OS · Prova']);
+    later.on = false;
+    n.push([ev('question', 'Quale tema?')]);
+    vi.advanceTimersByTime(2000);
+    expect(shown).toHaveLength(2);
+  });
+
   it('by default only urgent kinds may toast; away, muted and dnd never do', () => {
     const s: S = { osToasts: 'urgent', mute: {}, dnd: false, dndUntil: null };
     expect(loud([ev('chat-waiting'), ev('idea'), ev('now')], s).map(e => e.kind)).toEqual(['chat-waiting']);

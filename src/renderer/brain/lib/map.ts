@@ -60,11 +60,21 @@ export function relFile(file: string | undefined, root: string): string | null {
   return f.toLowerCase().startsWith(`${r.toLowerCase()}/`) ? f.slice(r.length + 1) : null;
 }
 
-/** Search a piece by label: exact match first, then the first that contains the text. */
+/** What a piece is called technically, shown small under its speaking label: its file relative to the brain, else the
+ *  brain's `name` (an agent, a /skill, a file in the user's home); null when it says nothing more than the label. */
+export function fileName(n: Pick<MapNode, 'label' | 'name' | 'file' | 'short'>, root: string): string | null {
+  const t = relFile(n.file, root) ?? n.name ?? null;
+  if (!t) return null;
+  const same = (s: string | undefined) => !!s && s.trim().toLowerCase() === t.toLowerCase();
+  return same(n.label) || same(n.short) ? null : t;
+}
+
+/** Search a piece by its label or its technical name (file, agent, /skill): exact match first, then partial. */
 export function findNode(nodes: MapNode[], q: string): MapNode | null {
   const t = q.trim().toLowerCase();
   if (!t) return null;
-  return nodes.find(n => n.label.toLowerCase() === t) ?? nodes.find(n => n.label.toLowerCase().includes(t)) ?? null;
+  const names = (n: MapNode) => [n.label, n.name ?? ''].map(s => s.toLowerCase());
+  return nodes.find(n => names(n).includes(t)) ?? nodes.find(n => names(n).some(s => s.includes(t))) ?? null;
 }
 
 /** Nodes of the view by layer, for the 2D list (fallback without WebGL). */

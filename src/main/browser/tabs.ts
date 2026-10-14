@@ -4,6 +4,8 @@
 // default environment comes from the host, sharing one is explicit. A tab that has not loaded a real page yet is
 // re-created in the right environment on its first navigation (a partition cannot change later).
 // Visible tabs are placed in the app window at the rects the renderer reports (views:layout, the complete visible set);
+// agent tabs always lay out at a fixed desktop size (DESKTOP, CDP device emulation) and are shown scaled to fit their
+// rect, so a small tile never narrows the page an agent tests nor its screenshots (Tab.scale = view px per CSS px);
 // every other tab is "parked" in an invisible offscreen window so it keeps rendering at its last size: screenshots,
 // rAF, hit-testing into cross-origin iframes all need a live compositor (a detached view has none). Agent tabs get a
 // CDP session (cdp.ts) for trusted input, dialogs and network; Electron's own native dialog box is suppressed on them
@@ -11,7 +13,7 @@
 // (opener kept, so OAuth popups work); downloads of agent tabs go to <userData>/evidence/<group>/downloads. Session
 // status per environment (valid / expiring / expired) is tracked from auth cookies and login pages. Every change is
 // pushed as `browser:tabs` / `browser:envs` events. Used by browser/actions.ts, browser/tools.ts, browser/service.ts.
-import { BrowserWindow, WebContentsView, app, session as electronSession, type WebContents, type WebFrameMain, type Session } from 'electron';
+import { BrowserWindow, WebContentsView, app, screen, session as electronSession, type WebContents, type WebFrameMain, type Session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserEnv, BrowserHandoff, BrowserSessionStatus, BrowserTab, Rect, ViewLayout } from '../../shared/contract';
@@ -21,10 +23,13 @@ import { log, errText, redact } from '../log';
 import { TabCdp } from './cdp';
 import { NetLog } from './netlog';
 import { Handoffs } from './handoffs';
+import { Credentials } from './logins';
 import { groupFolder } from './evidence';
 import { EnvStore, computeSession, envColor, envForUrl, envPartition, envSlug, isAuthCookie, isLoginUrl } from './envs';
 import { cookieEncryptionEnabled } from './fuses';
 import { hasPasswordField, pageCall } from './page';
+import { swallowCloseKey } from '../keyguard';
+import { DESKTOP, fitDesktop } from './desktop';
 
 const DEFAULT_SIZE = { width: 1280, height: 800 };
 const PARK_SIZE = { width: 1920, height: 1200 };
@@ -49,12 +54,16 @@ export interface Tab {
   env: string;                                // environment = session partition persist:env-<env>
   envExplicit: boolean;                       // named by the caller (never re-derived from the host)
   fresh: boolean;                             // no real page loaded yet (can still move to another environment)
+  pointer?: boolean;                          // the user's mouse is over the page (renderer lights up its pair)
   view: WebContentsView;
   wcId: number;
   wc: WebContents;
   cdp: TabCdp | null;
   host: 'main' | 'park' | null;
   size: { width: number; height: number };
+  scale: number;                              // view px per CSS px: < 1 while an agent tab is shown in a smaller tile
+  emu: number | null;                         // the scale the CDP device emulation was last set to (null = not set)
+  committed: boolean;                         // a navigation committed (emulating before that crashes Electron)
   frameNos: Map<number, number>;              // frameTreeNodeId → frame number (f1, f2...)
   frameSeq: number;
   refStart: Map<number, number>;              // frame number → highest ref number handed out (refs stay unique across reloads)
@@ -99,6 +108,8 @@ export class BrowserTabs {
   encryptedAtRest: boolean | null = null;
   readonly envStore: EnvStore;
   readonly handoffs: Handoffs;
+  /** The user's credentials file (login hand-offs): set to the brain folder by service.ts. */
+  readonly credentials = new Credentials();
 
   constructor(private readonly opts: TabsOptions) {
     this.envStore = new EnvStore(path.join(opts.userData, 'browser-envs.json'));
@@ -271,7 +282,7 @@ export class BrowserTabs {
     if (agent) this.envStore.markAgent(env);
     const tab: Tab = {
       id, group, owner, agent, env, envExplicit, fresh: !opts.webContents && (!url || url === 'about:blank'),
-      view, wc, wcId: wc.id, cdp: null, host: null, size: { ...DEFAULT_SIZE }, frameNos: new Map(), frameSeq: 0, refStart: new Map(),
+      view, wc, wcId: wc.id, cdp: null, host: null, size: { ...(agent ? DESKTOP : DEFAULT_SIZE) }, scale: 1, emu: null, committed: false, frameNos: new Map(), frameSeq: 0, refStart: new Map(),
       console: [], consoleSeq: 0, net: new NetLog(), dialog: null, dialogSeq: 0, lastDialog: null, dialogWaiters: new Set(), pendingDialogCb: null,
       forceUnload: false, unloadBlockedAt: 0, downloads: [], openedBy: opts.openedBy ?? null, createdAt: Date.now(),
     };
@@ -282,7 +293,7 @@ export class BrowserTabs {
     this.wire(tab);
     if (agent) {
       tab.cdp = new TabCdp(wc, (m, p, s) => this.onCdp(tab, m, p, s), id, () => this.onDetached(tab));
-      void tab.cdp.attach();
+      void tab.cdp.attach().then(() => this.emulate(tab));
     }
     this.place(tab);
     if (url && !opts.webContents) wc.loadURL(url).catch(e => { if (!/ERR_ABORTED/.test(errText(e))) log.info('browser', 'initial load failed', { data: { tab: id, url: redact(url), cause: errText(e) } }); });
@@ -339,6 +350,7 @@ export class BrowserTabs {
 
   private remove(t: Tab): void {
     if (this.tabs.get(t.id) !== t) return;           // already removed, or replaced by rebind()
+    this.setPointer(t, false);
     this.tabs.delete(t.id);
     this.byWc.delete(t.wcId);
     this.visible.delete(t.id);
@@ -357,6 +369,8 @@ export class BrowserTabs {
   }
 
   private onDetached(tab: Tab): void {
+    tab.emu = null;                                    // cdp.ts re-attaches by itself: set the desktop size again then
+    setTimeout(() => this.emulate(tab), 1000);
     if (tab.pendingDialogCb) { tab.pendingDialogCb(false, ''); tab.pendingDialogCb = null; }
     if (tab.dialog) {                                  // no Page.javascriptDialogClosed will come once detached
       tab.lastDialog = { ...tab.dialog, result: 'dismissed (automation detached)' };
@@ -369,10 +383,17 @@ export class BrowserTabs {
     const wc = tab.wc;
     const changed = () => this.emitTabs();
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-stop-loading', changed);
-    wc.on('did-navigate', (_e, url) => { if (url && url !== 'about:blank') tab.fresh = false; this.emitTabs(); });
+    wc.on('did-navigate', (_e, url) => { if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
     wc.on('did-stop-loading', () => { void this.onPageLoaded(tab); });
     wc.on('did-navigate-in-page', (_e, _url, isMain) => { if (isMain) void this.onPageLoaded(tab); });
     wc.on('destroyed', () => this.remove(tab));
+    // the mouse over the page, which the UI cannot see (a native view on top of it): the UI lights up the tab's chat
+    // (renderer lib/pairs.ts). Only the user's real cursor counts, never an agent's input (synthetic, no leave event).
+    wc.on('input-event', (_e, ev) => {
+      if (ev.type !== 'mouseMove' && ev.type !== 'mouseEnter' && ev.type !== 'mouseLeave') return;
+      this.setPointer(tab, ev.type !== 'mouseLeave' && (process.env.SB_TEST === '1' || this.cursorOver(tab)));
+    });
+    swallowCloseKey(wc); // Ctrl+W in a page would reach the default menu and quit the app (keyguard.ts)
     wc.on('console-message', e => {
       const d = e as unknown as { level: string; message: string; lineNumber: number; sourceId: string; frame?: WebFrameMain | null };
       tab.console.push({ seq: ++tab.consoleSeq, at: Date.now(), level: d.level, text: redact(String(d.message)).slice(0, 2000), source: `${d.sourceId ?? ''}:${d.lineNumber ?? ''}`, frame: safeFrameUrl(d.frame) });
@@ -480,6 +501,24 @@ export class BrowserTabs {
     for (const t of this.tabs.values()) this.place(t);
   }
 
+  private setPointer(t: Tab, inside: boolean): void {
+    if (!!t.pointer === inside) return;
+    t.pointer = inside;
+    this.opts.emitter.emit('browser:pointer', { tabId: t.id, inside });
+  }
+
+  /** Is the OS cursor over this tab's page in the main window? */
+  private cursorOver(t: Tab): boolean {
+    const win = this.opts.window();
+    if (t.host !== 'main' || !win || win.isDestroyed()) return false;
+    const c = screen.getCursorScreenPoint();
+    const w = win.getContentBounds();
+    const v = t.view.getBounds();
+    const x = c.x - w.x - v.x;
+    const y = c.y - w.y - v.y;
+    return x >= 0 && y >= 0 && x < v.width && y < v.height;
+  }
+
   private place(t: Tab): void {
     if (this.closing || t.wc.isDestroyed()) return;
     const win = this.opts.window();
@@ -489,16 +528,43 @@ export class BrowserTabs {
     try {
       if (rect && win) {
         if (t.host !== 'main') { win.contentView.addChildView(t.view); t.host = 'main'; }
-        t.view.setBounds(rect);
-        t.size = { width: Math.min(rect.width, PARK_SIZE.width), height: Math.min(rect.height, PARK_SIZE.height) };
+        if (t.agent) {
+          const fit = fitDesktop(rect);
+          t.view.setBounds(fit.bounds);
+          t.scale = fit.scale;
+        } else {
+          t.view.setBounds(rect);
+          t.size = { width: Math.min(rect.width, PARK_SIZE.width), height: Math.min(rect.height, PARK_SIZE.height) };
+        }
       } else {
         const park = this.parkWindow();
         if (t.host !== 'park') { park.contentView.addChildView(t.view); t.host = 'park'; }
+        this.setPointer(t, false);                     // parked under the cursor: no mouseLeave will come
         t.view.setBounds({ x: 0, y: 0, ...t.size });
+        t.scale = 1;
       }
+      this.emulate(t);
     } catch (e) {
       log.warn('browser', 'placing a tab failed', { cause: errText(e), data: { tab: t.id } });
     }
+  }
+
+  /** The CSS viewport the page lays out in: DESKTOP for agent tabs (while emulated), else the view's own size. */
+  viewport(t: Tab): { width: number; height: number } {
+    if (t.agent && t.emu !== null) return { ...DESKTOP };
+    const b = t.view.getBounds();
+    return { width: b.width, height: b.height };
+  }
+
+  /** Agent tabs: the page lays out at DESKTOP and is drawn at t.scale in its view (CDP device emulation, the same as
+   *  DevTools' device mode: the user's clicks in the scaled view land right, CDP input and screenshots are in view px
+   *  and are converted by actions.ts). Only sent when the scale changed. */
+  private emulate(t: Tab): void {
+    if (!t.agent || !t.committed || !t.cdp?.isAttached || t.wc.isDestroyed() || t.emu === t.scale) return;
+    const scale = t.scale;
+    t.emu = scale;
+    t.cdp.send('Emulation.setDeviceMetricsOverride', { width: DESKTOP.width, height: DESKTOP.height, deviceScaleFactor: 0, mobile: false, scale, screenWidth: DESKTOP.width, screenHeight: DESKTOP.height })
+      .catch(e => { if (t.emu === scale) t.emu = null; log.warn('browser', 'desktop size emulation failed', { cause: errText(e), data: { tab: t.id }, hint: 'the tab lays out at its tile size until the next navigation' }); });
   }
 
   private hook(win: BrowserWindow): void {
@@ -521,6 +587,9 @@ export class BrowserTabs {
     this.park = park;
     return park;
   }
+
+  /** View px per CSS px actually in force (1 when the emulation is not set: the page then lays out at its view size). */
+  cssScale(t: Tab): number { return t.emu ?? 1; }
 
   isShown(t: Tab): boolean { return t.host === 'main'; }
 

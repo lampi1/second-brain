@@ -66,6 +66,17 @@ describe('transcript', () => {
     expect(h.items[5]).toMatchObject({ kind: 'system', text: 'Interrotto.' });
   });
 
+  it('a pasted screenshot (one huge base64 line) does not push the conversation out of the history', () => {
+    const home = tmp('home');
+    const before = Array.from({ length: 30 }, (_, i) => line({ type: 'assistant', message: { id: `m${i}`, role: 'assistant', content: [{ type: 'text', text: `msg ${i}` }] } }));
+    const shotLine = line({ type: 'user', message: { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(3_500_000) } }, { type: 'text', text: 'guarda' }] } });
+    const f = writeTranscript(home, 'x', [...before, shotLine, line({ type: 'assistant', message: { id: 'z', role: 'assistant', content: [{ type: 'text', text: 'visto' }] } })]);
+    const h = readHistory(f);
+    expect(h.items[0]).toMatchObject({ text: 'msg 0' });
+    expect(h.items.find(i => i.kind === 'user')).toMatchObject({ text: 'guarda', images: 1 });
+    expect(h.items.at(-1)).toMatchObject({ text: 'visto' });
+  });
+
   it('keeps only the newest items and reads only the tail of big files', () => {
     const home = tmp('home');
     const lines = Array.from({ length: 50 }, (_, i) => line({ type: 'assistant', message: { id: `m${i}`, role: 'assistant', content: [{ type: 'text', text: `msg ${i}` }] } }));

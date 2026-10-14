@@ -50,6 +50,15 @@
   --backdrop: rgba(5, 6, 9, 0.62);
   --scroll: rgba(255, 255, 255, 0.09);
   --scroll-hover: rgba(255, 255, 255, 0.16);
+  /* chat ↔ browser pairs (lib/pairs.ts): away from the status hues (blue focus, amber wait, red error, green done, violet Regia) */
+  --pair-0: #3fc1c9;
+  --pair-1: #ff7ab6;
+  --pair-2: #dcdc5a;
+  --pair-3: #a3d95b;
+  --pair-4: #5cc8ff;
+  --pair-5: #f07ae2;
+  --pair-6: #2fd6b0;
+  --pair-7: #d4b483;
 
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -138,6 +147,14 @@
     --backdrop: rgba(20, 24, 33, 0.32);
     --scroll: rgba(0, 0, 0, 0.12);
     --scroll-hover: rgba(0, 0, 0, 0.22);
+    --pair-0: #0e8f96;
+    --pair-1: #c2357a;
+    --pair-2: #7a7a00;
+    --pair-3: #4d7c0f;
+    --pair-4: #0a74b8;
+    --pair-5: #b0279e;
+    --pair-6: #0b8a6e;
+    --pair-7: #8a6a2f;
     --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
     color-scheme: light;
   }
@@ -187,6 +204,14 @@
   --backdrop: rgba(20, 24, 33, 0.32);
   --scroll: rgba(0, 0, 0, 0.12);
   --scroll-hover: rgba(0, 0, 0, 0.22);
+  --pair-0: #0e8f96;
+  --pair-1: #c2357a;
+  --pair-2: #7a7a00;
+  --pair-3: #4d7c0f;
+  --pair-4: #0a74b8;
+  --pair-5: #b0279e;
+  --pair-6: #0b8a6e;
+  --pair-7: #8a6a2f;
   --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
   color-scheme: light;
 }

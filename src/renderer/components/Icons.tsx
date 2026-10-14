@@ -49,9 +49,11 @@ export const IconQuestion = (p: P) => <Svg {...p}><circle cx="12" cy="12" r="8.5
 export const IconShield = (p: P) => <Svg {...p}><path d="M12 3.5 19 6v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6z" /><path d="m9 12 2.2 2.2L15.5 10" /></Svg>;
 export const IconDot = (p: P) => <Svg {...p}><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" /></Svg>;
 export const IconList = (p: P) => <Svg {...p}><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.1M4.5 12h.1M4.5 17.5h.1" /></Svg>;
+export const IconBranch = (p: P) => <Svg {...p}><circle cx="7" cy="5.5" r="2" /><circle cx="7" cy="18.5" r="2" /><circle cx="17" cy="8" r="2" /><path d="M7 7.5v9M17 10c0 4-10 3-10 6.5" /></Svg>;
 export const IconBook = (p: P) => <Svg {...p}><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z" /><path d="M5 16.5a3 3 0 0 1 3-3h10.5" /></Svg>;
 export const IconCoins = (p: P) => <Svg {...p}><ellipse cx="9.5" cy="7.5" rx="5.5" ry="2.5" /><path d="M4 7.5v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-4" /><path d="M9 16.2c.2 1.3 2.6 2.3 5.5 2.3 3 0 5.5-1.1 5.5-2.5v-4c0-1.2-1.7-2.1-4-2.4" /></Svg>;
 export const IconChart = (p: P) => <Svg {...p}><path d="M4 20h16M7 16.5v-5M12 16.5V7M17 16.5v-8" /></Svg>;
+export const IconTicket = (p: P) => <Svg {...p}><path d="M4 7.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2V10a2 2 0 0 0 0 4v2.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V14a2 2 0 0 0 0-4z" /><path d="M14 5.5v2M14 11v2M14 16.5v2" /></Svg>;
 export const IconMap = (p: P) => <Svg {...p}><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z" /><path d="M9 4.5v13M15 6.5v13" /></Svg>;
 export const IconCompass = (p: P) => <Svg {...p}><circle cx="12" cy="12" r="8.5" /><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z" /></Svg>;
 export const IconLightbulb = (p: P) => <Svg {...p}><path d="M9 17.5h6M10 20.5h4M12 3.5a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V17h5v-.6c0-.8.4-1.5 1-2A6 6 0 0 0 12 3.5z" /></Svg>;
@@ -62,6 +64,8 @@ export const IconUndo = (p: P) => <Svg {...p}><path d="M9 14 4 9l5-5" /><path d=
 export const IconLogin = (p: P) => <Svg {...p}><path d="M14 4.5h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-4M10 16.5 14.5 12 10 7.5M14.5 12H4" /></Svg>;
 export const IconBell = (p: P) => <Svg {...p}><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></Svg>;
 export const IconLink = (p: P) => <Svg {...p}><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></Svg>;
+export const IconCopy = (p: P) => <Svg {...p}><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></Svg>;
+export const IconPlay = (p: P) => <Svg {...p}><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></Svg>;
 export const IconMoon = (p: P) => <Svg {...p}><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" /></Svg>;
 export const IconHistory = (p: P) => <Svg {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4.5v3.8h3.8" /><path d="M12 8v4.2l2.8 1.6" /></Svg>;
 export const IconPanel =(p: P) => <Svg {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M3.5 9h17" /></Svg>;

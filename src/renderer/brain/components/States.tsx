@@ -4,6 +4,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/format';
 import { IconRefresh } from './ui';
+import { HelpTip } from '../../components/HelpTip';
 
 export function Loading({ label = 'Leggo il cervello…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
   const [slow, setSlow] = useState(false);
@@ -63,7 +64,7 @@ export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions
   );
 }
 
-/** The discovery from the real data (bold), the next step it suggests, and on request what it says and why it matters. */
+/** The discovery from the real data (bold), the next step it suggests, and in a "Cosa significa?" HelpTip what it says and why it matters. */
 export interface ExplainProps { find?: ReactNode; next?: ReactNode; says?: ReactNode; why?: ReactNode }
 export function Explain({ find, next, says, why }: ExplainProps) {
   if (!find && !next && !says) return null;
@@ -72,10 +73,12 @@ export function Explain({ find, next, says, why }: ExplainProps) {
       {find && <p className="find">{find}</p>}
       {next && <p className="next">→ {next}</p>}
       {(says || why) && (
-        <details>
-          <summary>Cosa significa?</summary>
-          <p>{says && <><b>Cosa ti dice:</b> {says} </>}{why && <><b>Perché ti interessa:</b> {why}</>}</p>
-        </details>
+        <span className="more">
+          <HelpTip text="Cosa significa?">
+            {says && <p><b>Cosa ti dice:</b> {says}</p>}
+            {why && <p><b>Perché ti interessa:</b> {why}</p>}
+          </HelpTip>
+        </span>
       )}
     </div>
   );

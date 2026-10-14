@@ -1,0 +1,41 @@
+/* HelpTip (components/HelpTip.tsx): the round "?" mark and its bubble. The mark is drawn by CSS, so it adds no text to
+   the title it sits next to; the bubble is fixed on <body> above dialogs and the brain's side panels (z 1900) and uses the theme tokens (light/dark). */
+.help-tip {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; position: relative; padding: 0; margin: 0 0 0 6px; border: 0;
+  background: none; color: var(--text-3); font: inherit; font-size: var(--fs-s); line-height: 1; cursor: help; vertical-align: middle;
+}
+.help-tip-mark {
+  display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--border-3);
+  font: 700 9.5px/1 var(--font); color: var(--text-3); transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.help-tip-mark::before { content: "?"; }
+.help-tip::after { content: ""; position: absolute; inset: -5px; } /* a larger hit area than the 15 px mark */
+.help-tip.with-text { margin-left: 0; }
+.help-tip:hover, .help-tip[aria-expanded="true"] { color: var(--text-2); }
+.help-tip:hover .help-tip-mark, .help-tip[aria-expanded="true"] .help-tip-mark { color: var(--blue); border-color: var(--blue-line); background: var(--blue-bg); }
+.help-tip:focus-visible { outline: none; }
+.help-tip:focus-visible .help-tip-mark { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.help-bubble {
+  position: fixed; z-index: 1900; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 16px));
+  padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-2);
+  box-shadow: var(--shadow-pop); color: var(--text-2); font: 400 12.5px/1.45 var(--font); text-align: left; white-space: normal;
+  letter-spacing: normal; text-transform: none; overflow-wrap: anywhere; animation: helpIn var(--dur-fast) var(--ease);
+}
+.help-bubble { max-height: calc(100vh - 16px); overflow-y: auto; }
+.help-bubble.wide { max-width: min(480px, calc(100vw - 16px)); }
+.help-bubble[hidden] { display: none; }
+.help-bubble .help-title { display: block; margin-bottom: 3px; color: var(--text); font-weight: 600; font-size: 13px; }
+.help-bubble .help-body p { margin: 0; }
+.help-bubble .help-body p + p { margin-top: 5px; }
+.help-bubble .help-body b { color: var(--text); font-weight: 600; }
+.help-bubble .help-ex { margin: 7px 0 0; padding-top: 6px; border-top: 1px solid var(--border-2); color: var(--text-3); }
+.help-bubble .help-ex span { color: var(--text-2); font-weight: 600; }
+/* the arrow: a rotated square on the side of the mark, its two outer edges bordered */
+.help-bubble::before {
+  content: ""; position: absolute; left: var(--arrow); width: 9px; height: 9px; background: var(--surface-2);
+  border: 1px solid var(--border-2); transform: translateX(-50%) rotate(45deg);
+}
+.help-bubble.below::before { top: -5.5px; border-right: 0; border-bottom: 0; }
+.help-bubble.above::before { bottom: -5.5px; border-left: 0; border-top: 0; }
+@keyframes helpIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }

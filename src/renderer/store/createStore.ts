@@ -19,8 +19,9 @@ export function createStore<S>(initial: S, opts: { batch?: boolean } = {}): Stor
     if (!opts.batch) { notify(); return; }
     if (scheduled) return;
     scheduled = true;
-    // a frame when visible; a timer as fallback (hidden windows pause animation frames)
-    const t = setTimeout(notify, 50);
+    // a frame when visible; a timer as fallback (hidden windows pause animation frames): 250 ms there, nobody sees
+    // the renders a minimized window makes for streamed text ("Lag nell'app", 2026-10-12)
+    const t = setTimeout(notify, typeof document !== 'undefined' && document.hidden ? 250 : 50);
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { clearTimeout(t); if (scheduled) notify(); });
   };
   const store: Store<S> = {

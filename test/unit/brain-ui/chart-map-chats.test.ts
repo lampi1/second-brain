@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { catColor, labelStep, moneyEntries, niceMax, niceScale, tickLabel, ticks, topN } from '../../../src/renderer/brain/lib/chart';
 import { chatState, groupChats, isLive, waitsYou } from '../../../src/renderer/brain/lib/chats';
-import { byLayer, centerId, defaultKinds, findNode, groupIndex, mix, nodeSize, pickView, relFile, weakPoints } from '../../../src/renderer/brain/lib/map';
+import { byLayer, centerId, defaultKinds, fileName, findNode, groupIndex, mix, nodeSize, pickView, relFile, weakPoints } from '../../../src/renderer/brain/lib/map';
 import type { LiveChat, MapData } from '../../../src/renderer/brain/types';
 
 describe('chart', () => {
@@ -79,6 +79,18 @@ describe('map', () => {
   it('weak points include the problems to verify; groups index their members', () => {
     expect(weakPoints(map).map(w => w.kind)).toEqual(['mai usati', 'da verificare']);
     expect(groupIndex(map.simple!.nodes).get('t:mem')).toBe('g');
+  });
+  it('speaking names: the file shows small (relative, else the technical name), the search finds both', () => {
+    const lease = { id: 'tool:lease', layer: 'tool', kind: 'tool', label: 'Coda dei test', name: 'lease.mjs', file: 'C:\\brains\\demo\\ops\\tools\\lease.mjs' };
+    expect(fileName(lease, 'C:/brains/demo')).toBe('ops/tools/lease.mjs');
+    expect(fileName({ label: 'Stato di tutto', name: '/stato', file: 'D:/profile/.claude/skills/stato/SKILL.md' }, 'C:/brains/demo')).toBe('/stato');
+    expect(fileName({ label: 'mem.mjs', file: 'C:/brains/demo/mem.mjs' }, 'C:/brains/demo')).toBeNull(); // says nothing more than the label
+    expect(fileName({ label: 'Skill (4)' }, 'C:/brains/demo')).toBeNull(); // a group has no file
+    expect(fileName({ label: 'Fix', name: 'fix', short: 'Fix' }, '')).toBeNull();
+    const nodes = [...map.nodes, lease];
+    expect(findNode(nodes, 'lease.mjs')?.id).toBe('tool:lease');
+    expect(findNode(nodes, 'coda dei')?.id).toBe('tool:lease');
+    expect(findNode(nodes, 'Coda dei test')?.id).toBe('tool:lease');
   });
   it('relFile only for files inside the brain; findNode exact then partial', () => {
     expect(relFile('C:\\brains\\demo\\ops\\tools\\mem.mjs', 'C:/brains/demo')).toBe('ops/tools/mem.mjs');

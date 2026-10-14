@@ -1,17 +1,19 @@
 // Offline tests of the ops/tools scripts that need no network: cost.mjs, mem.mjs (now me), chat-prompt.mjs, day.mjs,
-// wt-land.mjs, inbox.mjs (its own inbox.test.mjs), recurrence.mjs, brain-site + brain-map (brain-site.test.mjs). Fixtures in a temp folder, never the real transcripts or memory. Usage: node ops/tools/test.mjs
+// wt-land.mjs, inbox.mjs (its own inbox.test.mjs), recurrence.mjs, brain-site + brain-map (brain-site.test.mjs), the improve loop (ops/improve/lib.test.mjs). Fixtures in a temp folder, never the real transcripts or memory. Usage: node ops/tools/test.mjs
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { scan, summarize, advice, kind, weight, DEFAULT_RATE } from './cost.mjs';
+import { scan, summarize, advice, kind, usdOf } from './cost.mjs';
+import { priceUsage, modelRow } from './prices.mjs';
 import { buildPrompt, checkTitle, findFirstPrompts, sameLabel, promptLink, openInCursor, LINK_MAX } from './chat-prompt.mjs';
 import { areaOf, nowThreads, claudeChatsOn, renderBrief, renderReport, romeDay } from './day.mjs';
 import { land, status } from './wt-land.mjs';
 import { parse as parseErrors, recurrence, render as renderRecurrence } from './recurrence.mjs';
 import { apply as applyHooks } from './install-inbox-hooks.mjs';
 import { parse as pbParse, op as pbOp, render as pbRender } from './playbook.mjs';
+import { mdToHtml, asciiOnly, cfHtml, inline } from './clip-html.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-tools-'));
@@ -46,20 +48,19 @@ T('cost', () => {
   const s = scan(path.join(tmp, 'claude'), Date.now() - 3 * 864e5, Date.now() + 864e5);
   ok(s.msgs.length === 3, `cost: 3 API responses expected (split one counted once), got ${s.msgs.length}`);
   ok(s.chats.size === 1, `cost: the subagent must count under its parent chat, chats ${s.chats.size}`);
-  const S = summarize(s, {}, [{ at: Date.parse(ts), model: 'grok', cost: 1.5 }], 4000);
-  const want = (weight(u(500000)) + weight(u(1000)) + weight(u(2000), 'claude-sonnet-5-5')) * DEFAULT_RATE;
+  const S = summarize(s, [{ at: Date.parse(ts), model: 'grok', cost: 1.5 }], 4000);
+  const want = usdOf(u(500000), 'claude-opus-5-5') + usdOf(u(1000), 'claude-opus-5-5') + usdOf(u(2000), 'claude-sonnet-5-5');
   ok(Math.abs(S.total - want) < 1e-9, `cost: total ${S.total} != ${want}`);
   ok(S.calls === 3, `cost: 3 tool calls expected, got ${S.calls}`);
   ok(S.byKind['memoria (now, errori, diario)']?.calls === 1 && S.byKind.leggere?.calls === 1 && S.byKind.browser?.calls === 1, `cost: kinds wrong ${JSON.stringify(S.byKind)}`);
   ok(S.byArea.A && Object.values(S.chats)[0].title === 'A · Prova', 'cost: area/title from custom-title');
   ok(S.longSave > 0 && advice(S)[0].text.startsWith('Chat lunghe'), `cost: a 500k-context call must give the long-chat advice first: ${JSON.stringify(advice(S))}`);
   ok(S.cursor.total === 1.5, 'cost: Cursor rows summed');
-  const S2 = summarize(s, { [today]: DEFAULT_RATE * 2 });
-  ok(Math.abs(S2.total - 2 * want) < 1e-9 && !S2.uncalibrated.length, 'cost: calibrated rate per day used');
+  ok(!S.unpriced.length, `cost: every model priced: ${S.unpriced}`);
   ok(kind('Bash', { command: 'node C:/x/ops/tools/mem.mjs now me --label a' }) === 'memoria (now, errori, diario)', 'cost: mem.mjs is memory');
   ok(kind('Bash', { command: 'cd {{BRAIN}} && git merge --no-edit x' }) === 'worktree → main', 'cost: {{BRAIN_NAME}} merge');
   const cli = run('cost.mjs', ['--root', path.join(tmp, 'claude'), '--state', path.join(tmp, 'none.json'), '--no-cursor', '--days', '2']);
-  ok(cli.status === 0 && /Costi del cervello/.test(cli.stdout) && /A · Prova/.test(cli.stdout) && /Prezzo stimato/.test(cli.stdout), `cost CLI:\n${cli.stdout}${cli.stderr}`);
+  ok(cli.status === 0 && /Costi del cervello/.test(cli.stdout) && /A · Prova/.test(cli.stdout) , `cost CLI:\n${cli.stdout}${cli.stderr}`);
   // Cursor CSV freshness: download time (file mtime) and newest row, in text and JSON
   const csv = path.join(tmp, 'cursor.csv');
   fs.writeFileSync(csv, `Date,Model,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens,Total Tokens,Cost\n"${today}T08:00:00.000Z","grok",1,1,1,1,4,0.5\n"${today}T09:30:00.000Z","grok",1,1,1,1,4,0.25\n`);
@@ -71,12 +72,59 @@ T('cost', () => {
   ok(cj.downloaded === `${today}T10:00:00.000Z` && cj.lastRow?.startsWith(`${today}T09:30`) && cj.file === 'cursor.csv', `cost: Cursor CSV dates in the JSON: ${JSON.stringify(cj)}`);
 });
 
+// ---------- prices.mjs (harness/models.json, list prices read 2026-10-13)
+T('prices', () => {
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  const M = 1e6;
+  // Opus 5.5: input 4, 1h cache write 8, 5m write 5, cache read 0.2, output 20 $/M
+  const o = priceUsage({ input_tokens: M, cache_creation_input_tokens: 2 * M, cache_creation: { ephemeral_1h_input_tokens: M, ephemeral_5m_input_tokens: M }, cache_read_input_tokens: M, output_tokens: M }, 'claude-opus-5-5');
+  ok(o.priced && near(o.usd, 4 + 8 + 5 + 0.2 + 20), `prices: Opus 5.5 ${o.usd}`);
+  // no cache_creation split: the whole write at the 5-minute price
+  ok(near(usdOf({ cache_creation_input_tokens: M }, 'claude-opus-5-5'), 5), 'prices: write without split = 5m');
+  ok(near(usdOf({ input_tokens: M, output_tokens: M, cache_read_input_tokens: M }, 'claude-fable-5-1'), 10 + 50 + 0.25), 'prices: Fable 5.1');
+  ok(near(usdOf({ cache_read_input_tokens: M }, 'claude-sonnet-5-5'), 0.1) && near(usdOf({ cache_read_input_tokens: M }, 'claude-sonnet-5'), 0.2), 'prices: Sonnet 5.5 vs 5 cache read');
+  ok(near(usdOf({ input_tokens: M, output_tokens: M }, 'claude-opus-5'), 30), 'prices: Opus 5 (still in the transcripts)');
+  // Haiku 5.5: up to 100k prompt tokens the low tier, over it the high tier (cache reads count in the prompt)
+  ok(near(usdOf({ input_tokens: 50000, output_tokens: 1000 }, 'claude-haiku-5-5'), (50000 * 0.1 + 1000 * 0.5) / M), 'prices: Haiku 5.5 ≤100k');
+  ok(near(usdOf({ input_tokens: 10, cache_read_input_tokens: 150000, output_tokens: 1000 }, 'claude-haiku-5-5'), (10 * 0.5 + 150000 * 0.05 + 1000 * 2.5) / M), 'prices: Haiku 5.5 >100k');
+  ok(near(usdOf({ input_tokens: M }, 'claude-haiku-4-5-20251001'), 1) && modelRow('claude-opus-5-5[1m]').id === 'claude-opus-5-5' && modelRow('opus').id === 'claude-opus-5-5', 'prices: dated id, [1m], alias');
+  ok(near(usdOf({ output_tokens: M, speed: 'fast' }, 'claude-opus-5-5'), 40), 'prices: fast mode Opus 5.5 = 40 $/M output');
+  ok(near(usdOf({ input_tokens: M, inference_geo: 'us' }, 'claude-opus-5-5'), 4.4) && near(usdOf({ input_tokens: M, inference_geo: 'us' }, 'claude-haiku-4-5'), 1), 'prices: US inference ×1.1 (4.6+ only)');
+  ok(near(usdOf({ server_tool_use: { web_search_requests: 3 } }, 'claude-opus-5-5'), 0.03), 'prices: web search 10 $ per 1000');
+  const x = priceUsage({ input_tokens: M }, 'claude-future-9');
+  ok(!x.priced && near(x.usd, 4), 'prices: unknown model = defaultModel, flagged unpriced');
+});
+
 // ---------- mem.mjs now me
 const memRoot = path.join(tmp, 'mem');
 fs.mkdirSync(memRoot);
 const nowFile = path.join(memRoot, 'now.md');
 fs.writeFileSync(nowFile, '# Now\n\n## Agenti e sessioni attive\n- **A · Altro** · x · (2026-10-01)\n\n## Personale\n- **Pers · Y** · y\n');
 const mem = (...a) => run('mem.mjs', ['now', 'me', '--root', memRoot, ...a]);
+T('mem error --agent', () => {
+  fs.writeFileSync(path.join(memRoot, 'ai-errors.md'), '# Errori\n');
+  const line = '2026-10-14 10:00 · Alfa · Fix · prod · fatto-non-verificato · detto: x · vero: y · visto da: {{OWNER}}';
+  const r = run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'reviewer']);
+  ok(r.status === 0 && fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8').includes(`- ${line} · agente: reviewer`), `--agent tags the line: ${r.stdout}${r.stderr}`);
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'a b']).status === 1, '--agent: a type, no spaces');
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent']).status === 1, '--agent without its type refused');
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--agent', '--text', line]).status === 1, '--agent followed by another flag refused');
+});
+T('mem error: the work key (· lavoro:)', () => {
+  fs.writeFileSync(path.join(memRoot, 'ai-errors.md'), '# Errori\n');
+  const app = path.join(tmp, 'mem-app');
+  fs.mkdirSync(app, { recursive: true });
+  fs.writeFileSync(path.join(app, 'chats.json'), JSON.stringify({ chats: [{ id: 'c_1', title: 'Beta · bug 123456', createdAt: 1 }] }));
+  const read = () => fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8');
+  const l1 = '2026-10-14 10:00 · Beta · bug 123456 · Fix · bug-non-trovato · detto: x · vero: y · visto da: {{OWNER}}';
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--app', app, '--text', l1]).status === 0 && read().includes(`- ${l1} · lavoro: wi:123456`), `the chat's work key is added: ${read()}`);
+  const l2 = '2026-10-14 10:01 · Gamma · Fix · bug-non-trovato · detto: x · vero: y · visto da: QA';
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--app', app, '--text', l2, '--work', 'branch:repo/fix/x']).status === 0 && read().includes(`- ${l2} · lavoro: branch:repo/fix/x`), '--work names it');
+  const l3 = '2026-10-14 10:02 · Delta · Fix · bug-non-trovato · detto: x · vero: y · visto da: QA';
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--app', app, '--text', l3]).status === 0 && read().includes(`- ${l3}\n`), 'no app chat with that title: no field');
+  ok(run('mem.mjs', ['error', '--root', memRoot, '--app', app, '--text', l3, '--work', 'boh']).status === 1, 'a malformed --work is refused');
+});
+
 T('mem idea', () => {
   const ideas = path.join(memRoot, 'ideas.md');
   fs.writeFileSync(ideas, '# Idee\n\n<!-- Template\n## AAAA-MM-GG · [lavoro|personale] · Titolo · `aperta`\n-->\n\n## 2026-10-01 · [lavoro] · Account Reader per Azure · `aperta`\n- **Idea:** x\n');
@@ -149,7 +197,7 @@ T('chat-prompt', () => {
   const job = 'Fai la review della PR.';
   const c = buildPrompt({ title: 'A · Review login', kind: 'code', repo: 'my-app', job, words: 'fai la review', date: '2026-10-10' });
   ok(c.includes('Sei la chat di lavoro "A · Review login"') && c.includes('Repo di lavoro: {{REPOS_JS}}\\my-app.') && c.includes('code.md'), 'chat-prompt: claude head');
-  ok(c.includes('inbox.mjs" send --to "regia" --from "a-review-login"') && c.includes('(AskUserQuestion)') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Regia, wait-devops, env-lease, now.md)');
+  ok(c.includes('inbox.mjs" send --to "regia" --from "a-review-login"') && c.includes('(AskUserQuestion;') && c.includes('blocco `powershell`') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Regia, wait-devops, env-lease, now.md)');
   ok(c.includes('Suite di test pesanti') && c.includes('`sb-tests`') && c.includes('`release` sempre'), 'chat-prompt: heavy-suite turn line missing (code.md "Heavy test suites")');
   ok(c.includes('Parole di {{OWNER}} (2026-10-10): "fai la review"') && c.includes(job), 'chat-prompt: words and job');
   const k = buildPrompt({ title: 'B · QA', kind: 'qa', harness: 'cursor', repo: 'my-app', job });
@@ -242,7 +290,7 @@ T('recurrence', () => {
     '- 2026-10-02 --:-- · OS · Tool · ops/tools · regola-ignorata · detto: heredoc · vero: regola 5 · visto da: io',
     '- 2026-10-03 11:00 · chat X · prod, DB clienti · azione pericolosa · detto: altra query · vero: no · visto da: {{OWNER}}',
     '- 2026-10-04 11:00 · chat Y · App QA · fatto-non-verificato · detto alla Regia: tutto ok · vero: no · visto da: QA',
-    '- 2026-10-05 11:00 · chat Z · stile · gergo · detto: x · vero: y · visto da: {{OWNER}}',
+    '- 2026-10-05 11:00 · chat Z · stile · tipo-inventato · detto: x · vero: y · visto da: {{OWNER}}',
     '- not a line',
   ].join('\n'));
   ok(rows.length === 5, `recurrence parse: ${rows.length}`);
@@ -250,7 +298,7 @@ T('recurrence', () => {
   ok(rows[3].type === 'fatto-non-verificato', `recurrence "detto alla Regia:": ${rows[3].type}`);
   const res = recurrence(rows);
   ok(res.rules.length === 1 && res.rules[0].again === 1, `recurrence came back once (same type, area shares "prod"): ${JSON.stringify(res.rules)}`);
-  ok(res.outside.length === 1 && res.outside[0].type === 'gergo', 'recurrence outside list');
+  ok(res.outside.length === 1 && res.outside[0].type === 'tipo-inventato', 'recurrence outside list');
   ok(/tornato 1 volte/.test(renderRecurrence(res)) && /fuori elenco: 1/.test(renderRecurrence(res)), 'recurrence render');
 });
 
@@ -387,5 +435,5 @@ T('inbox (own test file)', () => {
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log(fails.length ? fails.join('\n') : `ok: ${n} groups (cost, mem now me, chat-prompt, day, wt-land, inbox, brain-site)`);
+console.log(fails.length ? fails.join('\n') : `ok: ${n} groups (cost, mem now me, chat-prompt, day, wt-land, inbox, brain-site, estimates, prices, routing)`);
 process.exit(fails.length ? 1 : 0);

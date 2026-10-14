@@ -1,5 +1,5 @@
-// Renderer entry. The app page: starts the data store, the browser-view reporter, the global-layer sync and the
-// main→UI command listeners, then mounts App.tsx. The same bundle with #overlay is the global request layer page
+// Renderer entry. The app page: starts the data store, the browser-view reporter, the global-layer sync, the focus
+// keeper (lib/focusKeeper.ts) and the main→UI command listeners, then mounts App.tsx. The same bundle with #overlay is the global request layer page
 // (main/overlay.ts): it mounts OverlayApp.tsx only; with #brain-test/<page> it shows a brain page alone (the test
 // route of brain/testRoute.tsx).
 import { StrictMode } from 'react';
@@ -7,17 +7,25 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { sb } from './sb';
 import { startViewports } from './lib/viewports';
+import { startBeat } from './lib/beat';
+import { startInputLag } from './lib/inputlag';
 import { focusChat, nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
+import { startFocusKeeper } from './lib/focusKeeper';
+import { startTypingWatch } from './lib/questions';
 import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
+import { startLater } from './lib/later';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/shell.css';
+import './styles/code.css';
+import './styles/genui.css';
 
 const root = createRoot(document.getElementById('root')!);
+startBeat(); // every page: the alive marks (dots, spinners, pulses) step 5 times a second instead of animating
 if (isBrainTestRoute()) {
   // #brain-test/<page>: a brain page alone (e2e of brain/testRoute.tsx)
   root.render(<StrictMode><BrainTestRoute /></StrictMode>);
@@ -31,7 +39,11 @@ if (isBrainTestRoute()) {
   // subscribe before the first render: events sent while React mounts (ui:command from tests/tools) are not lost
   startStore();
   startViewports();
+  startLater(); // "Rispondi dopo": main's flag, before the first popup can show
   startLayer(focusChat, nextThing, link => { openLink(link); });
+  startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
+  startFocusKeeper();
+  startTypingWatch();
   setInterval(() => checkDnd(now()), 60_000);
   sb.on('ui:command', uiCommand);
   sb.on('focus:next', () => nextThing());

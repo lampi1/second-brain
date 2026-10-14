@@ -1,12 +1,13 @@
 // Markdown viewer of the brain pages: marked (GFM) → DOMPurify (its own instance, so hooks never touch other modules)
 // → HTML. After sanitizing: http(s) links open outside the app (target=_blank, main opens the system browser); every
 // other link is neutralized (a relative href would navigate the app window) and, when it names a brain file, opens it
-// in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. Used by Fatto,
-// Da fare, Idee, Confronto, Esplora.
+// in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. With `copy` (Procedure)
+// every code block gets a "Copia" button and a click on inline code copies it: copy only, nothing here ever runs.
+// Used by Fatto, Idee, Confronto, Esplora, Procedure.
 import { useMemo, type MouseEvent } from 'react';
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { download } from './ui';
+import { copyText, download, toast } from './ui';
 import { toCsv, fileSafe } from '../lib/table';
 
 const marked = new Marked({ gfm: true, breaks: false });
@@ -40,15 +41,29 @@ export function renderMarkdown(text: string, files?: Set<string>, root = ''): st
     return files.has(p) ? `<a class="file" data-file="${p.replace(/"/g, '&quot;')}" role="link" tabindex="0"><code>${t}</code></a>` : m;
   }));
 }
+/** Copy marks, added after sanitizing (our own markup): a "Copia" button on each code block, inline code clickable. */
+export function withCopy(html: string): string {
+  return html.split(/(<pre>[\s\S]*?<\/pre>)/).map(part => (part.startsWith('<pre>')
+    ? `<div class="bx-pre">${part}<button type="button" class="bx-btn s bx-pre-copy" data-copy="block" title="Copia il blocco negli appunti">Copia</button></div>`
+    : part.replace(/<code>/g, '<code class="bx-copy" data-copy="inline" role="button" tabindex="0" title="Clic per copiare">'))).join('');
+}
+
 const wrapTables = (html: string) => {
   let i = 0;
   return html.replace(/<table>/g, () => `<div class="bx-mdtable"><table data-i="${i++}">`).replace(/<\/table>/g, '</table></div>');
 };
 
-export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string }) {
-  const html = useMemo(() => renderMarkdown(text, files, root), [text, files, root]);
+export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean }) {
+  const html = useMemo(() => { const h = renderMarkdown(text, files, root); return copy ? withCopy(h) : h; }, [text, files, root, copy]);
   const act = (e: MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
+    const c = copy ? t.closest<HTMLElement>('[data-copy]') : null;
+    if (c) {
+      e.preventDefault();
+      const value = c.dataset.copy === 'block' ? c.parentElement?.querySelector('pre')?.textContent ?? '' : c.textContent ?? '';
+      void copyText(value.replace(/\n$/, '')).then(ok => toast(ok ? (c.dataset.copy === 'block' ? 'Blocco copiato' : 'Copiato') : 'Copia non riuscita'));
+      return;
+    }
     const a = t.closest('a');
     if (a?.dataset.file !== undefined) {
       e.preventDefault();
@@ -77,7 +92,7 @@ export function Markdown({ text, files, root, onOpenFile, name = 'tabella', test
   };
   return (
     <div className="bx-mdwrap" data-testid={testId}>
-      <div className="bx-md" onClick={act} onKeyDown={e => { if (e.key === 'Enter') act(e as unknown as MouseEvent<HTMLDivElement>); }} dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="bx-md" onClick={act} onKeyDown={e => { const t = e.target as HTMLElement; if ((e.key === 'Enter' || (e.key === ' ' && t.dataset.copy === 'inline')) && !t.closest('button')) { if (e.key === ' ') e.preventDefault(); act(e as unknown as MouseEvent<HTMLDivElement>); } }} dangerouslySetInnerHTML={{ __html: html }} />
       {tables.length > 0 && (
         <div className="bx-row bx-mdcsv">
           {tables.map((_, i) => <button key={i} type="button" className="bx-btn s" onClick={() => csv(i)}>Tabella {tables.length > 1 ? i + 1 : ''} in CSV</button>)}

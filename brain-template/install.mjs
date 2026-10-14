@@ -3,7 +3,7 @@
 // Claude and/or Cursor), copies the template filling the placeholders, writes the owner's me.md, starts the brain's
 // local git and, only after an explicit yes, wires it into the user's Claude Code / Cursor config (with backups).
 // Why: the brain is data, the method is product; a colleague gets the same structure empty and fills it by use.
-// Used by: a person installing second-brain (README "Install"), and by the product's own install test.
+// Used by: a person installing second-brain (README "Use it with your agents"), and by the product's own install test.
 //
 // Usage: node brain-template/install.mjs                         (guided, asks everything)
 //        node brain-template/install.mjs --yes --name "Mario Rossi" --dir D:/brain

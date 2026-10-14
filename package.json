@@ -3,7 +3,26 @@
   "productName": "second-brain",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop cockpit for Claude Code and Cursor: chats as tiles, questions as panels, internal browsers over MCP, a live brain.",
+  "description": "Desktop cockpit for AI coding agents: run Claude Code and Cursor chats side by side, answer their questions in one place, watch the browsers they drive over MCP and see your second brain update live.",
+  "keywords": [
+    "claude-code",
+    "cursor",
+    "ai-agents",
+    "multi-agent",
+    "electron",
+    "mcp",
+    "desktop-app",
+    "second-brain",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/lampi1/second-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lampi1/second-brain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lampi1/second-brain/issues"
+  },
   "type": "module",
   "main": "out/main/index.js",
   "engines": {
@@ -13,11 +32,14 @@
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs --dev && electron .",
     "start": "electron .",
+    "demo": "node scripts/demo.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "node scripts/build.mjs && playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run test:e2e",
+    "test:e2e": "node scripts/build.mjs && node scripts/e2e.mjs",
+    "shots": "node scripts/build.mjs && playwright test --config playwright.shots.config.ts",
+    "check": "node scripts/check.mjs",
+    "check:branch": "node scripts/check-branch.mjs",
     "doctor": "node scripts/doctor.mjs",
     "logs": "node scripts/logs.mjs",
     "setup": "npm ci && node node_modules/electron/install.js",

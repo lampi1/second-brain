@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions, type TurnEndInfo } from '../../../src/main/chats/manager';
-import { FAKE, FAKE_CURSOR, alive, cursorLog, fakeLog, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
+import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
+import { regieOf } from '../../../src/shared/regia';
 
 interface Env { userData: string; home: string; cwd: string; argLog: string }
 const managers: ChatManager[] = [];
@@ -62,6 +63,25 @@ describe('ChatManager', () => {
     await waitFor(() => results(m, c.id).length === 1, 'result');
     expect(m.items(c.id).some(i => i.kind === 'assistant' && i.text === 'Hai scelto Rosso')).toBe(true);
     expect(m.pending()).toEqual([]);
+  });
+
+  it('counts work time while starting or running, never while waiting for the answer', async () => {
+    const e = env();
+    const { m, em } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'ask me' });
+    const p = await waitFor(() => m.pending()[0], 'pending question');
+    const before = m.workMs(c.id);
+    expect(m.list()[0]!.workSince).toBeUndefined(); // the span stops when the chat waits
+    await new Promise(r => setTimeout(r, 1200)); // the user thinks: not work
+    expect(m.workMs(c.id)).toBe(before);
+    await m.answer(c.id, p.id, { kind: 'question', answers: { 'Che colore?': 'Rosso' } });
+    await waitFor(() => m.list()[0]?.state === 'idle', 'idle');
+    const s = m.list()[0]!;
+    expect(s.workSince).toBeUndefined();
+    expect(s.workMs).toBeGreaterThan(before);
+    expect(s.workMs).toBeLessThan(1200 + before); // the 1.2 s of waiting are not in it
+    expect(m.workMs(c.id)).toBe(s.workMs);
+    expect(em.of('chat:updated').at(-1)).toMatchObject({ workMs: s.workMs });
   });
 
   it('persists chats, restores them closed with their history and resumes on send', async () => {
@@ -144,7 +164,8 @@ describe('ChatManager', () => {
     await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant'), 'streaming');
     expect(await m.stopAll()).toBe(1);
     await waitFor(() => results(m, c.id).length === 1, 'interrupted result');
-    expect(results(m, c.id)[0]).toMatchObject({ isError: true });
+    expect(results(m, c.id)[0]).toMatchObject({ isError: false, interrupted: true });
+    expect(m.list().find(x => x.id === c.id)?.lastResult).toMatchObject({ isError: false, interrupted: true });
     await m.stop(c.id); // idle: no-op
 
     await m.send(c.id, 'crash');
@@ -187,28 +208,108 @@ describe('ChatManager', () => {
     await waitFor(() => fakeLog(e.argLog).some(l => l.control === 'interrupt'), 'interrupt sent');
   });
 
-  // finding 2 + A: no claude process survives the app
-  it('shutdown kills a busy CLI within the grace cap, killAll kills synchronously', async () => {
+  it('a message with pasted images: checked, shown with its previews, passed to the engine', async () => {
     const e = env();
-    const { m } = manager(e, { env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CLAUDE_DELAY: '50' } });
+    const { m } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd });
+    await waitFor(() => m.list()[0]?.state === 'idle', 'idle');
+    await expect(m.send(c.id, '  ', [])).rejects.toThrow(/vuoto/);
+    await expect(m.send(c.id, 'x', [{ mimeType: 'image/jpeg', data: PNG_1PX }])).rejects.toThrow(/non è un image\/jpeg/);
+    const thumb = 'data:image/webp;base64,UklGRg==';
+    await m.send(c.id, '', [{ mimeType: 'image/png', data: PNG_1PX, thumb }]);
+    expect(m.items(c.id).find(i => i.kind === 'user')).toMatchObject({ text: '', images: 1, thumbs: [thumb] });
+    await waitFor(() => fakeLog(e.argLog).find(l => l.blocks), 'the message at the engine');
+    expect(fakeLog(e.argLog).find(l => l.blocks)?.blocks).toEqual([`image:base64:image/png:${PNG_1PX.length}`]);
+  });
+
+  // finding 2 + A: no claude process survives the app
+  it('shutdown kills a busy CLI within its cap, killAll kills without blocking', async () => {
+    const e = env();
+    // the CLI's child lives 5 min by itself: only the tree kill can end it within this test
+    const { m } = manager(e, { env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CLAUDE_DELAY: '50', FAKE_CLAUDE_CHILD_MS: '300000' } });
     await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'slow' }); // a 10 s turn: stdin end alone would wait for it
     const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
     const gc = (await waitFor(() => fakeLog(e.argLog).find(l => l.grandchild), 'the CLI\'s own child')).grandchild ?? 0;
-    await waitFor(() => m.list()[0]?.state === 'running', 'running');
-    const t0 = Date.now();
-    await m.shutdown(400);
-    expect(Date.now() - t0).toBeLessThan(20000); // grace + 4.5 s + one taskkill (1-7 s on a loaded Windows box)
-    expect(alive(pid)).toBe(false); // shutdown waits for the kill to land
-    await waitFor(() => !alive(gc), 'the CLI\'s child killed with it (tree kill)', 8000); // taskkill is slow under load
+    const reaped = tmp('quit-reap');
+    const was = process.env.SB_QUIT_REAP_DONE;
+    process.env.SB_QUIT_REAP_DONE = reaped;
+    try {
+      await waitFor(() => m.list()[0]?.state === 'running', 'running');
+      const t0 = Date.now();
+      await m.shutdown(400);
+      expect(Date.now() - t0).toBeLessThan(6000); // within its cap (5.5 s), under the app's 6 s quit cap
+      expect(alive(pid)).toBe(false); // shutdown waits for the kill to land
+      // the detached child (it escapes the CLI's job) dies with the tree kill, or, when the CLI had to be terminated
+      // directly before anyone read its tree (WMI and taskkill take 15-40 s at 100% CPU), with the reaper that outlives
+      // the quit: wait for the child's death or the reaper's end (an event, not a guess at the load), then it must be dead
+      const done = path.join(reaped, `${pid}.done`);
+      await waitFor(() => !alive(gc) || fs.existsSync(done), 'the CLI\'s child killed, or the quit reaper done', 180000);
+      await waitFor(() => !alive(gc), 'the CLI\'s child killed with it (tree kill or quit reaper)', 5000);
+    } finally {
+      if (was === undefined) delete process.env.SB_QUIT_REAP_DONE; else process.env.SB_QUIT_REAP_DONE = was;
+      if (alive(gc)) process.kill(gc);
+    }
 
     const e2 = env();
     const two = manager(e2);
     await two.m.create({ harness: 'claude', cwd: e2.cwd });
     const pid2 = (await waitFor(() => fakeLog(e2.argLog).find(l => l.argv), 'start')).pid;
     expect(alive(pid2)).toBe(true);
+    const t1 = Date.now();
     two.m.killAll();
-    await waitFor(() => !alive(pid2), 'killed now', 10000);
-  }, 60000); // taskkill takes 1-7 s on a loaded Windows box, twice here
+    expect(Date.now() - t1).toBeLessThan(1000); // never blocks the main process (the quit's 6 s cap must hold)
+    // taskkill walks every process: 15-40 s on a loaded box, past 45 s at 100% CPU (2026-10-14, the 5th of 5 runs)
+    await waitFor(() => !alive(pid2), 'the CLI killed by the detached taskkill', 180000);
+  }, 450000); // taskkill and the reaper's WMI list take 15-40 s each on a loaded Windows box, minutes at 100% CPU
+
+  // a chat closed with ✕ / Ctrl+W / auto close: the CLI ends cleanly, but what it started must not outlive it
+  it('closing a chat leaves no process behind: the background command and its own child are reaped', async () => {
+    const e = env();
+    const was = process.env.SB_REAP;
+    process.env.SB_REAP = '1';
+    const { m } = manager(e);
+    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
+    try {
+      const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan' });
+      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
+      await waitFor(() => orphans().length === 2, 'the background command and its child');
+      await waitFor(() => m.list()[0]?.state === 'idle', 'idle');
+      expect(orphans().every(alive)).toBe(true);
+      const t0 = Date.now();
+      await m.close(c.id); // the ✕ path: stdin closed, the CLI exits by itself
+      await waitFor(() => !alive(pid), 'the CLI exited');
+      expect(Date.now() - t0).toBeLessThan(3000); // before the 3 s grace: no tree kill ran, only the reap can end them
+      // one WMI process list (3-40 s on a loaded box) then taskkill
+      await waitFor(() => orphans().every(p => !alive(p)), 'no process left from the closed chat', 180000); // minutes at 100% CPU
+    } finally {
+      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
+      for (const p of orphans()) if (alive(p)) process.kill(p);
+    }
+  }, 240000);
+
+  // the chat goes on in a new process (here: the Regia moves): the old engine's tools stay for now, and go at the real close
+  it('a chat that goes on keeps its tools until it really closes, then they are reaped', async () => {
+    const e = env();
+    const was = process.env.SB_REAP;
+    process.env.SB_REAP = '1';
+    const { m } = manager(e);
+    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
+    try {
+      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Regia', regia: true });
+      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
+      await waitFor(() => orphans().length === 2, 'the background command and its child');
+      await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
+      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true, replaces: old.id }); // the old Regia's process ends
+      await waitFor(() => !alive(pid), 'the old engine exited');
+      await new Promise(r => setTimeout(r, 5000)); // longer than a quick process list: a reap would have run
+      expect(orphans().every(alive)).toBe(true);
+      await m.close(old.id);
+      await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the real close', 180000); // WMI + taskkill: past 90 s at 100% CPU (2026-10-14)
+    } finally {
+      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
+      for (const p of orphans()) if (alive(p)) process.kill(p);
+    }
+  }, 260000);
 
   // finding 5: only full UUIDs reach --resume
   it('resumes only full session UUIDs', async () => {
@@ -300,7 +401,7 @@ describe('ChatManager', () => {
     await first.m.answer(c.id, p.id, { kind: 'permission', allow: true });
     await waitFor(() => results(first.m, c.id).length === 1 && first.m.list()[0]?.state === 'idle', 'turn');
     const s = first.m.list()[0];
-    expect(s).toMatchObject({ costUsd: 0, costKnown: false, model: 'auto', lastText: 'Test verdi.' });
+    expect(s).toMatchObject({ costUsd: 0, costKnown: false, model: 'auto[context=256k,reasoning_effort=high,fast=true]', lastText: 'Test verdi.' });
     expect(s?.sessionId).toMatch(/^[0-9a-f-]{36}$/);
     await expect(first.m.set(c.id, { effort: 'high' })).rejects.toThrow(/effort/i);
     await first.m.shutdown();
@@ -362,12 +463,13 @@ describe('ChatManager', () => {
     await waitFor(() => calls.done.length === 1, 'done after the turn');
     expect(calls.done).toEqual([c.id]);
     expect(calls.turns).toHaveLength(1);
-    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, kind: 'question', firstPrompt: 'ask me', costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false });
+    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, kind: 'question', firstPrompt: 'ask me', jobAt: expect.any(Number), jobTitle: expect.any(String), costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false });
     // the stream's rate_limit_event and the get_usage answer both reach the brain
     await waitFor(() => calls.rate.some(x => (x as { type?: string }).type === 'rate_limit_event') && calls.rate.some(x => !!(x as { rate_limits?: unknown }).rate_limits), 'rate limits');
     await m.send(c.id, 'hello');
     await waitFor(() => calls.turns.length === 2 && calls.done.length === 2, 'second turn');
     expect(calls.turns[1]?.firstPrompt).toBeUndefined();
+    expect(calls.turns[1]?.jobAt).toBeUndefined(); // the job's start goes with its first turn only
     expect(calls.est).toEqual(['ask me']); // one estimate per job
     expect(m.isOwnSession(c.sessionId ?? '')).toBe(true);
     expect(m.isOwnSession((c.sessionId ?? '').slice(0, 8).toUpperCase())).toBe(true);
@@ -392,4 +494,184 @@ describe('ChatManager', () => {
     expect(est).toEqual(['bash']);
   });
 
+  // several Regie (ADR 0021): a chats.json keeps every Regia with its tab name, and each work chat its Regia
+  it('a chats.json with two Regie restores both, with their names and the work chats\' Regia', () => {
+    const e = env();
+    const c = (id: string, createdAt: number, more: object = {}) => ({ id, harness: 'claude', cwd: e.cwd, sessionId: null, title: 'Regia', model: null, effort: null, permissionMode: null, isRegia: true, createdAt, costTotalUsd: 0, ...more });
+    fs.writeFileSync(path.join(e.userData, 'chats.json'), JSON.stringify({ version: 2, chats: [c('old', 1), c('app', 2, { title: 'Regia · App', regiaName: 'App' }), c('w', 3, { title: 'Fix', isRegia: false, regiaOf: 'app' })] }));
+    const { m } = manager(e);
+    expect(m.list().map(x => [x.id, x.isRegia, x.regiaName ?? null, x.regiaOf ?? null])).toEqual([['old', true, null, null], ['app', true, 'App', null], ['w', false, null, 'app']]);
+  });
+
+  it('adds a second Regia next to the first (named, own title) and closes one only while another stays', async () => {
+    const e = env();
+    const { m } = manager(e);
+    const first = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true });
+    await expect(m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: '  ' })).rejects.toThrow(/Nome della Regia/);
+    const app = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'App' });
+    expect([app.title, app.regiaName]).toEqual(['Regia · App', 'App']);
+    expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([first.id, app.id]);
+    const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: app.id });
+    expect(work.regiaOf).toBe(app.id);
+    // a regiaOf that is not a Regia is dropped (the first Regia answers then)
+    expect((await m.create({ harness: 'claude', cwd: e.cwd, title: 'Altro', regiaOf: work.id })).regiaOf).toBeUndefined();
+    // the auto-close never takes a Regia; the user's close does while another stays, and her chats move
+    await expect(m.archive(app.id, { auto: true })).rejects.toThrow(/unica|non si chiude/);
+    await m.archive(app.id);
+    expect(m.list().find(c => c.id === app.id)).toMatchObject({ isRegia: false });
+    expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(first.id);
+    await expect(m.archive(first.id)).rejects.toThrow(/unica/);
+    // the first Regia never closes (its "Regia" title is the mail address); replacing it keeps its place among the
+    // tabs, so the chats without a regiaOf keep answering to it, not to the next tab
+    const ricerca = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'Ricerca' });
+    await expect(m.archive(first.id)).rejects.toThrow(/prima Regia/);
+    const neu = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true, replaces: first.id });
+    expect(regieOf(m.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
+    const restarted = manager(e).m;
+    expect(regieOf(restarted.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
+  });
+
+  // "Migliora l'app": its chats keep their space and its Regia (one, never the work Regia) gets the /mcp/improve tools
+  it('the app space: saved across restarts, one app Regia, its own app-control server', async () => {
+    const e = env();
+    const urls: (string | undefined)[] = [];
+    const opts = { appMcpUrl: (_id: string, space?: string) => { urls.push(space); return `http://127.0.0.1:4329/mcp/${space === 'app' ? 'improve' : 'app'}`; }, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog } };
+    const { m } = manager(e, opts);
+    const r1 = await m.create({ harness: 'claude', cwd: e.cwd, title: "Regia dell'app", space: 'app', appRegia: true });
+    const r2 = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hi', title: "Regia dell'app", space: 'app', appRegia: true });
+    const a = await m.create({ harness: 'claude', cwd: e.cwd, title: 'App · tema', space: 'app' });
+    expect(m.list().filter(c => c.appRegia).map(c => c.id)).toEqual([r2.id]);
+    expect(m.list().some(c => c.isRegia)).toBe(false);
+    await waitFor(() => results(m, r2.id).length === 1, 'app regia turn');
+    expect(urls).toContain('app');
+    // only the app Regia's process gets the app tools (processes start in any order: find each by its name)
+    const lines = argvs(e).map(x => x.join(' '));
+    expect(lines.find(l => l.includes('--allowedTools mcp__second-brain-app'))).toContain("--name Regia dell'app");
+    expect(lines.filter(l => l.includes('App · tema')).every(l => !l.includes('--allowedTools mcp__second-brain-app'))).toBe(true);
+    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; space?: string; appRegia?: boolean }[] };
+    expect(stored.chats.map(c => [c.id, c.space ?? null, c.appRegia ?? false])).toEqual([[r1.id, 'app', false], [r2.id, 'app', true], [a.id, 'app', false]]);
+    const again = manager(e, opts).m;
+    expect(again.list().map(c => [c.id, c.space ?? null, !!c.appRegia])).toEqual([[r1.id, 'app', false], [r2.id, 'app', true], [a.id, 'app', false]]);
+  });
+
+  // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Regia takes the role, name and work chats; the
+  // old one stays as a normal chat and its process (started with the app-control tools) is closed, so its next
+  // message resumes it without them. Each Regia gets its own app-control endpoint; the Cursor Regia gets it too.
+  it('moves the Regia role to a new chat (persisted, both updated) and gives a Cursor Regia the app MCP server', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const appUrl = (id: string) => `http://127.0.0.1:4329/mcp/app/r/${id}/tok`;
+    const browserUrl = (id: string) => `http://127.0.0.1:4329/mcp/chat/${id}/tok`;
+    const opts = { cursorPath: FAKE_CURSOR, appMcpUrl: appUrl, mcpUrlFor: browserUrl, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
+    const { m, em } = manager(e, opts);
+    const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello', title: 'Regia', regia: true, regiaName: 'Lavoro' });
+    await waitFor(() => results(m, old.id).length === 1 && m.list()[0]?.state === 'idle', 'claude regia turn');
+    expect(argvs(e)[0]?.join(' ')).toContain('--allowedTools mcp__second-brain-app');
+    const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: old.id });
+
+    const before = em.of('chat:updated').length;
+    await expect(m.create({ harness: 'cursor', cwd: e.cwd, regia: true, replaces: work.id })).rejects.toThrow(/sostituire/);
+    const neu = await m.create({ harness: 'cursor', cwd: e.cwd, title: 'Regia', regia: true, replaces: old.id });
+    expect(neu.isRegia).toBe(true);
+    expect(neu.regiaName).toBe('Lavoro');
+    expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([neu.id]);
+    expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(neu.id);
+    const updates = em.of('chat:updated').slice(before);
+    expect(updates.some(u => u.id === old.id && !u.isRegia)).toBe(true);
+    expect(updates.some(u => u.id === neu.id && u.isRegia)).toBe(true);
+    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; isRegia: boolean }[] };
+    expect(stored.chats.map(c => [c.id, c.isRegia])).toEqual([[old.id, false], [work.id, false], [neu.id, true]]);
+    // the old Regia is not deleted: its idle process ends, its history stays
+    await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'closed', 'old regia process closed');
+    expect(m.items(old.id).some(i => i.kind === 'user' && i.text === 'hello')).toBe(true);
+
+    // the Cursor Regia receives the app-control server (app_create_chat) next to its browser endpoint
+    await waitFor(() => cursorLog(curLog).some(l => l.method === 'session/new'), 'cursor session/new');
+    expect(cursorLog(curLog).find(l => l.method === 'session/new')?.params?.mcpServers).toEqual([
+      { type: 'http', name: 'second-brain', url: browserUrl(neu.id), headers: [] },
+      { type: 'http', name: 'second-brain-app', url: appUrl(neu.id), headers: [] },
+    ]);
+
+    // a normal Cursor chat never gets it; the former Regia resumes without --allowedTools for the app
+    await m.create({ harness: 'cursor', cwd: e.cwd, title: 'Lavoro' });
+    await waitFor(() => cursorLog(curLog).filter(l => l.method === 'session/new').length === 2, 'second cursor session');
+    expect(cursorLog(curLog).filter(l => l.method === 'session/new')[1]?.params?.mcpServers).toEqual([{ type: 'http', name: 'second-brain', url: expect.stringContaining('/mcp/chat/'), headers: [] }]);
+    await m.send(old.id, 'again');
+    await waitFor(() => results(m, old.id).length === 2, 'former regia resumed');
+    expect(argvs(e).at(-1)?.join(' ')).not.toContain('mcp__second-brain-app');
+  });
+
+  it('raises the cost of a chat while its turn runs (live estimate), then settles it to the real cost', async () => {
+    const e = env();
+    const { m } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'meter' });
+    const mid = await waitFor(() => m.list().find(x => x.id === c.id && (x.costLiveUsd ?? 0) > 0), 'live cost');
+    expect(mid.costUsd).toBe(mid.costLiveUsd);
+    expect(mid.state).toBe('running');
+    const done = await waitFor(() => m.list().find(x => x.id === c.id && results(m, c.id).length === 1 && x.costLiveUsd === undefined), 'settled');
+    expect(done.costUsd).toBe(0.01);
+    // a second turn starts from the settled 0.01, never from the old estimate
+    await m.send(c.id, 'meter');
+    await waitFor(() => (m.list().find(x => x.id === c.id)?.costLiveUsd ?? 0) > 0, 'second live cost');
+    const s2 = m.list().find(x => x.id === c.id)!;
+    expect(s2.costUsd).toBeCloseTo(0.01 + (s2.costLiveUsd ?? 0), 9);
+    await waitFor(() => results(m, c.id).length === 2 && m.list().find(x => x.id === c.id)?.costLiveUsd === undefined, 'second result');
+    expect(m.list().find(x => x.id === c.id)?.costUsd).toBe(0.02);
+  });
+
+  it('corrects the live cost with get_usage mid-turn and keeps it as spent when the CLI dies mid-turn', async () => {
+    const e = env();
+    const { m } = manager(e, { onRateLimit: () => {}, usageEveryMs: 200 });
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'meter die' });
+    // the fake's tracker says 0.05 mid-turn: the real figure replaces the token estimate
+    await waitFor(() => m.list().find(x => x.id === c.id && x.costLiveUsd === 0.05), 'real running cost');
+    // no result will come: the cost stays, without the "still running" mark
+    const s = await waitFor(() => m.list().find(x => x.id === c.id && x.state === 'error'), 'crashed');
+    expect(s.costLiveUsd).toBeUndefined();
+    expect(s.costUsd).toBe(0.05);
+  });
+
+  it('a CLI that dies mid-turn calls onCrash once with its error (no result, so no onDone); a close does not', async () => {
+    const e = env();
+    const crashes: [string, string][] = [];
+    const done: string[] = [];
+    const { m } = manager(e, { onCrash: (id, err) => crashes.push([id, err]), onDone: id => done.push(id) });
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'meter die' });
+    await waitFor(() => m.list().find(x => x.id === c.id && x.state === 'error'), 'crashed');
+    await waitFor(() => crashes.length === 1, 'onCrash');
+    expect(crashes[0]![0]).toBe(c.id);
+    expect(crashes[0]![1]).toContain('fake crash mid-turn');
+    expect(done).toEqual([]);
+    const ok = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello' });
+    await waitFor(() => results(m, ok.id).length === 1, 'result');
+    await m.close(ok.id);
+    expect(crashes).toHaveLength(1);
+  });
+
+  it('asks get_usage on its own every usageEveryMs while a Claude chat is open (plan windows during long turns)', async () => {
+    const e = env();
+    const rate: unknown[] = [];
+    const { m } = manager(e, { onRateLimit: msg => rate.push(msg), usageEveryMs: 200 });
+    await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'meter' });
+    await waitFor(() => rate.filter(x => !!(x as { rate_limits?: unknown }).rate_limits).length >= 2, 'two get_usage answers mid-turn', 8000);
+    expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
+  });
+
+  it('an idle chat releases its engine after the delay, stays idle on the grid, and resumes on the next message; never a Regia', async () => {
+    const e = env();
+    const { m } = manager(e);
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there' });
+    const regia = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello regia', regia: true });
+    await waitFor(() => results(m, c.id).length === 1 && results(m, regia.id).length === 1, 'both turns');
+    await waitFor(() => m.list().every(x => x.state === 'idle'), 'both idle');
+    expect(m.releaseIdle(60_000)).toBe(0); // not idle long enough
+    expect(m.releaseIdle(60_000, Date.now() + 61_000)).toBe(1);
+    await waitFor(() => m.engines().live.length === 1, 'one engine left (the Regia)');
+    expect(m.engines().live[0]?.chatId).toBe(regia.id);
+    expect(m.list().find(x => x.id === c.id)).toMatchObject({ state: 'idle' });
+    await m.send(c.id, 'again');
+    await waitFor(() => results(m, c.id).length === 2, 'resumed turn');
+    expect(argvs(e).at(-1)?.join(' ')).toContain(`--resume=${c.sessionId}`);
+  });
 });
+

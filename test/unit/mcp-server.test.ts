@@ -201,6 +201,78 @@ describe('McpServer', () => {
     expect((await request(p, '/mcp/app', rpc(1, 'tools/list'))).json().result.tools[0].name).toBe('t_none');
     await s.close();
   });
+
+  describe('progress (long waits: Claude Code aborts a call silent for 300 s)', () => {
+    const s = new McpServer({ name: 't', version: '1' });
+    let p = 0;
+    const said: boolean[] = [];
+    beforeAll(async () => {
+      s.mount('/mcp', { name: 'g', instructions: '', tools: [
+        { name: 'slow', description: '', inputSchema: {}, run: async (_a, ctx) => {
+          said.push(ctx.progress('waiting 1'));
+          await new Promise(r => setTimeout(r, 20));
+          said.push(ctx.progress('waiting 2'));
+          return 'finished';
+        } },
+        { name: 'quick', description: '', inputSchema: {}, run: () => 'plain' },
+      ] });
+      p = await s.listen(0);
+    });
+    afterAll(() => s.close());
+    const sse = { accept: 'application/json, text/event-stream' };
+    const events = (body: string) => body.split('\n\n').filter(Boolean).map(e => JSON.parse(e.split('\n').find(l => l.startsWith('data: '))!.slice(6)));
+
+    it('streams progress notifications then the result when the call has a progressToken', async () => {
+      said.length = 0;
+      const r = await request(p, '/mcp', rpc(7, 'tools/call', { name: 'slow', arguments: {}, _meta: { progressToken: 'tok-1' } }), sse);
+      expect(r.status).toBe(200);
+      expect(r.headers['content-type']).toBe('text/event-stream');
+      const ev = events(r.body);
+      expect(ev.map(e => e.method ?? 'result')).toEqual(['notifications/progress', 'notifications/progress', 'result']);
+      expect(ev[0].params).toEqual({ progressToken: 'tok-1', progress: 1, message: 'waiting 1' });
+      expect(ev[1].params.progress).toBe(2);                     // strictly increasing
+      expect(ev[2]).toEqual({ jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: 'finished' }] } });
+      expect(said).toEqual([true, true]);
+    });
+
+    it('notifications/cancelled aborts the call it names (same session), even with the connection open', async () => {
+      let aborted = '';
+      const c = new McpServer({ name: 't', version: '1' });
+      c.mount('/mcp', { name: 'g', instructions: '', tools: [{ name: 'wait', description: '', inputSchema: {}, run: (a, ctx) => new Promise(res => {
+        ctx.signal.addEventListener('abort', () => { aborted = String(a.tag); res('stopped'); });
+      }) }] });
+      const cp = await c.listen(0);
+      const sid = (await request(cp, '/mcp', rpc(1, 'initialize', { protocolVersion: '2025-06-18' }))).headers['mcp-session-id'] as string;
+      const call = request(cp, '/mcp', rpc(42, 'tools/call', { name: 'wait', arguments: { tag: 'x' } }), { 'mcp-session-id': sid });
+      await new Promise(r => setTimeout(r, 50));
+      await request(cp, '/mcp', { jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 42 } }, { 'mcp-session-id': 'other' });
+      await new Promise(r => setTimeout(r, 50));
+      expect(aborted).toBe('');                                  // another session cannot cancel it
+      expect((await request(cp, '/mcp', { jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 42 } }, { 'mcp-session-id': sid })).status).toBe(202);
+      expect((await call).json().result.content[0].text).toBe('stopped');
+      expect(aborted).toBe('x');
+      await c.close();
+    });
+
+    it('answers plain JSON when the tool never reports progress', async () => {
+      const r = await request(p, '/mcp', rpc(8, 'tools/call', { name: 'quick', arguments: {}, _meta: { progressToken: 3 } }), sse);
+      expect(r.headers['content-type']).toBe('application/json');
+      expect(r.json().result.content[0].text).toBe('plain');
+    });
+
+    it('cannot stream without a progressToken, without text/event-stream or in a batch: progress() says false', async () => {
+      for (const [body, headers] of [
+        [rpc(9, 'tools/call', { name: 'slow', arguments: {} }), sse],
+        [rpc(10, 'tools/call', { name: 'slow', arguments: {}, _meta: { progressToken: 'x' } }), {}],
+        [[rpc(11, 'tools/call', { name: 'slow', arguments: {}, _meta: { progressToken: 'x' } })], sse],
+      ] as const) {
+        said.length = 0;
+        const r = await request(p, '/mcp', body, headers);
+        expect(r.headers['content-type']).toBe('application/json');
+        expect(said).toEqual([false, false]);
+      }
+    });
+  });
 });
 
 describe('MCP helpers', () => {

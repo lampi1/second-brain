@@ -11,4 +11,7 @@ corregge, non si toglie.
 - **Seconda volta = proposta di regola**: stesso tipo e stessa area già nel registro → proposta alla Regia
   (`brain-rules.md`). La regola è servita? `node ops/tools/recurrence.mjs`.
 
+Vuoto il primo giorno. La pagina Qualità dell'app legge da qui quante volte hai dovuto correggere l'IA e se le
+regole nate da un errore lo hanno fermato davvero.
+
 Formato: `- AAAA-MM-GG HH:MM · chat/agente · area · tipo · detto: … · vero: … · visto da: chi e come [· regola: quella nata]`

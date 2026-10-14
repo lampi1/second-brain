@@ -44,13 +44,13 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await esplora.getByRole('button', { name: 'Copia il percorso' }).click();
   await expect(page.getByTestId('toasts')).toContainText('Percorso copiato');
   await expect(page.locator('.bx-toast:visible')).toHaveCount(0);
-  // from Oggi, a link to another page goes through the history
-  await page.getByTestId('nav-home').click();
+  // from Qualità, a link to another page goes through the history (DevOps's link to Fatto shows only once DevOps is read)
+  await page.getByTestId('nav-qualita').click();
   await settled(page);
-  await page.getByTestId('brain-page-home').getByRole('button', { name: 'Dove va la spesa →' }).click();
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await page.getByTestId('brain-page-qualita').getByRole('button', { name: 'Apri proposals.md' }).click();
+  await expect(page.getByTestId('page-esplora')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
-  await expect(page.getByTestId('page-home')).toBeVisible();
+  await expect(page.getByTestId('page-qualita')).toBeVisible();
   // the map (2D list) opens a file and closes
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('sb://mappa/flat');

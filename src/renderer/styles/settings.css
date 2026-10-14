@@ -1,0 +1,81 @@
+/* The Settings page (components/SettingsPage.tsx): groups as cards of rows (text left, control right), switches and
+   segmented choices. Only the app's tokens (tokens.css), so light and dark follow the theme by themselves. */
+.st-page { display: grid; gap: 22px; max-width: 880px; width: 100%; margin: 0 auto; }
+.st-group { display: grid; gap: 8px; }
+.st-group-h { display: flex; align-items: center; }
+.st-group > header h2 { font: 650 var(--fs-l) var(--font-display); margin: 0; }
+.st-group > header p { margin: 2px 0 0; color: var(--text-3); font-size: var(--fs-s); max-width: 80ch; }
+.st-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; }
+.st-row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; min-height: 56px; }
+.st-card > .st-row + .st-row, .st-card > .st-exp + .st-exp { border-top: 1px solid var(--border); }
+.st-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.st-title { font-weight: 600; color: var(--text); }
+.st-desc { color: var(--text-3); font-size: var(--fs-s); line-height: 1.45; }
+.st-desc b { color: var(--text-2); font-weight: 600; }
+.st-meta { color: var(--text-4); font-size: var(--fs-xs); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.st-ctl { flex: none; display: flex; align-items: center; }
+.st-row.dim .st-title, .st-row.dim .st-desc { opacity: 0.6; }
+.st-foot { color: var(--text-4); font-size: var(--fs-xs); margin: 0; }
+
+/* an experiment and its agents */
+.st-sub { margin: 0 16px 12px 16px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+.st-sub-head { padding: 8px 12px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.st-sub-head span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.st-sub .st-row { padding: 8px 12px; min-height: 44px; }
+.st-sub .st-row + .st-row { border-top: 1px solid var(--border); }
+.st-sub .mono { font-family: var(--mono); font-size: 0.92em; }
+
+/* switch */
+.st-switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 1px solid var(--border-3); background: var(--surface-4); cursor: pointer; padding: 0;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.st-switch .st-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
+.st-switch.on { background: var(--blue); border-color: var(--blue); }
+.st-switch.on .st-knob { transform: translateX(16px); background: var(--on-accent); }
+.st-switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+.st-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* segmented choice */
+.st-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); }
+.st-seg button { border: 0; background: transparent; color: var(--text-2); font: 550 var(--fs-s) var(--font); height: 26px; padding: 0 12px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.st-seg button:hover { color: var(--text); background: var(--surface-3); }
+.st-seg button.on { background: var(--surface-4); color: var(--text); box-shadow: 0 0 0 1px var(--border-3) inset; }
+.st-seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* a list of choices (models, effort) */
+.st-select { min-width: 220px; max-width: 320px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2);
+  color: var(--text); font: 500 var(--fs-s) var(--font); cursor: pointer; }
+.st-select:hover { border-color: var(--border-3); }
+.st-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-select option { background: var(--surface); color: var(--text); }
+
+/* a $ amount, and a read-only value */
+.st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
+.st-input { width: 110px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
+  font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
+.st-input::placeholder { color: var(--text-4); }
+.st-inline { display: flex; align-items: center; gap: 8px; }
+.st-input.st-path { width: 38ch; max-width: 100%; }
+.st-input:hover { border-color: var(--border-3); }
+.st-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-value { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s); }
+.st-value.mono { font-family: var(--mono); }
+
+@media (prefers-reduced-motion: reduce) { .st-switch, .st-switch .st-knob, .st-seg button { transition: none; } }
+@media (max-width: 720px) { .st-row { flex-wrap: wrap; } .st-ctl { width: 100%; } }
+
+/* «Instradamento modelli» (RoutingGroup.tsx): the table, one row per rule */
+.st-rt-wrap { overflow-x: auto; padding: 0 12px 4px; }
+.st-rt { width: 100%; border-collapse: collapse; font-size: var(--fs-s); }
+.st-rt th { text-align: left; font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.st-rt td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid var(--border); }
+.st-rt .st-select.st-rt-s { min-width: 0; width: 140px; }
+.st-rt .st-select.st-rt-e { min-width: 0; width: 110px; }
+.st-rt .st-rt-area { width: 110px; }
+.st-rt .st-rt-why { width: 100%; min-width: 160px; }
+.st-rt .st-meta { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-rt-foot { gap: 8px; justify-content: flex-end; min-height: 48px; }
+.st-rt-reason { flex: 1; width: auto; }
+.st-rt-err .st-desc { color: var(--red); }
+.st-rt .st-input, .st-rt-reason { text-align: left; }

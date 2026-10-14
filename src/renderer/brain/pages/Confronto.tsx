@@ -1,6 +1,6 @@
 // Confronto modelli: the brain's model comparison (the same job done by Claude's and Cursor's agents, judged blind):
 // the main report rendered (tables exportable in CSV), the report files to download, every comparison file openable
-// in Esplora. Data: /api/files (reviews/compare/…) and /api/file.
+// in Esplora; the report ends with the discussion bar (ADR 0037). Data: /api/files (reviews/compare/…) and /api/file.
 import { normFile, normFiles } from '../types';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
@@ -9,6 +9,7 @@ import { Async, Empty, Explain, PageHead } from '../components/States';
 import { DataTable, type Col } from '../components/DataTable';
 import { Markdown } from '../components/Markdown';
 import { download, IconDownload, Section, toast, type Navigate } from '../components/ui';
+import { DiscussBar } from '../components/Discuss';
 
 const PREFIX = 'reviews/compare/';
 const MAIN = ['reviews/compare/report.md', 'reviews/compare/summary.md'];
@@ -48,7 +49,9 @@ export function Confronto({ nav }: { nav: Navigate }) {
             {main && (
               <section className="bx-card" data-testid="bx-compare-report">
                 <Async loading={doc.loading && !doc.data} error={doc.data ? null : doc.error} onRetry={() => doc.reload()} lines={8}>
-                  {() => doc.data && <><p className="small muted" style={{ marginBottom: 8 }}>{main} · aggiornato {fmt.when(doc.data.modified)}</p><Markdown text={doc.data.text} files={set} onOpenFile={f => nav(`esplora/${f}`)} name="confronto" /></>}
+                  {() => doc.data && <><p className="small muted" style={{ marginBottom: 8 }}>{main} · aggiornato {fmt.when(doc.data.modified)}</p><Markdown text={doc.data.text} files={set} onOpenFile={f => nav(`esplora/${f}`)} name="confronto" />
+                    <DiscussBar testId="bx-compare-discuss" topic={{ kind: 'quote', quote: { id: `confronto|${main}`, what: 'numero', title: 'il confronto tra modelli', source: `${main}, aggiornato ${fmt.when(doc.data.modified)}`,
+                      facts: [`${reports.length} file di confronto in reviews/compare/`], question: 'Cosa ci dice questo confronto? Quale modello per quale lavoro, e cosa resta da giudicare?' } }} /></>}
                 </Async>
               </section>
             )}

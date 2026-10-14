@@ -1,16 +1,18 @@
 // Start-menu and desktop shortcuts of the STABLE app (ADR 0007), written by the app itself on start: they run the
 // hidden launcher (launch.vbs → launch.cmd → release.mjs launch, with fallback to the previous release) and carry the
 // AppUserModelId 'second-brain', which Windows needs to show the app's toast notifications. Only for a stable release
-// (SB_RELEASE set by the launcher); a dev build never writes shortcuts. Used by index.ts.
+// (SB_RELEASE set by the launcher, release.ts); a dev build never writes shortcuts, even one started from a chat of the
+// stable app. Used by index.ts.
 import { app, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { log } from './log';
+import { releaseId } from './release';
 
 export const APP_ID = 'second-brain';
 
 export function ensureShortcuts(): void {
-  if (process.platform !== 'win32' || !process.env.SB_RELEASE) return;
+  if (process.platform !== 'win32' || !releaseId()) return;
   const base = path.join(process.env.LOCALAPPDATA ?? '', 'second-brain');
   const vbs = path.join(base, 'launch.vbs');
   if (!fs.existsSync(vbs)) { log.warn('shortcuts', 'launch.vbs missing: shortcuts not written', { data: { vbs } }); return; }

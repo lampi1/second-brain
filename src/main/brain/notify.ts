@@ -3,7 +3,8 @@
 // when the app window is not focused (when the user is looking, the in-app feed is enough), never for events that happened
 // while the app was closed, never for muted kinds or in do-not-disturb. Events that arrive together become ONE toast
 // ("3 novità per te"); at most one toast every 20 s, except urgent ones (an agent blocked on the user), which go out after a
-// short 1.5 s grouping window. A new toast replaces the previous one instead of stacking.
+// short 1.5 s grouping window. A new toast replaces the previous one instead of stacking. While "Rispondi dopo" is on
+// (main/later.ts) a new request's event is `held`: it stays in the feed, no toast (the user answers from the queue).
 // Windows caveat: an unpackaged app (electron.exe from node_modules) may have its toasts dropped silently when no Start
 // Menu shortcut carries its AppUserModelId ('second-brain', set in main/index.ts). We cannot detect a silent drop; a
 // reported failure ('failed' event) or Notification.isSupported() false switches to in-app only (logged with a hint).
@@ -19,6 +20,8 @@ export interface NotifierDeps {
   show(t: Toast): void;
   /** false = OS toasts unavailable (tests, unsupported, a reported failure): everything stays in-app */
   enabled(): boolean;
+  /** an event that must not become a toast now ("Rispondi dopo": a new request waits silently in the queue) */
+  held?(e: FeedEvent): boolean;
 }
 
 export interface NotifierTiming { groupMs: number; urgentGroupMs: number; minGapMs: number }
@@ -56,7 +59,7 @@ export class Notifier {
 
   push(events: FeedEvent[]): void {
     if (!this.d.enabled()) return;
-    const l = loud(events, this.d.settings());
+    const l = this.free(loud(events, this.d.settings()));
     if (!l.length || this.d.isFocused()) return;
     const now = Date.now();
     if (!this.buffer.length) this.firstAt = now;
@@ -78,7 +81,7 @@ export class Notifier {
     this.timer = null; this.dueAt = 0;
     const events = this.buffer; this.buffer = [];
     // the user came back to the app meanwhile, or muted/disabled it: the feed already shows them
-    const still = this.d.enabled() ? loud(events, this.d.settings()) : [];
+    const still = this.d.enabled() ? this.free(loud(events, this.d.settings())) : [];
     if (!still.length || this.d.isFocused()) return;
     const toast = compose(still);
     this.lastToastAt = Date.now();
@@ -86,6 +89,8 @@ export class Notifier {
     if (this.shown.length > 20) this.shown.shift();
     this.d.show(toast);
   }
+
+  private free(events: FeedEvent[]): FeedEvent[] { return this.d.held ? events.filter(e => !this.d.held!(e)) : events; }
 
   stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null; this.buffer = []; }
 }

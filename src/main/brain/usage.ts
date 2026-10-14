@@ -17,6 +17,12 @@ import { log } from '../log';
 import { romeDay } from './live';
 import { runNode, type NodeRunner } from './node';
 import type { ChatSpend, Spend } from './budget';
+import type { CursorDay } from './cursor-ledger';
+
+// Checked 2026-10-11 (docs/research/research-cursor-cost.md §1, §3): no documented usage API for a personal account (the
+// Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
+// endpoints would need the user's session token and fall under the ToS ban on extracting data. So: said, never guessed.
+export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
 
 export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number }
 export interface CostSnapshot { todayUsd: number; chats: ChatSpend[]; cursorTodayUsd: number | null; cursorNote: string; costKnown: boolean; costNote: string }
@@ -108,9 +114,13 @@ export function readClaudeCache(file: string, now = Date.now()): Limits | null {
 }
 
 /** Snapshot for the top bar from the last cost and the freshest limits. Windows past their reset become unknown. */
-export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now()): Usage {
+export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null): Usage {
   const u: Usage = { todayUsd: cost?.todayUsd ?? 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, weekResetsAt: null, limitsSource: null, limitsAt: null, at: now,
-    costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '' };
+    costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '', cursorPlanNote: CURSOR_PLAN_NOTE };
+  // the app's own Cursor figure (ledger + CSV) replaces cost.mjs's, which knows only the CSV
+  if (cursor && (cursor.turns > 0 || cursor.exact)) {
+    u.cursorTodayUsd = cursor.usd; u.cursorNote = cursor.note; u.cursorExact = cursor.exact; u.cursorMarginPct = Math.round(cursor.margin * 100); u.cursorChats = cursor.chats;
+  } else if (cursor && u.cursorTodayUsd == null) u.cursorNote = cursor.note;
   if (!limits) {
     u.limitsNote = 'Limiti 5 ore / 7 giorni non disponibili: arrivano da una chat Claude aperta nell\'app (o, per un\'ora, da /usage in Claude Code)';
     return u;
@@ -132,13 +142,17 @@ export interface UsageMonitorOptions {
   node: NodeRunner;
   everyMs?: number;              // default 3 min
   claudeConfig?: string | null;  // null = do not read Claude Code's cache (tests)
+  cursor?: () => CursorDay;      // today's Cursor ledger (brain/cursor-ledger.ts cursorToday); absent = cost.mjs's CSV only
+  cursorEveryMs?: number;        // default 30 s
   onUsage(u: Usage, spend: Spend): void;
 }
 
 export class UsageMonitor {
   private cost: CostSnapshot | null = null;
+  private cursor: CursorDay | null = null;
   private limits: Limits | null = null;
   private timer: NodeJS.Timeout | null = null;
+  private cursorTimer: NodeJS.Timeout | null = null;
   private running = false;
   private warned = false;
 
@@ -147,18 +161,35 @@ export class UsageMonitor {
   start(): void {
     void this.refresh();
     this.timer = setInterval(() => void this.refresh(), this.o.everyMs ?? 180e3);
+    // the Cursor ledger is a local file: re-read it often, so a Cursor turn shows within half a minute
+    if (this.o.cursor) this.cursorTimer = setInterval(() => { if (this.readCursor()) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
   }
 
-  stop(): void { if (this.timer) clearInterval(this.timer); this.timer = null; }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    if (this.cursorTimer) clearInterval(this.cursorTimer);
+    this.timer = null; this.cursorTimer = null;
+  }
 
-  get(): Usage { return composeUsage(this.cost, this.freshest()); }
+  /** true when today's Cursor figure changed */
+  private readCursor(): boolean {
+    if (!this.o.cursor) return false;
+    try {
+      const next = this.o.cursor();
+      const changed = JSON.stringify(next) !== JSON.stringify(this.cursor);
+      this.cursor = next;
+      return changed;
+    } catch (e) { log.warn('brain', 'cursor ledger unreadable', { data: { error: String(e) } }); return false; }
+  }
+
+  get(): Usage { return composeUsage(this.cost, this.freshest(), Date.now(), this.cursor); }
 
   spend(): Spend {
     const u = this.get();
     return {
       day: romeDay(),
       claude: { dayUsd: this.cost?.costKnown ? this.cost.todayUsd : null, chats: this.cost?.chats ?? [], fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null },
-      cursor: { dayUsd: this.cost?.cursorTodayUsd ?? null, chats: [] },
+      cursor: { dayUsd: u.cursorTodayUsd ?? null, chats: [] },
     };
   }
 
@@ -196,6 +227,7 @@ export class UsageMonitor {
           if (!this.cost) this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: '', costKnown: false, costNote: 'cost.mjs non ha risposto: riprovo tra 3 minuti' };
         }
       }
+      this.readCursor();
       this.o.onUsage(this.get(), this.spend());
     } finally { this.running = false; }
   }

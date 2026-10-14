@@ -7,6 +7,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { facetValues, nextSort, queryRows, scrollIntoRow, stamp, toCsv, toJson, windowRange, fileSafe, type ColBase, type TableQuery } from '../lib/table';
 import { fmt } from '../lib/format';
 import { Explain, type ExplainProps } from './States';
+import { HelpTip } from '../../components/HelpTip';
 import { download, IconChevL, IconChevR, IconClose, IconColumns, IconDownload, IconSearch, useEsc } from './ui';
 
 export interface Col<R> extends ColBase<R> {
@@ -27,7 +28,8 @@ export interface DataTableProps<R> {
   filters?: string[];
   sort?: { key: string; dir: 1 | -1 };
   search?: boolean;
-  detail?: (r: R) => ReactNode;
+  /** the peek's content; `close` hides the peek (an action that takes the user elsewhere, e.g. the docked Regia) */
+  detail?: (r: R, close: () => void) => ReactNode;
   detailTitle?: (r: R) => string;
   empty?: string;
   explain?: ExplainProps;
@@ -93,6 +95,8 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!visible.length) return;
+    // a control inside the table (a column's sort button or "?") keeps its own keys
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('button, a, input, select')) return;
     const k = e.key;
     if (k === 'ArrowDown') go(active + 1);
     else if (k === 'ArrowUp') go(active < 0 ? 0 : active - 1);
@@ -155,10 +159,13 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
               {shown.map(c => {
                 const s = order?.key === c.key ? order.dir : 0;
                 return (
-                  <th key={c.key} role="columnheader" scope="col" aria-sort={s ? (s > 0 ? 'ascending' : 'descending') : 'none'} className={`${c.type === 'num' || c.type === 'usd' ? 'num' : ''} ${c.help ? 'has-help' : ''}`}>
-                    <button type="button" title={c.help ? `${c.help} (clic per ordinare)` : 'Clic per ordinare'} onClick={() => setOrder(nextSort(order, c))}>
-                      <span className="l">{c.label}</span>{s !== 0 && <span className="arrow" aria-hidden="true">{s > 0 ? '▲' : '▼'}</span>}
-                    </button>
+                  <th key={c.key} role="columnheader" scope="col" aria-label={c.label} aria-sort={s ? (s > 0 ? 'ascending' : 'descending') : 'none'} className={`${c.type === 'num' || c.type === 'usd' ? 'num' : ''} ${c.help ? 'has-help' : ''}`}>
+                    <div className="bx-th">
+                      <button type="button" className="bx-sort" data-tip="Clic per ordinare" onClick={() => setOrder(nextSort(order, c))}>
+                        <span className="l">{c.label}</span>{s !== 0 && <span className="arrow" aria-hidden="true">{s > 0 ? '▲' : '▼'}</span>}
+                      </button>
+                      {c.help && <HelpTip label={c.label}>{c.help}</HelpTip>}
+                    </div>
                   </th>
                 );
               })}
@@ -198,7 +205,7 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
             <button type="button" className="bx-btn ghost s" aria-label="Riga successiva" disabled={active >= visible.length - 1} onClick={() => go(active + 1)}><IconChevR /></button>
             <button type="button" className="bx-btn ghost s" aria-label="Chiudi (Esc)" title="Chiudi (Esc)" onClick={() => { setPeek(false); box.current?.focus(); }}><IconClose /></button>
           </header>
-          <div className="body">{detail ? detail(cur) : <RowFields row={cur} cols={cols} />}</div>
+          <div className="body">{detail ? detail(cur, () => setPeek(false)) : <RowFields row={cur} cols={cols} />}</div>
         </aside>
       )}
     </div>

@@ -1,192 +1,194 @@
-// Qualità: how well the AI works, from the brain's own logs. Tabs: errors (by type, by day, every one), whether the
-// rules born from errors stopped them (recurrence), praise, the specialists' notebooks, improvement proposals and their
-// outcome, measures (forced interventions per day, stacked by kind), confirmed bugs by pattern. Each block opens with
-// the discovery from the data and the next step. Data: /api/tables.
-import { normTables, type BugRow, type ErrorRow, type Measure, type Playbook, type Proposal, type RuleRow, type Tables, type WinRow } from '../types';
+// Qualità: four numbers about how well the AI works, each with its source and the dates it covers, and the next step
+// (the user, 2026-10-13: "la sezione qualità sia veramente utile e veritiera"; few, true, actionable). 1) errors he had
+// to catch himself per 100 turns (ai-errors.md "visto da" ÷ the app's finished turns, same days only); 2) rules whose
+// error came back within 14 days (11 official types, near-duplicates mapped, rows out of the count shown, young rules
+// "troppo presto"); 3) his active PRs held by a failed build or QA; 4) his resolved bugs sent back to an open state.
+// The improvement proposals are one row. Praise, notebooks and measures are gone until they have real data. Below the
+// numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, rule, this week against the
+// one before). Every number and every pattern has its reading and the discussion bar ("Discutine" / "Apri una chat").
+// Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
+// bugs); computations in lib/quality.ts and lib/stats.ts.
+import type { ReactNode } from 'react';
+import { normAppQuality, normTables } from '../types';
 import { useBrain } from '../api';
-import { daysBetween, fmt } from '../lib/format';
-import { countBy, short, sum } from '../lib/text';
-import { Async, Empty, PageHead } from '../components/States';
-import { HBarChart, LineChart, StackedBars } from '../components/Charts';
-import { DataTable, type Col } from '../components/DataTable';
-import { Pill, Tabs, type Navigate, type Tone } from '../components/ui';
+import { fmt } from '../lib/format';
+import { ownerOf, short } from '../lib/text';
+import { caughtPer100, caughtWeeks, outOfCount, rate, reopenShare, ruleStats } from '../lib/quality';
+import { errorPatterns, trend, type Trend } from '../lib/stats';
+import type { Quote } from '../lib/discuss';
+import { Async, Explain, PageHead } from '../components/States';
+import { HelpTip } from '../../components/HelpTip';
+import { DiscussBar } from '../components/Discuss';
+import { ErrorPatterns, PatternsHelp, Reading } from '../components/Stats';
+import { ExtLink, Pill, Section, type Navigate, type Tone } from '../components/ui';
 
-type Tab = 'errori' | 'regole' | 'lodi' | 'taccuini' | 'proposte' | 'misure' | 'bug';
-const TABS: Tab[] = ['errori', 'regole', 'lodi', 'taccuini', 'proposte', 'misure', 'bug'];
-const propTone = (s: string): Tone => (/confermata|applicata/.test(s) ? 'good' : /rifiutata|peggiorata|inutile/.test(s) ? 'bad' : /accettata/.test(s) ? 'blue' : '');
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  tornato: { label: 'tornato', tone: 'bad' }, 'non-tornato': { label: 'non tornato', tone: 'good' },
+  'troppo-presto': { label: 'troppo presto', tone: '' }, 'senza-tipo': { label: 'senza tipo', tone: 'warn' },
+};
+const range = (from: string | null | undefined, to: string | null | undefined) => (from && to ? (from === to ? `il ${fmt.day(from)}` : `dal ${fmt.day(from)} al ${fmt.day(to)}`) : 'nessun dato');
 
-function Errori({ t }: { t: Tables }) {
-  const types = countBy(t.errors, r => r.tipo).slice(0, 12);
-  const dates = countBy(t.errors, r => r.data).sort(([a], [b]) => a.localeCompare(b)).slice(-30);
-  const worst = [...dates].sort((a, b) => b[1] - a[1])[0];
-  const week = t.errors.filter(r => daysBetween(r.data, t.today) < 7).length;
-  const cols: Col<ErrorRow>[] = [
-    { key: 'data', label: 'Data', type: 'date', nowrap: true, width: '92px', render: r => fmt.day(r.data) },
-    { key: 'chi', label: 'Chi', clip: true, width: '13%', help: "La chat o l'agente che ha sbagliato" },
-    { key: 'area', label: 'Area', clip: true, width: '12%' },
-    { key: 'tipo', label: 'Tipo', width: '160px', render: r => <Pill>{r.tipo || '—'}</Pill> },
-    { key: 'detto', label: 'Ha detto', clip: true, help: "Cosa ha affermato o fatto l'IA" },
-    { key: 'vero', label: 'Era vero', clip: true, help: 'Come stavano davvero le cose' },
-    { key: 'regola', label: 'Regola nata', clip: true, hidden: true, help: "La regola scritta per non ripetere l'errore" },
-    { key: 'visto', label: 'Visto da', clip: true, hidden: true },
-  ];
+function Metric({ id, title, help, value, unit, tone, reading, find, next, source, quote, children }: {
+  id: string; title: string; help?: ReactNode; value: ReactNode; unit?: ReactNode; tone?: 'warn' | 'bad'; reading?: Trend | null; find?: ReactNode; next?: ReactNode; source: ReactNode;
+  quote?: Quote; children?: ReactNode;
+}) {
   return (
-    <>
-      <div className="bx-grid-2">
-        <HBarChart title="Errori per tipo" name="errori-per-tipo" labels={types.map(([k]) => k)} series={[{ label: 'errori', values: types.map(([, v]) => v) }]}
-          explain={{ find: types[0] ? <><b>{types[0][0]}</b> è l'errore più comune: <b>{types[0][1]} volte, il {fmt.pct(types[0][1], t.errors.length)}%</b>.</> : undefined, next: types[0]?.[0] === 'fatto-non-verificato' ? 'l\'IA dice cose senza controllarle: chiedi sempre «da dove lo sai?»' : 'guarda in «Regole servite?» se la regola su questo tipo funziona', says: "che tipo di errori fa l'IA.", why: 'un tipo che si ripete chiede una regola.' }} />
-        <LineChart title="Errori per giorno" name="errori-per-giorno" labels={dates.map(([d]) => fmt.day(d))} series={[{ label: 'errori', values: dates.map(([, v]) => v) }]}
-          explain={{ find: worst ? <>Il giorno peggiore: <b>{fmt.day(worst[0])}, {worst[1]} errori</b>.</> : undefined, says: 'quanti errori sono stati registrati ogni giorno.', why: 'più chat in parallelo, più errori: è un segnale di carico.' }} />
-      </div>
-      <DataTable name="errori-ia" label="Errori dell'IA" rows={[...t.errors].reverse()} cols={cols} filters={['tipo', 'area']} detailTitle={r => r.detto || r.tipo}
-        explain={{ find: <><b>{week} errori negli ultimi 7 giorni</b> su {t.errors.length} in tutto.</>, says: "ogni errore: cosa ha detto l'IA e cosa era vero.", why: 'è lo storico da cui nascono le regole; clic su una riga per leggerla tutta.' }} />
-    </>
+    <section className={`bx-card bx-q ${tone ?? ''}`} data-testid={`bx-q-${id}`} aria-labelledby={`bx-q-${id}-h`}>
+      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
+      <p className="bx-q-v"><span className="bx-big">{value}</span>{unit && <span className="u"> {unit}</span>}</p>
+      {reading && <Reading t={reading} testId={`bx-q-${id}-reading`} />}
+      <Explain find={find} next={next} />
+      <p className="bx-q-src"><b>Fonte:</b> {source}</p>
+      {children}
+      {quote && <DiscussBar topic={{ kind: 'quote', quote }} testId={`bx-q-${id}-discuss`} />}
+    </section>
   );
 }
 
-function Regole({ t }: { t: Tables }) {
-  const rules = t.recurrence.rules;
-  const back = rules.filter(r => r.again > 0);
-  const worst = [...back].sort((a, b) => b.again - a.again)[0];
-  const cols: Col<RuleRow>[] = [
-    { key: 'date', label: 'Data', type: 'date', width: '92px', render: r => fmt.day(r.date) },
-    { key: 'type', label: 'Tipo', width: '170px' },
-    { key: 'area', label: 'Area', clip: true, width: '16%' },
-    { key: 'rule', label: 'Regola', clip: true },
-    { key: 'again', label: 'Errore tornato', type: 'num', width: '130px', help: "Quante volte lo stesso tipo di errore, in un'area simile, è tornato dopo la regola", render: r => <Pill tone={r.again ? 'bad' : 'good'}>{r.again ? `${r.again} ${r.again === 1 ? 'volta' : 'volte'}` : 'no'}</Pill> },
-  ];
-  return (
-    <>
-      {t.recurrence.totals.length > 0 && <HBarChart title="Ricorrenza per tipo" name="ricorrenza" note="tutti gli errori registrati" labels={t.recurrence.totals.slice(0, 10).map(([k]) => k)} series={[{ label: 'errori', values: t.recurrence.totals.slice(0, 10).map(([, v]) => v) }]} />}
-      {rules.length ? <DataTable name="regole-servite" label="Regole servite" rows={rules} cols={cols} filters={['type']} sort={{ key: 'again', dir: -1 }}
-        explain={{ find: <><b>{rules.length - back.length} regole su {rules.length} hanno funzionato</b>: il loro errore non è più tornato.{worst ? <> La meno efficace: <b>{short(worst.rule, 60)}</b>, errore tornato {worst.again} volte.</> : null}</>, next: worst ? "quella regola va riscritta: chiedilo alla Regia con le parole dell'errore" : undefined, says: 'per ogni regola nata da un errore, se l\'errore è tornato dopo.', why: "una regola che non ferma l'errore è solo testo in più." }} />
-        : <Empty title="Nessuna regola nata da un errore, ancora" />}
-    </>
-  );
-}
-
-function Lodi({ t }: { t: Tables }) {
-  const byChat = countBy(t.wins, r => r.chat);
-  const cols: Col<WinRow>[] = [
-    { key: 'data', label: 'Data', type: 'date', width: '92px', render: r => fmt.day(r.data) },
-    { key: 'ora', label: 'Ora', width: '60px' },
-    { key: 'chat', label: 'Chat', clip: true, width: '16%' },
-    { key: 'harness', label: 'Motore', width: '80px' },
-    { key: 'esito', label: 'Esito', width: '90px', help: 'pieno = lode senza riserve; parziale = «perfetto, però…»', render: r => <Pill tone={r.esito === 'pieno' ? 'good' : 'warn'}>{r.esito}</Pill> },
-    { key: 'parole', label: 'Le tue parole', clip: true },
-    { key: 'consegnato', label: 'Cosa era stato consegnato', clip: true },
-  ];
-  return t.wins.length ? <DataTable name="lodi" label="Lodi" rows={[...t.wins].reverse()} cols={cols} filters={['harness', 'esito']}
-    explain={{ find: <><b>{t.wins.length} lodi</b>; la chat che ne ha di più: <b>{byChat[0]?.[0]} ({byChat[0]?.[1]})</b>.</>, says: 'ogni volta che hai scritto «perfetto», «ora funziona»… e cosa era stato consegnato.', why: 'dice cosa funziona, da ripetere.' }} />
-    : <Empty title="Ancora nessuna lode registrata">Quando scrivi «perfetto» o «ora funziona» a una chat, la lode e cosa era stato consegnato arrivano qui.</Empty>;
-}
-
-function Taccuini({ t, nav }: { t: Tables; nav: Navigate }) {
-  const pb = t.playbooks;
-  const pts = sum(pb.map(p => p.punti)), proposed = sum(pb.map(p => p.proposti.length));
-  const cols: Col<Playbook>[] = [
-    { key: 'agent', label: 'Specialista', render: r => <button type="button" className="bx-go" onClick={() => nav(`esplora/playbooks/${r.agent}.md`)}>{r.agent}</button> },
-    { key: 'punti', label: 'Punti', type: 'num', help: 'Punti approvati, che lo specialista legge all\'avvio' },
-    { key: 'proposti', label: 'In attesa', type: 'num', value: r => r.proposti.length, help: 'Punti proposti dalle chat, non ancora approvati' },
-    { key: 'size', label: 'Caratteri (max 2500)', type: 'num', help: 'Il taccuino ha un tetto: quando è pieno si accorpa', render: r => (r.size > 2000 ? <Pill tone="warn">{fmt.int(r.size)}</Pill> : fmt.int(r.size)) },
-    { key: 'review', label: 'Da rivedere', value: r => r.review.join(', '), help: 'Punti con più voti «dannoso» che «utile»' },
-  ];
-  return pb.length ? <DataTable name="taccuini" label="Taccuini degli specialisti" rows={pb} cols={cols} search={false}
-    explain={{ find: <><b>{pts} punti</b> imparati in tutto, <b>{proposed} in attesa</b> del tuo sì.</>, next: proposed ? 'la Regia ti porta i punti proposti: un sì e lo specialista li usa' : undefined, says: 'il taccuino di ogni specialista: cosa ha imparato dai suoi errori e dalle tue lodi.', why: 'ogni punto rende lo specialista più bravo senza appesantire le altre chat.' }} />
-    : <Empty title="Nessun taccuino" />;
-}
-
-function Proposte({ t }: { t: Tables }) {
-  const st = countBy(t.proposals, r => r.stato), tp = countBy(t.proposals, r => r.tipo).slice(0, 10);
-  const applied = t.proposals.filter(p => p.stato === 'applicata').length, measured = t.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length;
-  const cols: Col<Proposal>[] = [
-    { key: 'id', label: 'Id', width: '72px', nowrap: true },
-    { key: 'data', label: 'Data', type: 'date', width: '92px', render: r => fmt.day(r.data) },
-    { key: 'proposta', label: 'Proposta', clip: true },
-    { key: 'tipo', label: 'Tipo', width: '100px' },
-    { key: 'stato', label: 'Stato', width: '110px', help: 'proposta → accettata → applicata → confermata (misurata e utile), oppure rifiutata / inutile / peggiorata', render: r => <Pill tone={propTone(r.stato)}>{r.stato || '—'}</Pill> },
-    { key: 'dettaglio', label: 'Dettaglio', clip: true, hidden: true },
-  ];
-  return (
-    <>
-      <div className="bx-grid-2">
-        <HBarChart title="Proposte per stato" name="proposte-stato" labels={st.map(([k]) => k)} series={[{ label: 'proposte', values: st.map(([, v]) => v) }]}
-          explain={{ find: <><b>{applied} applicate ma solo {measured} misurate</b> (confermate, inutili o peggiorate).</>, next: 'chiedi una misura per le applicate: senza, non sai se hanno aiutato', says: 'a che punto è ogni proposta di miglioramento.', why: 'tenere solo ciò che migliora davvero.' }} />
-        <HBarChart title="Proposte per tipo" name="proposte-tipo" labels={tp.map(([k]) => k)} series={[{ label: 'proposte', values: tp.map(([, v]) => v) }]}
-          explain={{ find: tp[0] ? <>Quasi sempre <b>{tp[0][0]}</b> ({tp[0][1]} su {t.proposals.length}).</> : undefined, says: 'di che tipo sono le proposte.', why: 'troppe regole e pochi script = più testo da rileggere.' }} />
-      </div>
-      <DataTable name="proposte" label="Proposte" rows={[...t.proposals].reverse()} cols={cols} filters={['stato', 'tipo']} detailTitle={r => `${r.id} · ${r.proposta}`}
-        explain={{ says: 'ogni proposta (regola, script, hook, agente) e il suo esito.', why: 'serve a non riproporre ciò che hai già scartato.' }} />
-    </>
-  );
-}
-
-function Misure({ t }: { t: Tables }) {
-  const m = t.measures.filter(x => x.metric === 'interventi_forzati').sort((a, b) => a.date.localeCompare(b.date));
-  const keys = [...new Set(m.flatMap(x => Object.keys(x.breakdown ?? {})))];
-  const first = m[0], last = m[m.length - 1];
-  const rows = [...t.measures].sort((a, b) => b.date.localeCompare(a.date));
-  const cols: Col<Measure>[] = [
-    { key: 'date', label: 'Data', type: 'date', width: '92px', render: r => fmt.day(r.date) },
-    { key: 'metric', label: 'Metrica' },
-    { key: 'value', label: 'Valore', type: 'num', width: '80px' },
-    { key: 'human', label: 'Tuoi messaggi', type: 'num', width: '120px', help: 'Quanti messaggi hai scritto quel giorno: per confrontare giorni pieni e vuoti' },
-    { key: 'model', label: 'Modello', width: '150px' },
-    { key: 'brain', label: 'Versione cervello', width: '130px', help: 'Il commit del cervello di quel giorno: lega una misura a un cambio di regole' },
-    ...keys.map(k => ({ key: `b:${k}`, label: k.replace(/_/g, ' '), type: 'num' as const, hidden: true, value: (r: Measure) => r.breakdown?.[k] ?? '' })),
-  ];
-  return (
-    <>
-      {m.length ? <StackedBars title="Interventi forzati per giorno" name="interventi-forzati" height={240} labels={m.map(x => fmt.day(x.date))} series={keys.map(k => ({ label: k.replace(/_/g, ' '), values: m.map(x => x.breakdown?.[k] ?? 0) }))}
-        explain={{ find: first && last && first !== last ? <>Dal {fmt.day(first.date)} al {fmt.day(last.date)}: <b>da {first.value} a {last.value}</b> interventi al giorno.</> : undefined, next: 'se sale, guarda il colore più alto: è il tipo di intervento da eliminare', says: "quante volte al giorno hai dovuto correggere, rispiegare o sollecitare l'IA.", why: 'è la misura di quanto il cervello ti fa perdere tempo: più basso è meglio.' }} />
-        : <Empty title="Nessuna misura registrata" />}
-      <DataTable name="misure" label="Misure" rows={rows} cols={cols} filters={['metric']} sort={{ key: 'date', dir: -1 }} />
-    </>
-  );
-}
-
-function Bug({ t }: { t: Tables }) {
-  const areas = countBy(t.bugs, r => r.area), pats = countBy(t.bugs, r => r.pattern);
-  const cols: Col<BugRow>[] = [
-    { key: 'data', label: 'Data', type: 'date', width: '92px', render: r => fmt.day(r.data) },
-    { key: 'area', label: 'Area', width: '16%' },
-    { key: 'bug', label: 'Bug', clip: true },
-    { key: 'pattern', label: 'Schema', width: '90px', help: 'Il tipo di errore ricorrente (catalogo del reviewer)' },
-    { key: 'fonte', label: 'Trovato da', width: '120px', clip: true },
-    { key: 'rif', label: 'Rif.', width: '120px', clip: true },
-  ];
-  return (
-    <>
-      {pats.length > 1 && <HBarChart title="Bug per schema" name="bug-schema" labels={pats.slice(0, 10).map(([k]) => k)} series={[{ label: 'bug', values: pats.slice(0, 10).map(([, v]) => v) }]} />}
-      <DataTable name="bug-log" label="Bug confermati" rows={[...t.bugs].reverse()} cols={cols} filters={['area', 'pattern']}
-        explain={{ find: areas[0] ? <>L'area con più bug: <b>{areas[0][0]} ({areas[0][1]})</b>.</> : undefined, next: areas[0] ? "prima di una review in quell'area, guarda questi bug: gli schemi si ripetono" : undefined, says: 'ogni bug confermato, con il suo schema.', why: 'gli schemi che tornano diventano controlli del reviewer.' }} />
-    </>
-  );
-}
-
-export function Qualita({ arg, nav }: { arg?: string; nav: Navigate }) {
+export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
   const t = useBrain('/api/tables', normTables);
-  const tab: Tab = TABS.includes(arg as Tab) ? (arg as Tab) : 'errori';
-  const d = t.data;
-  const week = d ? d.errors.filter(r => daysBetween(r.data, d.today) < 7).length : 0;
-  const rules = d?.recurrence.rules ?? [];
-  const held = rules.filter(r => !r.again).length;
+  const a = useBrain('/api/quality', normAppQuality);
+  const d = t.data, app = a.data, q = d?.quality ?? null;
+  const reload = () => { t.reload(); a.reload(true); }; // fresh: main reads DevOps again now (brain/quality.ts)
+
+  const caught = q && app ? caughtPer100(q.seenByDay, app.turns) : null;
+  const rules = q ? ruleStats(q) : null;
+  const out = q ? outOfCount(q) : null;
+  const share = app ? reopenShare(app.reopen) : null;
+  const weeks = caught ? caughtWeeks(caught) : null;
+  const caughtReading = weeks && weeks.cur !== null
+    ? trend(weeks.cur, weeks.prev, { what: 'ogni 100 turni', now: 'negli ultimi 7 giorni', before: 'nei 7 prima' }) : null;
+  const patterns = d ? errorPatterns(d.errors, q?.rules ?? [], d.today, ownerOf(d.ideas)) : null;
+  const errReading = patterns && patterns.to ? trend(patterns.week, patterns.prevWeek, { what: patterns.week === 1 ? 'errore registrato' : 'errori registrati', now: 'negli ultimi 7 giorni', before: 'nei 7 prima' }) : null;
+  const applied = d?.proposals.filter(p => p.stato === 'applicata').length ?? 0;
+  const measured = d?.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length ?? 0;
+
   return (
     <>
-      <PageHead title="Qualità" at={t.at} onRefresh={() => t.reload()}
-        lead={d ? <><b>{d.errors.length} errori</b> dell'IA registrati ({week} negli ultimi 7 giorni), <b>{d.wins.length} lodi</b>{rules.length ? <>; <b>{held} regole su {rules.length}</b> hanno fermato il loro errore</> : null}.</> : undefined}
-        what="Come lavora l'IA, dai registri del cervello: errori, regole, lodi, taccuini, proposte, misure e bug." />
-      <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={() => t.reload()} lines={6} block>
+      <PageHead title="Qualità" at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
+        lead={caught && rules && app ? <>
+          {caught.per100 !== null ? <><b>{caught.per100.toLocaleString('it-IT')} errori ogni 100 turni</b> li hai dovuti trovare tu</> : <>Turni non ancora misurati</>};{' '}
+          <b>{rules.tornato} regole su {rules.judged}</b> non hanno fermato il loro errore; {app.prs.at ? <><b>{app.prs.blocked.length} PR ferme</b></> : <>PR non lette</>}; {app.reopen.at ? <><b>{app.reopen.bugs.length} bug</b> tornati attivi in {app.reopen.days} giorni</> : <>bug riaperti non ancora letti</>}.
+        </> : undefined}
+        what="Quattro misure dai registri veri: ognuna dice da dove viene e che giorni copre." />
+      <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
         {() => d && (
-          <>
-            <Tabs label="Sezioni della qualità" value={tab} onChange={id => nav(id === 'errori' ? 'qualita' : `qualita/${id}`)} items={[
-              { id: 'errori', label: 'Errori', n: d.errors.length }, { id: 'regole', label: 'Regole servite?', n: rules.length }, { id: 'lodi', label: 'Lodi', n: d.wins.length },
-              { id: 'taccuini', label: 'Taccuini', n: d.playbooks.length }, { id: 'proposte', label: 'Proposte', n: d.proposals.length }, { id: 'misure', label: 'Misure', n: d.measures.length }, { id: 'bug', label: 'Bug', n: d.bugs.length },
-            ]} />
-            <div className="bx-section" data-testid={`bx-quality-${tab}`}>
-              {tab === 'errori' ? <Errori t={d} /> : tab === 'regole' ? <Regole t={d} /> : tab === 'lodi' ? <Lodi t={d} /> : tab === 'taccuini' ? <Taccuini t={d} nav={nav} /> : tab === 'proposte' ? <Proposte t={d} /> : tab === 'misure' ? <Misure t={d} /> : <Bug t={d} />}
+          <div className="bx-section" data-testid="bx-quality">
+            {!q && <p className="bx-warnline" role="note">Il cervello non calcola ancora la qualità degli errori (manca quality() in ops/tools/recurrence.mjs): aggiorna il brain.</p>}
+            <div className="bx-grid-2">
+              {q && <Metric id="trovati" title="Errori che hai dovuto trovare tu"
+                help="Errori degli agenti che hai scoperto tu, non un reviewer, la QA o un controllo automatico. Più il numero è basso, meno tempo perdi a ricontrollare il loro lavoro."
+                value={caught?.per100 != null ? caught.per100.toLocaleString('it-IT') : '—'} unit="ogni 100 turni" tone={caught?.per100 ? 'warn' : undefined}
+                reading={caughtReading}
+                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: 'errori che ho dovuto trovare io, ogni 100 turni', inBrain: false, source: 'ai-errors.md («visto da») ÷ turni nei log dell\'app',
+                  facts: [`${caught.per100.toLocaleString('it-IT')} ogni 100 turni ${range(caught.from, caught.to)}: ${caught.caught} trovati da me su ${caught.turns} turni, ${caught.others} trovati da altri`,
+                    caughtReading ? caughtReading.text : '', 'le chat fuori dall\'app hanno errori ma non turni: il numero può essere più alto del vero'],
+                  question: 'Cosa ci dice questo numero? Quali errori avrei potuto non dover trovare io, e con quale controllo automatico?' } : undefined}
+                find={caught && caught.from ? <>{range(caught.from, caught.to)}: <b>{caught.caught} errori li hai visti tu</b> su {fmt.int(caught.turns)} turni; altri {caught.others} li hanno trovati reviewer, QA, hook o l'agente stesso.{caught.unknown ? <> {caught.unknown} righe senza «visto da».</> : null}</>
+                  : <>I log dell'app non hanno ancora turni: il conto parte dal primo giorno di log.</>}
+                next={caught?.caught ? <>apri gli errori trovati da te (<button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>ai-errors.md</button>): quelli che si ripetono chiedono un controllo automatico, non una regola in più</> : undefined}
+                source={<>ai-errors.md (campo «visto da» con il tuo nome) ÷ turni finiti nei log dell'app, solo nei giorni coperti da entrambi ({range(app?.turns.from, app?.turns.to)}; i log tengono 14 giorni).
+                  Le chat fuori dall'app (Claude desktop, Cursor) hanno errori ma non turni: il numero può essere più alto del vero.{caught?.before ? <> {caught.before} errori trovati da te prima dei log restano fuori.</> : null}</>}>
+                {caught && caught.days.length > 0 && (
+                  <details className="bx-q-more"><summary>Giorno per giorno</summary>
+                    <ul className="bx-list compact" data-testid="bx-q-trovati-days">
+                      {caught.days.map(x => <li key={x.date}><span className="meta">{fmt.day(x.date)}</span><span className="t">{x.caught} su {fmt.int(x.turns)} turni</span><span className="meta">{rate(x.caught, x.turns)} / 100</span></li>)}
+                    </ul>
+                  </details>
+                )}
+              </Metric>}
+
+              {q && rules && out && <Metric id="tornati" title="Errori tornati dopo la regola"
+                help="Dopo un errore si scrive una regola perché non si ripeta. Qui conti le regole che non sono bastate: lo stesso tipo di errore è tornato entro pochi giorni."
+                value={rules.judged ? `${rules.tornato} su ${rules.judged}` : '—'} unit={`regole: l'errore è tornato entro ${q.windowDays} giorni`} tone={rules.tornato ? 'bad' : undefined}
+                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: 'regole che non hanno fermato il loro errore', inBrain: true, source: 'ai-errors.md, righe con «regola:»',
+                  facts: [`${rules.tornato} ${rules.tornato === 1 ? 'regola' : 'regole'} su ${rules.judged} giudicate: l'errore è tornato entro ${q.windowDays} giorni (${range(q.from, q.to)})`,
+                    ...rules.rules.filter(r => r.status === 'tornato').slice(0, 4).map(r => `non ha tenuto: ${r.rule} (${r.type}, ${r.area}; di nuovo il ${r.again.map(x => fmt.day(x.date)).join(', ')})`),
+                    `${rules.presto} ${rules.presto === 1 ? 'regola troppo recente' : 'regole troppo recenti'} per dirlo`],
+                  question: 'Perché queste regole non hanno fermato il loro errore? Per ognuna: regola da riscrivere o controllo automatico?' } : undefined}
+                find={<><b>{rules.presto} regole troppo recenti</b> per dirlo (meno di {q.windowDays} giorni){rules.senzaTipo ? <>, {rules.senzaTipo} senza un tipo valido</> : null}.</>}
+                next={rules.tornato ? <>riscrivi la regola del primo «tornato» qui sotto: chiedilo alla Regia con le parole dell'errore</> : out.total ? <>correggi il tipo delle righe fuori conteggio (uno degli 11 dell'intestazione di ai-errors.md)</> : undefined}
+                source={<>ai-errors.md, righe con «regola:» ({range(q.from, q.to)}). Tornato = stesso tipo (gli 11 ufficiali; i sinonimi evidenti contano come il loro tipo) e un'area con una parola in comune, entro {q.windowDays} giorni dalla regola.</>}>
+                {out.total > 0 && <p className="bx-warnline" role="note" data-testid="bx-q-fuori">{out.total} righe su {q.lines} fuori dal conteggio: {out.unparsed} illeggibili (manca «detto:» o un campo), {out.invalid} senza tipo valido.</p>}
+                {out.total > 0 && (
+                  <details className="bx-q-more"><summary>Quali righe</summary>
+                    <ul className="bx-list compact">
+                      {out.labels.map(([l, c]) => <li key={l}><span className="t">«{short(l, 70)}»</span><span className="meta">{c} {c === 1 ? 'riga' : 'righe'}</span></li>)}
+                      {q.unparsed.map((u, i) => <li key={`u${i}`}><span className="meta">{fmt.day(u.date)}</span><span className="t">{short(u.line.replace(/^- \S+ (\S+ )?· /, ''), 110)}</span><span className="meta">illeggibile</span></li>)}
+                    </ul>
+                  </details>
+                )}
+                {rules.rules.length > 0 && (
+                  <ul className="bx-list" data-testid="bx-q-regole">
+                    {rules.rules.slice(0, 6).map((r, i) => (
+                      <li key={i}><Pill tone={STATUS[r.status]?.tone}>{STATUS[r.status]?.label}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}{r.again.length ? ` · tornato il ${r.again.map(x => fmt.day(x.date)).join(', ')}` : ''}</span></li>
+                    ))}
+                    {rules.rules.length > 6 && (
+                      <li><details className="bx-q-more"><summary>{rules.rules.length === 7 ? 'Un’altra regola' : `Altre ${rules.rules.length - 6} regole`}</summary>
+                        <ul className="bx-list compact">
+                          {rules.rules.slice(6).map((r, i) => <li key={i}><Pill tone={STATUS[r.status]?.tone}>{STATUS[r.status]?.label}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}</span></li>)}
+                        </ul>
+                      </details></li>
+                    )}
+                  </ul>
+                )}
+              </Metric>}
+
+              {app && <Metric id="pr" title="Tue PR ferme per QA o build"
+                help="Una PR è ferma quando il prossimo passo è tuo: build fallita, un test fallito o bloccato, oppure un revisore che rifiuta o chiede modifiche."
+                value={app.prs.blocked.length} unit={`su ${app.prs.total} PR attive`} tone={app.prs.blocked.length ? 'bad' : undefined}
+                quote={app.prs.blocked.length ? { id: 'q|pr', what: 'numero', title: 'mie PR ferme per QA o build', source: `lettura DevOps delle mie PR attive${app.prs.at ? `, ${fmt.when(app.prs.at)}` : ''}`,
+                  facts: [`${app.prs.blocked.length} PR ferme su ${app.prs.total} attive`, ...app.prs.blocked.slice(0, 5).map(p => `${p.title} (${p.repo}): ${p.reasons.join(', ')}`)],
+                  question: 'Da quale parto e qual è il primo passo per sbloccarla?' } : undefined}
+                find={app.prs.blocked.length ? <><b>{app.prs.blocked.length} PR</b> aspettano te prima del lavoro nuovo.</> : app.prs.total ? <>Nessuna PR ferma: nessuna build fallita, nessun test case fallito o voto negativo.</> : <>Nessuna PR attiva all'ultima lettura.</>}
+                next={app.prs.blocked.length ? <>sistema queste prima di tutto il resto: la QA è ferma su di te</> : undefined}
+                source={<>lettura DevOps delle tue PR attive (pagina DevOps, sola lettura){app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>: mai letta</>}. Ferma = build fallita, test case collegato Failed o Blocked, voto «rifiutata» o «in attesa dell'autore».</>}>
+                {app.prs.error && <p className="bx-warnline" role="note">{app.prs.error}</p>}
+                {app.prs.blocked.length > 0 && (
+                  <ul className="bx-list" data-testid="bx-q-pr-list">
+                    {app.prs.blocked.map(p => <li key={p.id}><span className="t"><ExtLink href={p.url}>{p.title}</ExtLink><br /><span className="meta">{p.reasons.join(' · ')}</span></span><span className="meta">{p.repo}</span></li>)}
+                  </ul>
+                )}
+              </Metric>}
+
+              {app && <Metric id="riaperti" title="Bug tornati attivi dopo il tuo fix"
+                help="Bug che avevi messo Resolved e che qualcuno, di solito la QA, ha riaperto: il fix non bastava. La percentuale è su tutti i bug che hai risolto nel periodo."
+                value={app.reopen.at ? app.reopen.reopened : '—'} unit={app.reopen.at ? <>su {app.reopen.resolved} risolti da te{share !== null ? ` (${share}%)` : ''}</> : undefined} tone={app.reopen.reopened ? 'warn' : undefined}
+                quote={app.reopen.reopened ? { id: 'q|riaperti', what: 'numero', title: 'bug tornati attivi dopo il mio fix', source: `storico degli stati su DevOps, ultimi ${app.reopen.days} giorni`,
+                  facts: [`${app.reopen.reopened} su ${app.reopen.resolved} risolti da me${share !== null ? ` (${share}%)` : ''}`,
+                    ...app.reopen.bugs.slice(0, 5).map(b => `${b.title}: ${b.reopened.map(r => `riaperto il ${fmt.day(r.reopenedAt.slice(0, 10))}${r.by ? ` da ${r.by}` : ''}`).join(', ')}`)],
+                  question: 'Cosa è sfuggito ai miei test in questi bug, e cosa controllo prima del prossimo Resolved?' } : undefined}
+                find={app.reopen.at ? (app.reopen.reopened ? <><b>{app.reopen.bugs.length} bug</b> sono tornati Active (o New) dopo che li avevi messi Resolved.</> : <>Nessun bug tornato indietro dopo un tuo Resolved.</>)
+                  : app.reopen.refreshing ? <>Lettura in corso: premi Aggiorna tra un minuto.</> : <>Non ancora letto.</>}
+                next={app.reopen.reopened ? <>apri il più recente e leggi il commento di chi l'ha riaperto: cosa è sfuggito al test?</> : undefined}
+                source={<>storico degli stati su DevOps (ops/tools/bug-reopen.mjs, sola lettura), ultimi {app.reopen.days} giorni{app.reopen.at ? <>, letto {fmt.when(app.reopen.at)}</> : null}; si rilegge da solo ogni 12 ore quando la lettura DevOps è accesa. Conta solo i Resolved fatti da te.</>}>
+                {app.reopen.error && <p className="bx-warnline" role="note">{app.reopen.error}</p>}
+                {app.reopen.bugs.length > 0 && (
+                  <ul className="bx-list" data-testid="bx-q-riaperti-list">
+                    {[...app.reopen.bugs].sort((x, y) => (y.reopened.at(-1)?.reopenedAt ?? '').localeCompare(x.reopened.at(-1)?.reopenedAt ?? '')).slice(0, 6).map(b => (
+                      <li key={b.id}><span className="t"><ExtLink href={b.url || undefined}>{short(b.title, 90)}</ExtLink><br />
+                        <span className="meta">{b.reopened.map(r => `risolto ${fmt.day(r.resolvedAt.slice(0, 10))}, riaperto ${fmt.day(r.reopenedAt.slice(0, 10))}${r.by ? ` da ${r.by}` : ''}`).join(' · ')}</span></span>
+                        <span className="meta">{b.state}</span></li>
+                    ))}
+                  </ul>
+                )}
+              </Metric>}
             </div>
-          </>
+            {a.error && !app && <p className="bx-warnline" role="note">Turni, PR e bug riaperti non letti: {a.error}</p>}
+
+            {patterns && (
+              <Section title="Errori che si ripetono" count={patterns.recurring.length} testId="bx-q-errori" actions={<PatternsHelp />}
+                note={<>raggruppati per tipo, da ai-errors.md ({range(patterns.from, patterns.to)}); prima i più frequenti di questa settimana</>}>
+                {errReading && <Reading t={errReading} testId="bx-q-errori-reading" />}
+                <ErrorPatterns p={patterns} nav={nav} />
+              </Section>
+            )}
+
+            <p className="bx-q-row" data-testid="bx-q-proposte">
+              <b>Proposte di miglioramento:</b> {d.proposals.length}, di cui {applied} applicate, {measured} misurate (confermate, inutili o peggiorate).
+              {' '}<button type="button" className="bx-go" onClick={() => nav('esplora/proposals.md')}>Apri proposals.md</button>
+            </p>
+          </div>
         )}
       </Async>
     </>

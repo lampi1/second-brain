@@ -2,18 +2,19 @@
 // tiles, tabs and segmented controls, external links (http(s) only: main opens them outside the app), icons, a toast,
 // copy to clipboard and file download (both with fallbacks: the app window grants no permissions). Used by every page.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { TextPart } from '../lib/text';
+import { HelpTip } from '../../components/HelpTip';
 
 export type Tone = 'good' | 'warn' | 'bad' | 'blue' | 'violet' | 'outline' | 'neutral' | '';
 export function Pill({ tone = '', children, title }: { tone?: Tone; children: ReactNode; title?: string }) {
   return <span className={`bx-pill ${tone === 'neutral' ? '' : tone}`} title={title}>{children}</span>;
 }
 
-export function Section({ title, count, note, actions, children, id, testId }: { title: ReactNode; count?: number; note?: ReactNode; actions?: ReactNode; children: ReactNode; id?: string; testId?: string }) {
+export function Section({ title, count, note, actions, children, id, testId, help }: { title: ReactNode; count?: number; note?: ReactNode; actions?: ReactNode; children: ReactNode; id?: string; testId?: string; help?: ReactNode }) {
   return (
     <section className="bx-section" aria-labelledby={id ? `${id}-h` : undefined} data-testid={testId}>
       <div className="bx-section-head">
         <h2 id={id ? `${id}-h` : undefined}>{title}{count !== undefined && <span className="count"> · {count}</span>}</h2>
+        {help}
         {note && <p>{note}</p>}
         {actions && <><span className="sp" />{actions}</>}
       </div>
@@ -22,8 +23,8 @@ export function Section({ title, count, note, actions, children, id, testId }: {
   );
 }
 
-export function Kpi({ k, v, s, tone, testId }: { k: string; v: ReactNode; s?: ReactNode; tone?: 'warn'; testId?: string }) {
-  return <div className={`bx-kpi ${tone ?? ''}`} data-testid={testId}><span className="k">{k}</span><span className="v">{v}</span>{s && <span className="s">{s}</span>}</div>;
+export function Kpi({ k, v, s, tone, testId, help }: { k: string; v: ReactNode; s?: ReactNode; tone?: 'warn'; testId?: string; help?: ReactNode }) {
+  return <div className={`bx-kpi ${tone ?? ''}`} data-testid={testId}><span className="k">{k}{help && <HelpTip label={k}>{help}</HelpTip>}</span><span className="v">{v}</span>{s && <span className="s">{s}</span>}</div>;
 }
 
 export function Tabs<T extends string>({ items, value, onChange, label }: { items: { id: T; label: string; n?: number }[]; value: T; onChange: (id: T) => void; label: string }) {
@@ -53,15 +54,10 @@ export function Seg<T extends string | number>({ items, value, onChange, label }
 
 const safeUrl = (u: string | undefined): string | null => (u && /^https?:\/\//i.test(u) ? u : null);
 /** A link that opens outside the app (main turns target=_blank into the system browser); non-http URLs are plain text. */
-export function ExtLink({ href, children, title, className }: { href?: string; children: ReactNode; title?: string; className?: string }) {
+export function ExtLink({ href, children, title, className, onClick }: { href?: string; children: ReactNode; title?: string; className?: string; onClick?: () => void }) {
   const u = safeUrl(href);
   if (!u) return <span className={className}>{children}</span>;
-  return <a href={u} target="_blank" rel="noopener noreferrer" title={title ?? u} className={className}>{children}</a>;
-}
-
-/** Text with DevOps numbers already turned into named links (lib/text linkify). */
-export function Linked({ parts }: { parts: TextPart[] }) {
-  return <>{parts.map((p, i) => (typeof p === 'string' ? <span key={i}>{p}</span> : <ExtLink key={i} href={p.url} title={p.title}>{p.label}</ExtLink>))}</>;
+  return <a href={u} target="_blank" rel="noopener noreferrer" title={title ?? u} className={className} onClick={onClick} onAuxClick={e => { if (e.button === 1) onClick?.(); }}>{children}</a>;
 }
 
 export function Harness({ name }: { name: string }) {

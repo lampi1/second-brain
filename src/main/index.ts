@@ -1,24 +1,40 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
-import { app, dialog, type BrowserWindow } from 'electron';
+import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { initRelease } from './release';
 import { createWindow, hiddenRun } from './window';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
 import { log } from './log';
+import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { claudeStatus, cursorStatus, openLogin } from './cli';
 import { OverlayLayer } from './overlay';
+import { openLocal, type Shell } from './open-path';
+import { peekFile } from './peek-file';
+import { healthSnapshot } from './health';
+import { jobGuard } from './chats/jobguard';
+import { clipReader, readClipboardImage } from './clipboard-image';
+import { gitBranches } from './chats/branch';
+import { SearchService, demoBranchOf } from './search/service';
+import { gitBranch } from './search/sources';
+import { findTranscript } from './chats/transcript';
+import { FROZEN_EPOCH } from './demo';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 app.setAppUserModelId(APP_ID);
 // userData (ADR 0007): a stable release (started by the launcher, SB_RELEASE set) uses %APPDATA%/second-brain; a build run
 // from the repo uses %APPDATA%/second-brain-dev and MCP port 4329, so dev never touches the stable cockpit; tests isolate it.
-export const isStable = !!process.env.SB_RELEASE;
+// first: read the release and scrub the stable-only variables, so no CLI, shell or dev instance inherits them
+const stable = initRelease(app.getAppPath());
+export const isStable = !!stable.release;
 if (!isStable && !process.env.SB_MCP_PORT) process.env.SB_MCP_PORT = '4329';
 app.setPath('userData', process.env.SB_USER_DATA ?? path.join(app.getPath('appData'), isStable ? 'second-brain' : 'second-brain-dev'));
-if (!app.requestSingleInstanceLock()) app.quit();
+// a second start (the icon clicked while the app is open or still quitting) leaves at once, before any service starts,
+// with the code the stable launcher (scripts/release.mjs ALREADY_RUNNING) reads as "already open", never "broken"
+if (!app.requestSingleInstanceLock()) app.exit(75);
 
 let win: BrowserWindow | null = null;
 
@@ -28,32 +44,57 @@ app.whenReady().then(async () => {
   log.info('app', 'start', { data: { version: app.getVersion(), electron: process.versions.electron, userData: app.getPath('userData') } });
   win = createWindow(outDir);
   const emitter = new Emitter(() => win?.webContents ?? null);
+  // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
+  if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
   // the global request layer: a small top-most view above browser tiles and pages (main/overlay.ts)
   const overlay = new OverlayLayer(() => win, outDir);
   overlay.start();
   (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
+  const opened: string[] = [];
+  const hiddenShell: Shell = { openPath: async p => { opened.push(`open ${p}`); return ''; }, showItemInFolder: p => { opened.push(`folder ${p}`); } };
+  (globalThis as Record<string, unknown>).__sbOpened = opened; // e2e: what a hidden run would have opened
+  const clip = clipReader();
+  // Ctrl+K full-text search (ADR 0023): indexed on the first query, updated only when the user searches
+  const demo = process.env.SB_DEMO === '1';
+  const search = new SearchService({
+    chats: () => s.chats.list(),
+    items: id => s.chats.items(id),
+    transcriptOf: c => (!demo && c.harness === 'claude' && c.sessionId ? findTranscript(c.sessionId, c.cwd) : null),
+    brainRoot: () => (demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot),
+    branchOf: demo ? demoBranchOf : gitBranch,
+    ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
+  });
   const handlers: Handlers = {
-    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli() }),
+    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), health: healthSnapshot() }),
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
       const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
       if (dir) await s.brain.setSettings({ brainRoot: dir });
       return dir;
     },
+    // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
+    'app:openPath': a => openLocal(a.path, hiddenRun() ? hiddenShell : shell),
+    'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
     'app:usage': () => s.brain.usage(),
     'cli:status': a => (a.harness === 'claude' ? claudeStatus() : cursorStatus()),
     'cli:login': a => openLogin(a.harness),
     'chat:list': () => s.chats.list(),
     'chat:items': a => s.chats.items(a.chatId),
-    'chat:pending': () => s.chats.pending(),
+    'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
     'chat:create': a => s.chats.create(a),
-    'chat:send': a => s.chats.send(a.chatId, a.text),
+    'chat:send': a => s.chats.send(a.chatId, a.text, a.images),
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
-    'chat:stop': a => s.chats.stop(a.chatId),
+    'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
     'chat:close': a => s.chats.close(a.chatId),
+    'chat:archive': a => s.chats.archive(a.chatId, { auto: a.auto === true }),
+    'chat:reopen': a => s.chats.reopen(a.chatId),
+    'chat:admitNow': a => s.chats.admitNow(a.chatId),
     'chat:set': ({ chatId, ...patch }) => s.chats.set(chatId, patch),
+    'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
+    'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),
+    'chat:continue': a => s.chats.continueChat(a.chatId),
     'browser:list': () => s.browser.list(),
     'browser:open': a => s.browser.open(a.url, a.ownerChatId ?? null, a.env),
     'browser:navigate': a => s.browser.navigate(a.tabId, a.url),
@@ -62,7 +103,10 @@ app.whenReady().then(async () => {
     'views:layout': a => s.browser.layout(a),
     'browser:handoffs': () => s.browser.handoffs(),
     'browser:handoffResolve': a => s.browser.resolveHandoff(a.id, a.outcome, a.note),
+    'browser:handoffCopy': a => s.browser.copyFromHandoff(a.id, a.field),
     'browser:envList': () => s.browser.envs(),
+    'credentials:list': () => s.browser.credentials(),
+    'credentials:copy': a => s.browser.copyCredential(a.id, a.field),
     'feed:list': () => s.brain.feed(),
     'feed:mute': a => s.brain.mute(a.kind, a.muted),
     'settings:get': () => s.brain.settings(),
@@ -77,15 +121,59 @@ app.whenReady().then(async () => {
     'estimate:get': a => s.brain.estimate(a),
     'estimate:record': a => s.brain.recordJob(a),
     'brain:api': a => s.brain.api(a?.path),
+    'compare:list': () => s.brain.compareList(),
+    'compare:set': a => s.brain.compareSet(a?.experiment, a?.on, a?.agent),
+    'learn:act': a => s.brain.learnAct(a),
+    'models:seen': () => s.brain.modelsSeen(),
+    'routing:get': () => s.brain.routingInfo(),
+    // the renderer is the user's (sender check in ipc.ts): agents never reach this write, they only propose in chat
+    'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null),
+    'devops:get': () => s.devops.get(),
+    'devops:refresh': () => s.devops.refresh(),
+    // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
+    'chat:branches': a => {
+      const known = new Set(s.chats.list().map(c => c.cwd));
+      const cwds = Array.isArray(a?.cwds) ? a.cwds.filter(c => typeof c === 'string' && known.has(c) && !/^[\\/]{2}/.test(c)) : [];
+      return (s.branches ?? gitBranches)(cwds);
+    },
+    'devops:markRead': a => s.devops.markRead(Array.isArray(a?.keys) ? a.keys.filter((k): k is string => typeof k === 'string').slice(0, 2000) : undefined),
     'overlay:model': a => overlay.setModel(a),
     'overlay:size': a => overlay.setSize(a.width, a.height),
+    'app:inputLag': a => logInputLag(a),
     'overlay:action': a => overlay.relay(a),
     'overlay:focus': a => overlay.focus(a.target),
+    // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)
+    'run:start': a => { const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
+    'run:dismiss': a => s.asks.dismiss(a.chatId, a.requestId),
+    'run:stop': a => s.runner.stop(a.runId),
+    'run:list': a => s.runner.list(a?.chatId),
+    'skills:list': () => s.skills.list(),
+    'skills:read': a => s.skills.read(String(a?.id ?? '')),
+    'skills:save': a => s.skills.save(a),
+    'skills:delete': a => s.skills.remove(String(a?.id ?? '')),
+    // the engine's own list when it reported one, else its skills on disk for the chat's folder
+    'chat:commands': a => {
+      const c = s.chats.list().find(x => x.id === a?.chatId);
+      return c ? s.chats.commands(c.id) ?? s.skills.commandsFor(c.harness, c.cwd) : [];
+    },
+    // "Migliora l'app" (ADR 0020): promote and restart only on the user's click, never from an agent's tool
+    'improve:get': a => (a?.refresh || !s.improve.state().at ? s.improve.refresh() : s.improve.state()),
+    'improve:promote': () => s.improve.promote(),
+    'improve:regia': a => s.improve.createRegia(a?.harness === 'cursor' ? 'cursor' : 'claude', typeof a?.model === 'string' && a.model ? a.model : undefined),
+    'improve:dismissLaunch': () => s.improve.dismissLaunch(),
+    'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
+    'search:query': a => search.query(String(a?.q ?? '')),
+    'later:get': () => s.later.get(),
+    'later:set': a => s.later.set(a?.on === true),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
+  // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
+  // which may have fired while the services were starting
+  const resumed = s.chats.resumeInterrupted();
+  if (resumed) log.info('app', 'chats resumed after the restart', { data: { resumed } });
   // the stable launcher (scripts/release.mjs launch) waits for this file to know the release started (ADR 0007)
   win.once('ready-to-show', () => {
-    try { fs.writeFileSync(path.join(app.getPath('userData'), 'ready.json'), JSON.stringify({ release: process.env.SB_RELEASE ?? 'dev', pid: process.pid, at: new Date().toISOString() })); } catch (e) { log.warn('app', 'ready file not written', { data: String(e) }); }
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'ready.json'), JSON.stringify({ release: stable.release ?? 'dev', pid: process.pid, at: new Date().toISOString() })); } catch (e) { log.warn('app', 'ready file not written', { data: String(e) }); }
   });
   win.on('closed', () => { win = null; app.quit(); });
   // Quit: idle CLIs end cleanly, busy ones get their process trees killed (shutdown; capped at 6 s because taskkill
@@ -98,10 +186,20 @@ app.whenReady().then(async () => {
     e.preventDefault();
     if (quitting) return;
     quitting = true;
+    log.info('app', 'quit started');
+    // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }
     const cap = new Promise<void>(r => setTimeout(r, 6000));
     void Promise.race([s.shutdown(), cap])
       .catch(err => log.warn('app', 'shutdown failed', { data: String(err) }))
-      .finally(() => { s.killNow(); app.exit(0); });
+      .finally(() => {
+        s.killNow();
+        // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Regia widget state) written in
+        // the last seconds would be lost without this
+        session.defaultSession.flushStorageData();
+        log.info('app', 'exit');
+        app.exit(0);
+      });
   });
   app.on('will-quit', () => s.killNow());
 });

@@ -1,34 +1,46 @@
-// The app shell: top bar, the left navigation (chat grid, brain sections, the map), the needs-you lane (Mosaico), the
-// workspace (fixed Regia column with a splitter + the current view: Mosaico, Corsie or focus mode) or a brain page
-// (with the Regia docked on demand), the full-screen 3D map, the notification center, toasts, the live region,
-// tooltips and dialogs. It owns the global keyboard map (lib/keys.ts → actions.ts, G-letter go-to sequences), theme
-// and density, highlights the element a link points to, and tells the browser-view reporter when something covers
-// everything. Mounted by main.tsx.
+// The app shell: top bar, the left navigation (chat grid, brain sections, the map), the needs-you lane (focus mode's
+// peek), the workspace (the current view: Mosaico, Corsie or focus mode) or a brain page, the full-screen 3D map, the
+// Regia widget docked bottom-right over all of them, with its room kept free (RegiaOverlay.tsx, ADR 0028), the notification center, toasts, the live
+// region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
+// (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
+// tells the browser-view reporter when something covers everything. Mounted by main.tsx.
 import { useEffect, type CSSProperties } from 'react';
-import { BRAIN_PAGES, BrainMap, BrainPage } from './brain';
+import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
 import { makeLink } from './lib/notify';
+import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleView, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleBrowsers, toggleView, ui } from './store/ui';
 import {
-  back, copyLink, escapeOne, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia,
+  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia, askRenewRegia,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
+import { HealthBanner } from './components/HealthBanner';
 import { Sidebar } from './components/Sidebar';
 import { NeedsLane, LiveRegion } from './components/NeedsLane';
-import { RegiaTile } from './components/RegiaTile';
+import { RegiaOverlay, useDockReserve } from './components/RegiaOverlay';
 import { Mosaico } from './components/Mosaico';
 import { Corsie } from './components/Corsie';
 import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
+import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
 import { NewChatDialog } from './components/NewChatDialog';
+import { RegiaRenewDialog } from './components/RegiaRenewDialog';
 import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
-import { HarnessMark, IconArrowLeft, IconLink } from './components/Icons';
+import { HandoffDialog } from './components/HandoffDialog';
+import { CredentialsDialog } from './components/LoginsDialog';
+import { StatoDialog } from './components/StatoDialog';
+import { IconArrowLeft, IconLink } from './components/Icons';
 import { Keys, TooltipLayer } from './components/ui';
+import { SettingsPage } from './components/SettingsPage';
+import { SkillsPage } from './components/SkillsPage';
+import { QuestionsWindow } from './components/QuestionsWindow';
+import { ImprovePage } from './components/ImprovePage';
+import { LaunchBanner } from './components/LaunchBanner';
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -41,7 +53,7 @@ function onKey(e: KeyboardEvent): void {
   const u = ui.get();
   // "G then a letter": go to a section (never while typing in a field, never under a dialog)
   if (!u.modal && !editable(e.target)) {
-    const r = goSequence(gPending, e, Date.now(), BRAIN_PAGES);
+    const r = goSequence(gPending, e, Date.now(), [...BRAIN_PAGES, ...GO_ALIASES]);
     gPending = r.pendingAt;
     if (r.target) { e.preventDefault(); go({ page: r.target as (typeof BRAIN_PAGES)[number]['id'] }); return; }
     if (r.handled) { e.preventDefault(); return; }
@@ -50,15 +62,23 @@ function onKey(e: KeyboardEvent): void {
   if (!cmd) return;
   if (u.modal) {
     if (cmd.type === 'palette' && u.modal === 'palette') { e.preventDefault(); closeModal(); }
+    if (cmd.type === 'closeFocused') e.preventDefault(); // else Electron's default menu takes Ctrl+W and closes the window
     return; // an open dialog handles its own keys
+  }
+  // the questions window in front: only the palette, Ctrl+J and Esc act; nothing hidden under it (Ctrl+W, Ctrl+1-9…)
+  if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape') {
+    if (cmd.type === 'closeFocused') e.preventDefault();
+    return;
   }
   switch (cmd.type) {
     case 'palette': openModal('palette'); break;
     case 'next': nextThing(); break;
     case 'newChat': openModal('newChat'); break;
     case 'stopFocused': stopFocused(); break;
+    case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
     case 'toggleView': toggleView(); break;
+    case 'toggleBrowsers': toggleBrowsers(); break;
     case 'maximize': toggleMaximize(); break;
     case 'focusMode': toggleFocusMode(); break;
     case 'focusTile': focusTile(cmd.index); break;
@@ -67,7 +87,10 @@ function onKey(e: KeyboardEvent): void {
     case 'forward': forward(); break;
     case 'center': toggleCenter(); break;
     case 'regia': toggleRegia(); break;
+    case 'regiaRenew': askRenewRegia(); break;
     case 'map': if (u.map) setMap(false); else go({ page: 'mappa' }); break;
+    case 'settings': go({ page: 'impostazioni' }); break;
+    case 'stato': openModal('stato'); break;
     case 'escape': if (!escapeOne()) return; break;
   }
   e.preventDefault();
@@ -120,33 +143,9 @@ function useHighlight(): void {
   }, [h]);
 }
 
-function RegiaSplitter() {
-  const width = ui.use(s => s.prefs.regiaWidth);
-  const clamp = (w: number) => Math.round(Math.min(560, Math.max(260, w)));
-  return (
-    <div className="splitter v regia-split" role="separator" aria-orientation="vertical" aria-label="Larghezza della Regia" tabIndex={0} data-testid="splitter-regia"
-      onPointerDown={e => {
-        const el = e.currentTarget;
-        el.setPointerCapture(e.pointerId);
-        const left = el.parentElement?.getBoundingClientRect().left ?? 0;
-        const move = (ev: PointerEvent) => setPrefs({ regiaWidth: clamp(ev.clientX - left - 8) });
-        const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); schedule(); };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', up);
-      }}
-      onDoubleClick={() => setPrefs({ regiaWidth: null })}
-      onKeyDown={e => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        const cur = width ?? (document.querySelector('.regia-col')?.getBoundingClientRect().width ?? 320);
-        setPrefs({ regiaWidth: clamp(cur + (e.key === 'ArrowLeft' ? -24 : 24)) });
-      }} />
-  );
-}
-
-/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link", the Regia. */
+/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Regia
+ *  widget sits in the bottom-right corner, over the page too). */
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
-  const dock = ui.use(s => s.regiaDock);
   const arg = ui.use(s => s.pageArg);
   return (
     <div className="page-frame" data-testid={`page-${id}`}>
@@ -155,13 +154,14 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
         <h2>{pageLabel(id)}</h2>
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> Copia link</button>
-        <button type="button" className={`btn btn-s ${dock ? 'btn-regia' : 'btn-ghost'}`} onClick={toggleRegia} data-testid="page-regia" data-tip="La Regia qui, senza lasciare la pagina|Ctrl+R">
-          <HarnessMark harness="claude" regia size={16} /> Regia
-        </button>
         <span className="page-hint"><Keys combo="Esc" /> chat</span>
       </div>
       <div className="page-body">
-        <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} />
+        {id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+          ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
+          : id === 'skill'
+            ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>
+            : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
       </div>
     </div>
   );
@@ -178,7 +178,6 @@ export function App() {
   const view = ui.use(s => s.prefs.view);
   const density = ui.use(s => s.prefs.density);
   const theme = ui.use(s => s.prefs.theme);
-  const regiaWidth = ui.use(s => s.prefs.regiaWidth);
   const maximized = ui.use(s => s.maximized);
   const focusMode = ui.use(s => s.focusMode);
   const lanePeek = ui.use(s => s.lanePeek);
@@ -186,45 +185,44 @@ export function App() {
   const map = ui.use(s => s.map);
   const mapArg = ui.use(s => s.mapArg);
   const center = ui.use(s => s.center);
-  const dock = ui.use(s => s.regiaDock);
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
+  const dock = useDockReserve();
 
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
     root.dataset.density = density;
   }, [theme, density]);
-  useEffect(() => { setBlocked(modal !== null || map); }, [modal, map]);
+  const qShown = ui.use(s => s.qwin.shown);
+  useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
-  useEffect(() => { schedule(420); }, [view, maximized, focusMode, page, density, regiaWidth, lanePeek, center, dock]);
+  useEffect(() => { schedule(420); }, [view, maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
   useEffect(() => { if (focused) setPrefs({ lastFocus: focused }); }, [focused]);
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
-  const regiaMax = maximized === 'regia' && !page;
   const onPage = !!page;
-  const regiaInColumn = !onPage && !focusMode;
-  const regiaDocked = dock && (onPage || !!focusMode || map) && !regiaInColumn;
-  const showLane = !onPage && ((view === 'mosaico' && !focusMode) || lanePeek);
-  const style = (regiaWidth ? { '--regia-w': `${regiaWidth}px` } : {}) as CSSProperties;
+  // the Mosaico has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
+  // aspettano, adesso me le fa la regia"): each request is in its tile, the Regia or the global layer; focus mode keeps
+  // its Ctrl+J peek
+  const showLane = !onPage && lanePeek;
   return (
-    <div className="app" data-testid="app" data-view={view}>
+    // the Regia widget's corner: the workspace, the map and the questions window leave it free (shell.css)
+    <div className="app" data-testid="app" data-view={view} style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px` } as CSSProperties}>
       <TopBar />
       <BrainSetupBanner />
+      <HealthBanner />
+      <LaunchBanner />
       <div className="shell">
         <Sidebar />
         <div className="main-col">
           {showLane && <NeedsLane peek={lanePeek} />}
-          <main className={`workspace ${!regiaInColumn ? 'no-regia' : ''} ${regiaMax ? 'regia-max' : ''} ${regiaDocked ? 'docked' : ''}`} style={style} data-testid="workspace">
-            {regiaInColumn && <div className="regia-col"><RegiaTile maximized={regiaMax} /></div>}
-            {regiaInColumn && !regiaMax && <RegiaSplitter />}
-            {!regiaMax && (
-              <div className="view-area">
-                {onPage ? <PageFrame id={page} /> : focusMode ? <FocusView chatId={focusMode} /> : view === 'mosaico' ? <Mosaico /> : <Corsie />}
-              </div>
-            )}
+          <main className="workspace no-regia" data-testid="workspace">
+            <div className="view-area">
+              {onPage ? <PageFrame id={page} /> : focusMode ? <FocusView chatId={focusMode} /> : view === 'mosaico' ? <Mosaico /> : <Corsie />}
+            </div>
           </main>
         </div>
       </div>
@@ -232,18 +230,25 @@ export function App() {
         <div className="map-layer" data-testid="map-layer">
           <BrainMap onClose={() => setMap(false)} full={mapArg === 'tutto'} mode={mapArg === 'flat' ? 'flat' : undefined}
             focus={mapArg && mapArg !== 'tutto' && mapArg !== 'flat' ? mapArg : undefined}
-            onNavigate={t => { setMap(false); goTarget(t); }} />
+            onNavigate={t => { setMap(false); goTarget(t); }}
+            live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} />
         </div>
       )}
-      {regiaDocked && <div className="regia-dock" data-testid="regia-dock-panel"><RegiaTile docked /></div>}
+      <RegiaOverlay />
       {center && <NotificationCenter />}
       <Toasts />
+      <QuestionsWindow />
       <LiveRegion />
       <TooltipLayer />
+      <AutoCloser />
       {modal === 'palette' && <CommandPalette />}
       {modal === 'newChat' && <NewChatDialog />}
       {modal === 'shortcuts' && <ShortcutsDialog />}
       {modal === 'confirm' && <ConfirmDialog />}
+      {modal === 'regiaRenew' && <RegiaRenewDialog />}
+      {modal === 'handoff' && <HandoffDialog />}
+      {modal === 'credentials' && <CredentialsDialog />}
+      {modal === 'stato' && <StatoDialog />}
     </div>
   );
 }

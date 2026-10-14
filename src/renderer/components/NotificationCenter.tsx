@@ -6,7 +6,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FeedEvent } from '@shared/contract';
 import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
-import { isUnread, linkOfEvent, markAllRead, markRead, tierOf } from '../lib/notify';
+import { bellCount, isActionable, isUnread, linkOfEvent, markAllRead, markRead, tierOf } from '../lib/notify';
 import { registerOverlay } from '../lib/viewports';
 import { dndUntil, muteKind, setDnd, useApp } from '../store/store';
 import { setCenter, setRead, ui } from '../store/ui';
@@ -15,7 +15,7 @@ import { IconBell, IconCheck, IconLink, IconMoon, IconX } from './Icons';
 import { Keys } from './ui';
 
 const TONE: Record<string, string> = {
-  idea: 'blue', error: 'red', win: 'green', 'chat-done': 'green', 'chat-waiting': 'amber', reflection: 'violet', budget: 'amber', login: 'amber',
+  idea: 'blue', error: 'red', win: 'green', 'chat-done': 'green', 'chat-failed': 'red', question: 'amber', 'chat-waiting': 'amber', reflection: 'violet', budget: 'amber', login: 'amber',
   'sync-error': 'red', 'sync-blocked': 'red', 'mail-blocked': 'red',
 };
 
@@ -32,7 +32,7 @@ function Row({ e, unread, now }: { e: FeedEvent; unread: boolean; now: number })
       <span className="nc-tools">
         <button type="button" className="icon-btn" onClick={() => void copyLink(linkOfEvent(e))} aria-label="Copia link" data-tip="Copia link" data-testid={`nc-link-${e.id}`}><IconLink size={13} /></button>
         <button type="button" className="icon-btn" onClick={() => void muteKind(e.kind, e.label, !muted)} aria-label={muted ? `Riattiva «${e.label}»` : `Silenzia «${e.label}»`}
-          data-tip={muted ? 'Riattiva gli avvisi di questo tipo' : tierOf(e.kind) === 'toast' ? 'Silenzia gli avvisi di questo tipo' : 'Silenzia questo tipo'} data-testid={`nc-mute-${e.id}`}>
+          data-tip={muted ? 'Riattiva gli avvisi di questo tipo' : tierOf(e) === 'toast' ? 'Silenzia gli avvisi di questo tipo' : 'Silenzia questo tipo'} data-testid={`nc-mute-${e.id}`}>
           <IconBell size={13} style={{ opacity: muted ? 0.4 : 1 }} />
         </button>
       </span>
@@ -54,8 +54,13 @@ export function NotificationCenter() {
     for (const e of feed) { const k = m.get(e.kind) ?? { label: e.label, n: 0 }; k.n++; m.set(e.kind, k); }
     return [...m.entries()].sort((a, b) => b[1].n - a[1].n);
   }, [feed]);
-  const list = kind === 'all' ? feed : kind === 'unread' ? feed.filter(e => isUnread(e, read)) : feed.filter(e => e.kind === kind);
-  const unread = feed.filter(e => isUnread(e, read)).length;
+  // "to do" = unread and actionable: the rest of the list is there to read when he wants, never marked as pending
+  const pending = useApp(s => s.pending);
+  const open = useMemo(() => new Set(pending.map(p => p.chatId)), [pending]);
+  const todo = (e: FeedEvent) => isActionable(e, open) && isUnread(e, read);
+  const list = kind === 'all' ? feed : kind === 'unread' ? feed.filter(todo) : feed.filter(e => e.kind === kind);
+  const unread = bellCount(feed, read, open);
+  const anyUnread = feed.some(e => isUnread(e, read));
   const until = dndUntil();
   const tomorrow = () => { const d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.getTime(); };
   return (
@@ -64,7 +69,7 @@ export function NotificationCenter() {
         <h2>Notifiche</h2>
         {unread > 0 && <span className="count" data-testid="nc-unread">{unread}</span>}
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => setRead(r => markAllRead(r, now))} disabled={!unread} data-testid="nc-read-all"><IconCheck size={13} /> Segna tutto letto</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={() => setRead(r => markAllRead(r, now))} disabled={!anyUnread} data-testid="nc-read-all"><IconCheck size={13} /> Segna tutto letto</button>
         <span className="nc-dnd">
           <button type="button" className={`btn btn-s ${dnd ? 'btn-amber' : 'btn-ghost'}`} onClick={() => setDndMenu(m => !m)} aria-expanded={dndMenu} data-testid="nc-dnd"
             data-tip={dnd && until ? `Fino alle ${new Date(until).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Nessun avviso a comparsa (restano qui)'}>
@@ -82,15 +87,15 @@ export function NotificationCenter() {
       </header>
       <div className="nc-filters" role="tablist" aria-label="Filtra">
         <button type="button" role="tab" aria-selected={kind === 'all'} className={kind === 'all' ? 'on' : ''} onClick={() => setKind('all')} data-testid="nc-filter-all">Tutte</button>
-        <button type="button" role="tab" aria-selected={kind === 'unread'} className={kind === 'unread' ? 'on' : ''} onClick={() => setKind('unread')} data-testid="nc-filter-unread">Da leggere</button>
+        <button type="button" role="tab" aria-selected={kind === 'unread'} className={kind === 'unread' ? 'on' : ''} onClick={() => setKind('unread')} data-testid="nc-filter-unread">Da fare</button>
         {kinds.map(([k, v]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)} data-testid={`nc-filter-${k}`}>{v.label} <span className="nc-n">{v.n}</span></button>
         ))}
       </div>
       {list.length === 0 ? (
-        <p className="nc-empty" data-testid="nc-empty">{kind === 'unread' ? 'Hai letto tutto.' : 'Qui arrivano le novità: chat finite, errori, idee, avvisi.'}</p>
+        <p className="nc-empty" data-testid="nc-empty">{kind === 'unread' ? 'Niente da fare.' : 'Qui arrivano le novità: chat finite, errori, idee, avvisi.'}</p>
       ) : (
-        <ul className="nc-list" data-testid="nc-list">{list.slice(0, 200).map(e => <Row key={e.id} e={e} unread={isUnread(e, read)} now={now} />)}</ul>
+        <ul className="nc-list" data-testid="nc-list">{list.slice(0, 200).map(e => <Row key={e.id} e={e} unread={todo(e)} now={now} />)}</ul>
       )}
       <footer className="nc-foot"><Keys combo="Ctrl+Shift+N" /> apre e chiude · i link si incollano in <Keys combo="Ctrl+K" /></footer>
     </aside>

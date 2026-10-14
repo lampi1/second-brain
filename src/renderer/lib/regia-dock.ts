@@ -1,0 +1,61 @@
+// The Regia widget's geometry and counts (ADR 0028): docked bottom-right, collapsed to a bar or expanded to a panel the
+// user resizes from its top-left corner. Pure, so unit tests check it without React; used by
+// components/RegiaOverlay.tsx (place, size, unread), App.tsx (the room the workspace leaves it) and lib/layer.ts (the
+// global layer's cards and toasts sit beside it, never on it).
+import type { ChatItem } from '@shared/contract';
+
+export interface DockSize { w: number; h: number }
+export interface Reserve { right: number; bottom: number }
+
+/** the collapsed bar's height; EDGE = the workspace's --gap; MIN_WORK = what the chats always keep in width */
+export const BAR_H = 34, EDGE = 8, MIN_W = 340, MIN_H = 260, MIN_WORK = 420;
+
+/** The expanded panel's first size in a W×H window under a `top` px top bar: wide and low (the user, 2026-10-13: "la
+ *  finestra della regia la voglio più larga e meno alta"): 42% of the width (480-820 px), 42% of the height under the
+ *  top bar (300-560 px). DEFAULT_V: bumped when the default changes, so a size saved before is dropped once. */
+export const DEFAULT_V = 2;
+export function defaultSize(W: number, H: number, top: number): DockSize {
+  return { w: Math.min(820, Math.max(480, Math.round(W * 0.42))), h: Math.min(560, Math.max(300, Math.round((H - top) * 0.42))) };
+}
+
+/** A size kept usable: never under the minimum, never taller than the room under the top bar, never so wide that the
+ *  chats (right of the `left` px sidebar) get less than MIN_WORK. */
+export function clampSize(s: DockSize, W: number, H: number, top: number, left: number): DockSize {
+  const maxW = Math.max(MIN_W, W - left - MIN_WORK - 3 * EDGE);
+  const maxH = Math.max(MIN_H, H - top - 2 * EDGE);
+  return { w: Math.round(Math.min(Math.max(MIN_W, s.w), maxW)), h: Math.round(Math.min(Math.max(MIN_H, s.h), maxH)) };
+}
+
+/** The size shown: the saved one (or the default) kept usable in this window. */
+export function sizeIn(saved: DockSize | null, W: number, H: number, top: number, left: number): DockSize {
+  return clampSize(saved ?? defaultSize(W, H, top), W, H, top, left);
+}
+
+/** The page's measures the size depends on (the only DOM read here): window, top bar height, sidebar's right edge. */
+export function viewport(): { W: number; H: number; top: number; left: number } {
+  const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 52;
+  return { W: window.innerWidth, H: window.innerHeight, top, left: document.querySelector('.sidebar')?.getBoundingClientRect().right || 56 };
+}
+
+/** The room the widget takes from the bottom-right corner, so nothing lands under it (the user, 2026-10-13: never over
+ *  a chat's input or its Esegui/Copia): expanded = a right column as wide as the panel; collapsed = a bottom strip
+ *  as tall as the bar. The workspace pads by it; the global layer and the questions window move by it. */
+export function reserveOf(open: boolean, size: DockSize): Reserve {
+  return open ? { right: size.w + EDGE, bottom: 0 } : { right: 0, bottom: BAR_H + EDGE };
+}
+
+/** The "seen at" to keep when the panel collapses at `at`: a reply still streaming then (its `at` is when it started)
+ *  is not seen yet, so the bar counts it once it ends. */
+export function seenAtCollapse(lists: readonly (readonly ChatItem[] | undefined)[], at: number): number {
+  let seen = at;
+  for (const items of lists) for (const it of items ?? []) if (it.kind === 'assistant' && it.streaming && it.at <= seen) seen = it.at - 1;
+  return seen;
+}
+
+/** Replies of a Regia the user has not seen: finished assistant messages after `seenAt` (the last time the panel was
+ *  open). */
+export function unreadOf(items: readonly ChatItem[] | undefined, seenAt: number): number {
+  let n = 0;
+  for (const it of items ?? []) if (it.kind === 'assistant' && !it.streaming && it.at > seenAt) n++;
+  return n;
+}

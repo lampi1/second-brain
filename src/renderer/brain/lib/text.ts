@@ -2,7 +2,7 @@
 // prefixes dropped), DevOps numbers in free text turned into named links, the 3-5 stand-up sentences, decisions that
 // wait for the owner. Pure (no DOM), unit-tested in test/unit/brain-ui/text.test.ts. The owner's name is never in the
 // code: it is read from the data (ownerOf) and only used to turn third-person lines into first person.
-import type { Brief, BriefItem, BriefPr, BriefThread, DayReport, Idea } from '../types';
+import type { Brief, BriefItem, BriefPr, DayReport, Idea } from '../types';
 import { fmt } from './format';
 
 export const short = (s: unknown, n = 80): string => { const t = String(s ?? ''); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
@@ -36,12 +36,6 @@ export const firstPerson = (s: string, owner: string): string => (owner ? s.repl
 export const isWorkArea = (a: string): boolean => !/^(personale|altro)/i.test(a.trim());
 export const isAgentsSection = (s: string): boolean => /^Agenti e sessioni/i.test(s);
 
-/** A now.md thread that waits for a decision of the owner. */
-export function isDecision(t: Pick<BriefThread, 'next' | 'done' | 'section'>, owner = ''): boolean {
-  if (t.done || isAgentsSection(t.section)) return false;
-  const re = new RegExp(`\\b(decid\\w*|scegli\\w*|sceglie|aspetta te${owner ? `|aspetta ${escRe(owner)}` : ''})\\b`, 'i');
-  return re.test(t.next);
-}
 export const nextText = (s: string): string => s.replace(/^(prossimo|aspetta\w*|resta)\s*:?\s*/i, '');
 
 // ── DevOps names and links ────────────────────────────────────────────────────────────────────────────────────────

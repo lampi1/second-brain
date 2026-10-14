@@ -12,13 +12,13 @@ export const isBrainTestRoute = (hash: string = location.hash): boolean => hash.
 
 export function BrainTestRoute() {
   const [hash, setHash] = useState(location.hash);
-  const [last, setLast] = useState<{ id: BrainPageId; arg?: string }>({ id: 'home' });
+  const [last, setLast] = useState<{ id: BrainPageId; arg?: string }>({ id: 'devops' });
   useEffect(() => { const f = () => setHash(location.hash); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
   const raw = hash.slice(BRAIN_TEST_PREFIX.length).replace(/^\//, '');
   let decoded = raw;
   try { decoded = decodeURI(raw); } catch { /* a stray "%": keep it as typed */ }
   const [path = '', query = ''] = decoded.split('?');
-  const t = parseTarget(path || 'home') ?? { map: false as const, id: 'home' as BrainPageId };
+  const t = parseTarget(path || 'devops') ?? { map: false as const, id: 'devops' as BrainPageId };
   const pageKey = t.map ? '' : `${t.id}/${t.arg ?? ''}`;
   useEffect(() => { if (!t.map) setLast({ id: t.id, arg: t.arg }); }, [pageKey]);
   const page = t.map ? last : { id: t.id, arg: t.arg };

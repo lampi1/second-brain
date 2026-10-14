@@ -4,7 +4,7 @@
 //          --permission-prompt-tool stdio --permission-mode <explicit> [--model] [--effort] [--resume=|--session-id=] …
 //          [--settings <inline JSON>: session-only; the STABLE app adds deny guard rails, ADR 0007]
 //   env    CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1 → system/session_state_changed running/idle (authoritative)
-//   stdin  ← {"type":"user",…} turns and {"type":"control_request",request_id,request:{subtype}} (initialize,
+//   stdin  ← {"type":"user",…} turns (content: image blocks {type:image,source:{type:base64}} then the text) and {"type":"control_request",request_id,request:{subtype}} (initialize,
 //            interrupt, set_model, set_permission_mode, apply_flag_settings {effortLevel}, get_context_usage,
 //            rename_session)
 //   stdout → SDK messages (system/init, stream_event deltas, assistant, user tool results, result with cost) and the
@@ -18,18 +18,22 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Answer, ChatItem, ChatState, Effort, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
-import { commandFor, findCli, killTrees, resolveClaude } from './cli';
+import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from './cli';
+import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
+import { reapEnabled, reapEngine, type Root } from './proctree';
+import { LiveCost, priceUsage } from './live-cost';
 import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, toolSummary } from './claude-map';
-import { cut, lastLine, nextId, stripAnsi, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { releaseId } from '../release';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
   claudePath?: string;
   /** session-only settings for this chat (passed inline with --settings, never written to a file) */
   settings?: Record<string, unknown> | null;
-  /** run by the STABLE app (ADR 0007): add the guard rails; default = process.env.SB_RELEASE is set */
+  /** run by the STABLE app (ADR 0007): add the guard rails; default = this process is a release (release.ts) */
   stable?: boolean;
   /** %LOCALAPPDATA% (where the stable releases live); default from the environment */
   localAppData?: string;
@@ -42,6 +46,16 @@ export function rulePath(p: string): string {
   const m = s.match(/^([A-Za-z]):\/?(.*)$/);
   if (m) return `//${(m[1] ?? '').toLowerCase()}/${m[2] ?? ''}`.replace(/\/$/, '');
   return `/${s.startsWith('/') ? s : `/${s}`}`;
+}
+
+/** The auto-compact window of one process (ADR 0031). Only an env of the inline flag settings wins over a folder's own
+ *  .claude/settings.local.json env (the owner's ops folder set 1000000 there: its chats never compacted at the user's 300000; an
+ *  inherited env var and the autoCompactWindow key both lose to it, measured 13/10 with get_context_usage). The CLI
+ *  accepts 100000-1000000. */
+export function compactSettings(tokens: number | null | undefined): Record<string, unknown> | null {
+  if (!tokens || !Number.isFinite(tokens) || tokens <= 0) return null;
+  const w = Math.min(1_000_000, Math.max(100_000, Math.round(tokens)));
+  return { env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(w) } };
 }
 
 /** Guard rails for chats run by the STABLE app (ADR 0007): they must never stop the app they run in nor change its
@@ -101,6 +115,16 @@ const API_ERRORS: Record<string, string> = {
   model_not_found: 'Modello non trovato: scegline un altro.',
   max_output_tokens: 'Risposta troncata: raggiunto il limite di token in uscita.',
 };
+/** A failed result's subtype, when the CLI gives no other words (stream-json result subtypes) */
+const RESULT_ERRORS: Record<string, string> = {
+  error_max_turns: 'raggiunto il limite di passi del turno',
+  error_max_budget_usd: 'raggiunto il budget massimo del turno',
+  error_during_execution: 'errore durante l’esecuzione (il motore non ha detto altro)',
+  error_max_structured_output_retries: 'risposta strutturata non valida dopo più tentativi',
+};
+
+/** task statuses that end it (the CLI's terminal ones); any other (pending, running, a workflow's paused) keeps it */
+const END_TASK = new Set(['completed', 'failed', 'killed', 'stopped']);
 
 export class ClaudeSession implements HarnessSession {
   readonly harness = 'claude' as const;
@@ -118,14 +142,36 @@ export class ClaudeSession implements HarnessSession {
   private flushTimer: NodeJS.Timeout | null = null;
   private curMessage: string | null = null;
   private turnOpen = false;           // a turn is in flight (ours, a queued one, or one the CLI started itself)
+  /** the user stopped the running turn (Stop, or "Invia subito" = sendNow): its result is an interruption, not an error */
+  private stopping: { sendNow: boolean } | null = null;
   private stateEvents = false;        // the CLI sends session_state_changed (authoritative running/idle)
   private closing = false;
+  private keepChildren = false;
+  private exitedRoot: Root | null = null;
   private killed = false;
   private exited = false;
+  private procExited = false;         // 'exit' came ('close' also waits for the pipes, which a leftover may hold)
+  private job: number | null = null;  // its Job Object (jobguard.ts)
+  private jobKilled = false;          // its tree was terminated through the job
   private sawInit = false;
+  private cmdList: unknown[] | null = null;  // the engine's commands (initialize, commands_changed), for the "/" list
+  private skillNames = new Set<string>();    // init's `skills`: which of those commands are skills
   private pendingTitle: string | null = null; // a fork renamed before its own id is known
   private costBase: number;
+  private readonly live = new LiveCost(); // the running turn's estimate from token usage, until its result
+  private readonly counted = new Set<string>(); // response ids already reported as calls (the CLI repeats one per block)
   private badLines = 0;
+  private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
+  private ended = new Set<string>();  // tasks seen ending
+  /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
+  private spawnedAt = 0;
+  private readyAt = 0;                // the initialize reply: the engine is up and takes messages
+  private turnT: { sent: number; first?: number; text?: number; warm: boolean; n: number } | null = null;
+  private turnsSent = 0;
+  private readyDone!: () => void;
+  /** settles when the engine answered initialize, failed it, or exited: control requests sent after it are not
+   *  queued behind the start-up (a warm engine adopted while it still starts, warm.ts) */
+  readonly ready = new Promise<void>(r => { this.readyDone = r; });
   private exitDone!: () => void;
   private readonly exitPromise = new Promise<void>(r => { this.exitDone = r; });
 
@@ -136,6 +182,11 @@ export class ClaudeSession implements HarnessSession {
   }
 
   get pid(): number | null { return this.proc?.pid ?? null; }
+  get jobHandle(): number | null { return this.job; }
+  /** Nothing left for the quit's last resort: it exited, or its job was terminated. */
+  get gone(): boolean { return this.procExited || this.jobKilled; }
+  get root(): Root | null { return this.exitedRoot; }
+  get startedAt(): number { return this.spawnedAt; }
 
   /** Working: a turn in flight, a question open or still booting (stopAll counts these). */
   get busy(): boolean {
@@ -156,8 +207,8 @@ export class ClaudeSession implements HarnessSession {
     if (op.effort) a.push('--effort', op.effort);
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
-    const stable = op.stable ?? !!process.env.SB_RELEASE;
-    const settings = mergeSettings(op.settings, stable ? stableGuards(op.localAppData ?? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')) : null);
+    const stable = op.stable ?? !!releaseId();
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), stable ? stableGuards(op.localAppData ?? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];
@@ -174,11 +225,14 @@ export class ClaudeSession implements HarnessSession {
     env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1';         // session_state_changed: the authoritative running/idle
     const args = this.args();
     const c = commandFor(cli, args, env);
+    const startedAt = Date.now();
+    this.spawnedAt = startedAt;
     try {
       this.proc = spawn(c.command, c.args, { cwd: this.opts.cwd, env: c.env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
       return this.fail(`Avvio di Claude non riuscito: ${errText(e)}`, errText(e), 'check the claude path and the folder');
     }
+    const spawnMs = Date.now();
     const p = this.proc;
     log.info('chats', 'session start', { chat, data: { pid: p.pid, cli, cwd: this.opts.cwd, args } });
     p.stdout.setEncoding('utf8');
@@ -191,23 +245,46 @@ export class ClaudeSession implements HarnessSession {
     p.stdin.on('error', e => log.warn('chats', 'stdin error', { chat, data: errText(e) }));
     p.on('error', e => this.fail(`Avvio di Claude non riuscito: ${errText(e)}`, errText(e), 'check that the claude binary runs from a terminal'));
     p.on('close', (code: number | null) => this.onClose(code));
+    // a clean exit leaves its MCP servers, hooks and shells running: kill what still descends from it ('exit', not 'close': a leftover
+    // holding the inherited stdout would delay 'close' until it ends by itself)
+    p.once('exit', () => {
+      this.procExited = true;
+      if (!p.pid) return;
+      this.exitedRoot = { pid: p.pid, created: startedAt, exited: Date.now(), job: this.job };
+      if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: 'Claude' });
+    });
+    // its own job before it starts anything (MCP servers come seconds later): later children, orphans too, stay in it
+    void jobGuard.add(p.pid, chat).then(job => {
+      this.job = job;
+      if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); } // exited first: the walk reaped it
+    });
     this.controlRaw({ subtype: 'initialize', hooks: null }, 60000).then(env => {
       const r = o(env.response);
+      this.readyAt = Date.now();
+      this.readyDone();
+      log.info('chats', 'timing: engine ready', { chat, data: { readyMs: this.readyAt - startedAt, spawnMs: spawnMs - startedAt } });
       const v = s(r.claude_code_version);
       if (v) this.sink.changed({ version: v });
+      if (Array.isArray(r.commands)) { this.cmdList = r.commands; this.reportCommands(); }
       // prompts inherited by a resume ride on the control_response envelope, next to `response` (sdk.d.ts ControlResponse)
       for (const req of [...arr(env.pending_permission_requests), ...arr(r.pending_permission_requests)]) this.onMessage(o(req));
       if (this.state === 'starting') this.setState(this.turnOpen ? 'running' : 'idle');
     }).catch(e => {
+      this.readyDone();
       if (this.exited) return;
       log.warn('chats', 'initialize failed', { chat, data: errText(e) });
       if (this.state === 'starting') this.setState(this.turnOpen ? 'running' : 'idle');
     });
   }
 
-  send(text: string): void {
+  send(text: string, images: readonly ImageAttachment[] = []): void {
     if (this.exited || !this.proc) throw new Error('La sessione non è attiva.');
-    this.write({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, session_id: this.sessionId ?? '' });
+    // images first, then the text (the Messages API order recommended for image questions)
+    const content: Obj[] = images.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } }));
+    if (text || !content.length) content.push({ type: 'text', text });
+    this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '' });
+    // a message queued behind a running turn is not timed (its wait is the other turn's)
+    if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };
     this.turnOpen = true;
     if (this.state !== 'waiting') this.setState('running');
   }
@@ -240,10 +317,12 @@ export class ClaudeSession implements HarnessSession {
     return true;
   }
 
-  async interrupt(): Promise<void> {
+  async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (this.exited || !this.proc) return;
-    log.info('chats', 'interrupt', { chat: this.opts.chatId });
-    await this.control({ subtype: 'interrupt' }, 15000);
+    log.info('chats', 'interrupt', { chat: this.opts.chatId, data: { sendNow: !!opts?.keepQueued } });
+    // only a turn in flight ends with a result: an interrupt on an idle CLI must not mark the next real failure
+    if (this.turnOpen && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued };
+    try { await this.control({ subtype: 'interrupt' }, 15000); } catch (e) { this.stopping = null; throw e; }
   }
 
   async setModel(model: string | null): Promise<void> {
@@ -274,19 +353,49 @@ export class ClaudeSession implements HarnessSession {
     return { totalTokens, maxTokens, percentage: num(r.percentage) ?? (maxTokens ? (100 * totalTokens) / maxTokens : 0) };
   }
 
-  /** get_usage (experimental in the SDK): session totals + claude.ai plan windows; no transcript scan. */
+  /** get_usage (experimental in the SDK): session totals + claude.ai plan windows; no transcript scan. Mid-turn its
+   *  session.total_cost_usd (the CLI's tracker, updated at every API response) turns the live estimate into the real cost. */
   async usage(): Promise<unknown> {
-    return this.control({ subtype: 'get_usage', skip_behaviors: true });
+    const u = await this.control({ subtype: 'get_usage', skip_behaviors: true });
+    const total = num(o(u.session).total_cost_usd);
+    if (this.turnOpen && total !== undefined && total >= this.costBase && this.live.settle(total - this.costBase)) this.sink.changed({ liveCostUsd: this.live.usd() });
+    return u;
   }
 
-  close(graceMs = 3000): Promise<void> {
+  close(graceMs = CLOSE_GRACE_MS, keepChildren = false): Promise<void> {
     if (this.exited || !this.proc) { this.markExited(); return this.exitPromise; }
+    // a real close already asked wins over a later keeping one (a reopen after the turn while ✕ waits)
+    this.keepChildren = this.closing ? this.keepChildren && keepChildren : keepChildren;
     this.closing = true;
     try { this.proc.stdin.end(); } catch { /* gone */ }
-    const pid = this.proc.pid;
-    const t = setTimeout(() => { if (!this.exited) { log.warn('chats', 'session did not exit, killing', { chat: this.opts.chatId, data: { pid } }); this.killNow(); } }, graceMs);
+    if (this.killed) return this.exitPromise; // already being killed (app quit): no grace, no false "did not exit"
+    const pid = this.proc.pid, t0 = Date.now();
+    const t = setTimeout(() => {
+      if (this.exited) return;
+      if (this.procExited) return this.releasePipes();
+      log.warn('chats', 'session did not exit, killing', { chat: this.opts.chatId, data: { pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
+      this.killAfterGrace();
+    }, graceMs);
     t.unref();
     return this.exitPromise;
+  }
+
+  /** A close that took too long: with a job only the engine dies, and its exit reaps the tools from the job (a user's
+   *  Excel or browser in the job stays, ADR 0026); without one, the whole tree as before. */
+  private killAfterGrace(): void {
+    const p = this.proc;
+    if (!p || this.exited || this.killed) return;
+    if (!jobGuard.has(this.job)) return this.killNow();
+    this.killed = true;
+    engineKills.count++;
+    try { p.kill(); } catch { /* gone */ }
+  }
+
+  /** It exited, but a leftover holds the pipes it inherited, so 'close' never comes: let go of our side. */
+  private releasePipes(): void {
+    if (this.exited || !this.proc) return;
+    log.info('chats', 'session exited, a leftover still holds its output: closing the pipes', { chat: this.opts.chatId, data: { pid: this.proc.pid } });
+    closePipes(this.proc);
   }
 
   get alive(): boolean { return !!this.proc && !this.exited; }
@@ -297,10 +406,15 @@ export class ClaudeSession implements HarnessSession {
     if (this.exited || !p || this.killed) return;
     this.closing = true;
     this.killed = true;
-    killTrees([p.pid], { fallback: () => p.kill() });
-    // if the app is still alive and the tree kill did not land, terminate the process itself
-    // taskkill can take seconds under load: retry the TREE kill (killing only the parent would orphan its children)
-    setTimeout(() => { if (!this.exited) { log.warn('chats', 'tree kill did not land, retrying', { chat: this.opts.chatId, data: { pid: p.pid } }); killTrees([p.pid], { fallback: () => p.kill() }); } }, 12000).unref();
+    this.jobKilled = killEngineTree(p.pid, this.job, () => p.kill(), this.opts.chatId);
+    // taskkill can take seconds under load: retry the TREE kill (killing only the parent would orphan its children);
+    // gone already but 'close' still waits = a leftover holds the pipes
+    setTimeout(() => {
+      if (this.exited) return;
+      if (this.procExited) return this.releasePipes();
+      log.warn('chats', 'tree kill did not land, retrying', { chat: this.opts.chatId, data: { pid: p.pid }, cause: 'still alive 12 s after the kill', hint: 'taskkill is slow on a loaded box; npm run doctor' });
+      killTrees([p.pid], { fallback: () => p.kill() });
+    }, 12000).unref();
   }
 
   // ---- process I/O ----
@@ -389,6 +503,7 @@ export class ClaudeSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    this.readyDone();
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();
   }
@@ -405,6 +520,13 @@ export class ClaudeSession implements HarnessSession {
     if (this.turnOpen) return;
     this.turnOpen = true;
     this.setState(this.calls.size ? 'waiting' : 'running');
+  }
+
+  private task(id: string, live: boolean): void {
+    if (!id || (live && this.ended.has(id))) return; // a late update never revives an ended task
+    const n = this.tasks.size;
+    if (live) this.tasks.add(id); else { this.tasks.delete(id); this.ended.add(id); }
+    if (this.tasks.size !== n) this.sink.changed({ background: this.tasks.size });
   }
 
   private sys(text: string, level: 'info' | 'warn' | 'error'): void {
@@ -427,7 +549,10 @@ export class ClaudeSession implements HarnessSession {
         return;
       }
       case 'stream_event': if (m.parent_tool_use_id == null) { this.activity(); this.onStreamEvent(o(m.event)); } return;
-      case 'assistant': if (m.parent_tool_use_id == null) { this.activity(); this.onAssistant(m); } return;
+      case 'assistant':
+        if (this.live.add(m)) this.sink.changed({ liveCostUsd: this.live.usd() });
+        if (m.parent_tool_use_id == null) { this.countCall(m); this.activity(); this.onAssistant(m); }
+        return;
       case 'user': if (m.parent_tool_use_id == null) this.onUser(m); return;
       case 'result': return this.onResult(m);
       case 'system': return this.onSystem(m);
@@ -461,7 +586,8 @@ export class ClaudeSession implements HarnessSession {
       const always = noAlways ? [] : describeSuggestions(call.suggestions);
       req = { id, type: 'permission', tool, title: sub + t.title, detail: t.detail, input: trimInput(input), at: Date.now(), ...(always.length ? { alwaysRules: always } : { noAlways: true }) };
     }
-    log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type } });
+    if (call.toolUseId) req.toolUseId = call.toolUseId;
+    log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
   }
@@ -478,7 +604,10 @@ export class ClaudeSession implements HarnessSession {
 
   private onStreamEvent(e: Obj): void {
     switch (e.type) {
-      case 'message_start': this.curMessage = s(o(e.message).id) || nextId('m'); return;
+      case 'message_start':
+        this.curMessage = s(o(e.message).id) || nextId('m');
+        if (this.turnT && this.turnT.first === undefined) this.turnT.first = Date.now();
+        return;
       case 'content_block_start': {
         const b = o(e.content_block);
         if (b.type !== 'text' && b.type !== 'thinking') return;
@@ -498,11 +627,14 @@ export class ClaudeSession implements HarnessSession {
         const st = this.streams.get(`${this.curMessage ?? 'm'}:${num(e.index) ?? 0}`);
         const d = o(e.delta);
         if (!st || st.done) return;
-        if (d.type === 'text_delta') st.item = { ...st.item, text: st.item.text + s(d.text) };
+        if (d.type === 'text_delta') {
+          st.item = { ...st.item, text: st.item.text + s(d.text) };
+          if (this.turnT && this.turnT.text === undefined) this.turnT.text = Date.now();
+        }
         else if (d.type === 'thinking_delta') st.item = { ...st.item, text: st.item.text + s(d.thinking) };
         else return;
         this.dirty.add(st);
-        if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushStreams(false); }, 50); this.flushTimer.unref(); }
+        if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushStreams(false); }, 16); this.flushTimer.unref(); }
         return;
       }
       case 'content_block_stop': this.flushStreams(false); return;
@@ -538,6 +670,17 @@ export class ClaudeSession implements HarnessSession {
     return st;
   }
 
+  /** One API call of the main thread, reported once per response id (its input side is the same in every block). */
+  private countCall(m: Obj): void {
+    const msg = o(m.message), u = o(msg.usage), id = s(msg.id);
+    if (!id || !msg.usage || this.counted.has(id)) return;
+    if (this.counted.size > 5000) this.counted.clear();
+    this.counted.add(id);
+    const write = num(u.cache_creation_input_tokens) ?? 0;
+    const context = (num(u.input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0) + write;
+    this.sink.changed({ call: { context, cacheWrite: write, usd: priceUsage(s(msg.model), u) } });
+  }
+
   private onAssistant(m: Obj): void {
     const msg = o(m.message);
     const mid = s(msg.id);
@@ -571,7 +714,8 @@ export class ClaudeSession implements HarnessSession {
 
   private onUser(m: Obj): void {
     const content = o(m.message).content;
-    if (typeof content === 'string') { if (/^\[Request interrupted/.test(content)) this.sys('Interrotto.', 'info'); return; }
+    // the user's own interrupt is told once, by its result (onResult); one the CLI reports by itself shows here
+    if (typeof content === 'string') { if (/^\[Request interrupted/.test(content) && !this.stopping) this.sys('Interrotto.', 'info'); return; }
     for (const raw of arr(content)) {
       const b = o(raw);
       if (b.type === 'tool_result') {
@@ -582,13 +726,19 @@ export class ClaudeSession implements HarnessSession {
         const diff = diffFromResult(t.item.name, t.input, m.tool_use_result, this.opts.cwd);
         const item: ToolItem = { ...t.item, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content), ...(diff ? { diff } : {}) };
         this.sink.item(item, true);
-      } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text))) this.sys('Interrotto.', 'info');
+      } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sys('Interrotto.', 'info');
     }
   }
 
   private onResult(m: Obj): void {
     this.flushStreams(true);
-    const isError = m.is_error === true || (s(m.subtype) !== '' && s(m.subtype) !== 'success');
+    const failed = m.is_error === true || (s(m.subtype) !== '' && s(m.subtype) !== 'success');
+    // the turn the user stopped ends as error_during_execution: an interruption he asked for, not an error (12/10:
+    // "quando faccio Invia subito vedo sempre un errore")
+    const stopped = this.stopping;
+    this.stopping = null;
+    const interrupted = !!stopped && failed;
+    const isError = failed && !interrupted;
     // total_cost_usd is the CLI's running total (restored on resume): a turn costs the difference. A total below the
     // base is a new count (e.g. /clear) — except on an error result (startup failure, expired login report 0), which
     // is ignored so the base, and the persisted total, never drop to 0 and inflate the next resumed turn.
@@ -598,11 +748,17 @@ export class ClaudeSession implements HarnessSession {
     else if (reported !== undefined && !isError) { total = reported; turn = reported; }
     else if (reported !== undefined) log.warn('chats', 'error result below the cost base ignored', { chat: this.opts.chatId, data: { reported, base: this.costBase } });
     this.costBase = total;
+    this.live.reset();
     const errors = arr(m.errors).map(x => stripAnsi(String(x))).filter(Boolean);
-    if (errors.length) this.sys(cut(errors.join(' · '), 600), 'error');
+    if (interrupted) {
+      if (errors.length) log.info('chats', 'interrupted turn: abort errors not shown', { chat: this.opts.chatId, data: { errors: errors.slice(0, 3) } });
+      this.sys(stopped.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
+    } else if (errors.length) this.sys(cut(errors.join(' · '), 600), 'error');
     else if (isError && s(m.result)) this.sys(cut(stripAnsi(s(m.result)), 600), 'error');
-    this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: Math.round(turn * 1e6) / 1e6, durationMs: num(m.duration_ms) ?? 0, turns: num(m.num_turns) ?? 0, isError }, false);
-    this.sink.changed({ turnCostUsd: turn, totalCostUsd: total });
+    // a failure with no words from the CLI still says why: its subtype (max turns, budget…)
+    else if (isError) this.sys(`Turno finito con errore: ${RESULT_ERRORS[s(m.subtype)] ?? (s(m.subtype) || 'il motore non ha detto il motivo')}.`, 'error');
+    this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: Math.round(turn * 1e6) / 1e6, durationMs: num(m.duration_ms) ?? 0, turns: num(m.num_turns) ?? 0, isError, ...(interrupted ? { interrupted } : {}) }, false);
+    this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0 });
     // more sends wait in the CLI's queue: another turn follows on its own, the chat stays running
     const queued = num(m.queued_turn_count) ?? 0;
     if (queued > 0) this.turnOpen = true;
@@ -614,8 +770,28 @@ export class ClaudeSession implements HarnessSession {
       // the last result; if nothing reopened the turn within 3 s, the chat is idle (else the tile stays "al lavoro")
       else setTimeout(() => { if (!this.turnOpen && this.state === 'running') this.setState(this.calls.size ? 'waiting' : 'idle'); }, 3000).unref?.();
     }
-    log.info('chats', 'turn done', { chat: this.opts.chatId, data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, queued } });
+    log.info('chats', 'turn done', { chat: this.opts.chatId, data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, interrupted, queued } });
+    this.logTiming(m);
     this.contextUsage().then(u => { if (u) this.sink.changed({ contextTokens: u.totalTokens, contextMaxTokens: u.maxTokens }); }).catch(() => { /* old CLI or gone */ });
+  }
+
+  /** One line per timed turn: sent → first stream event → first text → result, next to the CLI's own API time, so
+   *  app overhead, engine start-up and model latency can be told apart later (`npm run logs -- --scope chats --grep timing`). */
+  private logTiming(m: Obj): void {
+    const t = this.turnT;
+    this.turnT = null;
+    if (!t) return;
+    const now = Date.now();
+    const rel = (x: number | undefined): number | null => (x === undefined ? null : x - t.sent);
+    log.info('chats', 'timing: turn', { chat: this.opts.chatId, data: {
+      turn: t.n, firstEventMs: rel(t.first), firstTextMs: rel(t.text), resultMs: now - t.sent, apiMs: num(m.duration_api_ms) ?? null,
+      // the first turn of a process: was the engine already up when it was sent (warm), and how long since the spawn
+      ...(t.n === 1 ? { warm: t.warm, sentAfterSpawnMs: t.sent - this.spawnedAt, readyMs: this.readyAt ? this.readyAt - this.spawnedAt : null } : {}),
+    } });
+  }
+
+  private reportCommands(): void {
+    if (this.cmdList) this.sink.commands?.(toCommands(this.cmdList, this.skillNames));
   }
 
   private onSystem(m: Obj): void {
@@ -636,6 +812,10 @@ export class ClaudeSession implements HarnessSession {
           this.pendingTitle = null;
           this.rename(title).catch(e => log.warn('chats', 'deferred rename failed', { chat: this.opts.chatId, data: errText(e) }));
         }
+        const skills = arr(m.skills).map(s).filter(Boolean);
+        if (skills.length) this.skillNames = new Set(skills);
+        if (!this.cmdList && Array.isArray(m.slash_commands)) this.cmdList = m.slash_commands.map(n => ({ name: s(n) }));
+        if (this.cmdList) this.reportCommands();
         if (!this.sawInit) {
           this.sawInit = true;
           for (const srv of arr(m.mcp_servers).map(o)) {
@@ -651,6 +831,7 @@ export class ClaudeSession implements HarnessSession {
         if (m.status === 'compacting') this.sys('Compattazione del contesto…', 'info');
         return;
       }
+      case 'commands_changed': if (Array.isArray(m.commands)) { this.cmdList = m.commands; this.reportCommands(); } return;
       case 'session_state_changed': {
         this.stateEvents = true;
         const st = s(m.state);
@@ -659,8 +840,14 @@ export class ClaudeSession implements HarnessSession {
         else if (st === 'idle') { this.turnOpen = false; this.setState(this.calls.size ? 'waiting' : 'idle'); }
         return;
       }
+      // background agents and shell commands (CLI 2.1.28x: task_started, task_updated with a status, task_notification
+      // at the end): counted so the app never auto-closes a chat whose work still runs behind an idle prompt
+      case 'task_started': return this.task(s(m.task_id), true);
+      case 'task_updated': { const st = s(o(m.patch).status); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
+      case 'task_notification': { const st = s(m.status); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
       case 'compact_boundary': {
         const meta = o(m.compact_metadata);
+        this.sink.changed({ compacted: { pre: num(meta.pre_tokens) ?? null, post: num(meta.post_tokens) ?? null } });
         this.sys(`Contesto compattato (${num(meta.pre_tokens) ?? '?'} → ${num(meta.post_tokens) ?? '?'} token).`, 'info');
         return;
       }

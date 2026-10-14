@@ -1,7 +1,7 @@
 // End-to-end: the brain area of the UI (src/renderer/brain) in the real app, pointed (SB_BRAIN) at a temporary
 // synthetic brain whose data server is test/fixtures/brain-ui/brain-site.mjs (the real API shapes, fictional data).
 // Every section is rendered through the test route (#brain-test/<page>), its key content asserted, and one screenshot
-// saved per section in test-results/shots/brain-*.png; then the 3D map (WebGL), its 2D fallback and a flow, the
+// saved per section in test-results/shots/brain-*.png (Qualità: its demo shot is in qualita.spec.ts); then the 3D map (WebGL), its 2D fallback and a flow, the
 // error state, the virtualized table, the side peek with the keyboard, and the light theme.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -38,37 +38,15 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_BRAIN: brain }));
   await page.emulateMedia({ colorScheme: "dark" }); // the app default; one light shot at the end
   await expect(page.getByTestId('app')).toBeVisible();
-  await open('home', true);
+  await open('fatto', true);
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Oggi: tiles (waiting, working, spend, AI ideas), done today, stand-up, map entry', async () => {
+test('Oggi and Adesso are gone: their old links open DevOps', async () => {
   await open('home');
-  const p = page.getByTestId('brain-page-home');
-  await settled();
-  await expect(p.getByTestId('bx-lead')).toContainText('chat ti aspettano');
-  await expect(p.getByTestId('bx-tile-wait')).toContainText('QA ordini');
-  await expect(p.getByTestId('bx-tile-live')).toContainText('Prodotto · Fix calcolo sconto');
-  await expect(p.getByTestId('bx-tile-cost')).toContainText('38 $');
-  await expect(p.getByTestId('bx-tile-ai')).toContainText('Rileggere i propri errori');
-  await expect(p.getByTestId('bx-home-done')).toContainText('PR unita');
-  await expect(p.getByTestId('bx-standup')).toContainText('Oggi:');
-  await expect(p.getByTestId('bx-standup')).not.toContainText('Alex decide');
-  await shot(page, 'brain-home');
-});
-
-test('Adesso: chats waiting first, working, finished folded; next step and last message; message box needs the Regia', async () => {
+  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
   await open('adesso');
-  const p = page.getByTestId('brain-page-adesso');
-  await settled();
-  await expect(p.getByTestId('bx-group-wait')).toContainText('QA ordini');
-  await expect(p.getByTestId('bx-group-wait')).toContainText('Tu: «riprendi dal test case 7»');
-  await expect(p.getByTestId('bx-group-live')).toContainText('Ho trovato la causa');
-  // a DevOps number in a now.md line became a named link
-  await expect(p.getByTestId('bx-group-live').getByRole('link', { name: /Sconto applicato due volte/ }).first()).toHaveAttribute('target', '_blank');
-  await expect(p.getByTestId('bx-group-rest')).toContainText('Finite o ferme');
-  await expect(p.getByTestId('bx-composer-off')).toBeVisible();
-  await shot(page, 'brain-adesso');
+  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
 });
 
 test('Fatto e standup: done by topic with DevOps links, diary table, another day', async () => {
@@ -78,22 +56,18 @@ test('Fatto e standup: done by topic with DevOps links, diary table, another day
   await expect(p.getByRole('heading', { name: 'Fatto oggi' })).toBeVisible();
   await expect(p.getByRole('link', { name: 'apply the discount once' })).toHaveAttribute('href', /pullrequest\/51001$/);
   await expect(p.getByTestId('bx-standup')).toBeVisible();
+  // only the work Regia's work: the app's own chats, diary lines, threads and commits are left out (lib/appwork.ts)
+  await expect(p.getByTestId('bx-standup')).toContainText('Export fatture');
+  await expect(p).not.toContainText('Pagina Procedure');
+  await expect(p).not.toContainText("Regia dell'app");
+  await p.locator('summary', { hasText: 'Dettaglio tecnico' }).click();
+  await expect(p).toContainText('2 commit');
+  await expect(p).toContainText('QA ordini');
   await shot(page, 'brain-fatto');
   await p.getByRole('button', { name: 'Giorno prima' }).click();
   await expect(p.getByRole('heading', { name: 'Fatto ieri' })).toBeVisible();
   await settled();
   await expect(p.getByTestId('bx-diary')).toContainText('Login scaduto sul nodo di test');
-});
-
-test('Da fare: decisions first, open work by topic (PR named after its bug), AI-found bugs apart, due ideas, threads', async () => {
-  await open('dafare');
-  const p = page.getByTestId('brain-page-dafare');
-  await settled();
-  await expect(p.getByTestId('bx-decisions')).toContainText('Clienti · Export fatture');
-  await expect(p.getByTestId('bx-todo')).toContainText('Sconto applicato due volte sul totale');
-  await expect(p.getByTestId('bx-todo')).toContainText("Bug trovati dall'IA");
-  await expect(p).toContainText('Idee da riprendere');
-  await shot(page, 'brain-dafare');
 });
 
 test('Idee: table with filters (state, area, who), side peek by keyboard, Esc closes it', async () => {
@@ -116,15 +90,25 @@ test('Idee: table with filters (state, area, who), side peek by keyboard, Esc cl
   await expect(p.getByTestId('bx-peek')).toHaveCount(0);
 });
 
-test("Spunti dell'IA: reasoning cards by audience, reflections tab", async () => {
-  await open('spunti');
-  const p = page.getByTestId('brain-page-spunti');
+test("Idee · Dall'IA: the AI's ideas with their reasoning in the peek, filter by audience, reflections below; old spunti links land here", async () => {
+  await open('spunti/riflessioni');
+  const p = page.getByTestId('brain-page-idee');
   await settled();
-  await expect(p.getByTestId('bx-spunto').first()).toContainText('Ho notato');
-  await expect(p).toContainText('Per te');
-  await shot(page, 'brain-spunti');
-  await p.getByTestId('bx-tab-riflessioni').click();
+  await expect(p.getByTestId('bx-tab-ia')).toHaveAttribute('aria-selected', 'true');
+  await expect(p.getByTestId('bx-table-idee')).toContainText('4 righe');
+  await expect(p.getByLabel('Filtra per Per')).toBeVisible();
   await expect(p.getByTestId('bx-riflessione')).toHaveCount(2);
+  await p.getByRole('row').filter({ hasText: 'Rileggere i propri errori' }).click();
+  await expect(p.getByTestId('bx-peek').getByTestId('bx-reason')).toContainText('Ho notato');
+  await page.waitForTimeout(300);
+  await shot(page, 'brain-idee-ia');
+  await page.keyboard.press('Escape');
+  await p.getByTestId('bx-tab-mie').click();
+  await expect(p.getByTestId('bx-tab-mie')).toHaveAttribute('aria-selected', 'true');
+  await expect(p.getByTestId('bx-table-idee')).toContainText('5 righe');
+  await expect(p.getByTestId('bx-riflessione')).toHaveCount(0);
+  await p.getByTestId('bx-tab-tutte').click();
+  await expect(p.getByTestId('bx-table-idee')).toContainText('9 righe');
 });
 
 test('Costi: KPIs, savings, charts by day / kind / model / area, chats table, estimates; period switch', async () => {
@@ -146,33 +130,18 @@ test('Costi: KPIs, savings, charts by day / kind / model / area, chats table, es
   await expect(p.getByTestId('bx-lead')).toContainText('in 30 giorni');
 });
 
-test('Qualità: errors (charts + table), rules, praise, notebooks, proposals, measures, bugs', async () => {
+test('Qualità: four metrics with their source (errors caught, rules, PRs, reopened bugs) and proposals in one row', async () => {
   await open('qualita');
   const p = page.getByTestId('brain-page-qualita');
   await settled();
-  await expect(p.getByTestId('bx-chart-errori-per-tipo')).toBeVisible();
-  await expect(p.getByTestId('bx-table-errori-ia')).toContainText('46 righe');
+  for (const id of ['trovati', 'tornati', 'pr', 'riaperti']) await expect(p.getByTestId(`bx-q-${id}`)).toContainText('Fonte:');
+  await expect(p.getByTestId('bx-q-tornati')).toContainText('2 su 4');
+  await expect(p.getByTestId('bx-q-fuori')).toContainText('7 righe su 49 fuori dal conteggio: 3 illeggibili');
+  // no DevOps in this run: the PRs card says so, the reopened bugs one says the read is off
+  await expect(p.getByTestId('bx-q-riaperti')).toContainText('lettura DevOps spenta');
+  await expect(p.getByTestId('bx-q-proposte')).toContainText('Proposte di miglioramento: 34');
+  for (const gone of ['lodi', 'taccuini', 'misure', 'bug']) await expect(p.getByTestId(`bx-tab-${gone}`)).toHaveCount(0);
   await shot(page, 'brain-qualita');
-  for (const [tab, text] of [['regole', 'hanno funzionato'], ['lodi', 'perfetto'], ['taccuini', 'qa-runner'], ['proposte', 'applicate ma solo'], ['misure', 'Interventi forzati per giorno'], ['bug', 'totale ricalcolato']] as const) {
-    await p.getByTestId(`bx-tab-${tab}`).click();
-    await expect(p.getByTestId(`bx-quality-${tab}`)).toContainText(text);
-  }
-  await shot(page, 'brain-qualita-bug');
-  await p.getByTestId('bx-tab-misure').click();
-  await shot(page, 'brain-qualita-misure');
-});
-
-test('Collaborazione: mailboxes (stuck mail), who writes to whom, environments, a 1000+ row log virtualized', async () => {
-  await open('collabora');
-  const p = page.getByTestId('brain-page-collabora');
-  await settled();
-  await expect(p.getByTestId('bx-boxes')).toContainText('2 chat hanno posta non letta');
-  await expect(p.getByTestId('bx-chart-posta-coppie')).toBeVisible();
-  await expect(p.getByTestId('bx-chart-ambienti-minuti')).toBeVisible();
-  const log = p.getByTestId('bx-table-posta-registro');
-  await expect(log).toContainText(/1\.?1\d\d righe/);
-  expect(await log.locator('tbody tr.r').count()).toBeLessThan(80);
-  await shot(page, 'brain-collabora');
 });
 
 test('Confronto: the comparison report rendered, files to open and download', async () => {
@@ -256,8 +225,8 @@ test('States: a failing data source shows its cause and Riprova; light theme fol
   await expect(p.getByTestId('bx-table-idee')).toBeVisible({ timeout: 15000 });
 
   await page.emulateMedia({ colorScheme: 'light' });
-  await open('home');
+  await open('fatto');
   await settled();
-  await shot(page, 'brain-home-light');
+  await shot(page, 'brain-fatto-light');
   await page.emulateMedia({ colorScheme: 'dark' });
 });

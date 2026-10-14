@@ -7,6 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes
 import type { ChatSummary } from '@shared/contract';
 import { stateInfo } from '../lib/format';
 import { registerOverlay, report, viewRects } from '../lib/viewports';
+import { splitTip } from '../lib/tips';
+import './HelpTip'; // imported early on purpose: its Esc listener must run before every dialog's (components/HelpTip.tsx)
 
 export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className="kbd">{children}</kbd>;
@@ -64,13 +66,15 @@ export function Segmented<T extends string>({ value, options, onChange, label, t
 export function Popover({ anchor, open, onClose, children, align = 'end', testid, width }: { anchor: RefObject<HTMLElement | null>; open: boolean; onClose: () => void; children: ReactNode; align?: 'start' | 'end'; testid?: string; width?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  // placed below the anchor, else above, else clamped inside the window (max-height in CSS)
   useLayoutEffect(() => {
     if (!open || !anchor.current || !ref.current) return;
     const a = anchor.current.getBoundingClientRect();
     const r = ref.current.getBoundingClientRect();
     let x = align === 'end' ? a.right - r.width : a.left;
     let y = a.bottom + 6;
-    if (y + r.height > window.innerHeight - 8) y = Math.max(8, a.top - r.height - 6);
+    if (y + r.height > window.innerHeight - 8) y = a.top - r.height - 6;
+    if (y < 8) y = Math.max(8, window.innerHeight - r.height - 8);
     x = Math.min(Math.max(8, x), window.innerWidth - r.width - 8);
     setPos({ x, y });
   }, [open, anchor, align]);
@@ -85,7 +89,8 @@ export function Popover({ anchor, open, onClose, children, align = 'end', testid
     };
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); anchor.current?.focus(); }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      // a slider in the menu (the Regia's opacity) keeps its own arrow keys
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !(document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'range')) {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])') ?? [])];
         if (!items.length) return;
         e.preventDefault();
@@ -128,7 +133,9 @@ export function Modal({ onClose, children, label, testid, className = '', top }:
     const prev = document.activeElement as HTMLElement | null;
     const el = ref.current;
     const t = setTimeout(() => {
-      if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[autofocus], input, textarea, select, button') ?? el).focus();
+      // React never writes the autofocus attribute: a control that must win marks itself data-autofocus (a dialog opened
+      // while another closes gets its focus back after the old one restored the previous element); disabled controls are skipped
+      if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled]), [autofocus]:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])') ?? el).focus();
     }, 0);
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return; }
@@ -137,7 +144,8 @@ export function Modal({ onClose, children, label, testid, className = '', top }:
       if (!f.length) return;
       const first = f[0]!;
       const last = f[f.length - 1]!;
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      // the dialog itself (a click on its text) counts as before the first control
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === el)) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     window.addEventListener('keydown', key, true);
@@ -155,9 +163,10 @@ export function Modal({ onClose, children, label, testid, className = '', top }:
 
 // ---------------------------------------------------------------- Tooltips
 
-/** One tooltip for the whole app: `data-tip="Testo"` or `data-tip="Testo|Ctrl+K"` on any element. */
+/** One tooltip for the whole app: `data-tip="Testo"`, `data-tip="Testo|Ctrl+K"` or `data-tip="Testo|Seconda riga"` on
+ *  any element; long texts wrap (max ~320 px). */
 export function TooltipLayer() {
-  const [tip, setTip] = useState<{ text: string; keys?: string; x: number; y: number; below: boolean } | null>(null);
+  const [tip, setTip] = useState<{ text: string; keys?: string; more?: string; x: number; y: number; below: boolean } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const target = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -167,10 +176,8 @@ export function TooltipLayer() {
       target.current = el;
       timer = setTimeout(() => {
         if (!el.isConnected || target.current !== el) return;
-        const raw = el.dataset.tip ?? '';
-        const [text, keys] = raw.split('|');
         const r = el.getBoundingClientRect();
-        setTip({ text: text ?? '', keys, x: r.left + r.width / 2, y: r.bottom, below: true });
+        setTip({ ...splitTip(el.dataset.tip ?? ''), x: r.left + r.width / 2, y: r.bottom, below: true });
         // vertical placement is fixed up after measuring (avoid covering browser views)
         requestAnimationFrame(() => {
           const t = ref.current;
@@ -209,8 +216,8 @@ export function TooltipLayer() {
   }, []);
   if (!tip) return null;
   return createPortal(
-    <div ref={ref} className={`tooltip ${tip.below ? 'below' : 'above'}`} role="tooltip" style={{ left: tip.x, top: tip.y }}>
-      <span>{tip.text}</span>
+    <div ref={ref} className={`tooltip ${tip.below ? 'below' : 'above'} ${tip.more || tip.text.length > 48 ? 'wrap' : ''}`} role="tooltip" style={{ left: tip.x, top: tip.y }}>
+      {tip.more ? <span className="tooltip-lines"><span>{tip.text}</span><span className="tooltip-more">{tip.more}</span></span> : <span>{tip.text}</span>}
       {tip.keys && <Keys combo={tip.keys} />}
     </div>,
     document.body,

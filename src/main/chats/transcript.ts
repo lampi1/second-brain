@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { ChatItem } from '../../shared/contract';
 import { diffFor, diffFromResult, resultText, toolSummary } from './claude-map';
 import { lastLine, trimInput } from './session';
+import { coldUserText } from './handoff';
 
 type Obj = Record<string, unknown>;
 const o = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {});
@@ -41,7 +42,7 @@ export function findTranscript(sessionId: string, cwd: string | null, home = cla
 export interface History { items: ChatItem[]; title: string | null; costTotalUsd: number | null; lastText: string }
 
 /** The last bytes of a file as complete lines. */
-function tailLines(file: string, maxBytes: number): string[] {
+function tailLines(file: string, maxBytes: number): { lines: string[]; whole: boolean } {
   const fd = fs.openSync(file, 'r');
   try {
     const size = fs.fstatSync(fd).size;
@@ -50,15 +51,27 @@ function tailLines(file: string, maxBytes: number): string[] {
     fs.readSync(fd, buf, 0, buf.length, start);
     const lines = buf.toString('utf8').split('\n');
     if (start > 0) lines.shift(); // partial first line
-    return lines;
+    return { lines, whole: start === 0 };
   } finally { fs.closeSync(fd); }
+}
+
+/** The transcript's last lines within maxBytes, widened (x4, up to 64 MB) while one huge line fills a quarter of the
+ *  window or more: a pasted screenshot is one line of up to ~5 MB of base64 and would push the conversation out. */
+function historyLines(file: string, maxBytes: number): string[] {
+  let budget = maxBytes;
+  for (;;) {
+    const t = tailLines(file, budget);
+    if (t.whole || t.lines.length >= 400 || budget >= 64 * 1024 * 1024 || !t.lines.some(l => l.length >= budget / 4)) return t.lines;
+    budget *= 4;
+  }
 }
 
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 
-/** User text as typed: slash commands shown as "/name args", injected reminders dropped. */
-function userText(raw: string): { text: string; system?: string } | null {
-  const t = raw.replace(REMINDER, '').trim();
+/** User text as typed (a cold continuation's note left out): slash commands shown as "/name args", injected reminders dropped. */
+export function userText(raw: string): { text: string; system?: string } | null {
+  // a cold continuation's first message (ADR 0031): only the user's part, the note stays behind the divider
+  const t = coldUserText(raw.replace(REMINDER, '').trim()).trim();
   if (!t) return null;
   if (/^\[Request interrupted/.test(t)) return { text: '', system: 'Interrotto.' };
   const cmd = t.match(/<command-name>([\s\S]*?)<\/command-name>/);
@@ -79,7 +92,7 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
   const tools = new Map<string, { idx: number; input: unknown }>();
   let title: string | null = null, cost: number | null = null;
   let lines: string[] = [];
-  try { lines = tailLines(file, opts.maxBytes ?? 4 * 1024 * 1024); } catch { return { items, title, costTotalUsd: cost, lastText: '' }; }
+  try { lines = historyLines(file, opts.maxBytes ?? 4 * 1024 * 1024); } catch { return { items, title, costTotalUsd: cost, lastText: '' }; }
   for (const line of lines) {
     if (!line.trim()) continue;
     let m: Obj;

@@ -6,7 +6,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawnSync } from 'node:child_process';
 import * as P from './brain-site/parse.mjs';
-import { collect, check, header, frontmatter, mapRows } from './brain-map.mjs';
+import { collect, check, header, frontmatter, mapRows, simplify, humanize, boxLabel, headingLabel, labelFor, uniqueLabels, LABELS } from './brain-map.mjs';
 import { makeServer, allowedFiles, parseChatList, parseChatRead, ageOf } from './brain-site.mjs';
 
 const fails = [];
@@ -114,6 +114,31 @@ await T('brain-map: pieces and arrows come from the files', () => {
   const nodeIds = new Set(m.nodes.map(x => x.id));
   ok(m.edges.every(e => nodeIds.has(e.from) && nodeIds.has(e.to)), 'every arrow joins two pieces');
   ok(m.nodes.every(x => !('text' in x)), 'file bodies are not shipped to the page (only the proof lines)');
+});
+
+await T('brain-map: speaking labels, technical name kept', () => {
+  ok(humanize('my-tool.mjs') === 'My tool' && humanize('notes/') === 'Notes' && humanize('ops/runbook/') === 'Runbook' && humanize('/cmd') === 'Cmd', 'humanize');
+  const areas = { app: 'App' };
+  ok(boxLabel('app-domande-doppie', areas) === 'App · domande doppie' && boxLabel('second-brain', areas) === 'Second brain' && boxLabel('app-x', {}) === 'App x', `box label: ${boxLabel('app-domande-doppie', areas)}`);
+  ok(headingLabel('# Errori dell\'IA: il registro\n') === "Errori dell'IA" && headingLabel('# Catalogo query (index)') === 'Catalogo query', 'heading before ":" or "("');
+  ok(headingLabel('# A heading that is far too long to be a label\n') === null && headingLabel('no heading') === null, 'long or missing heading → none');
+  ok(labelFor({ id: 'mem:notes-x.md', kind: 'file', label: 'notes-x.md', file: 'notes-x.md' }, '# Note di lavoro: tutto\n') === 'Note di lavoro', 'a markdown file gets its short heading');
+  ok(labelFor({ id: 'mem:long-x.md', kind: 'file', label: 'long-x.md', file: 'long-x.md' }, '# A heading that is far too long to be a label\n') === 'Long x', 'long heading → readable name');
+  ok(labelFor({ id: 'agent:x', kind: 'agente', label: 'x', file: 'x.md' }, '---\nname: x\nlabel: Lettore di prova\n---\n') === 'Lettore di prova', 'frontmatter label wins');
+  ok(labelFor({ id: 'owner', kind: 'persona', label: 'Owner' }) === 'Owner', 'people, chats, services keep their name');
+  const known = Object.entries(LABELS).find(([k]) => k.startsWith('tool:'));
+  if (known) ok(labelFor({ id: known[0], kind: 'tool', label: 'x.mjs', file: 'x.mjs' }) === known[1], 'the labels list wins');
+  const u = uniqueLabels([{ id: 'a', label: 'Posta', name: 'a.mjs' }, { id: 'b', label: 'posta', name: 'b.mjs' }, { id: 'c', label: 'Altro', name: 'c.mjs' }]);
+  ok(u[0].label === 'Posta (a.mjs)' && u[1].label === 'posta (b.mjs)' && u[2].label === 'Altro', `same label → technical name added: ${JSON.stringify(u)}`);
+  const m = collect({ root, home, inbox: { boxes: [{ box: 'os-tool-prova', unread: 0, listening: true }], stats: {} } });
+  const by = id => m.nodes.find(x => x.id === id);
+  ok(by('tool:foo').name === 'foo.mjs' && by('tool:foo').label === 'Foo', `tool: ${JSON.stringify([by('tool:foo').label, by('tool:foo').name])}`);
+  ok(by('agent:rev').name === 'rev' && by('agent:rev').label === 'Rev' && by('playbook:rev').label === 'Taccuino: Rev', `agent and notebook: ${by('agent:rev').label} / ${by('playbook:rev').label}`);
+  ok(by('skill:stato').name === '/stato' && by('chat:box:os-tool-prova').label === boxLabel('os-tool-prova') && by('chat:box:os-tool-prova').label !== 'os-tool-prova', `skill and box: ${by('skill:stato').label} / ${by('chat:box:os-tool-prova').label}`);
+  ok(by('mem:now.md').name === 'now.md' && by('mem:now.md').label !== 'now.md', `memory file: ${by('mem:now.md').label}`);
+  ok(m.edges.some(e => e.from === 'tool:foo' && e.to === 'mem:now.md'), 'arrows still found by the technical name');
+  const s = simplify(m);
+  ok(s.nodes.some(x => x.members?.length) && s.nodes.every(x => (x.members ?? []).every(mb => mb.name)), 'group members carry their technical name');
 });
 
 await T('brain-map: check finds a proof that disappeared', () => {

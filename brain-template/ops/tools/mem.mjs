@@ -10,7 +10,15 @@
 //   node "{{BRAIN}}/ops/tools/mem.mjs" now set --match "<words of that line>" --text "<line>"
 //   node .../mem.mjs now add --section "<words of the ## heading>" --text "<line>"
 //   node .../mem.mjs now del --match "<words of that line>"          (thread closed)
-//   node .../mem.mjs error --text "<line in ai-errors.md format>"    (prints earlier lines with the same type + area)
+//   node .../mem.mjs now show [--label "<chat label>" | --match "<words>"] [--section "<words>"] [--days N]
+//        READ-ONLY: only the now.md lines asked for (your own line, a thread, a section, the lines dated in the last N
+//        days), with their line numbers, instead of reading the whole file (~9k tokens re-read by every later step;
+//        2026-10-13: 475 now.md reads a week)
+//   node .../mem.mjs error --text "<line in ai-errors.md format>" [--agent <type>] [--work wi:<id>|branch:<repo>/<b>]
+//        (prints earlier lines with the same type + area; --agent = a sub-agent of that chat made the error: adds
+//        " · agente: <type>", which settles that sub-agent's routing outcome, improve/routing-outcomes.mjs; adds
+//        " · lavoro: <key>", the work the error fails as a whole (improve/work-keys.mjs: --work, else the key of the
+//        app chat whose title the line names; none found = no field, matched later by that title))
 //   node .../mem.mjs journal --text "<tag · text>"                   (adds "- HH:MM · " and today's file)
 //   node .../mem.mjs idea --area lavoro|personale --title "<title>" --file <md: Idea / Come / Perché / Fonte lines>
 //        [--per second-brain|owner|ia]   (required when Fonte starts with "IA": what the AI's idea improves; an
@@ -22,6 +30,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { workKeys, chainOf } from '../improve/work-keys.mjs';
 
 const argv = process.argv.slice(2);
 const arg = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
@@ -98,7 +108,35 @@ const meCmd = (lines, text) => {
   return `added at line ${end + 1}`;
 };
 
+// now show: a read, so no lock and no write. Filters add up (AND); none = the "Agenti e sessioni attive" section.
+export function nowShow(md, { label, match, section, days, now = Date.now() } = {}) {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  let sec = '';
+  const dates = days ? Array.from({ length: Number(days) }, (_, i) => {
+    const t = new Date(now - i * 864e5);
+    const f = o => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', ...o }).format(t);
+    return [f({ year: 'numeric', month: '2-digit', day: '2-digit' }), f({ day: '2-digit', month: '2-digit' }).split('-').reverse().join('/')];
+  }).flat() : null;
+  const secWs = words(section ?? (label || match || days ? '' : 'Agenti e sessioni attive'));
+  const out = [];
+  lines.forEach((l, i) => {
+    if (/^##\s/.test(l)) { sec = l; return; }
+    if (!l.startsWith('- ')) return;
+    if (secWs.length && !hasAll(sec, secWs)) return;
+    if (label && !l.startsWith(`- **${label.replace(/^\*\*|\*\*$/g, '').trim()}**`)) return;
+    if (match && !hasAll(l, words(match))) return;
+    if (dates && !dates.some(d => l.includes(d))) return;
+    out.push(`${i + 1}: ${l}`);
+  });
+  return out;
+}
+
 const nowCmd = (sub, text) => {
+  if (sub === 'show') {
+    const md = fs.existsSync(path.join(ROOT, 'now.md')) ? fs.readFileSync(path.join(ROOT, 'now.md'), 'utf8') : '';
+    const out = nowShow(md, { label: arg('--label'), match: arg('--match'), section: arg('--section'), days: arg('--days') });
+    return console.log(out.length ? out.join('\n') : 'now.md: nessuna riga per questi filtri');
+  }
   const one = (lines, m) => {
     const ws = words(m);
     if (!ws.length) fail('--match "<words>" is required');
@@ -126,11 +164,31 @@ const nowCmd = (sub, text) => {
   });
 };
 
-const errorCmd = text => {
+export const WORK_KEY = /^(wi:\d{4,7}|branch:[\w.-]+\/[\w./-]+|chat:[\w:.-]+)$/;
+/** The work key of the app chat a line names (the stable app's chats.json, or `appDir`), or null. `rest` = the line
+ *  after its time: titles contain " · " themselves, so the chat is the longest title the line starts with. */
+export function workOfLine(rest, { appDir = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'second-brain'), state = path.join(ROOT, 'ops', 'state', 'improve') } = {}) {
+  let chats = [];
+  try { chats = JSON.parse(fs.readFileSync(path.join(appDir, 'chats.json'), 'utf8')).chats ?? []; } catch { return null; }
+  // the longest title, then the newest chat with it (a title is reused after a chat is closed)
+  const c = chats.filter(x => x.title && rest.startsWith(`${x.title} · `))
+    .sort((a, b) => b.title.length - a.title.length || (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))[0];
+  // its hand-off chain too: the chain is one work, keyed by the first key found along it
+  return c ? workKeys(chainOf(c, chats), { state }).get(c.id) ?? null : null;
+}
+
+const errorCmd = (text, agent, work) => {
   if (text === undefined) fail('--text or --file is required');
-  const line = bullet(text);
-  const f = line.slice(2).split(' · ');
+  if (agent !== undefined && !/^[\w-]{1,40}$/.test(agent)) fail('--agent: the sub-agent type (reviewer, general-purpose, Explore…)');
+  if (agent !== undefined && / · agente: /.test(text)) fail('--agent given and the text already has "· agente:"');
+  if (work !== undefined && !WORK_KEY.test(work)) fail('--work: wi:<id>, branch:<repo>/<branch> or chat:<id>');
+  if (/ · lavoro: /.test(text)) fail('the text already has "· lavoro:": pass it with --work');
+  const f = bullet(text).slice(2).split(' · ');
   if (f.length < 6) fail('not in ai-errors.md format: "AAAA-MM-GG HH:MM · chat · area · tipo · detto: … · vero: … · visto da: …"');
+  // the whole work fails, not only this chat (2026-10-14, "il voto va al lavoro intero"): its key, when known
+  let key = work ?? null;
+  if (!key) try { key = workOfLine(f.slice(1).join(' · '), { ...(arg('--app') ? { appDir: arg('--app') } : {}) }); } catch { key = null; }
+  const line = bullet(text) + (agent ? ` · agente: ${agent}` : '') + (key ? ` · lavoro: ${key}` : '');
   const [, , area, type] = f;
   const sig = words(area).filter(w => w.length >= 4);
   edit('ai-errors.md', lines => {
@@ -260,10 +318,13 @@ const main = () => {
   }
   const [cmd, sub] = argv;
   if (cmd === 'now') return nowCmd(sub, text);
-  if (cmd === 'error') return errorCmd(text);
+  // --agent needs its type: a forgotten one would write an untagged line and the sub-agent would close as a success
+  if (cmd === 'error' && argv.includes('--agent') && !/^[^-]/.test(arg('--agent') ?? '')) fail('--agent needs the sub-agent type (reviewer, general-purpose, Explore…)');
+  if (cmd === 'error' && argv.includes('--work') && !/^[^-]/.test(arg('--work') ?? '')) fail('--work needs its key (wi:<id>, branch:<repo>/<branch>)');
+  if (cmd === 'error') return errorCmd(text, arg('--agent'), arg('--work'));
   if (cmd === 'journal') return journalCmd(text);
   const src = fs.readFileSync(new URL(import.meta.url), 'utf8');
   console.log(src.slice(0, src.indexOf('import ')).trim());
   if (cmd) process.exitCode = 1;
 };
-try { main(); } catch (e) { console.error(`mem: ${e.message}`); process.exit(1); }
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) try { main(); } catch (e) { console.error(`mem: ${e.message}`); process.exit(1); }

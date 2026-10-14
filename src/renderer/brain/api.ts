@@ -20,7 +20,7 @@ export interface Entry {
   fetchedAt: number;
 }
 
-const WRAPPED = new Set(['/api/now', '/api/cost', '/api/day', '/api/map']);
+const WRAPPED = new Set(['/api/now', '/api/cost', '/api/day', '/api/map', '/api/improve']);
 const pathname = (p: string) => p.split('?')[0] ?? p;
 export const withFresh = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}fresh=1`;
 
@@ -103,6 +103,8 @@ export function brainClient(): BrainClient {
   client = new BrainClient(path => window.sb.invoke('brain:api', { path }));
   // a brain file changed (idea, error, diary, now.md…): the tables are stale
   try { window.sb.on('feed:events', () => client?.invalidate('/api/tables')); } catch { /* no bridge (tests) */ }
+  // a procedure file changed (main's brain watcher): the Procedure page's list and the open procedure
+  try { window.sb.on('procedures:changed', () => client?.invalidate('/api/procedure')); } catch { /* no bridge (tests) */ }
   return client;
 }
 

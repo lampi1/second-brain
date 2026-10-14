@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrainApiResult } from '../../../src/shared/contract';
 import { BrainClient, unwrap, withFresh } from '../../../src/renderer/brain/api';
-import { normBrief, normCost, normMap, normNow, normTables } from '../../../src/renderer/brain/types';
+import { normBrief, normCost, normMap, normProcedure, normProcedures, normTables } from '../../../src/renderer/brain/types';
 
 describe('unwrap', () => {
   it('cached sources come as {value, at, refreshing}; the rest as they are', () => {
@@ -74,12 +74,13 @@ describe('normalizers', () => {
     const t = normTables({ today: '2026-10-11', ideas: [{ titolo: 'x', data: '2026-10-01' }] });
     expect(t.errors).toEqual([]);
     expect(t.recurrence).toEqual({ totals: [], rules: [] });
-    expect(t.inbox.boxes).toEqual([]);
     expect(t.ideas[0]).toMatchObject({ titolo: 'x', stato: '', chi: '' });
   });
-  it('now: the owner last message key is found whatever the name', () => {
-    const n = normNow({ chats: [{ title: 'A', state: 'in corso', ageMin: 3, lastJordan: 'vai', box: { name: 'a', listening: 1, unread: '2' } }] });
-    expect(n.chats[0]).toMatchObject({ lastOwner: 'vai', last: '', box: { name: 'a', listening: true, unread: 2 } });
+  it('procedures: rows without an id or a file are dropped, the rest filled', () => {
+    const l = normProcedures({ root: 'C:/b', procedures: [{ id: 'a.md#x', title: 'X', file: 'a.md', line: '3', tags: ['query', 4] }, { title: 'senza id' }] });
+    expect(l.procedures).toEqual([{ id: 'a.md#x', title: 'X', purpose: '', area: '', group: null, file: 'a.md', line: 3, source: '', tags: ['query'], changedAt: null }]);
+    expect(normProcedures(null)).toEqual({ root: null, procedures: [] });
+    expect(normProcedure({ id: 'a.md#x', file: 'a.md', markdown: 'testo', masked: '2' })).toMatchObject({ markdown: 'testo', masked: 2, path: '' });
   });
   it('cost: chats as an object become a list; brief and map fill their lists', () => {
     expect(normCost({ total: 3, chats: { a: { title: 'x', usd: 2 } } }).chats).toEqual([expect.objectContaining({ title: 'x', usd: 2 })]);

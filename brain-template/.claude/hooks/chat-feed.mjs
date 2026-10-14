@@ -103,9 +103,8 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
         return;
       }
       if (focus && focus.chat !== 'Regia') {
-        say(`{{OWNER}} is in focus on "${focus.chat}" since ${hhmm(focus.since)}: do not interrupt him (no panel, no ` +
-          'PushNotification) unless it is urgent (production, /urgente, or it blocks that chat); queue it and give him the ' +
-          'queue, most urgent first, when he writes here.');
+        // Only the fact: what to do in focus is written once in me.md ("Focus").
+        say(`Focus: {{OWNER}} is in "${focus.chat}" since ${hhmm(focus.since)}.`);
       }
       return;
     }
@@ -113,8 +112,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
       const chat = titleOf(input.transcript_path, input.cwd, input.session_title);
       append({ kind: 'owner', state: 'in-lavorazione', chat, cwd: input.cwd, text: oneLine(input.prompt, 300) });
       fs.writeFileSync(FOCUS, JSON.stringify({ chat, cwd: input.cwd, since: new Date().toISOString() }));
-      return say(`{{OWNER}} is writing in THIS chat directly (focus on "${chat}"): answer him here; panels and commands for ` +
-        'him go here, not to the Regia; the Regia sees this turn automatically (chat-feed). DB queries still only via the Regia.');
+      return say(`Focus: {{OWNER}} is in this chat since ${hhmm(new Date().toISOString())}.`);
     }
     const focus = readJson(FOCUS, null);
     fs.mkdirSync(DIR, { recursive: true });
@@ -137,8 +135,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     const moves = Object.entries(groups).map(([g, cs]) => `${g}: ${cs.join(', ')}`).join('; ');
     const sidebar = moves ? `\nSidebar, one move_sessions per group (match by title in list_sessions), only for chats not already there: ${moves}. ` +
       '"turno finito" → "In attesa di altri" if its now.md line waits on colleagues/QA, "Finite" if nothing is left.' : '';
-    return say(`${back}Since your last turn, in the other chats (chat-feed, automatic):\n${text || '(solo cambi di stato)'}${sidebar}\n` +
-      'Use it: never ask him what he already decided there; update the hub list; give him the queued non-urgent items now.');
+    return say(`${back}Since your last turn, in the other chats (chat-feed, automatic):\n${text || '(solo cambi di stato)'}${sidebar}`);
   }
 
   if (event === 'Notification' && !isRegia && input.notification_type === 'permission_prompt') {

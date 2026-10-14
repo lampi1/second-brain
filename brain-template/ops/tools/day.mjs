@@ -2,7 +2,7 @@
 // Personale (routines.md "Report della giornata", P-092; journal/brief/). READ-ONLY. The Regia still adds mail, Teams
 // and calendar ("Posta e chat"), picks the top 3 and writes the text for {{OWNER}}; never the reviews of others' PRs
 // (P-091). Area by heuristics (chat label, target branch release, area words): a draft, the Regia corrects it.
-// Usage (--json on both: structured rows with title, link, state and area, for the brain site's Fatto/Da fare/stand-up):
+// Usage (--json on both: structured rows with title, link, state, area and a chat's project folder (cwd), for the brain site's Fatto/Da fare/stand-up):
 //        node "{{BRAIN}}/ops/tools/day.mjs" brief                    (live PRs, work items, now.md)
 //        node "{{BRAIN}}/ops/tools/day.mjs" report [--date AAAA-MM-GG] (journal, DevOps of the
 //          day, chats active that day in Claude and Cursor, {{BRAIN_NAME}} commits)
@@ -59,11 +59,12 @@ export function claudeChatsOn(root, day) {
     for (const f of fs.readdirSync(path.join(root, d.name)).filter(f => f.endsWith('.jsonl'))) {
       const file = path.join(root, d.name, f);
       if (fs.statSync(file).mtimeMs < from) continue;
-      let title = '', first = 0, last = 0, his = 0, lastText = '';
+      let title = '', first = 0, last = 0, his = 0, lastText = '', cwd = '';
       for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
         if (!line) continue;
         let j; try { j = JSON.parse(line); } catch { continue; }
         if (j.type === 'custom-title') title = j.customTitle;
+        if (!cwd && typeof j.cwd === 'string') cwd = j.cwd; // the project folder: tells the app's own chats apart
         if ((j.type !== 'user' && j.type !== 'assistant') || j.isSidechain || !j.timestamp || romeDay(j.timestamp) !== day) continue;
         const t = Date.parse(j.timestamp);
         first ||= t; last = t;
@@ -71,7 +72,7 @@ export function claudeChatsOn(root, day) {
         if (j.type === 'user' && !j.isMeta && (typeof c === 'string' ? !c.startsWith('<') : Array.isArray(c) && c.some(p => p.type === 'text' && !p.text.startsWith('<')) && !c.some(p => p.type === 'tool_result'))) his++;
         if (j.type === 'assistant') { const tx = (c ?? []).filter(p => p.type === 'text').map(p => p.text).join(' ').trim(); if (tx) lastText = tx; }
       }
-      if (first) res.push({ title: title || '(senza titolo)', first, last, his, last_answer: clip(lastText, 180), area: areaOf(title || lastText) });
+      if (first) res.push({ title: title || '(senza titolo)', first, last, his, last_answer: clip(lastText, 180), area: areaOf(title || lastText), cwd });
     }
   }
   return res.sort((a, b) => a.first - b.first);
@@ -140,7 +141,7 @@ export function reportData({ day, journal, chats, cursor, dv, commits, brief }) 
   const rows = [
     ...(dv?.merged ?? []), ...(dv?.opened ?? []).filter(p => !mergedUrls.has(p.url)), ...(dv?.items ?? []),
     ...journal.map(l => { const m = l.replace(/^- /, '').match(/^(\d{1,2}:\d{2})(?: UTC)? · ([^·]+?) · (.*)$/); return { kind: 'diario', time: m?.[1] ?? '', tag: m?.[2]?.trim() ?? '', title: (m?.[3] ?? l.replace(/^- /, '')).replace(/^\[personale\]\s*/, ''), area: areaOf(l) }; }),
-    ...chats.map(c => ({ kind: 'chat', title: c.title, from: romeTime(c.first), to: romeTime(c.last), his: c.his, last: c.last_answer, area: c.area })),
+    ...chats.map(c => ({ kind: 'chat', title: c.title, from: romeTime(c.first), to: romeTime(c.last), his: c.his, last: c.last_answer, area: c.area, cwd: c.cwd ?? '' })),
     ...cursor.map(l => ({ kind: 'chat-cursor', title: l.replace(/^- /, ''), area: areaOf(l.replace(/^- /, '')) })),
   ].map(({ text, ...r }) => r);
   return { day, devops: dv !== null, areas: AREAS, rows, commits, brief, text: renderReport({ day, journal, chats, cursor, dv, commits, brief }) };

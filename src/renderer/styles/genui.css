@@ -1,0 +1,115 @@
+/* Generative UI (ADR 0033, components/GenUi.tsx): the catalog views (table, cards, board, diffList, barChart), the
+   visual's card in a chat's list, the ones attached to a question and the full-width view. Only design tokens
+   (tokens.css), so dark and light follow the theme; status colors always come with their word, never color alone. */
+.gu-art { flex: none; margin: 6px 0; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); overflow: hidden; }
+.gu-art.attached { margin: 0 0 6px; border-color: var(--blue-line); }
+.gu-head { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 8px 0 10px; color: var(--text-3); }
+.gu-title { font: 600 13px var(--font-display); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gu-kind, .gu-from { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
+.gu-from { color: var(--violet); background: var(--violet-bg); }
+.gu-btn { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-xs); background: none; color: var(--text-3); cursor: pointer; }
+.gu-btn:hover { background: var(--surface-3); color: var(--text); }
+.gu-btn:focus-visible, .gu-link:focus-visible, .gu-path:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.gu-sum { margin: 2px 10px 6px; font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
+.gu-body { position: relative; max-height: 280px; overflow: hidden; padding: 0 10px 10px; cursor: zoom-in; }
+.gu-body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(transparent, var(--surface-2)); pointer-events: none; }
+.gu-ask { margin-bottom: 6px; }
+.gu-preview { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.gu-fallback { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; font-size: 12.5px; color: var(--amber); }
+.gu-fallback pre { flex-basis: 100%; max-height: 120px; overflow: auto; }
+
+/* full width over the app: the app's Modal (components/ui.tsx), widened; the span around it is only for React events */
+.gu-full-events { display: contents; }
+.modal.gu-full { width: min(1200px, calc(100vw - 48px)); max-height: calc(100vh - 48px); background: var(--surface-2); border-color: var(--border-3); }
+.gu-full .gu-head { padding: 10px 10px 0 14px; }
+.gu-full .gu-sum { margin: 4px 14px 10px; font-size: 13px; }
+.gu-full-body { flex: 1; min-height: 0; overflow: auto; padding: 0 14px 14px; user-select: text; }
+
+/* status: a dot + its word */
+.gu-status { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.gu-status i, .gu-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.gu-ok { color: var(--green); } .gu-fail { color: var(--red); } .gu-blocked { color: var(--amber); } .gu-warn { color: var(--amber); }
+.gu-running { color: var(--blue-strong); } .gu-todo { color: var(--text-3); } .gu-info { color: var(--text-2); }
+.gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--blue-line); background: var(--blue-bg); color: var(--blue-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gu-link:hover { text-decoration: underline; }
+.gu-link.off { border-color: var(--border-2); background: none; color: var(--text-3); cursor: default; }
+.gu-count { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
+
+/* table */
+.gu-table-wrap { overflow-x: auto; scrollbar-width: thin; }
+.gu-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.gu-table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 11.5px; padding: 4px 8px; border-bottom: 1px solid var(--border-2); white-space: nowrap; }
+.gu-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+.gu-table tr:last-child td { border-bottom: 0; }
+.gu-row-fail td { background: var(--red-bg); } .gu-row-blocked td { background: var(--amber-bg); }
+
+/* cards: decision options */
+.gu-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.gu-card { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border: 1px solid var(--border-2); border-radius: var(--r-s); background: var(--surface); }
+.gu-card.rec { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green-bg); }
+.gu-card-head { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--text); }
+.gu-card-head b { flex: 1; min-width: 0; }
+.gu-rec { flex: none; font-size: 11px; font-weight: 600; color: var(--green); padding: 0 6px; border-radius: 99px; background: var(--green-bg); }
+.gu-card-sum { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
+.gu-pros, .gu-cons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--text-2); }
+.gu-pros li, .gu-cons li { display: flex; gap: 5px; align-items: baseline; }
+.gu-pros svg { color: var(--green); flex: none; } .gu-cons svg { color: var(--red); flex: none; }
+.gu-card-foot { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 10px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-3); }
+.gu-card-foot b { color: var(--text-2); }
+.gu-risk-high b { color: var(--red); } .gu-risk-medium b { color: var(--amber); } .gu-risk-low b { color: var(--green); }
+
+/* board: lanes side by side */
+.gu-board { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; align-items: flex-start; }
+.gu-lane { flex: 1 0 180px; max-width: 320px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--border-3); }
+.gu-lane-ok { border-top-color: var(--green); } .gu-lane-fail { border-top-color: var(--red); } .gu-lane-blocked, .gu-lane-warn { border-top-color: var(--amber); }
+.gu-lane-running { border-top-color: var(--blue); }
+.gu-lane-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
+.gu-lane-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gu-item { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: var(--r-xs); background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text); }
+.gu-item-title { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.gu-item-detail { color: var(--text-3); font-size: 12px; line-height: 1.35; }
+.gu-item-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.gu-empty { font-size: 12px; color: var(--text-4); }
+
+/* diffList: changed files by area */
+.gu-diff { display: flex; flex-direction: column; gap: 8px; }
+.gu-diff-area { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); margin-bottom: 2px; }
+.gu-diff-file { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; padding: 3px 0 3px 10px; border-left: 2px solid var(--border-2); font-size: 12.5px; }
+.gu-path { padding: 0; border: 0; background: none; font: inherit; color: var(--blue-strong); cursor: pointer; text-decoration: none; text-align: left; overflow-wrap: anywhere; }
+.gu-path:hover { text-decoration: underline; }
+.gu-path.off { color: var(--text); cursor: default; }
+.gu-path .mono { font-family: var(--mono); font-size: 12px; }
+.gu-diff-n { flex: none; font-family: var(--mono); font-size: 11.5px; }
+.gu-diff-n .add { color: var(--green); } .gu-diff-n .del { color: var(--red); }
+.gu-why { flex-basis: 100%; color: var(--text-3); font-size: 12px; }
+
+/* barChart: one series, recessive axis, text in text inks */
+.gu-bars { display: block; max-width: 760px; }
+.gu-bars .gu-axis { stroke: var(--border-3); stroke-width: 1; }
+.gu-bars .gu-fill { fill: var(--blue); }
+.gu-bars .gu-hit { fill: transparent; }
+.gu-bars .gu-bar:hover .gu-hit { fill: var(--surface-3); }
+.gu-bars .gu-bar:hover .gu-fill { fill: var(--blue-strong); }
+.gu-bars .gu-label { fill: var(--text-2); font: 12px var(--font); }
+.gu-bars .gu-value { fill: var(--text); font: 600 12px var(--font); }
+
+/* Copia: in the header, and small next to each file path */
+.gu-diff-file .gu-copy { width: 20px; height: 20px; opacity: .55; }
+.gu-diff-file:hover .gu-copy, .gu-diff-file .gu-copy:focus-visible { opacity: 1; }
+
+/* inline code you can copy (lib/copyable.ts) and the preview of a clicked link or file (LinkPeek.tsx) */
+.items .md code[data-copy] { cursor: copy; border-bottom: 1px dotted var(--border-3); }
+.items .md code[data-copy]:hover { background: var(--surface-3); }
+.items .md code[data-copy="path"] { cursor: pointer; color: var(--blue-strong); }
+.items .md code.copied::after { content: " ✓"; color: var(--green); font-family: var(--font-ui, inherit); }
+.peek { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-width: 0; }
+.peek-head { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-3); font-size: 12.5px; }
+.peek-head b { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek-size { flex: none; margin-left: auto; font-size: 11px; color: var(--text-3); }
+.peek-url { font-size: 11.5px; color: var(--text-3); overflow-wrap: anywhere; user-select: text; }
+.peek-text { margin: 0; max-height: 220px; overflow: auto; padding: 6px 8px; border-radius: var(--r-xs); background: var(--surface); border: 1px solid var(--border); font-size: 11.5px; line-height: 1.45; white-space: pre; user-select: text; scrollbar-width: thin; }
+.peek-img { display: block; width: 100%; height: 180px; object-fit: contain; border-radius: var(--r-xs); background: var(--surface); }
+.peek-note { font-size: 12px; color: var(--text-3); } .peek-note.warn { color: var(--amber); }
+.peek-acts { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.peek-act { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border-2); border-radius: var(--r-xs); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.peek-act:hover, .peek-act:focus-visible { background: var(--surface-3); outline: none; box-shadow: 0 0 0 2px var(--focus); }

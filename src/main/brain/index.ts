@@ -1,10 +1,13 @@
 // The brain module: implements BrainService (src/main/services.ts) for wiring.ts. It owns the settings (config.ts),
 // the live feed of the brain folder and chats (live.ts), calm Windows toasts (notify.ts), the top-bar usage
-// (usage.ts), the spending limits (budget.ts), cost/time estimates (estimates.ts) and the GET-only proxy to the
-// brain's own data server (api.ts). Why one module: they share the brain folder, the Electron-node runner and the
-// feed, and they restart together when the brain folder changes. Only this file touches Electron (Notification,
-// the window); the parts are plain Node and unit-tested apart. Never writes into the brain: app state lives in
-// userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json).
+// (usage.ts), the spending limits (budget.ts), cost/time estimates (estimates.ts), the GET-only proxy to the brain's
+// own data server (api.ts) and the brain's procedures (procedures.ts, /api/procedures). Why one module: they share the
+// brain folder, the Electron-node runner and the feed, and they restart together when the brain folder changes. Only
+// this file touches Electron (Notification, the window); the parts are plain Node and unit-tested apart. App state
+// lives in userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json). It writes into the
+// brain only the model routing (routing.ts, ADR 0032): a new table version when the user saves it from the settings
+// page, and the routed chats' lines in the improvement loop's ledger (ops/state/improve/, the brain's own state, never
+// its tracked files).
 import { Notification, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,15 +21,24 @@ import { findBrainCandidates } from './detect';
 import { Live, KINDS, stamp, cut, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
+import { cursorToday, installHook } from './cursor-ledger';
 import { BudgetWatcher, type Spend } from './budget';
 import { FileJobStore, Ledger } from './estimates';
-import { BrainApi } from './api';
+import { BrainEstimates, withBrain } from './brain-estimates';
+import { Routing, routeChat } from './routing';
+import { BrainApi, type LocalApi } from './api';
+import { Compare } from './compare';
+import { Procedures, touchesProcedures } from './procedures';
+import { Learn } from './learn';
+import { ModelsSeenStore } from './models-seen';
 import { electronNode } from './node';
 
 export interface BrainCtx {
   emitter: Emitter; window: () => BrowserWindow | null; userData: string; env?: NodeJS.ProcessEnv;
   /** the app's own chats are left out of the chats.mjs poll (the chat manager publishes their events) */
   skipChat?: (id: string) => boolean;
+  /** events that must not become a Windows toast now ("Rispondi dopo", main/later.ts) */
+  held?: (e: FeedEvent) => boolean;
 }
 
 const FEED_MAX = 500;
@@ -85,6 +97,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     isFocused: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isFocused() && w.isVisible() && !w.isMinimized(); },
     show: showToast,
     enabled: () => toastsOk,
+    ...(ctx.held ? { held: ctx.held } : {}),
   });
 
   // ── feed ──
@@ -112,31 +125,56 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   let live: Live | null = null;
   let usage: UsageMonitor | null = null;
   let api: BrainApi | null = null;
+  const localApi: LocalApi = new Map(); // paths main answers itself (serveApi), kept across brain folder changes
+  const compare = new Compare(() => cfg.get().brainRoot, node);
+  const learn = new Learn(() => cfg.get().brainRoot, node);
+  // the brain's estimates table (ops/state/estimates.json); tests only read it, never rescan transcripts
+  const brainEst = new BrainEstimates(() => cfg.get().brainRoot, node);
+  const routing = new Routing(() => cfg.get().brainRoot);
+  const models = new ModelsSeenStore(file('cursor-models.json'));
+  // the Procedure page: read-only, credentials masked here (procedures.ts); a change on disk reloads the page's list
+  const procedures = new Procedures(() => cfg.get().brainRoot);
+  localApi.set('/api/procedures', () => procedures.list());
+  localApi.set('/api/procedure', q => procedures.get(q.get('id') ?? ''));
+  let procTimer: NodeJS.Timeout | null = null;
+  const onBrainFile = (f: string) => {
+    if (!touchesProcedures(f)) return;
+    procedures.invalidate();
+    if (procTimer) clearTimeout(procTimer);
+    procTimer = setTimeout(() => { procTimer = null; ctx.emitter.emit('procedures:changed', undefined); }, 500);
+  };
   let lastUsage: Usage | null = null;
   let backfillTimer: NodeJS.Timeout | null = null;
+
+  // the Cursor stop hook's script, beside its ledger (~/.cursor/hooks.json points at it; that file is the user's to edit)
+  if (!testing) { try { installHook(); } catch (e) { log.warn('brain', 'cursor ledger hook not installed', { cause: errText(e), hint: 'check %LOCALAPPDATA%/second-brain is writable' }); } }
 
   const startParts = async () => {
     const root = cfg.get().brainRoot;
     usage = new UsageMonitor({
       root, node, claudeConfig: testing ? null : claudeConfigFile(env),
+      // tests point it at their own folders (never the user's ledger or Downloads)
+      ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
       onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
     });
     usage.start();
-    api = new BrainApi(root, node);
+    api = new BrainApi(root, node, undefined, localApi);
     if (!root) { log.warn('brain', 'no brain folder configured', { data: { hint: 'settings:set { brainRoot } or SB_BRAIN' } }); return; }
     // the brain's own switches win at start (the file may have been edited by hand): brain-settings.ts
     const cross = readCrossHarness(root);
     if (cross !== null && cross !== cfg.get().messaging.crossHarness) cfg.set({ messaging: { crossHarness: cross } });
-    live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
+    live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile, ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
     // estimates from day one: past chats from cost.mjs, a little after boot (it reads 30 days of transcripts)
     backfillTimer = setTimeout(() => {
       void ledger.backfill(root, node).then(r => { if (r.skipped) log.info('brain', 'estimates backfill skipped', { data: { why: r.skipped } }); })
         .catch(e => log.warn('brain', 'estimates backfill failed', { data: { error: errText(e) } }));
     }, testing ? 1000 : 20e3);
+    if (!testing) brainEst.schedule(); // a fresh table soon after boot (the chats run while the app was closed)
   };
   const stopParts = () => {
-    live?.stop(); usage?.stop(); api?.stop();
+    live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); procedures.invalidate();
+    if (procTimer) { clearTimeout(procTimer); procTimer = null; }
     if (backfillTimer) clearTimeout(backfillTimer);
     live = null; usage = null; api = null;
   };
@@ -187,9 +225,28 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       return { change: cfg.confirm(proposalId, accept) };
     },
     onSettingChange: fn => { settingListeners.add(fn); return () => { settingListeners.delete(fn); }; },
-    estimate: req => ledger.estimate(req),
-    recordJob: job => ledger.record(job),
+    // ONE estimator: the brain's table; the ledger's keyword estimate only when the brain has no table
+    estimate: req => withBrain(ledger.estimate(req), brainEst.estimate(req.title), !!brainEst.table()),
+    recordPrediction: p => brainEst.recordPrediction(p),
+    recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
+    routingInfo: () => routing.info(),
+    saveRouting: (routes, reason) => {
+      const info = routing.save(routes, 'utente (Impostazioni)', reason);
+      log.info('brain', 'routing table saved', { data: { version: info.table?.version ?? null, rows: info.table?.routes.length ?? 0, reason } });
+      return info;
+    },
+    route: req => routeChat({ counts: k => routing.armCounts(k), ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
+    lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
+    observeRouting: rec => {
+      try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
+    },
     api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun cervello configurato' }),
+    serveApi: (p, fn) => { localApi.set(p, fn); },
+    compareList: () => compare.list(),
+    compareSet: (experiment, on, agent) => compare.set(experiment, on, agent),
+    learnAct: a => learn.act(a),
+    recordModels: (h, list) => models.record(h, list),
+    modelsSeen: () => models.get(),
     publish: (events: FeedInput[]) => {
       publishRaw(events.filter(e => kindOk(e?.kind) && typeof e.title === 'string').map(e => ({
         kind: e.kind, title: cut(e.title, 200), detail: cut(e.detail ?? '', 400),

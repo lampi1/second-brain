@@ -21,12 +21,11 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
   - [ ] Oggi (home): today's costs, what was done, what waits for you, AI insights
   - [ ] Adesso: live chats with their state, mailbox, now.md line, message box
   - [ ] Fatto e standup: done items with DevOps links (PRs, work items), stand-up sentences
-  - [ ] Da fare: brief, open threads (now.md), due ideas, decisions waiting
-  - [ ] Idee: ideas with filters (area, state, who), due dates
-  - [ ] Spunti dell'IA e riflessioni: the AI's ideas and reflections (Notato / Penso / Sicurezza / Non so)
+  - [ ] ~~Da fare: brief, open threads (now.md), due ideas, decisions waiting~~ (dropped 2026-10-13, ADR 0041)
+  - [ ] Idee: ideas with filters (area, state, who), due dates; "Dall'IA" (once "Spunti dell'IA"): the AI's ideas and reflections (Notato / Penso / Sicurezza / Non so)
   - [ ] Costi: charts by day / model / chat, savings, the estimate ledger
   - [ ] Qualità: AI errors, praise, specialist notebooks, proposals, measures, bugs, recurrence
-  - [ ] Collaborazione: mail between chats, environment leases
+  - [ ] ~~Collaborazione: mail between chats, environment leases~~ (dropped 2026-10-13: Procedure took its place, ADR 0041)
   - [ ] Confronto: the model comparison reports
   - [ ] Esplora: every brain file, search, preview
   - [ ] Mappa 3D: essential view, full screen from its own button, menu, weak points, flows

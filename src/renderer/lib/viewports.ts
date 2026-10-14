@@ -5,7 +5,6 @@
 // It reports on resize/scroll/transition, after any change (a short burst of frames covers animations) and on a
 // slow safety poll, and only sends when something changed. Used by BrowserTile.tsx, Popover.tsx and App.tsx.
 import type { Rect, ViewLayout } from '@shared/contract';
-import { sb } from '../sb';
 
 const views = new Map<string, HTMLElement>();
 const overlays = new Set<HTMLElement>();
@@ -57,6 +56,7 @@ const intersects = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.ri
 
 export function measure(): ViewLayout[] {
   const ids = new Set([...known, ...views.keys()]);
+  if (!ids.size) return []; // no browser view: nothing to place (and no forced layout for the overlay rects)
   const W = window.innerWidth;
   const H = window.innerHeight;
   const overRects = [...overlays].filter(o => o.isConnected).map(o => o.getBoundingClientRect());
@@ -85,7 +85,8 @@ export function report(): void {
   const key = JSON.stringify(layout);
   if (key === lastSent) return;
   lastSent = key;
-  void sb.invoke('views:layout', layout).catch(() => { lastSent = ''; });
+  // window.sb read here, not at import: modules that only import this one (HelpTip, the brain pages) load in node tests
+  void window.sb.invoke('views:layout', layout).catch(() => { lastSent = ''; });
 }
 
 /** Report on the next frames for a short while (covers CSS transitions of 120-180 ms). */
@@ -105,8 +106,11 @@ export function startViewports(): void {
   if (started) return;
   started = true;
   window.addEventListener('resize', () => schedule());
-  document.addEventListener('scroll', () => schedule(), true);
+  // a chat list scrolling (it follows its bottom on every streamed frame) never moves a browser view: measuring then
+  // kept a layout-forcing loop running all the time while chats streamed
+  document.addEventListener('scroll', e => { if (!(e.target instanceof Element && e.target.closest('.items'))) schedule(); }, true);
   document.addEventListener('transitionend', () => schedule(), true);
-  setInterval(report, 700); // safety net: anything that moved without an event
+  setInterval(() => { if (!document.hidden) report(); }, 700); // safety net: anything that moved without an event
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
   window.addEventListener('beforeunload', () => { blocked = true; report(); });
 }

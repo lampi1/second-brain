@@ -73,7 +73,7 @@
     const player = el('div.mo-player', { hidden: true });
     const hint = el('div.mo-hint', 'Trascina per ruotare · rotella o due dita per lo zoom · clic su un pezzo');
     const search = el('input.mo-search', { type: 'search', list: 'mo-nodes', placeholder: 'Cerca un pezzo…', 'aria-label': 'Cerca un pezzo',
-      onchange: e => { const q = e.target.value.toLowerCase(); const n = full.nodes.find(x => x.label.toLowerCase() === q) ?? full.nodes.find(x => x.label.toLowerCase().includes(q)); if (n) focus(shown(n.id)); } });
+      onchange: e => { const q = e.target.value.toLowerCase(); const names = x => [x.label, x.name ?? ''].map(s => s.toLowerCase()); const n = full.nodes.find(x => names(x).includes(q)) ?? full.nodes.find(x => names(x).some(s => s.includes(q))); if (n) focus(shown(n.id)); } });
     const panelBtn = el('button.mo-btn', { type: 'button', 'aria-pressed': 'true', title: 'Mostra o nascondi il menu', onclick: () => { left.hidden = !left.hidden; panelBtn.setAttribute('aria-pressed', String(!left.hidden)); } }, '☰ Menu');
     ov.replaceChildren(bar({ search, panelBtn }, essential, map, full), el('datalist#mo-nodes', full.nodes.map(n => el('option', { value: n.label }))),
       el('div.mo-body', canvas, hint, left, right, player));
@@ -137,7 +137,7 @@
       .warmupTicks(essential ? 160 : 60).cooldownTicks(essential ? 120 : 260).cooldownTime(60000)
       .onEngineStop(() => { if (fitted) return; fitted = true; if (arg && arg !== 'tutto' && shown(arg)) focus(shown(arg)); else graph.zoomToFit(900, 60); })
       .nodeId('id').nodeRelSize(REL).nodeVal(size).nodeColor(nodeColor).nodeOpacity(0.97).nodeResolution(24)
-      .nodeLabel(n => `<b>${App.esc(n.label)}</b><br>${App.esc(n.short ?? '')}`)
+      .nodeLabel(n => `<b>${App.esc(n.label)}</b><br>${App.esc(n.short ?? '')}${n.name && n.name !== n.label ? `<br><small style="color:#8e97ab">${App.esc(n.name)}</small>` : ''}`)
       .nodeThreeObject(label).nodeThreeObjectExtend(true)
       .linkColor(linkColor).linkOpacity(0.9)
       .linkWidth(l => (hiL.has(lk(l)) ? (essential ? 3.2 : 2.2) : l.kind === 'flusso' ? (essential ? 1.1 : 0.7) : 0.4))

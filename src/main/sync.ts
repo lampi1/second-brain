@@ -4,7 +4,9 @@
 // promotion) into feed events/notifications, and (2) starts the same command when files of the PRODUCT inside the
 // brain change (paths from `product-sync.mjs paths --json`), after 10 minutes of quiet, never two at once.
 // Stable instance only (SB_RELEASE set, not in tests): a dev build never syncs. Exit codes: 0 ok (or paused / nothing
-// to do), 2 blocked by the check, anything else = error. Used by wiring.ts.
+// to do), 2 blocked by the check, anything else = error. A block or error with the same findings as the last one is
+// published once (one item that stays until a sync goes through; 40 identical red toasts were seen on 12/10). Used
+// by wiring.ts.
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +38,30 @@ export function outcomeEvent(o: SyncOutcome): { kind: string; title: string; det
   return { kind: 'sync-error', title: `Pubblicazione non riuscita (${what})`, detail: o.summary ?? `codice ${o.exitCode}` };
 }
 
+/** What a failure is about, without what changes from run to run (release ids, timestamps): same signature = same
+ *  problem still there. */
+export function failureSignature(ev: { kind: string; detail: string }): string {
+  const text = ev.detail
+    .replace(/\bbrain-[\w-]+/g, 'brain-*')
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}[:-]\d{2}(?:[:-]\d{2})?(?:[.,-]\d+)?Z?/g, '<time>')
+    .replace(/\s+/g, ' ').trim();
+  return `${ev.kind}|${text}`;
+}
+
+/** Outcome events → the ones to publish: a failure only when it differs from the open one; an ok closes it. */
+export class FailureDedup {
+  private open: string | null = null;
+  pass(ev: { kind: string; detail: string }): boolean {
+    if (ev.kind === 'sync-ok') { this.open = null; return true; }
+    const sig = failureSignature(ev);
+    if (sig === this.open) return false;
+    this.open = sig;
+    return true;
+  }
+}
+
 export class ProductSync {
+  private dedup = new FailureDedup();
   private dir: string;
   private seen = new Set<string>();
   private watchers: fs.FSWatcher[] = [];
@@ -52,7 +77,11 @@ export class ProductSync {
 
   start(): void {
     fs.mkdirSync(this.dir, { recursive: true });
-    for (const f of fs.readdirSync(this.dir)) this.seen.add(`${f}:${this.mtime(f)}`); // old outcomes: no notification
+    const old = fs.readdirSync(this.dir);
+    for (const f of old) this.seen.add(`${f}:${this.mtime(f)}`); // old outcomes: no notification
+    // the last outcome before this start: a failure still open is not published again after a restart
+    const last = old.filter(n => n.endsWith('.json')).sort((a, b) => this.mtime(b) - this.mtime(a))[0];
+    if (last) { try { const ev = outcomeEvent(JSON.parse(fs.readFileSync(path.join(this.dir, last), 'utf8')) as SyncOutcome); if (ev) this.dedup.pass(ev); } catch { /* unreadable: nothing open */ } }
     this.watchers.push(fs.watch(this.dir, () => this.scanOutcomes()));
     void this.loadPaths();
     const hourly = setInterval(() => void this.loadPaths(), 3600e3);
@@ -71,6 +100,7 @@ export class ProductSync {
       let o: SyncOutcome;
       try { o = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')) as SyncOutcome; } catch { continue; }
       const ev = outcomeEvent(o);
+      if (ev && !this.dedup.pass(ev)) { log.info('sync', 'same failure as before: not published again', { data: { file: f, kind: ev.kind } }); continue; }
       if (ev) { this.o.brain.publish([ev]); log.info('sync', 'outcome', { data: { file: f, kind: ev.kind } }); }
     }
   }

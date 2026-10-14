@@ -12,6 +12,7 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 | File | Holds | Read when | Write when |
 |------|-------|-----------|------------|
 | `AGENTS.md` | Short boot index: hard rules, on-demand pointers, routing | Every session | Only to add a hard rule or a pointer; keep it ≤ ~70 lines |
+| `START-HERE.md` | First-day guide: first steps, what each app page shows and when it fills up | Day one; an app page is empty or in error | Never routinely; delete it (and this row) once {{OWNER}} no longer needs it |
 | `me.md` | Who {{OWNER}} is, how to work with them, safety rules, machine | Every session, first | {{OWNER}} states a preference or corrects how you work |
 | `hub.md` | Orchestrator: how the hub "Regia" runs work chats and decisions | You are the hub | A hub rule changes |
 | `code.md` | Code work: repos, review, definition of done | Any code work | A code-work rule changes |
@@ -21,6 +22,8 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 | `routines.md` | Recurring procedures, run only on request | The request matches a routine | A recurring procedure is learned |
 | `ops/AGENTS.md` | Production rules and commands of {{OWNER}}'s job | Production, customers, incidents | Production rules change |
 | `ops/runbook/` | Procedures, one file per topic (`index.md`) | A problem is described (search it first) | A procedure is learned |
+| `rules/qa.md` | {{OWNER}}'s testing rules | A QA chat, a test case, verifying a fix | {{OWNER}} states or corrects a QA rule |
+| `rules/agent-standard.md` | How a specialist agent file is written | Creating or changing an agent | The agent standard changes |
 | `brain-rules.md` | How the brain itself is changed | Before changing any rule, skill, agent or test | {{OWNER}} changes how the brain is edited |
 | `tests/behavior.md` | Behaviour test cases, one per real correction | Before changing a rule; "testa il cervello" | {{OWNER}} corrects a behaviour |
 | `proposals.md` | Every improvement proposal with its metric and outcome | Before proposing an improvement | A proposal is made, answered, applied or measured |
@@ -40,7 +43,7 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 
 ## Layout
 
-`AGENTS.md map.md hub.md code.md me.md now.md ideas.md routines.md` · `journal/` · `ops/` (AGENTS.md, runbook/,
+`AGENTS.md START-HERE.md map.md hub.md code.md me.md now.md ideas.md routines.md` · `journal/` · `ops/` (AGENTS.md, runbook/,
 tools/: `mem.mjs` memory lines, `inbox.mjs` mail between chats, `chat-prompt.mjs` new-chat prompts, `day.mjs`
 brief/report, `cost.mjs` costs, `wt-land.mjs` worktree → main, `brain-lint.mjs` checks, `brain-site.mjs` local site,
 `playbook.mjs` notebooks, `session-find.mjs` old chats; offline tests `node ops/tools/test.mjs`) · `rules/` ·

@@ -38,13 +38,13 @@ test.afterAll(() => {
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ at: new Date().toISOString(), results }, null, 2));
 });
 
-test('Rispondo a una domanda dalla corsia senza aprire la chat', async () => {
+test('Rispondo a una domanda dalla sua tessera senza aprire la chat', async () => {
   const { app, page } = await launchDemo();
-  const s = new Scenario('Rispondo a una domanda dalla corsia', page);
+  const s = new Scenario('Rispondo a una domanda dalla sua tessera', page);
   await s.press('Control+J', 'Ctrl+J: la cosa più vecchia che mi aspetta');
   await s.press('1', '1: scelgo la prima opzione');
-  await s.check('la corsia scende a 2, nessuna chat aperta', async () => {
-    await expect(page.getByTestId('needs-count')).toHaveText('2');
+  await s.check('restano 2 domande, nessuna chat aperta', async () => {
+    await expect(page.locator('[data-request-key]')).toHaveCount(2);
     await expect(page.getByTestId('maximized')).toHaveCount(0);
   });
   await s.done(2);

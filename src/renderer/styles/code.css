@@ -1,0 +1,53 @@
+/* Code blocks of chat messages (components/CodeBlock.tsx): a header with the language, "Copia" and "Esegui", the code,
+   "Mandato" on a text to send, and under it the run of "Esegui" as a small terminal (PowerShell 5.1: status, live
+   output, whether the outcome reached the chat, "Rimanda").
+   Kept apart from app.css so the block can change without touching the chat styles. Tokens: styles/tokens.css. */
+.msg-md { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.codeblock { border: 1px solid var(--border-2); border-radius: var(--r-s); background: var(--bg); overflow: hidden; min-width: 0; }
+.codeblock.prod { border-color: color-mix(in srgb, var(--red) 45%, var(--border-2)); }
+.cb-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.cb-lang { font: 600 11px var(--font); color: var(--text-3); letter-spacing: 0.02em; }
+.cb-prod { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; color: var(--red); background: var(--red-bg); border-radius: 99px; padding: 0 7px; line-height: 17px; }
+.cb-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid transparent;
+  background: transparent; color: var(--text-2); font: 500 12px var(--font); cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+}
+.cb-btn:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.cb-btn:disabled { opacity: 0.55; cursor: default; }
+.cb-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.cb-run-btn { color: var(--blue); border-color: var(--blue-line); background: var(--blue-bg); }
+.cb-run-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 18%, transparent); color: var(--blue); }
+.cb-run-btn.armed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, transparent); background: var(--red-bg); }
+.cb-code { margin: 0; padding: 9px 12px; font: 12px/1.55 var(--mono); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.cb-code code { font: inherit; background: none; border: 0; padding: 0; }
+.cb-err { padding: 6px 12px; font-size: 12px; color: var(--red); background: var(--red-bg); border-top: 1px solid var(--border); }
+
+/* the run: a terminal look that stays readable in both themes */
+.cb-run { border-top: 1px solid var(--border); background: var(--term-bg, #0b0e14); }
+.cb-run-head { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px 0 10px; font-size: 11.5px; color: var(--term-dim, #9aa4b6); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.cb-run-name { font-weight: 600; color: var(--term-fg, #e6e9ef); }
+.cb-run-cwd { font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cb-run-status { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cb-run-ok .cb-run-status { color: #5fd38f; }
+.cb-run-error .cb-run-status { color: #ff8090; }
+.cb-run-running .cb-run-status { color: #8fa5ff; }
+.cb-run .cb-btn { color: var(--term-dim, #9aa4b6); }
+.cb-run .cb-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--term-fg, #e6e9ef); }
+.cb-out {
+  margin: 0; padding: 8px 12px; max-height: 260px; overflow: auto; font: 12px/1.5 var(--mono); color: var(--term-fg, #e6e9ef);
+  white-space: pre-wrap; word-break: break-word; user-select: text;
+}
+.cb-out:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
+.cb-run-foot { display: flex; align-items: center; gap: 6px; padding: 4px 6px 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+
+/* a text to send (lib/sendable.ts, ADR 0038): "Mandato" and its mark; Copia's "Copiato hh:mm" stays in the button */
+.cb-btn[data-mark='copied'] { color: var(--text-2); }
+.cb-send-btn { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); }
+.cb-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.cb-sent { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 8px; font: 600 12px var(--font); color: var(--green); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cb-undo { height: 20px; padding: 0 6px; font-weight: 500; color: var(--text-2); }
+/* Esegui's outcome went to the chat by itself (main/run/results.ts) */
+.cb-told { font-size: 11.5px; color: var(--term-dim, #9aa4b6); padding-left: 4px; }
+.cb-told.ok { display: inline-flex; align-items: center; gap: 5px; color: #5fd38f; }
+.cb-run-foot .cb-told + .cb-btn { margin-left: auto; }

@@ -6,6 +6,7 @@
 // Usage:
 //   node "{{BRAIN}}/ops/tools/chat-prompt.mjs" --title "A · Fix login" --kind code|qa|prod|os|research
 //        [--harness claude|cursor] [--repo my-app] [--words "<{{OWNER}}'s words>"] (--job "<task>" | --job-file <path>)
+//        [--app]    (the chat runs in the second-brain app: no inbox `wait` line, the app delivers the mail)
 //        [--open]   (cursor only: opens the chat in Cursor with the prompt link, {{OWNER}} clicks "Create Chat"; the
 //                    copy block is printed instead when the link is too long or Cursor refuses it)
 //   node .../chat-prompt.mjs show <words of the title or of the first message> [--days 30]
@@ -30,7 +31,7 @@ const READ = {
   research: ['map.md'],
 };
 const KIND_RULES = {
-  code: 'Lavoro sul codice con code workflow nel repo indicato; prima di dire "fatto" o di un commit, il sotto-agente `reviewer` sul diff (code.md).',
+  code: 'Lavoro sul codice con code workflow nel repo indicato; prima di dire "fatto" o di un commit, il sotto-agente `reviewer` sul diff (code.md). A che punto è il ramo (status, base, commit, merge in corso): `node "{{BRAIN}}/ops/tools/repo-state.mjs" <cartella>`, una chiamata.',
   qa: 'QA: scenario esatto dei test case, mai cambiato per aggirare un bug (resta Blocked); risultati sul tracker solo dopo l\'ok di {{OWNER}}.',
   prod: 'Produzione: proponi i comandi, li lancia {{OWNER}}; query sui DB di prod solo dalla Regia (le mandi il percorso del `.sql`); log e `az` in sola lettura li leggi tu (me.md "Safety").',
   os: 'Cervello: niente segreti nei file; permessi, settings e hook solo con l\'ok esplicito di {{OWNER}}; testo con backslash solo via Write/Edit; il contesto fisso non cresce; test offline, `reviewer` sul diff e `node ops\\tools\\brain-lint.mjs` prima del merge in main.',
@@ -47,7 +48,7 @@ export function checkTitle(title) {
   return null;
 }
 
-export function buildPrompt({ title, kind, harness = 'claude', repo, words, job, date = rome() }) {
+export function buildPrompt({ title, kind, harness = 'claude', repo, words, job, date = rome(), app = false }) {
   const err = checkTitle(title) ?? (!READ[kind] ? `--kind deve essere uno tra ${Object.keys(READ).join(', ')}` : null) ?? (!job?.trim() ? 'manca il lavoro (--job o --job-file)' : null);
   if (err) throw new Error(err);
   const repoPath = repo ? (/^[A-Za-z]:[\\/]/.test(repo) ? repo : `${REPOS}\\${repo}`) : null;
@@ -65,10 +66,13 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   L.push(`- ${KIND_RULES[kind]}`);
   const me = slug(title);
   const INBOX = 'node "{{BRAIN}}/ops/tools/inbox.mjs"';
-  // one channel in both harnesses (harness/tools.md, 2026-10-10 "un solo modo")
-  L.push(`- Domande (2-3 opzioni, la consigliata prima), comandi per {{OWNER}} e risultati alla Regia con \`${INBOX} send --to "regia" --from "${me}" --file <testo scritto con Write>\`, salvo che {{OWNER}} scriva qui: allora pannelli (${harness === 'cursor' ? 'AskQuestion' : 'AskUserQuestion'}) e comandi qui.`);
-  L.push(`- Posta tra chat (Claude e Cursor): appena partita lancia in background \`${INBOX} wait --me "${me}"\` e rilancialo dopo ogni messaggio ricevuto; i passaggi operativi (build pronta, stack libero, fix pronto per la QA) li mandi tu direttamente alla chat interessata con \`${INBOX} send --to "<chat>" --from "${me}" --file <testo>\`; domande e decisioni per {{OWNER}} solo alla Regia.`);
-  L.push(`- Tieni la tua riga in now.md, mai a mano: \`node "{{BRAIN}}/ops/tools/mem.mjs" now me --label "${title}" --text "<dove · stato · prossimo passo>"\`; a lavoro chiuso \`now me --label "${title}" --del\`.`);
+  // 2026-10-13 "la regia mi serve principalmente per lo stato": each chat asks {{OWNER}} itself, the app pops it up or queues it
+  L.push(`- Domande e comandi per {{OWNER}} li fai tu, qui: domande con i pannelli (${harness === 'cursor' ? 'AskQuestion' : 'AskUserQuestion'}; 2-3 opzioni, la consigliata prima), comandi come un solo blocco \`powershell\` (l'app lo mostra con Esegui); prima, in 1-3 righe, il contesto e il perché (cosa vedrà, cosa cambia). L'app li mostra in popup o in coda: mai mandarli alla Regia. Alla Regia solo risultati e stato con \`${INBOX} send --to "regia" --from "${me}" --file <testo scritto con Write>\`; query su DB di produzione: alla Regia (DB, perché, percorso del .sql).`);
+  // --app: the second-brain app delivers mail to its chats itself, mid-turn too: a `wait` would only wake the chat for
+  // nothing every 2 h (2026-10-13 zero-token audit: 115 waits a week)
+  if (app) L.push(`- Posta tra chat: te la consegna l'app second-brain da sé, anche a metà turno (niente \`wait\`); per scrivere usa send_to_chat. I passaggi operativi (build pronta, stack libero, fix pronto per la QA) li mandi tu direttamente alla chat interessata; domande e comandi per {{OWNER}} li fai tu qui (sopra).`);
+  else L.push(`- Posta tra chat (Claude e Cursor): appena partita lancia in background \`${INBOX} wait --me "${me}"\` e rilancialo dopo ogni messaggio ricevuto; i passaggi operativi (build pronta, stack libero, fix pronto per la QA) li mandi tu direttamente alla chat interessata con \`${INBOX} send --to "<chat>" --from "${me}" --file <testo>\`; domande e comandi per {{OWNER}} li fai tu qui (sopra).`);
+  L.push(`- Tieni la tua riga in now.md, mai a mano: \`node "{{BRAIN}}/ops/tools/mem.mjs" now me --label "${title}" --text "<dove · stato · prossimo passo>"\`; a lavoro chiuso \`now me --label "${title}" --del\`; per rileggere righe di now.md \`now show --label "${title}"\` (o \`--match "<parole>"\`), mai il file intero.`);
   L.push('- Se {{OWNER}} ti corregge o scopri un tuo errore: una riga con `node "{{BRAIN}}/ops/tools/mem.mjs" error --text "<riga>"` (formato in ai-errors.md).');
   // 2026-10-11: 10 chats ran full suites together, CPU 100%, ~1 h lost (code.md "Heavy test suites")
   L.push('- Suite di test pesanti (check completo, e2e, vitest intero): una alla volta sulla macchina, con lo stesso turno sull\'ambiente dei test del repo (`sb-tests` per second-brain-app): `wait` in background → suite → `release` sempre, anche se fallisce; senza turno solo singoli file di test; un timeout preso a PC carico non prova niente.');
@@ -160,7 +164,7 @@ function main() {
   const job = arg('--job-file') ? fs.readFileSync(arg('--job-file'), 'utf8') : arg('--job');
   const title = arg('--title');
   try {
-    const prompt = buildPrompt({ title, kind: arg('--kind'), harness: arg('--harness') ?? 'claude', repo: arg('--repo'), words: arg('--words'), job });
+    const prompt = buildPrompt({ title, kind: arg('--kind'), harness: arg('--harness') ?? 'claude', repo: arg('--repo'), words: arg('--words'), job, app: argv.includes('--app') });
     const nowFile = arg('--now') ?? path.join(OPS, 'now.md');
     const dup = fs.existsSync(nowFile) ? sameLabel(title, fs.readFileSync(nowFile, 'utf8')) : [];
     if (dup.length) console.error(`attenzione: in now.md c'è già una riga "${title}" (${dup[0].slice(0, 90)}…): titolo unico tra le chat aperte, o è la stessa chat?`);

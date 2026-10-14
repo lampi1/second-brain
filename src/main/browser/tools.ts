@@ -11,6 +11,11 @@ import { envForUrl } from './envs';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
+/** How often handoff_to_user tells the client it is still waiting (well under Claude Code's 300 s idle timeout). */
+export const PROGRESS_MS = 25_000;
+/** Key combos that paste from the clipboard (Ctrl+V, Ctrl+Shift+V, Shift+Insert, Cmd+V). */
+export const PASTE_KEYS = /(?:^|\s)(?:(?:ctrl|control|meta|cmd|command)\+(?:shift\+|alt\+)*v|shift\+insert|insert\+shift)(?=\s|$)/i;
+
 type Args = Record<string, unknown>;
 const str = (v: unknown, name: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${name} is required (a non-empty string)`);
@@ -180,7 +185,13 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       name: 'key', annotations: WRITE,
       description: 'Press keys, space-separated, combos with "+": "Enter", "Escape", "Tab", "ctrl+a Backspace", "shift+Tab", "ArrowDown". repeat presses the sequence N times.',
       inputSchema: schema({ keys: { type: 'string' }, repeat: { type: 'number' } }, ['keys']),
-      run: write(a => `key ${String(a.keys ?? '')}`, (tab, a) => actions.key(tab, str(a.keys, 'keys'), Number(a.repeat ?? 1))),
+      run: write(a => `key ${String(a.keys ?? '')}`, (tab, a) => {
+        const keys = str(a.keys, 'keys');
+        // a password the user just copied for a login hand-off sits on the clipboard: pasting it into any field would
+        // let the agent read it back (read_page shows field values)
+        if (PASTE_KEYS.test(keys) && tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked for 30 s while the user\'s password is on the clipboard (login hand-off). Type the text instead.');
+        return actions.key(tab, keys, Number(a.repeat ?? 1));
+      }),
     },
     {
       name: 'scroll', annotations: WRITE,
@@ -234,16 +245,17 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
     },
     {
       name: 'handoff_to_user', annotations: WRITE,
-      description: 'Ask the user to act in your tab themselves (login, MFA, CAPTCHA, a choice only they can make): the app shows them a banner with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Waits up to wait_seconds (default 120, max 600); if they have not answered yet, call it again with the same handoff_id to keep waiting. Never ask them for passwords in chat.',
+      description: 'Ask the user to act in your tab themselves (login, MFA, CAPTCHA, a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file: the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
       inputSchema: schema({
         reason: { type: 'string', description: 'One short line, e.g. "Login richiesto su example-test-3"' }, instructions: { type: 'string' },
         kind: { type: 'string', enum: ['login', 'other'] },
+        account: { type: 'string', description: 'kind login: user name or e-mail of the credentials-file entry to show (never a password)' },
         handoff_id: { type: 'string', description: 'Keep waiting on an open hand-off' }, wait_seconds: { type: 'number' },
       }),
       run: async (a, ctx) => {
         const s = scopeOf(ctx);
-        const waitMs = Math.max(5, Math.min(600, Number(a.wait_seconds ?? 120) || 120)) * 1000;
         let h;
+        let opened = '';
         if (a.handoff_id) {
           h = tabs.handoffs.get(String(a.handoff_id));
           if (!h || handoffGroup.get(h.id) !== s.group) throw new Error(`No hand-off "${String(a.handoff_id)}" for you: call handoff_to_user with a reason to open one.`);
@@ -251,18 +263,33 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
           const tab = tabOf(ctx, a);
           const kind = a.kind === 'login' ? 'login' as const : 'other' as const;
           const reason = String(a.reason ?? (kind === 'login' ? `Rifai l'accesso a ${tab.env}` : 'Serve il tuo intervento')).slice(0, 200);
-          h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason, instructions: String(a.instructions ?? '').slice(0, 2000), url: redact(tab.wc.getURL()), env: tab.env, kind });
+          const url = tab.wc.getURL();
+          const account = typeof a.account === 'string' && a.account.trim() ? tabs.credentials.lookup(a.account, url) : undefined;
+          h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason, instructions: String(a.instructions ?? '').slice(0, 2000), url: redact(url), env: tab.env, kind, ...(account ? { account } : {}) });
           handoffGroup.set(h.id, s.group);
           tabs.setLastAction(tab, `waiting for the user: ${h.reason}`);
-          log.info('browser', 'hand-off opened', { chat: s.chatId ?? undefined, data: { id: h.id, tab: tab.id } });
+          log.info('browser', 'hand-off opened', { chat: s.chatId ?? undefined, data: { id: h.id, tab: tab.id, account: account ? (account.found ? 'found' : 'not found') : 'none' } });
+          if (account) opened = account.found
+            ? `The banner shows account ${account.user} with its sign-in URL and a Copia password button (the password stays in the user's file).\n`
+            : `Account "${account.user}" is not in the user's credentials file (${tabs.credentials.describe()}): the banner shows the name only, without a password.\n`;
         }
         const t0 = Date.now();
-        const r = await tabs.handoffs.wait(h.id, waitMs, ctx.signal);
-        if (r.state === 'open') return `Still waiting for the user (hand-off ${r.id}, open for ${Math.round((Date.now() - r.at) / 1000)}s). Call handoff_to_user with handoff_id "${r.id}" to keep waiting.`;
+        // a progress notification every 25 s keeps the call alive (Claude Code aborts a call silent for 300 s); a
+        // client that cannot receive them gets an answer before 240 s and calls again
+        const live = ctx.progress(`Waiting for the user: ${h.reason}`);
+        const waitMs = Math.max(5, Math.min(live ? 1800 : 240, Number(a.wait_seconds ?? 600) || 600)) * 1000;
+        let r = h;
+        while (r.state === 'open' && !ctx.signal.aborted && Date.now() - t0 < waitMs) {
+          r = await tabs.handoffs.wait(h.id, Math.min(PROGRESS_MS, waitMs - (Date.now() - t0)), ctx.signal);
+          if (r.state === 'open' && live) ctx.progress(`Still waiting for the user (${Math.round((Date.now() - r.at) / 1000)}s): ${r.reason}`);
+        }
+        if (r.state === 'open' && !ctx.signal.aborted) tabs.handoffs.polled(r.id);   // a cancelled call will not come back
+        if (r.state === 'open') return `${opened}Still waiting for the user (hand-off ${r.id}, open for ${Math.round((Date.now() - r.at) / 1000)}s). Call handoff_to_user with handoff_id "${r.id}" to keep waiting; if you end your turn instead, the app messages you when they answer.`;
+        tabs.handoffs.delivered(r.id);
         const tab = tabs.tabs.get(r.tabId);
         const outcome = r.state === 'done' ? 'clicked Fatto (done)' : r.state === 'failed' ? 'answered Non riesco (failed)' : 'cancelled the hand-off (the tab was closed)';
         log.info('browser', 'hand-off resolved', { chat: s.chatId ?? undefined, data: { id: r.id, state: r.state, waitedMs: Date.now() - t0 } });
-        return `The user ${outcome}${r.note ? `: "${r.note}"` : ''}.${tab && !tab.wc.isDestroyed() ? `\nTab ${tab.id}: "${tab.wc.getTitle()}" ${redact(tab.wc.getURL())}` : ''}`;
+        return `${opened}The user ${outcome}${r.note ? `: "${r.note}"` : ''}.${tab && !tab.wc.isDestroyed() ? `\nTab ${tab.id}: "${tab.wc.getTitle()}" ${redact(tab.wc.getURL())}` : ''}`;
       },
     },
   ];

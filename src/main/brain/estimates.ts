@@ -6,6 +6,7 @@
 // the brain-tool proposal in the module report). It starts from day one with a backfill from the brain's cost.mjs
 // (per-chat $ and first-to-last-message span of the last 30 days). The prompt text is never stored: only its length.
 // Used by brain/index.ts for 'estimate:get' / 'estimate:record'; the chat manager records jobs and their actuals.
+// Since ADR 0030 its estimate is only the fallback when the brain has no estimates table (one estimator: the brain's).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -108,7 +109,8 @@ export function estimateFrom(jobs: JobRecord[], q: Query): EstimateResult {
     const g = done.filter(t.f);
     if (g.length < MIN_SAMPLES) continue;
     const usd = g.map(j => j.actual!.usd).sort((a, b) => a - b);
-    const mins = g.map(j => j.actual!.minutes).filter((x): x is number => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
+    // durations only from work time, the measure the tile shows beside them (a chat's span holds the user's waits)
+    const mins = g.filter(j => j.actual!.minutesKind === 'work').map(j => j.actual!.minutes).filter((x): x is number => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
     const r2 = (v: number) => Math.round(v * 100) / 100;
     const est: Estimate = {
       usdLow: r2(percentile(usd, 0.25)), usdHigh: r2(percentile(usd, 0.75)),
@@ -164,7 +166,7 @@ function checkEstimate(e: unknown): Estimate | null {
 function checkActual(a: unknown): JobActual | null {
   if (a === null || a === undefined) return null;
   const x = a as Record<string, unknown>;
-  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), tokensIn: n0(x.tokensIn, 'actual.tokensIn'), tokensOut: n0(x.tokensOut, 'actual.tokensOut'), turns: n0(x.turns, 'actual.turns') };
+  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), tokensIn: n0(x.tokensIn, 'actual.tokensIn'), tokensOut: n0(x.tokensOut, 'actual.tokensOut'), turns: n0(x.turns, 'actual.turns') };
 }
 export function checkHarness(h: unknown): Harness { if (h !== 'claude' && h !== 'cursor') throw new Error('harness: claude | cursor'); return h; }
 export function checkModel(m: unknown): string | null { if (m === null || m === undefined || m === '') return null; if (typeof m !== 'string' || m.length > 120) throw new Error('model: testo breve o null'); return m; }

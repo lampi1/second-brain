@@ -5,7 +5,8 @@
 // would start a second Electron app. Why a proxy: the renderer stays sandboxed and never talks to a port. Safety: only
 // GET, only the read-only /api/ paths listed below (never /api/send, never raw downloads), Host header localhost (the
 // server refuses others: DNS rebinding), the child dies with the app (its stdin is our pipe). Fails soft: no server in
-// the brain = { ok: false, error }. Started lazily on the first request. Used by brain/index.ts.
+// the brain = { ok: false, error }. Started lazily on the first request. Used by brain/index.ts. A few paths are answered
+// by main itself (`local`, e.g. /api/quality: brain/quality.ts), with what only the app knows; same checks, no child.
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -14,7 +15,10 @@ import type { BrainApiResult } from '../../shared/contract';
 import { log, errText } from '../log';
 import type { NodeRunner } from './node';
 
-export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/version', '/api/status']);
+export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve']);
+
+/** Paths answered by main itself instead of the brain's server (brain.serveApi). */
+export type LocalApi = Map<string, (query: URLSearchParams) => unknown | Promise<unknown>>;
 
 /** A renderer path → the path to forward, or an Italian error. Only known read-only endpoints; drops `raw`. */
 export function checkApiPath(p: unknown): { ok: true; path: string } | { ok: false; error: string } {
@@ -41,7 +45,7 @@ export class BrainApi {
   private child: ChildProcess | null = null;
   private port: Promise<number> | null = null;
 
-  constructor(private root: string | null, private node: NodeRunner, private timeoutMs = 120e3) {}
+  constructor(private root: string | null, private node: NodeRunner, private timeoutMs = 120e3, private local: LocalApi = new Map()) {}
 
   get script(): string | null { return this.root ? path.join(this.root, 'ops', 'tools', 'brain-site.mjs') : null; }
 
@@ -77,6 +81,9 @@ export class BrainApi {
   async get(p: unknown): Promise<BrainApiResult> {
     const c = checkApiPath(p);
     if (!c.ok) return c;
+    const u = new URL(c.path, 'http://localhost');
+    const own = this.local.get(u.pathname);
+    if (own) { try { return { ok: true, data: await own(u.searchParams) }; } catch (e) { return { ok: false, error: errText(e) }; } }
     let port: number;
     try { port = await this.start(); } catch (e) { return { ok: false, error: errText(e) }; }
     return new Promise<BrainApiResult>(resolve => {

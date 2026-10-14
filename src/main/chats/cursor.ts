@@ -4,7 +4,13 @@
 // of CLI 2026.07.23):
 //   → initialize {protocolVersion:1, clientCapabilities:{fs:{readTextFile:false,writeTextFile:false},terminal:false}}
 //   → session/new {cwd, mcpServers} | session/load {sessionId, cwd, mcpServers} (resume, when loadSession is advertised)
-//   → session/prompt {sessionId, prompt:[{type:'text'}]} → {stopReason, usage?} · session/cancel (stop, a notification)
+//   → session/prompt {sessionId, prompt:[{type:'image',mimeType,data}…, {type:'text'}]} → {stopReason, usage?} (images as
+//     blocks only when promptCapabilities.image; otherwise saved as files whose paths go in the text) · session/cancel
+//   → session/set_config_option {sessionId, configId, value}: the model's reasoning (option of category thought_level,
+//     e.g. reasoning_effort) and fast, from the user's settings (Chat aperte dalla Regia). Offered because initialize
+//     sends clientCapabilities._meta.parameterizedModelPicker (CLI 2026.07.23 acp/cursor-acp-agent): session/new|load
+//     then answer configOptions with each model parameter; without it the CLI keeps its own variant (high, fast) whatever
+//     --model or cli-config.json say (seen 2026-10-12 with grok-4.7). It writes only the app's own CURSOR_CONFIG_DIR.
 //   → session/set_mode {sessionId, modeId: agent|plan} (session-only). NEVER session/set_model: it writes the user's
 //     global Cursor CLI config. The model is `--model X` at spawn, and even that is written by the CLI into its config
 //     folder (handleInitialModel → updateConfig), so the app runs Cursor with its own CURSOR_CONFIG_DIR (configDir).
@@ -13,9 +19,15 @@
 //     tool_call_update (tool rows, diff counts), plan, current_mode_update, usage_update
 //   ← session/request_permission → a permission panel answered allow-once / reject-once only: Cursor's allow-always
 //     would write a permanent rule into the user's Cursor config, which the app never changes
-//   ← cursor/ask_question → a question panel (ids ↔ labels) · cursor/create_plan → "Approvi il piano?"
+//   ← cursor/ask_question → a question panel (ids ↔ labels); a free-text "Altro…" answer goes back as outcome skipped
+//     with the text as its reason (the CLI's answered outcome keeps only option ids: acp ask-question-handler)
+//   ← cursor/create_plan → "Approvi il piano?" ("Altro…" = rejected with the user's words as the reason)
 //   ← cursor/update_todos, cursor/task (requests in practice) → shown and acknowledged
 //   A chat restored after an app restart shows the past that session/load replays (showReplay).
+// Network drops: Cursor ends the turn normally (end_turn, no JSON-RPC error) with its transport error as the last
+// assistant text ("Error: RetriableError: [aborted] read ECONNRESET", "[unavailable] PING timed out"; seen 2026-10-12 on
+// every Cursor chat at once, hourly). The session sends "continue" by itself, at most twice per user message (5 s,
+// then 20 s), with a visible line; still failing → it stops with a clear warning (isCursorNetError, retryNet).
 // Login: the CLI's own `agent login` (cli:login). No login → session/new fails with auth required (-32000) and the
 // chat shows "Accedi a Cursor"; the app never calls `authenticate` (it would start a browser login from a hidden
 // process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts cursorAllowed).
@@ -24,18 +36,25 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Answer, ChatItem, ChatState, Effort, PendingRequest, PermissionMode, Question } from '../../shared/contract';
+import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
 import { lineDiff, resultText, shortPath } from './claude-map';
-import { cursorAllowed, cursorArgv, killTrees, resolveCursor, type CursorCommand } from './cli';
+import { CLOSE_GRACE_MS, cursorAllowed, cursorArgv, killTrees, resolveCursor, type CursorCommand } from './cli';
+import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
+import { runSubagentHooks, userHooksFile } from './cursor-hooks';
+import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
-import { cut, lastLine, nextId, stripAnsi, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { estimateTokens } from './handoff';
+import { writeImageFiles } from './images';
+import { cut, lastLine, nextId, stripAnsi, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 
 export interface CursorOptions extends SessionOptions {
   /** Cursor engine override (tests: a .mjs fake); default: the installed CLI (cli.ts resolveCursor) */
   cursorPath?: string;
   /** the chat's own browser MCP endpoint (passed when the agent supports http MCP) */
   mcpUrl?: string | null;
+  /** the Regia only: the app-control MCP endpoint (/mcp/app: app_create_chat, app_state…), passed as second-brain-app */
+  appMcpUrl?: string | null;
   /** app version for clientInfo */
   appVersion?: string;
   /** show the past that session/load replays (a chat restored after an app restart has no items yet) */
@@ -44,6 +63,46 @@ export interface CursorOptions extends SessionOptions {
    *  permissions.json at every start, so whatever Cursor writes (the --model choice, its startup defaults) never
    *  reaches the user's global config. Login is unaffected (auth.json lives in %APPDATA%/Cursor). */
   configDir?: string | null;
+  /** hooks file whose subagentStart/subagentStop commands the app runs (ACP never fires them): default
+   *  ~/.cursor/hooks.json, none under tests unless given */
+  hooksFile?: string | null;
+  /** the user's reasoning and fast for every Cursor chat (settings regiaChats.cursorReasoning/cursorFast); params the
+   *  chat's own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
+  modelConfig?: { reasoning: CursorReasoning | ''; fast: boolean } | null;
+  /** waits before each automatic retry after a Cursor network error (default 5 s, 20 s: two retries); tests: short */
+  netRetryDelaysMs?: readonly number[];
+}
+
+/** The prompt that resumes a turn Cursor's network error cut. */
+export const NET_RETRY_PROMPT = 'Il turno si è interrotto per un errore di rete di Cursor: continua da dove eri, senza rifare quello già fatto.';
+const NET_RETRY_DELAYS = [5000, 20000];
+
+/** Whether a turn's last assistant text is Cursor's transport error, not the model's words. The CLI's ACP handler
+ *  appends "\n\nError: " + String(error) (CLI 2026.07.23): the text ends with its own paragraph "Error: RetriableError: …"
+ *  ("[aborted] read ECONNRESET", "[unavailable] PING timed out", "Connection stalled"…) or "Error: [unavailable] …". The
+ *  error quoted inside a sentence or a longer paragraph is not one. */
+export function isCursorNetError(text: string): boolean {
+  return /(?:^|\n[ \t]*\n)[ \t]*Error: (?:RetriableError: |\[(?:aborted|unavailable|deadline_exceeded)\])[^\n]*$/.test(text.trimEnd());
+}
+
+/** One model parameter the session offers (ACP configOptions of category thought_level or model_config). */
+interface ModelParam { id: string; name: string; category: string; value: string; values: string[] }
+
+/** The model parameters in an ACP configOptions list (the model and mode pickers are not parameters). */
+export function modelParams(list: unknown): ModelParam[] {
+  return arr(list).map(o).filter(c => (c.category === 'thought_level' || c.category === 'model_config') && s(c.id))
+    .map(c => ({ id: s(c.id), name: s(c.name) || s(c.id), category: s(c.category), value: String(c.currentValue ?? ''), values: arr(c.options).map(x => s(o(x).value)).filter(Boolean) }));
+}
+
+/** The variant as Cursor writes it: "grok-4.7[context=256k,reasoning_effort=medium,fast=false]". */
+export function variantOf(model: string, params: readonly ModelParam[]): string {
+  return params.length ? `${model}[${params.map(p => `${p.id}=${p.value}`).join(',')}]` : model;
+}
+
+/** The parameter ids a model id pins in brackets: "gpt-5.6-sol[reasoning=high,fast=false]" → reasoning, fast. */
+export function pinnedParams(model: string | null | undefined): Set<string> {
+  const m = /\[(.*)\]$/.exec(model ?? '');
+  return new Set((m?.[1] ?? '').split(',').map(x => x.split('=')[0]!.trim()).filter(Boolean));
 }
 
 /** The message a model change gives: the manager restarts the session with the new --model (session/load). */
@@ -110,6 +169,13 @@ function contentText(content: unknown): string {
   return parts.filter(Boolean).join('\n');
 }
 
+/** The skip reason that carries a free-text answer to cursor/ask_question: every question with what the user chose or
+ *  wrote, so the model reads the whole answer even though ACP's "answered" outcome has room only for option ids. */
+export function freeTextReason(answers: { question: string; answers: string[] }[]): string {
+  const lines = answers.filter(a => a.answers.length).map(a => `«${a.question}» → ${a.answers.join(', ')}`);
+  return `L’utente ha risposto con parole sue invece di scegliere solo le opzioni: ${lines.join('; ')}`;
+}
+
 /** Unique strings: a repeated one gets " (2)", " (3)"… so labels and question texts stay keys. */
 function uniq(list: string[]): string[] {
   const seen = new Map<string, number>();
@@ -126,24 +192,48 @@ export class CursorSession implements HarnessSession {
   private rpcSeq = 1;
   private rpcs = new Map<number, Rpc>();
   private asks = new Map<string, Ask>();
-  private queue: string[] = [];
+  private queue: { text: string; images: readonly ImageAttachment[]; retry?: boolean }[] = [];
+  /** the user stopped the running turn (Stop, or "Invia subito" = sendNow): "cancelled" is then no error */
+  private stopping: { sendNow: boolean } | null = null;
+  private turnFiles: string[] = [];   // screenshots saved for this turn (no image support): deleted when it ends
   private open = false;          // session/new or session/load done
   private prompting = false;
   private loading = false;
   private caps: Obj = {};
   private models: { current: string | null; available: string[] } | null = null;
+  private params: ModelParam[] = [];
   private modes: string[] = [];
   private msg: Stream | null = null;
+  private lastAnswer = '';       // the turn's last assistant message (a Cursor network error shows up there)
+  private netRetries = 0;        // automatic retries of the current user message after a network error
+  private retryTimer: NodeJS.Timeout | null = null;
+  private retryItemId: string | null = null;
+  private retryOff = false;      // this turn is not retried (noRetry: a failed hand-off)
   private thought: Stream | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private tools = new Map<string, ToolItem>();
+  /** running subagents (Task tool calls) by toolCallId, for the subagent hooks */
+  private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
+  /** pending subagent hook runs (tests wait on them) */
+  readonly hookRuns: Promise<void>[] = [];
   private planItemId: string | null = null;
   private todosItemId: string | null = null;
   private context: ContextUsage | null = null;
+  /** characters of the conversation seen on the wire (prompts, answers, thoughts, tool input/output, a load's replay):
+   *  the context estimate while Cursor sends no usage_update (research-cursor-cost.md: CLI 2026.07 never does) */
+  private chars = 0;
   private turnStart = 0;
+  private sessionCost: number | null = null;   // ACP usage_update.cost (cumulative USD), when Cursor sends it
+  private costAtTurnStart: number | null = null;
   private closing = false;
+  private keepChildren = false;
+  private exitedRoot: Root | null = null;
+  private spawnedAt = 0;
   private killed = false;
   private exited = false;
+  private procExited = false;         // 'exit' came ('close' also waits for the pipes, which a leftover may hold)
+  private job: number | null = null;  // its Job Object (jobguard.ts)
+  private jobKilled = false;          // its tree was terminated through the job
   private badLines = 0;
   private replayUser: Extract<ChatItem, { kind: 'user' }> | null = null;
   private exitDone!: () => void;
@@ -157,8 +247,13 @@ export class CursorSession implements HarnessSession {
   }
 
   get pid(): number | null { return this.proc?.pid ?? null; }
+  get jobHandle(): number | null { return this.job; }
+  /** Nothing left for the quit's last resort: it exited, or its job was terminated. */
+  get gone(): boolean { return this.procExited || this.jobKilled; }
+  get root(): Root | null { return this.exitedRoot; }
+  get startedAt(): number { return this.spawnedAt; }
   get alive(): boolean { return !!this.proc && !this.exited; }
-  get busy(): boolean { return !this.exited && (this.prompting || this.queue.length > 0 || this.asks.size > 0 || this.state === 'starting'); }
+  get busy(): boolean { return !this.exited && (this.prompting || !!this.retryTimer || this.queue.length > 0 || this.asks.size > 0 || this.state === 'starting'); }
 
   /** Root flags before the `acp` command (`agent --model X acp`). */
   args(): string[] {
@@ -180,6 +275,8 @@ export class CursorSession implements HarnessSession {
       }
       env.CURSOR_CONFIG_DIR = this.opts.configDir;
     }
+    const startedAt = Date.now();
+    this.spawnedAt = startedAt;
     try {
       this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
     } catch (e) {
@@ -194,6 +291,19 @@ export class CursorSession implements HarnessSession {
     p.stdin.on('error', e => log.warn('chats', 'cursor stdin error', { chat, data: errText(e) }));
     p.on('error', e => this.fail(`Avvio di Cursor non riuscito: ${errText(e)}`, errText(e), 'check that `agent --version` works in a terminal'));
     p.on('close', (code: number | null) => this.onClose(code));
+    // a clean exit leaves its MCP servers and shells running: kill what still descends from it ('exit', not 'close': a leftover
+    // holding the inherited stdout would delay 'close' until it ends by itself)
+    p.once('exit', () => {
+      this.procExited = true;
+      if (!p.pid) return;
+      this.exitedRoot = { pid: p.pid, created: startedAt, exited: Date.now(), job: this.job };
+      if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: 'Cursor' });
+    });
+    // its own job before it starts anything (MCP servers come seconds later): later children, orphans too, stay in it
+    void jobGuard.add(p.pid, chat).then(job => {
+      this.job = job;
+      if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); } // exited first: the walk reaped it
+    });
     void this.boot();
   }
 
@@ -201,7 +311,7 @@ export class CursorSession implements HarnessSession {
     try {
       const init = await this.request('initialize', {
         protocolVersion: 1,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, _meta: { parameterizedModelPicker: true } },
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
       }, 60000);
       this.caps = o(init.agentCapabilities);
@@ -220,8 +330,11 @@ export class CursorSession implements HarnessSession {
   }
 
   private mcpServers(): Obj[] {
-    const url = this.opts.mcpUrl;
-    return url && o(this.caps.mcpCapabilities).http === true ? [{ type: 'http', name: 'second-brain', url, headers: [] }] : [];
+    if (o(this.caps.mcpCapabilities).http !== true) return [];
+    const list: Obj[] = [];
+    if (this.opts.mcpUrl) list.push({ type: 'http', name: 'second-brain', url: this.opts.mcpUrl, headers: [] });
+    if (this.opts.appMcpUrl) list.push({ type: 'http', name: 'second-brain-app', url: this.opts.appMcpUrl, headers: [] });
+    return list;
   }
 
   private async openSession(): Promise<void> {
@@ -241,6 +354,7 @@ export class CursorSession implements HarnessSession {
           this.sys(`Cursor non ha ripreso la sessione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');
         } finally {
           this.loading = false;
+          this.reportEstimate();
           this.flushAll(true);
           this.replayUser = null;
           this.tools.clear(); // replayed tool rows keep the status they were replayed with
@@ -259,8 +373,11 @@ export class CursorSession implements HarnessSession {
   private readState(r: Obj): void {
     const m = o(r.models);
     if (Object.keys(m).length) {
-      this.models = { current: s(m.currentModelId) || null, available: arr(m.availableModels).map(x => s(o(x).modelId)).filter(Boolean) };
-      if (this.models.current) this.sink.changed({ model: this.models.current });
+      const list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
+      this.models = { current: s(m.currentModelId) || null, available: list.map(x => x.id) };
+      this.params = modelParams(r.configOptions);
+      if (this.models.current) this.sink.changed({ model: variantOf(this.models.current, this.params) });
+      if (list.length) this.sink.models?.(list);
     }
     const md = o(r.modes);
     this.modes = arr(md.availableModes).map(x => s(o(x).id)).filter(Boolean);
@@ -269,53 +386,167 @@ export class CursorSession implements HarnessSession {
 
   /** The user's mode for this chat (session-only in Cursor). The model came with --model at spawn. */
   private async applyChoices(): Promise<void> {
-    const want = this.opts.model;
-    if (want && this.models?.current && this.models.current !== want) log.warn('chats', 'cursor runs another model than asked', { chat: this.opts.chatId, data: { asked: want, running: this.models.current } });
+    await this.applyModelConfig();
     if (this.opts.permissionMode === 'plan' && this.modes.includes('plan')) {
       try { await this.setPermissionMode('plan'); } catch (e) { log.warn('chats', 'cursor plan mode not applied', { chat: this.opts.chatId, data: errText(e) }); }
     }
   }
 
-  send(text: string): void {
+  /** The user's reasoning and fast (session/set_config_option), then the variant really running goes to the chat's
+   *  info; anything not as asked (another model, a value the model lacks, a refused option) is a visible warning. */
+  private async applyModelConfig(): Promise<void> {
+    const chat = this.opts.chatId, current = this.models?.current;
+    if (!current) return;
+    const misses: string[] = [];
+    const asked = this.opts.model?.replace(/\[.*\]$/, '');
+    if (asked && asked !== current) misses.push(`modello chiesto ${asked}`);
+    const mc = this.opts.modelConfig, pinned = pinnedParams(this.opts.model);
+    const want: [ModelParam, string][] = [];
+    const thought = this.params.find(p => p.category === 'thought_level'), fast = this.params.find(p => p.id === 'fast');
+    if (mc?.reasoning && thought && !pinned.has(thought.id)) want.push([thought, mc.reasoning]);
+    if (mc && fast && !pinned.has('fast')) want.push([fast, String(mc.fast)]);
+    for (const [p, value] of want) {
+      if (p.value === value) continue;
+      if (!p.values.includes(value)) { misses.push(`${p.name} ${value} non offerto`); continue; }
+      try {
+        const r = await this.request('session/set_config_option', { sessionId: this.sessionId, configId: p.id, value });
+        const next = modelParams(r.configOptions);
+        if (next.length) this.params = next; else p.value = value;
+        if (this.params.find(x => x.id === p.id)?.value !== value) misses.push(`${p.name} ${value} non applicato`);
+      } catch (e) {
+        misses.push(`${p.name} ${value} rifiutato`);
+        log.warn('chats', 'cursor model option refused', { chat, data: { option: p.id, value, error: errText(e) } });
+      }
+    }
+    const variant = variantOf(current, this.params);
+    this.sink.changed({ model: variant });
+    log.info('chats', 'cursor model variant', { chat, data: { asked: this.opts.model ?? null, config: mc ?? null, running: variant } });
+    if (misses.length) {
+      log.warn('chats', 'cursor runs another model than asked', { chat, data: { asked: this.opts.model ?? null, config: mc ?? null, running: variant, misses } });
+      this.sys(`Cursor gira ${variant} (${misses.join('; ')}).`, 'warn');
+    }
+  }
+
+  send(text: string, images: readonly ImageAttachment[] = []): void {
     if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
-    this.queue.push(text);
+    this.queue.push({ text, images });
     if (this.state !== 'waiting' && this.state !== 'starting') this.setState('running');
     this.drain();
   }
 
   /** One prompt at a time per session: the next queued message goes when the previous turn ends. */
   private drain(): void {
-    if (!this.open || this.prompting || this.exited) return;
-    const text = this.queue.shift();
-    if (text === undefined) return;
+    if (!this.open || this.prompting || this.exited || this.retryTimer) return;
+    const next = this.queue.shift();
+    if (next === undefined) return;
+    if (!next.retry) { this.netRetries = 0; this.retryOff = false; }
+    this.lastAnswer = '';
+    let prompt: Obj[];
+    try { prompt = this.promptOf(next.text, next.images); } catch (e) {
+      this.sys(`Immagini non inviate a Cursor: ${cut(errText(e), 200)}`, 'error');
+      prompt = [{ type: 'text', text: next.text || '(immagini non inviate)' }];
+    }
     this.prompting = true;
     this.turnStart = Date.now();
+    this.costAtTurnStart = this.sessionCost;
     this.planItemId = null;
+    this.chars += next.text.length;
     this.setState(this.asks.size ? 'waiting' : 'running');
-    this.request('session/prompt', { sessionId: this.sessionId, prompt: [{ type: 'text', text }] }, 0)
+    this.request('session/prompt', { sessionId: this.sessionId, prompt }, 0)
       .then(r => this.turnDone(r, null))
       .catch(e => this.turnDone({}, e as Error));
   }
 
+  /** ACP prompt blocks: images as image blocks when the agent takes them, else saved in the app's temp folder for this
+   *  chat and named in the text (the agent reads files itself). */
+  private promptOf(text: string, images: readonly ImageAttachment[]): Obj[] {
+    if (!images.length) return [{ type: 'text', text }];
+    if (o(this.caps.promptCapabilities).image === true) {
+      return [...images.map(im => ({ type: 'image', mimeType: im.mimeType, data: im.data })), ...(text ? [{ type: 'text', text }] : [])];
+    }
+    const files = writeImageFiles(path.join(os.tmpdir(), 'second-brain-images', this.opts.chatId.replace(/[^\w-]/g, '_')), images);
+    this.turnFiles = files;
+    log.info('chats', 'cursor: images saved as files (no image prompt support)', { chat: this.opts.chatId, data: { files } });
+    const list = files.map(f => `- ${f}`).join('\n');
+    return [{ type: 'text', text: `${text ? `${text}\n\n` : ''}Immagini allegate (aprile dai file):\n${list}` }];
+  }
+
   private turnDone(r: Obj, err: Error | null): void {
+    // the turn that read them is over: screenshots may hold private data, they do not stay in the temp folder
+    for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
     if (this.exited) return;
     this.flushAll(true);
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
+    for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
     this.tools.clear();
     const stop = s(r.stopReason);
+    const net = (!err && stop === 'end_turn' && isCursorNetError(this.lastAnswer)) || (!!err && isCursorNetError(errText(err)));
+    const stopped = this.stopping;
+    this.stopping = null;
+    const interrupted = !err && stop === 'cancelled' && !!stopped;
     if (err) this.sys(`Errore di Cursor: ${cut(stripAnsi(errText(err)), 400)}`, 'error');
     else if (stop === 'refusal') this.sys('Il modello ha rifiutato la richiesta.', 'warn');
     else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sys(`Turno interrotto da Cursor (${stop}).`, 'warn');
+    else if (interrupted) this.sys(stopped.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
     else if (stop === 'cancelled') this.sys('Interrotto.', 'info');
     const usage = Object.keys(o(r.usage)).length ? (o(r.usage) as AcpUsage) : null;
-    const cost = costOf(this.models?.current ?? this.opts.model ?? null, usage);
-    const isError = !!err || stop === 'cancelled' || stop === 'refusal';
-    this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError }, false);
-    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null });
-    log.info('chats', 'cursor turn done', { chat: this.opts.chatId, data: { stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage } });
+    // tokens in the prompt response (priced at list price); else the session cost ACP's usage_update reported, if any
+    const live = this.sessionCost !== null ? Math.max(0, this.sessionCost - (this.costAtTurnStart ?? 0)) : null;
+    const cost = costOf(this.models?.current ?? this.opts.model ?? null, usage) ?? live;
+    // the user's own interrupt (12/10: "quando faccio Invia subito vedo sempre un errore") is no error
+    const isError = !!err || net || (stop === 'cancelled' && !interrupted) || stop === 'refusal';
+    this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
+    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0 });
+    log.info('chats', 'cursor turn done', { chat: this.opts.chatId, data: { stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
+    this.reportEstimate();
     this.prompting = false;
+    if (net && !this.retryOff && this.retryNet(err ? errText(err) : this.lastAnswer)) return;
     if (this.queue.length) this.drain();
     else this.setState(this.asks.size ? 'waiting' : 'idle');
+  }
+
+  /** A turn cut by a Cursor network error: "continue" goes by itself after a growing wait (the chat stays running, queued
+   *  messages wait behind it); false when the retries are used up (a clear warning, the chat stops as usual). */
+  private retryNet(errorText: string): boolean {
+    const chat = this.opts.chatId, delays = this.opts.netRetryDelaysMs ?? NET_RETRY_DELAYS, n = this.netRetries;
+    const error = cut(stripAnsi(lastLine(errorText)), 200);
+    if (n >= delays.length) {
+      log.warn('chats', 'cursor network error: retries used up', { chat, data: { retries: n, error } });
+      this.sys(`Cursor si è fermata di nuovo per un errore di rete (${error}) dopo ${n} ripartenze automatiche: scrivi «continua» quando la rete è tornata.`, 'error');
+      return false;
+    }
+    this.netRetries = n + 1;
+    const wait = delays[n]!, attempt = `tentativo ${n + 1} di ${delays.length}`;
+    log.warn('chats', 'cursor network error: retrying', { chat, data: { attempt: n + 1, waitMs: wait, error } });
+    const id = nextId('s');
+    this.retryItemId = id;
+    this.sink.item({ kind: 'system', id, at: Date.now(), text: `Errore di rete di Cursor: riparto da sola tra ${Math.round(wait / 1000)} s (${attempt}).`, level: 'warn' }, false);
+    this.setState(this.asks.size ? 'waiting' : 'running');
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.retryItemId = null;
+      if (this.exited) return;
+      this.sink.item({ kind: 'system', id, at: Date.now(), text: `Ripartita da sola dopo un errore di rete di Cursor (${attempt}).`, level: 'info' }, true);
+      this.queue.unshift({ text: NET_RETRY_PROMPT, images: [], retry: true });
+      this.drain();
+    }, wait);
+    this.retryTimer.unref();
+    return true;
+  }
+
+  /** The running turn (and a retry already planned) is not retried after a network error. */
+  noRetry(): void {
+    this.retryOff = true;
+    if (this.retryTimer) { this.cancelRetry('passaggio di consegne interrotto'); if (!this.prompting) this.setState(this.queue.length ? 'running' : this.asks.size ? 'waiting' : 'idle'); this.drain(); }
+  }
+
+  /** Drops a planned automatic retry (stop, exit); its line says so. */
+  private cancelRetry(why: string): void {
+    if (!this.retryTimer) return;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    if (this.retryItemId) this.sink.item({ kind: 'system', id: this.retryItemId, at: Date.now(), text: `Ripartenza automatica annullata (${why}).`, level: 'info' }, true);
+    this.retryItemId = null;
   }
 
   answer(requestId: string, answer: Answer): boolean {
@@ -332,17 +563,24 @@ export class CursorSession implements HarnessSession {
       result = chosen ? { outcome: { outcome: 'selected', optionId: chosen.optionId } } : { outcome: { outcome: 'cancelled' } };
     } else if (ask.method === 'cursor/ask_question') {
       if (answer.kind === 'question') {
-        const answers = (ask.questions ?? []).map(q => {
+        const picked = (ask.questions ?? []).map(q => {
           const v = answer.answers[q.text];
           const labels = Array.isArray(v) ? v : typeof v === 'string' ? [v] : [];
-          return { questionId: q.id, selectedOptionIds: labels.map(l => q.byLabel.get(l)).filter((x): x is string => !!x) };
-        }).filter(a => a.selectedOptionIds.length);
-        result = { outcome: { outcome: 'answered', answers } };
+          return { q, labels, ids: labels.map(l => q.byLabel.get(l)).filter((x): x is string => !!x) };
+        });
+        const free = picked.some(p => p.labels.some(l => !p.q.byLabel.has(l)));
+        // "Altro…": ACP's answered outcome carries only option ids (the CLI drops anything else), so a free-text
+        // answer travels as a skip whose reason the model reads ("rejected: <reason>")
+        if (free) result = { outcome: { outcome: 'skipped', reason: freeTextReason(picked.map(p => ({ question: p.q.text, answers: p.labels }))) } };
+        else result = { outcome: { outcome: 'answered', answers: picked.map(p => ({ questionId: p.q.id, selectedOptionIds: p.ids })).filter(a => a.selectedOptionIds.length) } };
       } else if (!answer.allow) result = { outcome: { outcome: 'skipped', reason: answer.message?.trim() || 'L’utente ha saltato la domanda.' } };
       else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
     } else {
-      const yes = answer.kind === 'question' ? [answer.answers[PLAN_Q]].flat().includes(PLAN_YES) : answer.allow;
-      result = yes ? { outcome: { outcome: 'accepted' } } : { outcome: { outcome: 'rejected', ...(answer.kind === 'permission' && answer.message ? { reason: answer.message } : {}) } };
+      const said = answer.kind === 'question' ? [answer.answers[PLAN_Q]].flat().filter((x): x is string => typeof x === 'string') : [];
+      const own = said.find(x => x !== PLAN_YES && x !== PLAN_NO)?.trim(); // "Altro…" on the plan: rejected with the user's words
+      const yes = answer.kind === 'question' ? !own && said.includes(PLAN_YES) : answer.allow;
+      const reason = own ? `L’utente non approva il piano così com’è e ha scritto: «${own}»` : answer.kind === 'permission' ? answer.message : undefined;
+      result = yes ? { outcome: { outcome: 'accepted' } } : { outcome: { outcome: 'rejected', ...(reason ? { reason } : {}) } };
     }
     this.respond(ask.rpcId, result);
     this.asks.delete(requestId);
@@ -352,11 +590,14 @@ export class CursorSession implements HarnessSession {
     return true;
   }
 
-  /** Stop: session/cancel; every open panel is answered "cancelled" (ACP requires it) and queued messages are dropped. */
-  async interrupt(): Promise<void> {
+  /** Stop: session/cancel; every open panel is answered "cancelled" (ACP requires it) and queued messages are dropped,
+   *  unless keepQueued ("Invia subito"): then they were already sent by the user and run next, as drain goes on. */
+  async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (this.exited || !this.proc) return;
-    log.info('chats', 'cursor cancel', { chat: this.opts.chatId, data: { queued: this.queue.length, open: this.asks.size } });
-    if (this.queue.length) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
+    log.info('chats', 'cursor cancel', { chat: this.opts.chatId, data: { queued: this.queue.length, open: this.asks.size, keepQueued: !!opts?.keepQueued } });
+    this.cancelRetry('interrotta');
+    if (this.queue.length && !opts?.keepQueued) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
+    if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued }; // only a prompt in flight ends with a result
     // cancel first, so the agent knows its turn is over when its waits resolve
     if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
     for (const [id, ask] of [...this.asks]) {
@@ -364,7 +605,8 @@ export class CursorSession implements HarnessSession {
       this.asks.delete(id);
       this.sink.resolved(id);
     }
-    if (!this.prompting) this.setState('idle');
+    // "Invia subito" during a retry wait: no turn runs, so the kept messages go now (drain waited for the retry)
+    if (!this.prompting) { this.setState(this.queue.length ? 'running' : 'idle'); this.drain(); }
   }
 
   /** Never live: ACP session/set_model writes the user's global Cursor CLI config (cli-config.json: model,
@@ -390,13 +632,40 @@ export class CursorSession implements HarnessSession {
 
   async usage(): Promise<unknown> { return null; }
 
-  close(graceMs = 3000): Promise<void> {
+  close(graceMs = CLOSE_GRACE_MS, keepChildren = false): Promise<void> {
     if (this.exited || !this.proc) { this.markExited(); return this.exitPromise; }
+    // a real close already asked wins over a later keeping one (a reopen after the turn while ✕ waits)
+    this.keepChildren = this.closing ? this.keepChildren && keepChildren : keepChildren;
     this.closing = true;
     try { this.proc.stdin.end(); } catch { /* gone */ }
-    const t = setTimeout(() => { if (!this.exited) { log.warn('chats', 'cursor did not exit, killing', { chat: this.opts.chatId, data: { pid: this.proc?.pid } }); this.killNow(); } }, graceMs);
+    if (this.killed) return this.exitPromise; // already being killed (app quit): no grace, no false "did not exit"
+    const pid = this.proc.pid, t0 = Date.now();
+    const t = setTimeout(() => {
+      if (this.exited) return;
+      if (this.procExited) return this.releasePipes();
+      log.warn('chats', 'cursor did not exit, killing', { chat: this.opts.chatId, data: { pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
+      this.killAfterGrace();
+    }, graceMs);
     t.unref();
     return this.exitPromise;
+  }
+
+  /** A close that took too long: with a job only the engine dies, and its exit reaps the tools from the job (a user's
+   *  Excel or browser in the job stays, ADR 0026); without one, the whole tree as before. */
+  private killAfterGrace(): void {
+    const p = this.proc;
+    if (!p || this.exited || this.killed) return;
+    if (!jobGuard.has(this.job)) return this.killNow();
+    this.killed = true;
+    engineKills.count++;
+    try { p.kill(); } catch { /* gone */ }
+  }
+
+  /** It exited, but a leftover holds the pipes it inherited, so 'close' never comes: let go of our side. */
+  private releasePipes(): void {
+    if (this.exited || !this.proc) return;
+    log.info('chats', 'cursor exited, a leftover still holds its output: closing the pipes', { chat: this.opts.chatId, data: { pid: this.proc.pid } });
+    closePipes(this.proc);
   }
 
   killNow(): void {
@@ -404,9 +673,15 @@ export class CursorSession implements HarnessSession {
     if (this.exited || !p || this.killed) return;
     this.closing = true;
     this.killed = true;
-    killTrees([p.pid], { fallback: () => p.kill() });
-    // taskkill can take seconds under load: retry the TREE kill (killing only the parent would orphan its children)
-    setTimeout(() => { if (!this.exited) killTrees([p.pid], { fallback: () => p.kill() }); }, 12000).unref();
+    this.jobKilled = killEngineTree(p.pid, this.job, () => p.kill(), this.opts.chatId);
+    // taskkill can take seconds under load: retry the TREE kill (killing only the parent would orphan its children);
+    // gone already but 'close' still waits = a leftover holds the pipes
+    setTimeout(() => {
+      if (this.exited) return;
+      if (this.procExited) return this.releasePipes();
+      log.warn('chats', 'tree kill did not land, retrying', { chat: this.opts.chatId, data: { pid: p.pid }, cause: 'still alive 12 s after the kill', hint: 'taskkill is slow on a loaded box; npm run doctor' });
+      killTrees([p.pid], { fallback: () => p.kill() });
+    }, 12000).unref();
   }
 
   // ---- JSON-RPC ----
@@ -519,12 +794,16 @@ export class CursorSession implements HarnessSession {
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
       this.asks.set(rid, { rpcId: id, method, questions: acp });
+      // the text streamed before the question is finished now (no tool call closes it): the Regia's card reads its
+      // commands from finished messages only (lib/regia-route.ts commandsOfTurn)
+      this.flushAll(true);
       this.pending({ id: rid, type: 'question', tool: 'AskQuestion', title: cut(s(p.title) || questions[0]?.question || 'Domanda', 140), detail: questions.map(q => q.question).join('\n'), input: trimInput(p), questions, at });
       return;
     }
     if (method === 'cursor/create_plan') {
       const detail = [s(p.name), s(p.overview), s(p.plan)].map(x => x.trim()).filter(Boolean).join('\n\n');
       this.asks.set(rid, { rpcId: id, method });
+      this.flushAll(true);
       this.pending({
         id: rid, type: 'question', tool: 'CreatePlan', title: PLAN_Q, detail: cut(detail, 8000), input: trimInput(p), at,
         questions: [{ question: PLAN_Q, header: 'Piano', options: [{ label: PLAN_YES, description: 'Cursor procede con il piano' }, { label: PLAN_NO, description: 'Cursor non lo esegue' }], multiSelect: false }],
@@ -547,7 +826,11 @@ export class CursorSession implements HarnessSession {
       const id = this.todosItemId ?? nextId('todo');
       this.sink.item({ kind: 'system', id, at: Date.now(), text, level: 'info' }, !!this.todosItemId);
       this.todosItemId = id;
-    } else if (method === 'cursor/task') this.sys(`Subagente: ${cut(s(p.description) || s(p.prompt), 200)}`, 'info');
+    } else if (method === 'cursor/task') {
+      const sub = this.subagents.get(s(p.toolCallId));
+      if (sub && s(p.model)) sub.model = s(p.model);
+      this.sys(`Subagente: ${cut(s(p.description) || s(p.prompt), 200)}`, 'info');
+    }
   }
 
   private pending(req: Omit<PendingRequest, 'chatId'>): void {
@@ -561,7 +844,27 @@ export class CursorSession implements HarnessSession {
     if (method === 'cursor/update_todos' || method === 'cursor/task') this.showExt(method, p); // older CLIs: as notifications
   }
 
+  /** The estimate (characters / 4), until Cursor reports a real usage_update. */
+  private reportEstimate(): void {
+    if (this.context || !this.chars) return;
+    this.sink.changed({ contextTokens: estimateTokens(this.chars), contextEstimated: true });
+  }
+
+  /** Characters an update adds to the conversation (for the estimate). */
+  private count(u: Obj): void {
+    const kind = s(u.sessionUpdate);
+    if (kind === 'agent_message_chunk' || kind === 'agent_thought_chunk' || kind === 'user_message_chunk') this.chars += s(o(u.content).text).length;
+    else if (kind === 'tool_call' || kind === 'tool_call_update') {
+      for (const c of arr(u.content).map(o)) this.chars += s(o(c.content).text).length + s(c.newText).length;
+      if (u.rawInput !== undefined) this.chars += JSON.stringify(u.rawInput).length;
+      if (u.rawOutput !== undefined) this.chars += typeof u.rawOutput === 'string' ? u.rawOutput.length : JSON.stringify(u.rawOutput).length;
+    }
+  }
+
   private onUpdate(u: Obj): void {
+    this.count(u);
+    // the input's "/" list, also while a resumed session loads
+    if (u.sessionUpdate === 'available_commands_update') { this.sink.commands?.(toCommands(u.availableCommands)); return; }
     if (this.loading && !this.opts.showReplay) return; // replay of a session whose past is already on screen
     if (u.sessionUpdate !== 'user_message_chunk') this.replayUser = null;
     switch (u.sessionUpdate) {
@@ -588,15 +891,28 @@ export class CursorSession implements HarnessSession {
         return;
       }
       case 'current_mode_update': this.sink.changed({ permissionMode: s(u.currentModeId) === 'plan' ? 'plan' : 'default' }); return;
+      case 'config_option_update': { // the CLI changed a model parameter by itself: the chat's info follows it
+        const next = modelParams(u.configOptions);
+        if (next.length && this.models?.current) { this.params = next; this.sink.changed({ model: variantOf(this.models.current, next) }); }
+        return;
+      }
       case 'usage_update': {
         const used = num(u.used), size = num(u.size);
         if (used !== undefined && size) {
           this.context = { totalTokens: used, maxTokens: size, percentage: (100 * used) / size };
-          this.sink.changed({ contextTokens: used, contextMaxTokens: size });
+          this.sink.changed({ contextTokens: used, contextMaxTokens: size, contextEstimated: false });
+        }
+        // ACP: cost = the session's cumulative {amount, currency}; Cursor's CLI does not send it yet (research-cursor-cost.md)
+        const c = o(u.cost), amount = num(c.amount);
+        if (amount !== undefined && (!c.currency || s(c.currency) === 'USD')) {
+          // a loaded session's first figure includes its past turns: it becomes the base (undercount, never a jump)
+          if (this.sessionCost === null && this.opts.resume) this.costAtTurnStart = amount;
+          this.sessionCost = amount;
+          if (this.prompting) this.sink.changed({ liveCostUsd: Math.max(0, amount - (this.costAtTurnStart ?? 0)), costKnown: true });
         }
         return;
       }
-      default: return; // available_commands_update, session_info_update, config_option_update, notice…
+      default: return; // session_info_update, notice…
     }
   }
 
@@ -631,7 +947,7 @@ export class CursorSession implements HarnessSession {
     this.flushOne(st);
     if (st.item.kind === 'assistant') {
       if (st.emitted) this.sink.item({ ...st.item, streaming: false }, true);
-      if (st.item.text.trim()) this.sink.changed({ lastText: lastLine(st.item.text) });
+      if (st.item.text.trim()) { this.lastAnswer = st.item.text; this.sink.changed({ lastText: lastLine(st.item.text) }); }
       this.msg = null;
     } else this.thought = null;
   }
@@ -664,6 +980,30 @@ export class CursorSession implements HarnessSession {
     };
     this.tools.set(id, item);
     this.sink.item(item, !isNew || !!prev);
+    this.subagentHooks(id, u, item.status);
+  }
+
+  /** subagentStart when a Task tool call shows up, subagentStop when it ends (ACP never fires these hooks). */
+  private subagentHooks(id: string, u: Obj, status: ToolItem['status']): void {
+    const file = this.opts.hooksFile !== undefined ? this.opts.hooksFile : process.env.SB_TEST || process.env.VITEST ? null : userHooksFile();
+    if (!file || this.loading) return;
+    const sid = this.sessionId ?? '';
+    const base = { conversation_id: sid, parent_conversation_id: sid, tool_call_id: id, subagent_id: id, workspace_roots: [this.opts.cwd], cursor_version: 'acp (second-brain)' };
+    const raw = o(u.rawInput);
+    let sub = this.subagents.get(id);
+    if (!sub && raw._toolName === 'task') {
+      const t = raw.subagentType;
+      sub = { at: Date.now(), type: typeof t === 'string' ? t : s(o(t).custom) || 'unspecified', task: s(raw.prompt), description: s(raw.description), model: null };
+      this.subagents.set(id, sub);
+      this.hookRuns.push(runSubagentHooks(file, 'subagentStart', { ...base, subagent_type: sub.type, task: sub.task, description: sub.description }, this.opts.cwd));
+    }
+    if (!sub || status === 'running') return;
+    this.subagents.delete(id);
+    const out = o(u.rawOutput);
+    this.hookRuns.push(runSubagentHooks(file, 'subagentStop', {
+      ...base, subagent_type: sub.type, task: sub.task, description: sub.description, subagent_model: sub.model,
+      status: status === 'ok' ? 'completed' : 'error', duration_ms: num(out.durationMs) ?? Date.now() - sub.at,
+    }, this.opts.cwd));
   }
 
   private onClose(code: number | null): void {
@@ -687,7 +1027,7 @@ export class CursorSession implements HarnessSession {
   private stopWith(error: string, cause: string, hint: string): void {
     const p = this.proc;
     this.fail(error, cause, hint);
-    if (p) { try { p.stdin.end(); } catch { /* gone */ } killTrees([p.pid], { fallback: () => p.kill() }); }
+    if (p) { try { p.stdin.end(); } catch { /* gone */ } killEngineTree(p.pid, this.job, () => p.kill(), this.opts.chatId); }
   }
 
   private end(state: ChatState, code: number | null, error: string | null): void {
@@ -697,6 +1037,7 @@ export class CursorSession implements HarnessSession {
     this.rpcs.clear();
     for (const id of [...this.asks.keys()]) { this.asks.delete(id); this.sink.resolved(id); }
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
+    for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
     this.tools.clear();
     this.queue = [];
     this.prompting = false;
@@ -707,6 +1048,7 @@ export class CursorSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    this.cancelRetry('sessione chiusa');
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();
   }

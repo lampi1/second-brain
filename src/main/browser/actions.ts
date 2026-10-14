@@ -82,7 +82,11 @@ export class BrowserActions {
     const cdp = this.cdp(tab);
     const d = this.tabs.dialogOpened(tab);
     try {
-      for (const [method, params] of steps) {
+      for (const [method, raw] of steps) {
+        // CDP mouse input is in view px: an agent tab shown scaled in its tile (tabs.ts emulate) gets its CSS px scaled
+        const k = this.tabs.cssScale(tab);
+        const params = method === 'Input.dispatchMouseEvent' && k !== 1 && typeof raw.x === 'number' && typeof raw.y === 'number'
+          ? { ...raw, x: raw.x * k, y: raw.y * k } : raw;
         let timer: NodeJS.Timeout | undefined;
         const r = await Promise.race([
           cdp.send(method, params).then(() => 'ok' as const),
@@ -313,7 +317,7 @@ export class BrowserActions {
   private async target(tab: Tab, ref: unknown, coordinate: unknown): Promise<{ x: number; y: number; what: string }> {
     if (ref !== undefined && ref !== null && ref !== '') { const p = await this.point(tab, ref); return { x: p.x, y: p.y, what: p.desc }; }
     if (Array.isArray(coordinate) && coordinate.length === 2 && coordinate.every(n => typeof n === 'number' && Number.isFinite(n))) {
-      const b = tab.view.getBounds();
+      const b = this.tabs.viewport(tab);
       const [x, y] = coordinate as [number, number];
       if (x < 0 || y < 0 || x >= b.width || y >= b.height) throw new Error(`coordinate (${x}, ${y}) is outside the viewport (${b.width}x${b.height} CSS px).`);
       return { x, y, what: `(${x}, ${y})` };
@@ -418,7 +422,7 @@ export class BrowserActions {
     if (a.ref && !a.direction) { const p = await this.point(tab, a.ref); return `Scrolled ${p.desc} into view`; }
     const dir = String(a.direction ?? 'down');
     if (!['up', 'down', 'left', 'right'].includes(dir)) throw new Error('direction must be up, down, left or right');
-    const b = tab.view.getBounds();
+    const b = this.tabs.viewport(tab);
     const t = a.ref || a.coordinate ? await this.target(tab, a.ref, a.coordinate) : { x: b.width / 2, y: b.height / 2, what: 'the page' };
     const px = Math.max(1, Math.min(30, Number(a.amount ?? 3) || 3)) * 100;
     const delta = { up: [0, -px], down: [0, px], left: [-px, 0], right: [px, 0] }[dir as 'up']!;
@@ -553,7 +557,7 @@ export class BrowserActions {
 
   async screenshot(tab: Tab, o: { region?: unknown; full_page?: unknown }): Promise<Shot> {
     if (tab.wc.isDestroyed()) throw new Error('The tab was closed: call tabs_list.');
-    const b = tab.view.getBounds();
+    const b = this.tabs.viewport(tab);
     if (o.full_page === true) {
       const cdp = this.cdp(tab);
       const m = await cdp.send<{ cssContentSize?: { width: number; height: number }; contentSize?: { width: number; height: number } }>('Page.getLayoutMetrics');
@@ -570,6 +574,17 @@ export class BrowserActions {
       const x = Math.max(0, Math.min(x0, x1)), y = Math.max(0, Math.min(y0, y1));
       rect = { x, y, width: Math.min(b.width, Math.max(x0, x1)) - x, height: Math.min(b.height, Math.max(y0, y1)) - y };
       if (rect.width < 1 || rect.height < 1) throw new Error(`region is empty or outside the viewport (${b.width}x${b.height})`);
+    }
+    if (this.tabs.cssScale(tab) !== 1 && tab.cdp?.isAttached) {
+      // shown scaled in a small tile: the view's pixels are the small copy; CDP renders the DESKTOP viewport itself
+      // (clip in page coordinates: add the scroll offset)
+      const m = await tab.cdp.send<{ cssVisualViewport?: { pageX: number; pageY: number } }>('Page.getLayoutMetrics').catch(() => ({} as { cssVisualViewport?: { pageX: number; pageY: number } }));
+      const vv = m.cssVisualViewport ?? { pageX: 0, pageY: 0 };
+      const clip = rect ?? { x: 0, y: 0, width: b.width, height: b.height };
+      const zoom = rect ? 2 : 1;
+      const r = await withTimeout(tab.cdp.send<{ data: string }>('Page.captureScreenshot', { format: 'png', clip: { x: clip.x + vv.pageX, y: clip.y + vv.pageY, width: clip.width, height: clip.height, scale: zoom } }), 8000, 'screenshot');
+      const note = rect ? `region (${rect.x},${rect.y})-(${rect.x + rect.width},${rect.y + rect.height}) at ${zoom}.00x` : `${b.width}x${b.height} CSS px (image pixels = click coordinates)`;
+      return { png: Buffer.from(r.data, 'base64'), width: clip.width * zoom, height: clip.height * zoom, note };
     }
     let img = await withTimeout(rect ? tab.wc.capturePage(rect) : tab.wc.capturePage(), 8000, 'screenshot').catch(() => null);
     if (!img || img.isEmpty()) {

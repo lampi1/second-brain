@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ConfigStore, DEFAULTS, applyPatch, fromSaved } from '../../../src/main/brain/config';
-import { SCHEMA, defOf, validate } from '../../../src/main/brain/settings-schema';
+import { SCHEMA, defOf, flattenPatch, validate } from '../../../src/main/brain/settings-schema';
 import type { SettingChange } from '../../../src/shared/contract';
 import { tmpDir } from './helpers';
 
@@ -23,6 +23,9 @@ describe('settings schema and validate()', () => {
     for (const k of ['engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
     expect(defOf('view')!.protected).toBe(false);
+    expect(defOf('devops.enabled')!.protected).toBe(true);
+    expect(validate('devops.everyMin', 2).ok).toBe(false);
+    expect(validate('devops.everyMin', 60).ok).toBe(true);
     expect(defOf('theme')!.protected).toBe(false);
     expect(defOf('mute.chat-done')!.key).toBe('mute.*');
   });
@@ -41,8 +44,52 @@ describe('settings schema and validate()', () => {
       expect(r.ok, `${k}=${JSON.stringify(v)}`).toBe(false);
       if (!r.ok) expect(r.error).toMatch(/[a-zà-ù]/i);
     }
-    expect(() => applyPatch(DEFAULTS, { budget: { claude: { dailyUsd: -5 } } })).toThrow(/maggiore di 0/);
+    expect(() => applyPatch(DEFAULTS, { budget: { claude: { dailyUsd: -5 } } })).toThrow(/da 0,01/);
+    // rounded to cents before the check: 0.004 is not a 0 $ limit (0 = no limit)
+    expect(validate('budget.claude.dailyUsd', 0.004).ok).toBe(false);
+    expect(validate('budget.claude.dailyUsd', 0.005)).toMatchObject({ ok: true, value: 0.01 });
+    expect(validate('budget.claude.dailyUsd', 1e6 + 1).ok).toBe(false);
     expect(() => applyPatch(DEFAULTS, { colour: 'red' } as never)).toThrow(/sconosciuta/);
+  });
+});
+
+describe('flattenPatch', () => {
+  it('turns the nested UI patch of every group into dot keys (messaging too: the Claude <-> Cursor mail switch)', () => {
+    expect(flattenPatch({ messaging: { crossHarness: false }, engines: { cursor: false }, view: 'corsie' }))
+      .toEqual([['messaging.crossHarness', false], ['engines.cursor', false], ['view', 'corsie']]);
+    expect(flattenPatch({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
+      .toEqual([['regiaChats.harness', 'cursor'], ['regiaChats.cursorModel', 'grok-4.7']]);
+  });
+});
+
+describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
+  it('an older config with regiaDriven loads without it; the key is no setting any more', () => {
+    expect('regiaDriven' in DEFAULTS).toBe(false);
+    expect(defOf('regiaDriven' as never)).toBeNull();
+    expect('regiaDriven' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
+    expect(fromSaved({ view: 'corsie', regiaDriven: false }).view).toBe('corsie');
+  });
+});
+
+describe('Chat aperte dalla Regia (regiaChats)', () => {
+  it('protected keys (engine and model choose whose credits are spent), CLI defaults by default', () => {
+    for (const k of ['regiaChats.harness', 'regiaChats.claudeModel', 'regiaChats.claudeEffort', 'regiaChats.cursorModel']) expect(defOf(k)!.protected, k).toBe(true);
+    expect(DEFAULTS.regiaChats).toEqual({ harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false });
+  });
+  it('model ids as the CLIs take them, trimmed; nothing that could become a CLI flag or a path', () => {
+    expect(validate('regiaChats.cursorModel', ' grok-4.7 ')).toMatchObject({ ok: true, value: 'grok-4.7' });
+    expect(validate('regiaChats.cursorModel', 'gpt-5.6-sol[effort=high]')).toMatchObject({ ok: true });
+    expect(validate('regiaChats.claudeModel', '')).toMatchObject({ ok: true, value: '' });
+    for (const v of ['grok 4.7', 'a;b', '"x"', 'x'.repeat(121), 7, null]) expect(validate('regiaChats.claudeModel', v).ok, String(v)).toBe(false);
+    expect(validate('regiaChats.claudeEffort', 'xhigh')).toMatchObject({ ok: true });
+    expect(validate('regiaChats.claudeEffort', 'huge').ok).toBe(false);
+    expect(validate('regiaChats.harness', 'codex').ok).toBe(false);
+  });
+  it('a config saved before this setting gets the defaults; a saved choice survives a restart', () => {
+    expect(fromSaved({ view: 'corsie' }).regiaChats).toEqual(DEFAULTS.regiaChats);
+    const dir = tmpDir();
+    new ConfigStore(dir, {}).set({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7', claudeEffort: 'high' } });
+    expect(new ConfigStore(dir, {}).get().regiaChats).toEqual({ harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'medium', cursorFast: false });
   });
 });
 
@@ -52,6 +99,7 @@ describe('settings store', () => {
     expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, view: 'mosaico', osToasts: 'urgent', theme: 'dark', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
     expect(s.budget).toEqual({ enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } });
     expect(s.locked).toBeUndefined();
+    expect(s.devops).toEqual({ enabled: false, everyMin: 30, sound: true }); // DevOps reads only when the user turns it on; its alerts chime
   });
 
   it('saves a patch, reloads it, merges budget and mutes key by key; all-or-none on a bad key', () => {

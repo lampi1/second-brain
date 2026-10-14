@@ -12,6 +12,9 @@ export type ChatState = 'starting' | 'running' | 'waiting' | 'idle' | 'error' | 
 /** app = runs inside the app (we own the process). The only origin in v1 (ADR 0010: no coexistence with other apps). */
 export type ChatOrigin = 'app';
 
+/** a chat waiting in the CPU-aware queue (ADR 0036) */
+export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number }
+
 export interface ChatSummary {
   id: string;                 // app id (stable across resumes)
   harness: Harness;
@@ -23,42 +26,170 @@ export interface ChatSummary {
   effort: Effort | null;
   permissionMode: PermissionMode | null;
   state: ChatState;
-  costUsd: number;            // cumulative for this app run (API-equivalent on a subscription)
+  costUsd: number;            // cumulative for this app run (API-equivalent on a subscription), live estimate included
+  /** the part of costUsd that estimates the turn still running (from token usage); absent when every turn is settled */
+  costLiveUsd?: number;
   contextTokens?: number;
   contextMaxTokens?: number;  // the model's context window (with contextTokens: the context bar)
+  /** true = contextTokens is the app's estimate (the engine does not report it: Cursor over ACP), shown as "~" */
+  contextEstimated?: boolean;
+  /** the last hand-off saved for this chat (chat:handoffRead shows it): when, and who wrote it */
+  handoffAt?: number;
+  handoffSource?: HandoffSource;
+  /** the chat is writing its hand-off now (a turn the app asked for) */
+  handoffBusy?: boolean;
+  /** "Riprendi" links: this chat continues that one / continues in that one (the old one stays readable) */
+  continuedFrom?: ChatLink;
+  continuedBy?: ChatLink;
   /** estimate made at the first send of the job (vs the actual costUsd): null = "stima senza dati", absent = none asked */
   estimate?: (Estimate & { basis: number }) | null;
   /** false = the engine reports no usage (Cursor over ACP today): costUsd is 0 for lack of data, show the estimate */
   costKnown?: false;
+  /** renderer only: today's $ of this Cursor chat from the Cursor ledger (Usage.cursorChats by sessionId), an estimate */
+  costLedgerUsd?: number;
+  /** real work time since the app opened the chat: time spent starting or running, never waiting for the user's
+   *  answers nor idle; workSince = the running span now in progress (add now − workSince) */
+  workMs?: number;
+  workSince?: number;
   pending: number;            // open questions/permissions
   isRegia: boolean;
+  /** a Regia's tab label (ADR 0021); absent on a Regia from before several Regie existed: shown "Lavoro" */
+  regiaName?: string;
+  /** a work chat: the Regia it answers to (the one that opened it, or the tab open when the user created it);
+   *  resolved by regiaOfChat (shared/regia.ts): missing or stale = the first Regia */
+  regiaOf?: string;
+  /** a Regia's place among the tabs (ADR 0021): kept by the Regia that replaces it, so "Pulisci" or "Cambia motore"
+   *  never moves a tab nor changes which Regia is the first */
+  regiaSince?: number;
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
   updatedAt: number;
   browserTabIds: string[];    // internal browser tabs this chat drives
+  /** the last turn's end (a `result`): the auto-close clock starts here; isError = the turn failed; interrupted = the
+   *  user stopped it (Stop, "Invia subito"): not an error, and the chat does not close by itself */
+  lastResult?: { at: number; isError: boolean; interrupted?: boolean };
+  /** background tasks (agents, shell commands) the CLI still runs after its turn (Claude task_started/notification) */
+  background?: number;
+  /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
+  closedAt?: number;
+  /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */
+  closedBy?: 'auto' | 'user';
+  /** its turn was cut by an app restart and the app resumed it by itself at this time ("ripresa dopo il riavvio";
+   *  cleared by the user's next message) */
+  resumedAt?: number;
+  /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
+   *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
+  queued?: QueuedInfo;
+  /** 'app' = a chat of the "Migliora l'app" section (it changes the app's own code): shown there, never on the work grid
+   *  nor routed to the work Regia */
+  space?: ChatSpace;
+  /** the section's own Regia ("Regia dell'app"): it coordinates the 'app' chats; one at a time, never closed */
+  appRegia?: boolean;
+  /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
+  route?: RouteDecision;
+}
+
+export type ChatSpace = 'app';
+
+export interface ChatLink { id: string; title: string }
+/** chat = written by the chat itself on request · auto = built by the app without tokens (no decisions inside) */
+export type HandoffSource = 'chat' | 'auto';
+/** A chat's hand-off note ("passaggio di consegne"): <userData>/handoffs/<chatId>.md */
+export interface HandoffInfo {
+  chatId: string;
+  title: string;              // the chat's title when it was written
+  path: string;
+  text: string;               // markdown: Stato, File e worktree, Decisioni prese, Provato e scartato, Prossimo passo
+  at: number;
+  source: HandoffSource;
+  contextTokens?: number;     // the chat's context when it was written
+}
+
+/** How the app's Claude chats use their context (ADR 0031), counted from the API usage the engines report (zero
+ *  tokens): app_state shows it. "after" = the first calls of a fresh session from a cold hand-off vs after an
+ *  auto-compaction, the price of each way out of a long context. */
+export interface ContextStats {
+  since: number;
+  calls: number;
+  /** calls whose context (input + cache read + cache write) was over 200k */
+  over200k: number;
+  /** calls that re-wrote more than 100k of cache (a cold resume or a compaction's first call) */
+  coldRewrites: number;
+  compactions: number;
+  notesWritten: number;
+  notesUsed: number;
+  afterContinuation: { calls: number; usd: number };
+  afterCompaction: { calls: number; usd: number };
 }
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'plan' | 'bypassPermissions';
 
+/** An image attached to a message (a pasted or dropped screenshot). data = base64 without the `data:` prefix, at most
+ *  IMAGE_MAX_BYTES once decoded; at most IMAGE_MAX_COUNT per message. thumb = a small preview (data:image/jpeg|png|webp
+ *  URL, at most THUMB_MAX_CHARS) made by the renderer, kept on the user item for the history. */
+export interface ImageAttachment { mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string; thumb?: string }
+export const IMAGE_MAX_BYTES = 3_750_000;   // Claude's API limit is 5 MB of base64 per image
+export const IMAGE_MAX_COUNT = 10;
+export const IMAGES_MAX_TOTAL = 20_000_000; // all images of one message, decoded (the Messages API takes 32 MB per request)
+export const THUMB_MAX_CHARS = 120_000;
+
 export type ChatItem =
-  | { kind: 'user'; id: string; at: number; text: string; images?: number }
+  /** images = how many were attached; thumbs = their previews (live messages; a transcript gives only the count);
+   *  from = not the user's: who sent it (another chat's title, "Regia"), shown above the bubble */
+  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string }
   | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean }
   | { kind: 'thinking'; id: string; at: number; text: string }
   | { kind: 'tool'; id: string; at: number; name: string; summary: string; input: unknown; status: 'running' | 'ok' | 'error'; output?: string; diff?: FileDiff[] }
-  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error' }
-  | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean };
+  /** continued = the divider of an invisible continuation (ADR 0031): the items above it are the previous session
+   *  (shown folded), its note is the hand-off it starts from */
+  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; continued?: { notePath: string; session?: string } }
+  /** interrupted = the user stopped the turn (Stop, "Invia subito"): isError stays false, the UI says "interrotto da te" */
+  | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
+  /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =
+   *  the chat's own id for it (the same key again replaces it); from = the chat that sent it, when shown elsewhere (in its
+   *  Regia) and cwd = its folder (relative file paths open there); target next-ask: askId = the question it is attached
+   *  to, waiting = no question yet (not in the list) */
+  | { kind: 'artifact'; id: string; at: number; key: string; title: string; summary: string; ui: UiSpec; target: ArtifactTarget; from?: string; cwd?: string; askId?: string; waiting?: boolean };
+
+// ── Generative UI (ADR 0033): the catalog of trusted components a chat can show (show_ui on its MCP endpoint, or an
+// ```sb-ui fence inside an AskUserQuestion option's preview). Shapes only; validation and caps: shared/genui.ts ──
+/** ok = passed/done · fail = failed · blocked · running = in progress · todo = not run yet · info · warn */
+export type UiStatus = 'ok' | 'fail' | 'blocked' | 'running' | 'todo' | 'info' | 'warn';
+/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened through app:openPath) */
+export interface UiLink { label: string; href: string }
+export interface UiTable { columns: string[]; rows: { cells: string[]; status?: UiStatus; link?: UiLink }[] }
+export interface UiCards {
+  options: { title: string; summary?: string; pros?: string[]; cons?: string[]; effort?: string; risk?: 'low' | 'medium' | 'high'; recommended?: boolean }[];
+}
+export interface UiBoard { lanes: { title: string; status?: UiStatus; items: { title: string; detail?: string; status?: UiStatus; links?: UiLink[] }[] }[] }
+export interface UiDiffList { groups: { area: string; files: { path: string; why?: string; added?: number; removed?: number; href?: string }[] }[] }
+export interface UiBarChart { unit?: string; bars: { label: string; value: number; note?: string }[] }
+export type UiSpec =
+  | { component: 'table'; props: UiTable }
+  | { component: 'cards'; props: UiCards }
+  | { component: 'board'; props: UiBoard }
+  | { component: 'diffList'; props: UiDiffList }
+  | { component: 'barChart'; props: UiBarChart };
+export type UiComponent = UiSpec['component'];
+/** chat = a card in the calling chat · regia = in its Regia's panel · next-ask = on its next question (else a card) */
+export type ArtifactTarget = 'chat' | 'regia' | 'next-ask';
 
 export interface FileDiff { path: string; added: number; removed: number; patch?: string }
 
-export interface QuestionOption { label: string; description?: string }
+/** preview: AskUserQuestion's optional content shown for an option (a draft, a snippet: markdown) */
+export interface QuestionOption { label: string; description?: string; preview?: string }
 export interface Question { question: string; header?: string; options: QuestionOption[]; multiSelect: boolean }
 
 export interface PendingRequest {
   id: string;                 // request id (unique per chat)
   chatId: string;
-  type: 'permission' | 'question';
-  tool: string;               // tool name ("Bash", "Write", "AskUserQuestion", "mcp__x__y")
+  /** command = a shell block the chat left for the user to run (main/run/asks.ts): answered by Esegui (run:start) or
+   *  "Non serve" (run:dismiss), never by chat:answer; it does not count in ChatSummary.pending (the chat is not blocked) */
+  type: 'permission' | 'question' | 'command';
+  tool: string;               // tool name ("Bash", "Write", "AskUserQuestion", "mcp__x__y"; "Esegui" for a command)
+  /** the tool_use this request is about (Claude): its transcript row is `t-<toolUseId>`, where its context ends */
+  toolUseId?: string;
   title: string;              // one line: what is being asked
   detail: string;             // the command / path / description to show
   input: unknown;
@@ -66,11 +197,41 @@ export interface PendingRequest {
   at: number;
   noAlways?: boolean;         // permission: do not offer "always allow" (the CLI forbids a rule for this ask, or has none)
   alwaysRules?: string[];     // permission: what "always allow" grants, for this session only ("Bash(git push:*)", "modalità: accetta modifiche")
+  command?: CommandAsk;       // type = command
 }
+
+/** The block a command request is about: the assistant message it is in, its code (as Esegui runs it) and language;
+ *  prod = why it looks like production (Esegui asks a second click, shared/runnable.ts prodRisk); lead = the chat's
+ *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
+export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
+export type OpenPathResult = { how: 'opened' | 'folder' } | { how: 'missing' | 'refused'; reason: string };
+/** app:peekFile: a clicked file's preview (main/peek-file.ts): its first lines, an image thumbnail, or why not */
+export type PeekResult =
+  | { kind: 'text'; path: string; size: number; text: string; more: boolean }
+  | { kind: 'image'; path: string; size: number; dataUrl: string }
+  | { kind: 'other'; path: string; size: number; what: string }
+  | { kind: 'missing'; reason: string; path: string }
+  | { kind: 'refused'; reason: string };
 
 export type Answer =
   | { kind: 'permission'; allow: boolean; always?: boolean; message?: string }
   | { kind: 'question'; answers: Record<string, string | string[]> };
+
+/** A code block of a chat run in PowerShell 5.1 by the user's click ("Esegui" under the block, main/run/runner.ts).
+ *  output = the tail of stdout + stderr; prod = why the block looked like production (it needed a second click). */
+export interface RunInfo {
+  id: string;
+  chatId: string;
+  itemId: string;             // the assistant message the block belongs to
+  code: string;
+  cwd: string;
+  state: 'running' | 'ok' | 'error' | 'stopped';
+  exitCode: number | null;
+  output: string;
+  startedAt: number;
+  endedAt?: number;
+  prod?: string;
+}
 
 export interface NewChat {
   harness: Harness;
@@ -83,7 +244,17 @@ export interface NewChat {
   resumeSessionId?: string;   // resume (or fork, see fork) an existing CLI session
   fork?: boolean;             // resume as a copy: never two writers on one session
   regia?: boolean;
+  /** with regia: the tab label ("App"); the title defaults to "Regia · <name>" */
+  regiaName?: string;
+  /** with regia: the Regia whose role this one takes (Ricomincia da capo, Cambia motore, Pulisci): it becomes a
+   *  normal chat and its work chats follow the new one. Without it a new Regia is added next to the others. */
+  replaces?: string;
+  /** a work chat: the Regia it answers to */
+  regiaOf?: string;
   worktree?: boolean;         // claude --worktree
+  space?: ChatSpace;          // 'app': a chat of the "Migliora l'app" section
+  appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
+  route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
 }
 
 export interface BrowserTab {
@@ -141,6 +312,26 @@ export interface BrowserHandoff {
   resolvedAt?: number;
   env?: string;               // the environment of the tab
   kind?: 'login' | 'other';   // login = "rifai l'accesso a <env>": the user signs in, the env keeps the session
+  account?: HandoffAccount;   // kind login: the account the agent named, looked up in the user's credentials file
+}
+
+/** The account a login hand-off shows. Never the password: main copies it from the file on the user's click
+ *  ('browser:handoffCopy'), so it never reaches the agent, a tool argument, the renderer or a log. */
+export interface HandoffAccount {
+  user: string;               // as found in the file (or as the agent wrote it, when not found)
+  found: boolean;             // an entry with this user name and a password exists in the credentials file
+  url?: string;               // the entry's sign-in URL, if it has one
+  note?: string;              // the entry's note ("holding with module X enabled"), one line
+}
+
+/** One entry of the "Credenziali" panel (the user's credentials file). Never the password: main copies it from the
+ *  file on the user's click ('credentials:copy'), as for login hand-offs (ADR 0012). */
+export interface CredentialEntry {
+  id: string;                 // stable while the file does not change (a Copia after a change finds nothing)
+  group: string;              // the keys that lead to it in the file: "air · test"
+  user: string;
+  url?: string;               // sign-in URL, if the entry has one
+  note?: string;              // one line: "holding with module X enabled"
 }
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -163,14 +354,147 @@ export interface FeedEvent {
   away?: boolean;             // happened while the app was closed
 }
 
+// ---- DevOps (src/main/devops): the user's Azure DevOps, read by the brain's read-only scripts, never written
+
+export interface DevopsItem {
+  id: number; type: string; title: string; state: string; project: string; priority: number | null;
+  assignedTo: string | null; iteration: string | null; changedAt: string | null; url: string;
+}
+/** A comment as plain text (the script strips the HTML; the page shows it as text, never as HTML). */
+export interface DevopsComment { who: string; mine: boolean; at: string; text: string }
+/** A test case linked to a work item (Tested By) with the outcome of its most recent run (null = never run). */
+export interface DevopsTest { id: number; title: string; outcome: string | null; url: string }
+/** What the page shows inside a work item without opening DevOps (devops-me.mjs --full). */
+export interface DevopsDetail {
+  description: string | null; stateSince: string | null; createdAt: string | null;
+  comments: DevopsComment[];   // newest first, at most 5
+  tests: DevopsTest[];
+}
+export interface DevopsPrRef { id: number; title: string; repo: string; project: string; author: string | null; createdAt: string; url: string }
+export interface DevopsPr extends DevopsPrRef {
+  target: string; draft: boolean; autoComplete: boolean;
+  reviewers: { name: string; vote: number; label: string; required: boolean }[];
+  build: { result: string | null; status: string; number: string; url: string; at: string | null } | null;
+  workItems: DevopsItem[];
+  /** --full: open discussions and the last human comment (anyone's) */
+  activeThreads?: number;
+  lastComment?: (DevopsComment & { url: string }) | null;
+}
+/** mention · touched (my item changed by someone) · taken (moved away from me) · review (asked for my vote) ·
+ *  comment / vote / build (on my PRs) · followed (a ticket I follow or opened: state, assignee, comment) */
+export type DevopsNewsKind = 'mention' | 'touched' | 'taken' | 'review' | 'comment' | 'vote' | 'build' | 'followed';
+export interface DevopsNews {
+  key: string; at: string; kind: DevopsNewsKind; who: string | null; title: string; detail?: string; url: string;
+  /** the whole comment or mention as plain text (detail is its first 110 characters) */
+  body?: string;
+  item?: DevopsItem; pr?: DevopsPrRef; unread: boolean;
+}
+export interface DevopsState {
+  enabled: boolean;
+  everyMin: number;
+  /** the alerts' chime (setting devops.sound) */
+  sound: boolean;
+  running: boolean;
+  /** last successful read (ms) and the next automatic one (null when off) */
+  at: number | null;
+  nextAt: number | null;
+  /** login = `az login` missing or expired (command says what to run); script = the brain has no devops-me.mjs */
+  error: { kind: 'login' | 'script' | 'failed'; message: string; command?: string } | null;
+  news: DevopsNews[];          // newest first, the last 14 days
+  assigned: DevopsItem[];      // my open work items
+  urgent: DevopsItem[];        // my open P1/P2 bugs with no news
+  oldReviews: DevopsPrRef[];   // reviews waiting for me from before the window
+  reviews: DevopsPrRef[];      // every review waiting for my vote at the last read (recent + old)
+  prs: DevopsPr[];             // my active PRs, live
+  details: Record<string, DevopsDetail>;  // by work item id: description, last comments, test cases
+  unread: number;
+  /** "Test e QA": my active PRs' test plans (ops/tools/qa-status.mjs --mine), read with the page; [] without that script */
+  qa: QaReport[];
+  /** the QA read failed (the rest of the page read fine): the last good qa stays */
+  qaError: string | null;
+  /** repo name → its local clone (<home>/source/repos/<repo>), for the repos of the PRs on the page: "Apri chat" starts
+   *  a PR's chat there; a repo with no clone is missing */
+  repoDirs: Record<string, string>;
+}
+
+/** A test point: last outcome (null = not run yet), who ran it and when, who it is assigned to, its QA bugs' ids. */
+export interface QaPoint {
+  id: number; suite: string;
+  testCase: { id: number; title: string; url: string };
+  outcome: string | null; ranBy: string | null; ranAt: string | null; tester: string | null; bugs: number[];
+}
+export interface QaBug { id: number; title: string; state: string; open: boolean; assignedTo: string | null; createdAt: string | null; url: string; testCases: number[] }
+export interface QaTotals {
+  total: number; done: number; missing: number; passed: number; failed: number; blocked: number; notApplicable: number; other: number;
+  byPerson: { name: string; done: number; passed: number; failed: number; blocked: number }[];
+}
+export interface QaPlan { id: number; name: string; url: string; points: QaPoint[]; totals: QaTotals }
+export interface QaReport { pr: DevopsPrRef | null; plans: QaPlan[]; bugs: QaBug[]; totals: QaTotals & { bugs: number; openBugs: number } }
+
+// ---- "Migliora l'app" (src/main/improve): the user improves and customizes their own app from a section of it, with its
+// own Regia; changes go branch → green check → main → "Aggiorna" (scripts/release.mjs promote) → restart (ADR 0020)
+
+/** work = a branch with commits not in main and no green check on its tip · tested = its tip passed `npm run check:branch`
+ *  or `npm run check` (ADR 0027) ·
+ *  approved = merged into main, not yet in the version in use · promoted = inside the version in use */
+export type ImproveStage = 'work' | 'tested' | 'approved' | 'promoted';
+export interface ImproveBranch {
+  name: string;
+  sha: string;                // short
+  subject: string;            // last commit's subject
+  at: number;                 // last commit (ms)
+  stage: ImproveStage;
+  checkAt: number | null;     // green check on the tip (ms)
+  chatId?: string;            // the app chat working in its worktree
+  chatTitle?: string;
+}
+/** How the last start went, shown once after a restart until dismissed. new = the promoted version started ·
+ *  fallback = it did not start and the launcher went back to the previous one (reason: why, from the launcher) */
+export interface ImproveLaunch { outcome: 'new' | 'fallback'; running: string; wanted: string; reason: string; at: number }
+export interface ImprovePromote {
+  state: 'running' | 'ok' | 'error' | 'restarting';
+  startedAt: number;
+  endedAt?: number;
+  step: string;               // Italian, the step in progress ("Test in corso", "Copia della versione")
+  log: string;                // the output's tail
+  version?: string;           // the new release id once promoted
+}
+export interface ImproveState {
+  repo: string | null;
+  repoProblem: string | null; // Italian: why the code folder is missing or unusable
+  running: string;            // the release id in use, 'dev' for a build run from the repo
+  stable: boolean;
+  current: string | null;     // current.json
+  previous: string | null;
+  bad: string[];
+  /** main's tip when it is not the version in use: what "Aggiorna" would promote */
+  candidate: { sha: string; subject: string; at: number; checkAt: number | null } | null;
+  canPromote: boolean;
+  promoteWhy: string;         // Italian: why "Aggiorna" is off (empty when on)
+  promote: ImprovePromote | null;
+  launch: ImproveLaunch | null;
+  branches: ImproveBranch[];  // the last 14 days, newest first, at most 20
+  at: number;
+}
+
 export interface AppInfo {
   version: string;
   brainRoot: string | null;
   /** why the brain folder is missing: config.json unreadable, or the folder lacks the brain tools */
   brainProblem?: string | null;
   mcpUrl: string;
+  /** the app's own health since it started (main/health.ts); a fallen-back MCP port shows a banner */
+  health?: AppHealth;
   /** null until the background check finishes (a few seconds after start): ask cli:status for a fresh one. */
   cli: { claude: CliStatus; cursor: CliStatus } | null;
+}
+/** Since the app started: the MCP port (fallback = the configured one was taken, external clients lose the browser),
+ *  main-window renderer crashes/hangs (each reloads it; chats keep running), engines killed by force, Job Object guard. */
+export interface AppHealth {
+  mcp: { wanted: number | null; port: number | null; fallback: boolean; cause: string | null };
+  renderer: { crashes: number; hangs: number; reloads: number; last: { what: 'gone' | 'hang'; reason: string | null; at: number } | null };
+  forcedKills: number;
+  jobGuard: 'off' | 'starting' | 'ready' | 'failed';
 }
 export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null }
 
@@ -185,8 +509,17 @@ export interface Usage {
   limitsNote?: string;        // Italian, why they are missing or how old they are
   costKnown?: boolean;        // false = cost.mjs missing or failed: todayUsd is 0 only as a placeholder
   costNote?: string;
-  cursorTodayUsd?: number | null; // Cursor's real cost today from its usage export; null = unknown
+  /** Cursor today: the per-turn ledger (stop hook, agent -p) at list price × the CSV factor, exact for what a usage
+   *  export covers; null = unknown (no turn logged, no export) */
+  cursorTodayUsd?: number | null;
   cursorNote?: string;
+  /** true = the whole figure comes from Cursor's usage export (exact); false = an estimate within ±cursorMarginPct */
+  cursorExact?: boolean;
+  cursorMarginPct?: number;
+  /** estimated $ today per Cursor conversation id (= an app Cursor chat's sessionId) */
+  cursorChats?: Record<string, number>;
+  /** Italian: why Cursor's plan usage (included quota, on-demand spend) cannot be shown, and what does give its cost */
+  cursorPlanNote?: string;
   at?: number;                // when this snapshot was computed
 }
 
@@ -212,23 +545,75 @@ export interface Settings {
   /** Claude <-> Cursor chat mail (inbox.mjs); mirrored in the brain's brain-settings.json so it holds outside the app */
   messaging: { crossHarness: boolean };
   budget: BudgetSettings;
+  /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
+   *  a Claude chat turns amber near its own window (compactWindowTokens) instead (ADR 0031) */
+  contextWarnTokens: number;
+  /** the invisible continuation of cold chats (ADR 0031): an idle Claude chat with a long context writes its hand-off
+   *  while the prompt cache is still warm, and a message after the cache expired goes on in a fresh session from it */
+  contextHandoff: boolean;
+  /** the auto-compact window of every Claude chat the app starts (passed per process, it beats a folder's own
+   *  settings); 0 = whatever the user's Claude settings say (ADR 0031) */
+  compactWindowTokens?: number;
+  /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
+   *  ~60 min since the last call) */
+  coldHandoffMin?: number;
+  /** the chats the Regia opens (app_create_chat without harness/model) and where the "Nuova chat" dialog starts:
+   *  engine, model per engine ('' = the CLI default), Claude effort ('' = the CLI default); Cursor reasoning and fast
+   *  apply to every Cursor chat */
+  regiaChats: RegiaChatDefaults;
+  /** minutes a finished work chat stays on the grid before it closes by itself (archived, reopenable); 0 = never */
+  autoCloseMin: number;
+  /** minutes an idle chat keeps its engine process (with its MCP servers and shells); then the process ends and the
+   *  chat stays on the grid, resumed by itself on the next message (ADR 0026); 0 = never. Regie are never released. */
+  engineIdleMin?: number;
+  /** DevOps page: read by the brain's devops-me.mjs (no AI, no tokens), on a timer only when the user turns it on */
+  devops: { enabled: boolean; everyMin: number; /** a short sound with a DevOps alert (a mention, a change on my items) */ sound: boolean };
+  /** the Regia overlay's opacity in %, 40-100 (fully opaque while hovered or focused; ADR 0021) */
+  regiaOpacity: number;
+  /** "Eventi alla Regia": a work chat that finishes, fails, waits for the user or leaves a command wakes the Regia with a
+   *  short app message (main/chats/regia-wake.ts) */
+  regiaEvents: boolean;
+  /** "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets the exit code and the output's
+   *  tail as an app message (main/run/results.ts) */
+  runResults: boolean;
+  /** "Domande in finestra": every open question and permission shows in one modal window in front, one at a time in
+   *  a queue (instead of the chats' tiles and the Regia); it never takes the keyboard while the user types */
+  questionsModal: boolean;
+  /** "Migliora l'app": the folder of the app's own code (a git repo); null = the one the running release was built from */
+  appRepo: string | null;
+  /** "Coda per carico" (ADR 0036): an agent's new chat or turn waits while CPU is over loadQueueCpu % or free RAM under
+   *  loadQueueRam %; the user's own messages never wait */
+  loadQueue: boolean;
+  loadQueueCpu: number;
+  loadQueueRam: number;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engines' | 'messaging'>> & {
+export interface RegiaChatDefaults {
+  harness: Harness; claudeModel: string; cursorModel: string; claudeEffort: Effort | '';
+  /** reasoning of every Cursor chat (ACP session config option of category thought_level), '' = the model's default */
+  cursorReasoning: CursorReasoning | '';
+  /** Cursor's "fast" option for every Cursor chat (faster, spends more usage) */
+  cursorFast: boolean;
+}
+export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engines' | 'messaging' | 'regiaChats' | 'devops'>> & {
   engines?: Partial<Settings['engines']>;
+  devops?: Partial<Settings['devops']>;
   messaging?: Partial<Settings['messaging']>;
+  regiaChats?: Partial<RegiaChatDefaults>;
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
 };
 
 /** Every setting is one dot key ("view", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'osToasts' | 'dnd' | 'dndUntil' | 'engines.claude' | 'engines.cursor' | 'messaging.crossHarness' | 'budget.enabled'
-  | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`;
+  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | 'engines.claude' | 'engines.cursor' | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
+  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam';
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
-  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd';
+  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model'; // model: a CLI model id, '' = the CLI default
   default: unknown;
   nullable?: boolean;
   values?: readonly string[]; // enum
@@ -275,13 +660,24 @@ export interface BudgetAlert {
 
 // ── Estimates: cost and time of a job, from similar past jobs (p25-p75) ───────────────────────────────────────────
 export type JobKind = 'fix' | 'qa' | 'review' | 'feature' | 'research' | 'question' | 'other';
-export interface Estimate { usdLow: number; usdHigh: number; minLow: number | null; minHigh: number | null }
+/** from = 'brain': the brain's own table (estimates.mjs, every past transcript), with the mean error it measured on the
+ *  past chats (errMin, errUsd) and the grouping used (label, Italian). cover = the share of chats the low-high range
+ *  promises to hold (0.8: honest 80% range from the past errors; 0.5: p25-p75), held = how often it held (minutes, $), measured on
+ *  n past chats; usdMid/minMid = the medians. */
+export interface Estimate {
+  usdLow: number; usdHigh: number; minLow: number | null; minHigh: number | null; from?: 'brain'; label?: string; errMin?: number | null; errUsd?: number | null;
+  usdMid?: number; minMid?: number; cover?: 0.8 | 0.5; held?: { min: number; usd: number | null; n: number } | null;
+  /** the brain's own numbers (unrounded) and the policy/table version that made them: what its improvement loop records */
+  pred?: { policy: string | null; version: string; min: { low: number; mid: number; high: number }; usd: { low: number; mid: number; high: number } };
+}
 export interface EstimateResult {
   kind: JobKind;
   estimate: Estimate | null;  // null = "stima senza dati" (fewer than 5 similar jobs)
   basis: { count: number; scope: string; label: string }; // label: Italian ("da 12 lavori simili: stesso tipo e modello")
 }
-export interface JobActual { usd: number; minutes: number | null; tokensIn: number | null; tokensOut: number | null; turns: number | null }
+/** minutesKind 'work' = effective work time (running, never waiting for the user's answers: the app since 2026-10-11, the
+ *  same figure the chat tile shows); without it the minutes are a chat's span or the CLI's turn time and only $ count. */
+export interface JobActual { usd: number; minutes: number | null; minutesKind?: 'work'; tokensIn: number | null; tokensOut: number | null; turns: number | null }
 /** Record (or update: same id, last wins) one job in the ledger. The prompt text is never stored: only its length and kind. */
 export interface JobRecordInput {
   id?: string;
@@ -294,9 +690,107 @@ export interface JobRecordInput {
   actual?: JobActual | null;
 }
 
+// ── Model routing: which harness, model and effort a chat opened by an agent gets (ADR 0032) ─────────────────────────
+/** The task kinds the routing table decides on: the brain's estimates.mjs taskOf (its rules travel in estimates.json). */
+export const TASK_KINDS = ['qa-run', 'review', 'bug-fix', 'ops-read', 'writing', 'triage', 'research-web', 'investigation', 'app-feature', 'regia', 'altro'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+/** Harnesses of the model registry: 'api' = later, private or OpenAI-compatible endpoints (never started by the app yet). */
+export type RegistryHarness = Harness | 'api';
+/** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
+export interface RegistryModel {
+  id: string; harness: RegistryHarness; provider: string; aliases?: string[];
+  /** auto = the routing table may pick it; manual = only when named */
+  routing: 'auto' | 'manual'; tier?: string;
+  price: { input: number; cacheWrite5m: number; cacheWrite1h: number; cacheRead: number; output: number };
+  longPrompt?: { over: number; price: RegistryModel['price'] };
+  fastFactor?: number; noGeo?: boolean;
+  efforts: Effort[]; defaultEffort: Effort | null;
+}
+export interface ModelRegistry {
+  harnesses: Partial<Record<RegistryHarness, { routing: 'auto' | 'manual'; note?: string }>>;
+  defaultModel: string;
+  models: RegistryModel[];
+  modifiers?: { usGeo?: number; webSearchPerRequest?: number };
+}
+/** A row of the routing table: kind '*' = any; area = the title's label ("IT", "Pers · App"), one or several; no area = any. */
+export interface RoutingRow {
+  kind: TaskKind | '*'; area?: string | string[];
+  harness: RegistryHarness; model: string; effort: Effort | null;
+  why: string; since: string; evidence: string;
+}
+/** The table in force: <brain>/ops/state/improve/routing/v<version>.json, current.json says which (versioned: every save
+ *  is a new version + a line in audit.jsonl; old versions stay for rollback). */
+export interface RoutingTable { version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[] }
+/** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not. */
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null }
+/** How a chat's engine was chosen: table = its row; default = no row, the user's "Chat aperte dalla Regia"; override =
+ *  the agent named something else, with a reason. */
+export interface RouteDecision {
+  policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore';
+  reason: string | null; kind: TaskKind; area: string; at: number;
+  /** a chat that continues a routed one ("Riprendi"): the ledger id of the first chat, so one job keeps one outcome */
+  ledgerId?: string;
+  /** how many hand-offs led to this chat */
+  handoffs?: number;
+}
+
 /** The brain's own data server (ops/tools/brain-site.mjs), read-only: GET paths under /api/ (tables, now, cost, day,
  *  map, files, file, search, version, status). Never throws for a missing brain server: ok false + error. */
 export type BrainApiResult = { ok: true; data: unknown } | { ok: false; error: string };
+
+/** /api/quality, answered by main itself (brain/quality.ts), not by the brain's server: what only the app knows for the
+ *  Qualità page. Turns = finished turns of the chats run in this app (its own logs, Rome days); PRs = the user's
+ *  active PRs at the last DevOps read that a failed build or QA holds; reopen = the brain's bug-reopen.mjs (read-only,
+ *  cached in userData, refreshed at most every 12 h). */
+export interface QualityPrBlock { id: number; title: string; repo: string; url: string; reasons: string[] }
+export interface QualityReopen { resolvedAt: string; reopenedAt: string; by: string; to: string }
+export interface AppQuality {
+  turns: { from: string | null; to: string | null; byDay: { date: string; claude: number; cursor: number }[] };
+  prs: { at: number | null; total: number; blocked: QualityPrBlock[]; error: string | null };
+  reopen: {
+    at: string | null; days: number; resolved: number; reopened: number;
+    bugs: { id: number; title: string; state: string; url: string; reopened: QualityReopen[] }[];
+    error: string | null; refreshing: boolean;
+  };
+}
+
+/** One A/B experiment of the brain (<brain>/harness/compare/experiments/*.json) with its switches (switch.json, written
+ *  only by the harness's switch.mjs). A run is compared only when the experiment AND its agent are on. Cost so far: the
+ *  sum over its rounds (usd null = no round has a cost yet; missing = rounds without one, e.g. Cursor export not imported). */
+export interface CompareExperiment {
+  name: string; title: string; description: string;
+  on: boolean; changedAt: string | null;   // Europe/Rome "YYYY-MM-DD HH:MM:SS"
+  source: string; contender: string; judge: string; // "cursor", "claude-code opus", "cursor-agent gpt-5"
+  agents: { name: string; on: boolean }[];
+  rounds: number;
+  cost: { source: { usd: number | null; missing: number }; contender: { usd: number | null; missing: number } };
+}
+export type CompareState = { ok: true; experiments: CompareExperiment[] } | { ok: false; error: string };
+
+/** A click on the Miglioramento page (ADR 0030), run by the brain's ops/improve/improve.mjs (the app never writes the
+ *  loop's state): [Applica] / [No] on a proposal ("<policy>-<n>"), [Ripristina] a policy's previous version. */
+export type LearnAction = { action: 'apply' | 'reject'; id: string } | { action: 'rollback'; domain: string };
+export type LearnResult = { ok: true; message: string } | { ok: false; error: string };
+
+/** One procedure of the brain on the Procedure page (main brain/procedures.ts, /api/procedures): a leaf section of a
+ *  runbook-like file. `line` 1-based (its heading), `changedAt` = the file's last change (ISO), tags in Italian
+ *  (passi, query, comandi, produzione), `source` = the kind of file (Runbook, Routine, Regole…). */
+export interface ProcedureSummary {
+  id: string; title: string; purpose: string; area: string; group: string | null;
+  file: string; line: number; source: string; tags: string[]; changedAt: string | null;
+}
+/** /api/procedure?id=…: the procedure's markdown with every line that may hold a credential replaced (`masked` lines),
+ *  `path` = the file's full path. Read-only: the page only renders and copies it. */
+export interface Procedure extends ProcedureSummary { path: string; markdown: string; masked: number }
+/** The models a CLI itself offered (Cursor: availableModels of its last session/new or session/load), kept in userData;
+ *  null = no Cursor chat ran yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
+export interface ModelsSeen { cursor: { ids: { id: string; name: string }[]; at: number } | null }
+
+// ── "Rispondi dopo" (the user, 2026-10-13: "a volte sono concentrato e non ho tempo per rispondere"; ADR 0035) ──
+/** On after "Rispondi dopo" on any question or permission: every open request waits in the "Da rispondere" queue and
+ *  new ones join it silently (no window, card, toast or Windows notification; only the top bar's counter) until the user
+ *  opens the queue (Ctrl+J, the counter). The asking chats stay blocked. Kept by main (userData/answer-later.json). */
+export interface AnswerLater { on: boolean }
 
 // ── Global request layer (the user: "se l'IA vuole farmi domande mi compaiano ovunque io stia navigando nell'app") ──
 // Questions and permissions not visible elsewhere on screen float in a small top-most WebContentsView (main/overlay.ts),
@@ -313,6 +807,11 @@ export interface OverlayModel {
   now?: number;               // the app page's clock (frozen in the demo), for "4 min" labels
   /** important events (chat waiting/done, errors, sync, budget, login…) as short toasts above everything, max 2 */
   toasts?: OverlayToast[];
+  /** the Regia widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
+  avoid?: { right: number; bottom: number };
+  /** requests wait but no card is shown (ADR 0035): one small strip, always on screen; a click is Ctrl+J. queued =
+   *  "Rispondi dopo" is on (they wait in "Da rispondere"); first = the oldest one's chat */
+  strip?: { count: number; first: string; queued: boolean };
 }
 export interface OverlayToast {
   id: string;                 // group key (kind|chat)
@@ -327,13 +826,68 @@ export interface OverlayToast {
 /** The overlay page only renders the cards: the app page acts on its behalf. */
 export type OverlayAction =
   | { kind: 'answer'; key: string; answer: Answer }
-  | { kind: 'postpone'; key: string }       // Esc: off the layer, it stays in "Ti aspettano"
+  | { kind: 'postpone'; key: string }       // "Rispondi dopo" (Esc): every open request goes to "Da rispondere" (AnswerLater)
   | { kind: 'open'; key: string }           // show that chat in the app
   | { kind: 'next'; from?: string }         // Ctrl+J inside the layer (from = the card shown, the cycle goes on from it)
   | { kind: 'leave' }                       // keyboard back to the app
-  | { kind: 'toast'; id: string; act: 'open' | 'dismiss' }; // an event toast: its action, or ✕
+  | { kind: 'toast'; id: string; act: 'open' | 'dismiss' } // an event toast: its action, or ✕
+  | { kind: 'run'; key: string; confirmProd?: boolean }    // a command card's Esegui (the app page starts the run)
+  | { kind: 'dismiss'; key: string };                       // a command card's "Non serve"
+
+// ── Skills and agents (src/main/skills, ADR 0018): the CLIs' own markdown files, listed, edited and deleted by the user ──
+export type SkillKind = 'skill' | 'agent';
+export type SkillScope = 'user' | 'project';
+/** A problem of a skill/agent file (src/shared/skillmd.ts): error = not saved, warn = saved, shown. Italian text. */
+export interface MdIssue { level: 'error' | 'warn'; field?: string; text: string }
+export interface SkillEntry {
+  id: string;                 // the file's absolute path (the key for read, save, delete)
+  kind: SkillKind;
+  harness: Harness;
+  scope: SkillScope;
+  root: string | null;        // scope project: the project folder
+  name: string;               // from the frontmatter (the folder or file name when missing)
+  description: string;
+  path: string;
+  mtime: number;
+  errors: number;             // MdIssue errors in the file as it is on disk
+  /** why it cannot be saved from the app (a generated copy: "generato da sync-agents.mjs da <source>") */
+  readOnly?: string;
+}
+/** Where a new skill or agent can go. dir = the folder that holds them (".../.claude/skills"). */
+export interface SkillPlace { kind: SkillKind; harness: Harness; scope: SkillScope; root: string | null; dir: string; label: string }
+export interface SkillCatalog { entries: SkillEntry[]; places: SkillPlace[] }
+export interface SkillDoc { entry: SkillEntry; text: string }
+/** Save: id = an existing file (a new name in the text moves it); without id = a new one at place (kind/harness/scope/root).
+ *  mtime = the file's mtime when it was opened: a newer one on disk is never overwritten. */
+export interface SkillSave { id?: string; mtime?: number; kind: SkillKind; harness: Harness; scope: SkillScope; root?: string | null; text: string }
+/** hook = the command of the user's PreToolUse hook that refused the write; error is then its own message */
+export type SkillSaveResult = { ok: true; entry: SkillEntry; issues: MdIssue[] } | { ok: false; error: string; hook?: string; issues?: MdIssue[] };
+/** A command a chat can run by typing "/<name>" (skills, the engine's own commands). */
+export interface ChatCommand { name: string; description: string; hint?: string; skill?: boolean }
+
+/** Ctrl+K full-text search (main/search, ADR 0023). chat = a chat's title matches · message = its messages do ·
+ *  branch = the git branch of chats' folders · brain = a markdown file of the brain folder. */
+export type SearchKind = 'chat' | 'message' | 'branch' | 'brain';
+export interface SearchHit {
+  kind: SearchKind;
+  key: string;                // unique among the hits
+  title: string;              // chat title, branch name, brain file path
+  sub?: string;               // where: the folder, the chats on a branch
+  snippet: string;            // a short excerpt around the match ('' = none)
+  mark: [number, number] | null; // the match inside the snippet
+  at: number;                 // date of the matching message / file / chat
+  chatId?: string;            // chat, message, branch: the chat Enter opens
+  closed?: boolean;           // that chat is closed: Enter reopens it
+  path?: string;              // brain: the file, relative to the brain folder ('/')
+  line?: number;              // brain: 1-based line of the match
+  count?: number;             // how many messages / places matched
+}
+export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexed: { chats: number; files: number } }
 
 /** renderer → main. Each entry: [argument, result]. */
+/** Key → letter on screen in the app page over one window (ms): keydown to the first frame after its input event. */
+export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
+
 export interface InvokeMap {
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
@@ -341,16 +895,35 @@ export interface InvokeMap {
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
+  /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
+   *  images with their app, anything else only shown in its folder (main/open-path.ts) */
+  'app:openPath': [{ path: string }, OpenPathResult];
+  /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
+  'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
   'chat:list': [void, ChatSummary[]];
   'chat:items': [{ chatId: string }, ChatItem[]];
   'chat:pending': [void, PendingRequest[]];
   'chat:create': [NewChat, ChatSummary];
-  'chat:send': [{ chatId: string; text: string }, void];
+  /** text may be empty when images are attached */
+  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[] }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
-  'chat:stop': [{ chatId: string }, void];
+  /** keepQueued: "Invia subito" stops only the turn; messages the engine already holds still run after it */
+  'chat:stop': [{ chatId: string; keepQueued?: boolean }, void];
   'chat:stopAll': [void, number];
   'chat:close': [{ chatId: string }, void];
+  /** archive a finished chat (its process ends, its browser tabs close, the env sign-in stays); reopen brings it back */
+  'chat:archive': [{ chatId: string; auto?: boolean }, ChatSummary];
+  'chat:reopen': [{ chatId: string }, ChatSummary];
+  /** "Avvia ora": a chat waiting in the CPU queue starts now (ADR 0036); false = it was not waiting */
+  'chat:admitNow': [{ chatId: string }, boolean];
   'chat:set': [{ chatId: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string }, ChatSummary];
+  /** the chat writes its hand-off now (one turn; a token-free one when it cannot answer) */
+  'chat:handoff': [{ chatId: string }, HandoffInfo];
+  /** the saved hand-off, null if none */
+  'chat:handoffRead': [{ chatId: string; session?: string }, HandoffInfo | null];
+  /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
+   *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
+  'chat:continue': [{ chatId: string }, ChatSummary];
   'browser:list': [void, BrowserTab[]];
   'browser:open': [{ url?: string; ownerChatId?: string | null; env?: string }, BrowserTab];
   'browser:navigate': [{ tabId: string; url: string }, void];
@@ -359,7 +932,15 @@ export interface InvokeMap {
   'views:layout': [ViewLayout[], void];
   'browser:handoffs': [void, BrowserHandoff[]];
   'browser:handoffResolve': [{ id: string; outcome: 'done' | 'failed'; note?: string }, void];
+  /** main copies the hand-off's user name or password (read from the credentials file now) to the clipboard; a copied
+   *  password is cleared from the clipboard after 30 s if still there. Returns false when it could not (no entry). */
+  'browser:handoffCopy': [{ id: string; field: 'user' | 'password' }, boolean];
   'browser:envList': [void, BrowserEnv[]];
+  /** the "Credenziali" panel: the entries of the user's credentials file, without passwords */
+  'credentials:list': [void, CredentialEntry[]];
+  /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard
+   *  after 30 s if still there. Returns false when it could not (no such entry, e.g. the file changed). */
+  'credentials:copy': [{ id: string; field: 'user' | 'password' }, boolean];
   'feed:list': [void, FeedEvent[]];
   'feed:mute': [{ kind: string; muted: boolean }, void];
   'settings:get': [void, Settings];
@@ -375,15 +956,67 @@ export interface InvokeMap {
   'estimate:get': [{ harness: Harness; model: string | null; effort: Effort | null; prompt: string }, EstimateResult];
   'estimate:record': [JobRecordInput, { id: string }];
   'brain:api': [{ path: string }, BrainApiResult];
+  /** the brain's model comparisons (harness/compare): read through its config.mjs, switched through its switch.mjs */
+  'compare:list': [void, CompareState];
+  'compare:set': [{ experiment: string; on: boolean; agent?: string }, CompareState];
+  /** the brain's self-improvement loop: a click of the Miglioramento page (brain/learn.ts) */
+  'learn:act': [LearnAction, LearnResult];
+  'models:seen': [void, ModelsSeen];
+  /** the routing table and the model registry (Impostazioni → «Instradamento modelli») */
+  'routing:get': [void, RoutingInfo];
+  /** the user saves the table from the settings page: checked against the hard rules, written as a new version */
+  'routing:save': [{ routes: RoutingRow[]; reason?: string }, RoutingInfo];
+  'devops:get': [void, DevopsState];
+  /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
+  'devops:refresh': [void, DevopsState];
+  /** marks news read: the given keys, or all of them */
+  'devops:markRead': [{ keys?: string[] }, DevopsState];
+  /** the "Stato" view: the git branch checked out in each chat folder, read from disk (null = not a git folder) */
+  'chat:branches': [{ cwds: string[] }, Record<string, string | null>];
   /** the app page → main: what the global request layer shows now (main attaches/detaches it and forwards the model) */
   'overlay:model': [OverlayModel, void];
   /** the layer page → main: the size its cards need (main places the layer bottom-right) */
   'overlay:size': [{ width: number; height: number }, void];
+  /** the app page's typing probe (renderer/lib/inputlag.ts): one summary a minute while the user types, to the log */
+  'app:inputLag': [InputLagReport, void];
   /** the layer page → main → the app page: the user answered / postponed / opened a card, or left the layer */
   'overlay:action': [OverlayAction, void];
   /** move the keyboard to the layer (Ctrl+J, a click) or back to the app; never automatic */
   'overlay:focus': [{ target: 'overlay' | 'app' }, void];
+  /** the user clicked "Esegui" under a shell block (never an agent): confirmProd = the second click on a production one */
+  'run:start': [{ chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean }, RunInfo];
+  'run:stop': [{ runId: string }, void];
+  'run:list': [{ chatId?: string }, RunInfo[]];
+  /** "Non serve" on a command request: it leaves "Ti aspettano" without running (the block stays in the chat) */
+  'run:dismiss': [{ chatId: string; requestId: string }, void];
+  /** "Skill e agenti" (ADR 0018): every skill and agent of both engines, and where new ones can go */
+  'skills:list': [void, SkillCatalog];
+  'skills:read': [{ id: string }, SkillDoc];
+  /** checked (skillmd) and passed through the user's PreToolUse hooks for Write before anything is written */
+  'skills:save': [SkillSave, SkillSaveResult];
+  /** to the Windows Recycle Bin: a skill's folder, an agent's file */
+  'skills:delete': [{ id: string }, { ok: boolean; error?: string }];
+  /** what "/" offers in a chat's input: the commands its engine reported, or its engine's skills on disk */
+  'chat:commands': [{ chatId: string }, ChatCommand[]];
+  /** "Migliora l'app": the state (refresh = read git now) */
+  'improve:get': [{ refresh?: boolean }, ImproveState];
+  /** the user's click on "Aggiorna" (never an agent): test, copy, switch, then restart the app on the new version */
+  'improve:promote': [void, ImproveState];
+  /** the section's Regia: created in the code folder with its role prompt (harness/model: the user's choice) */
+  'improve:regia': [{ harness: Harness; model?: string }, ChatSummary];
+  /** the restart notice was read */
+  'improve:dismissLaunch': [void, ImproveState];
+  /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
+  'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
+  /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
+  'search:query': [{ q: string }, SearchResult];
+  /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
+  'later:get': [void, AnswerLater];
+  'later:set': [{ on: boolean }, AnswerLater];
 }
+
+/** An image read from the system clipboard by main (bytes as they were; the renderer checks and scales them). */
+export interface ClipboardImage { mimeType: string; bytes: Uint8Array }
 
 /** main → renderer. */
 export interface EventMap {
@@ -395,8 +1028,11 @@ export interface EventMap {
   'browser:tabs': BrowserTab[];
   'browser:handoff': BrowserHandoff;   // opened or changed state
   'browser:envs': BrowserEnv[];        // the known environments changed (tabs, session status, last login)
+  'browser:pointer': { tabId: string; inside: boolean };   // the mouse entered/left a tab's page (a native view the UI cannot see)
   'feed:events': FeedEvent[];
   'usage': Usage;
+  /** the background CLI check at start finished (app:info had cli null until now) */
+  'cli:ready': { claude: CliStatus; cursor: CliStatus };
   'focus:next': void;
   /** app-control MCP or a notification asks the UI to do something (switch view, focus a chat, open a page). */
   'ui:command': { action: string; value?: string };
@@ -405,10 +1041,17 @@ export interface EventMap {
   /** a protected change waits for the user (status pending), or was answered (accepted / rejected) */
   'settings:proposed': SettingProposal;
   'budget:alert': BudgetAlert;
+  'devops:state': DevopsState;
   /** main → the layer page: the cards to show */
   'overlay:model': OverlayModel;
   /** main → the app page: what the user did in the layer */
   'overlay:action': OverlayAction;
+  /** a run started, printed more output, or ended */
+  'run:updated': RunInfo;
+  'improve:state': ImproveState;
+  'later:changed': AnswerLater;
+  /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
+  'procedures:changed': void;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -418,15 +1061,20 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:send', 'chat:answer', 'chat:stop',
-  'chat:stopAll', 'chat:close', 'chat:set', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:send', 'chat:answer', 'chat:stop',
+  'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:get', 'estimate:record', 'brain:api',
-  'browser:handoffs', 'browser:handoffResolve', 'browser:envList', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
+  'devops:get', 'devops:refresh', 'devops:markRead', 'chat:branches',
+  'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save',
+  'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
+  'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
+  'clipboard:image',
+  'search:query', 'later:get', 'later:set',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'focus:next', 'ui:command',
-  'settings:changed', 'settings:proposed', 'budget:alert', 'browser:handoff', 'browser:envs', 'overlay:model', 'overlay:action',
+  'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
+  'settings:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

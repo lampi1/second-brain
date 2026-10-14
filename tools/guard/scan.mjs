@@ -105,12 +105,14 @@ const isBinary = buf => buf.subarray(0, 8000).includes(0);
 const findings = [];
 const add = (path, label, line, rule, buf) => { if (!allowed(path, rule, buf)) findings.push({ where: label, line, rule }); };
 
-function scanText(path, text, label = path) {
+// buf: the file's bytes, so a hash-pinned allow line can hold for a line finding too (only for that exact content);
+// commit messages pass none, so no pinned line ever silences them
+function scanText(path, text, label = path, buf) {
   const lines = text.split(/\r?\n/);
   const rules = [...SECRET_RULES, ...DATA_RULES, ...denyRules];
   for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]; if (l.length > 5000) { add(path, label, i + 1, 'long-line-unscanned'); continue; }
-    for (const [name, re] of rules) if (re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name);
+    const l = lines[i]; if (l.length > 5000) { add(path, label, i + 1, 'long-line-unscanned', buf); continue; }
+    for (const [name, re] of rules) if (re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name, buf);
   }
 }
 
@@ -129,7 +131,7 @@ function scanFile(path, buf, label = path) {
   else if (isBinary(buf)) { if (!FORBIDDEN_FILES.some(([re, r]) => r === 'binary-media' && re.test(path))) add(path, label, 0, 'unscanned-binary', buf); return; }
   else text = buf.toString('utf8');
   if (text.length > TEXT_MAX) { add(path, label, 0, 'too-large-unscanned', buf); return; }
-  scanText(path, text, label);
+  scanText(path, text, label, buf);
 }
 
 function walk(dir) {
@@ -143,24 +145,41 @@ function walk(dir) {
   }
 }
 
+// One git process per commit tree and ONE for all blobs (`cat-file --batch`): a process per blob took minutes and a
+// single failed spawn among thousands crashed the release sync with no message (2026-10-14). Same blobs, same labels.
 function scanHistory() {
-  const git = (...a) => execFileSync('git', ['-C', root, ...a], { maxBuffer: 1 << 30 });
+  const git = (args, input) => execFileSync('git', ['-C', root, ...args], { maxBuffer: 1 << 30, ...(input ? { input } : {}), stdio: ['pipe', 'pipe', 'pipe'] });
   let commits;
-  try { commits = git('rev-list', '--all').toString().split('\n').filter(Boolean); } catch { return; }
-  const seen = new Set();
+  try { commits = git(['rev-list', '--all']).toString().split('\n').filter(Boolean); } catch { return; }
+  const seen = new Map(); // blob sha → { path, label } of its first commit
   for (const c of commits) {
-    const meta = git('show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce%x00%B', c).toString();
+    const meta = git(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce%x00%B', c]).toString();
     scanText(`commit:${c.slice(0, 8)}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`);
-    for (const row of git('ls-tree', '-r', c).toString().split('\n').filter(Boolean)) {
+    for (const row of git(['ls-tree', '-r', c]).toString().split('\n').filter(Boolean)) {
       const [, type, sha, ...rest] = row.split(/\s+/); const path = rest.join(' ');
-      if (type !== 'blob' || seen.has(sha)) continue; seen.add(sha);
-      scanFile(path, git('cat-file', 'blob', sha), `${path}@${c.slice(0, 8)}`);
+      if (type !== 'blob' || seen.has(sha)) continue;
+      seen.set(sha, { path, label: `${path}@${c.slice(0, 8)}` });
     }
+  }
+  if (!seen.size) return;
+  // output: "<sha> blob <size>\n<bytes>\n" per input line, in input order
+  const out = git(['cat-file', '--batch'], [...seen.keys()].join('\n') + '\n');
+  let at = 0;
+  for (const [sha, { path, label }] of seen) {
+    const nl = out.indexOf(0x0a, at);
+    const [got, type, size] = out.subarray(at, nl).toString().split(' ');
+    if (got !== sha || type !== 'blob') throw new Error(`cat-file --batch: expected blob ${sha}, got "${out.subarray(at, nl)}"`);
+    const start = nl + 1, end = start + Number(size);
+    scanFile(path, out.subarray(start, end), label);
+    at = end + 1;
   }
 }
 
 walk(root);
-if (flag('--history')) scanHistory();
+// a failure is an error (exit 1, fail-closed) that says what failed, never a bare Node stack
+if (flag('--history')) {
+  try { scanHistory(); } catch (e) { console.error(`guard: history scan failed: ${String(e?.message ?? e).split('\n')[0]}${e?.stderr?.length ? ` (${String(e.stderr).trim().split('\n').pop()})` : ''}`); process.exit(1); }
+}
 
 const uniq = [...new Map(findings.map(f => [`${f.where}:${f.line}:${f.rule}`, f])).values()];
 if (flag('--json')) console.log(JSON.stringify({ ok: uniq.length === 0, findings: uniq }, null, 1));

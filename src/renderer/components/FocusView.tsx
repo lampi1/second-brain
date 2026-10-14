@@ -1,8 +1,10 @@
 // Focus mode (Ctrl+Shift+F): one chat full-window with the browsers it drives beside it; everything else reduces to
-// a count ("2 ti aspettano · Ctrl+J"), so deep work is protected without losing track. Esc leaves. Used by App.tsx.
+// a count ("2 ti aspettano · Ctrl+J"), so deep work is protected without losing track. "Nascondi browser"
+// (Ctrl+Shift+B) leaves the chat alone, except a tab waiting for the user (hand-off). Esc leaves. Used by App.tsx.
 import { useRef } from 'react';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
+import { useHandoffTabs } from '../store/handoffs';
 import { setFocusMode, setPrefs, ui } from '../store/ui';
 import { nextThing } from '../actions';
 import { BrowserTile } from './BrowserTile';
@@ -12,7 +14,10 @@ import { Kbd, Keys } from './ui';
 
 export function FocusView({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
-  const tabs = useApp(s => s.tabs.filter(t => t.ownerChatId === chatId).map(t => t.id), sameList);
+  const all = useApp(s => s.tabs.filter(t => t.ownerChatId === chatId).map(t => t.id), sameList);
+  const hide = ui.use(s => s.prefs.browsersHidden);
+  const waiting = useHandoffTabs();
+  const tabs = hide ? all.filter(t => waiting.includes(t)) : all;
   const others = useApp(s => s.pending.filter(p => p.chatId !== chatId).length);
   const split = ui.use(s => s.prefs.pairSplit);
   const ref = useRef<HTMLDivElement>(null);

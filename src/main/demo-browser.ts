@@ -5,11 +5,19 @@
 // the real browser module lands. Used by wiring.ts; e2e tests read globalThis.__sbDemo.layout() to check what the UI
 // reported (e.g. every rect null while the palette is open).
 import { WebContentsView, type BrowserWindow } from 'electron';
-import type { BrowserEnv, BrowserHandoff, BrowserTab, Rect, ViewLayout } from '../shared/contract';
+import type { BrowserEnv, BrowserHandoff, CredentialEntry, BrowserTab, Rect, ViewLayout } from '../shared/contract';
 import type { BrowserService, FeedInput } from './services';
 import type { DemoAction, DemoBrowserHooks, Emit } from './demo';
 import { pageUrl, type DemoPage } from './demo-pages';
+import { swallowCloseKey } from './keyguard';
 import { log } from './log';
+
+const DEMO_CREDENTIALS: CredentialEntry[] = [
+  { id: 'demo-1', group: 'air · test', user: 'mario.rossi@example.com', url: 'https://test-3.demo.test/Account/Login', note: 'holding con modulo X attivo (prove modulo X)' },
+  { id: 'demo-2', group: 'air · test', user: 'anna.bianchi@example.com', note: 'Prodotto B (area B), holding di prova' },
+  { id: 'demo-3', group: 'air · local', user: 'admin@localhost.test', url: 'https://localhost:44300/Account/Login', note: 'stack locale Prodotto A' },
+  { id: 'demo-4', group: 'sistemaTsTest', user: 'MEDICO-DEMO-01', note: 'Sistema TS TEST (invio 730), medico' },
+];
 
 interface Entry { tab: BrowserTab; view: WebContentsView | null; page: DemoPage }
 
@@ -41,6 +49,7 @@ export class DemoBrowser implements BrowserService, DemoBrowserHooks {
       view.setBounds({ x: 0, y: 0, width: 820, height: 560 });
       win.contentView.addChildView(view);
       const wc = view.webContents;
+      swallowCloseKey(wc);
       wc.setWindowOpenHandler(() => ({ action: 'deny' }));
       wc.on('will-navigate', e => e.preventDefault());
       wc.on('did-finish-load', () => this.scheduleCapture(150));
@@ -117,14 +126,24 @@ export class DemoBrowser implements BrowserService, DemoBrowserHooks {
   }
   forgetChat(chatId: string): void { this.closeOwned(chatId); }
   setFeed(_fn: (e: FeedInput) => void): void { /* the demo browser has no events of its own */ }
+  setWake(_fn: (chatId: string, text: string) => void): void { /* demo chats are scripted */ }
+  /** The demo copies a fake user name, never a real secret. */
+  copyFromHandoff(id: string, field: 'user' | 'password'): boolean {
+    const h = this.hand.get(id);
+    return !!h && h.state === 'open' && !!h.account?.found && (field === 'user' || field === 'password');
+  }
+
+  /** The "Credenziali" panel in the demo: fictional entries, and Copia never copies anything real. */
+  credentials(): CredentialEntry[] { return DEMO_CREDENTIALS; }
+  copyCredential(id: string, field: 'user' | 'password'): boolean { return DEMO_CREDENTIALS.some(e => e.id === id) && (field === 'user' || field === 'password'); }
 
   // ---- hand-offs (an agent asks the user to act in a tab): the demo can open one to show the banner
   private hand = new Map<string, BrowserHandoff>();
   handoffs(): BrowserHandoff[] { return [...this.hand.values()].filter(h => h.state === 'open'); }
-  openHandoff(tabId: string, chatId: string | null, reason: string, instructions: string, at: number): BrowserHandoff | null {
+  openHandoff(tabId: string, chatId: string | null, reason: string, instructions: string, at: number, extra: Partial<Pick<BrowserHandoff, 'kind' | 'env' | 'account'>> = {}): BrowserHandoff | null {
     const e = this.tabs.get(tabId);
     if (!e) return null;
-    const h: BrowserHandoff = { id: `ho-${++this.n}`, tabId, chatId, reason, instructions, url: e.tab.url, state: 'open', at };
+    const h: BrowserHandoff = { id: `ho-${++this.n}`, tabId, chatId, reason, instructions, url: e.tab.url, state: 'open', at, ...extra };
     this.hand.set(h.id, h);
     e.tab = { ...e.tab, handoffId: h.id };
     this.emit('browser:handoff', h);

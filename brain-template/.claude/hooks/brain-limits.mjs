@@ -11,7 +11,7 @@ import { parseHookJson } from '../../harness/cursor/hook-input.mjs';
 import os from 'node:os';
 import path from 'node:path';
 
-const BUDGET = 15000, NOW_MAX = 250;
+const BUDGET = 15000, NOW_MAX = 250, HUB_BUDGET = 8500;
 const home = os.homedir().replace(/\\/g, '/');
 const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const norm = s => (s ?? '').replace(/\r\n/g, '\n');
@@ -21,7 +21,7 @@ try {
   const input = parseHookJson(fs.readFileSync(0, 'utf8')); // Cursor runs this hook too, with a UTF-8 BOM
   const ti = input.tool_input || {};
   const file = String(ti.file_path || '').replace(/\\/g, '/');
-  const brain = file.match(/^(.*\/{{BRAIN_NAME}}(?:\/\.claude\/worktrees\/[^/]+)?)\/(me\.md|AGENTS\.md|CLAUDE\.md|now\.md)$/i);
+  const brain = file.match(/^(.*\/{{BRAIN_NAME}}(?:\/\.claude\/worktrees\/[^/]+)?)\/(me\.md|AGENTS\.md|CLAUDE\.md|now\.md|hub\.md)$/i);
   const styles = `${home}/.claude/output-styles/`.toLowerCase();
   const isStyle = file.toLowerCase().startsWith(styles) && file.toLowerCase().endsWith('.md');
   const isUserClaude = file.toLowerCase() === `${home}/.claude/CLAUDE.md`.toLowerCase();
@@ -59,12 +59,18 @@ try {
     process.exit(0);
   }
 
+  if (brain && /^hub\.md$/i.test(brain[2])) { // the Regia's own file: its own cap (2026-10-13)
+    if (a.length > b.length && a.length > HUB_BUDGET)
+      block(`hub.md ${b.length} → ${a.length} chars, budget ${HUB_BUDGET}: shorten or move to harness/ first (brain-rules.md 3), then retry.`);
+    process.exit(0);
+  }
+
   // Fixed context: same files and count as brain-lint (default output style only; a selected-only style counts itself)
   const root = brain ? brain[1] : '{{BRAIN}}';
   const style = (read(`${home}/.claude/settings.json`) || '').match(/"outputStyle"\s*:\s*"([^"]+)"/)?.[1]?.toLowerCase();
   const fixed = [`${home}/.claude/CLAUDE.md`, `${root}/CLAUDE.md`, `${root}/me.md`, `${root}/AGENTS.md`];
   for (const s of fs.existsSync(styles) ? fs.readdirSync(styles) : [])
-    if (s.replace(/\.md$/i, '').toLowerCase() === style || `${styles}${s}`.toLowerCase() === file.toLowerCase()) fixed.push(`${styles}${s}`);
+    if (isStyle ? `${styles}${s}`.toLowerCase() === file.toLowerCase() : s.replace(/\.md$/i, '').toLowerCase() === style) fixed.push(`${styles}${s}`); // one style per chat
   const total = [...new Set(fixed.map(p => p.toLowerCase()))].reduce((n, p) => n + norm(read(p)).length, 0);
   const delta = a.length - b.length;
   if (delta > 0 && total + delta > BUDGET)

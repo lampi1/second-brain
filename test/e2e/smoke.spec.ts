@@ -4,8 +4,9 @@ import { launch, shot } from './helpers';
 test('the app boots, the bridge answers and the renderer is sandboxed', async () => {
   const { app, page } = await launch();
   await expect(page.getByTestId('app')).toBeVisible();
-  await expect(page.locator('.topbar')).toContainText('second-brain');
-  await expect(page.locator('.topbar')).toContainText(/v\d+\.\d+\.\d+/);
+  // the brand shows only its mark: name and version are its label and tooltip (ADR 0020)
+  await expect(page.getByTestId('app-version')).toHaveAttribute('aria-label', /^second-brain v\d+\.\d+\.\d+/);
+  await expect(page.getByTestId('app-version')).toHaveAttribute('data-tip', /second-brain · v\d+\.\d+\.\d+/);
   // no Node in the page, only the allow-listed bridge
   expect(await page.evaluate(() => typeof (globalThis as { require?: unknown }).require)).toBe('undefined');
   expect(await page.evaluate(() => Object.keys(window.sb).sort().join(','))).toBe('invoke,on');

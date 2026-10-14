@@ -10,7 +10,7 @@ import { FIXTURES, plainNode, tmpDir } from './helpers';
 
 const job = (kind: JobKind, usd: number, minutes: number | null, extra: Partial<JobRecord> = {}): JobRecord => ({
   id: `j${Math.random()}`, at: 0, harness: 'claude', model: 'claude-opus-5-5', effort: 'high', kind, promptChars: 100, estimate: null,
-  actual: { usd, minutes, tokensIn: null, tokensOut: null, turns: null }, source: 'app', ...extra,
+  actual: { usd, minutes, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: null }, source: 'app', ...extra,
 });
 
 describe('classify', () => {
@@ -62,6 +62,9 @@ describe('estimates', () => {
     const wide = estimateFrom(jobs, { harness: 'claude', model: 'opus-5-5', effort: 'max', kind: 'fix' });
     expect(wide.basis).toMatchObject({ scope: 'kind+harness+model', count: 8 });
     expect(wide.estimate).toEqual({ usdLow: 2.75, usdHigh: 52.5, minLow: 20, minHigh: 40 }); // $ of all 8, minutes of the 5 known
+    // a chat's span (backfill) or the CLI's turn time is not work time: no duration from them
+    const spans = jobs.map(j => ({ ...j, actual: { ...j.actual!, minutesKind: undefined } }));
+    expect(estimateFrom(spans, { harness: 'claude', model: 'opus-5-5', effort: 'high', kind: 'fix' }).estimate).toEqual({ usdLow: 2, usdHigh: 4, minLow: null, minHigh: null });
     const other = estimateFrom(jobs, { harness: 'cursor', model: 'gpt-x', effort: null, kind: 'question' });
     expect(other.estimate).toBeNull(); // no Cursor jobs at all
     const coarse = estimateFrom(jobs, { harness: 'claude', model: 'sonnet-5', effort: null, kind: 'question' });
@@ -113,7 +116,7 @@ describe('estimates', () => {
     expect(r).toEqual({ added: 1, skipped: null });
     expect(l.all().find(x => x.id.startsWith('claude:1111'))!.actual!.usd).toBe(9); // the app's record stays
     expect((await l.backfill(root, plainNode, now + 3600e3)).skipped).toMatch(/20 ore/);
-    for (let i = 0; i < 5; i++) l.record({ harness: 'claude', model: 'opus-5-5', effort: 'high', prompt: 'Review this PR', actual: { usd: 1 + i, minutes: 5 + i, tokensIn: null, tokensOut: null, turns: 1 } });
+    for (let i = 0; i < 5; i++) l.record({ harness: 'claude', model: 'opus-5-5', effort: 'high', prompt: 'Review this PR', actual: { usd: 1 + i, minutes: 5 + i, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: 1 } });
     const e = l.estimate({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high', prompt: 'Fai la review della PR' });
     expect(e.kind).toBe('review');
     expect(e.estimate).toEqual({ usdLow: 2, usdHigh: 4, minLow: 6, minHigh: 8 });

@@ -71,6 +71,22 @@ test.describe.serial('internal browser over MCP', () => {
     expect(found).toMatch(/\(in iframe f\d+ http:\/\/localhost:\d+\)/);
   });
 
+  test('Ctrl+W in a page never closes the app (the default menu would; in the app Ctrl+W closes a chat)', async () => {
+    // the tab on screen in the app window, where its unhandled keys reach the window's menu
+    const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
+    const id = tabs.find(t => t.group?.startsWith('mcp:') && t.url.endsWith('/index.html'))!.id;
+    await page.evaluate(tabId => window.sb.invoke('views:layout', [{ tabId, rect: { x: 0, y: 0, width: 1280, height: 800 } }]), id); // its default size: the next tests measure it
+    await app.evaluate(({ webContents }) => {
+      const tab = webContents.getAllWebContents().find(w => w.getURL().startsWith('http') && w.getURL().endsWith('/index.html'))!; // not the app's file:…/index.html
+      tab.focus();
+      for (const type of ['keyDown', 'keyUp'] as const) tab.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
+    });
+    await page.waitForTimeout(800);
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
+    expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
+    await page.evaluate(() => window.sb.invoke('views:layout', []));
+  });
+
   test('fills a form in one call and submits it with a trusted click', async () => {
     const tree = await agent.ok('read_page', { filter: 'interactive' });
     const filled = await agent.ok('fill_form', { fields: [
@@ -172,7 +188,7 @@ test.describe.serial('internal browser over MCP', () => {
   test('screenshots are CSS-pixel PNGs and can be saved as evidence', async () => {
     const shot = await agent.call('screenshot');
     expect(shot.images[0]?.mimeType).toBe('image/png');
-    expect(pngSize(shot.images[0]!.data)).toEqual({ width: 1280, height: 800 });
+    expect(pngSize(shot.images[0]!.data)).toEqual({ width: 1920, height: 1080 });   // agent tabs: fixed desktop size
     const saved = await agent.ok('screenshot', { save_to: 'TC-1/home.png', return_image: false });
     const file = /Saved: (.+)$/m.exec(saved)?.[1] ?? '';
     expect(fs.existsSync(file)).toBe(true);
@@ -180,7 +196,7 @@ test.describe.serial('internal browser over MCP', () => {
     const escape = await agent.call('screenshot', { save_to: '../../outside.png' });
     expect(escape.isError).toBe(true);
     const full = await agent.call('screenshot', { full_page: true });
-    expect(pngSize(full.images[0]!.data).width).toBe(1280);
+    expect(pngSize(full.images[0]!.data).width).toBe(1920);
     const region = await agent.call('screenshot', { region: [0, 0, 200, 100] });
     expect(region.text).toContain('region (0,0)-(200,100)');
     fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
@@ -236,19 +252,41 @@ test.describe.serial('internal browser over MCP', () => {
       const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
       return win.contentView.children.map(v => v.getBounds());
     });
-    expect(bounds).toEqual([{ x: 0, y: 60, width: 790, height: 900 }, { x: 800, y: 60, width: 790, height: 900 }]);
+    // agent tabs keep their 1920x1080 page and are drawn scaled to fit the tile, centered
+    expect(bounds).toEqual([{ x: 0, y: 288, width: 790, height: 444 }, { x: 800, y: 288, width: 790, height: 444 }]);
     expect(await agent.ok('tabs_list')).toMatch(/\[on screen\]/);
-    // the agent's screenshot follows the tile size
-    expect(pngSize((await agent.call('screenshot', { tabId: shown[1]!.id })).images[0]!.data)).toEqual({ width: 790, height: 900 });
+    // a small tile changes neither the page's viewport nor the agent's screenshot, and CSS-px clicks still land right
+    await agent.ok('tabs_select', { tabId: shown[1]!.id });
+    expect(await agent.ok('javascript', { code: '[innerWidth, innerHeight].join("x")' })).toBe('1920x1080');
+    await agent.ok('javascript', { code: 'window.__downs = []; addEventListener("mousedown", e => __downs.push(e.clientX + "," + e.clientY), true); 1' });
+    await agent.ok('click', { coordinate: [1500, 900] });
+    const near = (got: string, x: number, y: number) => { const [gx, gy] = got.split(',').map(Number); return Math.abs(gx! - x) <= 3 && Math.abs(gy! - y) <= 3; };
+    expect(near(await agent.ok('javascript', { code: '__downs[0]' }), 1500, 900)).toBe(true);   // a view px is ~2.4 CSS px here
+    const small = await agent.call('screenshot', { tabId: shown[1]!.id });
+    expect(pngSize(small.images[0]!.data)).toEqual({ width: 1920, height: 1080 });
+    fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
+    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab-small-tile.png'), Buffer.from(small.images[0]!.data, 'base64'));
+    // the user's own click in the scaled tile lands on the same page point (the view maps it back)
+    await app.evaluate(({ webContents }, url) => {
+      const wc = webContents.getAllWebContents().find(w => w.getURL() === url);
+      for (const type of ['mouseDown', 'mouseUp'] as const) wc?.sendInputEvent({ type, x: 395, y: 222, button: 'left', clickCount: 1 });
+    }, shown[1]!.url);
+    await expect.poll(async () => (await agent.ok('javascript', { code: '__downs.join(" ")' })).split(' ').length).toBe(2);
+    expect(near(await agent.ok('javascript', { code: '__downs[1]' }), 960, 540)).toBe(true);   // view (395, 222) / scale 790/1920
+    // the window's own capture source, never one found by name: with the suite in parallel other apps' windows are
+    // named "second-brain" too; under load Windows may list the window late or with an empty thumbnail, so ask again
     await page.waitForTimeout(500);
-    const png = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
-      const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
-      const size = win.getContentSize();
-      const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: size[0]!, height: size[1]! } });
-      const src = sources.find(s => s.id === win.getMediaSourceId()) ?? sources.find(s => s.name === 'second-brain');
-      return src ? src.thumbnail.toPNG().toString('base64') : '';
-    });
-    expect(png.length).toBeGreaterThan(1000);
+    let png = '';
+    await expect.poll(async () => {
+      png = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
+        const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
+        const size = win.getContentSize();
+        const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: size[0]!, height: size[1]! } });
+        const src = sources.find(s => s.id === win.getMediaSourceId());
+        return src ? src.thumbnail.toPNG().toString('base64') : '';
+      });
+      return png.length;
+    }, { timeout: 15_000 }).toBeGreaterThan(1000);
     fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
     fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-two-tabs.png'), Buffer.from(png, 'base64'));
     // hiding them parks them offscreen: they keep rendering for the agent

@@ -1,6 +1,7 @@
 // Keyboard handling as pure functions (ADR 0005 keyboard map). `resolveShortcut` turns a keydown into an app command
 // (App.tsx dispatches it); `requestKey` turns 1-9 / Enter / Esc / arrows on a focused question or permission card into
-// an answer (NeedsLane.tsx and the inline RequestPanel use it). Both are pinned by test/unit/keys.test.ts.
+// an answer, and the digit after the last option into "Altro…" (RequestPanel uses it in every size). Both are pinned by
+// test/unit/keys.test.ts.
 import type { Answer, PendingRequest } from '@shared/contract';
 
 export interface KeyLike { key: string; code: string; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }
@@ -9,8 +10,10 @@ export type Command =
   | { type: 'palette' }
   | { type: 'next' }
   | { type: 'stopFocused' }
+  | { type: 'closeFocused' }
   | { type: 'stopAll' }
   | { type: 'toggleView' }
+  | { type: 'toggleBrowsers' }
   | { type: 'maximize' }
   | { type: 'escape' }
   | { type: 'newChat' }
@@ -21,7 +24,10 @@ export type Command =
   | { type: 'forward' }
   | { type: 'center' }
   | { type: 'regia' }
-  | { type: 'map' };
+  | { type: 'regiaRenew' }
+  | { type: 'map' }
+  | { type: 'stato' }
+  | { type: 'settings' };
 
 /** The keyboard map shown in the shortcuts dialog (Ctrl+/), in the same order as resolveShortcut. */
 export const KEYMAP: readonly { keys: string; what: string }[] = [
@@ -32,12 +38,17 @@ export const KEYMAP: readonly { keys: string; what: string }[] = [
   { keys: 'Alt ← · Alt →', what: 'Indietro / avanti' },
   { keys: 'G poi lettera', what: 'Vai a una sezione (fuori dai campi di testo)' },
   { keys: 'Ctrl R', what: 'Regia (da qualsiasi pagina)' },
+  { keys: 'Ctrl Shift R', what: 'Nuova Regia: ricomincia da capo o cambia motore' },
   { keys: 'Ctrl Shift N', what: 'Notifiche' },
+  { keys: 'Ctrl Shift S', what: 'Stato: chat e PR in un colpo d’occhio' },
   { keys: 'Ctrl Shift M', what: 'Mappa 3D' },
   { keys: 'Ctrl N', what: 'Nuova chat' },
+  { keys: 'Ctrl ,', what: 'Impostazioni' },
   { keys: 'Ctrl .', what: 'Ferma la chat selezionata' },
+  { keys: 'Ctrl W', what: 'Chiudi la chat selezionata (Annulla per 6 secondi; non la Regia)' },
   { keys: 'Ctrl Shift .', what: 'Ferma tutto' },
   { keys: 'Ctrl Shift V', what: 'Cambia vista (Mosaico / Corsie)' },
+  { keys: 'Ctrl Shift B', what: 'Nascondi / mostra i browser (continuano a lavorare)' },
   { keys: 'F11', what: 'Ingrandisci la tessera selezionata' },
   { keys: 'Ctrl Shift F', what: 'Modalità focus' },
   { keys: 'Ctrl 0', what: 'Vai alla Regia' },
@@ -56,9 +67,12 @@ export function resolveShortcut(e: KeyLike): Command | null {
   if (ctrl && e.shiftKey) {
     if (e.code === 'Period') return { type: 'stopAll' };
     if (e.code === 'KeyV') return { type: 'toggleView' };
+    if (e.code === 'KeyB') return { type: 'toggleBrowsers' };
     if (e.code === 'KeyF') return { type: 'focusMode' };
     if (e.code === 'KeyN') return { type: 'center' };
     if (e.code === 'KeyM') return { type: 'map' };
+    if (e.code === 'KeyR') return { type: 'regiaRenew' };
+    if (e.code === 'KeyS') return { type: 'stato' };
     return null;
   }
   if (ctrl) {
@@ -67,7 +81,9 @@ export function resolveShortcut(e: KeyLike): Command | null {
     if (e.code === 'KeyN') return { type: 'newChat' };
     if (e.code === 'KeyR') return { type: 'regia' };
     if (e.code === 'Period') return { type: 'stopFocused' };
+    if (e.key.toLowerCase() === 'w') return { type: 'closeFocused' }; // the character, like Electron's menu (AZERTY)
     if (e.code === 'Slash' || e.key === '/') return { type: 'shortcuts' };
+    if (e.code === 'Comma') return { type: 'settings' };
     const digit = /^Digit([0-9])$/.exec(e.code) ?? /^Numpad([0-9])$/.exec(e.code);
     if (digit) return { type: 'focusTile', index: Number(digit[1]) };
     return null;
@@ -95,7 +111,8 @@ export function goSequence(pendingAt: number | null, e: KeyLike, now: number, ta
 export interface Draft { step: number; picks: number[]; cursor: number; answers: Record<string, string | string[]> }
 export const emptyDraft: Draft = { step: 0, picks: [], cursor: 0, answers: {} };
 
-export interface KeyResult { handled: boolean; draft: Draft; answer?: Answer; blur?: boolean }
+/** other: open the free-text "Altro…" answer (the digit right after the last option). */
+export interface KeyResult { handled: boolean; draft: Draft; answer?: Answer; blur?: boolean; other?: boolean }
 
 /** Options of a permission card, in key order (1, 2, 3). */
 export const PERMISSION_OPTIONS = [
@@ -110,11 +127,15 @@ export function permissionAnswer(i: number): Answer {
   return { kind: 'permission', allow: false };
 }
 
-/** Which option is "recommended" (highlighted, Enter picks it first): the one that says so, else the first. */
-export function recommendedIndex(labels: readonly string[]): number {
-  const i = labels.findIndex(l => /consigliat|recommended/i.test(l));
-  return i >= 0 ? i : 0;
+const REC = /\s*\((consigliat[oa]|recommended)\)\s*/i;
+/** The option the agent marked as recommended ("… (consigliato)" in the label, or a description that starts with it);
+ *  -1 when none is marked (then no option is shown as recommended). */
+export function markedRecommended(options: readonly { label: string; description?: string }[]): number {
+  return options.findIndex(o => REC.test(o.label) || /^(consigliat|recommended)/i.test(o.description ?? ''));
 }
+/** An option label without its "(consigliato)" marker, and its description without a leading "consigliato:". */
+export const cleanLabel = (l: string): string => l.replace(REC, ' ').trim();
+export const cleanDescription = (d: string): string => d.replace(/^(consigliat[oa]|recommended)\b[:.,;–-]?\s*/i, '').trim();
 
 /** Pick option `index` of the current question (click or digit); returns the next draft and, when complete, the answer. */
 export function pickOption(req: PendingRequest, draft: Draft, index: number): KeyResult {
@@ -139,16 +160,18 @@ export function answerText(req: PendingRequest, draft: Draft, text: string): Key
   const qs = req.questions ?? [];
   const q = qs[draft.step];
   if (!q) return { handled: false, draft };
-  return commit(qs.length, { ...draft, answers: { ...draft.answers, [q.question]: q.multiSelect ? [t] : t } });
+  // multi-select: the ticked options stay, the text is added to them
+  const ticked = q.multiSelect ? draft.picks.map(i => q.options[i]?.label).filter((l): l is string => !!l) : [];
+  return commit(qs.length, { ...draft, answers: { ...draft.answers, [q.question]: q.multiSelect ? [...ticked, t] : t } });
 }
 
-/** Confirm the picks of a multi-select question. */
+/** Confirm the picks of a multi-select question; with nothing ticked it does nothing (never a choice the user did not make). */
 export function confirmPicks(req: PendingRequest, draft: Draft): KeyResult {
   const qs = req.questions ?? [];
   const q = qs[draft.step];
   if (!q || !q.multiSelect) return { handled: false, draft };
-  const picks = draft.picks.length ? draft.picks : [draft.cursor];
-  const labels = picks.map(i => q.options[i]?.label).filter((l): l is string => !!l);
+  if (!draft.picks.length) return { handled: true, draft };
+  const labels = draft.picks.map(i => q.options[i]?.label).filter((l): l is string => !!l);
   return commit(qs.length, { ...draft, answers: { ...draft.answers, [q.question]: labels } });
 }
 
@@ -173,17 +196,19 @@ export function requestKey(req: PendingRequest, draft: Draft, e: Pick<KeyLike, '
   const n = q.options.length;
   if (/^[1-9]$/.test(k)) {
     const i = Number(k) - 1;
+    if (i === n) return { handled: true, draft, other: true };
     return i < n ? pickOption(req, draft, i) : { handled: true, draft };
   }
   if (k === 'ArrowDown' || k === 'ArrowRight') return { handled: true, draft: { ...draft, cursor: (draft.cursor + 1) % n } };
   if (k === 'ArrowUp' || k === 'ArrowLeft') return { handled: true, draft: { ...draft, cursor: (draft.cursor - 1 + n) % n } };
   if (k === 'Enter') return q.multiSelect ? confirmPicks(req, draft) : pickOption(req, draft, draft.cursor);
+  if (k === ' ' && q.multiSelect) return pickOption(req, draft, draft.cursor);
   if (k === 'Escape') return { handled: true, draft, blur: true };
   return { handled: false, draft };
 }
 
-/** The highlight a fresh draft starts on: the recommended option of the first question. */
+/** The highlight a fresh draft starts on: the option the agent marked as recommended, else the first. */
 export function initialDraft(req: PendingRequest): Draft {
   const q = req.questions?.[0];
-  return { ...emptyDraft, cursor: q ? recommendedIndex(q.options.map(o => `${o.label} ${o.description ?? ''}`)) : 0 };
+  return { ...emptyDraft, cursor: q ? Math.max(0, markedRecommended(q.options)) : 0 };
 }

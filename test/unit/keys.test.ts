@@ -2,7 +2,7 @@
 // Esc / arrows answering of a focused question or permission card.
 import { describe, expect, it } from 'vitest';
 import type { PendingRequest } from '@shared/contract';
-import { answerText, goSequence, initialDraft, pickOption, requestKey, resolveShortcut, type Draft, type KeyLike } from '../../src/renderer/lib/keys';
+import { answerText, cleanDescription, cleanLabel, goSequence, initialDraft, markedRecommended, pickOption, requestKey, resolveShortcut, type Draft, type KeyLike } from '../../src/renderer/lib/keys';
 
 const k = (key: string, code: string, mods: Partial<KeyLike> = {}): KeyLike => ({ key, code, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
 const ctrl = { ctrlKey: true };
@@ -24,8 +24,10 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(k('k', 'KeyK', ctrl))).toEqual({ type: 'palette' });
     expect(resolveShortcut(k('j', 'KeyJ', ctrl))).toEqual({ type: 'next' });
     expect(resolveShortcut(k('.', 'Period', ctrl))).toEqual({ type: 'stopFocused' });
+    expect(resolveShortcut(k('w', 'KeyW', ctrl))).toEqual({ type: 'closeFocused' });
     expect(resolveShortcut(k(':', 'Period', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'stopAll' }); // Italian layout: Shift+. = ":"
     expect(resolveShortcut(k('V', 'KeyV', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'toggleView' });
+    expect(resolveShortcut(k('B', 'KeyB', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'toggleBrowsers' });
     expect(resolveShortcut(k('F', 'KeyF', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'focusMode' });
     expect(resolveShortcut(k('n', 'KeyN', ctrl))).toEqual({ type: 'newChat' });
     expect(resolveShortcut(k('F11', 'F11'))).toEqual({ type: 'maximize' });
@@ -40,6 +42,7 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(k('ArrowRight', 'ArrowRight', { altKey: true }))).toEqual({ type: 'forward' });
     expect(resolveShortcut(k('N', 'KeyN', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'center' });
     expect(resolveShortcut(k('r', 'KeyR', ctrl))).toEqual({ type: 'regia' });
+    expect(resolveShortcut(k('R', 'KeyR', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'regiaRenew' });
     expect(resolveShortcut(k('M', 'KeyM', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'map' });
   });
 
@@ -114,6 +117,16 @@ describe('requestKey', () => {
     expect(key(r, d, 'Enter').answer).toEqual({ kind: 'question', answers: { 'Cosa faccio?': ['Opzione 2 (consigliato)', 'Opzione 3'] } });
   });
 
+  it('multi-select: arrows move, Space ticks the highlighted option', () => {
+    const r = question(true);
+    let d = initialDraft(r);
+    d = key(r, d, 'ArrowDown').draft;
+    d = key(r, d, ' ').draft;
+    expect(d.picks).toEqual([d.cursor]);
+    expect(key(r, d, ' ').draft.picks).toEqual([]);
+    expect(key(question(false), initialDraft(question(false)), ' ').handled).toBe(false);
+  });
+
   it('several questions are answered one after the other, then sent together', () => {
     const first = key(twoQuestions, initialDraft(twoQuestions), '2');
     expect(first.answer).toBeUndefined();
@@ -136,6 +149,38 @@ describe('requestKey', () => {
     expect(answerText(question(), initialDraft(question()), ' a modo mio ').answer).toEqual({ kind: 'question', answers: { 'Cosa faccio?': 'a modo mio' } });
     expect(answerText(permission, initialDraft(permission), 'usa npm ci').answer).toEqual({ kind: 'permission', allow: false, message: 'usa npm ci' });
     expect(answerText(permission, initialDraft(permission), '   ').handled).toBe(false);
+  });
+
+  it('the digit after the last option opens "Altro…" (never an answer)', () => {
+    const r = question();
+    const out = key(r, initialDraft(r), '4');
+    expect(out).toMatchObject({ handled: true, other: true });
+    expect(out.answer).toBeUndefined();
+    expect(key(r, initialDraft(r), '5').other).toBeUndefined();
+  });
+
+  it('only an option the agent marked is "recommended"; markers are cleaned from labels and descriptions', () => {
+    expect(markedRecommended([{ label: 'A' }, { label: 'B (consigliato)' }])).toBe(1);
+    expect(markedRecommended([{ label: 'A' }, { label: 'B', description: 'Consigliata: è più sicura' }])).toBe(1);
+    expect(markedRecommended([{ label: 'A' }, { label: 'B' }])).toBe(-1);
+    expect(cleanLabel('Apro un bug (consigliato)')).toBe('Apro un bug');
+    expect(cleanDescription('consigliato: è più sicura')).toBe('è più sicura');
+    expect(cleanDescription('Consigliata, perché veloce')).toBe('perché veloce');
+  });
+
+  it('multi-select: Enter with nothing ticked sends nothing; free text keeps the ticked options', () => {
+    const r = question(true);
+    const none = key(r, initialDraft(r), 'Enter');
+    expect(none.handled).toBe(true);
+    expect(none.answer).toBeUndefined();
+    const d = key(r, initialDraft(r), '1').draft;
+    expect(answerText(r, d, 'e anche i log').answer).toEqual({ kind: 'question', answers: { 'Cosa faccio?': ['Opzione 1', 'e anche i log'] } });
+  });
+
+  it('the highlight starts on an option marked recommended, never on one that only mentions it', () => {
+    const r: PendingRequest = { ...question(), questions: [{ question: 'Q?', multiSelect: false, options: [{ label: 'Elimino il branch', description: 'Non consigliato: perdi il lavoro' }, { label: 'Lo tengo' }] }] };
+    expect(initialDraft(r).cursor).toBe(0);
+    expect(markedRecommended(r.questions![0]!.options)).toBe(-1);
   });
 
   it('pickOption by click works like the digit', () => {

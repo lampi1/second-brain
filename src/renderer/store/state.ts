@@ -2,8 +2,10 @@
 // actions; every update keeps the references of the parts that did not change, so a tile that selects
 // `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others).
 // Used by store.ts (the live store) and pinned by test/unit/state.test.ts.
-import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, PendingRequest, Settings, Usage } from '@shared/contract';
-import { sameDay } from '../lib/format';
+import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, ImageAttachment, PendingRequest, Settings, Usage } from '@shared/contract';
+
+/** A message waiting for its chat to be free: an id of its own (two equal texts stay two messages), text, images. */
+export interface QueuedMsg { id: string; text: string; images?: readonly ImageAttachment[] }
 
 export interface AppState {
   ready: boolean;
@@ -19,7 +21,7 @@ export interface AppState {
   /** newest first, capped */
   feed: readonly FeedEvent[];
   /** messages typed while a chat was busy, sent when it becomes idle */
-  queued: Readonly<Record<string, readonly string[]>>;
+  queued: Readonly<Record<string, readonly QueuedMsg[]>>;
   /** the app settings (mute per kind, do-not-disturb, view, theme), when main has them */
   settings: Settings | null;
 }
@@ -38,8 +40,12 @@ export type Action =
   | { type: 'feed:events'; events: FeedEvent[] }
   | { type: 'usage'; usage: Usage }
   | { type: 'info'; info: AppInfo }
-  | { type: 'queue'; chatId: string; text: string }
-  | { type: 'unqueue'; chatId: string; index: number }
+  | { type: 'cli'; cli: NonNullable<AppInfo['cli']> }
+  /** front: back at the head of the queue (a send that failed keeps its place) */
+  | { type: 'queue'; chatId: string; msg: QueuedMsg; front?: boolean }
+  | { type: 'unqueue'; chatId: string; id: string }
+  /** "Invia subito": that queued message moves to the front, the others keep their order behind it */
+  | { type: 'promote'; chatId: string; id: string }
   | { type: 'settings'; settings: Settings };
 
 export const MAX_ITEMS = 600;
@@ -48,11 +54,19 @@ export const MAX_FEED = 300;
 const byAt = (a: { at: number }, b: { at: number }) => a.at - b.at;
 const pendingKey = (p: { chatId: string; id: string }) => `${p.chatId}\u0000${p.id}`;
 
+/** A Cursor chat with no cost of its own gets the Cursor ledger's estimate for its session (Usage.cursorChats). */
+export function withLedger(c: ChatSummary, u: Usage | null): ChatSummary {
+  const v = c.harness === 'cursor' && c.costKnown === false && c.sessionId ? u?.cursorChats?.[c.sessionId] : undefined;
+  if (v === c.costLedgerUsd) return c;
+  if (v === undefined) { const { costLedgerUsd: _, ...rest } = c; return rest; }
+  return { ...c, costLedgerUsd: v };
+}
+
 export function reduce(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'init': {
       const chats: Record<string, ChatSummary> = {};
-      for (const c of a.chats) chats[c.id] = c;
+      for (const c of a.chats) chats[c.id] = withLedger(c, a.usage);
       // keep chats that arrived by event while the initial load was in flight
       for (const id of s.order) if (!chats[id] && s.chats[id]) chats[id] = s.chats[id];
       const order = [...a.chats.map(c => c.id), ...s.order.filter(id => !a.chats.some(c => c.id === id))];
@@ -60,6 +74,7 @@ export function reduce(s: AppState, a: Action): AppState {
       return { ...s, ready: true, chats, order, pending, tabs: a.tabs, feed: mergeFeed(s.feed, a.feed), usage: a.usage ?? s.usage, info: a.info ?? s.info };
     }
     case 'info': return { ...s, info: a.info };
+    case 'cli': return s.info ? { ...s, info: { ...s.info, cli: a.cli } } : s;
     case 'items': {
       const have = s.items[a.chatId] ?? [];
       const loaded = new Map(a.items.map(i => [i.id, i]));
@@ -70,8 +85,10 @@ export function reduce(s: AppState, a: Action): AppState {
     }
     case 'chat:updated': {
       const prev = s.chats[a.chat.id];
-      if (prev && shallowEqual(prev, a.chat)) return s;
-      return { ...s, chats: { ...s.chats, [a.chat.id]: a.chat }, order: prev ? s.order : [...s.order, a.chat.id] };
+      const chat = withLedger(a.chat, s.usage);
+      if (prev && shallowEqual(prev, chat)) return s;
+      const chats = { ...s.chats, [a.chat.id]: chat };
+      return { ...s, chats, order: prev ? s.order : [...s.order, a.chat.id] };
     }
     case 'chat:removed': {
       if (!s.chats[a.chatId]) return s;
@@ -103,17 +120,34 @@ export function reduce(s: AppState, a: Action): AppState {
     }
     case 'browser:tabs': return { ...s, tabs: a.tabs };
     case 'feed:events': return a.events.length ? { ...s, feed: mergeFeed(s.feed, a.events) } : s;
-    case 'usage': return { ...s, usage: a.usage };
+    case 'usage': {
+      // Cursor chats whose engine reports no cost take today's ledger estimate (unchanged chats keep their reference)
+      let chats = s.chats;
+      for (const [id, c] of Object.entries(s.chats)) {
+        const next = withLedger(c, a.usage);
+        if (next.costLedgerUsd !== c.costLedgerUsd) chats = { ...chats, [id]: next };
+      }
+      return { ...s, usage: a.usage, chats };
+    }
     case 'settings': return { ...s, settings: a.settings };
     case 'queue': {
-      const t = a.text.trim();
-      if (!t) return s;
-      return { ...s, queued: { ...s.queued, [a.chatId]: [...(s.queued[a.chatId] ?? []), t] } };
+      const text = a.msg.text.trim();
+      if (!text && !a.msg.images?.length) return s;
+      const q = s.queued[a.chatId] ?? [];
+      if (q.some(m => m.id === a.msg.id)) return s;
+      const msg = { ...a.msg, text };
+      return { ...s, queued: { ...s.queued, [a.chatId]: a.front ? [msg, ...q] : [...q, msg] } };
     }
     case 'unqueue': {
       const q = s.queued[a.chatId];
-      if (!q || a.index < 0 || a.index >= q.length) return s;
-      return { ...s, queued: { ...s.queued, [a.chatId]: q.filter((_, i) => i !== a.index) } };
+      if (!q || !q.some(m => m.id === a.id)) return s;
+      return { ...s, queued: { ...s.queued, [a.chatId]: q.filter(m => m.id !== a.id) } };
+    }
+    case 'promote': {
+      const q = s.queued[a.chatId];
+      const i = q ? q.findIndex(m => m.id === a.id) : -1;
+      if (!q || i <= 0) return s;
+      return { ...s, queued: { ...s.queued, [a.chatId]: [q[i]!, ...q.filter(m => m.id !== a.id)] } };
     }
   }
 }
@@ -156,39 +190,43 @@ export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
 export const isBusy = (c: ChatSummary) => c.state === 'running' || c.state === 'starting';
 
 /** The queued message to send now: a chat that just went from busy/waiting to idle with something in its queue. */
-export function toFlush(prev: ChatSummary | undefined, next: ChatSummary, queue: readonly string[] | undefined): string | null {
+export function toFlush(prev: ChatSummary | undefined, next: ChatSummary, queue: readonly QueuedMsg[] | undefined): QueuedMsg | null {
   if (!queue || queue.length === 0) return null;
   if (next.state !== 'idle' || next.pending > 0) return null;
   if (prev && prev.state === 'idle') return null;
   return queue[0] ?? null;
 }
 
-/** Corsie columns: waiting (oldest request first), working (creation order), finished today (newest first) and the
- *  older finished/closed chats ("Precedenti", newest first: restored chats can carry an old updatedAt). */
-export function corsie(s: Pick<AppState, 'chats' | 'order' | 'pending'>, now: number): { waiting: ChatSummary[]; working: ChatSummary[]; done: ChatSummary[]; older: ChatSummary[] } {
+/** Corsie columns: waiting (oldest request first) and working: the busy chats (creation order), then the finished
+ *  ones still open (newest first) until they close by themselves (lib/autoclose.ts). */
+export function corsie(s: Pick<AppState, 'chats' | 'order' | 'pending'>): { waiting: ChatSummary[]; working: ChatSummary[] } {
   const oldest = new Map<string, number>();
   for (const p of s.pending) if (!oldest.has(p.chatId)) oldest.set(p.chatId, p.at);
   const waiting: ChatSummary[] = [];
   const working: ChatSummary[] = [];
   const done: ChatSummary[] = [];
-  const older: ChatSummary[] = [];
   for (const id of s.order) {
     const c = s.chats[id];
-    if (!c || c.isRegia) continue;
+    if (!c || c.isRegia || c.closedAt || c.space === 'app') continue; // closed chats: the palette (Ctrl+K); app chats: their section
     if (c.state === 'waiting' || c.state === 'error' || c.pending > 0 || oldest.has(id)) waiting.push(c);
-    else if (isBusy(c)) working.push(c);
-    else if (sameDay(c.updatedAt, now)) done.push(c);
-    else older.push(c);
+    else if (isBusy(c) || c.queued) working.push(c); // waiting in the CPU queue (ADR 0036): about to work, never "finite"
+    else done.push(c);
   }
   waiting.sort((a, b) => (oldest.get(a.id) ?? a.updatedAt) - (oldest.get(b.id) ?? b.updatedAt));
   done.sort((a, b) => b.updatedAt - a.updatedAt);
-  older.sort((a, b) => b.updatedAt - a.updatedAt);
-  return { waiting, working, done, older };
+  return { waiting, working: [...working, ...done] };
 }
 
 export function runningCount(s: Pick<AppState, 'chats'>): number {
   let n = 0;
   for (const c of Object.values(s.chats)) if (isBusy(c)) n++;
+  return n;
+}
+
+/** Chats waiting in the CPU queue (ADR 0036), archived ones aside. */
+export function queuedCount(s: Pick<AppState, 'chats'>): number {
+  let n = 0;
+  for (const c of Object.values(s.chats)) if (c.queued && !c.closedAt) n++;
   return n;
 }
 

@@ -2,17 +2,20 @@
 // horizontal bars (categorical: one palette color per named thing, or grouped series), stacked bars and lines. Each
 // chart is a card with a title, an optional explain block, a legend when there is more than one series, a hover
 // tooltip, CSV export and a "Dati" toggle that shows the numbers as a table (the accessible alternative; the SVG has
-// a <title> and a <desc> with the key fact). Sizes follow the container (ResizeObserver). Used by Oggi, Costi,
-// Qualità, Collaborazione.
+// a <title> and a <desc> with the key fact). Sizes follow the container (ResizeObserver). Used by Costi and
+// Miglioramento; a chart given `discuss` ends with the discussion bar (Costi).
 import { useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { catColor, labelStep, niceMax, niceScale, ticks, tickLabel } from '../lib/chart';
 import { fmt } from '../lib/format';
 import { fileSafe, stamp, toCsv } from '../lib/table';
 import { Explain, type ExplainProps } from './States';
 import { download, IconDownload } from './ui';
+import { DiscussBar } from './Discuss';
+import type { Quote } from '../lib/discuss';
 
 export interface Series { label: string; values: number[]; color?: string }
-interface Common { title: string; note?: ReactNode; name: string; money?: boolean; explain?: ExplainProps; testId?: string }
+/** discuss: the numbers the discussion bar quotes (ADR 0037); no bar without it */
+interface Common { title: string; note?: ReactNode; name: string; money?: boolean; explain?: ExplainProps; testId?: string; discuss?: Quote }
 
 function useWidth<T extends HTMLElement>(): [RefObject<T | null>, number] {
   const ref = useRef<T>(null);
@@ -42,7 +45,7 @@ function Tip({ tip }: { tip: TipState | null }) {
 
 const val = (v: number, money?: boolean) => (money ? fmt.usd(v) : v.toLocaleString('it-IT', { maximumFractionDigits: 1 }));
 
-function ChartCard({ title, note, explain, name, labels, series, money, legend, children, testId }: Common & { labels: string[]; series: Series[]; legend?: boolean; children: ReactNode }) {
+function ChartCard({ title, note, explain, name, labels, series, money, legend, children, testId, discuss }: Common & { labels: string[]; series: Series[]; legend?: boolean; children: ReactNode }) {
   const [table, setTable] = useState(false);
   const csv = () => {
     const cols = [{ key: 'label', label: 'voce' }, ...series.map((s, i) => ({ key: `s${i}`, label: s.label || title }))];
@@ -68,6 +71,7 @@ function ChartCard({ title, note, explain, name, labels, series, money, legend, 
           </table>
         </div>
       ) : children}
+      {discuss && <DiscussBar topic={{ kind: 'quote', quote: discuss }} testId={`${testId ?? `bx-chart-${fileSafe(name)}`}-discuss`} />}
     </figure>
   );
 }

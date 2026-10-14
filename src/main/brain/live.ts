@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import type { FeedEvent, Priority } from '../../shared/contract';
+import type { ChatSummary, FeedEvent, Priority } from '../../shared/contract';
 import { log, errText } from '../log';
 import { runNode, type NodeRunner } from './node';
 
@@ -19,7 +19,9 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
   login: { label: 'Accesso da rifare', priority: 'urgent' },   // browser: an agent waits for the user to sign in to an environment
   question: { label: 'Domanda per te', priority: 'urgent' },
-  'chat-done': { label: 'Chat finita', priority: 'normal' },
+  'chat-done': { label: 'Chat finita', priority: 'quiet' },     // pull-only (the user, 2026-10-13: 627 toasts a day)
+  'chat-failed': { label: 'Chat finita con errore', priority: 'urgent' }, // an app chat's turn ended with an error
+  'chat-closed': { label: 'Chat chiusa', priority: 'quiet' },  // the Regia closed a chat (app_close_chat)
   error: { label: 'Errore registrato', priority: 'normal' },
   idea: { label: 'Idea aggiunta', priority: 'normal' },
   reflection: { label: "Riflessione dell'IA", priority: 'normal' },
@@ -35,6 +37,8 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'sync-ok': { label: 'GitHub aggiornato', priority: 'quiet' },
   'sync-blocked': { label: 'Pubblicazione bloccata dal controllo', priority: 'normal' },
   'sync-error': { label: 'Pubblicazione non riuscita', priority: 'normal' },
+  devops: { label: 'DevOps', priority: 'normal' },   // devops/service.ts: news on my work items, PRs and the tickets I follow
+  'devops-alert': { label: 'DevOps per te', priority: 'normal' },  // devops/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
 };
 
 /** An event before stamping. `priority` overrides the kind's default (a budget alert at 100 % is urgent). */
@@ -130,8 +134,20 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
   return out;
 }
 
-export const romeDay = (t = Date.now()): string =>
-  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t));
+/** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. A Regia's own turns are no event (it reports in its own tile);
+ *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
+export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'appRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
+  if (!c || c.isRegia || c.appRegia) return null;
+  // the CLI died mid-turn (no result): a failure too, with the engine's error as the detail
+  if (crash) return { kind: 'chat-failed', title: c.title || 'Chat', detail: cut(`il motore si è chiuso a metà turno: ${crash}`, 200), chatId: c.id };
+  return c.lastResult?.isError
+    ? { kind: 'chat-failed', title: c.title || 'Chat', detail: 'il turno è finito con un errore', chatId: c.id }
+    : { kind: 'chat-done', title: c.title || 'Chat', detail: 'ha finito il turno', chatId: c.id };
+}
+
+const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
+// one formatter for all calls: building one costs ~0.25 ms, and the Cursor ledger asks this for every row every 30 s
+export const romeDay = (t = Date.now()): string => ROME_DAY.format(new Date(t));
 
 /** Paths under the brain that never produce events (git internals, dependencies, worktree copies of the brain). */
 export const IGNORED = /^(\.git|node_modules|app\/node_modules|\.claude\/worktrees|out|test-results)\//;
@@ -153,6 +169,8 @@ export interface LiveOptions {
   debounceMs?: number;        // default 400 ms
   /** chats to leave out of the poll (the app's own chats: their events come from the chat manager) */
   skipChat?: (id: string) => boolean;
+  /** every changed path (relative, forward slashes), before any parsing: e.g. the Procedure page's list */
+  onFile?: (f: string) => void;
 }
 
 export class Live {
@@ -185,6 +203,7 @@ export class Live {
       this.snap.set(s.id, new Map(rows.map(r => [r.key, r])));
     }
     this.persist();
+    this.hashPlaybooks();
     if (away.length) this.o.onEvents(away.map(e => ({ ...e, away: true })));
     try {
       this.watcher = fs.watch(this.o.root, { recursive: true }, (_ev, f) => { if (f) this.changed(String(f).replace(/\\/g, '/')); });
@@ -197,6 +216,28 @@ export class Live {
       this.chatTimer = setInterval(() => void this.pollChats(false), this.o.chatsEveryMs ?? 15000);
     } else log.warn('brain', 'no chats.mjs in this brain: no chat events', { data: { file: this.chatsScript } });
     log.info('brain', 'live feed started', { data: { root: this.o.root, sources: this.src.map(x => x.id), away: away.length } });
+  }
+
+  /** content hash of each playbook: a save that leaves the text as it was (a touch, an editor re-save) is no event */
+  private playbooks = new Map<string, string>();
+
+  /** Baseline of the playbooks' hashes (at start): only a later change of content is an event. */
+  private hashPlaybooks(): void {
+    let names: string[] = [];
+    try { names = fs.readdirSync(path.join(this.o.root, 'playbooks')).filter(n => n.endsWith('.md')); } catch { return; }
+    for (const n of names) { const h = this.fileHash(`playbooks/${n}`); if (h) this.playbooks.set(`playbooks/${n}`, h); }
+  }
+
+  private fileHash(f: string): string | null {
+    try { return hash(fs.readFileSync(path.join(this.o.root, f))); } catch { return null; }
+  }
+
+  /** A playbook event when its content changed since the last look (deleted or unreadable: nothing). */
+  playbookEvent(f: string): RawEvent[] {
+    const h = this.fileHash(f);
+    if (!h || this.playbooks.get(f) === h) return [];
+    this.playbooks.set(f, h);
+    return [{ kind: 'playbook', title: f.replace(/^playbooks\/|\.md$/g, ''), detail: '', file: f }];
   }
 
   stop(): void {
@@ -248,7 +289,8 @@ export class Live {
   /** A path (relative to the brain, forward slashes) changed on disk. */
   changed(f: string): void {
     if (this.stopped || IGNORED.test(f)) return;
-    if (/^playbooks\/[^/]+\.md$/.test(f)) return this.debounce(f, () => this.o.onEvents([{ kind: 'playbook', title: f.replace(/^playbooks\/|\.md$/g, ''), detail: '', file: f }]));
+    this.o.onFile?.(f);
+    if (/^playbooks\/[^/]+\.md$/.test(f)) return this.debounce(f, () => { const ev = this.playbookEvent(f); if (ev.length) this.o.onEvents(ev); });
     if (/^ops\/state\/inbox\//.test(f)) return this.debounce('inbox', () => this.o.onEvents(this.inboxEvents()), 3000);
     const s = this.src.find(x => this.fileOf(x) === f);
     if (!s) return;

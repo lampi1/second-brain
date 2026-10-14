@@ -3,13 +3,18 @@
 // with selectors, so streaming one chat re-renders only that chat's tile. The actions here are the only place the UI
 // calls main (invoke), with optimistic updates and an error toast with the cause on failure.
 // Used by every component; App.tsx calls startStore() once.
-import type { Answer, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode, SettingsPatch } from '@shared/contract';
+import type { Answer, ChatSummary, CliStatus, Effort, HandoffInfo, Harness, ImageAttachment, NewChat, PendingRequest, PermissionMode, SettingsPatch } from '@shared/contract';
 import { sb } from '../sb';
 import { createStore } from './createStore';
-import { initialState, isBusy, reduce, toFlush, type Action, type AppState } from './state';
+import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
 import { announce, hideChat, setPrefs, toast, ui } from './ui';
+import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
+import { setMark, type Mark } from '../lib/marks';
+import { now as clockNow } from '../lib/clock';
 
 export const app = createStore<AppState>(initialState, { batch: true });
+/** How often streamed text reaches the screen (startStore). */
+export const STREAM_MS = 100;
 export const useApp = app.use;
 
 export function dispatch(a: Action): void {
@@ -18,8 +23,10 @@ export function dispatch(a: Action): void {
   if (next === prev) return;
   app.set(next);
   if (a.type === 'chat:updated') {
-    const text = toFlush(prev.chats[a.chat.id], a.chat, next.queued[a.chat.id]);
-    if (text !== null) { dispatch({ type: 'unqueue', chatId: a.chat.id, index: 0 }); void sendNow(a.chat.id, text); }
+    const msg = toFlush(prev.chats[a.chat.id], a.chat, next.queued[a.chat.id]);
+    if (msg) { dispatch({ type: 'unqueue', chatId: a.chat.id, id: msg.id }); void sendNow(a.chat.id, withNotes(a.chat.id, msg)); }
+    // free again with only notes to tell (a Mandato or Non serve while it worked): one message for all of them
+    else if (isFree(a.chat) && !(prev.chats[a.chat.id] && isFree(prev.chats[a.chat.id]!))) tellNotes(a.chat.id);
   }
   if (a.type === 'pending:added') {
     const c = next.chats[a.req.chatId];
@@ -37,15 +44,33 @@ export function startStore(): void {
   started = true;
   let loaded = false;
   const buffer: Action[] = [];
-  const put = (a: Action) => (loaded ? dispatch(a) : buffer.push(a));
+  const now = (a: Action) => (loaded ? dispatch(a) : buffer.push(a));
+  // Streamed text comes as new versions of the same item (main sends one per chat every ~100 ms): they are applied
+  // together every STREAM_MS, so every chat that changed shows its new words in the same single render, a step at a
+  // time instead of word by word ("Lag nell'app", owner 2026-10-12). Anything else first applies what is held, so
+  // the order on screen never changes (a chat never reads "finito" above words still to come).
+  const held = new Map<string, Action>();
+  let heldTimer: ReturnType<typeof setTimeout> | null = null;
+  const release = () => {
+    if (heldTimer) { clearTimeout(heldTimer); heldTimer = null; }
+    const all = [...held.values()];
+    held.clear();
+    for (const a of all) now(a);
+  };
+  const put = (a: Action) => { if (held.size) release(); now(a); };
   sb.on('chat:updated', chat => put({ type: 'chat:updated', chat }));
   sb.on('chat:removed', ({ chatId }) => put({ type: 'chat:removed', chatId }));
-  sb.on('chat:item', ({ chatId, item, replace }) => put({ type: 'chat:item', chatId, item, replace }));
+  sb.on('chat:item', ({ chatId, item, replace }) => {
+    if (!replace) { put({ type: 'chat:item', chatId, item, replace }); return; }
+    held.set(`${chatId}/${item.id}`, { type: 'chat:item', chatId, item, replace });
+    heldTimer ??= setTimeout(release, STREAM_MS);
+  });
   sb.on('pending:added', req => put({ type: 'pending:added', req }));
   sb.on('pending:resolved', ({ chatId, requestId }) => put({ type: 'pending:resolved', chatId, requestId }));
   sb.on('browser:tabs', tabs => put({ type: 'browser:tabs', tabs }));
   sb.on('feed:events', events => put({ type: 'feed:events', events }));
   sb.on('usage', usage => put({ type: 'usage', usage }));
+  sb.on('cli:ready', cli => put({ type: 'cli', cli }));
   const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
   syncSettings();
   void Promise.all([
@@ -72,17 +97,22 @@ function syncSettings(): void {
     dispatch({ type: 'settings', settings: s });
     setPrefs({ view: s.view === 'corsie' ? 'corsie' : 'mosaico', theme: s.theme });
   }).catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | null = null;
   sb.on('settings:changed', c => {
     dispatch({ type: 'settings', settings: c.settings });
+    // a newer local choice is waiting to be saved: an older echo (light, then dark at once) must not undo it
+    if (timer) return;
     known = { view: c.settings.view, theme: c.settings.theme };
     if (c.key === 'view' || c.key === 'theme') setPrefs({ view: c.settings.view === 'corsie' ? 'corsie' : 'mosaico', theme: c.settings.theme });
   });
-  let timer: ReturnType<typeof setTimeout> | null = null;
   ui.subscribe(() => {
     const p = ui.get().prefs;
-    if (!known || (known.view === p.view && known.theme === p.theme)) return;
+    if (!known) return;
+    // back to the saved value before the pending save (light, then dark at once): that save must not happen
+    if (known.view === p.view && known.theme === p.theme) { if (timer) { clearTimeout(timer); timer = null; } return; }
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
+      timer = null;
       const next = { view: p.view, theme: p.theme };
       known = next;
       void sb.invoke('settings:set', next).catch(() => {});
@@ -100,31 +130,132 @@ export async function refreshInfo(): Promise<void> {
 
 // ---------------------------------------------------------------- actions
 
-async function sendNow(chatId: string, text: string, before?: ChatSummary, optimistic?: ChatSummary): Promise<void> {
-  try { await sb.invoke('chat:send', { chatId, text }); }
+async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, optimistic?: ChatSummary): Promise<void> {
+  try { await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}) }); }
   catch (e) {
     fail('Messaggio non inviato')(e);
     // roll back only our optimistic copy: a newer chat:updated from main (an error, a state) wins
     if (before && optimistic && app.get().chats[chatId] === optimistic) dispatch({ type: 'chat:updated', chat: before });
-    dispatch({ type: 'queue', chatId, text });
+    // images main refused would fail the same way at every retry: the text goes back without them
+    const refused = !!msg.images?.length && /^(Immagine \d+:|Immagini|Troppe immagini)/.test(errText(e));
+    const back: QueuedMsg = refused ? { id: msg.id, text: msg.text } : msg;
+    // back at the head of the queue: it goes before the messages queued after it
+    if (back.text || back.images?.length) dispatch({ type: 'queue', chatId, msg: back, front: true });
   }
 }
 
 let localN = 0;
-/** Enter in a chat input: send now, or queue it while the chat is busy or waiting on a request (sent when idle). */
-export function send(chatId: string, text: string): 'sent' | 'queued' | 'empty' {
-  const t = text.trim();
-  if (!t) return 'empty';
+/** Enter in a chat input: send now, or queue it while the chat is busy or waiting on a request (sent when idle).
+ *  images: pasted or dropped screenshots (lib/images.ts); a message may be images only. */
+export function send(chatId: string, text: string, images: readonly ImageAttachment[] = []): 'sent' | 'queued' | 'empty' {
+  const own = text.trim();
+  if (!own && !images.length) return 'empty';
   const c = app.get().chats[chatId];
-  if (c && (isBusy(c) || c.state === 'waiting' || c.pending > 0)) { dispatch({ type: 'queue', chatId, text: t }); return 'queued'; }
+  // queued: the notes stay apart and ride on it when it leaves (the flush: withNotes), so removing it loses none
+  if (c && (isBusy(c) || c.state === 'waiting' || c.pending > 0)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}) } }); return 'queued'; }
+  // the notes waiting for this chat ride on the user's message
+  return sendOut(chatId, [own, takeNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c);
+}
+
+/** Send now (the chat is free): the optimistic copy, then main. */
+function sendOut(chatId: string, t: string, images: readonly ImageAttachment[], c: ChatSummary | undefined): 'sent' {
+  const msg: QueuedMsg = { id: `q:${++localN}`, text: t, ...(images.length ? { images } : {}) };
   // optimistic: the message and the state pill change at once; main's own user item replaces the copy
-  dispatch({ type: 'chat:item', chatId, item: { kind: 'user', id: `local:${++localN}`, at: Date.now(), text: t } });
+  const thumbs = images.flatMap(im => (im.thumb ? [im.thumb] : []));
+  dispatch({ type: 'chat:item', chatId, item: { kind: 'user', id: `local:${++localN}`, at: Date.now(), text: t, ...(images.length ? { images: images.length } : {}), ...(thumbs.length ? { thumbs } : {}) } });
   if (c) dispatch({ type: 'chat:updated', chat: { ...c, state: 'running' } });
-  void sendNow(chatId, t, c, app.get().chats[chatId]);
+  void sendNow(chatId, msg, c, app.get().chats[chatId]);
   return 'sent';
 }
 
-export const unqueue = (chatId: string, index: number) => dispatch({ type: 'unqueue', chatId, index });
+// ---------------------------------------------------------------- notes: what the user did with a block (ADR 0038)
+
+/** A note for the chat: "[Mandato] …" (told now if the chat is idle, else with its next message), "[Copiato] …" (only
+ *  with the user's next message: copying is not sending), "[Non serve] …" (a command card dismissed: like Mandato). */
+interface Note { key: string; kind: NoteKind; line: string }
+const notes = new Map<string, Note[]>();
+const undos = new Map<string, { timer: ReturnType<typeof setTimeout>; before: Mark | null }>();
+
+// free = idle, nothing asked, no hand-off being written (like main/run/results.ts)
+const isFree = (c: ChatSummary): boolean => c.state === 'idle' && !c.pending && !c.handoffBusy;
+const tellable = (chatId: string): boolean => !!notes.get(chatId)?.some(n => n.kind !== 'copied');
+function takeNotes(chatId: string): string[] {
+  const list = notes.get(chatId) ?? [];
+  notes.delete(chatId);
+  return list.map(n => n.line);
+}
+function withNotes(chatId: string, msg: QueuedMsg): QueuedMsg {
+  const extra = takeNotes(chatId);
+  return extra.length ? { ...msg, text: [msg.text, extra.join('\n')].filter(Boolean).join('\n\n') } : msg;
+}
+function addNote(chatId: string, n: Note): void {
+  // one note per block: Mandato replaces its Copiato
+  notes.set(chatId, [...(notes.get(chatId) ?? []).filter(x => x.key !== n.key), n]);
+  const c = app.get().chats[chatId];
+  if (n.kind !== 'copied' && c && isFree(c)) tellNotes(chatId);
+}
+/** A free chat with a note that must be told (Mandato, Non serve): one short message with every waiting note. Never
+ *  queued, and a closed chat is never woken by it (the notes go with its next message). */
+function tellNotes(chatId: string): void {
+  const c = app.get().chats[chatId];
+  if (!c || !isFree(c) || !tellable(chatId)) return;
+  sendOut(chatId, takeNotes(chatId).join('\n'), [], c);
+}
+
+/** Copia on a text-to-send block: "Copiato hh:mm" on the block; the chat hears it with the user's next message. */
+export function markCopied(chatId: string, key: string, code: string): void {
+  if (undos.has(key)) return; // a Mandato being undone stays the block's mark
+  const m = setMark(key, { kind: 'copied', at: clockNow() });
+  if (m?.kind === 'sent') { setMark(key, m); return; } // already sent: copying again changes nothing
+  addNote(chatId, { key, kind: 'copied', line: noteLine('copied', code) });
+}
+
+/** Mandato: the block shows "Mandato ✓ hh:mm" at once; the chat is told after UNDO_MS (undoSent cancels it). */
+export function markSent(chatId: string, key: string, code: string): void {
+  if (undos.has(key)) return;
+  const before = setMark(key, { kind: 'sent', at: clockNow() });
+  const timer = setTimeout(() => {
+    undos.delete(key);
+    addNote(chatId, { key, kind: 'sent', line: noteLine('sent', code) });
+  }, UNDO_MS);
+  undos.set(key, { timer, before });
+}
+
+/** Annulla within UNDO_MS: the block gets its previous mark back and the chat hears nothing. */
+export function undoSent(key: string): boolean {
+  const u = undos.get(key);
+  if (!u) return false;
+  clearTimeout(u.timer);
+  undos.delete(key);
+  setMark(key, u.before);
+  return true;
+}
+export const canUndo = (key: string): boolean => undos.has(key);
+
+export const unqueue = (chatId: string, id: string) => dispatch({ type: 'unqueue', chatId, id });
+
+/** "Invia subito" on a queued message: it moves to the front of the queue and the chat's turn is interrupted (Claude:
+ *  stream-json `interrupt`; Cursor: ACP `session/cancel`, open panels answered "cancelled"). The message itself is
+ *  sent by the one flush path above, when the chat reports idle after the interrupt: sent exactly once, never lost
+ *  (if the interrupt fails it stays first in the queue and goes when the turn ends). Order with several queued: the
+ *  chosen one first, then the others in the order they were typed, one per turn as before. A chat that is not busy
+ *  (e.g. a message re-queued after a failed send) gets it at once, with no interrupt. Messages the engine itself
+ *  already holds (sent by an agent over app_send_to_chat) are kept, not cancelled: they were sent earlier and go first.
+ *  Resolves 'sent' | 'interrupting' (the flush will send it) | 'failed' (still queued) | 'none' (no such message). */
+export async function sendQueuedNow(chatId: string, id: string): Promise<'sent' | 'interrupting' | 'failed' | 'none'> {
+  const s = app.get();
+  const msg = s.queued[chatId]?.find(m => m.id === id);
+  if (!msg) return 'none';
+  const c = s.chats[chatId];
+  if (!c || !(isBusy(c) || c.state === 'waiting' || c.pending > 0)) {
+    dispatch({ type: 'unqueue', chatId, id });
+    send(chatId, msg.text, msg.images ?? []);
+    return 'sent';
+  }
+  dispatch({ type: 'promote', chatId, id });
+  try { await sb.invoke('chat:stop', { chatId, keepQueued: true }); return 'interrupting'; }
+  catch (e) { fail('Non riesco a interromperla: il messaggio resta primo in coda')(e); return 'failed'; }
+}
 
 const attempts = new Map<string, number>();
 /** How many times a request came back after a failed answer (the layer re-mounts its card, so it is answerable again). */
@@ -143,6 +274,43 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
     dispatch({ type: 'pending:added', req });
     fail('Risposta non inviata')(e);
     return false;
+  }
+}
+
+/** "Comando da eseguire" → Esegui: the block runs in the chat that proposed it (main checks it is a block of that
+ *  message; confirmProd = the second click on a production one). main resolves the request when the run starts; the
+ *  output stays under the block in that chat. Resolves true when it started. */
+export async function runCommand(req: PendingRequest, confirmProd = false): Promise<boolean> {
+  const c = req.command;
+  if (!c) return false;
+  try {
+    await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}) });
+    const chat = app.get().chats[req.chatId];
+    toast(`Comando avviato: l’output è nella chat ${chat?.isRegia ? 'Regia' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
+    return true;
+  } catch (e) {
+    // the card comes back usable everywhere (the layer re-mounts it: its key carries the attempt)
+    const key = `${req.chatId}/${req.id}`;
+    attempts.set(key, attemptOf(key) + 1);
+    dispatch({ type: 'pending:added', req });
+    fail('Il comando non parte')(e);
+    return false;
+  }
+}
+
+/** "Non serve" on a command request: gone at once; back if main refuses for another reason than "no longer open". */
+export async function dismissCommand(req: PendingRequest): Promise<void> {
+  dispatch({ type: 'pending:resolved', chatId: req.chatId, requestId: req.id });
+  try {
+    await sb.invoke('run:dismiss', { chatId: req.chatId, requestId: req.id });
+    // the chat learns the user will not run it (the user, 2026-10-13: "devi capire meglio da sola quando finisco")
+    if (req.command) addNote(req.chatId, { key: `cmd:${req.chatId}/${req.id}`, kind: 'dismissed', line: noteLine('dismissed', req.command.code) });
+  } catch (e) {
+    if (/non è più aperta/i.test(errText(e))) return;
+    const key = `${req.chatId}/${req.id}`;
+    attempts.set(key, attemptOf(key) + 1);
+    dispatch({ type: 'pending:added', req });
+    fail('Non riesco a toglierla')(e);
   }
 }
 
@@ -174,17 +342,74 @@ export async function setChat(chatId: string, patch: { model?: string; effort?: 
   catch (e) { if (c) dispatch({ type: 'chat:updated', chat: c }); fail('Impostazione non salvata')(e); }
 }
 
-/** Close a chat with a 6-second undo: the tile disappears at once, the real close happens when the toast expires. */
+// ---- long chats: the hand-off note and "Riprendi" (a new chat that starts from it)
+
+/** The chat writes its hand-off now (one short turn; the app builds one itself when the chat cannot). */
+export async function writeHandoff(chatId: string): Promise<HandoffInfo | null> {
+  const c = app.get().chats[chatId];
+  if (c) dispatch({ type: 'chat:updated', chat: { ...c, handoffBusy: true } });
+  try {
+    const h = await sb.invoke('chat:handoff', { chatId });
+    toast(h.source === 'chat' ? 'Passaggio di consegne salvato' : 'Passaggio di consegne automatico salvato', 'ok');
+    return h;
+  } catch (e) {
+    const now = app.get().chats[chatId];
+    if (now?.handoffBusy) { const { handoffBusy: _, ...rest } = now; dispatch({ type: 'chat:updated', chat: rest }); }
+    fail('Passaggio non scritto')(e);
+    return null;
+  }
+}
+
+export async function readHandoff(chatId: string, session?: string | null): Promise<HandoffInfo | null> {
+  try { return await sb.invoke('chat:handoffRead', { chatId, ...(session ? { session } : {}) }); } catch (e) { fail('Passaggio non leggibile')(e); return null; }
+}
+
+const continuing = new Set<string>();
+
+/** "Riprendi": opens the new chat (main writes the hand-off first when needed) and returns it. The old chat shows
+ *  handoffBusy meanwhile (its buttons off); a second click while the first runs does nothing. */
+export async function continueChat(chatId: string): Promise<ChatSummary | null> {
+  if (continuing.has(chatId)) return null;
+  continuing.add(chatId);
+  const old = app.get().chats[chatId];
+  if (old) dispatch({ type: 'chat:updated', chat: { ...old, handoffBusy: true } });
+  try {
+    const c = await sb.invoke('chat:continue', { chatId });
+    dispatch({ type: 'chat:updated', chat: c });
+    void loadItems(c.id);
+    toast(`Ripresa in «${c.title}»: la chat vecchia resta consultabile`, 'ok');
+    return c;
+  } catch (e) {
+    fail('Ripresa non riuscita')(e);
+    return null;
+  } finally {
+    continuing.delete(chatId);
+    const now = app.get().chats[chatId];
+    if (now?.handoffBusy) { const { handoffBusy: _, ...rest } = now; dispatch({ type: 'chat:updated', chat: rest }); }
+  }
+}
+
+/** Close a chat with a 6-second undo: the tile disappears at once, the real close happens when the toast expires.
+ *  A chat already closing (hidden, its undo still running) is left alone: a second Ctrl+W or click starts no second timer.
+ *  A chat maximized or in focus mode leaves that view too (those views show it whatever the hidden list says); Annulla
+ *  puts it back, unless another tile took that view in the meantime. */
 export function closeChat(chatId: string): void {
   const c = app.get().chats[chatId];
-  if (!c) return;
+  const u = ui.get();
+  if (!c || u.hidden.includes(chatId)) return;
+  const wasMax = u.maximized === `chat:${chatId}` ? u.maximized : null;
+  const wasFocus = u.focusMode === chatId ? chatId : null;
+  if (wasMax || wasFocus) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, focusMode: wasFocus ? null : s.focusMode, lanePeek: wasFocus ? false : s.lanePeek }));
   hideChat(chatId, true);
   let undone = false;
   const timer = setTimeout(() => {
     if (undone) return;
     void sb.invoke('chat:close', { chatId }).catch(e => { hideChat(chatId, false); fail('Chat non chiusa')(e); }).then(() => hideChat(chatId, false));
   }, 6000);
-  toast(`Chiusa «${c.title}»`, 'info', { label: 'Annulla', run: () => { undone = true; clearTimeout(timer); hideChat(chatId, false); } }, 6000);
+  toast(`Chiusa «${c.title}»`, 'info', { label: 'Annulla', run: () => {
+    undone = true; clearTimeout(timer); hideChat(chatId, false);
+    if ((wasMax || wasFocus) && !ui.get().maximized && !ui.get().focusMode) ui.set(s => ({ ...s, maximized: wasMax, focusMode: wasFocus }));
+  } }, 6000);
 }
 
 export async function navigateTab(tabId: string, url: string): Promise<void> {
@@ -199,11 +424,29 @@ export async function cliLogin(harness: 'claude' | 'cursor'): Promise<void> {
   catch (e) { fail('Login non aperto')(e); }
 }
 
+/** One CLI's status when app:info has none yet (the check at start still running, or its event missed): asks
+ *  cli:status; null = no answer within ms or a failed check ("non verificato"). Once both CLIs answered, app:info
+ *  keeps them (the top bar's login warning reads it too). Used by the Nuova chat dialog. */
+const fetched: Partial<Record<Harness, CliStatus>> = {};
+export async function cliFetch(harness: Harness, ms = 20000): Promise<CliStatus | null> {
+  const st = await Promise.race([
+    sb.invoke('cli:status', { harness }).catch(() => null),
+    new Promise<null>(r => setTimeout(() => r(null), ms)),
+  ]);
+  if (st) keepCli(harness, st);
+  return st;
+}
+/** A fresh status into app:info; while it has none, only once both CLIs answered (never one CLI's for the other). */
+function keepCli(harness: Harness, st: CliStatus): void {
+  fetched[harness] = st;
+  const cli = app.get().info?.cli;
+  const { claude, cursor }: Partial<Record<Harness, CliStatus>> = { ...(cli ?? fetched), [harness]: st };
+  if (claude && cursor) dispatch({ type: 'cli', cli: { claude, cursor } });
+}
+
 export async function cliCheck(harness: 'claude' | 'cursor'): Promise<void> {
   try {
-    const st = await sb.invoke('cli:status', { harness, checkLogin: true });
-    const info = app.get().info;
-    if (info) dispatch({ type: 'info', info: { ...info, cli: { ...(info.cli ?? { claude: st, cursor: st }), [harness]: st } } });
+    keepCli(harness, await sb.invoke('cli:status', { harness, checkLogin: true }));
   } catch (e) { fail('Controllo non riuscito')(e); }
 }
 

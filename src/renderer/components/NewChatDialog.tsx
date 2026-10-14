@@ -1,77 +1,108 @@
 // "Nuova chat" (Ctrl+N): harness (Claude / Cursor, with each CLI's status), folder (recent folders suggested),
-// model, effort and permission mode (Claude), title, the first message, "È la Regia", separate worktree. Last choices
-// are remembered; Ctrl+Enter creates; the new chat's input gets the focus. Used by App.tsx.
-import { useMemo, useState } from 'react';
-import type { Effort, Harness, PermissionMode } from '@shared/contract';
+// model, effort and permission mode (Claude), title, the first message, "È la Regia" (several Regie, ADR 0021: with a
+// Regia already there the new one needs a tab name and sits next to the others; the overlay's + opens this dialog as
+// "Nuova Regia"), separate worktree. A work chat answers to the Regia of the tab open now (regiaOf). Engine, model and effort
+// start from the settings' "Chat aperte dalla Regia"; folder and permissions from the last choices; Ctrl+Enter creates;
+// the new chat's input gets the focus. The CLI status comes from app:info, or is asked on open while the check at start
+// has not reported ("non verificato" when nothing answers). Used by App.tsx.
+import { useEffect, useMemo, useState } from 'react';
+import type { CliStatus, Effort, Harness, PermissionMode } from '@shared/contract';
 import { EFFORTS, effortLabel, PERMISSION_MODES, permissionLabel } from '../lib/format';
-import { MODELS } from '../lib/models';
-import { createChat, useApp } from '../store/store';
-import { closeModal, setPrefs, ui } from '../store/ui';
-import { focusChat } from '../actions';
+import { modelOptions, useModelsSeen } from '../lib/models';
+import { cliFetch, createChat, useApp } from '../store/store';
+import { closeModal, setPrefs, setRegiaTab, ui } from '../store/ui';
+import { focusChat, regiaId } from '../actions';
+import { cleanRegiaName } from '@shared/regia';
 import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
 
 export function NewChatDialog() {
   const last = ui.use(s => s.prefs.newChat);
   const info = useApp(s => s.info);
-  const hasRegia = useApp(s => Object.values(s.chats).some(c => c.isRegia));
+  const current = useApp(s => { const id = s.order.find(x => s.chats[x]?.isRegia); return id ? s.chats[id] ?? null : null; });
+  const hasRegia = !!current;
+  const asRegia = ui.use(s => s.newChatRegia);
   const recent = useApp(s => [...new Set(s.order.map(id => s.chats[id]?.cwd).filter((x): x is string => !!x))].slice(0, 8), (a, b) => a.join('|') === b.join('|'));
-  const [harness, setHarness] = useState<Harness>(last.harness);
+  // engine, model and effort start from "Chat aperte dalla Regia" (Settings page), the same defaults app_create_chat uses
+  const def = useApp(s => s.settings?.regiaChats);
+  const modelOf = (h: Harness) => (def ? (h === 'cursor' ? def.cursorModel : def.claudeModel) : last.harness === h ? last.model : '');
+  const [harness, setHarness] = useState<Harness>(def?.harness ?? last.harness);
   // every chat starts in the brain folder (the user, 2026-10-11: «non voglio sbattermi a scegliere la cartella giusta»):
   // the AI picks the repo or worktree from the task; another folder only under Avanzate
   const [cwd, setCwd] = useState(info?.brainRoot || last.cwd || recent[0] || '');
-  const [model, setModel] = useState(last.harness === harness ? last.model : '');
-  const [effort, setEffort] = useState<Effort | ''>(last.effort);
+  const [model, setModel] = useState(() => modelOf(harness));
+  const [effort, setEffort] = useState<Effort | ''>(def ? def.claudeEffort : last.effort);
   const [perm, setPerm] = useState<PermissionMode | ''>(last.permissionMode);
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [regia, setRegia] = useState(!hasRegia);
+  const [regia, setRegia] = useState(asRegia || !hasRegia);
+  const [regiaName, setRegiaName] = useState('');
   const [worktree, setWorktree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const models = useMemo(() => MODELS[harness], [harness]);
+  const seen = useModelsSeen();
+  const models = useMemo(() => modelOptions(harness, seen, model), [harness, seen, model]);
 
   const create = async () => {
     if (!cwd.trim()) { setError('Scegli la cartella in cui lavora la chat.'); return; }
+    const name = cleanRegiaName(regiaName);
+    if (regia && hasRegia && !name) { setError('Dai un nome alla nuova Regia (es. App): è il nome della sua tab.'); return; }
     setBusy(true);
     setPrefs({ newChat: { harness, cwd: cwd.trim(), model, effort, permissionMode: perm } });
     const c = await createChat({
       harness, cwd: cwd.trim(), prompt: prompt.trim() || undefined, title: title.trim() || undefined, model: model || undefined,
       effort: harness === 'claude' && effort ? effort : undefined, permissionMode: harness === 'claude' && perm ? perm : undefined,
-      regia: regia || undefined, worktree: harness === 'claude' && worktree ? true : undefined,
+      regia: regia || undefined, ...(regia && name ? { regiaName: name } : {}),
+      ...(!regia && regiaId() ? { regiaOf: regiaId()! } : {}),
+      worktree: harness === 'claude' && worktree ? true : undefined,
     });
     setBusy(false);
-    if (c) { closeModal(); requestAnimationFrame(() => focusChat(c.id)); }
+    if (c) { closeModal(); if (c.isRegia) setRegiaTab(c.id); requestAnimationFrame(() => focusChat(c.id)); }
     else setError('La chat non è partita: il motivo è nell\'avviso in basso a sinistra.');
   };
 
-  const cli = info?.cli;
+  // each CLI shows as soon as it answers; missing = still asking, null = no answer in time
+  const [asked, setAsked] = useState<Partial<Record<Harness, CliStatus | null>>>({});
+  const known = !!info?.cli;
+  useEffect(() => {
+    if (known) return;
+    let live = true;
+    for (const h of ['claude', 'cursor'] as Harness[]) void cliFetch(h).then(st => { if (live) setAsked(a => ({ ...a, [h]: st })); });
+    return () => { live = false; };
+  }, [known]);
   const status = (h: Harness) => {
-    const st = cli?.[h];
-    if (!st) return 'controllo…';
+    const st = info?.cli?.[h] ?? asked[h];
+    if (st === undefined) return 'controllo…';
+    if (st === null) return 'non verificato';
     if (!st.found) return 'CLI non trovata';
     return st.loggedIn === false ? 'accesso da fare' : (st.version ?? 'pronta');
   };
 
   return (
-    <Modal onClose={closeModal} label="Nuova chat" testid="newchat" className="modal-newchat">
+    <Modal onClose={closeModal} label={asRegia ? 'Nuova Regia' : 'Nuova chat'} testid="newchat" className="modal-newchat">
       <form onSubmit={e => { e.preventDefault(); void create(); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void create(); } }}>
-        <div className="modal-head"><h2>Nuova chat</h2><span className="sp" /><Keys combo="Ctrl+Invio" /><span className="modal-head-hint">crea</span></div>
+        <div className="modal-head"><h2>{asRegia ? 'Nuova Regia' : 'Nuova chat'}</h2><span className="sp" /><Keys combo="Ctrl+Invio" /><span className="modal-head-hint">crea</span></div>
         <div className="modal-body">
           <label className="field">
-            <span>Cosa deve fare?</span>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} placeholder="Scrivi il lavoro: la chat parte dalla cartella del cervello e sceglie da sola repo e worktree" data-testid="newchat-prompt" autoFocus />
+            <span>{regia ? <>Primo messaggio <small>facoltativo</small></> : 'Cosa deve fare?'}</span>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={regia ? 2 : 4} placeholder={regia ? 'Es. «che si fa adesso?»' : 'Scrivi il lavoro: la chat parte dalla cartella del cervello e sceglie da sola repo e worktree'} data-testid="newchat-prompt" autoFocus={!(regia && hasRegia)} />
           </label>
+          {regia && hasRegia && (
+            <label className="field">
+              <span>Nome della Regia <small>il nome della sua tab, es. App</small></span>
+              <input value={regiaName} onChange={e => { setRegiaName(e.target.value); setError(null); }} maxLength={30} placeholder="App" data-testid="newchat-regia-name" autoFocus aria-invalid={!!error && !cleanRegiaName(regiaName)} />
+            </label>
+          )}
           <div className="harness-pick" role="radiogroup" aria-label="Harness">
             {(['claude', 'cursor'] as Harness[]).map(h => (
               <button key={h} type="button" role="radio" aria-checked={harness === h} className={`harness-card ${harness === h ? 'on' : ''}`} data-testid={`newchat-harness-${h}`}
-                onClick={() => { setHarness(h); setModel(''); }}>
+                onClick={() => { setHarness(h); setModel(modelOf(h)); }}>
                 <HarnessMark harness={h} size={28} />
                 <span><b>{h === 'claude' ? 'Claude Code' : 'Cursor'}</b><small>{status(h)}</small></span>
               </button>
             ))}
           </div>
-          <details className="advanced" data-testid="newchat-advanced">
+          <details className="advanced" data-testid="newchat-advanced" open={asRegia || undefined}>
           <summary>Avanzate <small>cartella, modello, permessi, titolo</small></summary>
           <label className="field">
             <span>Cartella <small>di base la cartella del cervello</small></span>
@@ -110,14 +141,20 @@ export function NewChatDialog() {
           </label>
           </details>
           <div className="checks">
-            <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} data-testid="newchat-regia" /><span>È la Regia <small>la chat che coordina le altre</small></span></label>
+            <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>È la Regia <small>la chat che coordina le altre</small></span></label>
             {harness === 'claude' && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>Worktree separato <small>non tocca il tuo branch</small></span></label>}
           </div>
+          {regia && current && (
+            <p className="regia-note" id="newchat-regia-note" data-testid="newchat-regia-note">
+              <HarnessMark harness={current.harness} regia size={16} />
+              <span>Si aggiunge come nuova tab accanto alle altre Regie: <b>«{current.title}»</b> resta com'è. Le chat che apre rispondono a lei.</span>
+            </p>
+          )}
           {error && <p className="field-error" role="alert">{error}</p>}
         </div>
         <div className="modal-foot">
           <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="newchat-cancel">Annulla</button>
-          <button type="submit" className="btn btn-primary btn-m" disabled={busy} data-testid="newchat-create">{busy ? 'Creo…' : 'Crea chat'}</button>
+          <button type="submit" className="btn btn-primary btn-m" disabled={busy} data-testid="newchat-create">{busy ? 'Creo…' : regia ? 'Crea la Regia' : 'Crea chat'}</button>
         </div>
       </form>
     </Modal>

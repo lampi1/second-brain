@@ -12,3 +12,18 @@ migliorano**. La revisione (solo su richiesta) li trasforma in regole, routine e
 - Un file al giorno: `journal/AAAA-MM-GG.md`, titolo `# AAAA-MM-GG (giorno)`.
 - Due aree: una riga è **lavoro** se non dice altro; le righe personali iniziano il testo con `[personale]`.
 - **Solo append**, una riga per evento: `- HH:MM · tag · testo`.
+
+## Com'è fatto un giorno
+
+Il primo file nasce con la prima riga del giorno. La pagina "Fatto e standup" dell'app lo legge (con le chat e i
+commit del giorno) e ne ricava le frasi per lo standup. Un esempio inventato, per vedere la forma:
+
+```
+# 2026-01-15 (giovedì)
+- 09:20 · fatto · PR "Correggi il login scaduto" aperta, test verdi, reviewer senza rilievi
+- 10:05 · interruzione · 20 min · chiamata non prevista sul rilascio · fonte: telefono
+- 11:40 · decisione · il rilascio slitta a lunedì: manca il collaudo
+- 15:10 · attrito · 15 min · ambiente di test giù, rifatto il login due volte · fonte: tool
+- 17:30 · lezione · prima del rilascio rileggere le note di collaudo, non solo i test
+- 18:00 · fatto · [personale] prenotata la visita
+```

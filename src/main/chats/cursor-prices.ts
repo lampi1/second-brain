@@ -3,7 +3,7 @@
 // does, a chat gets a real cost, otherwise ChatSummary.costKnown = false and the UI shows the estimate only (ADR 0010).
 // Source: https://cursor.com/docs/models, read 2026-10-11 (docs/research/research-cursor-cost.md §5.5; the page shows
 // no date). USD per 1M tokens. "Auto" bills at the routed model's price, which the CLI does not say: unknown → null.
-// Used by cursor.ts.
+// Used by cursor.ts and brain/cursor-ledger.ts.
 
 export const PRICES_READ_ON = '2026-10-11';
 
@@ -36,14 +36,21 @@ const tokens = (s: string): string[] => s.toLowerCase().replace(/\[.*\]$/, '').s
 /** The list price of a Cursor model id ("claude-sonnet-5.5", "sonnet-5.5-thinking", "gpt-5.6-sol[effort=high]"):
  *  the table entry whose tokens all appear in the id (the most specific wins; "claude" may be omitted). */
 export function priceOf(model: string | null | undefined): Price | null {
+  const key = modelKey(model);
+  return key ? TABLE.find(([k]) => k === key)![1] : null;
+}
+
+/** The price-table entry a model id falls under ("grok-4.7-low" → "grok-4.7"), or null: the per-model key of the CSV
+ *  calibration (brain/cursor-ledger.ts), so the CSV's names and the hook's names meet. */
+export function modelKey(model: string | null | undefined): string | null {
   if (!model) return null;
   const have = new Set(tokens(model));
-  let best: { n: number; p: Price } | null = null;
-  for (const [key, p] of TABLE) {
+  let best: { n: number; key: string } | null = null;
+  for (const [key] of TABLE) {
     const need = tokens(key).filter(t => t !== 'claude');
-    if (need.every(t => have.has(t)) && (!best || need.length > best.n)) best = { n: need.length, p };
+    if (need.every(t => have.has(t)) && (!best || need.length > best.n)) best = { n: need.length, key };
   }
-  return best?.p ?? null;
+  return best?.key ?? null;
 }
 
 export interface AcpUsage { inputTokens?: number; outputTokens?: number; cachedReadTokens?: number; cachedWriteTokens?: number; thoughtTokens?: number; totalTokens?: number }

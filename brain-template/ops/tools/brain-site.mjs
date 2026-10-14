@@ -66,9 +66,10 @@ export async function tables(root) {
   const days = (fs.existsSync(jdir) ? fs.readdirSync(jdir) : []).filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort();
   const journal = days.flatMap(f => P.journal(read(path.join(jdir, f)), f.slice(0, 10)));
   const imp = f => import(pathToFileURL(path.join(HERE, f)).href);
-  let playbooks = null, recurrence = null, inbox = null;
+  let playbooks = null, recurrence = null, quality = null, inbox = null;
   try { playbooks = (await imp('playbook.mjs')).summary(root); } catch { /* none */ }
-  try { const m = await imp('recurrence.mjs'); recurrence = m.recurrence(m.parse(read(path.join(root, 'ai-errors.md')) ?? '')); } catch { /* none */ }
+  // quality: what the app's Qualità page shows from ai-errors.md (canonical types, unreadable lines, who saw them, rules in a 14-day window)
+  try { const m = await imp('recurrence.mjs'); const t = read(path.join(root, 'ai-errors.md')) ?? ''; recurrence = m.recurrence(m.parse(t)); quality = m.quality?.(t, { today: romeDay() }) ?? null; } catch { /* none */ }
   try { const m = await imp('inbox.mjs'); const Pa = m.paths(root); inbox = { boxes: m.list(Pa), stats: m.stats(Pa), log: P.jsonl(read(Pa.log)) }; } catch { /* none */ }
   const briefs = (fs.existsSync(path.join(jdir, 'brief')) ? fs.readdirSync(path.join(jdir, 'brief')) : []).filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort();
   return {
@@ -84,7 +85,7 @@ export async function tables(root) {
     measures: P.jsonl(read(path.join(root, 'measures.jsonl'))),
     envs: P.jsonl(read(path.join(root, 'ops', 'state', 'envs.log'))),
     briefs: briefs.map(f => `journal/brief/${f}`),
-    playbooks, recurrence, inbox,
+    playbooks, recurrence, quality, inbox,
   };
 }
 
@@ -171,7 +172,7 @@ async function sendMessage(root, { to, text }) {
   return m.send(P2, { to: box, from: 'second-brain', harness: 'app', text: `${body}\n\n(dal sito second-brain, su richiesta di Owner: rispondi nella tua chat, non con inbox.mjs; il sito non legge risposte)` });
 }
 
-const TTL = { map: 10 * 60e3, cost: 3 * 60e3, day: 5 * 60e3, brief: 15 * 60e3, now: 20e3 };
+const TTL = { map: 10 * 60e3, cost: 3 * 60e3, day: 5 * 60e3, brief: 15 * 60e3, now: 20e3, improve: 60e3 };
 export function makeServer(root, { port = 4317 } = {}) {
   let files = null, filesAt = 0;
   const allowed = () => { if (!files || Date.now() - filesAt > 60e3) { files = allowedFiles(root); filesAt = Date.now(); } return files; };
@@ -220,6 +221,12 @@ export function makeServer(root, { port = 4317 } = {}) {
         return json(res, 200, await cached(`day:${kind}:${kind === 'brief' ? '' : date}`, kind === 'brief' ? TTL.brief : TTL.day,
           async () => ({ date, kind, ...JSON.parse(await runNode('day.mjs', args, root)) }), { force }));
       }
+      // the shared self-improvement loop (ops/improve): one row per policy for the app's Miglioramento page (~5 s: it rescans the jobs)
+      if (p === '/api/improve') return json(res, 200, await cached('improve', TTL.improve, async () => {
+        const j = JSON.parse(await runNode(path.join('..', 'improve', 'improve.mjs'), ['status', '--json', '--state', path.join(root, 'ops', 'state')], root));
+        if (!j.ok) throw new Error(j.error ?? 'improve.mjs senza risposta');
+        return { policies: j.policies };
+      }, { force }));
       if (p === '/api/files') return json(res, 200, allowed());
       if (p === '/api/file') {
         const f = String(u.searchParams.get('p') ?? '').replace(/\\/g, '/');

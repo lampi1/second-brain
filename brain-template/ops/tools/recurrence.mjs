@@ -3,7 +3,11 @@
 // ({{OWNER}} 2026-10-10, D4 of reviews/2026-10-10-architettura-agenti.md; ACE/ExpeL: count, don't guess). Also the
 // totals per type and the lines whose type is outside the list of the ai-errors.md header (they escape the count:
 // fix their type). READ-ONLY. Counts, never percentages: the samples are small. Run only when {{OWNER}} asks or in a
-// review, never on a schedule.
+// review, never on a schedule. quality(): the same file as the app's Qualità page needs it ({{OWNER}} 2026-10-13, "la sezione
+// qualità sia veramente utile e veritiera"): near-duplicate type labels mapped to the 11 official types (ALIASES, only
+// obvious synonyms; the rest is shown as "senza tipo valido", never guessed), the lines it cannot read, who saw each
+// error per day ({{OWNER}} or someone else), and per rule whether its error came back within 14 days ("troppo presto"
+// while the rule is younger than that).
 // Usage: node "{{BRAIN}}/ops/tools/recurrence.mjs" [--since AAAA-MM-GG] [--type <tipo>]
 //          [--file <ai-errors.md>] [--json]
 import fs from 'node:fs';
@@ -14,6 +18,30 @@ export const TYPES = ['test-passato-a-torto', 'bug-non-trovato', 'fatto-non-veri
   'richiesta-fraintesa', 'non-capito', 'azione-pericolosa', 'fuori-ruolo', 'blocco-aggirato', 'altro'];
 export const normType = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
   .replace(/\s*\(.*\)$/, '').replace(/[\s_]+/g, '-');
+// Labels written instead of an official type (seen in ai-errors.md, 2026-10-13) → the official type they plainly mean.
+// Keys are normType() output. Anything not here and not in TYPES stays without a type: fix the line, don't stretch this.
+export const ALIASES = {
+  'fatto-presunto': 'fatto-non-verificato', 'affermazione-non-verificata': 'fatto-non-verificato', 'cifra-non-verificata': 'fatto-non-verificato',
+  'fatto-sbagliato': 'fatto-non-verificato', 'bug-inventato': 'fatto-non-verificato', 'design-inventato': 'fatto-non-verificato',
+  'verifica-saltata': 'fatto-non-verificato', 'verifica-incompleta': 'fatto-non-verificato', 'stato-letto-male': 'fatto-non-verificato',
+  'azione-pericolosa-tentata': 'azione-pericolosa', 'push-senza-ok': 'azione-pericolosa', 'scrittura-non-voluta': 'azione-pericolosa',
+  'spiegazione-poco-chiara': 'non-capito', 'spiegazione-non-chiara': 'non-capito', 'spiegazione-non-chiara-+-domande-nelle-chat': 'non-capito',
+  'risposta-non-capita': 'non-capito', 'testo-non-visto': 'non-capito', 'comando-non-visto': 'non-capito', 'istruzione-poco-chiara': 'non-capito',
+  'presentazione-poco-chiara': 'non-capito', 'gergo': 'non-capito', 'testo-da-approvare-fuori-dal-pannello': 'non-capito',
+  'testo-da-approvare-fuori-dal-pannello-e-niente-link': 'non-capito',
+  'decisione-gia-presa-ignorata': 'regola-ignorata', 'decisione-ridiscussa': 'regola-ignorata', 'avviso-ignorato': 'regola-ignorata',
+  'worktree-altrui-scritto': 'posto-sbagliato',
+};
+/** The official type of a written label, or null when it is none of them. */
+export const canonType = t => { const n = normType(t); return TYPES.includes(n) ? n : ALIASES[n] ?? null; };
+/** The "visto da" text of a line ("visto da: {{OWNER}}, …" or "visto da Owner: …"), null when the line has none. */
+export const seenBy = line => { const m = String(line).match(/(?:^|·)\s*visto da(?![a-z]):?\s*([^·]*)/i); return m ? m[1].trim() : null; };
+/** {{OWNER}} caught it himself (not a reviewer, QA, a hook or the agent). */
+export const byOwner = seen => /^["'«]?owner(?![a-z])/i.test(String(seen ?? '').trim());
+export const WINDOW_DAYS = 14;
+const dayMs = d => Date.parse(`${d}T00:00:00Z`);
+const daysBetween = (a, b) => Math.round((dayMs(b) - dayMs(a)) / 864e5);
+
 const words = s => new Set(String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().match(/[a-z0-9]{4,}/g) ?? []);
 const near = (a, b) => { const B = words(b); return [...words(a)].some(w => B.has(w)); };
 
@@ -37,7 +65,7 @@ export function parse(text) {
 }
 
 export function recurrence(rows, { type } = {}) {
-  const sel = type ? rows.filter(r => r.type === normType(type)) : rows;
+  const sel = (type ? rows.filter(r => canonType(r.rawType) === canonType(type)) : rows).map(r => ({ ...r, type: canonType(r.rawType) ?? r.type }));
   const known = sel.filter(r => TYPES.includes(r.type));
   const totals = Object.entries(known.reduce((m, r) => ((m[r.type] = (m[r.type] ?? 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
   const rules = sel.map((r, i) => ({ r, i })).filter(({ r }) => r.rule).map(({ r, i }) => {
@@ -46,6 +74,35 @@ export function recurrence(rows, { type } = {}) {
   });
   const outside = sel.filter(r => !TYPES.includes(r.type));
   return { totals, rules, outside: outside.map(r => ({ date: r.date, type: r.rawType })) };
+}
+
+/** What the Qualità page shows from ai-errors.md: the lines it cannot read, the ones without a valid type, who saw the
+ *  errors day by day, and per rule whether its error (same official type, an area sharing a word) came back within
+ *  windowDays: 'tornato' · 'non-tornato' · 'troppo-presto' (rule younger than windowDays and not back yet) ·
+ *  'senza-tipo' (its own line has no valid type). today = AAAA-MM-GG. */
+export function quality(text, { today, windowDays = WINDOW_DAYS } = {}) {
+  const dated = String(text ?? '').split(/\r?\n/).filter(l => /^- \d{4}-\d{2}-\d{2}/.test(l));
+  const rows = parse(text ?? '').map(r => ({ ...r, canon: canonType(r.rawType) }));
+  const read = new Set(rows.map(r => r.line));
+  const unparsed = dated.filter(l => !read.has(l)).map(l => ({ date: l.slice(2, 12), line: l }));
+  const invalid = rows.filter(r => !r.canon).map(r => ({ date: r.date, type: r.rawType, line: r.line }));
+  const byDay = new Map();
+  for (const l of dated) {
+    // `owner`: the app's Qualità page reads this key (the same in the published product, where the name is generic)
+    const d = l.slice(2, 12), s = seenBy(l), e = byDay.get(d) ?? { date: d, owner: 0, other: 0, unknown: 0 };
+    e[s === null ? 'unknown' : byOwner(s) ? 'owner' : 'other']++;
+    byDay.set(d, e);
+  }
+  const rules = rows.map((r, i) => ({ r, i })).filter(({ r }) => r.rule).map(({ r, i }) => {
+    const again = r.canon ? rows.slice(i + 1).filter(x => x.canon === r.canon && x.date >= r.date && daysBetween(r.date, x.date) <= windowDays && near(x.area, r.area)) : [];
+    const age = today ? daysBetween(r.date, today) : Infinity;
+    const status = !r.canon ? 'senza-tipo' : again.length ? 'tornato' : age < windowDays ? 'troppo-presto' : 'non-tornato';
+    return { date: r.date, type: r.canon ?? r.rawType, area: r.area, rule: r.rule, status, ageDays: Number.isFinite(age) ? age : null, again: again.map(x => ({ date: x.date, line: x.line })) };
+  });
+  const totals = Object.entries(rows.filter(r => r.canon).reduce((m, r) => ((m[r.canon] = (m[r.canon] ?? 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
+  const dates = dated.map(l => l.slice(2, 12)).sort();
+  return { today: today ?? null, windowDays, from: dates[0] ?? null, to: dates.at(-1) ?? null, lines: dated.length, typed: rows.length - invalid.length,
+    unparsed, invalid, seenByDay: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)), totals, rules };
 }
 
 export function render(res) {

@@ -19,8 +19,8 @@ vorrei fossero troppo"). Sources and measures: `reviews/2026-10-10-agenti.md`.
 name: kebab-case, = file name
 description: <what it does, one sentence>. Use when <{{OWNER}}'s words / situations>. Not for <X> (use <other agent>). <one hard limit>.
 tools: minimal comma list (read-only agents: Bash, Read, Grep, Glob); MCP tools by exact name
-model: opus            # hub.md "Model": Opus for every agent; Cursor ignores it (model: inherit in the pointer)
-effort: high|medium    # high for hunts, reviews, QA, brain edits; medium for log reading and text writing
+model: opus            # harness/models.md: default, callers override by task kind; Cursor ignores it (model: inherit in the pointer)
+effort: medium         # harness/models.md: every Opus run medium; high/xhigh only when {{OWNER}} asks
 ```
 
 - `description` ≤ ~500 chars, English, third person: it is the only text the caller sees when choosing.

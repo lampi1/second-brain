@@ -209,6 +209,18 @@ describe('Handoffs', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('remembers which outcomes a tool call already gave its agent (no wake-up message for those)', () => {
+    const { h } = make();
+    const a = h.open({ ...req, kind: 'login', account: { user: 'mario@example.com', found: true } });
+    expect(a.account).toEqual({ user: 'mario@example.com', found: true });
+    expect(h.wasDelivered(a.id)).toBe(false);
+    h.delivered(a.id);
+    expect(h.wasDelivered(a.id)).toBe(true);
+    expect(h.lastPoll(a.id)).toBeUndefined();
+    h.polled(a.id);
+    expect(h.lastPoll(a.id)).toBe(5);
+  });
+
   it('cancels the hand-offs of a closed tab', async () => {
     const { h } = make();
     const a = h.open(req);

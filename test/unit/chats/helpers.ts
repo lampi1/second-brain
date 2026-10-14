@@ -10,6 +10,9 @@ export const FAKE = path.resolve(import.meta.dirname, '..', '..', 'fixtures', 'f
 export const FAKE_CURSOR = path.resolve(import.meta.dirname, '..', '..', 'fixtures', 'fake-cursor-acp.mjs');
 
 export interface CursorLog { pid: number; argv?: string[]; method?: string; params?: Record<string, unknown>; answer?: { outcome?: Record<string, unknown> } | null; exit?: string }
+/** A real 1x1 PNG (base64), for pasted-image tests. */
+export const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 export function cursorLog(file: string): CursorLog[] {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as CursorLog) : [];
 }
@@ -33,8 +36,8 @@ export function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
-/** Lines the fake CLI wrote to $FAKE_CLAUDE_LOG: starts ({argv}), control requests ({control, request}), user lines ({user}). */
-export interface FakeLog { pid: number; argv?: string[]; cwd?: string; stateEventsEnv?: string | null; control?: string; request?: Record<string, unknown>; user?: string; grandchild?: number }
+/** Lines the fake CLI wrote to $FAKE_CLAUDE_LOG: starts ({argv}), control requests ({control, request}), user lines ({user, blocks}). */
+export interface FakeLog { pid: number; at?: number; argv?: string[]; cwd?: string; stateEventsEnv?: string | null; control?: string; request?: Record<string, unknown>; user?: string; blocks?: string[]; grandchild?: number; orphan?: number }
 export function fakeLog(file: string): FakeLog[] {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as FakeLog) : [];
 }
@@ -49,12 +52,15 @@ export interface RecSink extends SessionSink {
   patch: SessionPatch;
   patches: SessionPatch[];
   exited: { code: number | null; error: string | null } | null;
+  /** the model lists the CLI offered (sink.models) */
+  modelLists: { id: string; name: string }[][];
   last<K extends ChatItem['kind']>(kind: K): Extract<ChatItem, { kind: K }> | undefined;
 }
 
 export function recSink(): RecSink {
   const sink: RecSink = {
-    items: new Map(), trace: [], events: [], pendings: [], resolvedIds: [], patch: {}, patches: [], exited: null,
+    items: new Map(), trace: [], events: [], pendings: [], resolvedIds: [], patch: {}, patches: [], exited: null, modelLists: [],
+    models(list) { sink.modelLists.push(list); },
     item(item, replace) { sink.events.push({ item, replace }); sink.items.set(item.id, item); if (item.kind === 'result') sink.trace.push('result'); },
     pending(req) { sink.pendings.push(req); },
     resolved(id) { sink.resolvedIds.push(id); },

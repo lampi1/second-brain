@@ -1,20 +1,32 @@
 // Builds the demo services (SB_DEMO=1; SB_DEMO_FREEZE=1 = deterministic) from demo.ts (chats, brain) and
-// demo-browser.ts (tabs as real WebContentsViews), with the real settings store and a real local MCP server where the
+// demo-browser.ts (tabs as real WebContentsViews), DevOps from devops/demo.ts (fixture JSON through the real service), with the real settings store and a real local MCP server where the
 // app-control tools are mounted (/mcp/app), so agents can drive the demo like the app. Why: one entry point for
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
-// views' visibility, a way to open a hand-off or a new question) and, when frozen, tells the UI the fixed clock after
+// views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
 // every page load (ui:command 'clock').
 import { app } from 'electron';
-import type { CliStatus, PendingRequest } from '../shared/contract';
-import { appControlTools } from './appctl/tools';
+import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
 import { ConfigStore } from './brain/config';
-import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit } from './demo';
+import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
+import { Procedures } from './brain/procedures';
+import { writeDemoProcedures } from './brain/procedures-demo';
+import { demoDevopsRun } from './devops/demo';
+import { DevopsService } from './devops/service';
+import { gitBranches } from './chats/branch';
+import path from 'node:path';
 import { log, errText } from './log';
-import { McpServer, mcpPortFromEnv, type McpTool } from './mcp/server';
-import { toMcp, type Ctx, type Wired } from './wiring';
+import { McpServer, mcpPortFromEnv } from './mcp/server';
+import { recordMcpPort } from './health';
+import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createImprove, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
+import { SkillsService } from './skills/service';
+import { demoSkillsHome } from './skills/demo';
+import fs from 'node:fs';
 
 const demoCli = (version: string, account: string): CliStatus => ({ found: true, path: '(demo)', version, loggedIn: true, account });
+
+/** the demo chats' folders (they do not exist) → made-up branches for the "Stato" view */
+const DEMO_BRANCHES: Record<string, string> = { brain: 'main', 'alfa-e2e': 'feat/rimborsi-parziali', 'alfa-shop': 'fix/totale-ordine' };
 
 export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const freeze = process.env.SB_DEMO_FREEZE === '1';
@@ -28,16 +40,37 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const brain = new DemoBrain(emit, chats, s, new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT }));
   chats.start();
   brain.start();
+  const devopsRun = demoDevopsRun(now);
+  const devops = new DevopsService({
+    file: path.join(ctx.userData, 'devops-demo.json'), brainRoot: () => 'demo', locate: () => 'devops-me.mjs (demo)', locateQa: () => 'qa-status.mjs (demo)',
+    settings: () => brain.settings().devops, run: (script, args) => devopsRun(script, args),
+    emit: st => ctx.emitter.emit('devops:state', st), feed: ev => brain.publish(ev), now,
+  });
+  brain.onSettingChange(c => { if (c.key.startsWith('devops.')) devops.schedule(); });
+  devops.schedule();
+  brain.serveApi('/api/quality', () => demoQuality());
+  // the Procedure page: made-up procedure files read by the real scanner (masking included)
+  const procDir = writeDemoProcedures(path.join(ctx.userData, 'demo-procedures'), now());
+  const procedures = new Procedures(() => procDir);
+  brain.serveApi('/api/procedures', () => procedures.list());
+  brain.serveApi('/api/procedure', q => procedures.get(q.get('id') ?? ''));
+  brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
-  const tools = appControlTools({ chats, browser, brain, window: ctx.window, version: app.getVersion(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) });
-  mcp.mount('/mcp/app', {
-    name: 'app', instructions: 'Control and inspect the second-brain app (demo data). It can never answer questions or permissions.',
-    tools: tools.map((t): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => toMcp(await t.run(a)) })),
-  });
-  try { await mcp.listen(mcpPortFromEnv()); } catch (e) {
+  // "Esegui" runs for real in the demo too (only on the user's click): the e2e tests run a harmless Write-Output
+  const runner = commandRunner(ctx, chats);
+  const asks = attachCommandAsks(ctx, runner, brain, now);
+  // the demo's scripted Regia answers every message: only an e2e test that asks for it gets the news
+  const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
+  // same for a run's result: only an e2e test that asks for it
+  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
+  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null);
+  // show_ui's visuals (ADR 0033): the demo has no chat endpoints, __sbDemo.show calls the same store
+  const artifacts = attachArtifacts(ctx, chats, now);
+  attachAppTools(mcp, { chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
+  try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
-    await mcp.listen(0);
+    recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
   }
   browser.mcpUrl = `http://127.0.0.1:${mcp.port}/mcp`;
 
@@ -47,22 +80,60 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     freeze,
     layout: () => browser.lastLayout(),
     views: () => browser.views(),
-    handoff: (tabId: string, reason: string, instructions: string) => browser.openHandoff(tabId, s.tabs.find(t => t.id === tabId)?.ownerChatId ?? null, reason, instructions, now()),
+    handoff: (tabId: string, reason: string, instructions: string, extra?: Partial<Pick<BrowserHandoff, 'kind' | 'env' | 'account'>>) =>
+      browser.openHandoff(tabId, s.tabs.find(t => t.id === tabId)?.ownerChatId ?? null, reason, instructions, now(), extra),
     /** an assistant message as a chat would stream it (e2e: markdown sanitizing) */
     say: (chatId: string, text: string) => chats.push(chatId, { kind: 'assistant', id: chats.nextId(), at: now(), text }),
+    /** a reasoning block (e2e: the prose a model wrote only there before its question) */
+    think: (chatId: string, text: string) => chats.push(chatId, { kind: 'thinking', id: chats.nextId(), at: now(), text }),
+    /** a tool row as a live chat shows it (e2e: the report a turn wrote, offered in the question's context) */
+    toolDone: (chatId: string, name: string, input: unknown, output?: string) => chats.push(chatId, { kind: 'tool', id: chats.nextId(), at: now(), name, summary: name, input, status: 'ok', ...(output !== undefined ? { output } : {}) }),
     failNextAnswer: () => { chats.failNextAnswer = true; },
+    /** the answers the UI sent so far (e2e: what reached the chat) */
+    answers: () => chats.answered,
+    /** the chat stops by itself: its open requests leave without an answer (e2e: a popup must go at once) */
+    stop: (chatId: string) => chats.stop(chatId),
+    /** a whole turn of a chat: it works, writes this message, ends idle (e2e: a command left for the user) */
+    turn: (chatId: string, text: string) => {
+      chats.patch(chatId, { state: 'running' });
+      chats.push(chatId, { kind: 'assistant', id: chats.nextId(), at: now(), text });
+      chats.patch(chatId, { state: 'idle', pending: 0, lastText: text.split(/\r?\n/)[0] ?? '' });
+    },
+    /** a chat ends its turn agoMs before now, idle with a clean result (e2e: the auto-close) */
+    finish: (chatId: string, agoMs: number, isError = false) => {
+      chats.push(chatId, { kind: 'result', id: chats.nextId(), at: now() - agoMs, costUsd: 0.1, durationMs: 1000, turns: 1, isError });
+      chats.patch(chatId, { state: 'idle', pending: 0 });
+    },
+    /** a chat the app resumed by itself after a restart (e2e: the "ripresa dopo il riavvio" mark) */
+    resumed: (chatId: string) => chats.patch(chatId, { resumedAt: now() }),
     clearThumbs: () => browser.clearThumbs(),
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),
+    /** show_ui as the chat would call it (e2e: a visual in the chat, in its Regia, on its next question); the error text on a wrong call */
+    show: (chatId: string, args: Record<string, unknown>) => { try { return artifacts.show(chatId, args); } catch (e) { return `Error: ${errText(e)}`; } },
     /** a new request from a chat (e2e: the global layer must show it without stealing focus) */
     ask: (chatId: string, req: Omit<PendingRequest, 'id' | 'chatId' | 'at'>) => { void chats.ask(chatId, req, new AbortController().signal).catch(() => {}); },
+    /** a tool call of a chat, running or finished (e2e: the live brain map); the same id again updates it */
+    tool: (chatId: string, t: { id: string; name: string; input: unknown; summary?: string; status?: 'running' | 'ok' | 'error' }) =>
+      chats.upsert(chatId, { kind: 'tool', id: t.id, at: now(), name: t.name, summary: t.summary ?? t.name, input: t.input, status: t.status ?? 'running' }),
   };
   log.info('demo', 'demo services started', { data: { freeze, chats: s.chats.length, tabs: s.tabs.length, mcpPort: mcp.port } });
 
+  // "Skill e agenti" on a fictional home under userData (never the user's ~/.claude); deletes for real there
+  const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
+
   return {
-    chats, browser, brain, mcp,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later: createLater(ctx),
+    // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
+    branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown(), mcp.close()]); },
-    killNow: () => { void chats.shutdown(); }, // the demo starts no processes: stopping its timers is enough
+    shutdown: async () => { artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(devops.shutdown()), brain.shutdown(), mcp.close()]); },
+    killNow: () => {
+      void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
+      // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the
+      // stable launcher's "still quitting" path can be tried for real on a sandbox release (scripts/release.mjs launch)
+      const ms = Math.min(Number(process.env.SB_DEMO_QUIT_MS) || 0, 60_000);
+      if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    },
   };
 }

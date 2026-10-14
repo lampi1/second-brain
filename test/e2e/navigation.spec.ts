@@ -1,6 +1,6 @@
 // E2E of navigation and notifications (frozen demo): an important event → a toast in the global layer → its action
 // opens the right place with the element highlighted; the notification center (filter, mark all read, remembered);
-// section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the Regia docked on a brain page;
+// section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the Regia overlay on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, layerPage, shot, windowShot } from './helpers';
@@ -12,26 +12,28 @@ test('an important event shows a toast above everything; its action opens the pl
   const { app, page } = await launchDemo();
   await page.getByTestId('nav-costi').click();
   await expect(page.getByTestId('page-costi')).toBeVisible();
-  await event(app, { kind: 'error', title: 'Test e2e rossi', detail: '2 falliti su 12', chatId: 'mappa' });
+  await event(app, { kind: 'chat-failed', title: 'Test e2e rossi', detail: 'il turno è finito con un errore', chatId: 'mappa' });
   const layer = await layerPage(app);
-  await expect(layer.getByTestId('ev-toast-error')).toContainText('Test e2e rossi');
-  await expect(layer.getByTestId('ev-toast-open-error')).toHaveText('Apri');
+  await expect(layer.getByTestId('ev-toast-chat-failed')).toContainText('Test e2e rossi');
+  await expect(layer.getByTestId('ev-toast-open-chat-failed')).toHaveText('Apri');
   await windowShot(app, 'event-toast');
-  await layer.getByTestId('ev-toast-open-error').click();
+  await layer.getByTestId('ev-toast-open-chat-failed').click();
   await expect(page.getByTestId('view-mosaico')).toBeVisible();
-  await expect(page.locator('[data-sb-id="chat-mappa"][data-highlighted="true"]')).toBeVisible(); // the folded chat came back, highlighted
-  await expect(layer.getByTestId('ev-toast-error')).toHaveCount(0);
-  // a quiet kind (an idea) never toasts: only the center and the badge
+  await expect(page.locator('[data-sb-id="chat-mappa"][data-highlighted="true"]')).toBeVisible(); // the chat is highlighted
+  await expect(layer.getByTestId('ev-toast-chat-failed')).toHaveCount(0);
+  // quiet kinds (an idea, a finished chat, a logged error) never toast: only the center
   await event(app, { kind: 'idea', title: 'Riassunto automatico al ritorno' });
+  await event(app, { kind: 'chat-done', title: 'QA', chatId: 'qa' });
+  await event(app, { kind: 'error', title: 'Comando lanciato due volte' });
   await page.waitForTimeout(600);
-  await expect(layer.getByTestId('ev-toast-idea')).toHaveCount(0);
+  await expect(layer.locator('[data-testid^="ev-toast-"]')).toHaveCount(0);
   await app.close();
 });
 
 test('notification center: filter by kind, mark all read (remembered after a reload), mute a kind', async () => {
   const { app, page } = await launchDemo();
   await event(app, { kind: 'idea', title: 'Idea nuova' });
-  await event(app, { kind: 'error', title: 'Errore nuovo' });
+  await event(app, { kind: 'chat-failed', title: 'Errore nuovo', chatId: 'qa' });
   await page.keyboard.press('Control+Shift+N');
   await expect(page.getByTestId('center')).toBeVisible();
   await page.getByTestId('nc-filter-idea').click();
@@ -44,34 +46,69 @@ test('notification center: filter by kind, mark all read (remembered after a rel
   await expect(page.locator('[data-testid="nc-list"] [data-unread]')).toHaveCount(0);
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByTestId('tile-regia')).toBeVisible();
+  await expect(page.getByTestId('regia-pill')).toBeVisible();
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   // mute a kind from its row (settings mute.<kind>): its toasts stop
   await page.keyboard.press('Control+Shift+N');
-  const row = page.locator('[data-testid="nc-list"] [data-kind="error"]').first();
+  const row = page.locator('[data-testid="nc-list"] [data-kind="chat-failed"]').first();
   await row.hover();
   await row.locator('[data-testid^="nc-mute-"]').click();
   await page.keyboard.press('Escape');
-  await event(app, { kind: 'error', title: 'Altro errore' });
+  await event(app, { kind: 'chat-failed', title: 'Altro errore', chatId: 'qa' });
   const layer = await layerPage(app);
   await page.waitForTimeout(600);
-  await expect(layer.getByTestId('ev-toast-error')).toHaveCount(0);
+  await expect(layer.getByTestId('ev-toast-chat-failed')).toHaveCount(0);
   await app.close();
 });
 
 test('section badges count new events and clear when the section is visited', async () => {
-  const { app, page } = await launchDemo();
-  const badge = page.getByTestId('nav-badge-idee');
-  const before = Number((await badge.textContent()) || 0);
-  await event(app, { kind: 'idea', title: 'Una idea in più' });
-  await expect(badge).toHaveText(String(before + 1));
+  // a live clock: frozen, the visit and the event share one instant and the event is never newer than the visit
+  const { app, page } = await launchDemo({ freeze: false });
+  // Costi's badge is a warning mark, not a number (WARN_SECTIONS): it shows with a new budget event
+  const badge = page.getByTestId('nav-badge-costi');
+  await page.getByTestId('nav-costi').click();
+  await expect(badge).toHaveText('');
   await page.getByTestId('nav-idee').click();
-  await expect(page.getByTestId('page-idee')).toBeVisible();
+  await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
+  await expect(badge).toHaveText('!');
+  // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was
+  const ideas = page.getByTestId('nav-badge-idee');
+  const ideasBefore = await ideas.textContent();
+  await event(app, { kind: 'idea', title: 'Una idea in più' });
+  await page.waitForTimeout(400);
+  await expect(ideas).toHaveText(ideasBefore ?? '');
+  await page.getByTestId('nav-costi').click();
+  await expect(page.getByTestId('page-costi')).toBeVisible();
   await expect(badge).toHaveText('');
   await app.close();
 });
 
-test('back/forward, recents, Ctrl+1, G-letter keys, the Regia docked on a page', async () => {
+test('the bell counts only what needs the user; the center keeps everything else as a list to read', async () => {
+  const { app, page } = await launchDemo();
+  // the frozen demo stamps every event at the same time: no "read all" (it would cover the new ones too), a baseline
+  const bell = page.getByTestId('bell');
+  const count = async () => Number((await bell.getAttribute('aria-label'))?.match(/(\d+) da leggere/)?.[1] ?? NaN);
+  await expect(bell).toBeVisible();
+  const before = await count();
+  // noise: none of these counts in the bell
+  for (const e of [
+    { kind: 'chat-done', title: 'Fix totale ordine', chatId: 'qa' }, { kind: 'error', title: 'Comando lanciato due volte' }, { kind: 'idea', title: 'Riassunto al ritorno' },
+    { kind: 'now', title: 'Filo aggiornato' }, { kind: 'playbook', title: 'qa' }, { kind: 'sync-ok', title: 'GitHub aggiornato' }, { kind: 'proposal', title: 'Proposta' },
+  ]) await event(app, e);
+  await page.waitForTimeout(400);
+  expect(await count()).toBe(before);
+  // what needs him: counted
+  await event(app, { kind: 'chat-failed', title: 'Mappa', detail: 'il turno è finito con un errore', chatId: 'mappa' });
+  await event(app, { kind: 'sync-blocked', title: 'Pubblicazione bloccata (prodotto nel cervello)', detail: 'src/a.ts:3 rule secret' });
+  await expect.poll(count).toBe(before + 2);
+  await page.keyboard.press('Control+Shift+N');
+  await expect(page.getByTestId('nc-unread')).toHaveText(String(before + 2));
+  await expect(page.locator('[data-testid="nc-list"] [data-kind="chat-done"]').first()).toBeVisible(); // still in the list
+  await shot(page, 'notifications-bell-center');
+  await app.close();
+});
+
+test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('nav-costi').click();
   await page.getByTestId('nav-idee').click();
@@ -94,18 +131,18 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the Regia docked on a page',
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   // the Regia without leaving the page
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-dock')).toBeVisible();
-  await page.getByTestId('regia-dock-input').fill('che si fa adesso?');
-  await page.getByTestId('regia-dock-input').press('Enter');
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await page.getByTestId('regia-input').fill('che si fa adesso?');
+  await page.getByTestId('regia-input').press('Enter');
   // the Regia waits on its decision: the message is queued (sent when it is free), the decision answerable right here
-  await expect(page.getByTestId('regia-dock-input-queued-0')).toContainText('che si fa adesso?');
-  await page.locator('[data-testid="regia-dock"] [data-request-key="regia/regia-q1"]').focus();
+  await expect(page.getByTestId('regia-input-queued-0')).toContainText('che si fa adesso?');
+  await page.locator('[data-testid="regia-overlay"] [data-request-key="regia/regia-q1"]').focus();
   await page.keyboard.press('1');
-  await expect(page.getByTestId('regia-dock')).toContainText('Ecco il quadro');
+  await expect(page.getByTestId('regia-overlay')).toContainText('Ecco il quadro');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
-  await shot(page, 'regia-dock');
+  await shot(page, 'regia-overlay');
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-dock')).toHaveCount(0);
+  await expect(page.getByTestId('regia-overlay')).toHaveCount(0);
   // the map: full screen, browser views hidden, Esc closes
   await page.getByTestId('nav-map').click();
   await expect(page.getByTestId('brain-map')).toBeVisible();

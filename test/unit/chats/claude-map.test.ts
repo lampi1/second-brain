@@ -55,6 +55,9 @@ describe('claude-map', () => {
     const qs = questionsFrom({ questions: [{ question: 'Q1', header: 'H', options: [{ label: 'A', description: 'd' }, { nolabel: 1 }], multiSelect: true }, { bad: 1 }] });
     expect(qs).toEqual([{ question: 'Q1', header: 'H', options: [{ label: 'A', description: 'd' }], multiSelect: true }]);
     expect(questionsFrom(null)).toEqual([]);
+    // an option's preview (a draft to approve) comes along; a blank one does not
+    expect(questionsFrom({ questions: [{ question: 'Q', options: [{ label: 'A', preview: '## Bozza\ntesto' }, { label: 'B', preview: '  ' }] }] })[0]!.options)
+      .toEqual([{ label: 'A', preview: '## Bozza\ntesto' }, { label: 'B' }]);
     expect(flattenAnswers({ Q1: ['A', 'B'], Q2: 'C' })).toEqual({ Q1: 'A, B', Q2: 'C' });
   });
 

@@ -1,10 +1,12 @@
-// Fatto e standup: what was done on a day (today by default; ← → or the date picker for another day), grouped by
-// topic with DevOps links (PRs, work items), the stand-up sentences (today), the diary of the day as a table and the
-// full technical report folded. Data: /api/day?kind=report&date=…, /api/tables.
-import { normReport, normTables, type JournalRow } from '../types';
+// Fatto e standup: what the work Regia and its chats did on a day (today by default; ← → or the date picker for
+// another day), grouped by topic with DevOps links (PRs, work items), the stand-up sentences (today), the diary of the
+// day as a table and the full technical report folded. The app's own work is left out (lib/appwork.ts: it has its
+// place in "Migliora l'app"). Data: /api/day?kind=report&date=…, /api/tables.
+import { normTables, type JournalRow } from '../types';
 import { useBrain } from '../api';
 import { dayName, fmt, isDay, shiftDay } from '../lib/format';
 import { ownerOf } from '../lib/text';
+import { normWorkReport, workJournal } from '../lib/appwork';
 import { Async, PageHead } from '../components/States';
 import { DataTable, type Col } from '../components/DataTable';
 import { Markdown } from '../components/Markdown';
@@ -17,9 +19,9 @@ export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
   const t = useBrain('/api/tables', normTables);
   const today = t.data?.today ?? '';
   const day = isDay(arg) ? arg : today;
-  const rep = useBrain(day ? `/api/day?kind=report&date=${day}` : null, normReport);
+  const rep = useBrain(day ? `/api/day?kind=report&date=${day}` : null, normWorkReport);
   const owner = t.data ? ownerOf(t.data.ideas) : '';
-  const journal = (t.data?.journal ?? []).filter(r => r.data === day);
+  const journal = workJournal((t.data?.journal ?? []).filter(r => r.data === day));
   const outcomes = rep.data ? rep.data.rows.filter(r => r.kind !== 'diario' || DONE_TAGS.test(r.tag ?? '')) : [];
   const prs = outcomes.filter(r => /^pr-/.test(r.kind)).length, items = outcomes.filter(r => r.kind === 'work-item').length;
   const isToday = day === today;

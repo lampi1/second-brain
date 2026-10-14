@@ -4,21 +4,32 @@
 // (computed by the brain). Right: the chosen piece (what it is, file, use, links in and out, members of a group).
 // Bottom: the flow player. Without WebGL (or when asked) the same map is a 2D list by layer, with the same menu and
 // player. Data: /api/map (essential view = its `simple` graph), /api/files (to open files in Esplora).
+// Names: a piece reads by the brain's speaking label; its file (or agent, /skill) shows small under it in the list, in
+// the 3D hover card and next to a group's members (lib/map.ts fileName); the search finds both.
+// Live map (`live`, given by the app): the neurons at work now light up (chats with their engine, brain files read or
+// written, tools, agents, the browser), their links pulse while in progress and fade out (lib/live.ts); the legend at
+// the bottom right lists the chats at work (a click opens one) and turns the live map off. A click on a live chat's
+// neuron opens the chat; any other lit piece shows "Adesso" in its panel, with the chats to open.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { normFiles, normMap, type MapEdge, type MapNode } from '../types';
 import { useBrain } from '../api';
-import { byLayer, centerId, defaultKinds, EDGE_KINDS, edgeKey, findNode, groupIndex, layerColor, NIGHT, pickView, relFile, weakPoints } from '../lib/map';
+import { byLayer, centerId, defaultKinds, EDGE_KINDS, edgeKey, fileName, findNode, groupIndex, layerColor, NIGHT, pickView, relFile, weakPoints } from '../lib/map';
 import { fmt } from '../lib/format';
 import { short } from '../lib/text';
 import { IconChevL, IconChevR, IconClose, IconPause, IconPlay, IconSearch, Tabs, useEsc } from '../components/ui';
 import { createEngine, webglAvailable, type Engine } from './engine';
+import { liveGraph, liveMoving, type LiveGraph, type LiveSnapshot, type LiveSource } from '../lib/live';
 
 type Tab = 'flussi' | 'strati' | 'deboli';
 type Sel = { kind: 'node'; id: string } | { kind: 'link'; edge: MapEdge } | null;
 
-export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }: {
+export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, live: source, onOpenChat }: {
   onClose: () => void;
   onNavigate?: (target: string) => void;
+  /** what the app's chats are doing now (the live map); without it the map is the brain's structure only */
+  live?: LiveSource;
+  /** open a chat of the app (a click on a lit neuron or in the legend) */
+  onOpenChat?: (chatId: string) => void;
   /** start in the full view ("mappa/tutto") */
   full?: boolean;
   /** a piece to fly to at start */
@@ -42,6 +53,8 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [q, setQ] = useState('');
+  const [liveOn, setLiveOn] = useState(() => { try { return localStorage.getItem('sb.map.live') !== '0'; } catch { return true; } });
+  const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -52,7 +65,20 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
   const viewKey = view ? `${view.essential}|${view.nodes.map(n => n.id).join(',')}` : '';
   const fileSet = useMemo(() => new Set(files.data ?? []), [files.data]);
   const byId = useMemo(() => new Map((view?.nodes ?? []).map(n => [n.id, n])), [view]);
-  const allById = useMemo(() => new Map([...(data?.nodes ?? []), ...(view?.nodes ?? [])].map(n => [n.id, n])), [data, view]);
+  // the live layer: recomputed from the app's snapshot (at most every 400 ms while chats work, every second while a glow fades)
+  const lg = useMemo<LiveGraph | null>(() => (snap && view && data ? liveGraph(snap, view.nodes, data.nodes, data.root) : null), [snap, view, data]);
+  const lgRef = useRef<LiveGraph | null>(null);
+  lgRef.current = lg;
+  useEffect(() => {
+    if (!source || !liveOn) { setSnap(null); return; }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const pull = () => { timer = null; setSnap(source.get()); };
+    pull();
+    const off = source.subscribe(() => { if (!timer) timer = setTimeout(pull, 400); });
+    const fade = setInterval(() => { const g = lgRef.current; if (g && liveMoving(g) && !document.hidden) pull(); }, 1000);
+    return () => { off(); clearInterval(fade); if (timer) clearTimeout(timer); };
+  }, [source, liveOn]);
+  const allById = useMemo(() => new Map([...(data?.nodes ?? []), ...(view?.nodes ?? []), ...(lg?.nodes ?? [])].map(n => [n.id, n])), [data, view, lg]);
   const groups = useMemo(() => groupIndex(view?.nodes ?? []), [view]);
   const shownId = useCallback((id: string) => (byId.has(id) ? id : groups.get(id) ?? null), [byId, groups]);
   const center = useMemo(() => centerId(view?.nodes ?? []), [view]);
@@ -63,6 +89,13 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
     const ids = new Set(nodes.map(n => n.id));
     return { nodes, edges: view.edges.filter(e => kindOn[e.kind] && ids.has(e.from) && ids.has(e.to)) };
   }, [view, layerOn, kindOn]);
+  // what the engine draws: the visible map plus the live neurons and links (in the layers that are on)
+  const drawn = useMemo(() => {
+    if (!lg) return visible;
+    const nodes = [...visible.nodes, ...lg.nodes.filter(n => layerOn[n.layer] !== false)];
+    const ids = new Set(nodes.map(n => n.id));
+    return { nodes, edges: [...visible.edges, ...lg.edges.filter(e => ids.has(e.from) && ids.has(e.to))] };
+  }, [visible, lg, layerOn]);
   const flow = view?.flows.find(f => f.id === flowId) ?? null;
   const cur = flow?.steps[step] ?? null;
   const labelOf = (id: string) => allById.get(id)?.label ?? id;
@@ -73,7 +106,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
   useEffect(() => { if (mode !== 'flat') setGl(webglAvailable() ? 'ok' : 'fail'); }, [mode]);
 
   // the latest handlers and state for callbacks that outlive a render (engine events, the player's timer)
-  const live = useRef({ pick: (_id: string) => {}, showLink: (_e: MapEdge) => {}, go: (_i: number) => {}, flowId: null as string | null, step: 0, len: 0, visible, center, focusId: null as string | null, menu: true, selOpen: false, hi: { nodes: new Set<string>(), links: new Set<string>() } });
+  const live = useRef({ pick: (_id: string) => {}, showLink: (_e: MapEdge) => {}, go: (_i: number) => {}, flowId: null as string | null, step: 0, len: 0, visible: drawn, lg: null as LiveGraph | null, center, focusId: null as string | null, menu: true, selOpen: false, hi: { nodes: new Set<string>(), links: new Set<string>() } });
   // the 3D engine: created per view (essential/full), destroyed on close or when the list is shown
   useEffect(() => {
     if (flat || gl !== 'ok' || !view || !canvas.current) return;
@@ -83,21 +116,28 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
       essential: view.essential, nodes: L.visible.nodes, edges: L.visible.edges, center: L.center, focus: L.focusId,
       onNode: id => live.current.pick(id), onLink: edge => live.current.showLink(edge),
       onBackground: () => { if (!live.current.flowId) { setHi({ nodes: new Set(), links: new Set() }); setSel(null); } },
-      insets: () => ({ left: live.current.menu ? 344 : 0, right: live.current.selOpen ? 364 : 0 }),
+      insets: () => ({ left: live.current.menu ? 344 : 0, right: live.current.selOpen ? 364 : 0 }), root: data?.root ?? '',
     }).then(x => {
       if (dead) { x.destroy(); return; }
       e = x; engine.current = x;
       x.setData(live.current.visible.nodes, live.current.visible.edges);
       x.setHighlight(live.current.hi.nodes, live.current.hi.links); // a recreated engine keeps the lit flow step / piece
+      x.setLive(live.current.lg);
     }, err => { if (!dead) { setGl('fail'); setGlError(err instanceof Error ? err.message : String(err)); } });
     return () => { dead = true; e?.destroy(); engine.current = null; };
   }, [flat, gl, viewKey]);
-  useEffect(() => { engine.current?.setData(visible.nodes, visible.edges); }, [visible]);
+  useEffect(() => { engine.current?.setData(drawn.nodes, drawn.edges); }, [drawn]);
+  useEffect(() => { engine.current?.setLive(lg); }, [lg]);
+  // a live piece that faded out while chosen: its panel and the dimming go with it
+  useEffect(() => { if (sel?.kind === 'node' && !allById.has(sel.id)) { setSel(null); setHi({ nodes: new Set(), links: new Set() }); } }, [allById, sel]);
   useEffect(() => { engine.current?.setHighlight(hi.nodes, hi.links); if (flat && hi.nodes.size) document.querySelector('.bx-map-flat button.lit')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [hi, flat]);
 
   function pick(id: string) {
     const n = allById.get(id);
     if (!n) return;
+    // a live chat's neuron stands for the chat itself: the click opens it
+    const chat = id.startsWith('live:chat:') ? lg?.chatOf.get(id) : undefined;
+    if (chat && onOpenChat) { onOpenChat(chat); return; }
     const sid = shownId(id) ?? id;
     if (n.layer && layerOn[n.layer] === false) setLayerOn(s => ({ ...s, [n.layer]: true }));
     const out = (view?.edges ?? []).filter(e => e.from === sid && kindOn[e.kind]), inn = (view?.edges ?? []).filter(e => e.to === sid && kindOn[e.kind]);
@@ -118,7 +158,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
     setHi({ nodes: new Set([s.from, s.to]), links: new Set([edgeKey(s.from, s.to, 'flusso')]) });
     engine.current?.frame([s.from, s.to], view?.essential ? 520 : 240);
   }
-  live.current = { pick, showLink, go, flowId, step, len: flow?.steps.length ?? 0, visible, center, focusId: focus ? shownId(focus) : null, menu, selOpen: !!sel, hi };
+  live.current = { pick, showLink, go, flowId, step, len: flow?.steps.length ?? 0, visible: drawn, lg, center, focusId: focus ? shownId(focus) : null, menu, selOpen: !!sel, hi };
   // a new flow starts at its first step; playing moves one step every 2.6 s and stops at the end
   useEffect(() => { if (flowId) live.current.go(0); }, [flowId]);
   useEffect(() => {
@@ -137,10 +177,44 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
   const search = () => { const n = findNode([...(view?.nodes ?? []), ...(data?.nodes ?? [])], q); if (n) pick(n.id); };
 
   const node = sel?.kind === 'node' ? allById.get(sel.id) ?? null : null;
+  const glow = node ? lg?.glow.get(node.id) : undefined;
+  const titleOf = (chatId: string) => snap?.chats.find(c => c.id === chatId)?.title ?? 'chat';
+  const toggleLive = () => setLiveOn(v => { try { localStorage.setItem('sb.map.live', v ? '0' : '1'); } catch { /* per-viewer convenience only */ } return !v; });
   const out = node ? (view?.edges ?? []).filter(e => e.from === node.id && kindOn[e.kind]) : [];
   const inn = node ? (view?.edges ?? []).filter(e => e.to === node.id && kindOn[e.kind]) : [];
   const sub = view ? `${view.nodes.length} pezzi${view.essential ? ` (dei ${view.total} veri)` : ''} · ${view.flows.length} percorsi` : '';
   const showFlat = flat || gl === 'fail';
+  // the live map's legend: over the canvas at the bottom right, or at the top of the 2D list
+  const legend = data && source ? (
+          <section className={`bx-map-live${showFlat ? ' inline' : sel ? ' shifted' : ''}`} aria-label="Al lavoro adesso" data-testid="bx-map-live">
+            <div className="head">
+              <i className={`bx-live-dot${lg?.working.some(w => w.running) ? ' run' : ''}`} aria-hidden="true" />
+              <b>Al lavoro adesso</b>
+              <span className="sp" />
+              <button type="button" className="bx-btn ghost s" aria-pressed={liveOn} onClick={toggleLive} title={liveOn ? 'Spegni la mappa viva' : 'Accendi la mappa viva'} data-testid="bx-map-live-toggle">{liveOn ? 'Spegni' : 'Accendi'}</button>
+            </div>
+            {liveOn && lg && (
+              <>
+                <p className="counts">{lg.counts.chats} chat · {lg.counts.files} file · {lg.counts.tools} {lg.counts.tools === 1 ? 'strumento' : 'strumenti'}</p>
+                {lg.working.length ? (
+                  <ul>
+                    {lg.working.slice(0, 5).map(w => (
+                      <li key={w.id}>
+                        <button type="button" onClick={() => onOpenChat?.(w.id)} disabled={!onOpenChat} title="Apri la chat" data-testid="bx-map-live-chat">
+                          <i className={`bx-live-dot${w.running ? ' run' : ''}`} style={{ opacity: 0.35 + 0.65 * w.level }} aria-hidden="true" />
+                          <span className="grow"><span>{w.title}</span><small>{w.harness === 'cursor' ? 'Cursor' : 'Claude'} · {short(w.doing, 60)}</small></span>
+                        </button>
+                      </li>
+                    ))}
+                    {lg.working.length > 5 && <li className="more">e altre {lg.working.length - 5}</li>}
+                  </ul>
+                ) : <p className="counts">Nessuna chat al lavoro: la mappa è a riposo.</p>}
+                <p className="key"><span><i className="halo" />neurone al lavoro</span><span><i className="wire" />connessione in corso, poi si spegne</span></p>
+              </>
+            )}
+            {!liveOn && <p className="counts">Spenta: la mappa mostra solo com'è fatto il cervello.</p>}
+          </section>
+  ) : null;
 
   return (
     <div ref={root} className="bx bx-map" role="dialog" aria-modal="true" aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
@@ -164,14 +238,16 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
         ) : showFlat ? (
           <div className="bx-map-flat bx-scroll" data-testid="bx-map-flat" style={{ paddingLeft: menu ? undefined : 18 }}>
             {gl === 'fail' && !flat && mode !== 'flat' && <p className="bx-warnline" style={{ marginBottom: 12, background: 'rgba(242,182,76,0.08)' }}>La grafica 3D non parte su questo PC{glError ? ` (${glError})` : ' (WebGL non disponibile)'}: ecco la stessa mappa come elenco, per strato.</p>}
+            {legend}
             <div className="layers">
-              {view && byLayer({ ...view, nodes: visible.nodes }).map(l => (
+              {view && byLayer({ ...view, nodes: drawn.nodes }).map(l => (
                 <section key={l.id} className="layer" aria-label={l.label}>
                   <h3><span className="sw" style={{ background: layerColor(l.id) }} />{l.label}<span className="muted small" style={{ marginLeft: 'auto' }}>{l.nodes.length}</span></h3>
                   {l.nodes.map(n => (
-                    <button key={n.id} type="button" className={`${sel?.kind === 'node' && sel.id === n.id ? 'on' : ''} ${hi.nodes.has(n.id) ? 'lit' : ''}`} onClick={() => pick(n.id)}>
-                      <span>{n.label}{n.members?.length ? <span className="muted"> · {n.members.length}</span> : null}</span>
+                    <button key={n.id} type="button" className={`${sel?.kind === 'node' && sel.id === n.id ? 'on' : ''} ${hi.nodes.has(n.id) ? 'lit' : ''} ${lg?.glow.has(n.id) ? 'live' : ''}`} onClick={() => pick(n.id)}>
+                      <span>{lg?.glow.has(n.id) && <i className={`bx-live-dot${lg.glow.get(n.id)!.running ? ' run' : ''}`} aria-label="al lavoro adesso" />}{n.label}{n.members?.length ? <span className="muted"> · {n.members.length}</span> : null}</span>
                       {(n.short || n.what) && <small>{short(n.short || n.what, 90)}</small>}
+                      {fileName(n, data?.root ?? '') && <small className="mono bx-map-file">{fileName(n, data?.root ?? '')}</small>}
                     </button>
                   ))}
                 </section>
@@ -182,8 +258,10 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
           <>
             <div ref={canvas} className="bx-map-canvas" data-testid="bx-map-canvas" />
             <div className="bx-map-hint">Trascina per ruotare · rotella per lo zoom · clic su un pezzo</div>
+            {legend}
           </>
         )}
+
 
         {data && view && menu && (
           <aside className="bx-map-panel left" aria-label="Menu della mappa" data-testid="bx-map-menu">
@@ -262,6 +340,13 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
                 <div className="bx-map-piece">
                   <div className="title"><span className="sw" style={{ background: layerColor(node.layer) }} /><h3>{node.label}</h3></div>
                   {node.short && <p className="short">{node.short}</p>}
+                  {glow && (
+                    <div className="bx-map-now" data-testid="bx-map-now">
+                      <h4><i className={`bx-live-dot${glow.running ? ' run' : ''}`} aria-hidden="true" />Adesso</h4>
+                      <ul>{glow.doing.slice(0, 6).map((d, i) => <li key={i}>{short(d, 90)}</li>)}</ul>
+                      {onOpenChat && glow.chats.map(c => <button key={c} type="button" className="bx-btn s" onClick={() => onOpenChat(c)}>Apri «{short(titleOf(c), 40)}»</button>)}
+                    </div>
+                  )}
                   {node.what && node.kind !== 'gruppo' && <p className="what">{short(node.what, 500)}</p>}
                   <dl className="bx-kv">
                     {node.file && <><dt>File</dt><dd>{fileLink(node.file)}</dd></>}
@@ -272,7 +357,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode }:
                     {node.fields?.model && <><dt>Modello</dt><dd>{node.fields.model}{node.fields.effort ? ` · impegno ${node.fields.effort}` : ''}</dd></>}
                     {node.playbook && <><dt>Taccuino</dt><dd>{node.playbook.punti} punti</dd></>}
                   </dl>
-                  {node.members?.length ? <><h4>{node.kind === 'gruppo' ? `Dentro · ${node.members.length}` : `Insieme a lui · ${node.members.length}`}</h4><ul>{node.members.map(x => <li key={x.id}><b style={{ color: '#fff' }}>{x.label}</b>{x.what ? ` · ${short(x.what, 90)}` : ''}{x.uses != null ? <span className="muted"> · {x.uses} usi</span> : null}</li>)}</ul></> : null}
+                  {node.members?.length ? <><h4>{node.kind === 'gruppo' ? `Dentro · ${node.members.length}` : `Insieme a lui · ${node.members.length}`}</h4><ul>{node.members.map(x => <li key={x.id}><b style={{ color: '#fff' }}>{x.label}</b>{x.name && x.name !== x.label ? <span className="muted mono"> {x.name}</span> : null}{x.what ? ` · ${short(x.what, 90)}` : ''}{x.uses != null ? <span className="muted"> · {x.uses} usi</span> : null}</li>)}</ul></> : null}
                   {out.length > 0 && <><h4>Verso · {out.length}</h4><ul>{out.slice(0, 30).map((e, i) => <li key={i}>→ <button type="button" onClick={() => pick(e.to)}>{labelOf(e.to)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
                   {inn.length > 0 && <><h4>Da · {inn.length}</h4><ul>{inn.slice(0, 30).map((e, i) => <li key={i}>← <button type="button" onClick={() => pick(e.from)}>{labelOf(e.from)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
                 </div>

@@ -1,0 +1,69 @@
+// End-to-end: the Miglioramento page (ADR 0030) in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) with the demo's
+// /api/improve and 'learn:act' (demo.ts demoLearn): estimates with its typical error, coverage and n, results out of
+// the count, a proposal with its gain and [Applica] / [No], the after-check, [Ripristina]; routing "senza dati". The
+// clicks go through main and change the page. Screenshots: test-results/shots/miglioramento-*.png.
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { launch, setSize, shot } from './helpers';
+
+const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
+function fixtureBrain(): string {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-learn-'));
+  fs.mkdirSync(path.join(d, 'ops', 'tools'), { recursive: true });
+  fs.copyFileSync(path.join(FIX, 'brain-site.mjs'), path.join(d, 'ops', 'tools', 'brain-site.mjs'));
+  fs.copyFileSync(path.join(FIX, 'data.mjs'), path.join(d, 'ops', 'tools', 'brain-ui-data.mjs'));
+  return d;
+}
+
+let app: ElectronApplication, page: Page;
+test.beforeAll(async () => {
+  ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
+  await setSize(app, 1600, 1000);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await expect(page.getByTestId('app')).toBeVisible();
+});
+test.afterAll(async () => { await app?.close(); });
+
+test('Miglioramento: one card per policy with its numbers and n; Applica, Ripristina and No change it', async () => {
+  await page.getByTestId('nav-miglioramento').click();
+  const p = page.getByTestId('page-miglioramento');
+  const est = p.getByTestId('bx-learn-estimates');
+  await expect(est).toBeVisible({ timeout: 30000 });
+  await expect(p.getByTestId('bx-lead')).toContainText('1 proposta da decidere');
+
+  await expect(est).toContainText('Stime di tempo e costo');
+  await expect(est).toContainText('v2');
+  await expect(est.getByTestId('bx-learn-error')).toContainText('×1,7');
+  await expect(est.getByTestId('bx-learn-error')).toContainText('sulle ultime 30');
+  await expect(est.getByTestId('bx-learn-cover')).toContainText('84% delle volte (su 30)');
+  await expect(est.getByTestId('bx-learn-out')).toContainText('5 con esito sconosciuto');
+  await expect(est.getByTestId('bx-learn-proposal')).toContainText('stessa area e tipo');
+  await expect(est.getByTestId('bx-learn-proposal')).toContainText('su 42 casi in comune');
+  await expect(est.getByTestId('bx-learn-check')).toContainText('migliorata');
+  await expect(est.getByTestId('bx-learn-rollback')).toHaveText('Ripristina v1');
+  const routing = p.getByTestId('bx-learn-routing');
+  await expect(routing).toContainText('Scelta del modello');
+  await expect(routing.getByTestId('bx-learn-error')).toContainText('senza dati: 12 misurati, ne servono 20');
+  await shot(page, 'miglioramento');
+  // the intro and a "?" beside the terms that are not obvious: its explanation on focus
+  await expect(p.getByText('Niente cambia finché non premi Applica')).toBeVisible();
+  await est.getByTestId('bx-help-h-prop-estimates').focus();
+  await expect(est.getByRole('tooltip').filter({ hasText: 'almeno 30' })).toBeVisible();
+  await shot(page, 'miglioramento-aiuto');
+  await est.getByTestId('bx-help-h-prop-estimates').blur();
+
+  // [Applica]: v3, the proposal gone, the after-check waiting
+  await est.getByTestId('bx-learn-apply').click();
+  await expect(est).toContainText('v3');
+  await expect(est.getByTestId('bx-learn-proposal')).toHaveCount(0);
+  await expect(est.getByTestId('bx-learn-check')).toContainText('in attesa dei primi 20 casi dopo il cambio');
+  await expect(p.getByTestId('bx-lead')).toContainText('nessuna proposta da decidere');
+  await shot(page, 'miglioramento-applicata');
+
+  // [Ripristina v2]: back to v2, nothing more to go back to
+  await est.getByTestId('bx-learn-rollback').click();
+  await expect(est).toContainText('v2');
+  await expect(est.getByTestId('bx-learn-rollback')).toHaveCount(0);
+});

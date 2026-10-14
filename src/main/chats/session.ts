@@ -2,7 +2,8 @@
 // Why: the manager must not know whether a chat runs on Claude Code (claude.ts, stream-json control protocol) or on
 // Cursor (cursor.ts later, `agent acp` JSON-RPC); each harness implements HarnessSession and reports through a
 // SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
-import type { Answer, ChatItem, ChatState, Effort, Harness, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Root } from './proctree';
+import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 
 /** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
 export interface SessionSink {
@@ -18,6 +19,30 @@ export interface SessionSink {
   exit(info: { code: number | null; error: string | null }): void;
   /** Plan rate-limit info as the CLI sent it (Claude: a stream-json `rate_limit_event`), for the brain's usage meter. */
   rateLimit?(msg: unknown): void;
+  /** The models the CLI offers (Cursor: models.availableModels of session/new or session/load), for the Settings page. */
+  models?(list: { id: string; name: string }[]): void;
+  /** The commands "/<name>" the engine offers in this chat (skills, its own commands), for the input's "/" list. */
+  commands?(list: ChatCommand[]): void;
+}
+
+/** An engine's command list → ChatCommand[]: Claude ({name, description, argumentHint}: initialize, commands_changed),
+ *  ACP ({name, description, input: {hint}}: available_commands_update). Names with spaces (Claude's "x (MCP)") cannot be
+ *  typed: left out. skill = a skill of the user or a project (in `skills`, or Claude's "(user)"/"(project)" label). */
+export function toCommands(list: unknown, skills?: ReadonlySet<string>): ChatCommand[] {
+  const out: ChatCommand[] = [];
+  const seen = new Set<string>();
+  for (const v of Array.isArray(list) ? list : []) {
+    const c = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+    const name = typeof c.name === 'string' ? c.name.trim().replace(/^\//, '') : '';
+    if (!name || /\s/.test(name) || seen.has(name) || name.length > 120) continue;
+    seen.add(name);
+    const raw = typeof c.description === 'string' ? c.description.trim() : '';
+    const tag = /\s*\((user|project)\)$/.exec(raw);
+    const input = c.input && typeof c.input === 'object' ? (c.input as Record<string, unknown>) : {};
+    const hint = typeof c.argumentHint === 'string' ? c.argumentHint : typeof input.hint === 'string' ? input.hint : '';
+    out.push({ name, description: cut(tag ? raw.slice(0, tag.index) : raw, 400), ...(hint.trim() ? { hint: hint.trim() } : {}), ...(tag || skills?.has(name) ? { skill: true } : {}) });
+  }
+  return out;
 }
 
 export interface SessionPatch {
@@ -28,13 +53,24 @@ export interface SessionPatch {
   effort?: Effort | null;
   contextTokens?: number;
   contextMaxTokens?: number;
+  /** true: contextTokens is an estimate (the engine reports none); false: a real count replaced the estimate */
+  contextEstimated?: boolean;
   /** cost of the turn that just ended (USD, API-equivalent) and the CLI's running total for the session */
   turnCostUsd?: number;
   totalCostUsd?: number;
+  /** estimate of the turn still running (USD, from token usage); 0 when it ended: turnCostUsd then holds the real cost */
+  liveCostUsd?: number;
   /** false: the engine reports no usage, so turnCostUsd is 0 for lack of data (Cursor over ACP today) */
   costKnown?: boolean;
   lastText?: string;
+  /** background tasks (agents, shell commands) still running after the turn; 0 = none */
+  background?: number;
   version?: string;            // CLI version
+  /** one API call of the main thread, once per response id (ADR 0031 counters): its context (input + cache read +
+   *  cache write), the cache it re-wrote, its list-price cost */
+  call?: { context: number; cacheWrite: number; usd: number };
+  /** the engine compacted the context (compact_boundary) */
+  compacted?: { pre: number | null; post: number | null };
 }
 
 export interface ContextUsage { totalTokens: number; maxTokens: number; percentage: number }
@@ -56,6 +92,9 @@ export interface SessionOptions {
   mcpConfig?: string | null;
   /** running total cost already restored for this session (for per-turn deltas after a resume) */
   costBaseUsd?: number;
+  /** Claude: the auto-compact window of this process (inline --settings env, beats a folder's own settings; ADR 0031);
+   *  0 or absent = the user's settings decide */
+  compactWindowTokens?: number;
   env?: NodeJS.ProcessEnv;
   extraArgs?: string[];
 }
@@ -65,15 +104,28 @@ export interface HarnessSession {
   readonly state: ChatState;
   readonly sessionId: string | null;
   readonly pid: number | null;
+  /** its Job Object (jobguard.ts), null when it has none (not Windows, helper not ready, tests) */
+  readonly jobHandle?: number | null;
+  /** exited or its job terminated: the quit's last resort leaves it alone (no taskkill on a pid that may be reused) */
+  readonly gone?: boolean;
+  /** The process once it exited (pid, start, exit time): the manager reaps a kept one's tools at the real close. */
+  readonly root: Root | null;
+  /** when we spawned the process (ms; 0 before): the quit's detached reaper (proctree.ts reapAfterQuit) needs it */
+  readonly startedAt?: number;
   /** working: a turn in flight (queued ones too), a question open, or booting */
   readonly busy: boolean;
   /** resolves when the engine's session is open or failed (engines that replay a resumed past: Cursor) */
   readonly ready?: Promise<void>;
   start(): void;
-  send(text: string): void;
+  /** text may be empty when images are attached (already checked by the manager: images.ts checkImages) */
+  send(text: string, images?: readonly ImageAttachment[]): void;
   /** false when the request is unknown (already answered or withdrawn). Throws on an answer of the wrong kind. */
   answer(requestId: string, answer: Answer): boolean;
-  interrupt(): Promise<void>;
+  /** keepQueued: only the running turn stops; messages the session already queued still go after it; byUser: the
+   *  user's Stop / "Invia subito" (the turn ends as "Interrotto da te", not an error), never the app's own interrupt */
+  interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;
+  /** the running turn is not retried by itself after a network error (Cursor only: a failed hand-off turn) */
+  noRetry?(): void;
   setModel(model: string | null): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
   setEffort(effort: Effort | null): Promise<void>;
@@ -81,8 +133,10 @@ export interface HarnessSession {
   contextUsage(): Promise<ContextUsage | null>;
   /** The CLI's own usage report (Claude: get_usage, plan windows included), raw; null when not supported. */
   usage(): Promise<unknown>;
-  /** Graceful end: stdin closed, killed after graceMs. Resolves when the process is gone. */
-  close(graceMs?: number): Promise<void>;
+  /** Graceful end: stdin closed, killed after graceMs. Resolves when the process is gone. The tools it left running
+   *  are reaped after the exit (proctree.ts), unless `keepChildren`: the chat goes on in a new process (model or Regia
+   *  change, continued elsewhere) and a dev server it started stays for the next turn. */
+  close(graceMs?: number, keepChildren?: boolean): Promise<void>;
   /** Kill the process tree now, without blocking (the exit is reported through the sink). */
   killNow(): void;
   /** the process is running (not yet exited) */

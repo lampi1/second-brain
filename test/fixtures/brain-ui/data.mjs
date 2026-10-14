@@ -52,6 +52,7 @@ export function build(now = Date.now()) {
   jl(d(0), '10:40', 'verificato', 'Prodotto · Fix calcolo sconto: build verde dopo il rebase');
   jl(d(0), '11:15', 'decisione', 'Le chat finite sopra 200k di contesto si chiudono');
   jl(d(0), '12:30', 'lezione', 'La stima dei costi va sempre mostrata con il suo intervallo');
+  jl(d(0), '13:05', 'fatto', "app: pagina Procedure al posto di Comunicazione, mandata alla Regia dell'app"); // the app's own work: not in Fatto
   const nowRows = [
     { sezione: 'Lavoro', filo: 'Prodotto · Fix calcolo sconto', dove: 'PR 51002, branch fix/sconto', prossimo: 'prossimo: aspetta la revisione della PR 51002', stato: 'build verde', aggiornato: d(0) },
     { sezione: 'Lavoro', filo: 'Clienti · Export fatture', dove: 'chat Clienti · Export fatture', prossimo: `prossimo: ${OWNER} decide se il PDF entra in questa versione`, stato: 'CSV fatto', aggiornato: d(1) },
@@ -97,6 +98,8 @@ export function build(now = Date.now()) {
     if (i % 5 === 2) envs.push({ ts: iso(t + 6e5), env, chat: chats[(i + 2) % chats.length], action: 'wait' });
     envs.push({ ts: iso(t + 18e5), env, chat: chats[(i + 1) % chats.length], action: 'release', heldMin: 10 + Math.floor(r() * 50) });
   }
+  // held right now (no release yet): the Collaborazione page shows it on top
+  envs.push({ ts: iso(now - 25 * 6e4), env: 'test-2', chat: 'QA ordini', action: 'take', why: 'test case 7, build 4.12' });
   const playbooks = [
     { agent: 'reviewer', punti: 6, proposti: ['controlla i null'], size: 1420, review: [] },
     { agent: 'qa-runner', punti: 9, proposti: [], size: 2210, review: ['punto 4'] },
@@ -112,6 +115,25 @@ export function build(now = Date.now()) {
       { date: d(10), type: 'regola-ignorata', area: 'memoria', rule: 'map.md "dove salvare"', again: 0, againLines: [] },
       { date: d(7), type: 'fuori-ruolo', area: 'PR', rule: 'code.md "codice degli altri"', again: 0, againLines: [] },
       { date: d(4), type: 'test-passato-a-torto', area: 'QA', rule: 'rules/qa.md "mai passare ciò che la QA boccia"', again: 0, againLines: [] },
+    ],
+  };
+  // recurrence.mjs quality(): who saw each error per day (the owner's name in the real brain), rules in a 14-day window
+  const seen = new Map();
+  for (const e of errors) { const x = seen.get(e.data) ?? { date: e.data, owner: 0, other: 0, unknown: 0 }; x[e.visto === OWNER ? 'owner' : 'other']++; seen.set(e.data, x); }
+  const quality = {
+    today, windowDays: 14, from: errors[0].data, to: errors.at(-1).data, lines: errors.length + 3, typed: errors.length - 4,
+    unparsed: [0, 1, 2].map(i => ({ date: d(i + 1), line: `- ${d(i + 1)} 10:0${i} · Regia · app · disattenzione · testo senza i campi detto e vero` })),
+    invalid: [['bug-introdotto', 2], ['shell', 3], ['bug-introdotto', 5], ['conto parziale', 6]].map(([type, n]) => ({ date: d(n), type, line: '' })),
+    seenByDay: [...seen.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    totals: recurrence.totals,
+    rules: [
+      { date: d(20), type: 'fatto-non-verificato', area: 'QA', rule: 'rules/qa.md "verifica sempre lo screenshot"', status: 'tornato', ageDays: 20, again: [{ date: d(12), line: '' }] },
+      { date: d(18), type: 'azione-pericolosa', area: 'produzione', rule: 'safety "produzione: propone l’agente"', status: 'non-tornato', ageDays: 18, again: [] },
+      { date: d(15), type: 'non-capito', area: 'Regia', rule: 'stile "domande una alla volta"', status: 'non-tornato', ageDays: 15, again: [] },
+      { date: d(10), type: 'regola-ignorata', area: 'memoria', rule: 'map.md "dove salvare"', status: 'troppo-presto', ageDays: 10, again: [] },
+      { date: d(7), type: 'fuori-ruolo', area: 'PR', rule: 'code.md "codice degli altri"', status: 'tornato', ageDays: 7, again: [{ date: d(3), line: '' }] },
+      { date: d(4), type: 'test-passato-a-torto', area: 'QA', rule: 'rules/qa.md "mai passare ciò che la QA boccia"', status: 'troppo-presto', ageDays: 4, again: [] },
+      { date: d(2), type: 'bug-introdotto', area: 'app', rule: 'code.md "test rosso prima del fix"', status: 'senza-tipo', ageDays: 2, again: [] },
     ],
   };
   const boxes = [
@@ -145,7 +167,7 @@ export function build(now = Date.now()) {
   log.sort((a, b) => a.ts.localeCompare(b.ts));
   const tables = {
     today, errors, wins, journal, now: nowRows, ideas, reflections, proposals, bugs, measures, envs,
-    briefs: [`journal/brief/${d(1)}.md`, `journal/brief/${today}.md`], playbooks, recurrence, inbox: { boxes, stats, log },
+    briefs: [`journal/brief/${d(1)}.md`, `journal/brief/${today}.md`], playbooks, recurrence, quality, inbox: { boxes, stats, log },
   };
 
   // ── now (chats.mjs + mailbox + now.md line) ─────────────────────────────────────────────────────────────────────
@@ -207,9 +229,13 @@ export function build(now = Date.now()) {
       { kind: 'chat', title: 'Produzione · lentezza login', from: '07:30', to: '07:55', his: 2, last: 'Carico normale per una domenica.', area: 'Produzione' },
       { kind: 'chat', title: 'OS · Mappa 3D', from: '13:10', to: '15:20', his: 4, last: 'La vista essenziale è in main.', area: 'Personale e OS' },
       { kind: 'chat-cursor', title: 'Cursor · Ricerca librerie grafici · finito', area: 'Personale e OS' },
+      // the app's own work ("Migliora l'app"): Fatto leaves it out
+      { kind: 'diario', time: '13:05', tag: 'fatto', title: "app: pagina Procedure al posto di Comunicazione, mandata alla Regia dell'app", area: 'Prodotto' },
+      { kind: 'chat', title: 'App · Pagina Procedure', from: '13:00', to: '14:10', his: 3, last: 'Pronta, mandata alla Regia.', area: 'Prodotto' },
+      { kind: 'chat', title: "Regia dell'app", from: '08:00', to: '18:00', his: 9, last: 'Unito in main.', area: 'Personale e OS' },
     ],
-    commits: ['map: essential view', 'cost: savings per long chat'], brief: false,
-    text: `# Giornata ${date}: materiale per il report\n\n## Prodotto\n- PR unita "fix(orders): apply the discount once" ${PR(51001)}\n- chat "QA ordini" 09:02-11:40, 6 messaggi tuoi\n\n## Clienti\n- PR aperta "feat(export)" ${PR(51003)}\n\n| Chat | Messaggi |\n|---|---|\n| QA ordini | 6 |\n| OS · Mappa 3D | 4 |\n`,
+    commits: ['map: essential view', 'cost: savings per long chat', "product: publish the app's Procedure page"], brief: false,
+    text: `# Giornata ${date}: materiale per il report\n\n## Prodotto\n- PR unita "fix(orders): apply the discount once" ${PR(51001)}\n- chat "QA ordini" 09:02-11:40, 6 messaggi tuoi\n- chat Claude "App · Pagina Procedure" 13:00-14:10, 3 messaggi tuoi\n\n## Clienti\n- PR aperta "feat(export)" ${PR(51003)}\n\n| Chat | Messaggi |\n|---|---|\n| QA ordini | 6 |\n| App · Pagina Procedure | 3 |\n| OS · Mappa 3D | 4 |\n`,
   });
   const brief = {
     date: today, kind: 'brief', day: today, devops: true, areas: AREAS,
@@ -229,6 +255,7 @@ export function build(now = Date.now()) {
     ],
     threads: [
       ...nowRows.map(x => ({ section: x.sezione, label: x.filo, date: x.aggiornato, next: x.prossimo, stale: x.aggiornato < d(7), done: /^FATT/i.test(x.prossimo), area: /^(OS|Pers)/.test(x.filo) ? 'Personale e OS' : x.filo.startsWith('Clienti') ? 'Clienti' : x.filo.startsWith('Produzione') ? 'Produzione' : 'Prodotto' })),
+      { section: 'Lavoro', label: 'App · Pagina Procedure', date: today, next: "prossimo: la Regia dell'app unisce il ramo", stale: false, done: false, area: 'Prodotto' },
     ],
     text: `# Brief ${today}\n\n## Le tue PR, dal vivo\n\n- "fix(orders): apply the discount once" → main ${PR(51002)}\n  voti: nessuno (4 revisori) · ultima build: succeeded\n\n## Fili aperti\n\n- **Clienti · Export fatture**: ${OWNER} decide se il PDF entra\n`,
   };
@@ -249,22 +276,22 @@ export function build(now = Date.now()) {
     N('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', 'una per ogni lavoro vero', 'Le chat aperte dalla Regia.', { degree: 6, file: 'hub.md' }),
     N('harness:claude', 'esterni', 'harness', 'Claude', 'il programma delle chat', 'Claude Code.', { degree: 4, file: 'AGENTS.md' }),
     N('harness:cursor', 'esterni', 'harness', 'Cursor', 'l\'altro programma', 'Cursor CLI.', { degree: 3, file: 'AGENTS.md' }),
-    N('agent:reviewer', 'agenti', 'agente', 'reviewer', 'rilegge ogni diff prima del fatto', 'Revisione di correttezza.', { degree: 4, file: 'agents/reviewer.md', uses: 14, playbook: { punti: 6 }, fields: { model: 'opus', effort: 'high' } }),
-    N('agent:qa', 'agenti', 'agente', 'qa-runner', 'esegue i test case', 'QA nel browser.', { degree: 3, file: 'agents/qa-runner.md', uses: 9 }),
+    N('agent:reviewer', 'agenti', 'agente', 'Revisore del codice', 'rilegge ogni diff prima del fatto', 'Revisione di correttezza.', { name: 'reviewer', degree: 4, file: 'agents/reviewer.md', uses: 14, playbook: { punti: 6 }, fields: { model: 'opus', effort: 'high' } }),
+    N('agent:qa', 'agenti', 'agente', 'Tester nel browser', 'esegue i test case', 'QA nel browser.', { name: 'qa-runner', degree: 3, file: 'agents/qa-runner.md', uses: 9 }),
     { id: 'grp:skill', layer: 'agenti', kind: 'gruppo', label: 'Skill (4)', short: 'comandi brevi: /stato, /opzioni…', degree: 2, members: [
-      { id: 'skill:stato', label: '/stato', what: 'Stato di tutto il lavoro aperto', uses: 12 }, { id: 'skill:opzioni', label: '/opzioni', what: 'Cosa puoi fare adesso', uses: 0 },
-      { id: 'skill:explain', label: '/explain', what: 'Spiega a domande', uses: 5 }, { id: 'skill:urgente', label: '/urgente', what: 'Corsia urgenze', uses: 1 }] },
-    N('tool:mem', 'tool', 'tool', 'mem.mjs', 'scrive la memoria, una riga', 'Il tool unico della memoria.', { degree: 6, file: 'ops/tools/mem.mjs', uses: 120 }),
-    N('tool:inbox', 'tool', 'tool', 'inbox.mjs', 'la posta tra chat', 'Caselle di posta tra chat.', { degree: 5, file: 'ops/tools/inbox.mjs', uses: 40 }),
-    N('tool:cost', 'tool', 'tool', 'cost.mjs', 'quanto costa e dove', 'I costi per giorno, modello, chat.', { degree: 2, file: 'ops/tools/cost.mjs', uses: 18 }),
+      { id: 'skill:stato', label: 'Stato di tutto', name: '/stato', what: 'Stato di tutto il lavoro aperto', uses: 12 }, { id: 'skill:opzioni', label: 'Cosa posso fare', name: '/opzioni', what: 'Cosa puoi fare adesso', uses: 0 },
+      { id: 'skill:explain', label: 'Spiegami a domande', name: '/explain', what: 'Spiega a domande', uses: 5 }, { id: 'skill:urgente', label: 'Urgenze', name: '/urgente', what: 'Corsia urgenze', uses: 1 }] },
+    N('tool:mem', 'tool', 'tool', 'Scrittura memoria', 'scrive la memoria, una riga', 'Il tool unico della memoria.', { name: 'mem.mjs', degree: 6, file: 'ops/tools/mem.mjs', uses: 120 }),
+    N('tool:inbox', 'tool', 'tool', 'Posta tra chat', 'la posta tra chat', 'Caselle di posta tra chat.', { name: 'inbox.mjs', degree: 5, file: 'ops/tools/inbox.mjs', uses: 40 }),
+    N('tool:cost', 'tool', 'tool', 'Costi del cervello', 'quanto costa e dove', 'I costi per giorno, modello, chat.', { name: 'cost.mjs', degree: 2, file: 'ops/tools/cost.mjs', uses: 18 }),
     { id: 'grp:hook', layer: 'tool', kind: 'gruppo', label: 'Hook (3)', short: 'scattano da soli a fine turno', degree: 3, members: [
-      { id: 'hook:commit', label: 'auto-commit', what: 'Salva il cervello a fine turno' }, { id: 'hook:feed', label: 'chat-feed', what: 'Le novità delle chat' }, { id: 'hook:guard', label: 'guard', what: 'Ferma i comandi pericolosi' }] },
-    N('mem:now', 'memoria', 'file', 'now.md', 'i fili aperti, una riga ciascuno', 'Stato di ogni filo.', { degree: 5, file: 'now.md', reads: 60 }),
+      { id: 'hook:commit', label: 'Salvataggio automatico', name: 'auto-commit.mjs', what: 'Salva il cervello a fine turno' }, { id: 'hook:feed', label: 'Notizie alla Regia', name: 'chat-feed.mjs', what: 'Le novità delle chat' }, { id: 'hook:guard', label: 'Guardia dei comandi', name: 'guard.mjs', what: 'Ferma i comandi pericolosi' }] },
+    N('mem:now', 'memoria', 'file', 'Fili aperti', 'i fili aperti, una riga ciascuno', 'Stato di ogni filo.', { name: 'now.md', degree: 5, file: 'now.md', reads: 60 }),
     N('mem:journal', 'memoria', 'cartella', 'Diario', 'cosa è successo, giorno per giorno', 'journal/', { degree: 3, file: 'journal' }),
-    N('mem:errors', 'memoria', 'file', 'ai-errors.md', 'ogni errore dell\'IA', 'Errori registrati.', { degree: 4, file: 'ai-errors.md' }),
-    N('mem:ideas', 'memoria', 'file', 'ideas.md', 'idee tue e dell\'IA', 'Le idee.', { degree: 2, file: 'ideas.md' }),
-    N('rule:me', 'regole', 'file', 'me.md', 'chi sei e come lavori', 'Preferenze e sicurezza.', { degree: 4, file: 'me.md' }),
-    N('rule:code', 'regole', 'file', 'code.md', 'regole per il codice', 'Fix, PR, commit.', { degree: 2, file: 'code.md' }),
+    N('mem:errors', 'memoria', 'file', 'Errori dell\'IA', 'ogni errore dell\'IA', 'Errori registrati.', { name: 'ai-errors.md', degree: 4, file: 'ai-errors.md' }),
+    N('mem:ideas', 'memoria', 'file', 'Idee da riprendere', 'idee tue e dell\'IA', 'Le idee.', { name: 'ideas.md', degree: 2, file: 'ideas.md' }),
+    N('rule:me', 'regole', 'file', 'Regole di lavoro', 'chi sei e come lavori', 'Preferenze e sicurezza.', { name: 'me.md', degree: 4, file: 'me.md' }),
+    N('rule:code', 'regole', 'file', 'Regole del codice', 'regole per il codice', 'Fix, PR, commit.', { name: 'code.md', degree: 2, file: 'code.md' }),
     N('ext:devops', 'esterni', 'servizio', 'DevOps', 'PR, bug, build', 'Il tracker.', { degree: 3, file: 'ops/AGENTS.md' }),
     N('ext:mail', 'esterni', 'servizio', 'Posta e chat', 'mail e messaggi', 'Outlook e Teams.', { degree: 1, file: 'hub.md' }),
   ];
@@ -297,7 +324,7 @@ export function build(now = Date.now()) {
   ];
   // the full view: the same pieces plus one node per member and a few more files
   const extra = [];
-  for (const g of simpleNodes.filter(n => n.kind === 'gruppo')) for (const m of g.members) extra.push({ id: m.id, layer: g.layer, kind: g.id === 'grp:skill' ? 'skill' : 'hook', label: m.label, what: m.what, file: `${root}/${m.id.replace(':', '/')}.md`, modified: iso(now - 3 * DAY), degree: 1, uses: m.uses });
+  for (const g of simpleNodes.filter(n => n.kind === 'gruppo')) for (const m of g.members) extra.push({ id: m.id, layer: g.layer, kind: g.id === 'grp:skill' ? 'skill' : 'hook', label: m.label, name: m.name, what: m.what, file: `${root}/${m.id.replace(':', '/')}.md`, modified: iso(now - 3 * DAY), degree: 1, uses: m.uses });
   const fullNodes = [...simpleNodes.filter(n => n.kind !== 'gruppo'), ...extra,
     ...['routines.md', 'people.md', 'hub.md', 'map.md', 'brain-rules.md'].map((f, i) => ({ id: `rule:${f}`, layer: i < 2 ? 'memoria' : 'regole', kind: 'file', label: f, what: `Il file ${f}.`, file: `${root}/${f}`, modified: iso(now - i * DAY), degree: 2 }))];
   const fullEdges = [...simpleEdges.filter(e => !e.from.startsWith('grp:') && !e.to.startsWith('grp:')), ...extra.map(m => E(m.kind === 'skill' ? 'chat:regia' : 'harness:claude', m.id, m.kind === 'skill' ? 'usa' : 'hook', m.kind === 'skill' ? 'usa' : 'scatta')),

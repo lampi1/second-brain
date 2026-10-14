@@ -1,7 +1,7 @@
 // Text helpers of the brain pages (src/renderer/brain/lib/text.ts): names not numbers, DevOps links in free text,
 // decisions, the stand-up sentences (first person, names instead of numbers).
 import { describe, expect, it } from 'vitest';
-import { bugName, clean, countBy, devopsIndex, firstPerson, isDecision, isWorkArea, lastDiaryDay, linkify, ownerOf, prName, standupText, topicOf } from '../../../src/renderer/brain/lib/text';
+import { bugName, clean, countBy, devopsIndex, firstPerson, isWorkArea, lastDiaryDay, linkify, ownerOf, prName, standupText, topicOf } from '../../../src/renderer/brain/lib/text';
 import type { Brief, DayReport } from '../../../src/renderer/brain/types';
 
 const PR = (n: number) => `https://dev.example.com/proj/_git/app/pullrequest/${n}`;
@@ -51,13 +51,6 @@ describe('owner', () => {
     expect(ownerOf([{ chi: 'IA' }])).toBe('');
     expect(firstPerson('Alex decide se Alex parte', 'Alex')).toBe('decide se parte');
     expect(firstPerson('nessun nome', '')).toBe('nessun nome');
-  });
-  it('a decision waits for the owner; agents and done threads never are', () => {
-    expect(isDecision(brief.threads[2]!, 'Alex')).toBe(true);
-    expect(isDecision({ next: 'prossimo: scegli il layout', done: false, section: 'Lavoro' })).toBe(true);
-    expect(isDecision({ next: 'prossimo: aspetta Alex', done: false, section: 'Lavoro' }, 'Alex')).toBe(true);
-    expect(isDecision({ next: 'prossimo: decide', done: true, section: 'Lavoro' })).toBe(false);
-    expect(isDecision({ next: 'decide', done: false, section: 'Agenti e sessioni attive' })).toBe(false);
   });
   it('work areas leave out the personal one and the catch-all', () => {
     expect(['Prodotto', 'Personale e OS', 'Altro', 'Produzione'].filter(isWorkArea)).toEqual(['Prodotto', 'Produzione']);

@@ -6,7 +6,11 @@
 //   node scripts/release.mjs rollback                 current ⇄ previous
 //   node scripts/release.mjs status [--json]           what is current/previous, where the launcher is
 //   node scripts/release.mjs launch                    (used by launch.cmd) start current; if its window does not report
-//                                                      ready within 30 s, mark it bad and start the previous release
+//                                                      ready within 30 s, mark it bad and start the previous release;
+//                                                      a start refused because the app is already open (or still
+//                                                      quitting) is never "bad": an open app is left in front, a
+//                                                      quitting one (quitting.json) is waited for, then retried;
+//                                                      the outcome of each start goes to <base>/launch-result.json
 // Root: %LOCALAPPDATA%/second-brain (SB_RELEASES_ROOT overrides, for tests). Runs with plain Node or Electron-as-Node.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -37,6 +41,10 @@ async function promote() {
     say('npm run test:stable …');
     execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'test:stable'], { cwd: repo, stdio: 'inherit', shell: process.platform === 'win32' });
   }
+  // the check took minutes and agents work in this folder ("Migliora l'app", ADR 0020): build only what was checked
+  const shaNow = execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  const dirtyNow = execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
+  if (shaNow !== sha || (dirtyNow && !process.argv.includes('--allow-dirty'))) throw new Error(`the repo changed during the check (${sha} -> ${shaNow}${dirtyNow ? ', uncommitted changes' : ''}): nothing promoted, run it again`);
   execFileSync(process.execPath, [path.join(repo, 'scripts', 'build.mjs')], { cwd: repo, stdio: 'inherit', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
   const id = `${pkg.version}-${sha}`;
   const dest = path.join(releases, id);
@@ -65,9 +73,11 @@ async function promote() {
   // loaded here, not at the top: the launcher copy of this script (next to launch.cmd) runs without fuses.mjs
   const { ensureCookieEncryption } = await import('./fuses.mjs');
   try { say(`cookie encryption: ${ensureCookieEncryption(electronFor(ev))}`); } catch (e) { say(`WARNING cookie encryption not enabled: ${e.message}`); }
-  fs.writeFileSync(path.join(dest, 'release.json'), JSON.stringify({ id, version: pkg.version, sha, electron: ev, claudeEngine, at: new Date().toISOString() }, null, 2));
+  // repo: where it was built from, the default code folder of "Migliora l'app" (ADR 0020)
+  fs.writeFileSync(path.join(dest, 'release.json'), JSON.stringify({ id, version: pkg.version, sha, electron: ev, claudeEngine, repo, at: new Date().toISOString() }, null, 2));
   const s = readState();
-  if (s.current !== id) { s.previous = s.current; s.current = id; }
+  // a current release the launcher discarded is no fallback: the previous one (the one that runs) stays previous
+  if (s.current !== id) { if (!(s.bad ?? []).includes(s.current)) s.previous = s.current; s.current = id; }
   s.bad = (s.bad ?? []).filter(b => b !== id);
   s.history = [...(s.history ?? []), { id, at: new Date().toISOString() }].slice(-20);
   writeState(s);
@@ -124,27 +134,73 @@ function rollback() {
   say(`current is now ${s.current} (previous: ${s.previous})`);
 }
 
+// src/main/index.ts exits with this code when another instance holds the app's single-instance lock: the app is already
+// open (it got the focus) or still quitting. Never a broken release (2026-10-12: 91967ec marked bad that way, the icon
+// clicked while the old instance was still closing).
+const ALREADY_RUNNING = 75;
+const WAIT_MS = Number(process.env.SB_LAUNCH_WAIT_MS) || 30_000; // tests shorten the waits
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+
+/** One start: 'ready' (its window wrote ready.json), 'busy' (another instance holds the lock) or 'failed', with why. */
+async function startOnce(id, rel, ready) {
+  const startedAt = Date.now();
+  const env = { ...process.env, SB_RELEASE: id, ...(rel.claudeEngine ? { SB_ENGINE_CLAUDE: rel.claudeEngine } : {}) };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const child = spawn(electronFor(rel.electron), [path.join(releases, id)], { env, detached: true, stdio: 'ignore' });
+  child.unref();
+  const secs = () => Math.round((Date.now() - startedAt) / 1000);
+  for (let waited = 0; waited < WAIT_MS; waited += 500) {
+    await sleep(500);
+    try { const r = JSON.parse(fs.readFileSync(ready, 'utf8')); if (r.release === id && Date.parse(r.at) >= startedAt - 1000) return { r: 'ready', reason: `window ready after ${secs()} s` }; } catch { /* not yet */ }
+    if (child.exitCode !== null) return child.exitCode === ALREADY_RUNNING ? { r: 'busy', reason: 'another instance holds the app' } : { r: 'failed', reason: `exited with code ${child.exitCode} after ${secs()} s` };
+  }
+  try { process.kill(child.pid); } catch { /* gone */ }
+  return { r: 'failed', reason: `window not ready within ${Math.round(WAIT_MS / 1000)} s` };
+}
+
+// <base>/launch-result.json: how the last start went, read by the app after it starts (the "Migliora l'app" banner:
+// the new release started, or the previous one and why). Atomic, never an error if it cannot be written.
+function writeResult(result) {
+  const f = path.join(base, 'launch-result.json');
+  try { fs.writeFileSync(`${f}.tmp`, JSON.stringify(result, null, 2)); fs.renameSync(`${f}.tmp`, f); } catch { /* best effort */ }
+}
+
 async function launch() {
   const s = readState();
+  const result = { at: new Date().toISOString(), wanted: s.current, started: null, attempts: [] };
+  const note = (id, outcome, reason) => { result.attempts.push({ id, outcome, reason }); writeResult(result); };
+  // before any start: the app reads the file while it starts, before 'started' lands, and must never find an earlier
+  // start's record there (another release wanted → a false "it did not start")
+  writeResult(result);
+  for (const id of [s.current, s.previous]) if (id && (s.bad ?? []).includes(id)) note(id, 'skipped-bad', 'marked bad by an earlier start');
   const order = [s.current, s.previous].filter(id => id && !(s.bad ?? []).includes(id));
+  const userData = process.env.SB_USER_DATA ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), 'second-brain');
+  const ready = path.join(userData, 'ready.json');
   for (const id of order) {
     const rel = JSON.parse(fs.readFileSync(path.join(releases, id, 'release.json'), 'utf8'));
-    const userData = process.env.SB_USER_DATA ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), 'second-brain');
-    const ready = path.join(userData, 'ready.json');
-    const startedAt = Date.now();
-    const env = { ...process.env, SB_RELEASE: id, ...(rel.claudeEngine ? { SB_ENGINE_CLAUDE: rel.claudeEngine } : {}) };
-    delete env.ELECTRON_RUN_AS_NODE;
-    const child = spawn(electronFor(rel.electron), [path.join(releases, id)], { env, detached: true, stdio: 'ignore' });
-    child.unref();
-    for (let i = 0; i < 60; i++) {
-      await new Promise(r => setTimeout(r, 500));
-      try { const r = JSON.parse(fs.readFileSync(ready, 'utf8')); if (r.release === id && Date.parse(r.at) >= startedAt - 1000) { say(`started ${id}`); return; } } catch { /* not yet */ }
-      if (child.exitCode !== null) break;
+    let o = await startOnce(id, rel, ready);
+    let waited = '';
+    // busy: if the instance that holds the lock (the last one that wrote ready.json) is quitting (it wrote quitting.json
+    // in before-quit), wait for it to go and start again; if it is open, the second start brought it to the front: done
+    for (let tries = 0; o.r === 'busy' && tries < 3; tries++) {
+      const pidIn = f => { try { return JSON.parse(fs.readFileSync(path.join(userData, f), 'utf8')).pid ?? null; } catch { return null; } };
+      const holder = pidIn('ready.json');
+      if (holder && alive(holder)) {
+        if (pidIn('quitting.json') !== holder) { say(`already running (pid ${holder}): brought to the front`); note(id, 'already-running', `pid ${holder} is open`); return; }
+        const until = Date.now() + WAIT_MS;
+        while (alive(holder) && Date.now() < until) await sleep(250);
+        if (alive(holder)) { say(`pid ${holder} still quitting after ${WAIT_MS} ms: ${id} not started, not marked bad`); note(id, 'still-quitting', `pid ${holder} still quitting after ${Math.round(WAIT_MS / 1000)} s`); return; }
+        waited = ` (after pid ${holder} finished quitting)`;
+      } else { await sleep(1000); waited = ' (after a busy start)'; }
+      o = await startOnce(id, rel, ready);
     }
-    say(`release ${id} did not start: marking it bad`);
-    try { process.kill(child.pid); } catch { /* gone */ }
+    if (o.r === 'ready') { say(`started ${id}`); result.started = id; note(id, 'started', o.reason + waited); return; }
+    if (o.r === 'busy') { say(`another instance still holds the app: ${id} not started, not marked bad`); note(id, 'still-quitting', o.reason); return; }
+    say(`release ${id} did not start (${o.reason}): marking it bad`);
     s.bad = [...new Set([...(s.bad ?? []), id])];
     writeState(s);
+    note(id, 'bad', o.reason);
   }
   throw new Error('no release could start: run `npm run dev` in the repo and check `npm run logs -- --level error`');
 }

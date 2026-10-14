@@ -23,20 +23,44 @@ const labelled = (parts, key) => {
 
 // ai-errors.md: `- AAAA-MM-GG HH:MM · chat · area · tipo · detto: … · vero: … · visto da: … [· regola: …]`.
 // Chat names may hold " · " ("OS · Tool"): like recurrence.mjs parse, fields are anchored on the "detto:"/"fatto:"
-// field (else "vero:"): type = the one before, area before it, chat = the rest. Off-format lines keep only "riga".
+// field (else "vero:"): type = the one before, area before it, chat = the rest. Older forms seen in the real file
+// (2026-10-13, the app showed their type as "—"): English labels ("said:", "true:", "seen by:"), the type glued to the
+// claim ("fatto-non-verificato: detto …"), "opinione:" as claim, the area missing (chat · official type · detto: the
+// type is kept, the area left empty; chat · word · detto: the word is the area, the type stays empty, never guessed),
+// and lines with no claim label at all, read from the end (… · type · claim · true · seen by, the last field when
+// there is no "visto da"). Off-format lines keep only "riga".
+const TYPES = ['test-passato-a-torto', 'bug-non-trovato', 'fatto-non-verificato', 'posto-sbagliato', 'regola-ignorata',
+  'richiesta-fraintesa', 'non-capito', 'azione-pericolosa', 'fuori-ruolo', 'blocco-aggirato', 'altro'];
+const isType = s => TYPES.includes(String(s ?? '').toLowerCase().trim());
+const CLAIM = /^(detto|fatto|said|opinione)[^:·]{0,20}:/i;
+const SEEN = /^(visto da|seen by|notato)\b\s*:?\s*/i;
 export function aiErrors(text) {
   const out = [];
   for (const l of lines(text)) {
     const m = l.match(/^- (\d{4}-\d{2}-\d{2})(?: ([\d:-]{5}))? · (.*)$/);
     if (!m) continue;
-    const p = fields(m[3]);
-    let i = p.findIndex(x => /^(detto|fatto)[^:·]{0,20}:/i.test(x));
-    if (i < 0) i = p.findIndex(x => /^vero\s*:/i.test(x));
-    const claim = i >= 0 ? p[i].replace(/^[^:]*:\s*/, '') : '';
-    const ok = i >= 3;
-    out.push({ data: m[1], ora: /\d/.test(m[2] ?? '') ? m[2] : '', chi: ok ? p.slice(0, i - 2).join(' · ') : '',
-      area: ok ? p[i - 2] : '', tipo: ok ? p[i - 1] : '', detto: claim, vero: labelled(p, 'vero'),
-      visto: labelled(p, 'visto da') || labelled(p, 'notato'), regola: labelled(p, 'regola'), riga: l.slice(2) });
+    // "<tipo>: detto …" → "<tipo>", "detto: …"
+    const p = fields(m[3]).flatMap(x => {
+      const g = x.match(/^([a-z][a-z-]+):\s*(detto|said)\b\s*:?\s*(.*)$/i);
+      return g && isType(g[1]) ? [g[1], `${g[2]}: ${g[3]}`] : [x];
+    });
+    let i = p.findIndex(x => CLAIM.test(x));
+    if (i < 0) i = p.findIndex(x => /^(vero|true)\s*:/i.test(x));
+    let claim = i >= 0 ? p[i].replace(/^[^:]*:\s*/, '') : '';
+    let chi = '', area = '', tipo = '', vero = labelled(p, 'vero') || labelled(p, 'true');
+    const s = p.findIndex(x => SEEN.test(x));
+    let visto = s >= 0 ? p[s].replace(SEEN, '').trim() : '';
+    if (i >= 3) { chi = p.slice(0, i - 2).join(' · '); area = p[i - 2]; tipo = p[i - 1]; }
+    else if (i === 2) { chi = p[0]; if (isType(p[1])) tipo = p[1]; else area = p[1]; }
+    else if (i < 0) {
+      const end = s >= 0 ? s : p.length - 1;
+      if (end >= 5) {
+        chi = p.slice(0, end - 4).join(' · '); area = p[end - 4]; tipo = p[end - 3]; claim = p[end - 2]; vero = vero || p[end - 1];
+        if (s < 0) visto = p[end];
+      }
+    }
+    out.push({ data: m[1], ora: /\d/.test(m[2] ?? '') ? m[2] : '', chi, area, tipo, detto: claim, vero, visto,
+      regola: labelled(p, 'regola'), riga: l.slice(2) });
   }
   return out;
 }

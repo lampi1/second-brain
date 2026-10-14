@@ -1,9 +1,10 @@
 // Writing to a chat from a brain page, through the app's own chats only ('chat:list' + 'chat:send'): to a chat of the
 // app directly, or to a chat the app only reads (Claude desktop, Cursor IDE: it has a mailbox in the brain) through the
 // Regia, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia) because a
-// message makes a model work. "Discutiamone" (Spunti) is the same, to the Regia, one click less. Used by Adesso, Spunti.
+// message makes a model work. Used by Adesso.
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
+import { chatName } from '@shared/regia';
 import { toast } from './ui';
 
 /** The app's chats, live (chat:list once, then chat:updated / chat:removed). */
@@ -46,7 +47,7 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (focusKey) { ta.current?.focus(); ta.current?.closest('section')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, [focusKey]);
 
-  const app: Target[] = (chats ?? []).filter(c => c.state !== 'closed' && c.origin === 'app').sort((a, b) => Number(b.isRegia) - Number(a.isRegia)).map(c => ({ kind: 'app', chatId: c.id, name: c.isRegia ? 'Regia' : c.title }));
+  const app: Target[] = (chats ?? []).filter(c => c.state !== 'closed' && c.origin === 'app').sort((a, b) => Number(b.isRegia) - Number(a.isRegia)).map(c => ({ kind: 'app', chatId: c.id, name: chatName(c) }));
   const options: ComposerTarget[] = [...app, ...(regia ? mailboxes : [])];
   const keyOf = (t: ComposerTarget) => (t.kind === 'app' ? `app:${t.chatId}` : `box:${t.box}`);
   // the chosen chat, or the first one when none was chosen; a chosen chat that is gone is never swapped for another

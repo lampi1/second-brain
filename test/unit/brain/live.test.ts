@@ -121,7 +121,7 @@ describe('live feed', () => {
     expect(got).toEqual([]);
   });
 
-  it('chat transitions: running → waiting is urgent, running → done is normal, waiting → waiting is nothing', () => {
+  it('chat transitions: running → waiting is urgent, running → done is quiet (center only, 2026-10-13), waiting → waiting is nothing', () => {
     const list = (s: string) => parseChatList(`- Claude · OS · Prova · brain · 11/10, 09:00 · ${s} · id abc123`);
     expect(diffChats(null, list('aspetta te (domanda)'))).toEqual([]);
     const before = new Map(list('in corso').map(c => [c.id, c]));
@@ -130,7 +130,7 @@ describe('live feed', () => {
     expect(stamp(w[0]!).priority).toBe('urgent');
     const d = diffChats(before, list('finito'));
     expect(d[0]!.kind).toBe('chat-done');
-    expect(stamp(d[0]!).priority).toBe('normal');
+    expect(stamp(d[0]!).priority).toBe('quiet');
     expect(diffChats(new Map(list('aspetta te (domanda)').map(c => [c.id, c])), list('aspetta te (domanda)'))).toEqual([]);
   });
 

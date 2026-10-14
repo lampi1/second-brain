@@ -1,11 +1,12 @@
 // brain-map: the map of {{OWNER}}'s brain ({{BRAIN_NAME}}) read from the real files, for the 3D page of the brain site
 // (ops/tools/brain-site.mjs; {{OWNER}} 2026-10-10, "rappresentazione 3d del mio cervello... costantemente aggiornata").
-// READ-ONLY, no model, zero tokens. Nothing about the pieces is written by hand here: agents from .claude/agents
-// frontmatter, notebooks from playbook.mjs, tools and hooks from their header comment, hook wiring from
+// READ-ONLY, no model, zero tokens. Which pieces exist and how they link is never written by hand: agents from
+// .claude/agents frontmatter, notebooks from playbook.mjs, tools and hooks from their header comment, hook wiring from
 // ~/.claude/settings.json + .claude/settings.json + harness/cursor/hooks.json, memory and rule files from the map.md
 // table, skills from ~/.claude/skills/*/SKILL.md, chats from the inbox boxes, last change from git, use from
-// brain-usage.mjs. The only hand-written part is FLOWS ("how it works"): every step cites a sentence of a real file
-// and is marked unverified when that sentence is gone, so the map never claims what the brain no longer says.
+// brain-usage.mjs. Hand-written: the pieces' Italian names and sentences (brain-map/labels.mjs, SHORT) and FLOWS ("how
+// it works"): every step cites a sentence of a real file and is marked unverified when that sentence is gone, so the
+// map never claims what the brain no longer says.
 // Usage: node "{{BRAIN}}/ops/tools/brain-map.mjs" [--json] [--no-usage]   (--root/--home: tests)
 import fs from 'node:fs';
 import os from 'node:os';
@@ -59,7 +60,7 @@ export const FLOWS = [
     ['chat:lavoro', 'tool:inbox', 'manda un messaggio (send)', 'ops/tools/inbox.mjs', 'chats talk to each other on this PC'],
     ['tool:inbox', 'chat:lavoro', 'sveglia la chat che aspetta (wait)', 'ops/tools/inbox.mjs', 'when a message arrives the command ends and the harness wakes the'],
     ['hook:claude:inbox-stop', 'tool:inbox', 'a fine turno consegna la posta non letta', 'ops/tools/inbox.mjs', 'the Stop hook (`hook claude` / `hook cursor`, installed only by {{OWNER}}) hands unread messages'],
-    ['chat:lavoro', 'chat:regia-claude', 'domande e decisioni per {{OWNER}} solo via Regia', 'hub.md', 'questions, decisions and commands for {{OWNER}} only via the Regia'],
+    ['chat:lavoro', 'owner', 'domande e comandi per {{OWNER}} nella propria chat (popup o coda dell\'app)', 'hub.md', 'the worker asks in its own chat'],
   ] },
   { id: 'memoria', title: 'La memoria si scrive con mem.mjs', steps: [
     ['chat:lavoro', 'tool:mem', 'ogni riga di memoria passa da qui', 'map.md', 'write these lines and `ai-errors.md` ones with'],
@@ -164,6 +165,52 @@ function gitDates(root) {
 
 const node = (id, layer, kind, label, extra = {}) => ({ id, layer, kind, label, ...extra });
 
+// Speaking names ({{OWNER}} 2026-10-13, "nella mappa 3d i nomi devono essere più parlanti"): every piece is labelled by
+// what it is or does, in Italian, in 2-4 words; its technical name (file, agent, /skill) stays in `name` for the
+// hover detail and the search. LABELS (brain-map/labels.mjs): one Italian name per piece of today's brain (the files'
+// own headers are English sentences, too long for a label); a piece not there gets, in order: a `label:` line in its
+// frontmatter, the first heading of its markdown file when it is short, its name made readable (humanize).
+// The list is this brain's own (optional: a brain without it, e.g. the product template, gets the derived names).
+// BOX_AREAS: the area prefixes of this brain's chat titles ("<Area> · <cosa>"), to name a live chat by its mailbox.
+const own = await import('./brain-map/labels.mjs').catch(e => { if (e?.code === 'ERR_MODULE_NOT_FOUND') return {}; throw e; });
+export const LABELS = own.LABELS ?? {}, BOX_AREAS = own.BOX_AREAS ?? {};
+// "my-tool.mjs" → "My tool", "notes/" → "Notes", "/cmd" → "Cmd"; a live chat's box "app-some-work" → "App · some work".
+export function humanize(name) {
+  const s = String(name ?? '').replace(/\/+$/, '').split('/').pop().replace(/^\//, '').replace(/\.(mjs|js|sh|ps1|md|jsonl?)$/, '')
+    .replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : String(name ?? '');
+}
+export function boxLabel(box, areas = BOX_AREAS) {
+  const [area, ...rest] = String(box ?? '').split('-');
+  return areas[area] && rest.length ? `${areas[area]} · ${rest.join(' ')}` : humanize(box);
+}
+// The first `# heading` of a markdown text, its part before ":" or "(", when it is a short name (≤ 4 words).
+export function headingLabel(text) {
+  const h = String(text ?? '').match(/^#\s+(.+)$/m)?.[1];
+  const head = h?.split(/:|\s\(|\s[-–]\s/)[0].replace(/[`*]/g, '').trim();
+  return head && head.split(/\s+/).length <= 4 && head.length <= 32 ? head : null;
+}
+// The speaking label of one piece (n = the node as collected, its `label` still the technical name).
+export function labelFor(n, text = null) {
+  const file = n.id.replace(/^(rule|mem):/, '');
+  const known = LABELS[n.id] ?? (/^(rule|mem):/.test(n.id) ? LABELS[file] : undefined);
+  if (known) return known;
+  if (n.id.startsWith('playbook:')) return `Taccuino: ${LABELS[`agent:${n.id.slice(9)}`] ?? humanize(n.id.slice(9))}`;
+  if (n.id.startsWith('chat:box:')) return boxLabel(n.label);
+  if (!/^(agent|skill|tool|hook|rule|mem):/.test(n.id)) return n.label; // people, chats, harnesses, services: already named
+  const fm = text ? frontmatter(text) : {};
+  if (fm.label) return fm.label;
+  if (/\.md$/i.test(n.file ?? '') && n.kind !== 'cartella') { const h = headingLabel(text?.replace(/^---[\s\S]*?\r?\n---/, '')); if (h) return h; }
+  if (n.id.startsWith('skill:')) return n.label; // "/stato": the command is its name
+  return humanize(n.label.replace(/^(stile|taccuino) /, '$1-'));
+}
+// Two pieces with the same speaking label get their technical name after it, so every label reads apart.
+export function uniqueLabels(nodes) {
+  const count = {};
+  for (const n of nodes) count[n.label.toLowerCase()] = (count[n.label.toLowerCase()] ?? 0) + 1;
+  return nodes.map(n => (count[n.label.toLowerCase()] > 1 && n.name && n.name !== n.label ? { ...n, label: `${n.label} (${n.name})` } : n));
+}
+
 export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null, inbox = null, playbooks = null, lint = null, recurrence = null } = {}) {
   const nodes = new Map(), edges = [], warnings = [];
   const dates = gitDates(root);
@@ -182,7 +229,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   // People and chats
   add(node('owner', 'persone', 'persona', 'Owner', { what: 'Il proprietario del cervello: lavora con le chat, decide, lancia lui i comandi di produzione.', file: `${root}/me.md`, modified: modified(path.join(root, 'me.md')) }));
   if (fs.existsSync(path.join(root, 'people.md'))) add(node('colleghi', 'persone', 'persona', 'Colleghi e QA', { what: 'Colleghi, soprannomi, ruoli e chi taggare su DevOps (people.md).', file: `${root}/people.md`, modified: modified(path.join(root, 'people.md')) }));
-  add(node('chat:regia-claude', 'chat', 'regia', 'Regia (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, porta domande e risultati, resta libera.', file: `${root}/hub.md`, modified: modified(path.join(root, 'hub.md')) }));
+  add(node('chat:regia-claude', 'chat', 'regia', 'Regia (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libera.', file: `${root}/hub.md`, modified: modified(path.join(root, 'hub.md')) }));
   const cursorRegia = path.join(root, '.cursor', 'skills', 'regia', 'SKILL.md');
   if (fs.existsSync(cursorRegia)) fileNode('chat:regia-cursor', 'chat', 'regia', 'Regia (Cursor)', cursorRegia, { what: 'La stessa Regia dentro Cursor, accesa con /regia; legge le chat Cursor con chats.mjs.' });
   add(node('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', { what: 'Una chat per ogni lavoro (fix, QA, produzione, OS): tiene la sua riga in now.md e parla alle altre con inbox.mjs.', file: `${root}/hub.md`, modified: modified(path.join(root, 'hub.md')) }));
@@ -361,7 +408,11 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   const uniq = new Map();
   for (const e of edges) { const k = `${e.from}|${e.to}|${e.kind}`; if (!uniq.has(k) && nodes.has(e.from) && nodes.has(e.to)) uniq.set(k, e); }
   for (const e of uniq.values()) { deg[e.from] = (deg[e.from] ?? 0) + 1; deg[e.to] = (deg[e.to] ?? 0) + 1; }
-  const out = [...nodes.values()].map(({ text, ...n }) => ({ ...n, file: n.file ? n.file.replace(/\\/g, '/') : undefined, degree: deg[n.id] ?? 0 }));
+  // Speaking labels last: the arrows above find the pieces by their technical name (now `name`).
+  const out = uniqueLabels([...nodes.values()].map(({ text, ...n }) => {
+    const body = text ?? (n.file && /\.md$/i.test(n.file) && n.kind !== 'cartella' ? read(n.file) : null);
+    return { ...n, name: n.label, label: labelFor(n, body), file: n.file ? n.file.replace(/\\/g, '/') : undefined, degree: deg[n.id] ?? 0 };
+  }));
   return { generated: new Date().toISOString(), root, layers: LAYERS, nodes: out, edges: [...uniq.values()], flows, weak, warnings };
 }
 
@@ -372,7 +423,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
 // SHORT: one Italian line per main piece for the label; a piece not here gets the first sentence of its own header.
 export const SHORT = {
   owner: 'decide e lancia lui la produzione', colleghi: 'QA e colleghi, chi taggare',
-  'chat:regia-claude': 'dove scrivi: apre le chat, porta le decisioni', 'chat:regia-cursor': 'la stessa Regia dentro Cursor',
+  'chat:regia-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:regia-cursor': 'la stessa Regia dentro Cursor',
   'chat:lavoro': 'una chat per ogni lavoro', 'harness:claude': 'le chat Claude e i loro hook', 'harness:cursor': 'le chat Cursor, stesse regole',
   'agent:reviewer': 'controlla un diff prima del merge', 'agent:code-investigator': 'trova la causa di un bug nel codice',
   'agent:prod-log-reader': 'legge log e stato di produzione', 'agent:qa': 'prova i test case del prodotto nel browser',
@@ -417,7 +468,7 @@ export function simplify(map) {
       const base = groups[g] ? { id: g, kind: 'gruppo', ...groups[g], members: [] } : { ...(byId.get(g) ?? n), members: [] };
       out.set(g, base);
     }
-    if (g !== n.id) out.get(g).members.push({ id: n.id, label: n.label, what: n.what ? firstSentence(n.what) : '', file: n.file, modified: n.modified, uses: n.uses ?? n.reads });
+    if (g !== n.id) out.get(g).members.push({ id: n.id, label: n.label, name: n.name, what: n.what ? firstSentence(n.what) : '', file: n.file, modified: n.modified, uses: n.uses ?? n.reads });
   }
   for (const n of out.values()) {
     n.short = SHORT[n.id] ?? firstSentence(n.what);

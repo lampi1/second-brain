@@ -12,6 +12,17 @@ declare global { interface Window { __ev: { ch: string; p: unknown }[] } }
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
+test('the Nuova chat dialog shows the status of each CLI, never "controllo…" forever (no check at start under tests)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
+  const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
+  expect(await page.evaluate(() => window.sb.invoke('app:info', undefined).then(i => i.cli))).toBeNull();
+  await page.keyboard.press('Control+N');
+  await expect(page.getByTestId('newchat-harness-claude')).toContainText('0.0.0-fake', { timeout: 30_000 }); // two CLI runs, slow under load
+  await expect(page.getByTestId('newchat-harness-cursor')).not.toContainText('controllo…', { timeout: 30_000 });
+  await shot(page, 'newchat-cli-status');
+  await app.close();
+});
+
 test('a Claude chat runs a turn, asks a question, takes the answer and streams events to the page', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
@@ -123,14 +134,23 @@ for (const engine of ['claude', 'cursor'] as const) {
   });
 }
 
-test('quitting the app leaves no claude process behind, even mid-turn', async () => {
+// both quit paths: the taskkill fallback (job guard off, as when its helper cannot start) and the real one, the job
+// guard's Job Objects (ADR 0026, on by default in the app; tests turn it on with SB_JOBGUARD=1)
+for (const guard of [false, true]) test(`quitting the app leaves no claude process behind, even mid-turn${guard ? ' (job guard)' : ''}`, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const logFile = path.join(home, 'fake.jsonl');
-  const { app, page, userData } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: logFile, FAKE_CLAUDE_DELAY: '100' });
+  const { app, page, userData } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: logFile, FAKE_CLAUDE_DELAY: '100', ...(guard ? { SB_JOBGUARD: '1' } : {}) });
   const busy: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'slow' }), cwd); // a 20 s turn
   await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir }), cwd); // an idle one
-  const lines = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').trim().split('\n').map(l => JSON.parse(l) as { pid: number; argv?: string[]; grandchild?: number }) : []);
+  // the fake CLIs append one JSON line per write while we read: a last line without its '\n' is still being written,
+  // so it is read on the next poll; every complete line must parse, and none may stay incomplete (checked at the end)
+  const read = () => {
+    const text = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+    const cut = text.lastIndexOf('\n') + 1;
+    return { lines: text.slice(0, cut).split('\n').filter(Boolean).map(l => JSON.parse(l) as { pid: number; argv?: string[]; grandchild?: number }), partial: text.slice(cut) };
+  };
+  const lines = () => read().lines;
   const pids = async () => [...lines().filter(l => l.argv).map(l => l.pid), ...lines().flatMap(l => (l.grandchild ? [l.grandchild] : []))];
   // two CLIs + the busy one's own child (a tool or MCP server: outside the app's job, it would outlive a plain exit)
   await expect.poll(async () => (await pids()).length).toBe(3);
@@ -141,17 +161,26 @@ test('quitting the app leaves no claude process behind, even mid-turn', async ()
   // The user closes the window (the X): that quits twice (our 'closed' handler + Electron's window-all-closed). Let
   // Electron exit by itself: Playwright's own close() would tree-kill the app on Windows and hide the bug.
   const electronPid = app.process().pid ?? 0;
-  const exited = new Promise<void>(r => app.process().once('exit', () => r()));
-  const t0 = Date.now();
+  const exited = new Promise<number>(r => app.process().once('exit', () => r(Date.now())));
   await app.evaluate(({ BrowserWindow }) => { setTimeout(() => BrowserWindow.getAllWindows()[0]?.close(), 50); }).catch(() => {});
-  await exited;
-  expect(Date.now() - t0).toBeLessThan(12000); // shutdown is capped at 6 s, plus one sync taskkill if needed
+  const goneAt = await exited;
   expect(alive(electronPid)).toBe(false);
   await expect.poll(() => started.filter(alive).length, { timeout: 6000 }).toBe(0);
-  // the clean path really ran: the idle CLI ended on its own (stdin closed) and the manager finished its shutdown
-  expect(lines().some(l => (l as { exit?: string }).exit === 'stdin closed')).toBe(true);
+  expect(read().partial, 'a fake CLI log line left incomplete').toBe(''); // its writers are gone: nothing may be half written
+  // the idle CLI too: its tree is killed at quit, not left to end by itself (its MCP servers would outlive the app;
+  // owner, 2026-10-12); the manager finished its shutdown
   const logDir = path.join(userData, 'logs');
   const appLog = fs.readdirSync(logDir).map(f => fs.readFileSync(path.join(logDir, f), 'utf8')).join('\n');
   expect(appLog).toContain('"msg":"manager stopped"');
+  if (guard) expect(appLog).toContain('"msg":"job guard ready"'); // the engines really ran in the guard's jobs
+  // timed from the app's own log: our shutdown (capped at 6 s, plus one sync taskkill if needed) apart from Electron's
+  // teardown after app.exit, which takes 3-7 s on a loaded machine and is not ours to cap (owner, 2026-10-12)
+  const at = (msg: string) => {
+    const line = appLog.split('\n').find(l => l.includes('"scope":"app"') && l.includes(`"msg":"${msg}"`));
+    expect(line, `the "${msg}" log line`).toBeTruthy();
+    return Date.parse((JSON.parse(line!) as { t: string }).t);
+  };
+  expect(at('exit') - at('quit started')).toBeLessThan(12000);
+  expect(goneAt - at('exit')).toBeLessThan(12000);
   await app.close().catch(() => {});
 });

@@ -6,16 +6,27 @@
 //   ask → AskUserQuestion via can_use_tool, waits for the answer · bash → Bash permission (with a rule suggestion)
 //   locked → Bash permission with suppress_always_allow_rule · mode → Edit permission with a setMode suggestion
 //   edit → an auto-allowed Edit with a structuredPatch result · slow → streams until interrupted
+//   (FAKE_CLAUDE_SLOW_TICKS deltas, default 200; FAKE_CLAUDE_STAMP=1 ends each word with @<Date.now()> so
+//   scripts/bench-perf.mjs can measure CLI → screen)
 //   stream → 24 text deltas (FAKE_CLAUDE_DELAY apart) before the final answer
 //   later → after the result, the CLI starts another turn on its own (like a task notification)
+//   meter → assistant messages with API usage (one repeated per block, one from a subagent), the session's running cost
+//     goes up by 0.05 mid-turn (get_usage shows it), then a 1.5 s pause before the answer; meter die → exits after the pause
 //   garbage → prints non-JSON lines first · crash → stderr + exit 3 · expired → error result with total cost 0
+//   big → get_context_usage reports 250000 of 1M from then on (default 1234; the window is the app's --settings
+//     env CLAUDE_CODE_AUTO_COMPACT_WINDOW when it passes one)
+//   a cold continuation ([second-brain · continuazione] …) → "Continuo dal passaggio: <the user's part>"
+//   the app's hand-off request (<<<PASSAGGIO) → a hand-off between the markers (FAKE_CLAUDE_HANDOFF=off: plain text)
+//   "Riprendi un lavoro…" (a chat continuing another) → "Ripreso dal passaggio…"; both ignore the words above
+//   orphan → starts a child with its own child that outlive this process (FAKE_CLAUDE_LOG gets {orphan: pid} twice)
+// FAKE_CLAUDE_INIT_DELAY=<ms> delays the initialize reply (a slow start-up); every FAKE_CLAUDE_LOG line has at: Date.now().
 //   anything else → streams "Ciao dal motore".
 // Like the real CLI (2.1.282, probed): results carry queued_turn_count; with CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1
 // it emits system/session_state_changed running/idle (FAKE_CLAUDE_NO_STATE_EVENTS=1 turns that off, as in older CLIs);
 // the initialize control_response carries pending_permission_requests on its envelope (FAKE_CLAUDE_INHERITED=1 puts
 // one inherited Bash prompt there). It writes a transcript to $CLAUDE_CONFIG_DIR/projects/<cwd slug>/<session>.jsonl
 // and logs to $FAKE_CLAUDE_LOG one JSON line per start ({argv}), per control request ({control}) and per user
-// message ({user: session_id}). `--version` and `auth status` answer at once. Every turn emits a `rate_limit_event`;
+// message ({user: session_id, blocks: content block types, images as image:<source type>:<media type>:<base64 length>}). `--version` and `auth status` answer at once. Every turn emits a `rate_limit_event`;
 // the get_usage control answers with plan windows (rate_limits.five_hour / seven_day).
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -36,8 +47,10 @@ let sessionId = argv.includes('--fork-session') ? crypto.randomUUID() : resumeId
 // no --permission-mode: the user's settings.json decides (FAKE_CLAUDE_SETTINGS_MODE stands for its defaultMode)
 let permissionMode = opt('--permission-mode') ?? process.env.FAKE_CLAUDE_SETTINGS_MODE ?? 'default';
 let model = opt('--model') ?? 'claude-fake-1';
+// the compaction window the app passes per process (inline --settings env, ADR 0031): get_context_usage reports it
+const compactWindow = (() => { try { return Number(JSON.parse(opt('--settings') ?? '{}')?.env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW) || null; } catch { return null; } })();
 const stateEvents = process.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS === '1' && process.env.FAKE_CLAUDE_NO_STATE_EVENTS !== '1';
-const logLine = obj => { if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ pid: process.pid, ...obj })}\n`); };
+const logLine = obj => { if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ pid: process.pid, at: Date.now(), ...obj })}\n`); };
 logLine({ argv, cwd: process.cwd(), stateEventsEnv: process.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS ?? null });
 
 const home = process.env.CLAUDE_CONFIG_DIR;
@@ -71,6 +84,9 @@ let n = 0;
 const queue = [];
 let busy = false;
 let ended = false;
+let spent = 0; // the running turn's cost so far, as the real CLI's tracker has it after each API response
+let ctxTokens = 1234; // get_context_usage; "big" in a message → 250000 (over the default 200k threshold)
+const FAKE_HANDOFF = 'Ecco il passaggio.\n<<<PASSAGGIO\n## Stato\nFatto il fix finto, test verdi.\n## File e worktree\n- a.txt\n## Decisioni prese\n- niente refactor\n## Provato e scartato\n- la cache: inutile\n## Prossimo passo\nAprire la PR.\nPASSAGGIO>>>';
 
 function assistant(content, id = `msg_${++n}`) {
   out({ type: 'assistant', message: { id, role: 'assistant', content }, parent_tool_use_id: null, session_id: sessionId, uuid: crypto.randomUUID() });
@@ -86,8 +102,11 @@ async function streamText(text, parts) {
   out({ type: 'stream_event', event: { type: 'message_start', message: { id, role: 'assistant', content: [] } }, parent_tool_use_id: null, session_id: sessionId });
   out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }, parent_tool_use_id: null, session_id: sessionId });
   let said = '';
-  for (const p of parts) {
+  let words = 0;
+  for (let p of parts) {
     if (turn?.aborted) break;
+    // bench text: a stamp per word and a paragraph every 40 words, like a real answer
+    if (process.env.FAKE_CLAUDE_STAMP === '1') p = p.replace(/ $/, `@${Date.now()}${words++ % 40 === 39 ? '\n\n' : ' '}`);
     said += p;
     out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: p } }, parent_tool_use_id: null, session_id: sessionId });
     await sleep(Number(process.env.FAKE_CLAUDE_DELAY ?? 5));
@@ -104,6 +123,7 @@ function ask(toolName, input, toolUseId, extra = {}) {
 }
 function result(final, aborted, t0) {
   cost = Math.round((cost + 0.01) * 1e6) / 1e6;
+  spent = 0;
   record({ type: 'cost-state', totalCostUSD: cost });
   out({ type: 'result', subtype: aborted ? 'error_during_execution' : 'success', is_error: aborted, duration_ms: Date.now() - t0, num_turns: 1, total_cost_usd: cost, result: aborted ? '' : final, errors: [], queued_turn_count: queue.length, session_id: sessionId, uuid: crypto.randomUUID() });
 }
@@ -132,6 +152,21 @@ async function runTurn(text) {
   record({ type: 'user', message: { role: 'user', content: text } });
   // like the real CLI on a claude.ai login: plan windows as utilization 0-1, resets in unix seconds
   out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', utilization: 0.25, resetsAt: Math.floor(Date.now() / 1000) + 3600 }, session_id: sessionId, uuid: crypto.randomUUID() });
+  if (/\bbig\b/.test(text)) ctxTokens = 250000;
+  // the app's hand-off request and the first message of a chat that continues another: answered as such, whatever words
+  // they contain (FAKE_CLAUDE_HANDOFF=off: an answer without the markers, so the app falls back to its own note)
+  const handoffAsk = text.includes('<<<PASSAGGIO'), resumed = text.startsWith('Riprendi un lavoro') || text.includes('\n\nRiprendi un lavoro');
+  // a cold continuation's first message (ADR 0031): the note, then the user's own message after the separator
+  const cold = text.startsWith('[second-brain · continuazione]');
+  if (handoffAsk || resumed || cold) {
+    const reply = cold ? `Continuo dal passaggio: ${text.slice(text.indexOf('\n--- messaggio ---\n') + 19)}`
+      : !handoffAsk ? 'Ripreso dal passaggio di consegne: verifico lo stato reale.'
+      : process.env.FAKE_CLAUDE_HANDOFF === 'off' ? 'Non so scrivere passaggi.' : FAKE_HANDOFF;
+    await streamText(reply, [reply.slice(0, 10), reply.slice(10)]);
+    result(reply, false, t0);
+    turn = null;
+    return;
+  }
   if (/crash/.test(text)) { process.stderr.write('fatal: fake crash for tests\n'); process.exit(3); }
   if (/expired/.test(text)) {
     // like an expired login: an error result whose running total reads 0
@@ -164,24 +199,59 @@ async function runTurn(text) {
     assistant([{ type: 'tool_use', id: 'toolu_edit', name: 'Edit', input: { file_path: file, old_string: 'a\nb\nc', new_string: 'a\nB\nc\nd' } }]);
     toolResult('toolu_edit', 'The file a.txt has been updated.', false, { filePath: file, structuredPatch: [{ oldStart: 1, oldLines: 3, newStart: 1, newLines: 4, lines: [' a', '-b', '+B', ' c', '+d'] }] });
   }
+  if (/toolwait/.test(text) && !turn.aborted) {
+    // a long tool call (a build, a test suite): the chat shows a running tool for FAKE_CLAUDE_TOOL_MS (bench --working)
+    assistant([{ type: 'tool_use', id: 'toolu_wait', name: 'Bash', input: { command: 'npm test', description: 'Run the tests' } }]);
+    await sleep(Number(process.env.FAKE_CLAUDE_TOOL_MS ?? 120000));
+    toolResult('toolu_wait', '3 passed');
+  }
   if (/stream/.test(text) && !turn.aborted) {
     // a longer answer streamed word by word (FAKE_CLAUDE_DELAY between deltas), then the turn goes on
     await streamText('', Array.from({ length: 24 }, (_, i) => `parola${i} `));
   }
+  if (/meter/.test(text) && !turn.aborted) {
+    const usage = (o) => ({ input_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 1000, output_tokens: o });
+    const msg = (id, content, u, parent = null) => out({ type: 'assistant', message: { id, model, role: 'assistant', content, usage: u }, parent_tool_use_id: parent, session_id: sessionId, uuid: crypto.randomUUID() });
+    msg('msg_m1', [{ type: 'thinking', thinking: 'penso' }], usage(10));
+    msg('msg_m1', [{ type: 'text', text: 'misuro' }], usage(20)); // the same response, one more block: counted once
+    msg('msg_sub', [{ type: 'text', text: 'dal subagente' }], usage(20), 'toolu_task');
+    spent = 0.05;
+    await sleep(1500);
+    if (/die/.test(text)) { process.stderr.write('fatal: fake crash mid-turn\n'); process.exit(3); }
+  }
+  if (/orphan/.test(text)) {
+    // a background command that outlives this CLI (a dev app, a hook, an MCP server the real CLI leaves running):
+    // a child that starts its own child, both 5 min long, never ended by this process; the app must reap both
+    const keep = 'setTimeout(() => {}, 300000)';
+    const script = `const g = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { stdio: 'ignore', windowsHide: true });`
+      + ` if (process.env.FAKE_CLAUDE_LOG) require('node:fs').appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ pid: process.pid, orphan: g.pid }) + '\\n'); ${keep};`;
+    const o = spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore', windowsHide: true });
+    o.unref();
+    logLine({ orphan: o.pid });
+  }
   if (/slow/.test(text)) {
     // a child of the CLI (a Bash tool, an MCP server): outside our parent's job, like claude.exe's own children;
-    // it ends by itself after 40 s and with a normal exit of this process, never later
-    const gc = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 40000)'], { detached: true, stdio: 'ignore', windowsHide: true });
+    // it ends by itself after FAKE_CLAUDE_CHILD_MS (40 s) and with a normal exit of this process, never later
+    const life = Number(process.env.FAKE_CLAUDE_CHILD_MS ?? 40000);
+    const gc = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${life})`], { detached: true, stdio: 'ignore', windowsHide: true });
     gc.unref();
     process.on('exit', () => { try { gc.kill(); } catch { /* gone */ } });
     logLine({ grandchild: gc.pid });
-    await streamText('', Array.from({ length: 200 }, () => 'tick '));
+    await streamText('', Array.from({ length: Number(process.env.FAKE_CLAUDE_SLOW_TICKS ?? 200) }, () => 'tick '));
   }
   else if (!turn.aborted) await streamText(final, [final.slice(0, 4), final.slice(4)]);
   const aborted = turn.aborted;
   if (aborted) out({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] }, parent_tool_use_id: null, session_id: sessionId });
+  // like run_in_background: a task starts in this turn and ends after the turn (FAKE_CLAUDE_TASK_MS), with a notification
+  if (/background/.test(text)) out({ type: 'system', subtype: 'task_started', task_id: 'task_bg', tool_use_id: 'toolu_bg', description: 'npm test', task_type: 'local_bash', session_id: sessionId });
   result(final, aborted, t0);
   turn = null;
+  if (/background/.test(text)) {
+    // "paused": the task pauses and resumes before it ends (a workflow), and a late update follows its end
+    const upd = (status, ms) => setTimeout(() => out({ type: 'system', subtype: 'task_updated', task_id: 'task_bg', patch: { status }, session_id: sessionId }), ms);
+    if (/paused/.test(text)) { upd('paused', 50); upd('running', 150); upd('running', Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400) + 100); }
+    setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'task_bg', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400));
+  }
   if (/later/.test(text)) {
     // the CLI picks up a task notification by itself: no user message, a whole new turn
     setTimeout(async () => {
@@ -217,7 +287,16 @@ function control(id, req) {
       const pending = process.env.FAKE_CLAUDE_INHERITED === '1' ? [inherited] : [];
       if (pending.length) waiters.set('req_inherited', r => { out({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', content: [{ type: 'text', text: `inherited: ${r?.behavior}` }] }, parent_tool_use_id: null, session_id: sessionId }); });
       // like Claude Code 2.1.282: the pending lists ride on the envelope, beside `response`
-      return ok({ commands: [], agents: [], models: [], account: {}, output_style: 'default', available_output_styles: [], claude_code_version: '0.0.0-fake' }, { pending_permission_requests: pending, pending_user_dialog_requests: [] });
+      // like 2.1.282: the chat's "/" commands with description and argument hint; skills carry "(user)"/"(project)"
+      const commands = [
+        { name: 'spiega', description: 'Spiega un argomento a domande (user)', argumentHint: '<argomento>' },
+        { name: 'compact', description: 'Compatta il contesto della chat', argumentHint: '' },
+        { name: 'wiz:scan (MCP)', description: 'an MCP prompt: its name has a space, not typeable', argumentHint: '' },
+      ];
+      const reply = () => ok({ commands, agents: [], models: [], account: {}, output_style: 'default', available_output_styles: [], claude_code_version: '0.0.0-fake' }, { pending_permission_requests: pending, pending_user_dialog_requests: [] });
+      // FAKE_CLAUDE_INIT_DELAY: a slow start-up (the real CLI answers after 10-25 s)
+      if (process.env.FAKE_CLAUDE_INIT_DELAY) { setTimeout(reply, Number(process.env.FAKE_CLAUDE_INIT_DELAY)); return; }
+      return reply();
     }
     case 'interrupt':
       if (turn) {
@@ -229,12 +308,22 @@ function control(id, req) {
     case 'set_permission_mode': permissionMode = req.mode; out({ type: 'system', subtype: 'status', status: null, permissionMode, session_id: sessionId }); return ok({ mode: req.mode });
     case 'apply_flag_settings': return ok();
     case 'rename_session': record({ type: 'custom-title', customTitle: req.title }); return ok();
-    case 'get_context_usage': return ok({ categories: [], totalTokens: 1234, maxTokens: 200000, rawMaxTokens: 200000, percentage: 0.617 });
-    case 'get_usage': return ok({ session: { total_cost_usd: cost }, rate_limits: { five_hour: { utilization: 25, resets_at: new Date(Date.now() + 3600e3).toISOString() }, seven_day: { utilization: 40, resets_at: new Date(Date.now() + 5 * 864e5).toISOString() } } });
+    case 'get_context_usage': {
+      const max = compactWindow ?? (ctxTokens > 200000 ? 1000000 : 200000);
+      return ok({ categories: [], totalTokens: ctxTokens, maxTokens: max, rawMaxTokens: max, percentage: Math.round((ctxTokens / max) * 100000) / 1000 });
+    }
+    case 'get_usage': return ok({ session: { total_cost_usd: Math.round((cost + spent) * 1e6) / 1e6 }, rate_limits: { five_hour: { utilization: 25, resets_at: new Date(Date.now() + 3600e3).toISOString() }, seven_day: { utilization: 40, resets_at: new Date(Date.now() + 5 * 864e5).toISOString() } } });
     default: return out({ type: 'control_response', response: { subtype: 'error', request_id: id, error: `Unsupported control request subtype: ${req.subtype}` } });
   }
 }
 
+// FAKE_CLAUDE_HOLD_PIPES=<ms>: a leftover that inherited this CLI's stdout/stderr and outlives it (a background command
+// started with inherited handles): the CLI exits, but the host's 'close' waits for the pipes
+if (process.env.FAKE_CLAUDE_HOLD_PIPES) {
+  const h = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${Number(process.env.FAKE_CLAUDE_HOLD_PIPES)})`], { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, detached: true });
+  h.unref();
+  logLine({ holder: h.pid });
+}
 const rl = readline.createInterface({ input: process.stdin });
 rl.on('line', line => {
   if (!line.trim()) return;
@@ -247,8 +336,9 @@ rl.on('line', line => {
     return;
   }
   if (m.type === 'user') {
-    logLine({ user: m.session_id });
     const c = m.message?.content;
+    // the content block types and image media types, so tests see what a message carried (pasted screenshots)
+    logLine({ user: m.session_id, blocks: Array.isArray(c) ? c.map(b => (b.type === 'image' ? `image:${b.source?.type}:${b.source?.media_type}:${(b.source?.data ?? '').length}` : b.type)) : ['string'] });
     queue.push(Array.isArray(c) ? c.map(b => b.text ?? '').join('\n') : String(c ?? ''));
     void pump();
   }

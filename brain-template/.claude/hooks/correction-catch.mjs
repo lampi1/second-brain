@@ -38,9 +38,6 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
   }
   if (!CORRECTION.test(prompt) && !CONFUSION.test(prompt)) return;
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext:
-    'If this message corrects you, or shows {{OWNER}} did not understand or did not see something you sent, then in this turn ' +
-    'append one line to {{BRAIN}}/ai-errors.md in its format (date time, chat, area, type, said, true, ' +
-    'seen by: how he noticed, with his words) with `node "{{BRAIN}}/ops/tools/mem.mjs" error --text "<line>"`. ' +
-    'If it prints SECONDA VOLTA, send the Regia a rule proposal (file + exact text). ' +
-    'Not an error (a new request, "ricordati di..."): write nothing.' } }));
+    // Only the fact: how to log (format, mem.mjs, second time) lives once in the ai-errors.md header.
+    'Possible correction or confusion: if it is one, log it per the {{BRAIN}}/ai-errors.md header.' } }));
 });

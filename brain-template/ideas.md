@@ -8,6 +8,8 @@ Pensieri emersi in chat, da non perdere. Più recenti in alto. Stato: `aperta` �
 - **Idee dell'IA**: any chat may now and then write its **own** idea (with **Come** and **Fonte** `IA · <chat> · <why>`
   and `--per second-brain|owner|ia`), at most one per chat per day, silently: it stays an idea until {{OWNER}} picks it.
 
+Il primo giorno è vuoto: le idee compaiono qui sotto, la più recente in alto, e nella pagina Idee dell'app.
+
 <!-- Template
 ## AAAA-MM-GG · [lavoro|personale] · Titolo breve · `aperta`
 - **Idea:** cosa, in 1-2 righe.

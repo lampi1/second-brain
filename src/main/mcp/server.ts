@@ -4,7 +4,10 @@
 //   /mcp/chat/:chatId/:token      one per app chat (authorize() checks the token)
 //   /mcp/app                      app control tool set (mounted by the integrator)
 // Spec subset: POST JSON-RPC (single or batch) → application/json; notifications/responses only → 202; DELETE with a
-// session id → 204 when the mount frees sessions (onSessionEnd), else 405; GET/OPTIONS → 405. Security: bound to 127.0.0.1 only; Host must be a loopback name with our port and any Origin header is
+// session id → 204 when the mount frees sessions (onSessionEnd), else 405; GET/OPTIONS → 405. A single tools/call that
+// carries _meta.progressToken (and accepts text/event-stream) may stream: on the tool's first ctx.progress() the answer
+// switches to SSE, sends notifications/progress events, then the result as the last event. Long waits need it: Claude
+// Code aborts a tool that sends no response or progress for 300 s (CLI 2.1.283, "MCP tool idle timeout"). Security: bound to 127.0.0.1 only; Host must be a loopback name with our port and any Origin header is
 // refused unless allow-listed (DNS rebinding and web pages in any browser, including our own tabs, must never drive
 // it); POST bodies must be application/json (a cross-origin "simple" text/plain POST would skip the CORS preflight);
 // bodies are capped. Used by browser/service.ts (browser tool sets) and wiring.ts (other mounts).
@@ -33,6 +36,9 @@ export interface CallCtx {
   params: Record<string, string>;    // path params (e.g. chatId)
   sessionId: string;                 // Mcp-Session-Id of the client ('' when the client sent none)
   signal: AbortSignal;               // aborted when the client disconnects
+  /** Progress notification to the client (keeps a long call alive); false = the client cannot receive it (no
+   *  progressToken, a batch, or no text/event-stream): the tool must then return before the client's idle timeout. */
+  progress: (message: string) => boolean;
 }
 
 export interface McpTool {
@@ -75,6 +81,8 @@ export class McpServer {
   private boundPort = 0;
   private readonly maxBody: number;
   private readonly origins: Set<string>;
+  /** Running tools/call by mount + session + request id: notifications/cancelled aborts the one it names. */
+  private readonly inflight = new Map<string, AbortController>();
 
   constructor(private readonly opts: McpServerOptions) {
     this.maxBody = opts.maxBodyBytes ?? 4 * 1024 * 1024;
@@ -181,8 +189,23 @@ export class McpServer {
       sessionId = crypto.randomUUID();
       headers['Mcp-Session-Id'] = sessionId;
     }
-    const ctxBase = { mount: route.mount.name, params: route.params, sessionId, signal: ac.signal };
+    const stream = !batch && acceptsSse(req.headers.accept) ? progressTokenOf(list[0]) : undefined;
+    let streaming = false, step = 0;
+    const progress = (message: string): boolean => {
+      if (stream === undefined || res.writableEnded || res.destroyed) return false;
+      if (!streaming) {
+        streaming = true;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...headers });
+      }
+      sseEvent(res, { jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: stream, progress: ++step, message: message.slice(0, 500) } });
+      return true;
+    };
+    const ctxBase: CallCtx = { mount: route.mount.name, params: route.params, sessionId, signal: ac.signal, progress };
     const out = (await Promise.all(list.map(m => this.handle(m, route.mount, ctxBase)))).filter((r): r is JsonRpcReply => r !== null);
+    if (streaming) {                                   // the result is the last event of the stream
+      if (!res.writableEnded && !res.destroyed) { if (out[0]) sseEvent(res, out[0]); res.end(); }
+      return;
+    }
     if (!out.length) { res.writeHead(202, headers).end(); return; }
     send(res, 200, batch ? out : out[0], headers);
   }
@@ -191,7 +214,12 @@ export class McpServer {
     if (!msg || typeof msg !== 'object') return fail(null, -32600, 'Invalid Request');
     const { id, method, params } = msg;
     if (method === undefined) return null;                        // a response from the client: nothing to answer
-    if (id === undefined) return null;                            // notification (initialized, cancelled, ...)
+    if (id === undefined) {                                       // notification (initialized, cancelled, ...)
+      // the client gave up on a call (user stop, its own timeout): the tool stops waiting, the connection may stay open
+      const rid = (params as { requestId?: unknown } | undefined)?.requestId;
+      if (method === 'notifications/cancelled' && (typeof rid === 'string' || typeof rid === 'number')) this.inflight.get(callKey(mount, ctx, rid))?.abort();
+      return null;
+    }
     if (typeof method !== 'string') return fail(id, -32600, 'Invalid Request: method must be a string');
     const p = (params && typeof params === 'object' ? params : {}) as Record<string, unknown>;
     try {
@@ -216,13 +244,22 @@ export class McpServer {
           const args = (p.arguments && typeof p.arguments === 'object' ? p.arguments : {}) as Record<string, unknown>;
           const who = mount.who?.(ctx.params, ctx.sessionId);
           const t0 = Date.now();
+          const key = callKey(mount, ctx, id);
+          const ac = new AbortController();
+          const onClose = () => ac.abort();
+          ctx.signal.addEventListener('abort', onClose, { once: true });
+          if (ctx.signal.aborted) ac.abort();
+          if (id !== null) this.inflight.set(key, ac);
           try {
-            const out = await tool.run(args, ctx);
+            const out = await tool.run(args, { ...ctx, signal: ac.signal });
             log.debug('mcp', `call ${name}`, { chat: who, data: { mount: mount.name, ms: Date.now() - t0, args: Object.keys(args) } });
             return ok(id, { content: toContent(out) });
           } catch (e) {
             log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
             return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}` }], isError: true });
+          } finally {
+            ctx.signal.removeEventListener('abort', onClose);
+            if (this.inflight.get(key) === ac) this.inflight.delete(key);
           }
         }
         default:
@@ -261,6 +298,22 @@ function readBody(req: http.IncomingMessage, max: number): Promise<Buffer | null
     req.on('error', reject);
   });
 }
+
+function callKey(mount: Mount, ctx: CallCtx, id: string | number | null): string {
+  return `${mount.name}|${JSON.stringify(ctx.params)}|${ctx.sessionId}|${typeof id}:${String(id)}`;
+}
+
+/** A tools/call request's _meta.progressToken (string or number), else undefined. */
+function progressTokenOf(m: JsonRpcMsg | undefined): string | number | undefined {
+  if (!m || typeof m !== 'object' || m.method !== 'tools/call' || m.id === undefined) return undefined;
+  const meta = (m.params as { _meta?: { progressToken?: unknown } } | undefined)?._meta;
+  const t = meta?.progressToken;
+  return typeof t === 'string' || (typeof t === 'number' && Number.isFinite(t)) ? t : undefined;
+}
+
+function acceptsSse(accept: string | undefined): boolean { return /(^|[\s,])text\/event-stream\b/i.test(accept ?? ''); }
+
+function sseEvent(res: http.ServerResponse, body: unknown): void { res.write(`event: message\ndata: ${JSON.stringify(body)}\n\n`); }
 
 function send(res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
   res.writeHead(status, { 'Content-Type': 'application/json', ...headers }).end(JSON.stringify(body));

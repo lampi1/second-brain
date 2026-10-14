@@ -150,7 +150,7 @@ export function questionsFrom(input: unknown): Question[] {
     if (!str(o.question)) continue;
     const options: QuestionOption[] = (Array.isArray(o.options) ? o.options : [])
       .map(x => obj(x)).filter(x => str(x.label))
-      .map(x => (str(x.description) ? { label: str(x.label), description: str(x.description) } : { label: str(x.label) }));
+      .map(x => ({ label: str(x.label), ...(str(x.description) ? { description: str(x.description) } : {}), ...(str(x.preview).trim() ? { preview: str(x.preview).slice(0, 20_000) } : {}) }));
     out.push({ question: str(o.question), ...(str(o.header) ? { header: str(o.header) } : {}), options, multiSelect: o.multiSelect === true });
   }
   return out;

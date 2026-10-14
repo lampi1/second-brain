@@ -15,6 +15,34 @@ const say = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, at
 const init = (s: AppState = initialState) => reduce(s, { type: 'init', chats: [chat('a'), chat('b')], pending: [], tabs: [], feed: [], usage: null, info: null });
 
 describe('reduce', () => {
+  it('cli:ready fills the CLI status into app:info, and waits for app:info when it comes first', () => {
+    const cli = { claude: { found: true, path: 'c', version: '2', loggedIn: true }, cursor: { found: false, path: null, version: null, loggedIn: null } };
+    expect(reduce(init(), { type: 'cli', cli }).info).toBeNull();
+    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null } });
+    expect(reduce(s, { type: 'cli', cli }).info?.cli).toEqual(cli);
+  });
+
+  it('a Cursor chat with no cost of its own takes the Cursor ledger estimate for its session, and drops it when gone', () => {
+    const cur = chat('c', { harness: 'cursor', sessionId: 's1', costKnown: false });
+    const usage = (cursorChats: Record<string, number>) => ({ todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, cursorChats });
+    let s = reduce(init(), { type: 'chat:updated', chat: cur });
+    s = reduce(s, { type: 'usage', usage: usage({ s1: 0.4 }) });
+    expect(s.chats.c?.costLedgerUsd).toBe(0.4);
+    const a = s.chats.a;
+    s = reduce(s, { type: 'chat:updated', chat: { ...cur, lastText: 'x' } });
+    expect(s.chats.c?.costLedgerUsd).toBe(0.4); // a chat update keeps it
+    expect(s.chats.a).toBe(a);                   // other chats keep their reference
+    s = reduce(s, { type: 'usage', usage: usage({}) });
+    expect(s.chats.c?.costLedgerUsd).toBeUndefined();
+  });
+
+  it('cli:ready fills the CLI status into app:info, and waits for app:info when it comes first', () => {
+    const cli = { claude: { found: true, path: 'c', version: '2', loggedIn: true }, cursor: { found: false, path: null, version: null, loggedIn: null } };
+    expect(reduce(init(), { type: 'cli', cli }).info).toBeNull();
+    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null } });
+    expect(reduce(s, { type: 'cli', cli }).info?.cli).toEqual(cli);
+  });
+
   it('init keeps chats that arrived by event during the load and marks ready', () => {
     const early = reduce(initialState, { type: 'chat:updated', chat: chat('z') });
     const s = init(early);
@@ -55,6 +83,17 @@ describe('reduce', () => {
     expect(reduce(s, { type: 'chat:updated', chat: chat('a') })).toBe(s);
   });
 
+  // several Regie (ADR 0021): main moves a role and sends both updates; the store shows what main says
+  it('a second Regia sits next to the first; a role moves only with main\'s update of the old one', () => {
+    let s = reduce(init(), { type: 'chat:updated', chat: chat('a', { isRegia: true }) });
+    const bRef = s.chats.b;
+    s = reduce(s, { type: 'chat:updated', chat: chat('n', { isRegia: true, harness: 'cursor', regiaName: 'App' }) });
+    expect(Object.values(s.chats).filter(c => c.isRegia).map(c => c.id).sort()).toEqual(['a', 'n']);
+    s = reduce(s, { type: 'chat:updated', chat: chat('a', { isRegia: false }) });
+    expect(Object.values(s.chats).filter(c => c.isRegia).map(c => c.id)).toEqual(['n']);
+    expect(s.chats.b).toBe(bRef);
+  });
+
   it('pending stays oldest first, deduped, and resolves by chat + id', () => {
     let s = init();
     s = reduce(s, { type: 'pending:added', req: req('a', 'r2', 20) });
@@ -69,7 +108,7 @@ describe('reduce', () => {
   it('chat:removed drops its items, pending and queue', () => {
     let s = init();
     s = reduce(s, { type: 'pending:added', req: req('a', 'r', 1) });
-    s = reduce(s, { type: 'queue', chatId: 'a', text: 'dopo' });
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q1', text: 'dopo' } });
     s = reduce(s, { type: 'chat:removed', chatId: 'a' });
     expect(s.order).toEqual(['b']);
     expect(s.pending).toHaveLength(0);
@@ -84,28 +123,45 @@ describe('reduce', () => {
     expect(s.feed.map(x => x.id)).toEqual(['b', 'c', 'a']);
   });
 
-  it('queue ignores blank text; unqueue removes by index', () => {
+  it('queue ignores blank text without images and repeated ids; unqueue removes by id; front puts it back first', () => {
+    const img = { mimeType: 'image/png' as const, data: 'iVBORw0KGgo=' };
     let s = init();
-    s = reduce(s, { type: 'queue', chatId: 'a', text: '  ' });
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q0', text: '  ' } });
     expect(s.queued.a).toBeUndefined();
-    s = reduce(s, { type: 'queue', chatId: 'a', text: 'uno' });
-    s = reduce(s, { type: 'queue', chatId: 'a', text: 'due' });
-    s = reduce(s, { type: 'unqueue', chatId: 'a', index: 0 });
-    expect(s.queued.a).toEqual(['due']);
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q1', text: ' uno ' } });
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q2', text: 'uno' } }); // same text, another message
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q3', text: '', images: [img] } }); // images only
+    expect(reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q1', text: 'x' } })).toBe(s);
+    expect(s.queued.a?.map(m => [m.id, m.text])).toEqual([['q1', 'uno'], ['q2', 'uno'], ['q3', '']]);
+    s = reduce(s, { type: 'unqueue', chatId: 'a', id: 'q1' });
+    expect(s.queued.a?.map(m => m.id)).toEqual(['q2', 'q3']);
+    expect(reduce(s, { type: 'unqueue', chatId: 'a', id: 'nope' })).toBe(s);
+    s = reduce(s, { type: 'queue', chatId: 'a', msg: { id: 'q1', text: 'uno' }, front: true });
+    expect(s.queued.a?.map(m => m.id)).toEqual(['q1', 'q2', 'q3']);
+  });
+
+  it('promote moves one queued message (by id) to the front, the others keep their order', () => {
+    let s = init();
+    for (const [id, text] of [['q1', 'uno'], ['q2', 'due'], ['q3', 'tre']] as const) s = reduce(s, { type: 'queue', chatId: 'a', msg: { id, text } });
+    s = reduce(s, { type: 'promote', chatId: 'a', id: 'q3' });
+    expect(s.queued.a?.map(m => m.text)).toEqual(['tre', 'uno', 'due']);
+    const same = s;
+    for (const id of ['q3', 'nope']) expect(reduce(same, { type: 'promote', chatId: 'a', id })).toBe(same); // already first, or gone
+    expect(reduce(same, { type: 'promote', chatId: 'zz', id: 'q1' })).toBe(same);
   });
 });
 
 describe('selectors', () => {
   it('toFlush sends the first queued message only on the transition to idle with nothing pending', () => {
-    const q = ['dopo'];
-    expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle' }), q)).toBe('dopo');
+    const q = [{ id: 'q1', text: 'dopo' }];
+    expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle' }), q)).toBe(q[0]);
     expect(toFlush(chat('a', { state: 'idle' }), chat('a', { state: 'idle' }), q)).toBeNull();
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'waiting' }), q)).toBeNull();
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle', pending: 1 }), q)).toBeNull();
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle' }), [])).toBeNull();
   });
 
-  it('corsie: waiting by oldest request, working, finished today newest first; Regia excluded', () => {
+  it('corsie: waiting by oldest request, then working with the finished ones newest first; Regia excluded', () => {
     const now = new Date(2026, 9, 11, 12, 0).getTime();
     const s = {
       order: ['r', 'w1', 'w2', 'run', 'd1', 'd2', 'old'],
@@ -120,11 +176,10 @@ describe('selectors', () => {
       },
       pending: [req('w2', 'x', 5), req('w1', 'y', 9)],
     };
-    const c = corsie(s, now);
+    const c = corsie(s);
     expect(c.waiting.map(x => x.id)).toEqual(['w2', 'w1']);
-    expect(c.working.map(x => x.id)).toEqual(['run']);
-    expect(c.done.map(x => x.id)).toEqual(['d2', 'd1']);
-    expect(c.older.map(x => x.id)).toEqual(['old']); // not today: kept, in "Precedenti"
+    // the finished chats still open follow the busy ones, newest first (no "Finite oggi" column: they close by themselves)
+    expect(c.working.map(x => x.id)).toEqual(['run', 'd2', 'd1', 'old']);
   });
 
   it('runningCount and todayCost', () => {

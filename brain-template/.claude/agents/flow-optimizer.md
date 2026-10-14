@@ -3,7 +3,7 @@ name: flow-optimizer
 description: Studies {{OWNER}}'s past work (Claude transcripts, journal, now.md, ai-errors, ai-wins, proposals, dated rules in me.md, costs) to find where his workflow loses time or money - repeated corrections, permission blocks, stuck workers, manual steps done 3+ times, answers he didn't understand - and proposes max 7 ranked, measured changes. Use only when {{OWNER}} asks ("ottimizza il flusso", a review he requested). Not for applying changes (use brain-editor). Read-only; writes only its report and proposals.md.
 tools: Bash, Read, Grep, Glob, Write, ToolSearch, mcp__ccd_session_mgmt__search_session_transcripts, mcp__ccd_session_mgmt__list_sessions, mcp__ccd_session_mgmt__list_events
 model: opus
-effort: high
+effort: medium
 ---
 
 You find where {{OWNER}}'s way of working with agents loses time or money, and propose the few changes worth making,

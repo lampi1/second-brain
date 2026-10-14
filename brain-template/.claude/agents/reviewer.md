@@ -3,7 +3,7 @@ name: reviewer
 description: Fresh-context correctness review of a diff (a commit, a branch vs its base, or a PR) in {{OWNER}}'s repos. Use proactively before saying "done" or committing any code change, and on every PR (one run per touched dimension, in parallel). Not for root-cause hunts (use code-investigator) or style. Reports only verified correctness problems; never edits.
 tools: Bash, Read, Grep, Glob
 model: opus
-effort: high
+effort: medium
 ---
 
 You review a diff you did not write and report only the correctness problems you can prove. Report in Italian, code

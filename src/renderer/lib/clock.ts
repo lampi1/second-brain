@@ -1,6 +1,7 @@
 // The UI clock: Date.now(), or a fixed instant when the demo runs frozen (SB_DEMO_FREEZE=1 sends ui:command
 // 'clock'), so relative times ("4 min") are identical in every screenshot. `useNow` re-renders a component on a
 // coarse tick (relative labels) without each tile running its own timer. Used by tiles, the lane and the top bar.
+// Paused while the window is hidden (lib/beat.ts has the why: "Lag nell'app", 2026-10-12).
 import { useSyncExternalStore } from 'react';
 
 let frozen: number | null = null;
@@ -26,9 +27,12 @@ export function freezeClock(ms: number): void {
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+// a hidden window re-renders nothing for the clock: relative labels catch up at once when it shows again
+const shown = () => typeof document === 'undefined' || !document.hidden;
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (shown()) tick(); });
 function subscribe(fn: () => void): () => void {
   listeners.add(fn);
-  if (!timer) timer = setInterval(tick, 1000);
+  if (!timer) timer = setInterval(() => { if (shown()) tick(); }, 1000);
   return () => {
     listeners.delete(fn);
     if (listeners.size === 0 && timer) { clearInterval(timer); timer = null; }

@@ -1,10 +1,12 @@
 // Persistence of the app's own chats in <userData>/chats.json, so tiles come back after a restart as 'closed' and
-// resume on the first message (docs/architecture.md "Data and state"). Only ids, folders and choices are stored:
+// resume on the first message (docs/architecture.md "Data and state"). Only ids, folders, choices, the last context
+// size, the hand-off/"Riprendi" links and the past sessions of a cold continuation (ADR 0031) are stored:
 // never messages (they stay in each CLI's transcript) and never secrets. Writes are atomic (tmp + rename); a corrupt
 // file is set aside as chats.json.bad-<time> instead of being lost. Used by manager.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Effort, Harness, PermissionMode } from '../../shared/contract';
+import type { ChatLink, ChatSpace, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
+import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
 
@@ -21,9 +23,63 @@ export interface StoredChat {
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
   isRegia: boolean;
+  /** a Regia's tab name; a work chat's Regia (ADR 0021) */
+  regiaName?: string;
+  regiaOf?: string;
+  regiaSince?: number;
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
   costTotalUsd?: number;
+  /** end of the last real turn: a saved hand-off older than this is stale */
+  lastTurnAt?: number;
+  /** the context size last seen, so a closed long chat still shows it (estimated: Cursor) */
+  context?: { tokens: number; max?: number; estimated?: boolean };
+  /** a hand-off note exists in <userData>/handoffs/<id>.md, written at this time */
+  handoffAt?: number;
+  handoffSource?: HandoffSource;
+  /** its saved hand-off is a cold note (ADR 0031) written at this time: a message after the cache expired continues
+   *  the chat in a fresh session from it */
+  coldNoteAt?: number;
+  /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
+  pastSessions?: PastSession[];
+  /** "Riprendi" links: this chat continues another one / is continued by another one */
+  continuedFrom?: ChatLink;
+  continuedBy?: ChatLink;
+  /** created with "Worktree separato" (the CLI made the worktree; "Riprendi" tells the new chat to work there) */
+  inWorktree?: boolean;
+  /** archived (out of the grid, in the palette's "Chiuse" group) at this time, by the auto-close or by hand */
+  closedAt?: number;
+  closedBy?: 'auto' | 'user';
+  /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
+  working?: true;
+  /** a chat of the "Migliora l'app" section; appRegia = that section's Regia */
+  space?: ChatSpace;
+  appRegia?: true;
+  /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
+  route?: RouteDecision;
+}
+
+export interface PastSession { sessionId: string; at: number; notePath: string }
+
+const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const link = (v: unknown): ChatLink | null => {
+  const l = v as Record<string, unknown> | null;
+  return l && typeof l === 'object' && typeof l.id === 'string' && l.id && typeof l.title === 'string' ? { id: l.id, title: l.title } : null;
+};
+function extras(c: Record<string, unknown>): Partial<StoredChat> {
+  const ctx = c.context as Record<string, unknown> | undefined;
+  const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route);
+  return {
+    ...(route ? { route } : {}),
+    ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),
+    ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
+    ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
+    ...(Array.isArray(c.pastSessions) ? { pastSessions: c.pastSessions.flatMap(p => { const x = p as Record<string, unknown>; return isUuid(x?.sessionId) && num(x.at) && typeof x.notePath === 'string' ? [{ sessionId: x.sessionId, at: x.at, notePath: x.notePath }] : []; }).slice(-20) } : {}),
+    ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
+    ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
+    ...(c.inWorktree === true ? { inWorktree: true } : {}),
+    ...(c.space === 'app' ? { space: 'app' as const, ...(c.appRegia === true ? { appRegia: true as const } : {}) } : {}),
+  };
 }
 
 const HARNESSES: readonly string[] = ['claude', 'cursor'];
@@ -45,8 +101,15 @@ function valid(x: unknown, version: number): StoredChat | null {
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
     permissionMode: MODES.includes(String(c.permissionMode)) && !(version < 2 && c.permissionMode === 'default') ? (c.permissionMode as PermissionMode) : null,
     isRegia: c.isRegia === true,
+    ...(c.isRegia === true && typeof c.regiaName === 'string' && c.regiaName ? { regiaName: c.regiaName.slice(0, 30) } : {}),
+    ...(c.isRegia !== true && typeof c.regiaOf === 'string' && c.regiaOf ? { regiaOf: c.regiaOf } : {}),
+    ...(c.isRegia === true && typeof c.regiaSince === 'number' && Number.isFinite(c.regiaSince) ? { regiaSince: c.regiaSince } : {}),
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
+    ...extras(c),
+    // the Regia (and the app's Regia) is never archived, whatever the file says
+    ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isRegia !== true && c.appRegia !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
+    ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
   };
 }
 
