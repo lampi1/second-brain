@@ -19,6 +19,9 @@ consapevole che sto usando le chat dal second brain"):
 - **Browser**: the app's own (`mcp__second-brain__*`), shown as a tile next to its chat (no Ctrl+Shift+B); a remote
   sign-in → `handoff_to_user` kind "login", and the chat gives him URL, account and password (`rules/devops-qa.md`).
 - **His PC clock flips to UTC-3** (`tzautoupdate`): give him `Set-TimeZone -Id "W. Europe Standard Time"` (2026-10-06).
+- **Kimi CLI login**: his Kimi account is on kimi.ai (overseas, Google); the CLI defaults to kimi.com (China, WeChat/+86
+  page). User env vars `KIMI_CODE_OAUTH_HOST=https://auth.kimi.ai` and `KIMI_CODE_BASE_URL=https://api.kimi.ai/coding/v1`
+  make "Accedi" work with Google (2026-10-15).
 - **Claude Desktop-only tools** (chip `spawn_task`, `ccd_*` sidebar, PushNotification, `read_terminal`): only if they
   are in your tool list; in the app chats are created and messaged with `app_create_chat` and `app_send_to_chat`.
 
