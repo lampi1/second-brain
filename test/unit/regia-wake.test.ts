@@ -1,6 +1,7 @@
 // Unit tests of main/chats/regia-wake.ts ("Eventi alla Regia"): a work chat that finishes, fails, waits for an answer
 // or leaves a command is told to the Regia in one grouped message labelled as the app's; a chat at most once every
-// perChatMs; never while the Regia works or waits for the user; off with the setting; the Regia's own turns never.
+// perChatMs; into the Regia's running turn, never while it waits for the user (a failure only); off with the setting;
+// the Regia's own turns never.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { APP_EVENT_LABEL, RegiaWake, wakeLine } from '../../src/main/chats/regia-wake';
@@ -128,16 +129,34 @@ describe('RegiaWake', () => {
     expect(sent[1]!.text).not.toContain('«due»');
   });
 
-  it('never while the Regia works or waits for the user: sent when it is idle again', async () => {
+  it('into the Regia\'s running turn at once; while it waits for the user only a failure; the rest when it is free', async () => {
     const { sent, up, finish } = make();
     up({ id: 'regia', isRegia: true, state: 'running' });
     finish('qa', 'fatto');
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(sent).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(sent).toHaveLength(1); // no new turn: it joins the one running
     up({ id: 'regia', isRegia: true, state: 'waiting', pending: 1 });
+    finish('dev', 'fatto anche io');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(sent).toHaveLength(1); // it waits for the user: no interruption
+    up({ id: 'fail', state: 'running' }); up({ id: 'fail', state: 'error', lastError: 'ECONNRESET' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(sent).toHaveLength(2); // a failure goes at once
+    expect(sent[1]!.text).toContain('ECONNRESET');
+    expect(sent[1]!.text).not.toContain('fatto anche io');
+    up({ id: 'regia', isRegia: true, state: 'idle', pending: 0 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(sent).toHaveLength(3);
+  });
+
+  it('a Cursor Regia (no message mid-turn) gets nothing while it works', async () => {
+    const { sent, up, finish } = make();
+    up({ id: 'regia', isRegia: true, state: 'running', harness: 'cursor' });
+    up({ id: 'fail', state: 'running' }); up({ id: 'fail', state: 'error', lastError: 'x' });
+    finish('qa', 'fatto');
     await vi.advanceTimersByTimeAsync(3000);
     expect(sent).toEqual([]);
-    up({ id: 'regia', isRegia: true, state: 'idle', pending: 0 });
+    up({ id: 'regia', isRegia: true, state: 'idle', harness: 'cursor' });
     await vi.advanceTimersByTimeAsync(10);
     expect(sent).toHaveLength(1);
   });

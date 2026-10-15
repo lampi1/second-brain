@@ -9,7 +9,10 @@
 //   with a Windows error dialog and the VS JIT debugger; inside the job they just end;
 // - kill: TerminateJobObject, the whole tree at once, orphans included, in milliseconds;
 // - list: the job's members (pid, parent pid, image), for the reap after a clean exit (proctree.ts reapEngine);
-// - release: drops kill-on-close and the handle, so what the chat opened for the user outlives the app.
+// - release: drops kill-on-close and the handle, so what the chat opened for the user outlives the app;
+// - closeall: every job not released dies (the quit's last kill);
+// - quit: closeall, then starts a booster that raises the threads of the app's process tree until the app is gone (a slow
+//   exit under load, Boost), and ends.
 // Jobs are named by our own ids, never by pid: Windows reuses pids, and a kept engine's job outlives its process.
 // The helper is a normal child of the app, so libuv kills it with the app (quit or crash): its handles close and every
 // job not released dies with it. No helper (not Windows, Add-Type blocked, tests) = the taskkill paths alone.
@@ -37,6 +40,18 @@ public static class SbJob {
   [DllImport("kernel32", SetLastError = true)] static extern IntPtr OpenProcess(uint a, bool i, int p);
   [DllImport("kernel32", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
   [DllImport("ntdll")] static extern int NtQueryInformationProcess(IntPtr p, int c, ref Pbi i, int l, IntPtr r);
+  [DllImport("kernel32", SetLastError = true)] static extern IntPtr OpenThread(uint a, bool i, int t);
+  [DllImport("kernel32", SetLastError = true)] static extern bool SetThreadPriority(IntPtr t, int p);
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct Si { public int cb; public string r, d, t; public int x, y, w, h, cx, cy, fill, flags; public short show, r2; public IntPtr r3, i, o, e; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct Pe { public int size, usage, pid; public IntPtr heap; public int mod, threads, ppid, pri, flags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string exe; }
+  [StructLayout(LayoutKind.Sequential)] struct Te { public int size, usage, tid, owner, basePri, deltaPri, flags; }
+  [DllImport("kernel32", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint f, int pid);
+  [DllImport("kernel32", CharSet = CharSet.Unicode)] static extern bool Process32FirstW(IntPtr s, ref Pe e);
+  [DllImport("kernel32", CharSet = CharSet.Unicode)] static extern bool Process32NextW(IntPtr s, ref Pe e);
+  [DllImport("kernel32")] static extern bool Thread32First(IntPtr s, ref Te e);
+  [DllImport("kernel32")] static extern bool Thread32Next(IntPtr s, ref Te e);
+  [StructLayout(LayoutKind.Sequential)] struct Pi { public IntPtr P, T; public int Pid, Tid; }
+  [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcessW(string app, System.Text.StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string dir, ref Si si, out Pi pi);
   static Dictionary<int, IntPtr> jobs = new Dictionary<int, IntPtr>();
   static bool Limit(IntPtr j, uint flags) { var e = new Ext(); e.B.Flags = flags; return SetInformationJobObject(j, 9, ref e, Marshal.SizeOf(typeof(Ext))); }
   static string Err() { return "win32 " + Marshal.GetLastWin32Error(); }
@@ -57,6 +72,7 @@ public static class SbJob {
       if (!ok) { CloseHandle(j); return am; }
       jobs[id] = j; return "ok";
     }
+    if (cmd == "closeall") { foreach (var h in jobs.Values) CloseHandle(h); jobs.Clear(); return "ok"; }
     if (!jobs.TryGetValue(id, out j)) return "err nojob";
     if (cmd == "list") {
       int size = 8 + 8 * 4096; IntPtr buf = Marshal.AllocHGlobal(size);
@@ -75,29 +91,100 @@ public static class SbJob {
     if (cmd == "release") { Limit(j, 0x800); CloseHandle(j); jobs.Remove(id); return "ok"; }
     return "err command";
   }
+  // Started by the quit: Boost below in a process of its own, with no handle of ours: whatever the helper inherited from
+  // the app (its sockets: the inspector's under the e2e) is closed once the helper exits, and the app's teardown waits
+  // for none of it. Out of libuv's job too (silent breakaway), so it outlives the helper; it ends with the app's process.
+  // In the high class (0x80) so it starts within seconds on a busy CPU; it lives only as long as the app's exit.
+  public static string SpawnBoost(string dll, int pid) {
+    var si = new Si(); si.cb = Marshal.SizeOf(typeof(Si)); Pi pi;
+    var cmd = new System.Text.StringBuilder("powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \\"[void][Reflection.Assembly]::LoadFrom('" + dll.Replace("'", "''") + "'); [SbJob]::Boost(" + pid + ", 30000)\\"");
+    if (!CreateProcessW(null, cmd, IntPtr.Zero, IntPtr.Zero, false, 0x08000080, IntPtr.Zero, null, ref si, out pi)) return "err spawn " + Err();
+    CloseHandle(pi.T); CloseHandle(pi.P); return "ok";
+  }
+  // The app's process after app.exit: Windows ends a process only once each of its threads has run, and the app's exit
+  // waits for its Chromium children (GPU, network, renderers) to end theirs; on a busy CPU, at normal and background
+  // priority (Chromium's pool threads: 4), that took 20-130 s (2026-10-15). Every thread of the app and its descendants
+  // goes to time-critical (only exit work is left), new ones on each pass, until the app's process is gone or \`ms\` passed
+  // (30 s, the quit e2e's bound): under the same load the exit then took 5-6 s, the booster's own start included. On the
+  // way out every raised thread still alive goes back to normal: a hung app or a Chromium child left behind never keeps
+  // time-critical threads.
+  public static void Boost(int pid, int ms) {
+    // the handle stays open (p.Handle) so the pid stays ours until the booster ends: a reused pid is never the root
+    Process p; DateTime born; string exe; try { p = Process.GetProcessById(pid); var held = p.Handle; born = p.StartTime; exe = null; } catch { return; }
+    var sw = Stopwatch.StartNew(); var raised = new Dictionary<int, int>(); // thread id -> its process
+    try { while (sw.ElapsedMilliseconds < ms) {
+      IntPtr snap = CreateToolhelp32Snapshot(0x6, 0);
+      if (snap != new IntPtr(-1)) try {
+        // the app's process and its descendants (GPU, network, renderers: its exit waits for theirs)
+        // only processes of the app's own executable started after it: a program the user opened from the app (an
+        // editor, Excel) is its child too and would keep time-critical threads for good; a stale parent pid that
+        // happens to match is older than the app
+        var parent = new Dictionary<int, int>(); var image = new Dictionary<int, string>();
+        var pe = new Pe(); pe.size = Marshal.SizeOf(typeof(Pe));
+        for (bool ok = Process32FirstW(snap, ref pe); ok; ok = Process32NextW(snap, ref pe)) { parent[pe.pid] = pe.ppid; image[pe.pid] = pe.exe; }
+        if (exe == null && !image.TryGetValue(pid, out exe)) exe = "";
+        var tree = new HashSet<int> { pid }; var no = new HashSet<int>();
+        for (bool grew = true; grew; ) {
+          grew = false;
+          foreach (var kv in parent) {
+            if (kv.Key == 0 || tree.Contains(kv.Key) || no.Contains(kv.Key) || !tree.Contains(kv.Value)) continue;
+            bool mine = false;
+            if (string.Equals(image[kv.Key], exe, StringComparison.OrdinalIgnoreCase)) try { using (var c = Process.GetProcessById(kv.Key)) mine = c.StartTime >= born; } catch { }
+            if (mine) { tree.Add(kv.Key); grew = true; } else no.Add(kv.Key);
+          }
+        }
+        var te = new Te(); te.size = Marshal.SizeOf(typeof(Te));
+        for (bool ok = Thread32First(snap, ref te); ok; ok = Thread32Next(snap, ref te)) {
+          if (!tree.Contains(te.owner) || te.basePri >= 15) continue;
+          IntPtr h = OpenThread(0x0020 | 0x0040, false, te.tid);
+          if (h != IntPtr.Zero) { if (SetThreadPriority(h, 15)) raised[te.tid] = te.owner; CloseHandle(h); }
+        }
+      } finally { CloseHandle(snap); }
+      try { if (p.WaitForExit(100)) return; } catch { return; }
+    } } finally { Lower(raised); }
+  }
+  // the threads Boost raised, back to normal (0) if they still run in the same process: a reused thread id elsewhere is left
+  static void Lower(Dictionary<int, int> raised) {
+    if (raised.Count == 0) return;
+    IntPtr snap = CreateToolhelp32Snapshot(0x4, 0);
+    if (snap == new IntPtr(-1)) return;
+    try {
+      var te = new Te(); te.size = Marshal.SizeOf(typeof(Te)); int owner;
+      for (bool ok = Thread32First(snap, ref te); ok; ok = Thread32Next(snap, ref te)) {
+        if (!raised.TryGetValue(te.tid, out owner) || owner != te.owner) continue;
+        IntPtr h = OpenThread(0x0020 | 0x0040, false, te.tid);
+        if (h != IntPtr.Zero) { SetThreadPriority(h, 0); CloseHandle(h); }
+      }
+    } finally { CloseHandle(snap); }
+  }
 }`;
 
 // Add-Type compiles for 8-13 s on a loaded box (measured 2026-10-13): the first run writes the assembly to the cache
 // folder (SB_JOBGUARD_DLL, named by a hash of the source), later starts only load it.
+// The source appears once: -EncodedCommand (UTF-16, base64) must stay under Windows' 32767-char command line.
 const PS = `$ErrorActionPreference = 'Stop'
+$cs = @'
+${CS}
+'@
 try {
   $dll = $env:SB_JOBGUARD_DLL
   if ($dll -and (Test-Path -LiteralPath $dll)) { [void][Reflection.Assembly]::LoadFrom($dll) }
   elseif ($dll) {
     $tmp = "$dll.$PID.tmp"
-    Add-Type -OutputAssembly $tmp -TypeDefinition @'
-${CS}
-'@
+    Add-Type -OutputAssembly $tmp -TypeDefinition $cs
     try { Move-Item -LiteralPath $tmp -Destination $dll -ErrorAction Stop } catch { $dll = $tmp } # another instance won the race
     [void][Reflection.Assembly]::LoadFrom($dll)
   }
-  else { Add-Type -TypeDefinition @'
-${CS}
-'@ }
+  else { Add-Type -TypeDefinition $cs }
 } catch { [Console]::Out.WriteLine('0 fatal ' + $_.Exception.Message.Replace([char]10, ' ')); exit 1 }
 [Console]::Out.WriteLine('0 ready'); [Console]::Out.Flush()
 while ($null -ne ($l = [Console]::In.ReadLine())) {
   $p = $l.Split(' ')
+  if ($p[1] -eq 'quit') {
+    [void][SbJob]::Run('closeall', 0, 0)
+    $r = if ($dll) { [SbJob]::SpawnBoost($dll, [int]$p[3]) } else { 'err no assembly file' }
+    [Console]::Out.WriteLine($p[0] + ' ' + $r); [Console]::Out.Flush(); exit 0
+  }
   try { $r = [SbJob]::Run($p[1], [int]$p[2], [int]$p[3]) } catch { $r = 'err ' + $_.Exception.Message.Replace([char]10, ' ') }
   [Console]::Out.WriteLine($p[0] + ' ' + $r); [Console]::Out.Flush()
 }`;
@@ -260,6 +347,26 @@ export class JobGuard {
     if (!job || !this.jobs.has(job)) return;
     this.jobs.delete(job);
     await this.call('release', job);
+  }
+
+  /** Every job not released dies (kill-on-close); the helper stays for the quit. A helper that does not answer is
+   *  ended instead, which closes the jobs too. */
+  async closeAll(): Promise<void> {
+    if (!this.proc) return;
+    this.jobs.clear();
+    if ((await this.call('closeall', 0, 0, 2000)) !== 'ok') this.stop();
+  }
+
+  /** The app's last step before app.exit: the jobs die, the helper starts a booster of its own that raises the threads
+   *  of the app's process tree until the app's process is gone (the C# SpawnBoost/Boost: on a busy CPU the exit took
+   *  20-130 s), and ends. Resolves with its answer, at most `ms`; no helper = nothing to do. */
+  async quit(pid: number, ms = 1000): Promise<void> {
+    if (!this.proc || this.st !== 'ready') return;
+    this.jobs.clear();
+    // no answer in time: the helper is left alone (it may be starting the booster); a stuck one dies with the app
+    // (libuv's job) and its jobs with it
+    const r = await this.call('quit', 0, pid, ms);
+    if (r !== 'ok') log.warn('chats', 'job guard quit not confirmed', { cause: r, hint: 'the app may take long to exit on a busy CPU; the jobs still die with the helper' });
   }
 
   /** Ends the helper: every job not released dies with it. */

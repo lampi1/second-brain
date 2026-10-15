@@ -7,7 +7,7 @@
 // demo sits at one rich state and every action completes instantly. Used by wiring.ts (with demo-browser.ts for tabs)
 // and test/unit/demo.test.ts. The data is fictional: no real people, customers or paths.
 import type {
-  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, EstimateResult, LearnResult, EventMap,
+  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
   FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, Usage,
 } from '../shared/contract';
 import type { BrainService, ChatService, FeedInput } from './services';
@@ -19,6 +19,7 @@ import type { RouteRequest, RouteResult } from './brain/routing';
 import { electronNode } from './brain/node';
 import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
+import { KIMI_PLAN_NOTE } from './brain/kimi-usage';
 import { runResultMessage } from './run/results';
 import { cleanRegiaName, regieOf } from '../shared/regia';
 import { splitNewChat } from '../shared/newchat';
@@ -218,7 +219,8 @@ export function seed(E: number): Seed {
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
   ];
-  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
+  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE,
+    kimi: { tokens: 1_840_000, input: 310_000, cacheRead: 1_480_000, cacheWrite: 0, output: 50_000, calls: 37, lastAt: E - 6 * MIN, models: [{ model: 'k3', tokens: 1_520_000 }, { model: 'k3-256k', tokens: 320_000 }], planNote: KIMI_PLAN_NOTE } };
   return { chats, items, pending, tabs, feed, usage };
 }
 
@@ -822,10 +824,8 @@ export class DemoBrain implements BrainService {
   confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null } { return { change: this.cfg.confirm(proposalId, accept) }; }
   onSettingChange(fn: (c: SettingChange, now: Settings) => void): () => void { return this.cfg.onChange(fn); }
 
-  // ---- estimates, brain data, plan windows, budget: honest "no data" in the demo
-  estimate(): EstimateResult { return { kind: 'other', estimate: null, basis: { count: 0, scope: 'demo', label: 'stima senza dati (demo)' } }; }
+  // ---- brain data, plan windows, budget: honest "no data" in the demo
   recordJob(): { id: string } { return { id: `job-${++this.n}` }; }
-  recordPrediction(): boolean { return false; }
   // ---- model routing: a table in memory with the real rules (brain/routing-demo.ts)
   private routing: DemoRouting | null = null;
   private routingNow(): DemoRouting { return (this.routing ??= new DemoRouting(new Date(this.chats.now() - 2 * 3600_000).toISOString())); }
@@ -851,10 +851,13 @@ export class DemoBrain implements BrainService {
   // one experiment like the real brain's, switched in memory
   private compare: CompareExperiment[] = [{
     name: 'cursor-vs-claude', title: 'Code review agents: Cursor vs Claude Code',
-    description: 'Every run of the listed Cursor sub-agents is captured; Claude Code repeats the same task blind; a judge of a third vendor rates both blind.',
-    on: true, changedAt: '2026-10-10 08:09:21', source: 'cursor', contender: 'claude-code opus', judge: 'cursor-agent gpt-5',
+    description: 'Every run of the listed Cursor sub-agents is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
+    on: true, changedAt: '2026-10-10 08:09:21',
+    a: { engine: 'cursor', label: 'Cursor', agents: ['reviewer', 'code-investigator', 'prod-log-reader'] },
+    b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
+    judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
     agents: [{ name: 'reviewer', on: true }, { name: 'code-investigator', on: false }, { name: 'prod-log-reader', on: false }],
-    rounds: 4, cost: { source: { usd: 1.84, missing: 1 }, contender: { usd: 6.12, missing: 0 } },
+    rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
   }];
   async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }
   async compareSet(experiment: string, on: boolean, agent?: string): Promise<CompareState> {

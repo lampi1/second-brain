@@ -1,8 +1,9 @@
 // E2E of the usage strip in the top bar (UsageBar.tsx) on the frozen demo: today's spend, the Claude 5-hour and week
-// windows with their reset times, Cursor's estimate (≈ with its margin), and the detail panel with the reason Cursor's plan usage is missing;
-// screenshots in dark and light theme and at 1280 px (test-results/shots/usage-*.png). Then the real app on a Cursor
-// ledger and a usage CSV in test folders (SB_CURSOR_LEDGER, SB_DOWNLOADS): "≈ $" while estimated, exact once the CSV
-// covers the day, and the Costi page says the same. The app runs hidden (SB_HIDDEN).
+// windows with their reset times, Cursor's estimate (≈ with its margin), Kimi's tokens today, and the detail panel with
+// the reason Cursor's and Kimi's plan usage is missing; screenshots in dark and light theme and at 1280 px
+// (test-results/shots/usage-*.png). Then the real app on a Cursor ledger and a usage CSV in test folders
+// (SB_CURSOR_LEDGER, SB_DOWNLOADS): "≈ $" while estimated, exact once the CSV covers the day, and the Costi page says
+// the same; and on fake Kimi session files (SB_KIMI_HOME): its tokens, growing with a new turn. The app runs hidden (SB_HIDDEN).
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -30,6 +31,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(page.getByTestId('usage-5h')).toContainText('↻');
     await expect(page.getByTestId('usage-week')).toContainText('31%');
     await expect(page.getByTestId('usage-cursor')).toContainText('≈ 1,84 $');
+    await expect(page.getByTestId('usage-kimi-value')).toHaveText('1,8M tok');
     expect(await page.getByTestId('topbar').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0); // nothing pushed out
     await clip(page, `usage-bar-${scheme}`, 'topbar');
 
@@ -42,6 +44,9 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(page.getByTestId('usage-pop-cursor')).toContainText('export CSV');
     await expect(pop).toContainText('±9%');
     await expect(page.getByTestId('usage-pop-cursor-est')).toHaveText('stima');
+    await expect(page.getByTestId('usage-pop-kimi-total')).toHaveText('1,8M token');
+    await expect(page.getByTestId('usage-pop-kimi')).toContainText('K3-256k');
+    await expect(page.getByTestId('usage-pop-kimi')).toContainText('/usage');
     await expect(pop).toContainText('Chat aperte');
     await clip(page, `usage-pop-${scheme}`, 'usage-pop');
     await shot(page, `usage-${scheme}`);
@@ -97,5 +102,27 @@ test('Cursor today: estimated from the ledger (≈, margin), exact once a usage 
   await expect(page.getByTestId('bx-cursor-today')).toContainText('1,70', { timeout: 30_000 });
   await expect(page.getByTestId('bx-cursor-today')).toContainText('esatto');
   await shot(page, 'usage-cursor-costi');
+  await app.close();
+});
+
+test('Kimi today: tokens from its session files, a new turn shows within half a minute; no $ and no plan quota', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-kimi-'));
+  const dir = path.join(home, 'sessions', 'wd_repo_1', 'session_1', 'agents', 'main');
+  fs.mkdirSync(dir, { recursive: true });
+  const rec = (model: string, inputOther: number, output: number, inputCacheRead: number) =>
+    JSON.stringify({ type: 'usage.record', model, usage: { inputOther, output, inputCacheRead, inputCacheCreation: 0 }, usageScope: 'turn', time: Date.now() - 60e3 }) + '\n';
+  const wire = path.join(dir, 'wire.jsonl');
+  fs.writeFileSync(wire, JSON.stringify({ type: 'metadata', protocol_version: '1.4', created_at: Date.now() }) + '\n' + rec('k3', 40_000, 6_000, 200_000));
+  const { app, page } = await launch({ SB_KIMI_HOME: home });
+  await expect(page.getByTestId('usage-kimi-value')).toHaveText('246k tok');
+  fs.appendFileSync(wire, rec('k3-256k', 10_000, 4_000, 0));
+  await expect(page.getByTestId('usage-kimi-value')).toHaveText('260k tok', { timeout: 45_000 });
+  await page.getByTestId('usage').click();
+  const pop = page.getByTestId('usage-pop-kimi');
+  await expect(pop).toContainText('K3');
+  await expect(pop).toContainText('K3-256k');
+  await expect(pop).toContainText('Quota del piano non disponibile');
+  await expect(pop).not.toContainText('$');
+  await clip(page, 'usage-kimi', 'usage-pop');
   await app.close();
 });

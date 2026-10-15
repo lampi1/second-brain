@@ -1,21 +1,18 @@
-// Cost and time estimate of a job before it starts, honest and improving with use (the user, 2026-10-11). A job = one
-// chat started with a prompt. Method: classify the first prompt into a kind (keywords, Italian + English), take the
-// similar past jobs from the ledger (same kind, harness, model and effort first, then wider), and answer p25-p75 of
-// their real cost and duration; fewer than 5 similar jobs = no estimate ("stima senza dati"), never a guess. The ledger
-// is a JSON-lines file behind a pluggable store (default userData/jobs.jsonl; a brain-side store can replace it, see
-// the brain-tool proposal in the module report). It starts from day one with a backfill from the brain's cost.mjs
-// (per-chat $ and first-to-last-message span of the last 30 days). The prompt text is never stored: only its length.
-// Used by brain/index.ts for 'estimate:get' / 'estimate:record'; the chat manager records jobs and their actuals.
-// Since ADR 0030 its estimate is only the fallback when the brain has no estimates table (one estimator: the brain's).
+// The job ledger: a job = one chat started with a prompt, kept with its real cost and time (ADR 0053 removed the
+// per-job cost/time estimate once shown next to them: measured on 178 chats it held only 47% of the time with a
+// bigger median error than the median cost). The ledger is a JSON-lines file behind a pluggable store (default
+// userData/jobs.jsonl). It starts from day one with a backfill from the brain's cost.mjs (per-chat $ and
+// first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind
+// (classify(), keywords Italian + English). Used by brain/index.ts for 'estimate:record'; the chat manager records
+// jobs and their actuals; the brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { Effort, Estimate, EstimateResult, Harness, JobActual, JobKind, JobRecordInput } from '../../shared/contract';
+import type { Effort, Harness, JobActual, JobKind, JobRecordInput } from '../../shared/contract';
 import { log } from '../log';
 import { runNode, type NodeRunner } from './node';
 import { engineOf, engines } from '../engines/registry';
 
-export const MIN_SAMPLES = 5;
 export const KIND_LABELS: Record<JobKind, string> = {
   fix: 'correzione', qa: 'QA e test', review: 'revisione', feature: 'funzionalità', research: 'indagine', question: 'domanda', other: 'altro',
 };
@@ -46,13 +43,6 @@ export function classify(prompt: string): JobKind {
   return best;
 }
 
-/** Linear-interpolated percentile of an ascending array (p in 0..1). */
-export function percentile(sorted: number[], p: number): number {
-  if (!sorted.length) return NaN;
-  const i = p * (sorted.length - 1), lo = Math.floor(i), hi = Math.ceil(i);
-  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (i - lo);
-}
-
 // ── ledger ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface JobRecord {
   id: string;
@@ -62,7 +52,6 @@ export interface JobRecord {
   effort: Effort | null;
   kind: JobKind;
   promptChars: number | null;
-  estimate: Estimate | null;
   actual: JobActual | null;
   source: 'app' | 'backfill';
 }
@@ -90,40 +79,6 @@ export class FileJobStore implements JobStore {
 
 export const modelKey = (m: string | null | undefined): string | null => (m ? m.toLowerCase().replace(/^claude-/, '').replace(/\[.*\]$/, '').trim() || null : null);
 
-interface Query { harness: Harness; model: string | null; effort: Effort | null; kind: JobKind }
-const HN: Record<Harness, string> = { claude: 'Claude', cursor: 'Cursor' };
-
-/** p25-p75 of the most specific group of similar jobs that has at least MIN_SAMPLES; null under that. */
-export function estimateFrom(jobs: JobRecord[], q: Query): EstimateResult {
-  const m = modelKey(q.model);
-  const done = jobs.filter(j => j.actual && Number.isFinite(j.actual.usd) && j.actual.usd > 0);
-  const tiers: { scope: string; label: string; ok: boolean; f: (j: JobRecord) => boolean }[] = [
-    { scope: 'kind+harness+model+effort', label: 'stesso tipo, modello e sforzo', ok: !!m && !!q.effort, f: j => j.kind === q.kind && j.harness === q.harness && modelKey(j.model) === m && j.effort === q.effort },
-    { scope: 'kind+harness+model', label: 'stesso tipo e modello', ok: !!m, f: j => j.kind === q.kind && j.harness === q.harness && modelKey(j.model) === m },
-    { scope: 'kind+harness', label: `stesso tipo, ${HN[q.harness]}`, ok: true, f: j => j.kind === q.kind && j.harness === q.harness },
-    { scope: 'kind', label: 'stesso tipo, Claude e Cursor', ok: true, f: j => j.kind === q.kind },
-    { scope: 'harness+model', label: 'stesso modello, tutti i tipi (stima grezza)', ok: !!m, f: j => j.harness === q.harness && modelKey(j.model) === m },
-    { scope: 'harness', label: `tutti i lavori ${HN[q.harness]} (stima grezza)`, ok: true, f: j => j.harness === q.harness },
-  ];
-  for (const t of tiers) {
-    if (!t.ok) continue;
-    const g = done.filter(t.f);
-    if (g.length < MIN_SAMPLES) continue;
-    const usd = g.map(j => j.actual!.usd).sort((a, b) => a - b);
-    // durations only from work time, the measure the tile shows beside them (a chat's span holds the user's waits)
-    const mins = g.filter(j => j.actual!.minutesKind === 'work').map(j => j.actual!.minutes).filter((x): x is number => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
-    const r2 = (v: number) => Math.round(v * 100) / 100;
-    const est: Estimate = {
-      usdLow: r2(percentile(usd, 0.25)), usdHigh: r2(percentile(usd, 0.75)),
-      minLow: mins.length >= MIN_SAMPLES ? Math.round(percentile(mins, 0.25)) : null,
-      minHigh: mins.length >= MIN_SAMPLES ? Math.round(percentile(mins, 0.75)) : null,
-    };
-    return { kind: q.kind, estimate: est, basis: { count: g.length, scope: t.scope, label: `da ${g.length} lavori simili: ${t.label}` } };
-  }
-  const same = done.filter(j => j.kind === q.kind).length;
-  return { kind: q.kind, estimate: null, basis: { count: same, scope: 'none', label: `stima senza dati: ${same} lavori simili (${KIND_LABELS[q.kind]}), ne servono ${MIN_SAMPLES}` } };
-}
-
 // ── backfill from cost.mjs ──────────────────────────────────────────────────────────────────────────────────────────
 export const BACKFILL_DAYS = 30;
 export const MAX_SPAN_MIN = 8 * 60; // a longer first-to-last span is a chat left open, not working time: no duration
@@ -143,7 +98,7 @@ export function backfillFromCost(j: unknown, o: { now: number; windowStartMs: nu
     const span = Math.max(1, Math.round((to - from) / 6e4));
     out.push({
       id: `claude:${sid}`, at: from, harness: 'claude', model: null, effort: null,
-      kind: /^[0-9a-f]{8}$/.test(title) ? 'other' : classify(title), promptChars: null, estimate: null,
+      kind: /^[0-9a-f]{8}$/.test(title) ? 'other' : classify(title), promptChars: null,
       actual: { usd: Math.round(usd * 1000) / 1000, minutes: span <= MAX_SPAN_MIN ? span : null, tokensIn: null, tokensOut: null, turns: null },
       source: 'backfill',
     });
@@ -159,11 +114,6 @@ const n0 = (v: unknown, f: string): number | null => {
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new Error(`${f}: numero ≥ 0`);
   return v;
 };
-function checkEstimate(e: unknown): Estimate | null {
-  if (e === null || e === undefined) return null;
-  const x = e as Record<string, unknown>;
-  return { usdLow: n0(x.usdLow, 'estimate.usdLow') ?? 0, usdHigh: n0(x.usdHigh, 'estimate.usdHigh') ?? 0, minLow: n0(x.minLow, 'estimate.minLow'), minHigh: n0(x.minHigh, 'estimate.minHigh') };
-}
 function checkActual(a: unknown): JobActual | null {
   if (a === null || a === undefined) return null;
   const x = a as Record<string, unknown>;
@@ -183,12 +133,6 @@ export class Ledger {
 
   all(): JobRecord[] { return [...this.jobs.values()]; }
 
-  estimate(req: { harness: Harness; model: string | null; effort: Effort | null; prompt: string }): EstimateResult {
-    const harness = checkHarness(req.harness);
-    if (typeof req.prompt !== 'string') throw new Error('prompt: testo');
-    return estimateFrom(this.all(), { harness, model: checkModel(req.model), effort: checkEffort(req.effort), kind: classify(req.prompt) });
-  }
-
   /** Insert or update (same id: fields given override, the first time `at` stays). Claude jobs should use the id
    *  `claude:<sessionId>`, so the cost.mjs backfill and the app describe the same job once. */
   record(input: JobRecordInput, now = Date.now()): { id: string } {
@@ -205,7 +149,6 @@ export class Ledger {
       effort: input.effort !== undefined ? checkEffort(input.effort) : old?.effort ?? null,
       kind: input.kind ?? (input.prompt !== undefined ? classify(input.prompt) : old?.kind ?? 'other'),
       promptChars: input.prompt !== undefined ? input.prompt.length : old?.promptChars ?? null,
-      estimate: input.estimate !== undefined ? checkEstimate(input.estimate) : old?.estimate ?? null,
       actual: input.actual !== undefined ? checkActual(input.actual) : old?.actual ?? null,
       source: 'app',
     };

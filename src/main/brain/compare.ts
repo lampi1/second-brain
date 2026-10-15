@@ -2,18 +2,23 @@
 // ops/state/compare/switch.json) as switches on the Settings page (the user, 2026-10-11: "vorrei più cose configurabili
 // ad esempio dove sta l'abilitazione e disabilitazione del confronto tra modelli"). The app never writes switch.json:
 // it reads through the harness's own config.mjs and switches through its own switch.mjs (the one command the user used
-// by hand), each run as an Electron-node child in the brain folder. Cost so far = the sum of the rounds' frozen
-// cursor.json / claude.json cost_usd (missing ones counted, never guessed). Used by brain/index.ts ('compare:*').
+// by hand), each run as an Electron-node child in the brain folder. An experiment names sides a and b and a judge, each
+// on an engine (ADR 0046 §4); files written before that (source / contender / judge.tool, rounds with cursor.* and
+// claude.*) are still read, so an older brain keeps working. Cost so far = the sum of the rounds' frozen a.json /
+// b.json cost_usd (cursor.json / claude.json in old rounds; missing ones counted, never guessed). Used by
+// brain/index.ts ('compare:*').
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CompareExperiment, CompareState } from '../../shared/contract';
+import type { CompareCost, CompareExperiment, CompareState } from '../../shared/contract';
+import { engineLabel } from '../engines/registry';
 import { errText, log } from '../log';
 import { runNode, type NodeRunner } from './node';
 
 export const compareDir = (root: string) => path.join(root, 'harness', 'compare');
 
-// The child: loads the experiments and their state with the harness's own modules, prints one JSON line.
+// The child: loads the experiments and their state with the harness's own modules, prints one JSON line. A round's
+// side is a.json / b.json, or in a round written before sides a/b, cursor.json (a) / claude.json (b).
 const LIST = [
   "import path from 'node:path';",
   "import { pathToFileURL } from 'node:url';",
@@ -21,12 +26,13 @@ const LIST = [
   "const imp = f => import(pathToFileURL(path.join(dir, f)).href);",
   "const c = await imp('config.mjs');",
   "const L = await imp('lib.mjs');",
+  'const side = (d, now, old) => L.readJson(path.join(d, now), null) ?? L.readJson(path.join(d, old), null);',
   'const rounds = L.captures().map(n => { const d = path.join(L.OUT, n); return { cap: L.readJson(path.join(d, "capture.json"), {}) ?? {},',
-  '  cursor: L.readJson(path.join(d, "cursor.json"), null), claude: L.readJson(path.join(d, "claude.json"), null) }; });',
+  '  a: side(d, "a.json", "cursor.json"), b: side(d, "b.json", "claude.json") }; });',
   'const out = c.experiments().map(e => {',
   '  const mine = rounds.filter(r => c.experimentOf(r.cap)?.name === e.name);',
-  '  const usd = side => { const v = mine.map(r => r[side]?.cost_usd).filter(x => typeof x === "number"); return { usd: v.length ? v.reduce((a, b) => a + b, 0) : null, missing: mine.filter(r => r[side] && typeof r[side].cost_usd !== "number").length }; };',
-  '  return { e, s: c.stateOf(e.name), rounds: mine.length, source: usd("cursor"), contender: usd("claude") };',
+  '  const usd = k => { const v = mine.map(r => r[k]?.cost_usd).filter(x => typeof x === "number"); return { usd: v.length ? v.reduce((x, y) => x + y, 0) : null, missing: mine.filter(r => r[k] && typeof r[k].cost_usd !== "number").length }; };',
+  '  return { e, s: c.stateOf(e.name), rounds: mine.length, a: usd("a"), b: usd("b") };',
   '});',
   'process.stdout.write(JSON.stringify(out) + "\\n");',
 ].join('\n');
@@ -38,35 +44,51 @@ export function errLine(stderr: string): string {
 }
 
 const NAME = /^[a-z0-9][a-z0-9._-]{0,80}$/i;
+type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {});
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const tool = (o: unknown): string => {
-  const x = (o && typeof o === 'object' ? o : {}) as Record<string, unknown>;
-  return [str(x.tool), str(x.model)].filter(Boolean).join(' ');
+const opt = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null);
+
+/** The tool names of experiments written before engines (ADR 0046) → the engine id. */
+const OLD_TOOL: Record<string, string> = { 'claude-code': 'claude', 'cursor-agent': 'cursor', cursor: 'cursor' };
+
+/** A side or the judge: `{ engine, model?, effort? }`, or the old `{ tool, model? }`. */
+function sideOf(v: unknown): { engine: string; label: string; model: string | null; effort: string | null } {
+  const x = obj(v);
+  const tool = str(x.tool);
+  const engine = (str(x.engine) || OLD_TOOL[tool] || tool).slice(0, 40);
+  return { engine, label: engine ? engineLabel(engine) : '', model: opt(x.model), effort: opt(x.effort) };
+}
+
+const costOf = (v: unknown): CompareCost => {
+  const c = obj(v);
+  return { usd: typeof c.usd === 'number' && Number.isFinite(c.usd) ? Math.round(c.usd * 100) / 100 : null, missing: typeof c.missing === 'number' ? c.missing : 0 };
 };
 
 /** The child's raw JSON → the contract shape (defensive: the brain's files are hand-edited). */
 export function normalize(raw: unknown): CompareExperiment[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap(r => {
-    const x = (r && typeof r === 'object' ? r : {}) as Record<string, unknown>;
-    const e = (x.e && typeof x.e === 'object' ? x.e : {}) as Record<string, unknown>;
-    const s = (x.s && typeof x.s === 'object' ? x.s : {}) as Record<string, unknown>;
+    const x = obj(r), e = obj(x.e), s = obj(x.s);
     const name = str(e.name);
     if (!NAME.test(name)) return [];
-    const src = (e.source && typeof e.source === 'object' ? e.source : {}) as Record<string, unknown>;
-    const agentsOn = (s.agents && typeof s.agents === 'object' ? s.agents : {}) as Record<string, unknown>;
-    const agents = (Array.isArray(src.agents) ? src.agents : []).filter((a): a is string => typeof a === 'string' && NAME.test(a));
-    const cost = (v: unknown) => {
-      const c = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-      return { usd: typeof c.usd === 'number' && Number.isFinite(c.usd) ? Math.round(c.usd * 100) / 100 : null, missing: typeof c.missing === 'number' ? c.missing : 0 };
-    };
+    // the side sampled: `a` now, `source` before sides a/b; the contender became `b`
+    const rawA = e.a !== undefined ? e.a : e.source;
+    const agentsOn = obj(s.agents);
+    // the agents side a captures: `a.capture.agents` (the brain's config.mjs normalizes every experiment to it), else a
+    // hand-written `a.agents`, else the old `source.agents`
+    const listed = [obj(obj(rawA).capture).agents, obj(rawA).agents, obj(e.source).agents].find(Array.isArray) as unknown[] | undefined;
+    const agents = (listed ?? []).filter((a): a is string => typeof a === 'string' && NAME.test(a));
+    const a = sideOf(rawA), b = sideOf(e.b !== undefined ? e.b : e.contender), judge = sideOf(e.judge);
     return [{
       name, title: str(e.title) || name, description: str(e.description),
       on: s.on === true, changedAt: str(s.changed_at) || null,
-      source: tool(src), contender: tool(e.contender), judge: tool(e.judge),
-      agents: agents.map(a => ({ name: a, on: agentsOn[a] === true })),
+      a: { engine: a.engine, label: a.label, ...(agents.length ? { agents } : {}) },
+      b,
+      judge: { engine: judge.engine, label: judge.label, model: judge.model },
+      agents: agents.map(n => ({ name: n, on: agentsOn[n] === true })),
       rounds: typeof x.rounds === 'number' ? x.rounds : 0,
-      cost: { source: cost(x.source), contender: cost(x.contender) },
+      cost: { a: costOf(x.a), b: costOf(x.b) },
     }];
   });
 }

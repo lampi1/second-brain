@@ -2,7 +2,7 @@
 // Mosaico geometry (lib/grid.ts) and the remembered preferences parser (store/ui.ts loadPrefs).
 import { describe, expect, it } from 'vitest';
 import type { BrowserTab, ChatSummary } from '@shared/contract';
-import { ago, chatCost, diffTotals, duration, estimateText, estimateTip, folderName, formatCost, minutes, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
+import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
 import { fuzzyFilter, fuzzyScore } from '../../src/renderer/lib/fuzzy';
 import { cellsFor, dragSplit, fractions, gridFor, mosaicTiles, pairIndex, pairSlots, PAIR_COLORS, splitZones, tileKey } from '../../src/renderer/lib/grid';
 import { defaultPrefs, loadPrefs } from '../../src/renderer/store/ui';
@@ -59,26 +59,13 @@ describe('format', () => {
     expect(formatCost(38.2)).toBe('38,20 $');
     expect(chatCost({ harness: 'cursor', costUsd: 0 })).toBe('costo n/d');
     expect(chatCost({ harness: 'cursor', costUsd: 0, costKnown: false, costLedgerUsd: 1.5 })).toBe('≈ 1,50 $');
-    // work time and the estimate beside the cost
+    // work time, shown beside the cost
     expect(workTime({}, 5000)).toBeNull();
     expect(workTime({ workMs: 60_000, workSince: 1000 }, 121_000)).toBe(180_000);
     expect(workTime({ workSince: 9000 }, 5000)).toBe(0); // a frozen UI clock behind main's never goes negative
     expect(minutes(20_000)).toBe('<1 min');
     expect(minutes(12 * 60_000)).toBe('12 min');
     expect(minutes(65 * 60_000)).toBe('1 h 05');
-    expect(estimateText(undefined)).toBeNull();
-    expect(estimateText(null)).toBe('stima senza dati');
-    expect(estimateText({ usdLow: 0.4, usdHigh: 1.2, minLow: 9.6, minHigh: 25, basis: 8 })).toBe('stima 0,40–1,20 $ · 10–25 min');
-    expect(estimateText({ usdLow: 0.4, usdHigh: 1.2, minLow: null, minHigh: null, basis: 8 })).toBe('stima 0,40–1,20 $ · durata senza dati');
-    const e80 = { usdLow: 0.5, usdHigh: 9, minLow: 10, minHigh: 120, basis: 140, from: 'brain' as const, label: 'tutte le chat', errMin: 50, errUsd: 12, usdMid: 3, minMid: 40, cover: 0.8 as const, held: { min: 0.86, usd: 0.65, n: 140 } };
-    expect(estimateTip(e80, '1 $')).toMatch(/8 volte su 10 \(sulle ultime 140 chat: durata 86%, costo 65%\); valore tipico 40 min, 3,00 \$/);
-    expect(estimateTip({ ...e80, cover: 0.5, held: null }, '1 $')).toMatch(/metà centrale/);
-    expect(estimateText({ usdLow: 1.7, usdHigh: 20, minLow: 10, minHigh: 107, basis: 222 })).toBe('stima 1,70–20,00 $ · 10 min–1 h 47');
-    // the tooltip: the brain's estimate says how wrong it was on the past chats
-    expect(estimateTip(null, '2 $')).toBe('Meno di 5 lavori simili: niente stima');
-    expect(estimateTip({ usdLow: 1, usdHigh: 2, minLow: 1, minHigh: 2, basis: 7 }, '2 $')).toBe('Stima da 7 lavori simili; finora 2 $');
-    expect(estimateTip({ usdLow: 1, usdHigh: 2, minLow: 1, minHigh: 2, basis: 222, from: 'brain', label: 'tutte le chat', errMin: 70, errUsd: 15 }, '2 $'))
-      .toBe('Stima da 222 chat passate (tutte le chat); sulle chat passate sbaglia in media di 1 h 10 e 15,00 $; finora 2 $');
     expect(prettyModel('claude-opus-5-5')).toBe('Opus 5.5');
     expect(prettyModel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
     expect(prettyModel('claude-sonnet-4-5[1m]')).toBe('Sonnet 4.5 1M');

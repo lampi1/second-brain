@@ -1,6 +1,6 @@
 // E2E of a chat's duration beside its cost (ChatTile.tsx): the real work time ("lavoro N min": starting or running,
-// never the wait for the user's answer) and the estimate of similar jobs, "stima senza dati" when there are none (no
-// brain here). The real app with the fake Claude CLI, hidden (SB_HIDDEN); screenshot test-results/shots/chat-duration.png.
+// never the wait for the user's answer). The real app with the fake Claude CLI, hidden (SB_HIDDEN);
+// screenshot test-results/shots/chat-duration.png.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,7 +10,7 @@ import { launch, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
-test('a chat shows its real work time (waits for the answer left out) and "stima senza dati" without similar jobs', async () => {
+test('a chat shows its real work time (waits for the answer left out)', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
@@ -21,7 +21,6 @@ test('a chat shows its real work time (waits for the answer left out) and "stima
 
   const work = page.getByTestId(`chat-work-${chat.id}`);
   await expect(work).toHaveText(/^lavoro (<1|\d+) min$/);
-  await expect(page.getByTestId(`chat-est-${chat.id}`)).toHaveText('stima senza dati');
   // while it waits for the answer the work time stands still
   const listed = async () => (await page.evaluate(() => window.sb.invoke('chat:list', undefined)))[0]!;
   const waiting = await listed();

@@ -4,15 +4,25 @@
 // through ClaudeSession like the app does, and the reply must carry the chosen label. Catches protocol drift on CLI
 // updates (ADR 0002). Never runs Cursor. Cost, duration, model and CLI version land in test-results/live-claude.json.
 // Also: a pasted screenshot (base64 image block) reaches the model (haiku, ~0.01 $; checked on CLI 2.1.283).
-import { describe, expect, it } from 'vitest';
+// The CLI contract smoke (ADR 0055): every message of these turns is recorded sanitized, must raise no format drift,
+// and becomes test/fixtures/cli/claude/<version>.jsonl, the replay fixture of test/unit/chats/cli-contract.test.ts.
+// Run it when doctor says the embedded Claude version is "not tested", only after the owner approves the tokens.
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { ClaudeSession } from '../../src/main/chats/claude';
+import { drifts, setRecorder } from '../../src/main/chats/drift';
+// @ts-expect-error a plain .mjs script, no types
+import { importRecords } from '../../scripts/cli-fixtures.mjs';
 import { recSink, tmp, waitFor } from '../unit/chats/helpers';
 
 describe.skipIf(process.env.SB_LIVE !== '1')('live: real claude CLI', () => {
+  const records = tmp('cli-records');
+  beforeAll(() => setRecorder(records));
+  afterAll(() => setRecorder(null));
+
   it('streams, asks a question through can_use_tool, takes the answer and reports cost', async () => {
     const sink = recSink();
     const s = new ClaudeSession({
@@ -89,6 +99,12 @@ describe.skipIf(process.env.SB_LIVE !== '1')('live: real claude CLI', () => {
       await s.close();
     }
   }, 420000);
+
+  it('no CLI format drift in these turns; their shapes become the contract fixtures', () => {
+    expect(drifts()).toEqual([]);
+    const done = (importRecords as (from: string) => { cli: string; version: string; total: number }[])(records);
+    expect(done.some(d => d.cli === 'claude' && d.total > 0)).toBe(true);
+  });
 });
 
 /** A w×h PNG of one RGB color (no dependency: zlib + CRC32). */

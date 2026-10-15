@@ -1,5 +1,5 @@
 // One chat run by the app through an ACP CLI the user installed (ADR 0010, ADR 0046: one adapter for every ACP engine,
-// Cursor `agent acp`, Kimi `kimi acp`, Gemini `gemini --acp`…; each chat spends only that engine's credits). The engine
+// Cursor `agent acp`, Kimi `kimi acp`…; each chat spends only that engine's credits). The engine
 // comes in the options (engineId, label, args, modelFlag); what only Cursor has (its CURSOR_CONFIG_DIR snapshot, the
 // subagent hooks, the list-price fallback, the model options from Settings) runs only when the Cursor entry passes its
 // option (engines/sessions.ts), never by the engine's name. The cursor/* extension requests below are answered for any
@@ -44,20 +44,21 @@ import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachm
 import { errText, log } from '../log';
 import { lineDiff, resultText, shortPath } from './claude-map';
 import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
+import { drift, record } from './drift';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { runSubagentHooks, userHooksFile } from './cursor-hooks';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
-import { cut, lastLine, nextId, stripAnsi, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 
 export interface AcpOptions extends SessionOptions {
   /** the engine's id (registry): the session's harness, SB_<ID>_PATH, the logs' `engine` */
   engineId: string;
   /** the engine's short name in every text the user reads ("Cursor", "Kimi") */
   label: string;
-  /** the ACP command and its flags, after the model flag and extraArgs (Cursor and Kimi ['acp'], Gemini ['--acp']) */
+  /** the ACP command and its flags, after the model flag and extraArgs (Cursor and Kimi ['acp']) */
   args: string[];
   /** the flag that passes the chat's model at spawn, before everything else (Cursor '--model'); absent or null = the
    *  model is not passed on the command line */
@@ -139,15 +140,48 @@ export function cursorConfigDir(env: NodeJS.ProcessEnv): string {
   return xdg ? path.join(xdg, 'cursor') : path.join(os.homedir(), '.cursor');
 }
 
-/** Copies the user's Cursor CLI settings into the app's private folder (read-only for the user's side). */
-export function snapshotCursorConfig(from: string, to: string): void {
+/** Copies the user's Cursor CLI settings into the app's private folder (read-only for the user's side). withoutAllow: a
+ *  read-only run's copy keeps no allow rule (permissions.allow emptied), so every tool beyond the engine's own reads asks
+ *  first and its owner refuses it; a file that is not JSON is left out. denyRead (read-only only): folders the run may
+ *  never read, added to cli-config.json's permissions.deny as Read(<folder>/**) (a minimal cli-config.json is written
+ *  when the user has none, so the rule is there anyway). */
+export function snapshotCursorConfig(from: string, to: string, withoutAllow = false, denyRead: readonly string[] = []): void {
   fs.mkdirSync(to, { recursive: true });
   for (const f of ['cli-config.json', 'permissions.json']) {
     const src = path.join(from, f), dst = path.join(to, f);
     if (path.resolve(src) === path.resolve(dst)) continue;
-    if (fs.existsSync(src)) fs.copyFileSync(src, dst);
-    else if (fs.existsSync(dst)) fs.rmSync(dst, { force: true });
+    const deny = f === 'cli-config.json' ? denyRead : [];
+    if (!fs.existsSync(src)) {
+      if (withoutAllow && deny.length) fs.writeFileSync(dst, noAllowRules('{}', deny)!);
+      else if (fs.existsSync(dst)) fs.rmSync(dst, { force: true });
+      continue;
+    }
+    if (!withoutAllow) { fs.copyFileSync(src, dst); continue; }
+    const cfg = noAllowRules(fs.readFileSync(src, 'utf8'), deny);
+    if (cfg === null) fs.rmSync(dst, { force: true });
+    else fs.writeFileSync(dst, cfg);
   }
+}
+
+/** The Cursor CLI rule that denies reading a folder and everything in it: Read(C:/a/b/**). */
+export const cursorReadRule = (dir: string): string => `Read(${path.resolve(dir).replace(/\\/g, '/').replace(/\/+$/, '')}/**)`;
+
+/** A Cursor config file's JSON without allow rules (top-level allow and permissions.allow emptied), plus a deny rule for
+ *  each folder in denyRead; null = not JSON. */
+export function noAllowRules(text: string, denyRead: readonly string[] = []): string | null {
+  let v: unknown;
+  try { v = JSON.parse(text); } catch { return null; }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out = { ...(v as Obj) };
+  if (Array.isArray(out.allow)) out.allow = [];
+  const hasPerms = out.permissions && typeof out.permissions === 'object' && !Array.isArray(out.permissions);
+  if (hasPerms || denyRead.length) {
+    const perms = { ...(hasPerms ? (out.permissions as Obj) : {}) };
+    if (Array.isArray(perms.allow) || denyRead.length) perms.allow = [];
+    if (denyRead.length) perms.deny = [...new Set([...(Array.isArray(perms.deny) ? perms.deny : []), ...denyRead.map(cursorReadRule)])];
+    out.permissions = perms;
+  }
+  return JSON.stringify(out, null, 2);
 }
 
 type Obj = Record<string, unknown>;
@@ -165,6 +199,10 @@ const NOT_ACTIVE = 'La sessione non è attiva.';
 class RpcError extends Error {
   constructor(message: string, readonly code: number) { super(message); }
 }
+/** A read-only session the engine cannot put in a read-only mode: it is stopped before any prompt (fail closed). */
+class ReadOnlyModeMissing extends Error {
+  constructor(message: string, readonly why: string) { super(message); }
+}
 interface Rpc { resolve(v: Obj): void; reject(e: Error): void; method: string; timer: NodeJS.Timeout | null }
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
 type StreamItem = Extract<ChatItem, { kind: 'assistant' | 'thinking' }>;
@@ -178,10 +216,26 @@ interface Ask {
   questions?: AcpQuestion[];
 }
 
-const KIND_NAME: Record<string, string> = {
+/** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
+export const KIND_NAME: Record<string, string> = {
   execute: 'Shell', read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode', other: 'Tool',
 };
 const PLAN_Q = 'Approvi il piano?';
+// The ACP vocabulary the app knows (drift.ts reports anything else): stop reasons of session/prompt, updates it
+// knowingly ignores, the protocol version it speaks. Checked against Cursor CLI 2026.07.23 and agentclientprotocol.com.
+const STOP_REASONS = new Set(['end_turn', 'cancelled', 'refusal', 'max_tokens', 'max_turn_requests']);
+const QUIET_UPDATES = new Set(['session_info_update', 'notice']);
+const ACP_VERSION = 1;
+
+/** The shape an ACP message is recorded under (drift.ts record): `result/<method>` for an answer to one of ours,
+ *  `request/<method>`, `update/<sessionUpdate>` or `notify/<method>` for what the engine sends. */
+export function acpKey(m: Obj, answered?: string): string {
+  const method = s(m.method);
+  if (!method) return `result/${answered ?? '?'}`;
+  if (m.id !== undefined) return `request/${method}`;
+  if (method === 'session/update') return `update/${s(o(o(m.params).update).sessionUpdate)}`;
+  return `notify/${method}`;
+}
 const PLAN_YES = 'Approva', PLAN_NO = 'Rifiuta';
 
 /** Text of ACP tool call content: text blocks; diffs and terminals are summarised. */
@@ -261,6 +315,8 @@ export class AcpSession implements HarnessSession {
   private job: number | null = null;  // its Job Object (jobguard.ts)
   private jobKilled = false;          // its tree was terminated through the job
   private badLines = 0;
+  private cliVersion: string | null = null; // initialize's agentInfo.version, else Cursor's version folder: drift reports name it
+  private recording = false;          // a real CLI (not a test's fake): its message shapes go to drift.ts record
   private replayUser: Extract<ChatItem, { kind: 'user' }> | null = null;
   private exitDone!: () => void;
   private readonly exitPromise = new Promise<void>(r => { this.exitDone = r; });
@@ -304,11 +360,13 @@ export class AcpSession implements HarnessSession {
     if (!cmd) return this.fail(`${label} CLI non trovato: installa la CLI di ${label} (${this.cliName}) e fai login.`, `${engine} CLI not found (${engine === 'cursor' ? '%LOCALAPPDATA%/cursor-agent, ' : ''}PATH)`, `install the ${label} CLI, log in (${this.loginCommand ?? 'its own login or an API key'}), or set ${envName}`);
     if (!engineAllowed(cmd)) return this.fail(`Nei test il motore ${label} reale non parte mai: serve il fake (${envName}=…/fake-cursor-acp.mjs).`, `refused to start the real ${label} engine under tests (${cmd.display})`, `point ${envName} to test/fixtures/fake-cursor-acp.mjs`);
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
+    this.recording = cmd.kind !== 'fake';
+    if (cmd.kind === 'node') this.cliVersion = path.basename(cmd.display);
     let argv: ReturnType<typeof cliArgv>;
     try { argv = cliArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
     const env: NodeJS.ProcessEnv = { ...argv.env, ...this.opts.env };
     if (this.opts.configDir) {
-      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir); } catch (e) {
+      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir, !!this.opts.readOnly, this.opts.readOnly ? this.opts.denyRead ?? [] : []); } catch (e) {
         return this.fail(`Impostazioni di ${label} non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
       }
       env.CURSOR_CONFIG_DIR = this.opts.configDir;
@@ -353,6 +411,9 @@ export class AcpSession implements HarnessSession {
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
       }, 60000);
       this.caps = o(init.agentCapabilities);
+      const v = s(o(init.agentInfo).version);
+      if (v && !this.cliVersion) this.cliVersion = v; // Cursor: its version folder, the name doctor checks
+      if (init.protocolVersion !== ACP_VERSION) this.drift('protocol version', String(init.protocolVersion), init);
       log.info('chats', 'acp initialized', { chat: this.opts.chatId, data: { engine: this.engine, protocolVersion: init.protocolVersion, loadSession: this.caps.loadSession === true, mcp: this.caps.mcpCapabilities, agent: init.agentInfo } });
       await this.openSession();
       await this.applyChoices();
@@ -361,6 +422,7 @@ export class AcpSession implements HarnessSession {
       this.drain();
     } catch (e) {
       if (this.exited) return;
+      if (e instanceof ReadOnlyModeMissing) return this.stopWith(e.message, e.why, 'a read-only run needs an engine with an ask or plan mode; pick another engine for side b');
       const auth = e instanceof RpcError && (e.code === -32000 || /auth/i.test(e.message));
       if (auth) this.stopWith(authHelp(this.label, this.loginCommand), `${this.engine} not logged in: ${errText(e)}`, `the user logs in (${this.loginCommand ?? 'API key in Settings → Motori'}), then sends again`);
       else this.stopWith(`${this.label} non è partito: ${errText(e)}`, errText(e), `see the stderr lines in the log; run \`${this.cliName} --version\` in a terminal`);
@@ -422,9 +484,23 @@ export class AcpSession implements HarnessSession {
     if (s(md.currentModeId) === 'plan') this.sink.changed({ permissionMode: 'plan' });
   }
 
-  /** The user's mode for this chat (session-only in ACP). The model came with the model flag at spawn. */
+  /** The user's mode for this chat (session-only in ACP). The model came with the model flag at spawn. A read-only run
+   *  takes the engine's read-only mode (Cursor's "ask", else "plan"); an engine without one, or one that refuses it,
+   *  never gets the prompt (ReadOnlyModeMissing: boot stops the session). Its permissions are answered by its owner
+   *  either way. */
   private async applyChoices(): Promise<void> {
     await this.applyModelConfig();
+    if (this.opts.readOnly) {
+      const modeId = ['ask', 'plan'].find(m => this.modes.includes(m));
+      if (!modeId) throw new ReadOnlyModeMissing(`${this.label} non offre una modalità in sola lettura (ask o plan): il confronto non la avvia`, `modes offered: ${this.modes.join(', ') || 'none'}`);
+      try {
+        await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
+      } catch (e) {
+        throw new ReadOnlyModeMissing(`${this.label} non ha accettato la modalità in sola lettura (${modeId}): il confronto non la avvia`, `session/set_mode ${modeId} failed: ${errText(e)}`);
+      }
+      if (modeId === 'plan') this.sink.changed({ permissionMode: 'plan' });
+      return;
+    }
     if (this.opts.permissionMode === 'plan' && this.modes.includes('plan')) {
       try { await this.setPermissionMode('plan'); } catch (e) { log.warn('chats', 'acp plan mode not applied', { chat: this.opts.chatId, data: { engine: this.engine, error: errText(e) } }); }
     }
@@ -519,6 +595,7 @@ export class AcpSession implements HarnessSession {
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
     this.tools.clear();
     const stop = s(r.stopReason);
+    if (!err && !STOP_REASONS.has(stop)) this.drift('stop reason', stop, r);
     const net = (!err && stop === 'end_turn' && isNetError(this.lastAnswer)) || (!!err && isNetError(errText(err)));
     const stopped = this.stopping;
     this.stopping = null;
@@ -537,7 +614,8 @@ export class AcpSession implements HarnessSession {
     // the user's own interrupt (12/10: "quando faccio Invia subito vedo sempre un errore") is no error
     const isError = !!err || net || (stop === 'cancelled' && !interrupted) || stop === 'refusal';
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
-    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0 });
+    const turnTokens = usage ? tokenUsage(usage.inputTokens, usage.cachedReadTokens, usage.cachedWriteTokens, usage.outputTokens) : undefined;
+    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
     log.info('chats', 'acp turn done', { chat: this.opts.chatId, data: { engine: this.engine, stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
     this.reportEstimate();
     this.prompting = false;
@@ -780,6 +858,10 @@ export class AcpSession implements HarnessSession {
       return;
     }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
+    if (this.recording) {
+      const id = (m as Obj).id;
+      record(this.engine, this.cliVersion, acpKey(m as Obj, typeof id === 'number' ? this.rpcs.get(id)?.method : undefined), m);
+    }
     try { this.onMessage(m as Obj); } catch (e) {
       log.error('chats', 'ACP message not understood', { chat: this.opts.chatId, cause: errText(e), hint: `protocol drift? compare with the agentclientprotocol.com schema and the ${this.label} CLI's ACP docs, update chats/acp.ts`, data: { engine: this.engine, line: cut(raw, 500) } });
     }
@@ -855,6 +937,7 @@ export class AcpSession implements HarnessSession {
     // Cursor sends these "non-blocking" extensions as requests (extMethod): show them and acknowledge
     if (method === 'cursor/update_todos' || method === 'cursor/task') { this.showExt(method, p); this.respond(id, {}); return; }
     // fs/* and terminal/* are not offered in our capabilities; anything else is unknown
+    this.drift('agent request', method, p);
     log.warn('chats', 'unsupported ACP request', { chat: this.opts.chatId, data: { engine: this.engine, method } });
     this.respondError(id, -32601, `Method not found: ${method}`);
   }
@@ -884,6 +967,11 @@ export class AcpSession implements HarnessSession {
   private onNotification(method: string, p: Obj): void {
     if (method === 'session/update') return this.onUpdate(o(p.update));
     if (method === 'cursor/update_todos' || method === 'cursor/task') this.showExt(method, p); // older CLIs: as notifications
+    else this.drift('notification', method, p);
+  }
+
+  private drift(kind: string, what: string, sample: unknown): void {
+    drift(this.engine, this.cliVersion, kind, what, sample, this.opts.chatId);
   }
 
   /** The estimate (characters / 4), until the engine reports a real usage_update. */
@@ -954,7 +1042,7 @@ export class AcpSession implements HarnessSession {
         }
         return;
       }
-      default: return; // session_info_update, notice…
+      default: if (!QUIET_UPDATES.has(s(u.sessionUpdate))) this.drift('session update', s(u.sessionUpdate), u); return;
     }
   }
 
@@ -1005,6 +1093,7 @@ export class AcpSession implements HarnessSession {
     this.flushAll(true);
     const prev = this.tools.get(id);
     const kind = s(u.kind) || (prev ? '' : 'other');
+    if (kind && !KIND_NAME[kind]) this.drift('tool kind', kind, u);
     const name = kind ? KIND_NAME[kind] ?? 'Tool' : prev?.name ?? 'Tool';
     const title = s(u.title) ? stripAnsi(s(u.title)).replace(/`/g, '') : '';
     const status = s(u.status);

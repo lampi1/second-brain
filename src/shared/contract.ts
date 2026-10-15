@@ -46,6 +46,15 @@ export interface EngineInfo {
   /** false: its start definition is not the one the user turned on (changed in the brain, or never on): it does not start */
   trusted: boolean;
 }
+/** The app's own engine for the Anthropic Messages API (engines/registry.ts, ADR 0052): the judge and the other text-only
+ *  calls (engines/text.ts) and the writing rows «Sui crediti API» run on it, with the key saved in Settings. */
+export const ANTHROPIC_API = 'anthropic';
+/** One engine's API spend in a month, as the app computed it at list prices (engines/spend.ts): calls = requests and chat
+ *  turns; unpriced = those whose model has no price in the brain's table (counted, not in usd). */
+export interface ApiSpendLine { usd: number; calls: number; unpriced: number }
+/** engines:spend → this month's spend per API engine (month "2026-10", local time); measured = always 'app' (the API
+ *  shows spend only to an Admin key, ADR 0052). */
+export interface ApiSpendInfo { month: string; measured: 'app'; engines: Record<Harness, ApiSpendLine> }
 /** The stored API keys as the renderer sees them (engines/secrets.ts): never a key, only its mask. */
 export interface SecretsStatus {
   /** false: this machine offers no safe encryption (why says so); no key can be stored */
@@ -91,8 +100,6 @@ export interface ChatSummary {
   /** "Riprendi" links: this chat continues that one / continues in that one (the old one stays readable) */
   continuedFrom?: ChatLink;
   continuedBy?: ChatLink;
-  /** estimate made at the first send of the job (vs the actual costUsd): null = "stima senza dati", absent = none asked */
-  estimate?: (Estimate & { basis: number }) | null;
   /** false = the engine reports no usage (Cursor over ACP today): costUsd is 0 for lack of data, show the estimate */
   costKnown?: false;
   /** renderer only: today's $ of this Cursor chat from the Cursor ledger (Usage.cursorChats by sessionId), an estimate */
@@ -608,7 +615,21 @@ export interface Usage {
   cursorChats?: Record<string, number>;
   /** Italian: why Cursor's plan usage (included quota, on-demand spend) cannot be shown, and what does give its cost */
   cursorPlanNote?: string;
+  /** Kimi today from its own session files (brain/kimi-usage.ts); absent/null = no Kimi data folder on this machine */
+  kimi?: KimiUsage | null;
   at?: number;                // when this snapshot was computed
+}
+/** Kimi's tokens today (every model call of every session, Rome day); no $ (subscription, no published price) */
+export interface KimiUsage {
+  tokens: number; input: number; cacheRead: number; cacheWrite: number; output: number;
+  /** model calls today */
+  calls: number;
+  /** the last call today (ms), null = none */
+  lastAt: number | null;
+  /** tokens per model, most first */
+  models: { model: string; tokens: number }[];
+  /** Italian: why the plan quota is not shown and where to see it */
+  planNote: string;
 }
 
 // ── Settings (userData/config.json; never secrets) ─────────────────────────────────────────────────────────────────
@@ -754,23 +775,9 @@ export interface BudgetAlert {
   text: string;               // Italian, one line
 }
 
-// ── Estimates: cost and time of a job, from similar past jobs (p25-p75) ───────────────────────────────────────────
+// ── Job ledger: real cost and time of a job, kept for the brain's routing table (ADR 0053 dropped the estimate shown
+// to the user: measured on 178 chats it held only 47% of the time with a bigger median error than the median cost) ──
 export type JobKind = 'fix' | 'qa' | 'review' | 'feature' | 'research' | 'question' | 'other';
-/** from = 'brain': the brain's own table (estimates.mjs, every past transcript), with the mean error it measured on the
- *  past chats (errMin, errUsd) and the grouping used (label, Italian). cover = the share of chats the low-high range
- *  promises to hold (0.8: honest 80% range from the past errors; 0.5: p25-p75), held = how often it held (minutes, $), measured on
- *  n past chats; usdMid/minMid = the medians. */
-export interface Estimate {
-  usdLow: number; usdHigh: number; minLow: number | null; minHigh: number | null; from?: 'brain'; label?: string; errMin?: number | null; errUsd?: number | null;
-  usdMid?: number; minMid?: number; cover?: 0.8 | 0.5; held?: { min: number; usd: number | null; n: number } | null;
-  /** the brain's own numbers (unrounded) and the policy/table version that made them: what its improvement loop records */
-  pred?: { policy: string | null; version: string; min: { low: number; mid: number; high: number }; usd: { low: number; mid: number; high: number } };
-}
-export interface EstimateResult {
-  kind: JobKind;
-  estimate: Estimate | null;  // null = "stima senza dati" (fewer than 5 similar jobs)
-  basis: { count: number; scope: string; label: string }; // label: Italian ("da 12 lavori simili: stesso tipo e modello")
-}
 /** minutesKind 'work' = effective work time (running, never waiting for the user's answers: the app since 2026-10-11, the
  *  same figure the chat tile shows); without it the minutes are a chat's span or the CLI's turn time and only $ count. */
 export interface JobActual { usd: number; minutes: number | null; minutesKind?: 'work'; tokensIn: number | null; tokensOut: number | null; turns: number | null }
@@ -782,7 +789,6 @@ export interface JobRecordInput {
   effort: Effort | null;
   prompt?: string;
   kind?: JobKind;
-  estimate?: Estimate | null;
   actual?: JobActual | null;
 }
 
@@ -814,6 +820,10 @@ export interface RoutingRow {
   kind: TaskKind | '*'; area?: string | string[];
   harness: Harness; model: string; effort: Effort | null;
   why: string; since: string; evidence: string;
+  /** the user's switch for the writing rows «Sui crediti API» (ADR 0052): on = its chats run on the Anthropic API engine
+   *  with the same model, while that engine is on, has a key and may be used; else on the row's harness. Absent = off;
+   *  only the user turns it on or off */
+  onApi?: boolean;
   /** the user's switch «L'AI può cambiarla» off: an agent may neither change nor remove this row (absent = it may) */
   locked?: boolean;
 }
@@ -865,16 +875,24 @@ export interface AppQuality {
   };
 }
 
+/** One side of a comparison's cost so far: usd null = no round has a cost yet; missing = rounds without one (e.g. a
+ *  Cursor export not imported). */
+export interface CompareCost { usd: number | null; missing: number }
+
 /** One A/B experiment of the brain (<brain>/harness/compare/experiments/*.json) with its switches (switch.json, written
- *  only by the harness's switch.mjs). A run is compared only when the experiment AND its agent are on. Cost so far: the
- *  sum over its rounds (usd null = no round has a cost yet; missing = rounds without one, e.g. Cursor export not imported). */
+ *  only by the harness's switch.mjs; ADR 0046 §4). A run is compared only when the experiment AND its agent are on.
+ *  Side a is the work sampled (e.g. a Cursor subagent's run), side b re-runs the same task inside the app as a hidden
+ *  read-only run (main/compare), the judge rates both blind. engine = an engine id (registry), label = its short name
+ *  ("Cursor"); a model or effort the experiment does not name is null. Cost so far: the sum over its rounds. */
 export interface CompareExperiment {
   name: string; title: string; description: string;
   on: boolean; changedAt: string | null;   // Europe/Rome "YYYY-MM-DD HH:MM:SS"
-  source: string; contender: string; judge: string; // "cursor", "claude-code opus", "cursor-agent gpt-5"
+  a: { engine: string; label: string; agents?: string[] };
+  b: { engine: string; label: string; model: string | null; effort: string | null };
+  judge: { engine: string; label: string; model: string | null };
   agents: { name: string; on: boolean }[];
   rounds: number;
-  cost: { source: { usd: number | null; missing: number }; contender: { usd: number | null; missing: number } };
+  cost: { a: CompareCost; b: CompareCost };
 }
 export type CompareState = { ok: true; experiments: CompareExperiment[] } | { ok: false; error: string };
 
@@ -1062,6 +1080,8 @@ export interface InvokeMap {
   'secrets:delete': [{ engine: Harness }, SecretsStatus];
   /** the user's "Riaccendi" on an engine whose definition changed: trust its definition of now and turn it on */
   'engines:trust': [{ engine: Harness }, void];
+  /** this month's API spend per engine, computed by the app (engines/spend.ts) */
+  'engines:spend': [void, ApiSpendInfo];
   /** The user's own change from the UI (each key logged as a change by 'user'); all keys validated first, all or none */
   'settings:set': [SettingsPatch, Settings];
   'settings:schema': [void, SettingDef[]];
@@ -1071,7 +1091,7 @@ export interface InvokeMap {
   'settings:propose': [{ key: string; value: unknown; chatId?: string; reason?: string }, SettingRequestResult];
   'settings:pending': [void, SettingProposal[]];
   'settings:confirm': [{ proposalId: string; accept: boolean }, { change: SettingChange | null }];
-  'estimate:get': [{ harness: Harness; model: string | null; effort: Effort | null; prompt: string }, EstimateResult];
+  /** the job's actual cost and time, for the brain's ledger (jobs.jsonl: routing reads it, ADR 0053) */
   'estimate:record': [JobRecordInput, { id: string }];
   'brain:api': [{ path: string }, BrainApiResult];
   /** the brain's model comparisons (harness/compare): read through its config.mjs, switched through its switch.mjs */
@@ -1189,13 +1209,13 @@ export const INVOKE_CHANNELS = [
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
-  'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:get', 'estimate:record', 'brain:api',
+  'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'devops:get', 'devops:refresh', 'devops:markRead', 'chat:branches',
   'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
-  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust',
+  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',

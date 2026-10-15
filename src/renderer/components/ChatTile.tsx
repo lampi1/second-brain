@@ -8,7 +8,7 @@
 // focus view.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatItem, PendingRequest } from '@shared/contract';
-import { chatCost, queueReason, effortLabel, estimateText, estimateTip, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
+import { chatCost, queueReason, effortLabel, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
@@ -29,12 +29,11 @@ import { HarnessMark, IconAlert, IconMaximize, IconMinimize, IconMore, IconStop,
 import { IconButton, StatePill, useSize } from './ui';
 
 const EMPTY_ITEMS: readonly ChatItem[] = [];
-// the ✕ (of a chat or a browser tile) is ignored for half a second after a close: the grid reflows and the next tile's
-// ✕ lands under the pointer, so a double click would close two tiles
-let lastXAt = 0;
-export function closeFromX(close: () => void): void {
-  if (Date.now() - lastXAt < 500) return;
-  lastXAt = Date.now();
+// the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
+// next tile's ✕ lands under the pointer, so a double click would close two tiles. Not a time window: one swallowed a
+// deliberate ✕ right after a close and Annulla (close-fast.spec)
+export function closeFromX(e: { detail: number }, close: () => void): void {
+  if (e.detail > 1) return;
   close();
 }
 const EMPTY_REQS: readonly PendingRequest[] = [];
@@ -94,7 +93,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const sub = [prettyModel(chat.model, chat.harness), effortLabel(chat.effort), chatCost(chat)].filter(Boolean).join(' · ');
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
-  const est = estimateText(chat.estimate);
   const work = workTime(chat, now);
   return (
     <section ref={ref} className={`tile chat-tile tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
@@ -117,20 +115,19 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           {(busy || chat.state === 'waiting') && (
             <IconButton label="Ferma" shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
           )}
-          <IconButton ref={menuBtn} label="Modello, ragionamento e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
+          <IconButton ref={menuBtn} label="Rinomina, modello, permessi e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
           {/* the chats of "Migliora l'app" live in their section, which has no maximized view */}
           {chat.space !== 'app' && (
             <IconButton label={maximized ? 'Ripristina' : 'Ingrandisci'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
               {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
             </IconButton>
           )}
-          {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={() => closeFromX(() => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
         </div>
         <div className="th-sub" data-testid={`chat-sub-${chatId}`}>
           <span className={`pill pill-${st.tone} pill-sub`} aria-hidden="true">{st.label}</span>
           <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip="Tempo di lavoro effettivo: senza le attese delle tue risposte">lavoro {minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
           {perm && <span className="th-badge">{perm}</span>}
-          {est && <span className="th-est" data-testid={`chat-est-${chatId}`} data-tip={estimateTip(chat.estimate, `${chatCost(chat)}${work !== null ? ` in ${minutes(work)} di lavoro` : ''}`)}>{est}</span>}
           <ContextMeter chat={chat} warn={warn} />
         </div>
         {!compact && <ChatLinkChips chatId={chatId} items={items} />}

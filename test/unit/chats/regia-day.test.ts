@@ -1,4 +1,4 @@
-// «Regie corte» (chats/regia-day.ts, ADR 0051): the pure rule (a Regia on Claude, idle a few minutes, with a long
+// «Regie corte» (chats/continuity.ts regiaDayDue, ADR 0051): the pure rule (a Regia on Claude, idle a few minutes, with a long
 // context begun on an earlier Rome day, once a day) and the ChatManager flow on the fake Claude engine: one quiet
 // `/compact` turn, the engine's «Contesto compattato» line in the tile, same chat and session, nothing else shown; never
 // twice a day, never a work chat, never with the setting off; a restart keeps when the context began.
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
-import { REGIA_COMPACT, REGIA_DAY_IDLE_MS, REGIA_DAY_MIN, regiaDayDue, romeDay, type RegiaDayView } from '../../../src/main/chats/regia-day';
+import { REGIA_COMPACT, REGIA_DAY_IDLE_MS, REGIA_DAY_MIN, regiaDayDue, romeDay, type RegiaDayView } from '../../../src/main/chats/continuity';
 import { FAKE, recEmitter, tmp, waitFor } from './helpers';
 
 const DAY = 86_400_000;

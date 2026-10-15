@@ -95,7 +95,7 @@ describe('notes to the chat', () => {
     expect(markOf(key)?.kind).toBe('sent');
   });
 
-  it('while the chat works: no new turn; with a queued message it rides on it, else one line when it is free', () => {
+  it('while the chat works: no new turn; with a queued message it rides on it, else one line when it is free', async () => {
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
     markSent('a', key, MAIL);
     vi.advanceTimersByTime(UNDO_MS);
@@ -103,6 +103,7 @@ describe('notes to the chat', () => {
     expect(app.get().queued.a ?? []).toEqual([]); // not a queued message of its own
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
     expect(sent()).toEqual(['[Mandato] Ciao Marco,']);
+    await Promise.resolve(); // main's reply: the note is no longer on its way (until then the chat counts as busy)
 
     invoke.mockClear();
     const k2 = blockKey('a', 'Secondo testo');
@@ -113,6 +114,22 @@ describe('notes to the chat', () => {
     expect(app.get().queued.a?.map(m => m.text)).toEqual(['e poi?']); // the note is not inside the queued message
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
     expect(sent()).toEqual(['e poi?\n\n[Mandato] Secondo testo']);
+  });
+
+  it('a note due while a message is on its way to main waits for its reply: a late idle never sends it ahead', async () => {
+    let resolve: () => void = () => {};
+    invoke.mockImplementationOnce(() => new Promise<void>(r => { resolve = r; }));
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    expect(send('a', 'primo')).toBe('queued');
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) }); // "primo" leaves, on its way
+    markSent('a', key, MAIL);
+    vi.advanceTimersByTime(UNDO_MS);
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.01 }) }); // the old turn's late idle
+    expect(sent()).toEqual(['primo']);
+    resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,']); // main took it and the chat shows free: told now
   });
 
   it('a queued message removed loses no note; Enter on an empty field never sends notes alone', () => {

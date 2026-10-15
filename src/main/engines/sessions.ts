@@ -10,7 +10,7 @@ import { ApiSession } from '../chats/api';
 import { ClaudeSession } from '../chats/claude';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
-import { engines, type EngineDef } from './registry';
+import { engines, priceEnginesOf, type EngineDef } from './registry';
 
 /** What the app gives a session beyond the chat's own options. */
 export interface EngineContext {
@@ -42,7 +42,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
-        ...(engine.cursorExtras ? cursorOptions(engine, ctx) : {}),
+        ...(engine.cursorExtras ? cursorOptions(engine, ctx, opts.readOnly ? opts.chatId : null) : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
       }, sink);
     }
@@ -50,7 +50,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       return new ApiSession({
         ...opts, engineId: engine.id, protocol: engine.protocol ?? 'openai', baseUrl: engine.baseUrl ?? '', apiKey: ctx.key,
         historyFile: path.join(ctx.userData, 'api-chats', `${opts.chatId}.json`), showReplay: ctx.showReplay,
-        pricesOf: model => listPrice(engine.id, model),
+        pricesOf: model => listPrice(priceEnginesOf(engine), model),
       }, sink);
   }
 }
@@ -61,17 +61,22 @@ export function withApiModels(seen: ModelsSeen): ModelsSeen {
   const out: ModelsSeen = { ...seen };
   for (const e of engines()) {
     if (e.kind !== 'api' || out[e.id]?.ids.length) continue;
-    const ids = registryModels(e.id);
+    const ids = registryModels(priceEnginesOf(e));
     if (ids.length) out[e.id] = { ids, at: 0 };
   }
   return out;
 }
 
 /** What only the Cursor CLI has: its config folder snapshot, the subagent hooks, its price fallback, the model options
- *  from Settings. */
-function cursorOptions(engine: EngineDef, ctx: EngineContext): Partial<AcpOptions> {
+ *  from Settings. A read-only run (the comparison's side b; readOnlyRun = its chat id) gets a folder of its own per run
+ *  (its copy has no allow rules and the run's own deny rules: a chat or another run starting meanwhile must not change
+ *  them) and no subagent hooks (they would capture its subagents as new comparison rounds). */
+function cursorOptions(engine: EngineDef, ctx: EngineContext, readOnlyRun: string | null): Partial<AcpOptions> {
   return {
-    subagentHooks: true, priceFallback: true,
-    configDir: path.join(ctx.userData, `${engine.id}-config`), modelConfig: ctx.acpModelConfig,
+    subagentHooks: !readOnlyRun, priceFallback: true,
+    configDir: readOnlyRun ? readOnlyConfigDir(ctx.userData, engine.id, readOnlyRun) : path.join(ctx.userData, `${engine.id}-config`), modelConfig: ctx.acpModelConfig,
   };
 }
+
+/** The Cursor config folder of one read-only run (removed by its owner when the run ends: compare/headless.ts). */
+export const readOnlyConfigDir = (userData: string, engineId: string, chatId: string): string => path.join(userData, `${engineId}-config-readonly`, chatId);

@@ -150,6 +150,13 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
     f();
     return () => { document.removeEventListener('focusin', f); document.removeEventListener('focusout', later); };
   }, []);
+  // once shown for a card the note keeps its place, empty: a click on an option moves the keyboard here on the mousedown,
+  // and a note leaving then would move the options up under the pointer, the mouseup elsewhere, no click (the user,
+  // 2026-10-15: "devo premere 2 volte")
+  const curKey = reqKey(cur);
+  const [noteFor, setNoteFor] = useState<string | null>(null);
+  if (elsewhere && noteFor !== curKey) setNoteFor(curKey);
+  const noteSlot = elsewhere || noteFor === curKey;
   const card = () => boxRef.current?.querySelector<HTMLElement>('[data-request-key]');
   // a click on the window's own surface or on the backdrop (not a button, link or field) gives the card the keyboard
   const onMouseDown = (e: React.MouseEvent) => {
@@ -166,7 +173,6 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
     const next = e.shiftKey ? (i <= 0 ? all[all.length - 1] : null) : (i === all.length - 1 ? all[0] : null);
     if (next) { e.preventDefault(); next.focus(); }
   };
-  const curKey = reqKey(cur);
   const rail = all.length > 1;
   return (
     <div className="qwin-backdrop" data-testid="qwin-backdrop" hidden={hidden} onMouseDown={onMouseDown}>
@@ -198,6 +204,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
             )}
             {setting && <button type="button" className="btn btn-subtle btn-s" onClick={() => { parkQuestions(); toggleQuestionsModal(); }} data-testid="qwin-off" data-tip="Spegni la finestra: le domande tornano nelle chat">Spegni</button>}
           </div>
+          {noteSlot && !elsewhere && <div className="qwin-note gone" aria-hidden="true" data-testid="qwin-elsewhere-slot">Il cursore è rimasto nel campo dove scrivevi: un clic qui o <Keys combo="Ctrl+J" /> per rispondere.</div>}
           {elsewhere && (
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">Il cursore è rimasto nel campo dove scrivevi: un clic qui o <Keys combo="Ctrl+J" /> per rispondere.</div>
           )}

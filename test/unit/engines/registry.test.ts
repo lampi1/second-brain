@@ -1,7 +1,7 @@
 // The engine registry and the session factory (src/main/engines, ADR 0046): known ids, caps instead of names, the tests'
 // command overrides from SB_<ID>_PATH, and each kind getting its own adapter.
 import { describe, expect, it } from 'vitest';
-import { brainEngine, engineInfos, engineLabel, engineOf, engineOrThrow, enginePathsFromEnv, engines, ENGINE_ID, setBrainEngines } from '../../../src/main/engines/registry';
+import { anthropicApi, brainEngine, engineInfos, engineLabel, engineOf, engineOrThrow, enginePathsFromEnv, engines, ENGINE_ID, priceEnginesOf, setBrainEngines } from '../../../src/main/engines/registry';
 import { sessionFor } from '../../../src/main/engines/sessions';
 import { ApiSession } from '../../../src/main/chats/api';
 import { ClaudeSession } from '../../../src/main/chats/claude';
@@ -13,7 +13,7 @@ const opts: SessionOptions = { chatId: 'c_x', cwd: process.cwd(), model: null, e
 
 describe('engine registry', () => {
   it('knows Claude, Cursor and the presets, in display order, by caps', () => {
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'kimi', 'gemini']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'kimi', 'anthropic']);
     expect(engineOf('claude')?.caps.effort).toBe(true);
     expect(engineOf('cursor')?.caps.effort).toBe(false);
     expect(engineOf('cursor')?.kind).toBe('acp');
@@ -21,6 +21,19 @@ describe('engine registry', () => {
     expect(() => engineOrThrow('nope')).toThrow(/Motore sconosciuto: nope/);
     expect(engineLabel('cursor')).toBe('Cursor');
     expect(engineLabel('gone')).toBe('gone');
+  });
+
+  it('has the Anthropic API as an off preset on the Messages API, priced like Claude (ADR 0052)', () => {
+    const a = anthropicApi();
+    expect(a).toMatchObject({ id: 'anthropic', kind: 'api', protocol: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', defaultOn: false, key: 'required', trusted: false });
+    expect(a!.caps.tools).toBe(false);
+    expect(priceEnginesOf(a!)).toEqual(['anthropic', 'claude']);
+    expect(priceEnginesOf(engineOrThrow('kimi'))).toEqual(['kimi']);
+    // a brain entry with that id but another protocol is no Anthropic Messages endpoint
+    const other = brainEngine('anthropic', { kind: 'api', label: 'Altro', baseUrl: 'https://example.com/v1', protocol: 'openai' });
+    if (typeof other === 'string') throw new Error(other);
+    setBrainEngines([other]);
+    try { expect(anthropicApi()).toBeNull(); } finally { setBrainEngines([]); }
   });
 
   it('gives the renderer no start details', () => {

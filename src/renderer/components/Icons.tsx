@@ -93,7 +93,7 @@ export function HarnessMark({ harness, regia, size = 20 }: { harness: Harness; r
     );
   }
   if (harness !== 'claude') {
-    // any other engine (Kimi, Gemini, one from the brain): its initial, never another vendor's mark
+    // any other engine (Kimi, one from the brain): its initial, never another vendor's mark
     return <span className="mark mark-engine" style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }} aria-hidden="true">{harness.charAt(0).toUpperCase()}</span>;
   }
   return (

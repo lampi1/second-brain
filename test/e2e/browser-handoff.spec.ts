@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
-import { launch, shot } from './helpers';
+import { launch, moreAction, shot } from './helpers';
 import { startSites, McpClient, type Sites } from './fixture-server';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
@@ -60,7 +60,7 @@ test.describe.serial('login hand-off', () => {
 
   test('the Credenziali panel lists the file without the password; Copia copies it and blocks the agents paste; Apri opens a tab', async () => {
     expect((await agent.call('key', { keys: 'ctrl+v' })).text).not.toContain('pasting is blocked');
-    await page.getByTestId('topbar-credentials').click();
+    await moreAction(page, 'more-credentials');
     const panel = page.getByTestId('credentials');
     await expect(panel).toBeVisible();
     await expect(panel).toContainText('site · test');

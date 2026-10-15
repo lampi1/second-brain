@@ -92,7 +92,8 @@ const clean = t => String(t).replace(/<system-reminder[\s\S]*?<\/system-reminder
 const jstr = s => { try { return JSON.parse(`"${s}"`); } catch { return s; } };
 // The app's live feed runs `list` every 15 s: reading every transcript in full each time cost 32 s, 5 s of CPU and
 // 370 MB a run on 15/10 (99 files, 396 MB). A cache keeps each file's title and folder with the offset scanned so far:
-// a run scans only the bytes added since (a file that shrank is scanned again), and the state comes from the tail.
+// a run scans only the bytes added since, and the state comes from the tail. A file rewritten (shorter, or longer: a
+// compaction that grew back) is scanned again: the 64 bytes before the offset (the end of a row with its uuid) must match.
 const CACHE = process.env.BRAIN_CHATS_CACHE || path.join(import.meta.dirname, '..', '..', 'ops', 'state', 'chats-cache.json');
 const CACHE_DAYS = 31; // `read` looks back 30 days by title
 function loadCache() { try { return JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch { return {}; } }
@@ -110,14 +111,16 @@ function readRange(fd, from, to) {
 /** Title (last custom-title) and folder (first cwd) of a transcript, scanning only what was appended since the cache. */
 function scanHead(cache, file, fd, st) {
   let e = cache[file];
-  if (!e || st.size < e.scanned) e = { scanned: 0, name: '', cwd: '' }; // new, or rewritten shorter
+  const mark = e && e.scanned <= st.size ? readRange(fd, Math.max(0, e.scanned - 64), e.scanned).toString('latin1') : null;
+  if (!e || mark !== e.mark) e = { scanned: 0, name: '', cwd: '' }; // new, or rewritten
   const chunk = readRange(fd, e.scanned, st.size);
   const end = chunk.lastIndexOf(10) + 1; // whole lines only: a line being written is scanned next run
   const text = chunk.subarray(0, end).toString('utf8');
   let name = e.name;
   for (const m of text.matchAll(/"customTitle":"((?:[^"\\]|\\.)*)"/g)) name = jstr(m[1]);
   const cwd = e.cwd || jstr(text.match(/"cwd":"((?:[^"\\]|\\.)*)"/)?.[1] ?? '');
-  cache[file] = { scanned: e.scanned + end, name, cwd, mtime: st.mtimeMs };
+  const scanned = e.scanned + end;
+  cache[file] = { scanned, mark: readRange(fd, Math.max(0, scanned - 64), scanned).toString('latin1'), name, cwd, mtime: st.mtimeMs };
   return { name, cwd };
 }
 /** The file's last rows, reading back from the end (256 KB, then 4x) until they hold an assistant row with text: from

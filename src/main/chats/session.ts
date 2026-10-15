@@ -68,11 +68,23 @@ export interface SessionPatch {
   /** one API call of the main thread, once per response id (ADR 0031 counters): its context (input + cache read +
    *  cache write), the cache it re-wrote, its list-price cost */
   call?: { context: number; cacheWrite: number; usd: number };
+  /** the tokens of the turn that just ended, when the engine reports them (Claude's result usage, ACP's prompt usage,
+   *  an HTTP model's usage); absent = unknown. Read by compare/headless.ts for a run's total. */
+  turnTokens?: TokenUsage;
   /** the engine compacted the context (compact_boundary) */
   compacted?: { pre: number | null; post: number | null };
 }
 
 export interface ContextUsage { totalTokens: number; maxTokens: number; percentage: number }
+/** A turn's token counts by kind (input = not from the cache). */
+export interface TokenUsage { input: number; cacheRead: number; cacheWrite: number; output: number }
+
+/** A usage object's counts (non-negative finite numbers, else 0), or undefined when it reports none at all. */
+export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unknown, output: unknown): TokenUsage | undefined {
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const u = { input: n(input), cacheRead: n(cacheRead), cacheWrite: n(cacheWrite), output: n(output) };
+  return u.input + u.cacheRead + u.cacheWrite + u.output > 0 ? u : undefined;
+}
 
 /** Options common to every harness. */
 export interface SessionOptions {
@@ -96,6 +108,14 @@ export interface SessionOptions {
   compactWindowTokens?: number;
   env?: NodeJS.ProcessEnv;
   extraArgs?: string[];
+  /** a hidden run that must change nothing (the comparison's side b, compare/headless.ts): each adapter adds its own
+   *  read-only means (Claude: plan mode, read tools only, no MCP, no hooks, no transcript; ACP: its read-only mode,
+   *  the engine's allow rules left out). Its owner still answers every permission itself. */
+  readOnly?: boolean;
+  /** with readOnly: absolute folders the run may never read (the comparison's other side and verdicts); each adapter
+   *  turns them into deny rules (Claude: Read(//…/**) in its session settings; ACP/Cursor: Read(…/**) in its config
+   *  copy). Its owner refuses a read there too when the engine asks. */
+  denyRead?: string[];
 }
 
 export interface HarnessSession {

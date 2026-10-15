@@ -22,10 +22,10 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   await toast.getByTestId('toast-action').click();
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
 
-  // a double click on the ✕ closes one chat: the next tile's ✕, which slides under the pointer, ignores the second click
+  // a double click on the ✕ closes one chat: the next tile's ✕, which slides under the pointer, ignores the second click;
+  // right after Annulla, so a ✕ soon after a close counts (no time window swallows it)
   const tiles = page.locator('[data-testid^="tile-chat-"]');
   const n = await tiles.count();
-  await page.waitForTimeout(600); // past the ✕ guard of the first close (500 ms), else this double click is ignored whole
   await page.getByTestId('chat-x-fix').dblclick();
   await expect(page.getByTestId('tile-chat-fix')).toHaveCount(0);
   await page.waitForTimeout(300);

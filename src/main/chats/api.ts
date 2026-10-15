@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { Root } from './proctree';
-import { cut, lastLine, nextId, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, tokenUsage, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 
 export type ApiProtocol = 'openai' | 'anthropic';
 
@@ -33,7 +33,7 @@ export interface ApiOptions extends SessionOptions {
   /** on resume, show the saved past (a chat restored after a restart has no items) */
   showReplay?: boolean;
   /** a model's list prices in USD per million tokens (the model may change between turns); null or absent = unknown */
-  pricesOf?: (model: string) => { inputPerMTok: number; outputPerMTok: number } | null;
+  pricesOf?: (model: string) => ListPrice | null;
   /** the answer's token cap (Anthropic requires one) */
   maxTokens?: number;
   /** ms to wait for the response headers and then for the first event (tests shorten it) */
@@ -43,7 +43,8 @@ export interface ApiOptions extends SessionOptions {
 
 export interface ApiMessage { role: 'user' | 'assistant'; content: string }
 interface History { version: 1; sessionId: string; messages: ApiMessage[] }
-interface Usage { input: number; output: number; cacheRead: number; cacheWrite: number }
+export interface Usage { input: number; output: number; cacheRead: number; cacheWrite: number }
+export type ListPrice = { inputPerMTok: number; outputPerMTok: number };
 /** user: the user's Stop / "Invia subito" · app: the app's own interrupt · close: the chat closes · timeout: no first byte */
 type Stop = 'user' | 'app' | 'close' | 'timeout';
 
@@ -108,6 +109,12 @@ function* sseEvents(buf: { text: string }): Generator<string> {
 type Obj = Record<string, unknown>;
 const o = (v: unknown): Obj => (v && typeof v === 'object' ? (v as Obj) : {});
 const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/** USD at list price (cache reads 0.1×, cache writes 1.25× the input price, as Anthropic bills them), to the micro-dollar. */
+export function usageCost(u: Usage, p: ListPrice): number {
+  const input = u.input + u.cacheRead * 0.1 + u.cacheWrite * 1.25;
+  return Math.round(((input * p.inputPerMTok + u.output * p.outputPerMTok) / 1e6) * 1e6) / 1e6;
+}
 
 export class ApiSession implements HarnessSession {
   readonly harness: string;
@@ -195,7 +202,8 @@ export class ApiSession implements HarnessSession {
     const cost = this.costOf(usage, model);
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - t0, turns: 1, isError: !!error || turn.stop === 'app', ...(interrupted ? { interrupted } : {}) }, false);
     const context = usage.input + usage.cacheRead + usage.cacheWrite + usage.output;
-    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(context ? { contextTokens: context, contextEstimated: false } : {}) });
+    const turnTokens = tokenUsage(usage.input, usage.cacheRead, usage.cacheWrite, usage.output);
+    this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(context ? { contextTokens: context, contextEstimated: false } : {}), ...(turnTokens ? { turnTokens } : {}) });
     log.info('chats', 'api turn done', { chat: this.opts.chatId, data: { host: this.host, ms: Date.now() - t0, usage, costUsd: cost, stop: turn.stop, error } });
     this.turn = null;
     if (this.queue.length) this.drain();
@@ -284,12 +292,10 @@ export class ApiSession implements HarnessSession {
     }
   }
 
-  /** USD at list price (cache reads 0.1×, cache writes 1.25× the input price, as Anthropic bills them); null = no prices. */
+  /** USD at list price (usageCost); null = no prices. */
   private costOf(u: Usage, model: string | null): number | null {
     const p = model ? this.opts.pricesOf?.(model) : null;
-    if (!p) return null;
-    const input = u.input + u.cacheRead * 0.1 + u.cacheWrite * 1.25;
-    return Math.round(((input * p.inputPerMTok + u.output * p.outputPerMTok) / 1e6) * 1e6) / 1e6;
+    return p ? usageCost(u, p) : null;
   }
 
   /** A short Italian line; never the key, never a header. */

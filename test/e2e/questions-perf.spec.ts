@@ -25,10 +25,15 @@ test('the questions window opens fast, stays still, and other chats never render
   // opening: under 100 ms, the card takes the keyboard (nobody is typing)
   await resetOpen(page);
   await demo(app, (d, id, t) => d.say(id, t), 'qa', 'Il test case 7 fallisce anche su master: il rimborso ignora lo sconto. Report: [report TC7](https://dev.azure.com/o/Shop/_workitems/edit/4720).');
+  // the open time is awaited inside the page, the focus checked after: a Playwright locator check landing mid-opening
+  // (about 700 forced layouts, 25 ms in a Chromium trace) would be timed as the window's own
+  const opened = page.evaluate(() => new Promise<number>(res => {
+    const s = (globalThis as unknown as { __sbQwin: Stats }).__sbQwin;
+    const t = setInterval(() => { if (s.openMs >= 0) { clearInterval(t); res(s.openMs); } }, 20);
+  }));
   await demo(app, (d, id, q) => d.ask(id, q), 'qa', question('Apro un bug per il test case 7?', ['Sì', 'No']));
+  const openMs = await opened;
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect.poll(async () => (await stats(page)).openMs).toBeGreaterThanOrEqual(0);
-  const { openMs } = await stats(page);
   expect(openMs).toBeLessThan(100);
 
   // nothing moves once it is open: the window's top edge and the question stay where they first painted

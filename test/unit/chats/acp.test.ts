@@ -58,7 +58,7 @@ afterEach(async () => {
 describe('authHelp', () => {
   it('names the login command, or the key in Settings when the engine has none', () => {
     expect(authHelp('Kimi', 'kimi login')).toContain('`kimi login`');
-    expect(authHelp('Gemini', null)).toContain('Impostazioni → Motori');
+    expect(authHelp('Kimi', null)).toContain('Impostazioni → Motori');
   });
 });
 

@@ -4,12 +4,13 @@
 // <userData>/secrets.json; never in clear on disk, never in the brain or the settings. Write-only from the UI: the
 // renderer sends a key once and from then on sees only its mask; no IPC and no MCP tool ever returns it. A key is bound
 // to the fingerprint of its engine's start definition (registry.ts): a changed command, URL or variable stops its use.
-// Every key read is added to the logs' redaction. Used by wiring.ts (the engines' start) and index.ts (secrets:*).
+// Every key read is added to the logs' redaction. The key of an engine the app removed (REMOVED_ENGINES) is erased at
+// load: no Settings row could delete it any more. Used by wiring.ts (the engines' start) and index.ts (secrets:*).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness, SecretsStatus } from '../../shared/contract';
 import { addRedaction, log } from '../log';
-import { ENGINE_ID } from './registry';
+import { ENGINE_ID, REMOVED_ENGINES } from './registry';
 
 /** The OS encryption the store uses: Electron's safeStorage in the app, a fake in the tests. */
 export interface SecretCipher {
@@ -52,11 +53,17 @@ export class SecretStore {
     this.file = path.join(userData, 'secrets.json');
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8')) as { keys?: Record<string, Saved> };
+      const removed: string[] = [];
       for (const [id, s] of Object.entries(raw.keys ?? {})) {
+        if (REMOVED_ENGINES.has(id)) { removed.push(id); continue; }
         if (ENGINE_ID.test(id) && s && typeof s.cipher === 'string' && typeof s.mask === 'string' && typeof s.bound === 'string') this.saved[id] = s;
       }
+      if (removed.length) {
+        this.write(this.saved);
+        log.info('secrets', 'API key of a removed engine erased', { data: { engines: removed } });
+      }
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('secrets', 'secrets.json unreadable: no API key loaded', { cause: (e as Error).message, hint: 'type the keys again in Impostazioni → Motori' });
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('secrets', 'secrets.json unreadable or not rewritten: no API key loaded', { cause: (e as Error).message, hint: 'type the keys again in Impostazioni → Motori' });
     }
   }
 

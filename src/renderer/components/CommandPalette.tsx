@@ -97,7 +97,7 @@ function buildCommands(): Cmd[] {
       sub: questionsModalOn(s) ? 'ora le domande compaiono in primo piano, una alla volta' : 'ora le domande restano nelle chat e nella Regia',
       icon: <IconQuestion />, run: toggleQuestionsModal, text: 'domande finestra modale popup permessi' },
     { id: 'density', title: u.prefs.density === 'compact' ? 'Densità comoda' : 'Densità compatta', icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
-    { id: 'theme', title: 'Tema: chiaro / scuro / come Windows', sub: `ora: ${u.prefs.theme === 'system' ? 'come Windows' : u.prefs.theme === 'dark' ? 'scuro' : 'chiaro'}`, icon: <IconSettings />,
+    { id: 'theme', title: 'Tema: chiaro / scuro / come il sistema', sub: `ora: ${u.prefs.theme === 'system' ? 'come il sistema' : u.prefs.theme === 'dark' ? 'scuro' : 'chiaro'}`, icon: <IconSettings />,
       run: () => setPrefs({ theme: u.prefs.theme === 'system' ? 'dark' : u.prefs.theme === 'dark' ? 'light' : 'system' }) },
     { id: 'credentials', title: 'Credenziali', sub: 'URL, utente e Copia password degli ambienti (test, local, prod)', icon: <IconLogin />, run: () => openModal('credentials'),
       text: 'credenziali password utente login account ambienti test url pms' },

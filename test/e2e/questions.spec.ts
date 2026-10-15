@@ -8,7 +8,7 @@
 // question then waits silently, answer-later.spec.ts covers the queue), any waiting request can be answered first.
 // Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, moreAction, shot } from './helpers';
 
 type Demo = { __sbDemo: { answers(): { chatId: string }[]; stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: Demo['__sbDemo'], ...a: A) => void, ...a: A) =>
@@ -66,8 +66,8 @@ test('Corsie: the field the user types in keeps the keyboard when its chat start
 
 test('the questions window: waits while the user types, never takes the field, Ctrl+J brings it, 1 answers, Esc is "Rispondi dopo"', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('topbar-qwin').click();
-  await expect(page.getByTestId('topbar-qwin')).toHaveAttribute('aria-pressed', 'true');
+  await moreAction(page, 'more-qwin');
+  await expect(page.getByTestId('qwin')).toBeVisible();
   // the open requests of the demo (Regia, QA, Feedback) are in the window now; the tiles keep one line
   await expect(page.getByTestId('qwin')).toBeVisible();
   await expect(page.getByTestId('chat-in-window-qa')).toBeVisible();
@@ -130,15 +130,41 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(field).toHaveValue('sto scrivendo!'); // the draft is still there
   // off again from the window itself (the top bar is under it): the panels go back to the tiles
   await page.getByTestId('qwin-off').click();
-  await expect(page.getByTestId('topbar-qwin')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await expect(page.getByTestId('chat-in-window-qa')).toHaveCount(0);
   await app.close();
 });
 
-test('the questions window, two questions in a row: the second shows once, with its own reasoning, and says it is asked again', async () => {
+test('the questions window: the first click on an option answers, even when the note "Il cursore è rimasto…" was showing', async () => {
+  // the user, 2026-10-15: "a volte nella modale della domanda devo premere 2 volte". The note left on the mousedown (the
+  // option took the keyboard) and the options moved up under the pointer: the mouseup fell elsewhere, no click.
   const { app, page } = await launchDemo();
   await page.getByTestId('topbar-qwin').click();
+  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await page.getByTestId('chat-input-fix').click();
+  await page.keyboard.type('una nota');
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo con il commit?', ['Sì, procedi', 'No, aspetta', 'Fammi vedere il diff']));
+  await expect(page.getByTestId('qwin-elsewhere')).toBeVisible({ timeout: 5000 });
+  const before = (await demo(app, d => d.answers()) as unknown as unknown[]).length;
+  const opt = (await page.getByTestId('qwin-card-opt-2').boundingBox())!;
+  // a real click: the button down, the page settles (the focus moved into the window), then the button up
+  await page.mouse.move(opt.x + opt.width / 2, opt.y + opt.height / 2);
+  await page.mouse.down();
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(page.getByTestId('qwin-elsewhere')).toHaveCount(0); // the note left, its place stays
+  expect((await page.getByTestId('qwin-card-opt-2').boundingBox())!.y).toBe(opt.y);
+  await shot(page, 'questions-window-note-slot');
+  await page.mouse.up();
+  await expect.poll(async () => (await demo(app, d => d.answers()) as unknown as unknown[]).length).toBe(before + 1);
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await shot(page, 'questions-window-first-click');
+  await app.close();
+});
+
+test('the questions window, two questions in a row: the second shows once, with its own reasoning, and says it is asked again', async () => {
+  const { app, page } = await launchDemo();
+  await moreAction(page, 'more-qwin');
   await expect(page.getByTestId('qwin')).toBeVisible();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -169,7 +195,7 @@ test('the questions window, two questions in a row: the second shows once, with 
 
 test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Regia's question first, QA and Feedback under it
+  await moreAction(page, 'more-qwin'); // "Domande in finestra": the Regia's question first, QA and Feedback under it
   await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
   const picks = page.getByTestId('qwin-pick');
   await expect(picks).toHaveCount(2);

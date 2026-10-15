@@ -42,7 +42,7 @@ export interface StoredChat {
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
   /** when the context in force began (first turn since the session start or the last compaction): a Regia's day
-   *  compaction (regia-day.ts) */
+   *  compaction (continuity.ts regiaDayDue) */
   ctxSince?: number;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
   pastSessions?: PastSession[];

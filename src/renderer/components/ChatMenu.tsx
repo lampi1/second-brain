@@ -1,6 +1,7 @@
-// The ⋯ menu of a chat tile: model, effort and permissions (engines that take them), rename, copy link, focus mode, the context size
-// with "Passaggio di consegne…" and "Riprendi in chat nuova" (not on the Regia: it renews instead), close. The same
-// menu serves a Regia, which adds "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
+// The ⋯ menu of a chat tile, the everyday actions first (2026-10-15): rename, copy link, focus mode; then model, effort
+// and permissions (engines that take them); "Passaggio di consegne" with the context size, the note and "Riprendi in chat
+// nuova" (not on the Regia: it renews instead); close last. The same menu serves a Regia, which adds, after the
+// everyday actions, "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
 // "Cambia motore" (to the first other engine): both open the "Nuova Regia" confirm (RegiaRenewDialog); the old Regia goes on as
 // a normal chat, history kept; the overlay's opacity (setting regiaOpacity, ADR 0021). "Chiudi la Regia" only while another Regia stays.
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and RegiaTile.
@@ -48,7 +49,11 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
   const opacity = useApp(s => s.settings?.regiaOpacity ?? 100);
   const regie = useApp(s => regieIdsOf(s), sameList);
   return (
-    <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={regia ? 290 : 260}>
+    <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={regia ? 290 : 270}>
+      <MenuItem onSelect={pick(onRename)} testid={`chat-rename-${id}`}>Rinomina…</MenuItem>
+      <MenuItem onSelect={pick(() => void copyLink(makeLink('workspace', regia ? 'regia' : `chat-${id}`)))} testid={`chat-link-${id}`}>Copia link</MenuItem>
+      {!regia && chat.space !== 'app' && <MenuItem onSelect={pick(() => { setFocused(`chat:${id}`); toggleFocusMode(); })} shortcut="Ctrl+Shift+F" testid={`chat-focusmode-${id}`}>Modalità focus</MenuItem>}
+      <MenuSep />
       {regia && (
         <>
           <MenuLabel>Regia</MenuLabel>
@@ -81,7 +86,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
       {engineCan(chat.harness, 'effort') && (
         <>
           <MenuSep />
-          <MenuLabel>Ragionamento</MenuLabel>
+          <MenuLabel>Quanto ragiona</MenuLabel>
           {EFFORTS.map(e => (
             <MenuItem key={e} checked={chat.effort === e} onSelect={pick(() => void setChat(id, { effort: e }))} testid={`chat-effort-${id}-${e}`}>{effortLabel(e)}</MenuItem>
           ))}
@@ -90,19 +95,15 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
       {engineCan(chat.harness, 'permissionMode') && (
         <>
           <MenuSep />
-          <MenuLabel>Permessi</MenuLabel>
+          <MenuLabel>Quando chiede il permesso</MenuLabel>
           {PERMISSION_MODES.map(p => (
             <MenuItem key={p} checked={chat.permissionMode === p} danger={p === 'bypassPermissions'} onSelect={pick(() => void setChat(id, { permissionMode: p }))} testid={`chat-perm-${id}-${p}`}>{permissionLabel(p)}</MenuItem>
           ))}
         </>
       )}
       <MenuSep />
-      <MenuItem onSelect={pick(onRename)} testid={`chat-rename-${id}`}>Rinomina…</MenuItem>
-      <MenuItem onSelect={pick(() => void copyLink(makeLink('workspace', regia ? 'regia' : `chat-${id}`)))} testid={`chat-link-${id}`}>Copia link</MenuItem>
-      {!regia && chat.space !== 'app' && <MenuItem onSelect={pick(() => { setFocused(`chat:${id}`); toggleFocusMode(); })} shortcut="Ctrl+Shift+F" testid={`chat-focusmode-${id}`}>Modalità focus</MenuItem>}
-      <MenuSep />
-      <MenuLabel>Contesto{chat.contextTokens ? ` · ${chat.contextEstimated ? '~' : ''}${tokensShort(chat.contextTokens)} token` : ''}</MenuLabel>
-      <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>Passaggio di consegne…</MenuItem>
+      <MenuLabel>Passaggio di consegne{chat.contextTokens ? ` · ${chat.contextEstimated ? '~' : ''}${tokensShort(chat.contextTokens)} token usati` : ''}</MenuLabel>
+      <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>Leggi o scrivi la nota per chi continua…</MenuItem>
       {!chat.isRegia && !chat.appRegia && (
         <MenuItem onSelect={pick(() => void resumeChat(id))} disabled={!next && (isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy)} testid={`chat-resume-${id}`}>
           {next ? OPEN_NEXT_LABEL : RESUME_LABEL}

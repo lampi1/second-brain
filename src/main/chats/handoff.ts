@@ -6,9 +6,9 @@
 // the note between two markers in plain text (no file tool, no permission), and the app saves it as
 // <userData>/handoffs/<chatId>.md. When the chat cannot be asked (not running and not to be started, or no answer in
 // the format) a token-free note is built from what the app saw (files, commands, last messages) and marked as such.
-// Cold chats (ADR 0031): coldAsk / coldRoute are the rules of the invisible continuation (an idle long Claude chat
-// writes its note while the prompt cache is warm; a message after the cache expired goes on in a fresh session of the
-// same chat, from coldPrompt). Used by manager.ts (ChatManager.handoff / continueChat / the cold sweep) and its tests.
+// The note is the base of two of the three ways a chat goes on (continuity.ts: when each one is due): a new chat
+// ("Riprendi", continuePrompt) and a fresh session of the same chat once its cache expired (coldPrompt, ADR 0031).
+// Used by manager.ts (ChatManager.handoff / continueChat / the cold sweep) and its tests.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, HandoffInfo } from '../../shared/contract';
@@ -122,50 +122,11 @@ export function continuePrompt(from: { title: string; harness: string; cwd: stri
   ].join('\n');
 }
 
-// ---- cold chats (ADR 0031) ----
+// ---- the fresh session of a cold chat (ADR 0031; when: continuity.ts coldRoute) ----
 
 /** the first line of a cold continuation's first message: the transcript shows only the user's part after COLD_SEP */
 export const COLD_MARK = '[second-brain · continuazione]';
 export const COLD_SEP = '--- messaggio ---';
-/** the prompt cache lives 1 h from its last use: past this a message re-writes the whole context */
-export const CACHE_TTL_MS = 55 * 60_000;
-/** below this a cold re-write costs less than a hand-off and a fresh start */
-export const COLD_MIN_TOKENS = 100_000;
-/** calls counted as "after" a continuation or a compaction (ADR 0031 counters) */
-export const AFTER_CALLS = 5;
-
-/** What the cold rules look at in a chat. noteAt = its cold note (0 = none); lastCallAt = its last API call. */
-export interface ColdView {
-  harness: string; isRegia: boolean; appRegia?: boolean; continuedBy?: unknown;
-  state: string; pending: number; busy: boolean; alive: boolean; handoffTurn: boolean;
-  contextTokens: number; lastTurnAt: number; noteAt: number; lastCallAt: number;
-  /** the lastTurnAt the note was already asked for (once per idle stretch, even if it failed) */
-  askedFor?: number | undefined;
-}
-
-const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'appRegia' | 'continuedBy'>): boolean => v.harness === 'claude' && !v.isRegia && !v.appRegia && !v.continuedBy;
-
-/** Ask for the note now: idle, nothing pending, live engine, a long context, no fresh note, and the cache still warm
- *  but about to expire (idleMs after the last call, before CACHE_TTL_MS). */
-export function coldAsk(v: ColdView, now: number, idleMs: number, ttlMs = CACHE_TTL_MS): boolean {
-  if (!coldChat(v) || v.state !== 'idle' || v.pending > 0 || v.busy || !v.alive || v.handoffTurn) return false;
-  if (v.contextTokens < COLD_MIN_TOKENS || !v.lastTurnAt || v.noteAt >= v.lastTurnAt || v.askedFor === v.lastTurnAt) return false;
-  const idle = now - v.lastCallAt;
-  return idle >= idleMs && idle < ttlMs;
-}
-
-/** The chat still waits for its note (its engine must not be released before it). */
-export function coldArmed(v: ColdView, now: number, ttlMs = CACHE_TTL_MS): boolean {
-  return coldChat(v) && v.contextTokens >= COLD_MIN_TOKENS && !!v.lastTurnAt && v.noteAt < v.lastTurnAt
-    && v.askedFor !== v.lastTurnAt && now - v.lastCallAt < ttlMs;
-}
-
-/** A message now goes to a fresh session: a note newer than the last turn, the cache expired, nothing in flight. */
-export function coldRoute(v: Omit<ColdView, 'alive' | 'state'>, now: number, ttlMs = CACHE_TTL_MS): boolean {
-  if (!coldChat(v) || v.busy || v.pending > 0 || v.handoffTurn) return false;
-  return v.noteAt > 0 && v.noteAt >= v.lastTurnAt && now - v.lastCallAt > ttlMs;
-}
-
 /** The first message of the fresh session: the note, then the user's message (after COLD_SEP). */
 export function coldPrompt(from: { title: string; cwd: string; inWorktree?: boolean }, h: HandoffInfo, message: string): string {
   return [

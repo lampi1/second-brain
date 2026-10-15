@@ -23,8 +23,10 @@ export function dispatch(a: Action): void {
   if (next === prev) return;
   app.set(next);
   if (a.type === 'chat:updated') {
-    const msg = toFlush(prev.chats[a.chat.id], a.chat, next.queued[a.chat.id]);
-    if (msg) { dispatch({ type: 'unqueue', chatId: a.chat.id, id: msg.id }); void sendNow(a.chat.id, withNotes(a.chat.id, msg)); }
+    // a message still on its way to main: an idle reported meanwhile is older than it (the turn it starts reports
+    // running once main has it), so the queue waits for its own turn (sendNow's end checks again)
+    const msg = inFlight.has(a.chat.id) ? null : toFlush(prev.chats[a.chat.id], a.chat, next.queued[a.chat.id]);
+    if (msg) flushOne(a.chat.id, msg);
     // free again with only notes to tell (a Mandato or Non serve while it worked): one message for all of them
     else if (isFree(a.chat) && !(prev.chats[a.chat.id] && isFree(prev.chats[a.chat.id]!))) tellNotes(a.chat.id);
   }
@@ -131,9 +133,31 @@ export async function refreshInfo(): Promise<void> {
 
 // ---------------------------------------------------------------- actions
 
+/** Chats with a message sent to main whose chat:send has not returned yet (how many). Main reports the turn's
+ *  "running" before it returns (same IPC pipe, in order), so until then the chat counts as busy: a message typed
+ *  meanwhile is queued, never sent past the queue, and an idle the old turn reported late flushes nothing. */
+const inFlight = new Map<string, number>();
+const busyNow = (chatId: string, c: ChatSummary | undefined): boolean => inFlight.has(chatId) || (!!c && (isBusy(c) || c.state === 'waiting' || c.pending > 0));
+
+/** The first queued message leaves (the chat went free): shown running at once, like a message sent by hand. */
+function flushOne(chatId: string, msg: QueuedMsg): void {
+  dispatch({ type: 'unqueue', chatId, id: msg.id });
+  const before = app.get().chats[chatId];
+  if (before) dispatch({ type: 'chat:updated', chat: { ...before, state: 'running' } });
+  void sendNow(chatId, withNotes(chatId, msg), before, app.get().chats[chatId]);
+}
+
 async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, optimistic?: ChatSummary): Promise<void> {
-  try { await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}) }); }
-  catch (e) {
+  inFlight.set(chatId, (inFlight.get(chatId) ?? 0) + 1);
+  const done = () => { const n = (inFlight.get(chatId) ?? 1) - 1; if (n > 0) inFlight.set(chatId, n); else inFlight.delete(chatId); };
+  try {
+    await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}) });
+    done();
+    // main took it and the chat is free again (a turn that already ended, a hand-off turn): the queue goes on
+    const c = app.get().chats[chatId], next = app.get().queued[chatId]?.[0];
+    if (c && next && !busyNow(chatId, c)) flushOne(chatId, next);
+    else tellNotes(chatId); // notes that came while it was on its way (tellNotes checks the chat is free)
+  } catch (e) {
     fail('Messaggio non inviato')(e);
     // roll back only our optimistic copy: a newer chat:updated from main (an error, a state) wins
     if (before && optimistic && app.get().chats[chatId] === optimistic) dispatch({ type: 'chat:updated', chat: before });
@@ -142,6 +166,7 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
     const back: QueuedMsg = refused ? { id: msg.id, text: msg.text } : msg;
     // back at the head of the queue: it goes before the messages queued after it
     if (back.text || back.images?.length) dispatch({ type: 'queue', chatId, msg: back, front: true });
+    done(); // after the roll back: its idle flushes nothing, the failed message stays first (no retry loop)
   }
 }
 
@@ -153,7 +178,7 @@ export function send(chatId: string, text: string, images: readonly ImageAttachm
   if (!own && !images.length) return 'empty';
   const c = app.get().chats[chatId];
   // queued: the notes stay apart and ride on it when it leaves (the flush: withNotes), so removing it loses none
-  if (c && (isBusy(c) || c.state === 'waiting' || c.pending > 0)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}) } }); return 'queued'; }
+  if (busyNow(chatId, c)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}) } }); return 'queued'; }
   // the notes waiting for this chat ride on the user's message
   return sendOut(chatId, [own, takeNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c);
 }
@@ -199,7 +224,7 @@ function addNote(chatId: string, n: Note): void {
  *  queued, and a closed chat is never woken by it (the notes go with its next message). */
 function tellNotes(chatId: string): void {
   const c = app.get().chats[chatId];
-  if (!c || !isFree(c) || !tellable(chatId)) return;
+  if (!c || !isFree(c) || inFlight.has(chatId) || !tellable(chatId)) return; // a message on its way: after its reply
   sendOut(chatId, takeNotes(chatId).join('\n'), [], c);
 }
 
@@ -248,7 +273,7 @@ export async function sendQueuedNow(chatId: string, id: string): Promise<'sent' 
   const msg = s.queued[chatId]?.find(m => m.id === id);
   if (!msg) return 'none';
   const c = s.chats[chatId];
-  if (!c || !(isBusy(c) || c.state === 'waiting' || c.pending > 0)) {
+  if (!busyNow(chatId, c)) {
     dispatch({ type: 'unqueue', chatId, id });
     send(chatId, msg.text, msg.images ?? []);
     return 'sent';

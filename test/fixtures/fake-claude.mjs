@@ -5,6 +5,9 @@
 // What a turn does is chosen by words in the user's message:
 //   ask → AskUserQuestion via can_use_tool, waits for the answer · bash → Bash permission (with a rule suggestion)
 //   locked → Bash permission with suppress_always_allow_rule · mode → Edit permission with a setMode suggestion
+//   readgate → a Read permission: "Letto a.txt" when allowed, "Lettura negata: <message>" when refused
+//     (readgate=<path> reads that path, relative to the cwd, instead of a.txt)
+//   planexit → an ExitPlanMode permission (the plan to approve): "Piano approvato" or "Piano rifiutato: <message>"
 //   edit → an auto-allowed Edit with a structuredPatch result · slow → streams until interrupted
 //   (FAKE_CLAUDE_SLOW_TICKS deltas, default 200; FAKE_CLAUDE_STAMP=1 ends each word with @<Date.now()> so
 //   scripts/bench-perf.mjs can measure CLI → screen)
@@ -25,6 +28,7 @@
 // it emits system/session_state_changed running/idle (FAKE_CLAUDE_NO_STATE_EVENTS=1 turns that off, as in older CLIs);
 // the initialize control_response carries pending_permission_requests on its envelope (FAKE_CLAUDE_INHERITED=1 puts
 // one inherited Bash prompt there). It writes a transcript to $CLAUDE_CONFIG_DIR/projects/<cwd slug>/<session>.jsonl
+// (none with --no-session-persistence)
 // and logs to $FAKE_CLAUDE_LOG one JSON line per start ({argv}), per control request ({control}) and per user
 // message ({user: session_id, blocks: content block types, images as image:<source type>:<media type>:<base64 length>}). `--version` and `auth status` answer at once. Every turn emits a `rate_limit_event`;
 // the get_usage control answers with plan windows (rate_limits.five_hour / seven_day).
@@ -55,7 +59,8 @@ logLine({ argv, cwd: process.cwd(), stateEventsEnv: process.env.CLAUDE_CODE_EMIT
 
 const home = process.env.CLAUDE_CONFIG_DIR;
 const slug = () => process.cwd().replace(/[^A-Za-z0-9]/g, '-');
-const transcript = () => (home ? path.join(home, 'projects', slug(), `${sessionId}.jsonl`) : null);
+// like the real CLI: --no-session-persistence writes no transcript
+const transcript = () => (home && !argv.includes('--no-session-persistence') ? path.join(home, 'projects', slug(), `${sessionId}.jsonl`) : null);
 function record(obj) {
   const f = transcript();
   if (!f) return;
@@ -125,7 +130,7 @@ function result(final, aborted, t0) {
   cost = Math.round((cost + 0.01) * 1e6) / 1e6;
   spent = 0;
   record({ type: 'cost-state', totalCostUSD: cost });
-  out({ type: 'result', subtype: aborted ? 'error_during_execution' : 'success', is_error: aborted, duration_ms: Date.now() - t0, num_turns: 1, total_cost_usd: cost, result: aborted ? '' : final, errors: [], queued_turn_count: queue.length, session_id: sessionId, uuid: crypto.randomUUID() });
+  out({ type: 'result', subtype: aborted ? 'error_during_execution' : 'success', is_error: aborted, duration_ms: Date.now() - t0, num_turns: 1, total_cost_usd: cost, usage: { input_tokens: 10, cache_creation_input_tokens: 200, cache_read_input_tokens: 3000, output_tokens: 40 }, result: aborted ? '' : final, errors: [], queued_turn_count: queue.length, session_id: sessionId, uuid: crypto.randomUUID() });
 }
 
 async function permissionTurn(tool, input, id, extra, okText) {
@@ -196,6 +201,20 @@ async function runTurn(text) {
   const rule = [{ type: 'addRules', rules: [{ toolName: 'Bash', ruleContent: 'npm test' }], behavior: 'allow', destination: 'localSettings' }];
   if (/bash/.test(text) && !turn.aborted) {
     final = await permissionTurn('Bash', { command: 'npm test', description: 'Run the tests' }, 'toolu_bash', { permission_suggestions: rule, decision_reason: '\u001b[1mcomando non in allow list\u001b[0m' }, '3 passed') ?? final;
+  }
+  if (/readgate/.test(text) && !turn.aborted) {
+    const file = path.resolve(process.cwd(), /readgate=(\S+)/.exec(text)?.[1] ?? 'a.txt');
+    assistant([{ type: 'tool_use', id: 'toolu_read', name: 'Read', input: { file_path: file } }]);
+    const r = await ask('Read', { file_path: file }, 'toolu_read');
+    if (r?.behavior === 'allow') { toolResult('toolu_read', 'contenuto di a.txt'); final = 'Letto a.txt'; }
+    else if (r) { toolResult('toolu_read', `Permission denied: ${r.message}`, true); final = `Lettura negata: ${r.message}`; }
+  }
+  if (/planexit/.test(text) && !turn.aborted) {
+    const input = { plan: '1. leggi, 2. rispondi' };
+    assistant([{ type: 'tool_use', id: 'toolu_plan', name: 'ExitPlanMode', input }]);
+    const r = await ask('ExitPlanMode', input, 'toolu_plan');
+    if (r?.behavior === 'allow') { toolResult('toolu_plan', 'ok'); final = 'Piano approvato'; }
+    else if (r) { toolResult('toolu_plan', r.message, true); final = `Piano rifiutato: ${r.message}`; }
   }
   if (/locked/.test(text) && !turn.aborted) {
     final = await permissionTurn('Bash', { command: 'git push' }, 'toolu_locked', { permission_suggestions: rule, suppress_always_allow_rule: true }, 'pushed') ?? final;

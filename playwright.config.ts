@@ -13,6 +13,7 @@ export const EXCLUSIVE: Record<string, string> = {
   'map-live.spec.ts': 'frame times and fps budgets',
   'chats.spec.ts': 'quit timed against a budget, process trees counted',
   'stability.spec.ts': 'hang and reload delays timed on the clock',
+  'questions-perf.spec.ts': 'questions window open time against a 100 ms budget',
   // these read the real system clipboard back (Copia in the renderer writes it): two at once would read each other's
   'brain-nav.spec.ts': 'system clipboard',
   'devops-qa.spec.ts': 'system clipboard',

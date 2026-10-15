@@ -1,20 +1,21 @@
 // The engine registry (ADR 0046): every engine the app can run a chat on, with the protocol it speaks (its kind: one
 // adapter per kind, sessions.ts), how it starts and what it can do (caps). The app asks an engine's caps, never its
 // name, so a new engine is one entry. Three sources, in order: the built-in Claude Code (stream-json) and Cursor
-// (ACP), whose start is app code; the app's presets (Kimi, Gemini: ACP CLIs, off until the user turns them on); the
+// (ACP), whose start is app code; the app's presets (Kimi: an ACP CLI; Anthropic API: the Messages API on the
+// user's key, ADR 0052; all off until the user turns them on); the
 // brain's harness/models.json `engines` entries (an ACP CLI or an HTTP endpoint), which may add engines or change a
-// preset. Every engine's start definition has a fingerprint: an engine that is not built in starts only while its
+// preset (an id the app removed, REMOVED_ENGINES, is left out). Every engine's start definition has a fingerprint: an engine that is not built in starts only while its
 // fingerprint is the one the user turned on (trust.ts), so an agent editing models.json can never make the app run
 // another program or send a key to another host. Used by the chat manager, the settings schema, the CLI status and
 // login (../cli.ts) and the renderer through AppInfo.engines.
 import crypto from 'node:crypto';
-import type { EngineCaps, EngineInfo, EngineKind, Harness } from '../../shared/contract';
+import { ANTHROPIC_API, type EngineCaps, type EngineInfo, type EngineKind, type Harness } from '../../shared/contract';
 
 /** How an engine starts: an ACP CLI's command, or an HTTP endpoint. Its fingerprint covers all of it. */
 export interface EngineStart {
   /** ACP: the CLI's name on PATH or an absolute path */
   command?: string;
-  /** ACP: the arguments that start its ACP mode (Kimi ['acp'], Gemini ['--acp']) */
+  /** ACP: the arguments that start its ACP mode (Kimi ['acp']) */
   args?: string[];
   /** ACP: the flag that names the model before args (Cursor '--model'); absent = the model only through ACP */
   modelFlag?: string;
@@ -37,6 +38,9 @@ export interface EngineDef extends EngineInfo, EngineStart {
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
 export const ENGINE_ID = /^[a-z][a-z0-9-]{0,30}$/;
 const BUILT_IN = new Set(['claude', 'cursor']);
+/** Engines the app no longer runs (ADR 0046: Gemini CLI, 15/10): a brain entry with their id is left out and logged once,
+ *  the settings saved for them are dropped on load (brain/config.ts fromSaved). */
+export const REMOVED_ENGINES: ReadonlySet<string> = new Set(['gemini']);
 
 const CLAUDE_CAPS: EngineCaps = {
   effort: true, liveModel: true, fork: true, warm: true, worktree: true, permissionMode: true,
@@ -57,7 +61,7 @@ const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
   { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login'], defaultOn: false },
-  { id: 'gemini', label: 'Gemini', name: 'Gemini CLI', kind: 'acp', command: 'gemini', args: ['--acp'], modelFlag: '-m', keyEnv: 'GEMINI_API_KEY', login: [], defaultOn: false },
+  { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];
 
 /** The fingerprint of an engine's start definition, its login command included (16 hex). */
@@ -93,6 +97,7 @@ export function safeBaseUrl(v: unknown): string | null {
 export function brainEngine(id: string, v: unknown): EngineEntry | string {
   if (!ENGINE_ID.test(id)) return 'id non valido';
   if (BUILT_IN.has(id)) return 'motore incorporato: si avvia solo come lo avvia l’app';
+  if (REMOVED_ENGINES.has(id)) return 'motore tolto dall’app: la voce è ignorata';
   const o = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   if (!o) return 'oggetto atteso';
   const preset = APP_ENGINES.find(e => e.id === id);
@@ -161,6 +166,18 @@ export function engineOrThrow(id: Harness): EngineDef {
   const e = engineOf(id);
   if (!e) throw new Error(`Motore sconosciuto: ${id}`);
   return e;
+}
+
+/** The Anthropic API engine (ADR 0052) when the registry has it as an Anthropic Messages endpoint, else null. */
+export function anthropicApi(): EngineDef | null {
+  const e = engineOf(ANTHROPIC_API);
+  return e?.kind === 'api' && e.protocol === 'anthropic' ? e : null;
+}
+
+/** The engines whose rows in the brain's price table an engine's models are: its own, and for an Anthropic Messages
+ *  endpoint also Claude's (the same models at the same list prices; ADR 0052). */
+export function priceEnginesOf(e: Pick<EngineDef, 'id' | 'kind' | 'protocol'>): string[] {
+  return e.kind === 'api' && e.protocol === 'anthropic' ? [e.id, 'claude'] : [e.id];
 }
 
 /** "Claude", "Cursor": an engine's short name (its id when unknown). */

@@ -5,16 +5,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrainEngines } from '../../../src/main/brain/engines';
 import { engineOn } from '../../../src/main/engines/policy';
 import { brainEngine, engineOf, engines, fingerprint, safeBaseUrl, setBrainEngines, setTrust } from '../../../src/main/engines/registry';
 import { EngineTrust } from '../../../src/main/engines/trust';
 import { withApiModels } from '../../../src/main/engines/sessions';
 import { setPriceTable } from '../../../src/main/chats/live-cost';
+import { log } from '../../../src/main/log';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-trust-'));
-const on = { engineOn: { claude: true, cursor: true, kimi: true, gemini: true, local: true } };
+const on = { engineOn: { claude: true, cursor: true, kimi: true, local: true } };
 afterEach(() => { setBrainEngines([]); setTrust({}); });
 
 describe('brainEngine', () => {
@@ -99,7 +100,7 @@ describe('trust', () => {
     expect(engineOf('kimi')?.trusted).toBe(false);
     fs.writeFileSync(path.join(d, 'engine-trust.json'), '{');
     new EngineTrust(d);
-    expect(engineOn(on, 'gemini')).toBe(false);
+    expect(engineOn(on, 'kimi')).toBe(false);
   });
 });
 
@@ -111,12 +112,31 @@ describe('BrainEngines', () => {
     fs.writeFileSync(f, JSON.stringify({ harnesses: {}, engines: { qwen: { kind: 'acp', label: 'Qwen', command: 'qwen', args: ['--acp'] }, bad: { kind: 'acp', label: 'B', command: 'a|b' } } }));
     const b = new BrainEngines(() => root);
     b.refresh();
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'kimi', 'gemini', 'qwen']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'kimi', 'anthropic', 'qwen']);
     expect(engineOf('qwen')).toMatchObject({ source: 'brain', runs: 'qwen --acp', key: 'none', trusted: false });
     fs.writeFileSync(f, JSON.stringify({ engines: {} }));
     fs.utimesSync(f, new Date(), new Date(Date.now() + 5000));
     b.refresh();
     expect(engineOf('qwen')).toBeNull();
+  });
+
+  it('a gemini entry (an engine the app removed, ADR 0046) is ignored and logged once, even a complete one', () => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, 'harness'));
+    const f = path.join(root, 'harness', 'models.json');
+    fs.writeFileSync(f, JSON.stringify({ engines: { gemini: { kind: 'acp', label: 'Gemini', command: 'gemini', args: ['--acp'], keyEnv: 'GEMINI_API_KEY' } } }));
+    const warn = vi.spyOn(log, 'warn');
+    try {
+      const b = new BrainEngines(() => root);
+      b.refresh();
+      expect(engineOf('gemini')).toBeNull();
+      fs.utimesSync(f, new Date(), new Date(Date.now() + 5000));
+      b.refresh();
+      expect(engineOf('gemini')).toBeNull();
+      const left = warn.mock.calls.filter(c => c[1] === 'engine of the brain left out');
+      expect(left).toHaveLength(1);
+      expect(left[0]![2]).toMatchObject({ data: { engine: 'gemini', why: 'motore tolto dall’app: la voce è ignorata' } });
+    } finally { warn.mockRestore(); }
   });
 
   it('no brain, no file or bad JSON: only the app engines', () => {
@@ -139,7 +159,7 @@ describe('the models of an HTTP engine', () => {
     setPriceTable(() => ({ models: [row('qwen3', 'local'), row('opus', 'claude')] }) as never);
     try {
       const cursor = { ids: [{ id: 'gpt-5', name: 'GPT-5' }], at: 1 };
-      expect(withApiModels({ cursor })).toEqual({ cursor, local: { ids: [{ id: 'qwen3', name: 'qwen3' }], at: 0 } });
+      expect(withApiModels({ cursor })).toEqual({ cursor, anthropic: { ids: [{ id: 'opus', name: 'opus' }], at: 0 }, local: { ids: [{ id: 'qwen3', name: 'qwen3' }], at: 0 } });
     } finally { setPriceTable(() => null); }
   });
 });

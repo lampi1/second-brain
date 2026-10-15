@@ -24,11 +24,10 @@ test('chats left, browsers right; Nascondi browser hides them, the chats grow, t
   const before = (await chats.boundingBox())!.width;
   await shot(page, 'zones-mosaico');
 
-  // the top-bar toggle
-  const toggle = page.getByTestId('topbar-browsers');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  // the toggle in the top bar's "…"
+  await page.getByTestId('topbar-more').click();
+  await expect(page.getByTestId('more-browsers')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('more-browsers').click();
   await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
   await expect(browsers).toHaveCount(0);
   await expect(page.getByTestId('topbar-browsers-count')).toHaveText('2');
@@ -40,12 +39,12 @@ test('chats left, browsers right; Nascondi browser hides them, the chats grow, t
   await page.waitForTimeout(300);
   await page.reload();
   await expect(page.getByTestId('regia-pill')).toBeVisible();
-  await expect(page.getByTestId('topbar-browsers')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('topbar-browsers-count')).toHaveText('2');
   await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
 
   // Ctrl+Shift+B brings them back
   await page.keyboard.press('Control+Shift+B');
-  await expect(page.getByTestId('topbar-browsers')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('topbar-browsers-count')).toHaveCount(0);
   await expect(page.getByTestId('zone-browsers').locator('[data-testid^="tile-browser-"]')).toHaveCount(2);
 
   // hiding with a browser maximized (F11) restores the grid

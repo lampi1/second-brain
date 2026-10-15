@@ -9,6 +9,9 @@
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
 //   ask → cursor/ask_question (one single-choice and one multi-choice question) · plan → cursor/create_plan
 //   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled
+//   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
+//   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
+//   asks permission: "Scritto a.txt" when allowed; either says "<kind> rifiutato" otherwise
 //   stream → thought + 24 text chunks, then a read tool call pending → in_progress → completed
 //   extensions → cursor/update_todos and cursor/task sent as requests (as the real CLI does)
 //   acpcost → usage_update notifications with a cumulative cost mid-turn
@@ -26,15 +29,20 @@
 // Env: FAKE_CURSOR_LOG (one JSON line per start {argv}, per request {method, params}, per answer {answer}),
 // FAKE_CURSOR_NO_AUTH=1 (not logged in: session/new fails -32000), FAKE_CURSOR_NO_LOAD=1 (no loadSession),
 // FAKE_CURSOR_DELAY (ms between chunks), FAKE_CURSOR_NO_IMAGE=1 (promptCapabilities.image false),
-// FAKE_CURSOR_NETERR_HANDOFF=1 (the hand-off turn ends with Cursor's network error).
+// FAKE_CURSOR_NETERR_HANDOFF=1 (the hand-off turn ends with Cursor's network error), FAKE_CURSOR_MODES=agent (no
+// read-only mode offered), FAKE_CURSOR_SET_MODE_FAILS=1 (session/set_mode answers an error).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('2026.07.23-fake000\n'); process.exit(0); }
 const log = obj => { if (process.env.FAKE_CURSOR_LOG) fs.appendFileSync(process.env.FAKE_CURSOR_LOG, `${JSON.stringify({ pid: process.pid, ...obj })}\n`); };
-log({ argv, cwd: process.cwd(), configDir: process.env.CURSOR_CONFIG_DIR ?? null });
+// the config it was started with (cli-config.json in CURSOR_CONFIG_DIR, as the real CLI reads it): the tests check a
+// read-only run's rules even after the app removed that folder
+const cliConfig = (() => { try { return JSON.parse(fs.readFileSync(`${process.env.CURSOR_CONFIG_DIR}/cli-config.json`, 'utf8')); } catch { return null; } })();
+log({ argv, cwd: process.cwd(), configDir: process.env.CURSOR_CONFIG_DIR ?? null, cliConfig });
 // like the real CLI (handleInitialModel → updateConfig): a --model is written into the config folder it runs with
 if (process.env.CURSOR_CONFIG_DIR && argv.includes('--model')) {
   const f = `${process.env.CURSOR_CONFIG_DIR}/cli-config.json`;
@@ -77,7 +85,8 @@ function ask(method, params) {
   return new Promise(resolve => waiting.set(id, resolve));
 }
 const modelsState = () => ({ currentModelId: model, availableModels: [{ modelId: 'auto', name: 'Auto' }, { modelId: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' }, { modelId: 'claude-sonnet-5.5', name: 'Sonnet 5.5' }] });
-const modesState = () => ({ currentModeId: mode, availableModes: [{ id: 'agent', name: 'Agent' }, { id: 'plan', name: 'Plan' }, { id: 'ask', name: 'Ask' }] });
+// FAKE_CURSOR_MODES=agent: only the agent mode (no read-only one) · FAKE_CURSOR_SET_MODE_FAILS=1: session/set_mode errors
+const modesState = () => ({ currentModeId: mode, availableModes: process.env.FAKE_CURSOR_MODES === 'agent' ? [{ id: 'agent', name: 'Agent' }] : [{ id: 'agent', name: 'Agent' }, { id: 'plan', name: 'Plan' }, { id: 'ask', name: 'Ask' }] });
 const opt = (optionId, name, kind) => ({ optionId, name, kind });
 
 async function prompt(id, p) {
@@ -132,6 +141,18 @@ async function prompt(id, p) {
       update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'failed', content: [{ type: 'content', content: { type: 'text', text: `rejected: ${o.outcome}` } }] });
       final = o.outcome === 'cancelled' ? '' : 'Ok, non lo eseguo.';
     }
+  }
+  for (const [word, kind, title] of [['readgate', 'read', 'Read a.txt'], ['writegate', 'edit', 'Edit a.txt']]) {
+    if (!text.includes(word) || turn.cancelled) continue;
+    const tcId = `tc_${word}`;
+    const rel = new RegExp(`${word}=(\\S+)`).exec(text)?.[1];
+    const locations = [{ path: rel ? path.resolve(process.cwd(), rel) : `${process.cwd()}/a.txt` }];
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title, kind, status: 'pending', locations });
+    const r = await ask('session/request_permission', { sessionId: sid, toolCall: { toolCallId: tcId, title, kind, status: 'pending', locations }, options: [opt('allow-once', 'Allow once', 'allow_once'), opt('reject-once', 'Reject', 'reject_once')] });
+    log({ answer: r });
+    const allowed = r?.outcome?.outcome === 'selected' && r.outcome.optionId === 'allow-once';
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: allowed ? 'completed' : 'failed' });
+    final = allowed ? (kind === 'read' ? 'Letto a.txt' : 'Scritto a.txt') : `${kind} rifiutato`;
   }
   // "ask cmd": a command for the user, then the question with no tool call in between (the Regia's card shows the command)
   if (/ask cmd/.test(text)) await say(sid, 'agent_message_chunk', ['Lancia:\n```powershell\n', 'Get-Date\n```\n']);
@@ -244,7 +265,8 @@ function request(id, method, p) {
     }
     // the real one writes the user's global CLI config (cli-config.json): second-brain must never call it
     case 'session/set_model': return out({ id, error: { code: -32602, message: 'fake: session/set_model must never be called by second-brain' } });
-    case 'session/set_mode': mode = p.modeId; update(p.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: mode }); return out({ id, result: {} });
+    case 'session/set_mode': if (process.env.FAKE_CURSOR_SET_MODE_FAILS === '1') return out({ id, error: { code: -32603, message: 'fake: mode not available' } });
+      mode = p.modeId; update(p.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: mode }); return out({ id, result: {} });
     case 'session/set_config_option': {
       const d = paramDefs().find(x => x.id === p.configId);
       if (!picker || !d || !d.values.includes(p.value)) return out({ id, error: { code: -32602, message: `Invalid value for ${p.configId}: ${p.value}` } });

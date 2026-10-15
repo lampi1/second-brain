@@ -127,6 +127,7 @@ app.whenReady().then(async () => {
     'secrets:set': a => s.engines.setSecret(a.engine, a.key),
     'secrets:delete': a => s.engines.deleteSecret(a.engine),
     'engines:trust': a => s.engines.trust(a.engine),
+    'engines:spend': () => s.engines.apiSpend(),
     'settings:set': a => s.brain.setSettings(a),
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
@@ -135,7 +136,6 @@ app.whenReady().then(async () => {
     'settings:propose': a => s.brain.requestSetting(a?.key, a?.value, { by: 'agent', ...(a?.chatId ? { chatId: String(a.chatId) } : {}), ...(a?.reason ? { reason: String(a.reason) } : {}) }),
     'settings:pending': () => s.brain.pendingSettings(),
     'settings:confirm': a => s.brain.confirmSetting(a?.proposalId, a?.accept),
-    'estimate:get': a => s.brain.estimate(a),
     'estimate:record': a => s.brain.recordJob(a),
     'brain:api': a => s.brain.api(a?.path),
     'compare:list': () => s.brain.compareList(),
@@ -212,14 +212,17 @@ app.whenReady().then(async () => {
     const cap = new Promise<void>(r => setTimeout(r, 6000));
     void Promise.race([s.shutdown(), cap])
       .catch(err => log.warn('app', 'shutdown failed', { data: String(err) }))
-      .finally(() => {
+      .finally(async () => {
         s.killNow();
         // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Regia widget state) written in
         // the last seconds would be lost without this
         session.defaultSession.flushStorageData();
+        // the process ends only once each of its threads and its Chromium children ran: on a busy CPU that took 20-130 s;
+        // the job guard's helper starts a booster that outlives our code and raises them all (jobguard.ts Boost)
+        await jobGuard.quit(process.pid).catch(() => {});
         log.info('app', 'exit');
         // our last moment (the log writes synchronously): what comes after is Electron's and Chromium's own teardown
-        // (profile files, GPU caches; 0.3-6 s, longer under load), which no code of ours can hold or shorten
+        // (profile files, GPU caches; 0.3-6 s, longer under load), shortened only by the boost above
         process.once('exit', () => log.info('app', 'node exit'));
         app.exit(0);
       });

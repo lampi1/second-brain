@@ -1,8 +1,11 @@
-// The left navigation, always visible and collapsible (remembered): the chat grid (Ctrl+1), every brain section (with
-// its G-letter shortcut) and the dedicated "Mappa" button (Impostazioni is not listed: the gear menu, Ctrl+, and Ctrl+K reach it). Each entry carries the unread badge of the feed kinds it
-// owns (lib/notify.ts sectionOf; Costi as a warning), cleared when the section is visited; DevOps shows its unread news
-// (store/devops.ts), cleared by marking them read. Pointing at "Mappa" gets the map's data ready (preloadMap).
-// Used by App.tsx.
+// The left navigation, always visible and collapsible (remembered), in three groups (2026-10-15, before one flat list of
+// 13): Lavoro = the chat grid (Ctrl+1), DevOps (only while the brain has its script: the app is generic) and Fatto;
+// Brain = what the brain holds (Idee, Procedure, Regole imparate, Esplora, the "Mappa 3D" button); App = how the app
+// itself is doing and is shaped (Costi, Qualità, Confronto modelli, Skill e agenti, "Migliora l'app"). Impostazioni is
+// not listed: the gear menu, Ctrl+, and Ctrl+K reach it. Each entry keeps its G-letter shortcut and carries the unread
+// badge of the feed kinds it owns (lib/notify.ts sectionOf; Costi as a warning), cleared when the section is visited;
+// DevOps shows its unread news (store/devops.ts), cleared by marking them read. Pointing at "Mappa" gets the map's data
+// ready (preloadMap). Used by App.tsx.
 import type { ReactNode } from 'react';
 import { BRAIN_PAGES, preloadMap, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
@@ -19,6 +22,10 @@ const ICON: Record<BrainPageId, ReactNode> = {
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, esplora: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
 };
 
+/** The pages of the two lower groups, in order (Lavoro is built by hand: Chat is not a page, DevOps can hide). */
+const BRAIN_GROUP: BrainPageId[] = ['idee', 'procedure', 'miglioramento', 'esplora'];
+const APP_GROUP: BrainPageId[] = ['costi', 'qualita', 'confronto', 'skill'];
+
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;
   return <span className={`nav-badge ${warn ? 'warn' : ''}`} aria-label={`${n} nuove`}>{warn ? '!' : n > 99 ? '99+' : n}</span>;
@@ -32,6 +39,8 @@ export function Sidebar() {
   const feed = useApp(s => s.feed);
   const waiting = useApp(s => s.pending.length);
   const devopsUnread = useDevops(s => s?.unread ?? 0);
+  // DevOps only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
+  const devopsOn = useDevops(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
   const collapsed = collapsedPref ?? window.innerWidth < 1800;
   const b = badges(feed, read);
   const item = (id: string, label: string, icon: ReactNode, on: boolean, onClick: () => void, extra: { key?: string; badge?: ReactNode; testid: string; onHover?: () => void }) => (
@@ -42,25 +51,32 @@ export function Sidebar() {
       {extra.badge}
     </button>
   );
+  const page1 = (id: BrainPageId) => {
+    const p = BRAIN_PAGES.find(x => x.id === id)!;
+    return item(p.id, p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
+      key: p.key, testid: `nav-${p.id}`, badge: <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
+    });
+  };
+  const title = (t: string, id: string) => (collapsed ? <div className="nav-sep" role="separator" aria-label={t} data-testid={`nav-group-${id}`} /> : <div className="nav-title" data-testid={`nav-group-${id}`}>{t}</div>);
   return (
     <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Sezioni" data-testid="sidebar">
-      <div className="nav-group">
+      <div className="nav-group nav-scroll">
+        {!collapsed && <div className="nav-title" data-testid="nav-group-work">Lavoro</div>}
         {item('workspace', 'Chat', <IconGrid />, !page && !map, () => go({ page: 'workspace' }), {
           key: 'Ctrl+1', testid: 'nav-workspace',
           badge: waiting ? <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={`${waiting} ti aspettano`}>{waiting}</span> : <span data-testid="nav-badge-workspace"><Badge n={b.workspace ?? 0} /></span>,
         })}
-      </div>
-      <div className="nav-sep" role="separator" />
-      <div className="nav-group nav-scroll">
-        {!collapsed && <div className="nav-title">Cervello</div>}
-        {BRAIN_PAGES.filter(p => p.id !== 'impostazioni' && p.id !== 'migliora').map(p => item(p.id, p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
-          key: p.key, testid: `nav-${p.id}`, badge: <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
-        }))}
+        {devopsOn && page1('devops')}
+        {page1('fatto')}
+        {title('Brain', 'brain')}
+        {BRAIN_GROUP.map(page1)}
+        {item('mappa', 'Mappa 3D', <IconMap />, map, () => go({ page: 'mappa' }), { key: 'Ctrl+Shift+M', testid: 'nav-map', onHover: () => preloadMap(true) })}
+        {title('App', 'app')}
+        {APP_GROUP.map(page1)}
+        {item('migliora', "Migliora l'app", <IconSparkle />, page === 'migliora' && !map, () => go({ page: 'migliora' }), { key: 'G U', testid: 'nav-migliora' })}
       </div>
       <div className="nav-sep" role="separator" />
       <div className="nav-group">
-        {item('migliora', "Migliora l'app", <IconSparkle />, page === 'migliora' && !map, () => go({ page: 'migliora' }), { key: 'G U', testid: 'nav-migliora' })}
-        {item('mappa', 'Mappa 3D', <IconMap />, map, () => go({ page: 'mappa' }), { key: 'Ctrl+Shift+M', testid: 'nav-map', onHover: () => preloadMap(true) })}
         <button type="button" className="nav-item nav-collapse" onClick={() => setPrefs({ navCollapsed: !collapsed })} aria-label={collapsed ? 'Espandi il menu' : 'Comprimi il menu'}
           data-tip={collapsed ? 'Espandi il menu' : undefined} data-testid="nav-collapse" aria-expanded={!collapsed}>
           <span className="nav-icon"><IconChevronRight style={{ transform: collapsed ? 'none' : 'rotate(180deg)' }} /></span>

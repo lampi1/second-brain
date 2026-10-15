@@ -1,6 +1,7 @@
 // Unit tests of the renderer store actions with a fake bridge (src/renderer/store/store.ts): a failed send rolls back
 // only its own optimistic copy (a newer chat:updated wins); a failed answer comes back answerable (attempt bumped),
-// except when main says the request is no longer open; "Invia subito" interrupts and the message goes exactly once.
+// except when main says the request is no longer open; "Invia subito" interrupts and the message goes exactly once;
+// while a message is on its way to main the chat counts as busy (what the user types is queued, a late idle flushes nothing).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppInfo, ChatSummary, CliStatus, PendingRequest } from '@shared/contract';
 import { engineInfos } from '../../src/main/engines/registry';
@@ -43,6 +44,7 @@ describe('send', () => {
     expect(local).toMatchObject({ kind: 'user', text: '', images: 1, thumbs: [img.thumb] });
     expect(invoke).toHaveBeenCalledWith('chat:send', { chatId: 'a', text: '', images: [img] });
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    await flush(); // main's reply (it comes after its "running", same pipe): the message is no longer on its way
     expect(send('a', 'guarda qui', [img, img])).toBe('queued');
     expect(app.get().queued.a?.[0]).toMatchObject({ text: 'guarda qui', images: [img, img] });
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
@@ -78,6 +80,43 @@ describe('send', () => {
     expect(app.get().queued.a?.map(m => m.text)).toEqual(['primo', 'secondo']);
   });
 
+  it('while a flushed message is on its way to main, what the user types is queued, even past a late idle', async () => {
+    let resolve: () => void = () => {};
+    invoke.mockImplementationOnce(() => new Promise<void>(r => { resolve = r; })).mockResolvedValue(undefined);
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    send('a', 'slow');
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) }); // the old turn ends: "slow" leaves
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(app.get().chats.a?.state).toBe('running'); // shown running at once, like a message sent by hand
+    const img = { mimeType: 'image/png' as const, data: 'iVBORw0KGgo=' };
+    expect(send('a', '', [img])).toBe('queued');
+    // an idle main reported before it got "slow" (the old turn's last update) flushes nothing; the next is queued too
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.01 }) });
+    expect(send('a', 'dopo')).toBe('queued');
+    expect(invoke).toHaveBeenCalledTimes(1);
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) }); // main has "slow": its turn runs
+    resolve();
+    await flush();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(app.get().queued.a?.map(m => [m.text, m.images?.length ?? 0])).toEqual([['', 1], ['dopo', 0]]);
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) }); // "slow" ends: the image goes first
+    expect(invoke).toHaveBeenLastCalledWith('chat:send', { chatId: 'a', text: '', images: [img] });
+  });
+
+  it('main took a flushed message while the chat still shows free: the next queued one goes on', async () => {
+    let resolve: () => void = () => {};
+    invoke.mockImplementationOnce(() => new Promise<void>(r => { resolve = r; })).mockResolvedValue(undefined);
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    send('a', 'primo');
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
+    send('a', 'secondo');
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.02 }) }); // no "running" from main
+    resolve();
+    await flush();
+    expect(invoke).toHaveBeenLastCalledWith('chat:send', { chatId: 'a', text: 'secondo' });
+    expect(app.get().queued.a).toEqual([]);
+  });
+
   it('a failed send never overwrites a newer chat:updated (e.g. the error main reported)', async () => {
     let reject: (e: Error) => void = () => {};
     invoke.mockImplementationOnce(() => new Promise((_, r) => { reject = r; }));
@@ -110,6 +149,7 @@ describe('sendQueuedNow ("Invia subito")', () => {
     expect(sends()).toEqual(['tre']);
     expect(texts()).toEqual(['uno', 'due']);
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    await flush(); // main's reply to "tre"
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
     expect(sends()).toEqual(['tre', 'uno']);
   });

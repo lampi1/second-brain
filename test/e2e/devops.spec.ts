@@ -97,14 +97,15 @@ test('DevOps page: read on demand, unread news with links, badge and feed, mark 
     await expect(dv.getByTestId('devops-pr-812')).toBeVisible();
     await shot(page, 'devops-login-expired');
 
-    // the gear menu turns the automatic read on (the page follows) and offers the interval
+    // the page itself turns the automatic read on and sets the interval (the gear menu no longer does: one place, 2026-10-15)
+    const auto = dv.getByTestId('devops-auto');
+    await auto.getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Acceso' }).click();
+    await expect(auto.getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Acceso' })).toHaveAttribute('aria-pressed', 'true');
+    await auto.getByRole('button', { name: '1 h' }).click();
+    await expect(auto.getByRole('button', { name: '1 h' })).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('settings').click();
-    await page.getByTestId('settings-devops-auto').click();
-    await expect(dv.getByTestId('devops-auto').getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Acceso' })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('settings').click();
-    await expect(page.getByTestId('settings-devops-every-30')).toBeVisible();
-    await page.getByTestId('settings-devops-every-60').click();
-    await expect(dv.getByTestId('devops-auto').getByRole('button', { name: '1 h' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('settings-pop')).not.toContainText('DevOps');
+    await page.keyboard.press('Escape');
   } finally {
     await app.close();
   }

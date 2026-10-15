@@ -50,17 +50,26 @@ export function priceUsage(model: string, u: ApiUsage, reg: ModelRegistry | null
   return usd;
 }
 
-/** An API engine's list prices for a model of its own (ADR 0046): only a row of that engine in the brain's models.json,
- *  never the Claude fallback (an unknown price = cost unknown, not a wrong one). */
-export function listPrice(engine: string, model: string, reg: ModelRegistry | null = table()): { inputPerMTok: number; outputPerMTok: number } | null {
+/** An API engine's list prices for a model of its own (ADR 0046): only a row of that engine in the brain's models.json
+ *  (or of the engines whose models it serves at the same price, registry.ts priceEnginesOf: ADR 0052), never the Claude
+ *  fallback (an unknown price = cost unknown, not a wrong one). */
+export function listPrice(engine: string | readonly string[], model: string, reg: ModelRegistry | null = table()): { inputPerMTok: number; outputPerMTok: number } | null {
   const id = bare(model);
-  const r = reg?.models?.find(m => m.harness === engine && (m.id === id || (m.aliases ?? []).includes(id)));
-  return r ? { inputPerMTok: r.price.input, outputPerMTok: r.price.output } : null;
+  for (const h of typeof engine === 'string' ? [engine] : engine) {
+    const r = reg?.models?.find(m => m.harness === h && (m.id === id || (m.aliases ?? []).includes(id)));
+    if (r) return { inputPerMTok: r.price.input, outputPerMTok: r.price.output };
+  }
+  return null;
 }
 
-/** An engine's models in the brain's table (an HTTP engine has no CLI to list them: these are its choices). */
-export function registryModels(engine: string, reg: ModelRegistry | null = table()): { id: string; name: string }[] {
-  return (reg?.models ?? []).filter(m => m.harness === engine).map(m => ({ id: m.id, name: m.id }));
+/** An engine's models in the brain's table (an HTTP engine has no CLI to list them: these are its choices); the first
+ *  engine with rows wins. */
+export function registryModels(engine: string | readonly string[], reg: ModelRegistry | null = table()): { id: string; name: string }[] {
+  for (const h of typeof engine === 'string' ? [engine] : engine) {
+    const rows = (reg?.models ?? []).filter(m => m.harness === h).map(m => ({ id: m.id, name: m.id }));
+    if (rows.length) return rows;
+  }
+  return [];
 }
 
 interface Seen { model: string; u: ApiUsage }

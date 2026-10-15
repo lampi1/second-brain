@@ -15,12 +15,12 @@
 // note, linked to the old one (handoff.ts); a cold chat (idle, long, Claude) writes its note quietly while the cache is
 // warm and a message after the cache expired goes on in a fresh session of the same chat (coldTick / coldSwitch, ADR
 // 0031), counted with the other context numbers (context-stats.ts, contextStats()). Brain hooks
-// (options onRateLimit, onTurnEnd, onWaiting, onDone, estimateFor; method isOwnSession) let wiring.ts feed the brain
+// (options onRateLimit, onTurnEnd, onWaiting, onDone; method isOwnSession) let wiring.ts feed the brain
 // without this module knowing it. Wired in src/main/wiring.ts.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Answer, ChatCommand, ChatItem, ChatSpace, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, EstimateResult, HandoffInfo, Harness, JobKind, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatCommand, ChatItem, ChatSpace, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
 import { errText, log } from '../log';
@@ -28,8 +28,8 @@ import type { ChatService } from '../services';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit, reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
-import { REGIA_COMPACT, regiaDayDue, romeDay } from './regia-day';
-import { AFTER_CALLS, autoHandoff, CACHE_TTL_MS, coldArmed, coldAsk, coldPrompt, coldRoute, type ColdView, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
+import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, REGIA_COMPACT, romeDay } from './continuity';
+import { autoHandoff, coldPrompt, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
 import { ContextCounters } from './context-stats';
 
 /** The app's own message to a chat whose turn a restart cut (resumeInterrupted). */
@@ -82,7 +82,7 @@ export interface ChatManagerOptions {
   onRateLimit?: (msg: unknown) => void;
   /** the models a CLI session offers (→ BrainService.recordModels, for the Settings page) */
   onModels?: (harness: Harness, list: { id: string; name: string }[]) => void;
-  /** a turn ended (→ the job ledger: estimate vs actual) */
+  /** a turn ended (→ the job ledger: real cost and time) */
   onTurnEnd?: (info: TurnEndInfo) => void;
   /** a question or permission opened in an app chat (→ feed "chat waiting") */
   onWaiting?: (chatId: string, pending: PendingRequest) => void;
@@ -90,8 +90,6 @@ export interface ChatManagerOptions {
   onDone?: (chatId: string) => void;
   /** the CLI died in the middle of a turn, with an error and no result (→ feed "chat finita con errore") */
   onCrash?: (chatId: string, error: string) => void;
-  /** cost/time estimate at the first send of a job (→ BrainService.estimate); shown as ChatSummary.estimate */
-  estimateFor?: (req: { harness: Harness; model: string | null; effort: Effort | null; prompt: string; title?: string }) => EstimateResult | null;
   /** the user's reasoning and fast for every ACP chat, read at each session start (settings regiaChats.*) */
   acpModelConfig?: () => { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** min ms between two get_usage asks after turns (default 60 s) */
@@ -132,12 +130,8 @@ export interface TurnEndInfo {
   harness: Harness;
   model: string | null;
   effort: Effort | null;
-  kind?: JobKind;
   /** only on the first turn of the job (the brain stores its length and kind, never the text) */
   firstPrompt?: string;
-  /** only on the first turn: when the job started and the title its estimate was made on (before it ran) */
-  jobAt?: number;
-  jobTitle?: string;
   costUsd: number;
   durationMs: number;
   turns: number;
@@ -166,13 +160,9 @@ interface Rec {
   /** engines ended while the chat went on (model or Regia change, continued): their tools are reaped at the real close */
   kept?: HarnessSession[];
   historyLoaded: boolean;
-  /** a job not started yet (a chat created in this run): its first send gets the estimate and the first prompt */
+  /** a job not started yet (a chat created in this run): its first send gets the first prompt */
   jobNew: boolean;
   firstPrompt: string | null;
-  kind?: JobKind;
-  /** when the job started and the title its estimate was made on (the brain records the prediction with them) */
-  jobAt?: number;
-  jobTitle?: string;
   /** a turn ran since the last onDone */
   turnSinceDone: boolean;
   /** a resumed session still opening (sends wait for it) */
@@ -248,7 +238,7 @@ export class ChatManager implements ChatService {
   private lastUsageChat: string | null = null;
   private coldTimer: NodeJS.Timeout | null = null;
   private readonly counters: ContextCounters;
-  private readonly onExit = (): void => { this.killAll(); };
+  private readonly onExit = (): void => { this.killAll(true); };
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
@@ -805,8 +795,9 @@ export class ChatManager implements ChatService {
     let n = 0;
     for (const r of this.chats.values()) {
       const v = this.coldView(r);
-      if (on && coldAsk(v, now, idle, this.ttl())) { n++; void this.coldNote(r); continue; }
-      if (day && regiaDayDue({ ...v, lastTurnAt: r.lastTurnAt, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now)) { n++; void this.regiaCompact(r, now); continue; }
+      const step = continuityStep({ ...v, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now, { cold: on, day, idleMs: idle, ttlMs: this.ttl() });
+      if (step === 'note') { n++; void this.coldNote(r); continue; }
+      if (step === 'compact') { n++; void this.regiaCompact(r, now); continue; }
       if (r.closeAfterCold && !r.handoffTurn && (!on || !coldArmed(v, now, this.ttl()))) void this.endKept(r);
     }
     return n;
@@ -835,7 +826,7 @@ export class ChatManager implements ChatService {
     if (r.closeAfterCold) await this.endKept(r);
   }
 
-  /** A Regia's day compaction (regia-day.ts): one quiet `/compact` turn with what to keep; the engine's compact_boundary
+  /** A Regia's day compaction (continuity.ts regiaDayDue): one quiet `/compact` turn with what to keep; the engine's compact_boundary
    *  shows in the tile («Contesto compattato») and starts its context's day again. Same chat, same session. */
   private async regiaCompact(r: Rec, now: number): Promise<void> {
     r.dayCompactOn = romeDay(now);
@@ -987,31 +978,35 @@ export class ChatManager implements ChatService {
 
   /** Synchronous last resort (before app.exit, will-quit, process exit): a detached taskkill /T for every CLI process
    *  still alive, never waited for (it finishes the tree after the app is gone; the CLI itself dies with libuv's
-   *  kill-on-close job). Never blocks: the bounded wait is shutdown's (killLeft). No-op when nothing is alive. */
-  killAll(): void {
-    const loose = this.takeLeft();
+   *  kill-on-close job). Never blocks: the bounded wait is shutdown's (killLeft). No-op when nothing is alive.
+   *  `sync`: the process exits right now (its 'exit' event). Otherwise (before app.exit: shutdown may have hit its cap
+   *  before killLeft) the guard's helper stays for the quit's booster (jobguard.ts quit). */
+  killAll(sync = false): void {
+    const loose = this.takeLeft(sync);
     if (loose.length) killTrees(loose.map(x => x.pid), { fallback: () => { for (const x of loose) x.killNow(); } });
   }
 
   /** shutdown's last kill: like killAll, then waits (without blocking) at most `ms` for those processes to die; the
    *  ones still alive go with what `kids` pictured them starting. */
   private async killLeft(ms: number, kids: (pid: number) => number[], spawnMs: number): Promise<void> {
-    const loose = this.takeLeft();
+    const loose = this.takeLeft(false);
     const started = new Map(loose.map(x => [x.pid, x.startedAt ?? 0]));
     // their tree kill (taskkill /T) already runs since shutdown's killNow: no second one to spawn
     if (loose.length) await killTreesWithin(loose.map(x => x.pid), ms, { started: { spawnMs }, kids, after: (pids, at) => reapAfterQuit(pids.map(pid => ({ pid, created: started.get(pid) ?? 0, exited: at }))) });
   }
 
   /** The CLI processes still alive and not killed yet, marked killed; engines in a Job Object end with the guard's
-   *  handles (kill-on-close, no taskkill), so only the others ("loose") are returned. */
-  private takeLeft(): HarnessSession[] {
+   *  handles (kill-on-close, no taskkill), so only the others ("loose") are returned. `sync`: no await may follow
+   *  (process exit), so the guard's helper is ended at once; otherwise it closes the jobs and stays for the quit's
+   *  booster (jobguard.ts quit). */
+  private takeLeft(sync: boolean): HarnessSession[] {
     // a killed pid stays "alive" until the loop runs 'close' again: never taskkill it twice (1-40 s each)
     const left = [...this.chats.values()].map(r => r.session).concat(this.warm.current?.session ?? null).filter((x): x is HarnessSession => !!x && x.alive && !x.gone && !!x.pid && !this.killedPids.has(x.pid));
     if (!left.length) return [];
     log.warn('chats', 'killing CLI processes still alive at quit', { data: { pids: left.map(x => x.pid) } });
     for (const x of left) if (x.pid) this.killedPids.add(x.pid);
     const loose = left.filter(x => !jobGuard.has(x.jobHandle));
-    if (loose.length < left.length) jobGuard.stop();
+    if (loose.length < left.length) { if (sync) jobGuard.stop(); else void jobGuard.closeAll(); }
     return loose;
   }
 
@@ -1042,21 +1037,10 @@ export class ChatManager implements ChatService {
     }
   }
 
-  /** First send of a job: the estimate (shown next to the actual cost) and the first prompt for the ledger. */
+  /** First send of a job: the first prompt for the ledger. */
   private startJob(r: Rec, prompt: string): void {
     r.jobNew = false;
     r.firstPrompt = prompt;
-    r.jobAt = Date.now();
-    r.jobTitle = r.s.title;
-    const fn = this.opts.estimateFor;
-    if (!fn) return;
-    this.hook('estimateFor', () => {
-      const e = fn({ harness: r.s.harness, model: r.choice.model, effort: r.choice.effort, prompt, title: r.s.title });
-      if (!e) return;
-      r.kind = e.kind;
-      r.s.estimate = e.estimate ? { ...e.estimate, basis: e.basis.count } : null;
-      this.updated(r);
-    });
   }
 
   /** Starts the chat's engine if it is not running (a resumed Cursor chat: waits until its replayed past has landed). */
@@ -1130,7 +1114,7 @@ export class ChatManager implements ChatService {
       const cut = item.isError || !!item.interrupted;
       if (cut) { r.handoffStopped = true; r.session?.noRetry?.(); }
       handoffTurn.done(cut ? null : [...handoffTurn.texts.values()].join('\n\n'));
-      return; // not a turn of the job: no ledger entry, no estimate calibration
+      return; // not a turn of the job: no ledger entry
     }
     r.turnSinceDone = true; r.lastTurnAt = item.at;
     r.ctxSince ??= item.at;
@@ -1141,7 +1125,7 @@ export class ChatManager implements ChatService {
     if (on) {
       const info: TurnEndInfo = {
         chatId: r.s.id, sessionId: r.s.sessionId, harness: r.s.harness, model: r.s.model, effort: r.s.effort,
-        ...(r.kind ? { kind: r.kind } : {}), ...(first ? { firstPrompt: first, ...(r.jobAt ? { jobAt: r.jobAt } : {}), ...(r.jobTitle !== undefined ? { jobTitle: r.jobTitle } : {}) } : {}),
+        ...(first ? { firstPrompt: first } : {}),
         costUsd: item.costUsd, durationMs: item.durationMs, turns: item.turns, isError: item.isError,
       };
       this.hook('onTurnEnd', () => on(info));

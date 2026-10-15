@@ -34,12 +34,41 @@ function brain(): string {
 describe('model comparisons', { timeout: 120e3 }, () => {
   it('lists each experiment with what it compares, its switches and the cost so far', async () => {
     const r = await new Compare(() => brain(), plainNode).list();
+    // an experiment written before sides a/b (source / contender / judge.tool): read as sides a and b on engines
     expect(r).toEqual({ ok: true, experiments: [{
       name: 'cursor-vs-claude', title: EXP.title, description: 'x', on: false, changedAt: null,
-      source: 'cursor', contender: 'claude-code opus', judge: 'cursor-agent gpt-5',
+      a: { engine: 'cursor', label: 'Cursor', agents: ['reviewer', 'code-investigator'] },
+      b: { engine: 'claude', label: 'Claude', model: 'opus', effort: null },
+      judge: { engine: 'cursor', label: 'Cursor', model: 'gpt-5' },
       agents: [{ name: 'reviewer', on: true }, { name: 'code-investigator', on: false }],
-      rounds: 2, cost: { source: { usd: 0.5, missing: 1 }, contender: { usd: 3.25, missing: 0 } },
+      rounds: 2, cost: { a: { usd: 0.5, missing: 1 }, b: { usd: 3.25, missing: 0 } },
     }] });
+  });
+
+  it('reads an experiment with sides a and b, and sums a.json / b.json, falling back to an old round\'s files', async () => {
+    const root = brain();
+    const d = path.join(root, 'harness', 'compare', 'experiments');
+    fs.writeFileSync(path.join(d, 'ab.json'), JSON.stringify({
+      name: 'ab', title: 'A contro B', description: 'y',
+      a: { engine: 'cursor', capture: { agents: ['reviewer'] } }, b: { engine: 'claude', model: 'opus', effort: 'medium' }, judge: { engine: 'kimi', model: 'k2' },
+      defaults: { on: true, agents: { reviewer: true } },
+    }));
+    const round = (name: string, files: Record<string, unknown>) => {
+      const r = path.join(root, 'reviews', 'compare', name);
+      fs.mkdirSync(r, { recursive: true });
+      for (const [f, v] of Object.entries(files)) fs.writeFileSync(path.join(r, f), JSON.stringify(v));
+    };
+    round('r4', { 'capture.json': { experiment: 'ab' }, 'a.json': { cost_usd: 0.2 }, 'b.json': { cost_usd: 1 } });
+    round('r5', { 'capture.json': { experiment: 'ab' }, 'a.json': { cost_usd: 0.3 }, 'claude.json': { cost_usd: 0.7 } });
+    const r = await new Compare(() => root, plainNode).list();
+    expect(r.ok && r.experiments.find(e => e.name === 'ab')).toEqual({
+      name: 'ab', title: 'A contro B', description: 'y', on: true, changedAt: null,
+      a: { engine: 'cursor', label: 'Cursor', agents: ['reviewer'] },
+      b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
+      judge: { engine: 'kimi', label: 'Kimi', model: 'k2' },
+      agents: [{ name: 'reviewer', on: true }],
+      rounds: 2, cost: { a: { usd: 0.5, missing: 0 }, b: { usd: 1.7, missing: 0 } },
+    });
   });
 
   it('switches an experiment and one agent only through switch.mjs, and refuses unknown names', async () => {
@@ -96,8 +125,9 @@ describe('model comparisons', { timeout: 120e3 }, () => {
 
   it('normalize drops bad names and keeps only string agents', () => {
     expect(normalize([{ e: { name: '../x' } }, { e: { name: 'ok', source: { agents: ['a', 3, '../b'] } }, s: { agents: { a: true } } }, null])).toEqual([{
-      name: 'ok', title: 'ok', description: '', on: false, changedAt: null, source: '', contender: '', judge: '',
-      agents: [{ name: 'a', on: true }], rounds: 0, cost: { source: { usd: null, missing: 0 }, contender: { usd: null, missing: 0 } },
+      name: 'ok', title: 'ok', description: '', on: false, changedAt: null,
+      a: { engine: '', label: '', agents: ['a'] }, b: { engine: '', label: '', model: null, effort: null }, judge: { engine: '', label: '', model: null },
+      agents: [{ name: 'a', on: true }], rounds: 0, cost: { a: { usd: null, missing: 0 }, b: { usd: null, missing: 0 } },
     }]);
     expect(normalize('x')).toEqual([]);
   });

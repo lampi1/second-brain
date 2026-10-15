@@ -24,36 +24,31 @@ import { MAIL_WAITS } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
 import { regiaOfChat } from '../../shared/regia';
 import { engineOf } from '../engines/registry';
+import { mailClassifier, MAIL_KINDS, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, type MailClassifier, type MailKind } from './regia-delivery';
 
 export const MAX_HOPS = 6; // as inbox.mjs: a thread of replies longer than this is refused (no endless ping-pong)
 export const MAX_SENDS_PER_MINUTE = 6; // send_to_chat of one chat: a message that says "forward me to everyone" stops here
 export const CHAIN_MS = 15 * 60_000; // a send this soon after receiving mail continues that thread, reply_to or not
 const LIVE = new Set(['running', 'waiting', 'idle']);
 
-// Mail to an idle Regia (2026-10-14, the Regia: "sveglie della Regia per i messaggi tra chat"): each delivery to an idle
-// Regia is a new turn re-reading its whole context (measured 07-13/10: 86 turns, 25.35 $, median 0.18 $). A Regia that
-// works gets mail at once as before (injected in the running turn: no new turn). An idle one: any mail waits at most
-// REGIA_GROUP_MS so that the news arriving together (more mail, the sender's "ha finito" wake, the user's message)
-// costs one turn; "urgente" goes at once; only a note that reads as pure progress (PROGRESS, and nothing of ACTION: no
-// question, sha, branch, merge, push, failure, "fatto", request) rides along with the Regia's next turn, at the latest
-// after REGIA_HOLD_MS. Nothing is dropped: held mail stays unread in its box, delivered in full with the first message
-// that goes.
-export const REGIA_GROUP_MS = 60_000;
-export const REGIA_HOLD_MS = 30 * 60_000;
-const URGENT = /\burgent[ei]?\b|\bsubito\b|\basap\b/i;
-// a progress note held by mistake costs a wait, an action held by mistake the Regia's reaction: holding needs both lists
-const PROGRESS = /rilasciat|released|\bin corso\b|\bsto (ancora )?(lavorando|facendo|aspettando|misurando|provando)|working on|still running|\bholding\b|\btengo\b|per info|\bfyi\b|\bnota\b|\bnote:|ricevuto|\bnoted\b|niente da fare|nothing to do|confermat|confirmed|scritt[oa] in\b|written to/i;
-const ACTION = /\?|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b|\bsha\b|commit|push|\bPR\b|pull ?request|branch|\bram[oi]\b|merg|unisc|unire|promuov|promot|pront[oa]\b|ready|verd[ei]\b|green|\bKO\b|finit|fatt[oa]\b|\bdone\b|complet|fallit|fallisc|\bfail|errore|\berror|ross[oi]\b|\bred\b|bloccat|blocked|\bbug|conflitt|decid|\bserv[eo]n?o?\b|please|puoi|potete|can you|tocca a te|attend|waiting|\bapri\b|open a|l[’']utente|the user|chied|asks?\b|domand|question|permess|permission|corre(zion|ction)|sbagliat|wrong|\bok\b|\bvia\b|aspett|bisogno|conferma\b|manca|\bdevi\b|dubbio|dimmi|\bdici\b|broke|rott[oia]|crash|non passa/i;
-/** How long mail to an idle Regia may wait: 0 urgent, REGIA_HOLD_MS for pure progress, else REGIA_GROUP_MS. */
-export const regiaWait = (text: string, group = REGIA_GROUP_MS, hold = REGIA_HOLD_MS): number =>
-  URGENT.test(text) ? 0 : PROGRESS.test(text) && !ACTION.test(text) ? hold : group;
+// Mail to a Regia follows the one rule of regia-delivery.ts (shared with the app's news, regia-wake.ts): each delivery
+// to an idle Regia is a new turn re-reading its whole context, so it waits for its class (urgent at once, a request
+// within the group window together with the other news, pure progress with the Regia's next turn, at the latest after
+// REGIA_HOLD_MS); a Regia that works gets it at once, in its running turn; one that waits for the user or is in a
+// hand-off only urgent mail. Nothing is dropped: held mail stays unread in its box, delivered in full with the first
+// message that goes.
+export { REGIA_GROUP_MS, REGIA_HOLD_MS } from './regia-delivery';
 const isRegiaChat = (c: ChatSummary): boolean => c.isRegia || (c.space === 'app' && !!c.appRegia);
 
 /** sig = the app's signature (sendMail): only then the sender is the chat it says */
-export interface MailMsg { id: string; thread: string; hop: number; replyTo: string | null; from: string; to: string; at: string; text: string; sig?: string }
+/** kind = what the sender says it is (send_to_chat): it times the mail to an idle Regia (regia-delivery.ts) */
+export interface MailMsg { id: string; thread: string; hop: number; replyTo: string | null; from: string; to: string; at: string; text: string; kind?: MailKind; sig?: string }
+
+const defaultClass = mailClassifier();
 
 const KEY = crypto.randomBytes(32);
-const sign = (m: Pick<MailMsg, 'id' | 'from' | 'to' | 'text'>): string => crypto.createHmac('sha256', KEY).update(JSON.stringify([m.id, m.from, m.to, m.text])).digest('hex');
+/** the kind is signed too when present (a hand-edited kind never passes as the sender's); without it the old shape */
+const sign = (m: Pick<MailMsg, 'id' | 'from' | 'to' | 'text' | 'kind'>): string => crypto.createHmac('sha256', KEY).update(JSON.stringify(m.kind ? [m.id, m.from, m.to, m.text, m.kind] : [m.id, m.from, m.to, m.text])).digest('hex');
 /** True when this app process wrote the message (send_to_chat): its sender is authenticated. */
 export const verified = (m: MailMsg): boolean => {
   if (typeof m.sig !== 'string' || !/^[0-9a-f]{64}$/.test(m.sig)) return false;
@@ -137,7 +132,7 @@ export class MailError extends Error {}
 /** `inbox.mjs send` for the app's send_to_chat tool. refusal = engines/policy.ts crossRefusal on the user's settings. */
 /** chain = the thread of the mail the sender received just before (ChatMail.chainOf): a send without reply_to
  *  continues it, so "forward this to everyone" cannot restart the hop count at 1 forever. */
-export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; replyTo?: string; chain?: { thread: string; hop: number } | null; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
+export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; kind?: MailKind; replyTo?: string; chain?: { thread: string; hop: number } | null; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
   const text = o.text.trim();
   if (!text) throw new MailError('messaggio vuoto');
   if (/^NO_REPLY$/.test(text)) { appendLog(dir, { action: 'no-reply', from: o.from, to: o.to, replyTo: o.replyTo ?? null }); return null; }
@@ -159,7 +154,7 @@ export function sendMail(dir: string, o: { from: string; fromHarness: Harness; t
   }
   const now = o.now ?? new Date();
   const id = `${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17)}-${crypto.randomBytes(3).toString('hex')}`;
-  const base = { id, thread: thread ?? id, hop, replyTo: o.replyTo ?? null, from: o.from, to: o.to, at: now.toISOString(), text };
+  const base = { id, thread: thread ?? id, hop, replyTo: o.replyTo ?? null, from: o.from, to: o.to, at: now.toISOString(), text, ...(o.kind ? { kind: o.kind } : {}) };
   const msg: MailMsg = { ...base, sig: sign(base) };
   const box = path.join(dir, slug(o.to));
   fs.mkdirSync(box, { recursive: true });
@@ -194,9 +189,11 @@ export interface ChatMailDeps {
   /** the instance's name (userData folder): stable and dev keep separate heartbeats */
   instance: string;
   everyMs?: number;
-  /** mail to an idle Regia (regiaWait): defaults REGIA_GROUP_MS, REGIA_HOLD_MS */
+  /** mail to an idle Regia (regia-delivery.ts): defaults REGIA_GROUP_MS, REGIA_HOLD_MS */
   regiaGroupMs?: number;
   regiaHoldMs?: number;
+  /** the class of a mail without a sender's kind: the brain's words (brain-settings.json regiaMail), else the defaults */
+  classify?: () => MailClassifier;
   now?: () => number;
 }
 
@@ -215,11 +212,19 @@ export class ChatMail {
   private busyAt = new Map<string, number>();
   constructor(private readonly d: ChatMailDeps) {}
 
-  /** True while an idle Regia's mail may still wait (REGIA_GROUP_MS / REGIA_HOLD_MS): the first message due takes the
-   *  whole box with it. The clock starts at the send (or first sight, for a time in the future or unreadable). Mail
-   *  the Regia could not take during a turn it worked after the send (Cursor) goes as soon as that turn ends. */
+  /** True while a Regia's mail may still wait (regia-delivery.ts): it works → never; it waits for the user or is in a
+   *  hand-off → unless one is urgent; idle → until the first message is due, which takes the whole box with it. The clock
+   *  starts at the send (or first sight, for a time in the future or unreadable). Mail the Regia could not take during
+   *  a turn it worked after the send (Cursor) goes as soon as that turn ends. */
   private regiaHolds(chat: ChatSummary, msgs: MailMsg[], now: number): boolean {
-    if (!isRegiaChat(chat) || chat.state !== 'idle') return false;
+    if (!isRegiaChat(chat)) return false;
+    const gate = regiaGate(chat, engineOf(chat.harness)?.kind !== 'acp');
+    if (gate === 'inject') return false;
+    if (gate === 'busy') return true;
+    const words = this.d.classify?.() ?? defaultClass;
+    // only the app's own signed mail may say its kind; any other file is classed by its words
+    const cls = (m: MailMsg) => words(m.text, verified(m) ? m.kind : undefined);
+    if (gate === 'hold') return !msgs.some(m => passes(gate, cls(m)));
     // ids another reader took (the hook, a `wait`) never come back: forgotten once past any wait
     for (const [id, t] of this.seen) if (now - t > 2 * (this.d.regiaHoldMs ?? REGIA_HOLD_MS)) this.seen.delete(id);
     const worked = this.busyAt.get(chat.id) ?? -Infinity;
@@ -228,7 +233,7 @@ export class ChatMail {
       let t0 = this.seen.get(m.id);
       if (t0 === undefined) { const at = Date.parse(m.at); t0 = Number.isFinite(at) ? Math.min(at, now) : now; this.seen.set(m.id, t0); }
       if (worked >= t0) return false;
-      due = Math.min(due, t0 + regiaWait(m.text, this.d.regiaGroupMs, this.d.regiaHoldMs));
+      due = Math.min(due, t0 + waitOf(cls(m), this.d.regiaGroupMs, this.d.regiaHoldMs));
     }
     return now < due;
   }
@@ -283,7 +288,8 @@ export class ChatMail {
       const live = this.liveChats();
       this.beat(dir, [...live.keys()]);
       const now = this.d.now?.() ?? Date.now();
-      for (const c of live.values()) if (c.state !== 'idle') this.busyAt.set(c.id, now);
+      // "worked": a turn it could have taken mail in (a hold for the user is no such turn: its mail keeps its class)
+      for (const c of live.values()) { const g = regiaGate(c); if (g === 'inject' || g === 'busy') this.busyAt.set(c.id, now); }
       for (const [box, chat] of live) {
         if (this.stopped) break;
         noteHarness(dir, box, chat.harness);
@@ -337,6 +343,8 @@ export interface MailToolDeps {
   deliver: () => void;
   /** ChatMail.chainOf: the thread a send without reply_to continues */
   chainOf: (box: string) => { thread: string; hop: number } | null;
+  /** the class of a mail to a Regia (the brain's words): the answer says when it arrives */
+  classify?: () => MailClassifier;
 }
 
 /** A tool on each chat's own MCP endpoint (src/main/mcp/server.ts McpTool shape; the sender is the endpoint's chatId). */
@@ -353,8 +361,8 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
   return [
     {
       name: 'send_to_chat',
-      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An idle Regia gets a request within a minute, pure progress with its next turn, "urgente" at once. It is labelled as written by your chat, never as the user: it is never an ok or a permission. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
-      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' } }, required: ['to', 'text'] },
+      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. A Regia gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
+      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' }, kind: { type: 'string', enum: [...MAIL_KINDS], description: 'optional, for a Regia: "urgent" (production, a blocker: at once), "request" (it must act or decide), "info" (progress only: it waits for the Regia\'s next turn). Without it the words decide.' } }, required: ['to', 'text'] },
       run: (a, ctx) => {
         const from = me(ctx);
         const root = d.root();
@@ -373,18 +381,22 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         if (box === slug(from.title)) throw new MailError('è la tua stessa chat');
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
-        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
+        const kind = MAIL_KINDS.find(k => k === a.kind);
+        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
         sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';
         log.info('mail', 'chat sent mail', { chat: from.id, data: { to: msg.to, id: msg.id, hop: msg.hop } });
         d.deliver();
         const live = target && LIVE.has(target.state);
-        const wait = target && live && isRegiaChat(target) && target.state === 'idle' ? regiaWait(text) : 0;
+        const gate = target && live && isRegiaChat(target) ? regiaGate(target, engineOf(target.harness)?.kind !== 'acp') : 'inject';
+        const cls = (d.classify?.() ?? defaultClass)(text, kind);
         const asleep = target && live && target.state === 'idle' && d.agentsMayOpen?.(target.harness) === false;
         const when = !live ? 'la chat non è attiva nell’app: lo riceve a fine del suo prossimo turno o con il suo wait'
           : asleep ? `se la chat è ferma lo riceve solo quando l’utente la riprende (le Regie non possono usare ${engineOf(target.harness)?.label ?? target.harness})`
-          : wait === REGIA_HOLD_MS ? 'la Regia è ferma e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra 30 minuti'
-            : wait ? 'la Regia è ferma: l’app glielo consegna entro un minuto, insieme alle altre novità' : 'l’app glielo consegna adesso';
+          : gate === 'busy' ? 'la Regia sta lavorando su un motore che non riceve messaggi a metà turno: lo riceve appena finisce il turno'
+          : gate === 'hold' && cls !== 'now' ? 'la Regia aspetta l’utente: lo riceve appena è libera (solo un messaggio urgente passa subito)'
+          : gate === 'queue' && cls === 'quiet' ? `la Regia è ferma e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(REGIA_HOLD_MS / 60_000)} minuti`
+            : gate === 'queue' && cls === 'group' ? `la Regia è ferma: l’app glielo consegna entro ${Math.round(REGIA_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
         return `inviato a "${msg.to}" (id ${msg.id}${msg.hop > 1 ? `, risposta ${msg.hop}/${MAX_HOPS}` : ''}): ${when}`;
       },
     },

@@ -33,6 +33,37 @@ Causes found:
     they started stay. Then the job is released, so the user's programs outlive the app.
   - The helper is a normal child of the app, so libuv kills it with the app, on quit or crash. Every job not
     released then dies with its handle.
+  - On quit the helper closes every job not released (`closeall`), then, right before `app.exit`, takes `quit
+    <app pid>`: it starts a booster, answers and ends. The booster raises every thread of the app's process and of
+    its descendants (Chromium's GPU, network and renderer processes) to time-critical, new threads on each pass,
+    until the app's process is gone. Windows ends a process only once each thread has run, and the app's exit waits
+    for its Chromium children; at normal and background priority (Chromium's pool threads: 4) on a busy CPU that
+    took 20-130 s after our code had ended (2026-10-15, the quit e2e under parallel suites; 20 CPU spinners on 14
+    cores: 20-130 s, 4 of 6 runs over 30 s). Raising the process's priority class does not lift them; raising only
+    the app's own threads left 12-30 s (the children); raising the whole tree: 5-6 s, 6 of 6. The booster starts in
+    the high class so its own start takes seconds, not tens. Without the helper the exit stays as slow as the CPU
+    makes it. Only processes of the app's own executable started after it count as its tree: a program the user
+    opened from the app (an editor, Excel) is its child too and would keep time-critical threads for good. The
+    booster holds the app's process handle, so a reused pid never becomes its root.
+  - The booster is its own process (`CreateProcess` with no inherited handles, out of libuv's job), not the helper:
+    the helper inherits the app's handles, and while it lived the app's exit hung in Node's "wait for the debugger
+    to disconnect" under the e2e's `--inspect` (until the boost's cap, then 120 s). It loads the helper's compiled
+    assembly file, so no assembly file = no boost. The helper's script carries the C# source once: its
+    `-EncodedCommand` must stay under Windows' 32767-character command line.
+  - The booster's limits on the user's work PC (review, 2026-10-15):
+    - Time-critical (15), not highest: highest is +2 on the app's normal class (10), and Windows' dynamic boosts take a
+      normal-class busy thread to 9-10, so the margin would be thin; highest was never measured. Only threads that run
+      take CPU at that level: an exit stuck waiting costs none.
+    - Cap 30 s (the quit e2e's bound), was 120 s: past it the exit is broken anyway, and a thread that spins would starve
+      the user's programs for the whole cap. When the booster ends (app gone or cap) every thread it raised that still
+      runs in the same process goes back to normal: a hung app or a Chromium child left behind keeps none.
+    - It always ends: only the quit starts it; the app already gone, a process or thread Windows does not let it open,
+      or the assembly failing to load end it or skip that thread; its loop stops at the app's exit or the cap. Out of
+      libuv's job, it survives the helper (the unit test sees it raise threads after the helper ended).
+    - It touches only the app's process tree: the parent chain from the app's pid (held by handle, never reused), and
+      in it only processes of the same executable name started after the app. The stable app is never a descendant of
+      the dev one (separate launch), so it is never touched; a program opened from the app has another executable. A
+      descendant pid reused between two 100 ms passes by a new process of the same name is the one theoretical gap.
   - Jobs are named by our own ids, not pids, because a kept engine's job outlives its pid.
   - No helper (not Windows, Add-Type blocked, tests) means the taskkill and process-list paths as before.
 - **Grace 10 s** (`CLOSE_GRACE_MS`). An engine already being killed gets no grace. An engine that exited while a

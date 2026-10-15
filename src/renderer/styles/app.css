@@ -60,8 +60,6 @@ html[data-b4="3"] .spin { transform: rotate(270deg); }
 .btn-regia { background: var(--violet); color: #160d26; font-weight: 600; }
 .count-badge { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 99px; background: var(--amber); color: #1b1304; font-size: 11px; font-weight: 700; }
 .count-badge.red { background: var(--red-bg); color: var(--red); }
-.browsers-toggle.on { border-color: var(--blue); color: var(--blue); }
-.browsers-toggle .count-badge { background: var(--surface-3); color: var(--text); }
 
 .icon-btn {
   width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 7px; border: 0; background: transparent;
@@ -107,21 +105,20 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 /* TopBar.tsx: the actions shrink step by step (data-fit, useFit) and are clipped as a last resort; the end group never shrinks */
 .topbar-main { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 10px; overflow: hidden; padding-inline: 2px; margin-inline: -2px; }
 .topbar-end { flex: none; display: flex; align-items: center; gap: 10px; }
-.topbar-more { display: none; }
-.topbar[data-fit~="1"] .segmented button span, .topbar[data-fit~="1"] .browsers-toggle > span:not(.count-badge),
-.topbar[data-fit~="1"] .btn-danger > span:not(.count-badge) { display: none; }
-.topbar[data-fit~="1"] .browsers-toggle { padding-inline: 9px; }
+.topbar-more { position: relative; display: inline-flex; }
+.topbar-more .icon-btn.on { color: var(--blue); }
+.topbar-more .more-badge { position: absolute; top: -2px; right: -4px; pointer-events: none; background: var(--blue); color: #fff; }
+.topbar[data-fit~="1"] .segmented button span, .topbar[data-fit~="1"] .btn-danger > span:not(.count-badge) { display: none; }
 .topbar[data-fit~="2"] .ub-reset, .topbar[data-fit~="2"] .ub-today .ub-k, .topbar[data-fit~="2"] .ub-win-week .ub-meter { display: none; }
-.topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label, .topbar[data-fit~="3"] .improve-label,
+.topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,
 .topbar[data-fit~="3"] .ub-meter:not(.wide), .topbar[data-fit~="3"] .ub-pill { display: none; }
 .topbar[data-fit~="3"] .search { flex: none; min-width: 0; width: auto; }
-/* 4 the usage strip without Cursor (still in its panel); 5 browsers, Credenziali, questions window and Migliora into "…";
-   6 icon-only "Nuova chat"; 7 (the narrowest windows) the view switch into "…" too */
-.topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
-.topbar[data-fit~="5"] .browsers-toggle, .topbar[data-fit~="5"] .improve-btn { display: none; }
-.topbar[data-fit~="5"] .topbar-more { display: contents; }
-.topbar[data-fit~="6"] .topbar-main .btn-primary > span { display: none; }
-.topbar[data-fit~="7"] [data-testid="view-toggle"] { display: none; }
+/* 4 the usage strip without Cursor and Kimi (still in its panel); 5 icon-only "Nuova chat"; 6 (the narrowest windows) the
+   view switch into "…" too */
+.topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]),
+.topbar[data-fit~="4"] [data-testid="usage-kimi"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-kimi"]) { display: none; }
+.topbar[data-fit~="5"] .topbar-main .btn-primary > span { display: none; }
+.topbar[data-fit~="6"] [data-testid="view-toggle"] { display: none; }
 .brand { display: flex; align-items: center; gap: 9px; font: 600 14px var(--font-display); letter-spacing: -0.005em; padding-right: 4px; white-space: nowrap; }
 
 .brand-mark { width: 14px; height: 14px; border-radius: 3.5px; background: linear-gradient(135deg, var(--blue), var(--violet)); transform: rotate(45deg); box-shadow: 0 0 12px color-mix(in srgb, var(--blue) 40%, transparent); }
@@ -282,7 +279,6 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .th-engine { flex: none; display: inline-flex; }
 .th-resumed { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 99px; padding: 0 7px; font-size: 10.5px; line-height: 18px; color: var(--violet); background: var(--violet-bg); }
 .th-row > .icon-btn { margin-left: -2px; }
-.th-est { flex: none; font-size: 10.5px; color: var(--text-3); }
 .th-work { color: var(--text-2); font-variant-numeric: tabular-nums; }
 /* context meter (ContextBar.tsx): "182k" + a thin bar of the window; amber above the threshold */
 .th-ctx { flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--text-3); cursor: default; }
@@ -980,7 +976,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
   .lane-keys { display: none; }
 }
 @media (max-width: 1360px) {
-  .next-btn .next-label, .improve-btn .improve-label { display: none; }
+  .next-btn .next-label { display: none; }
   .search-text { display: none; }
   .search { flex: none; min-width: 0; width: auto; }
 }
@@ -995,14 +991,6 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 }
 @media (max-width: 1180px) {
   .segmented button span { display: none; }
-}
-/* room for "Nascondi browser": the view switch goes to icons first (its tips keep the names) */
-@media (max-width: 1760px) {
-  .topbar .segmented button span { display: none; }
-  .browsers-toggle > span:not(.count-badge) { display: none; }
-  /* the Regia button (ADR 0021) and Ferma tutto go to icon + count (their tips keep the names) */
-  .topbar .btn-danger > span:not(.count-badge) { display: none; }
-  .topbar .browsers-toggle { padding-inline: 9px; } /* icon only: room for the "Domande in finestra" button */
 }
 
 /* ---------------------------------------------------------------- motion */

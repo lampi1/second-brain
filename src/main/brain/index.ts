@@ -1,7 +1,8 @@
 // The brain module: implements BrainService (src/main/services.ts) for wiring.ts. It owns the settings (config.ts),
 // the live feed of the brain folder and chats (live.ts), calm Windows toasts (notify.ts), the top-bar usage
-// (usage.ts), the spending limits (budget.ts), cost/time estimates (estimates.ts), the GET-only proxy to the brain's
-// own data server (api.ts) and the brain's procedures (procedures.ts, /api/procedures). Why one module: they share the
+// (usage.ts), the spending limits (budget.ts), the job ledger (estimates.ts: real cost and time, feeding the brain's
+// routing table, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the brain's procedures
+// (procedures.ts, /api/procedures). Why one module: they share the
 // brain folder, the Electron-node runner and the feed, and they restart together when the brain folder changes. Only
 // this file touches Electron (Notification, the window); the parts are plain Node and unit-tested apart. App state
 // lives in userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json). It writes into the
@@ -11,7 +12,7 @@
 import { Notification, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { BudgetAlert, FeedEvent, SettingChange, Settings, Usage } from '../../shared/contract';
+import type { BudgetAlert, FeedEvent, Harness, SettingChange, Settings, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
@@ -22,9 +23,10 @@ import { Live, KINDS, stamp, cut, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
 import { cursorToday, installHook } from './cursor-ledger';
+import { KimiReader, kimiHome } from './kimi-usage';
 import { BudgetWatcher, type Spend } from './budget';
 import { FileJobStore, Ledger } from './estimates';
-import { BrainEstimates, withBrain } from './brain-estimates';
+import { BrainEstimates } from './brain-estimates';
 import { Routing, routeChat } from './routing';
 import { BrainApi, type LocalApi } from './api';
 import { Compare } from './compare';
@@ -39,6 +41,11 @@ export interface BrainCtx {
   skipChat?: (id: string) => boolean;
   /** events that must not become a Windows toast now ("Rispondi dopo", main/later.ts) */
   held?: (e: FeedEvent) => boolean;
+  /** extra environment for the brain's estimates.mjs run and what it starts (the sample judge): the app's text endpoint
+   *  on the user's API credits (engines/text-mcp.ts, ADR 0052); read at each run */
+  scriptEnv?: () => Record<string, string>;
+  /** the Anthropic API engine when the writing rows «Sui crediti API» may use it now (on, with a key), else null (ADR 0052) */
+  apiRoute?: () => Harness | null;
 }
 
 const FEED_MAX = 500;
@@ -129,8 +136,9 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const compare = new Compare(() => cfg.get().brainRoot, node);
   const learn = new Learn(() => cfg.get().brainRoot, node);
   // the brain's estimates table (ops/state/estimates.json); tests only read it, never rescan transcripts
-  const brainEst = new BrainEstimates(() => cfg.get().brainRoot, node);
-  const routing = new Routing(() => cfg.get().brainRoot);
+  const estNode = { exe: node.exe, get env() { return { ...node.env, ...(ctx.scriptEnv?.() ?? {}) }; } };
+  const brainEst = new BrainEstimates(() => cfg.get().brainRoot, estNode);
+  const routing = new Routing(() => cfg.get().brainRoot, file('routing-api.json'));
   const models = new ModelsSeenStore(file('cursor-models.json'));
   // the Procedure page: read-only, credentials masked here (procedures.ts); a change on disk reloads the page's list
   const procedures = new Procedures(() => cfg.get().brainRoot);
@@ -145,16 +153,20 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   };
   let lastUsage: Usage | null = null;
   let backfillTimer: NodeJS.Timeout | null = null;
+  let warmTimer: NodeJS.Timeout | null = null;
 
   // the Cursor stop hook's script, beside its ledger (~/.cursor/hooks.json points at it; that file is the user's to edit)
   if (!testing) { try { installHook(); } catch (e) { log.warn('brain', 'cursor ledger hook not installed', { cause: errText(e), hint: 'check %LOCALAPPDATA%/second-brain is writable' }); } }
 
   const startParts = async () => {
     const root = cfg.get().brainRoot;
+    // Kimi: its own session files (tests point it at their folder, SB_KIMI_HOME, never the user's)
+    const kimi = !testing || env.SB_KIMI_HOME ? new KimiReader(env.SB_KIMI_HOME || kimiHome(env)) : null;
     usage = new UsageMonitor({
       root, node, claudeConfig: testing ? null : claudeConfigFile(env),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
+      ...(kimi ? { kimi: () => kimi.today() } : {}),
       onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
     });
     usage.start();
@@ -176,11 +188,14 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
         .catch(e => log.warn('brain', 'estimates backfill failed', { data: { error: errText(e) } }));
     }, testing ? 1000 : 20e3);
     if (!testing) brainEst.schedule(); // a fresh table soon after boot (the chats run while the app was closed)
+    // the brain pages' data server, started before the first page needs it (tests start it on demand)
+    if (!testing) { const a = api; warmTimer = setTimeout(() => { warmTimer = null; a.warm(); }, 10e3); }
   };
   const stopParts = () => {
     live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); procedures.invalidate();
     if (procTimer) { clearTimeout(procTimer); procTimer = null; }
     if (backfillTimer) clearTimeout(backfillTimer);
+    if (warmTimer) { clearTimeout(warmTimer); warmTimer = null; }
     live = null; usage = null; api = null;
   };
 
@@ -230,9 +245,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       return { change: cfg.confirm(proposalId, accept) };
     },
     onSettingChange: fn => { settingListeners.add(fn); return () => { settingListeners.delete(fn); }; },
-    // ONE estimator: the brain's table; the ledger's keyword estimate only when the brain has no table
-    estimate: req => withBrain(ledger.estimate(req), brainEst.estimate(req.title), !!brainEst.table()),
-    recordPrediction: p => brainEst.recordPrediction(p),
     recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
     routingInfo: () => routing.info(),
     saveRouting: (routes, reason, o = {}) => {
@@ -246,7 +258,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       log.info('brain', 'routing table restored', { data: { from: version, version: info.table?.version ?? null, by } });
       return info;
     },
-    route: req => routeChat({ counts: k => routing.armCounts(k), ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
+    route: req => routeChat({ counts: k => routing.armCounts(k), api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }

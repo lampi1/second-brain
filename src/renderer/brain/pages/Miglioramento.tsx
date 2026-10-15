@@ -81,7 +81,7 @@ export function Miglioramento(_: { nav: Navigate }) {
   };
   return (
     <>
-      <PageHead title="Miglioramento" at={d.at} refreshing={d.refreshing} onRefresh={() => d.reload(true)}
+      <PageHead title="Regole imparate" at={d.at} refreshing={d.refreshing} onRefresh={() => d.reload(true)}
         lead={list.length ? <>{list.length} {list.length === 1 ? 'politica' : 'politiche'} che imparano dai risultati; {pending ? <b>{pending} {pending === 1 ? 'proposta' : 'proposte'} da decidere</b> : 'nessuna proposta da decidere'}.</> : undefined}
         what={HELP.intro} />
       <Async loading={d.loading && !d.data} error={d.data ? null : d.error} onRetry={() => d.reload(true)} lines={5} block>

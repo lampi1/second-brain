@@ -5,7 +5,8 @@
 // would start a second Electron app. Why a proxy: the renderer stays sandboxed and never talks to a port. Safety: only
 // GET, only the read-only /api/ paths listed below (never /api/send, never raw downloads), Host header localhost (the
 // server refuses others: DNS rebinding), the child dies with the app (its stdin is our pipe). Fails soft: no server in
-// the brain = { ok: false, error }. Started lazily on the first request. Used by brain/index.ts. A few paths are answered
+// the brain = { ok: false, error }. Started on the first request, or earlier by warm() (brain/index.ts, soon after boot:
+// the child's start took 9-13 s on a busy machine, so the first brain page waited for it). Used by brain/index.ts. A few paths are answered
 // by main itself (`local`, e.g. /api/quality: brain/quality.ts), with what only the app knows; same checks, no child.
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
@@ -76,6 +77,11 @@ export class BrainApi {
     });
     this.port.catch(() => { this.port = null; });
     return this.port;
+  }
+
+  /** Starts the child ahead of the first request (no-op without a brain server); failures are retried by get(). */
+  warm(): void {
+    if (this.script && fs.existsSync(this.script)) this.start().catch(() => { /* get() starts it again and reports why */ });
   }
 
   async get(p: unknown): Promise<BrainApiResult> {

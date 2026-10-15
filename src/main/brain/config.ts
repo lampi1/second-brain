@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, SettingProposal, SettingRequestResult, SettingsPatch } from '../../shared/contract';
 import { COMPACT_WINDOW, OLD_COMPACT_WINDOW, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
-import { ENGINE_ID } from '../engines/registry';
+import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import { log } from '../log';
 
 export { validate, schema };
@@ -35,14 +35,19 @@ export function fromSaved(raw: unknown): Settings {
   }
   const mute = (raw as { mute?: unknown }).mute;
   if (mute && typeof mute === 'object') for (const [k, v] of Object.entries(mute)) { const c = validate(`mute.${k}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
-  // every engine the file names, also one the brain defines later (its registry entry comes after the settings load)
+  // every engine the file names, also one the brain defines later (its registry entry comes after the settings load);
+  // an engine the app removed (Gemini, ADR 0046) is dropped: its keys and the Regia's choice of it go, Claude takes over
   for (const group of ['engineOn', 'engines'] as const) {
     const o = (raw as Record<string, unknown>)[group];
-    if (o && typeof o === 'object' && !Array.isArray(o)) for (const [id, v] of Object.entries(o)) { const c = validate(`${group}.${id}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
+    if (o && typeof o === 'object' && !Array.isArray(o)) for (const [id, v] of Object.entries(o)) {
+      if (REMOVED_ENGINES.has(id)) continue;
+      const c = validate(`${group}.${id}`, v);
+      if (c.ok) s = setAt(s, c.key, c.value);
+    }
   }
   // the Regia's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
   const regiaEngine = (raw as { regiaChats?: { harness?: unknown } }).regiaChats?.harness;
-  if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
+  if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine) && !REMOVED_ENGINES.has(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
   return s;
 }
 

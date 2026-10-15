@@ -39,6 +39,22 @@ describe('brain api', () => {
     expect(await api.get('/api/send')).toMatchObject({ ok: false, error: expect.stringMatching(/non permesso/) });
   });
 
+  it('warm() starts the child before the first request; without a server it does nothing', async () => {
+    const root = fakeBrain();
+    const api = new BrainApi(root, plainNode);
+    apis.push(api);
+    api.warm();
+    const child = (api as unknown as { child: unknown }).child;
+    expect(child).not.toBeNull();
+    expect((await api.get('/api/tables')).ok).toBe(true);
+    expect((api as unknown as { child: unknown }).child).toBe(child); // the warmed child serves it, none started twice
+    const none = new BrainApi(tmpDir(), plainNode);
+    apis.push(none);
+    none.warm();
+    expect((none as unknown as { child: unknown }).child).toBeNull();
+    new BrainApi(null, plainNode).warm(); // no brain: no throw
+  });
+
   it('fails soft when the brain has no data server or no brain is set', async () => {
     const a = new BrainApi(tmpDir(), plainNode);
     apis.push(a);

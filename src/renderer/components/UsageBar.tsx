@@ -1,11 +1,11 @@
-// The usage strip in the top bar: today's spend, the Claude plan windows (5 hours and week, each with its reset time)
-// and Cursor, always visible, with a detail panel on click. Why: the user wants their subscriptions' usage in sight at
+// The usage strip in the top bar: today's spend, the Claude plan windows (5 hours and week, each with its reset time),
+// Cursor and Kimi's tokens today (when Kimi is on this machine), always visible, with a detail panel on click. Why: the user wants their subscriptions' usage in sight at
 // all times (2026-10-11), and an honest "n/d" with the reason where a number does not exist (Cursor's plan usage has no
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
 // own costs (live estimate included). Used by TopBar.tsx.
 import { useRef, useState } from 'react';
 import type { ChatSummary, Usage } from '@shared/contract';
-import { chatCost, formatCost, until } from '../lib/format';
+import { chatCost, formatCost, tokensShort, until } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { useApp } from '../store/store';
 import { HarnessMark } from './Icons';
@@ -39,6 +39,9 @@ export function todayTotal(u: Usage | null): { usd: number; partial: boolean; es
   if (!u || u.costKnown === false) return null;
   return { usd: u.todayUsd + (u.cursorTodayUsd ?? 0), partial: u.cursorTodayUsd == null, estimated: u.cursorTodayUsd != null && u.cursorExact === false };
 }
+
+/** Kimi's model id as a name: "k3-256k" → "K3-256k"; others as they are ("kimi-for-coding"). */
+const kimiModel = (m: string) => m.replace(/^k(\d)/, 'K$1');
 
 /** Cursor today as shown: "n/d", the exact $ of an export, or "≈ $" of the ledger estimate (with "±x%" when long). */
 export function cursorText(u: Usage | null, long = false): string {
@@ -105,6 +108,19 @@ function Details({ usage, chats, now }: { usage: Usage | null; chats: ChatSummar
         <div className="ub-sec-head"><span><HarnessMark harness="cursor" size={16} /> Piano Cursor</span></div>
         <div className="ub-na" data-testid="usage-pop-cursor"><b>Non disponibile</b><span>{usage?.cursorPlanNote ?? 'Cursor non espone l’uso del piano.'}</span></div>
       </section>
+      {usage?.kimi ? (
+        <section className="ub-sec" data-testid="usage-pop-kimi">
+          <div className="ub-sec-head"><span><HarnessMark harness="kimi" size={16} /> Kimi oggi</span>{usage.kimi.lastAt ? <small>ultimo turno {ago(usage.kimi.lastAt, now)}</small> : null}</div>
+          <div className="ub-total" data-testid="usage-pop-kimi-total">{usage.kimi.tokens ? `${tokensShort(usage.kimi.tokens)} token` : 'Nessun turno oggi'}</div>
+          {usage.kimi.tokens ? (
+            <div className="ub-rows">
+              {usage.kimi.models.slice(0, 4).map(m => <div key={m.model} className="ub-row"><span className="ub-label">{kimiModel(m.model)}</span><b>{tokensShort(m.tokens)}</b></div>)}
+              <div className="ub-row"><span className="ub-label">di cui letti dalla cache</span><b>{tokensShort(usage.kimi.cacheRead)}</b></div>
+            </div>
+          ) : null}
+          <div className="ub-na"><b>Quota del piano non disponibile</b><span>{usage.kimi.planNote}</span></div>
+        </section>
+      ) : null}
       {top.length > 0 && (
         <section className="ub-sec">
           <div className="ub-sec-head"><span>Chat aperte</span><small>da quando l’app è aperta</small></div>
@@ -134,6 +150,7 @@ export function UsageBar() {
     usage?.fiveHourPct != null ? `5 ore al ${pctText(usage.fiveHourPct)}` : null,
     usage?.weekPct != null ? `settimana al ${pctText(usage.weekPct)}` : null,
     'Cursor: uso del piano non disponibile',
+    usage?.kimi ? `Kimi oggi ${tokensShort(usage.kimi.tokens)} token` : null,
   ].filter(Boolean).join(' · ');
   return (
     <>
@@ -150,6 +167,15 @@ export function UsageBar() {
           <HarnessMark harness="cursor" size={16} />
           <span className="ub-pill" data-testid="usage-cursor-value">{cursorText(usage)}</span>
         </span>
+        {usage?.kimi ? (
+          <>
+            <span className="ub-sep" />
+            <span className="ub-group" data-testid="usage-kimi">
+              <HarnessMark harness="kimi" size={16} />
+              <span className="ub-pill" data-testid="usage-kimi-value">{tokensShort(usage.kimi.tokens)} tok</span>
+            </span>
+          </>
+        ) : null}
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="usage-pop" width={360}>
         <Details usage={usage} chats={list} now={now} />

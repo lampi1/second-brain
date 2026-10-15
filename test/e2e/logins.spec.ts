@@ -3,7 +3,7 @@
 // entries with a URL. Screenshots test-results/shots/credentials-{dark,light}.png. The real file, Copia and the agents'
 // paste block are covered with a fixture brain in browser-handoff.spec.ts.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, moreAction, shot } from './helpers';
 
 for (const scheme of ['dark', 'light'] as const) {
   test(`the Credenziali panel lists the environments with Copia password (${scheme})`, async () => {
@@ -27,8 +27,8 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(panel.getByTestId(/^cred-user-/)).toHaveText(['MEDICO-DEMO-01']);
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
-      // from the top bar
-      await page.getByTestId('topbar-credentials').click();
+      // from the top bar's "…"
+      await moreAction(page, 'more-credentials');
       await expect(panel).toBeVisible();
     } finally {
       await app.close();

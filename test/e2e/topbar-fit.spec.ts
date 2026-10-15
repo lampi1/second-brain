@@ -1,6 +1,6 @@
 // The top bar fits any window width (the user, 2026-10-13: "se metto l'app in full screen non vedo le impostazioni"):
 // at 1280, 1366 and 1920 px (the view switch stays on the bar there), windowed and in real full screen (setFullScreen), the settings button is on screen and opens its
-// menu, no action is clipped, and when the bar is too full the lesser actions sit in the "â€¦" menu and still work.
+// menu, no action is clipped, and the actions used now and then sit in the "â€¦" menu (always there, 2026-10-15) and still work.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, setSize, shot } from './helpers';
 
@@ -28,15 +28,14 @@ async function settingsWork(page: Page): Promise<void> {
   await expect(page.getByTestId('settings-pop')).toHaveCount(0);
 }
 
-/** Each action the bar can hide (bar testid â†’ its "â€¦" item): when it is off the bar, "â€¦" is on screen and lists it. */
-const MOVABLE: [string, string][] = [['topbar-browsers', 'more-browsers'], ['topbar-credentials', 'more-credentials'], ['topbar-qwin', 'more-qwin'], ['topbar-improve', 'more-improve'], ['view-toggle', 'more-view-corsie']];
+/** "…" is always on screen and lists the actions used now and then; the view switch too once it left the bar. */
+const ALWAYS_MORE = ['more-browsers', 'more-qwin', 'more-credentials', 'more-improve'];
 async function everyHiddenListed(page: Page): Promise<void> {
-  const hidden: string[] = [];
-  for (const [bar, item] of MOVABLE) if (!(await page.getByTestId(bar).isVisible())) hidden.push(item);
-  if (!hidden.length) return;
+  await expect(page.getByTestId('topbar-more')).toBeInViewport({ ratio: 1 });
+  const items = [...ALWAYS_MORE, ...((await page.getByTestId('view-toggle').isVisible()) ? [] : ['more-view-corsie'])];
   await page.getByTestId('topbar-more').click();
   await expect(page.getByTestId('topbar-more-pop')).toBeVisible();
-  for (const item of hidden) await expect(page.getByTestId(item)).toBeVisible();
+  for (const item of items) await expect(page.getByTestId(item)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
 }

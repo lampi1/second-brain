@@ -1,5 +1,6 @@
 // doctor: is this machine ready to run second-brain? Checks the build, Electron, the Claude and Cursor CLIs (found,
-// version, Claude login), the brain folder, the MCP port and recent errors in the logs. No model calls, no Cursor calls
+// version, Claude login), whether their versions are covered by the CLI contract fixtures and whether a CLI format
+// changed today (ADR 0055), the brain folder, the MCP port and recent errors in the logs. No model calls, no Cursor calls
 // beyond `--version` (each harness spends only its own tokens; a Claude agent may run this). Readable by agents:
 //   node scripts/doctor.mjs           human lines: ✓/✗/! name · detail · → next step
 //   node scripts/doctor.mjs --json    [{ id, ok, level, detail, hint }]; exit 1 if any check failed
@@ -10,6 +11,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { testedVersions } from './cli-fixtures.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const userData = process.env.SB_USER_DATA ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain');
@@ -52,6 +54,27 @@ else {
   add('cursor-login', true, 'not checked here (only the app or the user check it: Cursor tokens are spent only by Cursor)', '', 'info');
 }
 
+// 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the embedded engine; Cursor: its newest
+// version folder, no process started) against the versions recorded in test/fixtures/cli; format drift seen today
+const tested = testedVersions();
+const contract = (id, cli, version) => {
+  if (!version) return add(id, true, `${cli}: version unknown`, '', 'info');
+  const ok = (tested[cli] ?? []).includes(version);
+  add(id, ok, ok ? `${cli} ${version}: covered by the contract fixtures` : `${cli} ${version}: not tested (fixtures: ${(tested[cli] ?? []).join(', ') || 'none'})`,
+    `use ${cli} chats in the dev instance (npm run dev), then node scripts/cli-fixtures.mjs and npx vitest run test/unit/chats/cli-contract.test.ts${cli === 'claude' ? '; or, only after the owner approves the real tokens: SB_LIVE=1 npx vitest run test/live/claude.live.test.ts' : ''}`, ok ? 'ok' : 'warn');
+};
+const embedded = path.join(root, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude');
+const engine = process.env.SB_CLAUDE_PATH ?? (fs.existsSync(embedded) ? embedded : claude);
+contract('claude-tested', 'claude', engine ? (run(engine, ['--version']).stdout ?? '').match(/\d+\.\d+\.\d+/)?.[0] : null);
+const cursorVersions = path.join(process.env.LOCALAPPDATA ?? '', 'cursor-agent', 'versions');
+// the same rule as src/main/chats/cli.ts newestCursorVersion: numeric date (month and day not zero-padded), complete folder
+const VERSION_DIR = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-(\d{2})-(\d{2})-(\d{2}))?-[a-f0-9]+$/;
+const versionKey = m => Number(`${m[1]}${m[2].padStart(2, '0')}${m[3].padStart(2, '0')}${m[4] ?? '00'}${m[5] ?? '00'}${m[6] ?? '00'}`);
+const cursorNewest = fs.existsSync(cursorVersions) ? fs.readdirSync(cursorVersions).map(n => ({ n, m: n.match(VERSION_DIR) }))
+  .filter(x => x.m && fs.existsSync(path.join(cursorVersions, x.n, 'node.exe')) && fs.existsSync(path.join(cursorVersions, x.n, 'index.js')))
+  .sort((a, b) => versionKey(b.m) - versionKey(a.m))[0]?.n ?? null : null;
+if (cursorNewest) contract('cursor-tested', 'cursor', cursorNewest);
+
 // 4. brain folder
 let cfg = {};
 try { cfg = JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')); } catch { /* no config yet */ }
@@ -84,6 +107,14 @@ else {
   const errs = fs.existsSync(today) ? fs.readFileSync(today, 'utf8').split('\n').filter(l => l.includes('"lvl":"error"')) : [];
   const last = errs.at(-1) ? JSON.parse(errs.at(-1)) : null;
   add('logs', errs.length === 0, errs.length ? `${errs.length} errors today, last: ${last.scope} · ${last.msg} · cause: ${last.cause}` : `no errors today (${logs})`, last?.hint ?? 'node scripts/logs.mjs --level error', errs.length ? 'warn' : 'ok');
+}
+
+// 7. CLI format drift today (src/main/chats/drift.ts: one warn per CLI, version and unknown shape)
+if (fs.existsSync(logs)) {
+  const today = path.join(logs, `app-${new Date().toISOString().slice(0, 10)}.jsonl`);
+  const drift = fs.existsSync(today) ? [...new Set(fs.readFileSync(today, 'utf8').split('\n').filter(l => l.includes('"scope":"drift"') && l.includes('"lvl":"warn"')).map(l => { try { return JSON.parse(l).cause; } catch { return null; } }).filter(Boolean))] : [];
+  add('cli-drift', drift.length === 0, drift.length ? `${drift.length} CLI format changes today: ${drift.slice(0, 3).join(' · ')}` : 'no CLI format change today',
+    'npm run logs -- --scope drift --since 24h; update chats/claude.ts or chats/acp.ts (or their known lists), then the contract test', drift.length ? 'warn' : 'ok');
 }
 
 if (process.argv.includes('--json')) console.log(JSON.stringify(checks, null, 1));

@@ -12,10 +12,10 @@
 // Claude Code's own settings (~/.claude/settings.json: permissions, hooks) stay out by design (AGENTS.md rule 6).
 // Rendered by App.tsx PageFrame for the 'impostazioni' place, inside the brain page frame (.bx classes).
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { BudgetLimits, BudgetMode, CompareExperiment, CompareState, CursorReasoning, Effort, EngineInfo, Harness, RegiaChatDefaults, SecretsStatus, ToastLevel } from '@shared/contract';
+import { ANTHROPIC_API, type ApiSpendInfo, type BudgetLimits, type BudgetMode, type CompareExperiment, type CompareState, type CursorReasoning, type Effort, type EngineInfo, type Harness, type RegiaChatDefaults, type SecretsStatus, type ToastLevel } from '@shared/contract';
 import { PageHead } from '../brain/components/States';
-import { AGENT, autoLine, costLine, toolName } from '../lib/compare';
-import { EFFORTS, effortLabel } from '../lib/format';
+import { AGENT, autoLine, costLine, sideName, sidesLine } from '../lib/compare';
+import { EFFORTS, effortLabel, formatCost } from '../lib/format';
 import { modelOptions, useModelsSeen } from '../lib/models';
 import { useEngines } from '../lib/engines';
 import { parseUsd, portOf } from '../lib/settings-page';
@@ -81,14 +81,15 @@ function Experiment({ e, busy, onSet }: { e: CompareExperiment; busy: string | n
   return (
     <div className="st-exp" data-testid={`st-exp-${e.name}`}>
       <Row title={autoLine(e)} testid={`st-exp-row-${e.name}`}
-        desc={<>Ogni volta che lavora un agente acceso qui sotto, <b>{toolName(e.contender)}</b> fa lo stesso compito; <b>{toolName(e.judge)}</b> giudica i due lavori alla cieca. Spento: nessun confronto parte, nessun costo.</>}
+        desc={<>Ogni volta che lavora un agente acceso qui sotto, <b>{sideName(e.b)}</b> fa lo stesso compito dentro l'app, in sola lettura; <b>{sideName(e.judge)}</b> giudica i due lavori alla cieca. Spento: nessun confronto parte, nessun costo.</>}
         control={<Switch on={e.on} busy={busy === e.name} onChange={on => onSet(on)} label={`${autoLine(e)}: ${e.on ? 'acceso' : 'spento'}`} testid={`st-exp-switch-${e.name}`} />}>
         <div className="st-meta" data-testid={`st-exp-cost-${e.name}`}>{cost ?? 'Nessun confronto ancora: il costo compare dal primo.'}{e.changedAt ? ` · ultimo cambio ${e.changedAt.slice(0, 16)}` : ''}</div>
+        <div className="st-meta" data-testid={`st-exp-sides-${e.name}`}>{sidesLine(e)}</div>
         <div className="st-meta">Esperimento: {e.title}</div>
       </Row>
       {e.agents.length > 0 && (
-        <div className="st-sub" role="group" aria-label={`Agenti di ${toolName(e.source.split(' ')[0] ?? '')} confrontati`}>
-          <div className="st-sub-head">Quali agenti di {toolName(e.source.split(' ')[0] ?? '')}{!e.on && <span> · valgono solo con l'interruttore sopra acceso</span>}</div>
+        <div className="st-sub" role="group" aria-label={`Agenti di ${sideName(e.a)} confrontati`}>
+          <div className="st-sub-head">Quali agenti di {sideName(e.a)}{!e.on && <span> · valgono solo con l'interruttore sopra acceso</span>}</div>
           {e.agents.map(a => (
             <Row key={a.name} dim={!e.on} title={<span className="mono">{a.name}</span>} desc={AGENT[a.name] ? `Le esecuzioni di ${AGENT[a.name]}.` : undefined} testid={`st-agent-${e.name}-${a.name}`}
               control={<Switch on={a.on} busy={busy === `${e.name}/${a.name}`} onChange={on => onSet(on, a.name)} label={`${a.name}: ${a.on ? 'confrontato' : 'non confrontato'}`} testid={`st-agent-switch-${e.name}-${a.name}`} />} />
@@ -126,8 +127,8 @@ function CompareGroup() {
   return (
     <Group title="Confronto tra modelli" testid="st-group-compare"
       help={<HelpTip label="Confronto tra modelli" title="Alla cieca" testid="st-help-compare"
-        example="un reviewer di Cursor trova 3 problemi, Opus ne trova 5: il giudice dice quanti sono veri per ciascuno.">
-        Un giudice legge i due risultati senza sapere quale modello li ha scritti, così il voto non dipende dal nome. Ogni confronto spende i crediti di entrambi.
+        example="il modello A trova 3 problemi, il modello B ne trova 5: il giudice dice quanti sono veri per ciascuno.">
+        Un giudice legge i due risultati senza sapere quale modello li ha scritti, così il voto non dipende dal nome. Il lato B gira dentro l'app, nascosto e in sola lettura, su un motore che hai acceso tu. Ogni confronto spende i crediti di entrambi.
       </HelpTip>}
       desc="Lo stesso compito fatto da due modelli e giudicato alla cieca. Un lavoro viene confrontato solo se sono accesi sia l'interruttore principale sia il suo agente.">
       {!st ? <div className="st-row"><div className="st-desc">Leggo gli esperimenti…</div></div>
@@ -242,6 +243,24 @@ function KeyRow({ e, st, onStatus }: { e: EngineInfo; st: SecretsStatus; onStatu
   );
 }
 
+/** An API engine's spend this month, as the app computed it at list prices (engines/spend.ts: the API shows spend only to
+ *  an Admin key); for the Anthropic API also where the API credits of the user's Max plan come from (ADR 0052). */
+function ApiSpendRow({ e, spend, live }: { e: EngineInfo; spend: ApiSpendInfo; live: boolean }) {
+  const l = spend.engines[e.id];
+  const [y, m] = spend.month.split('-').map(Number);
+  const month = new Date(y!, (m ?? 1) - 1, 1).toLocaleString('it-IT', { month: 'long' });
+  const figure = l ? `${formatCost(l.usd)} in ${l.calls} ${l.calls === 1 ? 'richiesta' : 'richieste'}${l.unpriced ? ` (${l.unpriced} senza prezzo nel cervello, non ${l.unpriced === 1 ? 'contata' : 'contate'})` : ''}` : 'niente finora';
+  return (
+    <Row title={`Spesa di ${month} su ${e.label}`} testid={`st-spend-${e.id}`} dim={!live}
+      desc={`${figure}. Calcolata dall'app ai prezzi di listino: l'API mostra la spesa solo a una chiave Admin.`}
+      control={<span className="st-meta" data-testid={`st-spend-${e.id}-usd`}>{formatCost(l?.usd ?? 0)}</span>}>
+      {e.id === ANTHROPIC_API && <div className="st-meta" data-testid={`st-spend-${e.id}-credits`}>
+        Crediti del piano Max: 100 $ al mese con Max 5x, 200 $ con Max 20x. Si riscattano nella Console Anthropic; non passano al mese dopo e non pagano Claude Code. {live ? 'Li usano il giudice dei lavori e le righe Scrittura «sui crediti API».' : 'Li useranno il giudice dei lavori e le righe Scrittura «sui crediti API» quando Anthropic API è acceso e ha la chiave.'}
+      </div>}
+    </Row>
+  );
+}
+
 /** Each engine on or off (with how it starts), its API key when it takes one, whether the Regie may use it, and the one
  *  switch for chats across engines (ADR 0046). Protected settings: an agent can only propose them. An engine that is
  *  not built in counts as on only while it starts as it did when the user turned it on (main's trust): if its
@@ -252,10 +271,15 @@ function EnginesGroup() {
   const regie = useApp(s => s.settings?.engines);
   const cross = useApp(s => s.settings?.messaging?.crossHarness);
   const [keys, setKeys] = useState<SecretsStatus | null>(null);
+  const [spend, setSpend] = useState<ApiSpendInfo | null>(null);
   useEffect(() => {
     let alive = true;
     window.sb.invoke('secrets:status', undefined).then(s => { if (alive) setKeys(s); }, err => toast(errText(err), 'err'));
-    return () => { alive = false; };
+    const read = () => window.sb.invoke('engines:spend', undefined).then(s => { if (alive) setSpend(s); }, err => toast(errText(err), 'err'));
+    void read();
+    // the judge or a chat may spend while the page is open: read again when the window comes back
+    window.addEventListener('focus', read);
+    return () => { alive = false; window.removeEventListener('focus', read); };
   }, [list]);
   if (!on || !regie || cross === undefined) return null;
   const turn = (e: EngineInfo, v: boolean) => {
@@ -274,6 +298,7 @@ function EnginesGroup() {
             {on[e.id] === true && !e.trusted && <div className="st-meta" data-testid={`st-engine-on-${e.id}-changed`}>{`Non parte: il modo di avviarlo è cambiato da quando l'hai acceso. Riaccendilo se l'avvio qui sopra va bene.`}</div>}
           </Row>,
           e.key !== 'none' && keys && <KeyRow key={`${e.id}-key`} e={e} st={keys} onStatus={setKeys} />,
+          e.kind === 'api' && spend && <ApiSpendRow key={`${e.id}-spend`} e={e} spend={spend} live={live && !!keys?.keys[e.id]} />,
         ];
       })}
       {list.map(e => (
@@ -365,8 +390,8 @@ function NotifyGroup() {
   if (!level) return null;
   return (
     <Group title="Notifiche" testid="st-group-notify" desc={'Tutto resta sempre nel centro notifiche. "Non disturbare" è nel centro notifiche (campanella).'}>
-      <Row title="Notifiche di Windows" desc="Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna." testid="st-toasts"
-        control={<Choice<ToastLevel> value={level} onChange={v => void setSetting({ osToasts: v })} label="Notifiche di Windows" testid="st-toasts-choice"
+      <Row title="Notifiche di sistema" desc="Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna." testid="st-toasts"
+        control={<Choice<ToastLevel> value={level} onChange={v => void setSetting({ osToasts: v })} label="Notifiche di sistema" testid="st-toasts-choice"
           options={[{ value: 'urgent', label: 'Solo urgenti' }, { value: 'normal', label: 'Anche normali' }, { value: 'off', label: 'Nessuna' }]} />} />
     </Group>
   );
@@ -462,9 +487,9 @@ export function SettingsPage() {
       <BudgetGroup />
       <NotifyGroup />
       <Group title="Aspetto" testid="st-group-look">
-        <Row title="Tema" desc="Scuro, chiaro o come Windows." testid="st-theme"
+        <Row title="Tema" desc="Scuro, chiaro o come il sistema." testid="st-theme"
           control={<Choice<Theme> value={theme} onChange={t => setPrefs({ theme: t })} label="Tema" testid="st-theme-choice"
-            options={[{ value: 'dark', label: 'Scuro' }, { value: 'light', label: 'Chiaro' }, { value: 'system', label: 'Come Windows' }]} />} />
+            options={[{ value: 'dark', label: 'Scuro' }, { value: 'light', label: 'Chiaro' }, { value: 'system', label: 'Come il sistema' }]} />} />
         <Row title="Densità" desc="Compatta mostra più righe nello stesso spazio." testid="st-density"
           control={<Choice<Density> value={density} onChange={d => setPrefs({ density: d })} label="Densità" testid="st-density-choice"
             options={[{ value: 'comfortable', label: 'Comoda' }, { value: 'compact', label: 'Compatta' }]} />} />

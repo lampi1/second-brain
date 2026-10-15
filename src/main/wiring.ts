@@ -7,23 +7,26 @@ import os from 'node:os';
 import type { CliStatus, Harness } from '../shared/contract';
 import { NEW_CHAT_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
-import { enginePathsFromEnv } from './engines/registry';
+import { anthropicApi, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { EngineSweeper } from './chats/sweep';
-import { ChatManager, type TurnEndInfo } from './chats/manager';
+import { ChatManager } from './chats/manager';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
 import { createBrain } from './brain';
 import { doneEvent } from './brain/live';
 import { predictionLine } from './brain/routing';
-import { setPriceTable } from './chats/live-cost';
+import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { appControlTools, regiaEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
+import { brainClassifier } from './chats/regia-delivery';
+import { readRegiaMail } from './brain/brain-settings';
 import { EndpointTokens } from './mcp/tokens';
 import { createDemoServices } from './demo-wiring';
 import { forcedSampler, OsLoadSampler } from './chats/admission';
@@ -44,7 +47,10 @@ import { log, errText } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
+import { HeadlessRunner } from './compare/headless';
+import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
+import { setRecorder } from './chats/drift';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
@@ -213,6 +219,8 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
 
 export async function createServices(ctx: Ctx): Promise<Wired> {
   if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
+  // the dev instance records the shapes real CLIs send (sanitized, a few per kind): fixtures for the contract tests (ADR 0055)
+  setRecorder(!releaseId() && !process.env.SB_TEST ? path.join(ctx.userData, 'cli-records') : null);
   let cliCache: Record<Harness, CliStatus> | null = null;
   // not in e2e tests: a pending CLI check would delay the app exit by seconds
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; ctx.emitter.emit('cli:ready', all); });
@@ -224,9 +232,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   let isOwn: (id: string) => boolean = () => false;
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
   const later = createLater(ctx);
-  const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind) });
+  // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits;
+  // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
+  let scriptEnv: () => Record<string, string> = () => ({});
+  let apiRoute: () => Harness | null = () => null;
+  const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
+    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute() });
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
+  const textTool = mountTextTool(mcp, engines.text);
+  scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
+  apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
   let prices: { at: number; reg: ReturnType<BrainService['routingInfo']>['registry'] } = { at: 0, reg: null };
   setPriceTable(() => { if (Date.now() - prices.at > 30_000) prices = { at: Date.now(), reg: brain.routingInfo().registry }; return prices.reg; });
@@ -259,24 +275,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     // the Regia also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
     appMcpUrl: (regiaId, space) => browser.mcpUrlFor(null).replace(/\/mcp$/, space === 'app' ? '/mcp/improve' : `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
-    // brain hooks: plan limits, the job ledger (estimate vs actual), the live feed and notifications
+    // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => brain.recordModels(h, list),
     acpModelConfig: () => { const r = brain.settings().regiaChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
-    estimateFor: req => brain.estimate(req),
     onTurnEnd: info => {
-      const job = jobs.get(info.chatId) ?? { usd: 0, turns: 0, prompt: info.firstPrompt, kind: info.kind };
+      // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
+      const api = engineOf(info.harness);
+      if (api?.kind === 'api') engines.addSpend(info.harness, info.model && listPrice(priceEnginesOf(api), info.model) ? info.costUsd : null);
+      const job = jobs.get(info.chatId) ?? { usd: 0, turns: 0, prompt: info.firstPrompt };
       job.usd += info.costUsd; job.turns += info.turns;
       jobs.set(info.chatId, job);
-      const est = manager.list().find(c => c.id === info.chatId)?.estimate ?? null;
-      // the job's first turn: its estimate, made before it ran, goes to the brain's outcomes (shared improvement loop)
-      if (info.firstPrompt !== undefined && info.sessionId && info.jobAt) {
-        brain.recordPrediction({ id: `${info.harness}:${info.sessionId}`, at: info.jobAt, harness: info.harness, model: info.model, effort: info.effort,
-          title: info.jobTitle ?? '', promptChars: info.firstPrompt.length, estimate: est });
-      }
       brain.recordJob({
         ...(info.sessionId ? { id: `${info.harness}:${info.sessionId}` } : {}), harness: info.harness, model: info.model, effort: info.effort,
-        ...(job.prompt ? { prompt: job.prompt } : {}), ...(job.kind ? { kind: job.kind } : {}), estimate: est,
+        ...(job.prompt ? { prompt: job.prompt } : {}),
         // minutes = real work time (running, not waiting for the user's answers), the same the tile shows
         actual: { usd: job.usd, minutes: Math.round(manager.workMs(info.chatId) / 6000) / 10, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: job.turns },
       });
@@ -319,7 +331,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       return tool && fs.existsSync(tool) ? tool : null;
     },
   });
-  const jobs = new Map<string, { usd: number; turns: number; prompt: string | undefined; kind: TurnEndInfo['kind'] }>();
+  const jobs = new Map<string, { usd: number; turns: number; prompt: string | undefined }>();
   // a routed chat's totals already in the ledger when this run first saw it (after a restart, or its predecessor's)
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
@@ -346,8 +358,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // mail between chats in real time: inbox.mjs mail goes to the app's live chats at once, and every chat gets
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
-  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData) });
-  addChatTools(mailTools({
+  // the words that time the mail to a Regia come from the brain (chats/regia-delivery.ts)
+  const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readRegiaMail(root) : undefined; });
+  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify });
+  addChatTools(mailTools({ classify,
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
@@ -391,6 +405,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     trash: p => (process.env.SB_TEST ? fs.promises.rm(p, { recursive: true, force: true }) : shell.trashItem(p)),
   });
 
+  // the comparison's side b (ADR 0046 §4): the runs the brain queues (harness/compare/app-queue.mjs), each a hidden
+  // read-only session on an engine the user turned on, with the app's own logins and keys (compare/headless.ts)
+  const headless = new HeadlessRunner({
+    userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.routingInfo().registry,
+    // the other side's answers and the verdicts: never read by a run, whatever the brain lists
+    denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
+  });
+  const compareRuns = new CompareQueue({
+    brainRoot: () => brain.info().brainRoot, node, runner: headless,
+    anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
+  });
+  // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
+  if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
+
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
   if (releaseId() && !process.env.SB_TEST && process.env.SB_NO_SYNC !== '1') {
@@ -402,7 +430,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines,
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
-    shutdown: async () => { engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
-    killNow: () => { manager.killAll(); runner.shutdown(); },
+    shutdown: async () => { engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

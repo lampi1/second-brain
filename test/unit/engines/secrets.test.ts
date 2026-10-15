@@ -20,20 +20,20 @@ describe('SecretStore', () => {
   it('stores a key encrypted, shows only its mask, gives it back to main for the same definition', () => {
     const d = dir();
     const s = new SecretStore(d, fake());
-    s.set('gemini', `  ${KEY}\n`, 'fp1');
+    s.set('anthropic', `  ${KEY}\n`, 'fp1');
     const disk = fs.readFileSync(path.join(d, 'secrets.json'), 'utf8');
     expect(disk).not.toContain(KEY);
     expect(disk).not.toContain('0123456789');
-    expect(s.status(() => 'fp1')).toEqual({ available: true, keys: { gemini: { mask: 'sk-…WXYZ', stale: false } } });
-    expect(new SecretStore(d, fake()).get('gemini', 'fp1')).toBe(KEY);
+    expect(s.status(() => 'fp1')).toEqual({ available: true, keys: { anthropic: { mask: 'sk-…WXYZ', stale: false } } });
+    expect(new SecretStore(d, fake()).get('anthropic', 'fp1')).toBe(KEY);
   });
 
   it('does not use a key whose engine changed since it was saved, and says so', () => {
     const s = new SecretStore(dir(), fake());
-    s.set('gemini', KEY, 'fp1');
-    expect(s.get('gemini', 'fp2')).toBeNull();
-    expect(s.status(() => 'fp2').keys.gemini?.stale).toBe(true);
-    expect(s.status(() => null).keys.gemini?.stale).toBe(true);
+    s.set('anthropic', KEY, 'fp1');
+    expect(s.get('anthropic', 'fp2')).toBeNull();
+    expect(s.status(() => 'fp2').keys.anthropic?.stale).toBe(true);
+    expect(s.status(() => null).keys.anthropic?.stale).toBe(true);
   });
 
   it('redacts a key in the logs once saved or read', () => {
@@ -43,27 +43,39 @@ describe('SecretStore', () => {
 
   it('refuses empty, spaced, too long keys and bad ids; deletes', () => {
     const s = new SecretStore(dir(), fake());
-    expect(() => s.set('gemini', '', 'fp')).toThrow(/vuota/);
-    expect(() => s.set('gemini', 42, 'fp')).toThrow(/vuota/);
-    expect(() => s.set('gemini', 'sk-a b-cdefghijklmnop', 'fp')).toThrow(/valida/);
-    expect(() => s.set('gemini', 'x'.repeat(5000), 'fp')).toThrow(/valida/);
+    expect(() => s.set('anthropic', '', 'fp')).toThrow(/vuota/);
+    expect(() => s.set('anthropic', 42, 'fp')).toThrow(/vuota/);
+    expect(() => s.set('anthropic', 'sk-a b-cdefghijklmnop', 'fp')).toThrow(/valida/);
+    expect(() => s.set('anthropic', 'x'.repeat(5000), 'fp')).toThrow(/valida/);
     expect(() => s.set('../x', KEY, 'fp')).toThrow(/motore/);
-    s.set('gemini', KEY, 'fp');
-    s.delete('gemini');
-    expect(s.get('gemini', 'fp')).toBeNull();
+    s.set('anthropic', KEY, 'fp');
+    s.delete('anthropic');
+    expect(s.get('anthropic', 'fp')).toBeNull();
     expect(s.status(() => 'fp').keys).toEqual({});
   });
 
   it('without OS encryption saves nothing and says why', () => {
     const s = new SecretStore(dir(), fake('niente cifratura'));
-    expect(() => s.set('gemini', KEY, 'fp')).toThrow(/niente cifratura/);
+    expect(() => s.set('anthropic', KEY, 'fp')).toThrow(/niente cifratura/);
     expect(s.status(() => 'fp')).toMatchObject({ available: false, why: 'niente cifratura' });
   });
 
   it('a key it cannot decrypt (another user or PC) is null, not an error', () => {
     const d = dir();
-    new SecretStore(d, fake()).set('gemini', KEY, 'fp');
-    expect(new SecretStore(d, { ...fake(), decrypt: () => { throw new Error('bad'); } }).get('gemini', 'fp')).toBeNull();
+    new SecretStore(d, fake()).set('anthropic', KEY, 'fp');
+    expect(new SecretStore(d, { ...fake(), decrypt: () => { throw new Error('bad'); } }).get('anthropic', 'fp')).toBeNull();
+  });
+
+  it('erases at load the key of an engine the app removed (Gemini, ADR 0046), keeps the others', () => {
+    const d = dir();
+    new SecretStore(d, fake()).set('anthropic', KEY, 'fp');
+    const f = path.join(d, 'secrets.json');
+    const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+    fs.writeFileSync(f, JSON.stringify({ ...j, keys: { ...j.keys, gemini: { ...j.keys.anthropic } } }));
+    const s = new SecretStore(d, fake());
+    expect(Object.keys(s.status(() => 'fp').keys)).toEqual(['anthropic']);
+    expect(Object.keys(JSON.parse(fs.readFileSync(f, 'utf8')).keys)).toEqual(['anthropic']);
+    expect(s.get('anthropic', 'fp')).toBe(KEY);
   });
 });
 

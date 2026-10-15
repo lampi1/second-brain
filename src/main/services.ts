@@ -1,12 +1,11 @@
 // Service interfaces of the main process. index.ts wires them to the IPC handlers; each module implements one.
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
-  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, EstimateResult, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
+  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { Emitter } from './ipc';
 import type { RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
-import type { PredictionInput } from './brain/brain-estimates';
 
 export interface ChatService {
   list(): ChatSummary[];
@@ -97,12 +96,8 @@ export interface BrainService {
   confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null };
   /** Main-process listeners (e.g. the browser module restarts its MCP server on 'mcpPort'). */
   onSettingChange(fn: (c: SettingChange, now: Settings) => void): () => void;
-  /** title: the chat's title ("Area · cosa"), what the brain's estimates table is keyed on */
-  estimate(req: { harness: Harness; model: string | null; effort: Effort | null; prompt: string; title?: string }): EstimateResult;
+  /** The job's real cost and time, for the brain's ledger (jobs.jsonl: routing reads it, ADR 0053). */
   recordJob(job: JobRecordInput): { id: string };
-  /** A job's estimate as the brain's self-improvement loop records it, made before the job ran (brain-estimates.ts
-   *  predictionLine); false when there is nothing to record (no brain table, not the brain's estimate). */
-  recordPrediction(p: PredictionInput): boolean;
   /** Model routing (brain/routing.ts, ADR 0032): the table and registry for the settings page. */
   routingInfo(): RoutingInfo;
   /** A new version of the table, refused (throws, Italian) on a broken hard rule: from the user's settings page, or from

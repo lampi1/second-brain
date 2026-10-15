@@ -23,8 +23,9 @@ test('Impostazioni: groups, theme live, mail switch, model comparison switches w
   // the main switch, first on the page, in the user's words
   await expect(s.locator('.st-group').first()).toHaveAttribute('data-testid', 'st-group-compare');
   await expect(exp).toContainText('Opus rifà in automatico il lavoro dei reviewer di Cursor');
-  await expect(exp).toContainText('Cursor Agent (gpt-5)');
-  await expect(s.getByTestId('st-exp-cost-cursor-vs-claude')).toContainText('Finora 4 confronti · Claude Code (opus) 6,12 $ · Cursor 1,84 $ (1 confronto senza costo)');
+  // each side and the judge by engine, model and effort (ADR 0046 §4), side a's compared agents in brackets
+  await expect(s.getByTestId('st-exp-sides-cursor-vs-claude')).toHaveText('A: Cursor (reviewer) · B: Claude opus medium · giudice: Claude sonnet');
+  await expect(s.getByTestId('st-exp-cost-cursor-vs-claude')).toContainText('Finora 4 confronti · Claude opus medium 6,12 $ · Cursor 1,84 $ (1 confronto senza costo)');
   const main = s.getByTestId('st-exp-switch-cursor-vs-claude');
   await expect(main).toHaveAttribute('aria-checked', 'true');
   const inv = s.getByTestId('st-agent-switch-cursor-vs-claude-code-investigator');
@@ -35,6 +36,7 @@ test('Impostazioni: groups, theme live, mail switch, model comparison switches w
     const r = await window.sb.invoke('compare:list', undefined);
     return r.ok ? r.experiments[0]!.agents.find(a => a.name === 'code-investigator')!.on : null;
   })).toBe(true);
+  await expect(s.getByTestId('st-exp-sides-cursor-vs-claude')).toContainText('A: Cursor (reviewer, code-investigator)');
   await shot(page, 'settings-dark');
 
   await main.click();
@@ -216,23 +218,25 @@ test('Motori: a new engine turns on by the user\'s click, its API key is saved e
   await eng.scrollIntoViewIfNeeded();
   const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
 
-  // Gemini ships off; how it starts is shown before the user turns it on, and only their click turns it on
-  const on = eng.getByTestId('st-engine-on-gemini-switch');
+  // Kimi ships off; how it starts is shown before the user turns it on, and only their click turns it on
+  const on = eng.getByTestId('st-engine-on-kimi-switch');
   await expect(on).toHaveAttribute('aria-checked', 'false');
-  await expect(eng.getByTestId('st-engine-on-gemini-runs')).toHaveText('Avvio: gemini --acp');
+  await expect(eng.getByTestId('st-engine-on-kimi-runs')).toHaveText('Avvio: kimi acp · accesso: kimi login');
   await on.click();
   await expect(on).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(async () => (await get()).engineOn.gemini).toBe(true);
-  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).gemini).toMatch(/^[0-9a-f]{16}$/);
+  await expect.poll(async () => (await get()).engineOn.kimi).toBe(true);
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).kimi).toMatch(/^[0-9a-f]{16}$/);
+  // Gemini CLI was removed from the app (ADR 0046, 15/10): no row
+  await expect(eng.getByTestId('st-engine-on-gemini-switch')).toHaveCount(0);
 
   // the key: typed once, sent, the field emptied, then only its mask
-  const KEY = 'AIzaE2eTestKeyNotReal0123456789wxyz';
-  const row = eng.getByTestId('st-key-gemini');
-  await expect(row.getByTestId('st-key-gemini-input')).toHaveAttribute('type', 'password');
-  await row.getByTestId('st-key-gemini-input').fill(KEY);
-  await row.getByTestId('st-key-gemini-save').click();
-  await expect(row.getByTestId('st-key-gemini-mask')).toHaveText('Salvata: …wxyz');
-  await expect(row.getByTestId('st-key-gemini-input')).toHaveValue('');
+  const KEY = 'sk-e2eTestKeyNotReal0123456789wxyz';
+  const row = eng.getByTestId('st-key-anthropic');
+  await expect(row.getByTestId('st-key-anthropic-input')).toHaveAttribute('type', 'password');
+  await row.getByTestId('st-key-anthropic-input').fill(KEY);
+  await row.getByTestId('st-key-anthropic-save').click();
+  await expect(row.getByTestId('st-key-anthropic-mask')).toHaveText('Salvata: sk-…wxyz');
+  await expect(row.getByTestId('st-key-anthropic-input')).toHaveValue('');
   const status = await page.evaluate(async () => window.sb.invoke('secrets:status', undefined));
   expect(JSON.stringify(status)).not.toContain('0123456789');
   expect(fs.readFileSync(path.join(userData, 'secrets.json'), 'utf8')).not.toContain(KEY);
@@ -242,8 +246,8 @@ test('Motori: a new engine turns on by the user\'s click, its API key is saved e
   await row.scrollIntoViewIfNeeded();
   await shot(page, 'settings-engines-keys');
 
-  await row.getByTestId('st-key-gemini-delete').click();
-  await expect(row.getByTestId('st-key-gemini-mask')).toHaveCount(0);
+  await row.getByTestId('st-key-anthropic-delete').click();
+  await expect(row.getByTestId('st-key-anthropic-mask')).toHaveCount(0);
   await app.close();
   const logs = path.join(userData, 'logs');
   for (const f of fs.readdirSync(logs)) expect(fs.readFileSync(path.join(logs, f), 'utf8')).not.toContain(KEY);

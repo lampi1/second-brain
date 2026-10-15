@@ -25,8 +25,9 @@ import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
 import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, toolSummary } from './claude-map';
-import { cut, lastLine, nextId, stripAnsi, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
+import { drift, record } from './drift';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -71,6 +72,25 @@ export function stableGuards(localAppData: string): Record<string, unknown> {
       ],
     },
   };
+}
+
+/** The only tools a read-only run has (SessionOptions.readOnly, the comparison's hidden side b): reading and searching
+ *  files. Its owner allows a permission only for these (compare/headless.ts). */
+export const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
+
+/** A read-only run's session-only settings: deny rules for every tool that writes, runs or reaches the network (deny
+ *  wins over the user's own allow rules, at any level) and no hooks (the user's hooks would see a chat the user never
+ *  opened). */
+export const READ_ONLY_SETTINGS: Record<string, unknown> = {
+  permissions: { deny: ['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch'] },
+  disableAllHooks: true,
+};
+
+/** The Claude Code rule that denies reading a folder and everything in it, in its absolute-path form (`//` + the path
+ *  with forward slashes; a Windows drive C: becomes /c): Read(//c/a/b/**). A Read rule also covers Grep and Glob. */
+export function claudeReadRule(dir: string): string {
+  const p = path.resolve(dir).replace(/\\/g, '/').replace(/\/+$/, '').replace(/^([A-Za-z]):/, (_m, d: string) => `/${d.toLowerCase()}`);
+  return `Read(/${p}/**)`;
 }
 
 /** Merges inline settings objects; permission lists (allow / deny / ask) are concatenated, not replaced. */
@@ -125,6 +145,33 @@ const RESULT_ERRORS: Record<string, string> = {
 
 /** task statuses that end it (the CLI's terminal ones); any other (pending, running, a workflow's paused) keeps it */
 const END_TASK = new Set(['completed', 'failed', 'killed', 'stopped']);
+const LIVE_TASK = new Set(['pending', 'running', 'in_progress']);
+// What the CLI sends that the app knowingly ignores (drift.ts: anything else outside the handled cases is reported).
+// Checked against CLI 2.1.283; a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
+const QUIET_TYPES = new Set(['keep_alive', 'auth_status', 'tool_progress', 'tool_use_summary', 'prompt_suggestion']);
+const QUIET_STREAM = new Set(['message_delta', 'message_stop', 'ping']);
+const QUIET_DELTAS = new Set(['input_json_delta', 'signature_delta', 'citations_delta']);
+const QUIET_BLOCKS = new Set(['tool_use', 'server_tool_use', 'redacted_thinking', 'mcp_tool_use', 'mcp_tool_result', 'web_search_tool_result', 'web_fetch_tool_result', 'code_execution_tool_result']);
+const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress']);
+const SESSION_STATES = new Set(['running', 'idle', 'requires_action']);
+
+/** The shape a message is recorded under (drift.ts record): type, then the sub-kind that picks the parser branch. */
+export function claudeKey(m: Obj): string {
+  const t = s(m.type);
+  if (t === 'system' || t === 'result') return `${t}/${s(m.subtype)}`;
+  if (t === 'control_request') return `${t}/${s(o(m.request).subtype)}`;
+  if (t === 'control_response') return `${t}/${s(o(m.response).subtype)}`;
+  if (t === 'stream_event') {
+    const e = o(m.event);
+    const sub = e.type === 'content_block_delta' ? s(o(e.delta).type) : e.type === 'content_block_start' ? s(o(e.content_block).type) : '';
+    return `${t}/${s(e.type)}${sub ? `/${sub}` : ''}`;
+  }
+  if (t === 'assistant' || t === 'user') {
+    const c = o(m.message).content;
+    return `${t}/${Array.isArray(c) ? s(o(c[0]).type) : typeof c}`;
+  }
+  return t;
+}
 
 export class ClaudeSession implements HarnessSession {
   readonly harness = 'claude' as const;
@@ -161,6 +208,8 @@ export class ClaudeSession implements HarnessSession {
   private readonly live = new LiveCost(); // the running turn's estimate from token usage, until its result
   private readonly counted = new Set<string>(); // response ids already reported as calls (the CLI repeats one per block)
   private badLines = 0;
+  private cliVersion: string | null = null; // what the CLI says it is (initialize, system/init): drift reports name it
+  private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
   private ended = new Set<string>();  // tasks seen ending
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
@@ -198,8 +247,13 @@ export class ClaudeSession implements HarnessSession {
     const op = this.opts;
     const a = ['-p', '--output-format', 'stream-json', '--verbose', '--input-format', 'stream-json', '--include-partial-messages',
       '--permission-prompt-tool', 'stdio'];
-    // no choice = the user's settings.json decides (defaultMode, e.g. auto); the CLI reports the mode at init (ADR 0002)
-    if (op.permissionMode) a.push('--permission-mode', op.permissionMode);
+    // no choice = the user's settings.json decides (defaultMode, e.g. auto); the CLI reports the mode at init (ADR 0002);
+    // a read-only run is always in plan mode
+    const mode = op.readOnly ? 'plan' : op.permissionMode;
+    if (mode) a.push('--permission-mode', mode);
+    // a read-only run: only the read tools exist (--tools is variadic: a flag follows it), no MCP server, no transcript
+    // (it never shows up among the external chats)
+    if (op.readOnly) a.push('--tools', READ_ONLY_TOOLS.join(','), '--strict-mcp-config', '--no-session-persistence');
     // `--flag=<id>`: an id can never be read as another flag (ids are UUIDs, checked by the manager)
     if (op.resume && op.sessionId) { a.push(`--resume=${op.sessionId}`); if (op.fork) a.push('--fork-session'); }
     else if (op.sessionId) a.push(`--session-id=${op.sessionId}`);
@@ -208,9 +262,9 @@ export class ClaudeSession implements HarnessSession {
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), stable ? stableGuards(op.localAppData ?? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, stable ? stableGuards(op.localAppData ?? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
-    if (op.mcpConfig) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
+    if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];
   }
 
@@ -220,6 +274,7 @@ export class ClaudeSession implements HarnessSession {
     const cli = this.opts.claudePath ? findCli(this.opts.claudePath) : resolveClaude()?.path ?? null;
     if (!cli || !fs.existsSync(cli)) return this.fail(`Motore Claude non trovato${cli ? `: ${cli}` : ''}. Reinstalla l’app (il motore è incluso) o imposta SB_CLAUDE_PATH.`, `claude engine not found (${cli ?? 'embedded/PATH'})`, 'run npm ci (embedded engine in node_modules/@anthropic-ai/claude-agent-sdk-win32-x64) or set SB_ENGINE_CLAUDE / SB_CLAUDE_PATH');
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
+    this.recording = !/\.m?js$/i.test(cli);
     const env = { ...process.env, ...this.opts.env };
     env.MCP_TOOL_TIMEOUT = env.MCP_TOOL_TIMEOUT ?? '600000'; // browser tools may wait on a page
     env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1';         // session_state_changed: the authoritative running/idle
@@ -264,7 +319,7 @@ export class ClaudeSession implements HarnessSession {
       this.readyDone();
       log.info('chats', 'timing: engine ready', { chat, data: { readyMs: this.readyAt - startedAt, spawnMs: spawnMs - startedAt } });
       const v = s(r.claude_code_version);
-      if (v) this.sink.changed({ version: v });
+      if (v) { this.cliVersion = v; this.sink.changed({ version: v }); }
       if (Array.isArray(r.commands)) { this.cmdList = r.commands; this.reportCommands(); }
       // prompts inherited by a resume ride on the control_response envelope, next to `response` (sdk.d.ts ControlResponse)
       for (const req of [...arr(env.pending_permission_requests), ...arr(r.pending_permission_requests)]) this.onMessage(o(req));
@@ -465,6 +520,7 @@ export class ClaudeSession implements HarnessSession {
       return;
     }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
+    if (this.recording) record('claude', this.cliVersion, claudeKey(m as Obj), m);
     try { this.onMessage(m as Obj); } catch (e) {
       log.error('chats', 'CLI message not understood', { chat: this.opts.chatId, cause: errText(e), hint: 'protocol drift? compare with the Agent SDK sdk.d.ts and update claude.ts', data: cut(raw, 500) });
     }
@@ -557,14 +613,19 @@ export class ClaudeSession implements HarnessSession {
       case 'result': return this.onResult(m);
       case 'system': return this.onSystem(m);
       case 'rate_limit_event': this.sink.rateLimit?.(m); return;
-      default: return; // keep_alive, auth_status, rate limits, prompt suggestions…: nothing to show
+      default: if (!QUIET_TYPES.has(s(m.type))) this.drift('message type', s(m.type), m); return;
     }
+  }
+
+  private drift(kind: string, what: string, sample: unknown): void {
+    drift('claude', this.cliVersion, kind, what, sample, this.opts.chatId);
   }
 
   private onControlRequest(m: Obj): void {
     const id = s(m.request_id);
     const r = o(m.request);
     if (r.subtype !== 'can_use_tool') {
+      this.drift('control request', s(r.subtype), m);
       log.warn('chats', 'unsupported control request from CLI', { chat: this.opts.chatId, data: { subtype: r.subtype } });
       try { this.write({ type: 'control_response', response: { subtype: 'error', request_id: id, error: `unsupported by second-brain: ${s(r.subtype)}` } }); } catch { /* gone */ }
       return;
@@ -610,7 +671,7 @@ export class ClaudeSession implements HarnessSession {
         return;
       case 'content_block_start': {
         const b = o(e.content_block);
-        if (b.type !== 'text' && b.type !== 'thinking') return;
+        if (b.type !== 'text' && b.type !== 'thinking') { if (!QUIET_BLOCKS.has(s(b.type))) this.drift('content block', s(b.type), e); return; }
         const msg = this.curMessage ?? 'm';
         const key = `${msg}:${num(e.index) ?? 0}`;
         const item = b.type === 'text'
@@ -632,13 +693,13 @@ export class ClaudeSession implements HarnessSession {
           if (this.turnT && this.turnT.text === undefined) this.turnT.text = Date.now();
         }
         else if (d.type === 'thinking_delta') st.item = { ...st.item, text: st.item.text + s(d.thinking) };
-        else return;
+        else { if (!QUIET_DELTAS.has(s(d.type))) this.drift('stream delta', s(d.type), e); return; }
         this.dirty.add(st);
         if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushStreams(false); }, 16); this.flushTimer.unref(); }
         return;
       }
       case 'content_block_stop': this.flushStreams(false); return;
-      default: return;
+      default: if (!QUIET_STREAM.has(s(e.type))) this.drift('stream event', s(e.type), e); return;
     }
   }
 
@@ -743,6 +804,9 @@ export class ClaudeSession implements HarnessSession {
     // base is a new count (e.g. /clear) — except on an error result (startup failure, expired login report 0), which
     // is ignored so the base, and the persisted total, never drop to 0 and inflate the next resumed turn.
     const reported = num(m.total_cost_usd);
+    // a turn that ran says what it cost (an error result, e.g. a startup failure, may leave them out)
+    if (!failed && reported === undefined) this.drift('result field', 'total_cost_usd', m);
+    if (!failed && m.usage === undefined) this.drift('result field', 'usage', m);
     let total = this.costBase, turn = 0;
     if (reported !== undefined && reported >= this.costBase) { total = reported; turn = reported - this.costBase; }
     else if (reported !== undefined && !isError) { total = reported; turn = reported; }
@@ -758,7 +822,9 @@ export class ClaudeSession implements HarnessSession {
     // a failure with no words from the CLI still says why: its subtype (max turns, budget…)
     else if (isError) this.sys(`Turno finito con errore: ${RESULT_ERRORS[s(m.subtype)] ?? (s(m.subtype) || 'il motore non ha detto il motivo')}.`, 'error');
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: Math.round(turn * 1e6) / 1e6, durationMs: num(m.duration_ms) ?? 0, turns: num(m.num_turns) ?? 0, isError, ...(interrupted ? { interrupted } : {}) }, false);
-    this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0 });
+    const u = o(m.usage);
+    const turnTokens = tokenUsage(u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens, u.output_tokens);
+    this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
     // more sends wait in the CLI's queue: another turn follows on its own, the chat stays running
     const queued = num(m.queued_turn_count) ?? 0;
     if (queued > 0) this.turnOpen = true;
@@ -798,6 +864,8 @@ export class ClaudeSession implements HarnessSession {
     switch (m.subtype) {
       case 'init': {
         const sid = s(m.session_id);
+        if (s(m.claude_code_version)) this.cliVersion = s(m.claude_code_version);
+        if (!sid) this.drift('init field', 'session_id', m);
         if (sid && sid !== this.sessionId) { this.sessionId = sid; this.sink.changed({ sessionId: sid }); }
         const mode = s(m.permissionMode) as PermissionMode;
         const effort = s(m.effort) as Effort;
@@ -838,13 +906,14 @@ export class ClaudeSession implements HarnessSession {
         if (st === 'running') { this.turnOpen = true; this.setState(this.calls.size ? 'waiting' : 'running'); }
         else if (st === 'requires_action') this.setState('waiting');
         else if (st === 'idle') { this.turnOpen = false; this.setState(this.calls.size ? 'waiting' : 'idle'); }
+        if (!SESSION_STATES.has(st)) this.drift('session state', st, m);
         return;
       }
       // background agents and shell commands (CLI 2.1.28x: task_started, task_updated with a status, task_notification
       // at the end): counted so the app never auto-closes a chat whose work still runs behind an idle prompt
       case 'task_started': return this.task(s(m.task_id), true);
-      case 'task_updated': { const st = s(o(m.patch).status); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
-      case 'task_notification': { const st = s(m.status); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
+      case 'task_updated': { const st = s(o(m.patch).status); this.taskStatus(st, m); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
+      case 'task_notification': { const st = s(m.status); this.taskStatus(st, m); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
       case 'compact_boundary': {
         const meta = o(m.compact_metadata);
         this.sink.changed({ compacted: { pre: num(meta.pre_tokens) ?? null, post: num(meta.post_tokens) ?? null } });
@@ -857,7 +926,12 @@ export class ClaudeSession implements HarnessSession {
       case 'informational': if (s(m.content)) this.sys(cut(stripAnsi(s(m.content)), 400), s(m.level) === 'warning' ? 'warn' : 'info'); return;
       case 'local_command_output': if (s(m.content)) this.sys(cut(stripAnsi(s(m.content)), 2000), 'info'); return;
       case 'model_refusal_fallback': case 'model_refusal_no_fallback': this.sys(cut(stripAnsi(s(m.content)) || 'Il modello ha rifiutato la richiesta.', 400), 'warn'); return;
-      default: return;
+      default: if (!QUIET_SYSTEM.has(s(m.subtype))) this.drift('system subtype', s(m.subtype), m); return;
     }
+  }
+
+  /** A task status outside the known ones: a new end state would keep the task (and the chat) open for ever. */
+  private taskStatus(st: string, m: Obj): void {
+    if (st && !END_TASK.has(st) && !LIVE_TASK.has(st)) this.drift('task status', st, m);
   }
 }

@@ -8,12 +8,14 @@
 // Cronologia lists every change, who made it and why, and «Ripristina» brings an older version back as a new one
 // ('routing:restore'). The user has the same powers here as the agent, plus two of their own (2026-10-14): the switch
 // «L'AI può cambiarla» per row (off = no agent changes or removes that row, and exploration leaves its chats alone) and
-// the «Peso del costo» (0-10, the λ the daily loop weighs cost against quality with). Rendered by SettingsPage.tsx.
+// the «Peso del costo» (0-10, the λ the daily loop weighs cost against quality with). A writing row on an Anthropic model
+// also has «Sui crediti API» (ADR 0052, off until the user turns it on): its chats run on the Anthropic API engine, paid
+// by the API credits of the user's Max plan. Rendered by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import type { RoutingInfo, TaskKind } from '@shared/contract';
 import { effortLabel } from '../lib/format';
 import { engineCan } from '../lib/engines';
-import { blankRow, fromEdit, KIND_IT, pickable, startEffort, tableEfforts, toEdit, type EditRow } from '../lib/routing';
+import { apiCapable, blankRow, fromEdit, KIND_IT, pickable, startEffort, tableEfforts, toEdit, type EditRow } from '../lib/routing';
 import { toast } from '../store/ui';
 import { HelpTip } from './HelpTip';
 
@@ -107,6 +109,15 @@ export function RoutingGroup() {
                             onChange={e => { const nm = reg?.models.find(x => x.id === e.target.value); put(i, { model: e.target.value, effort: r.effort && tableEfforts(nm, takes).includes(r.effort) ? r.effort : startEffort(nm, takes) }); }}>
                             {models.map(x => <option key={x.id} value={x.id}>{x.id.replace(/^claude-/, '')}</option>)}
                           </select>
+                          {apiCapable(r, m) && (
+                            <label className="st-rt-api" data-testid={`st-routing-api-${i}`}>
+                              <input type="checkbox" checked={r.onApi} aria-label={`Riga ${i + 1}: sui crediti API`} onChange={e => put(i, { onApi: e.target.checked })} data-testid={`st-routing-api-${i}-check`} />
+                              <span>sui crediti API</span>
+                              <HelpTip label="Sui crediti API" title="Crediti API del piano Max" testid={`st-help-routing-api-${i}`}>
+                                Acceso: queste chat girano su Anthropic API con lo stesso modello e le pagano i crediti API del piano, non i limiti di Claude Code. Solo testo: niente file né strumenti. Servono, in «Motori»: Anthropic API acceso con la chiave e «Le Regie possono usare Anthropic API»; per le chat aperte da una Regia anche «Chat tra motori diversi». Se ne manca uno restano su Claude. Lo cambi solo tu.
+                              </HelpTip>
+                            </label>
+                          )}
                         </td>
                         <td>
                           <select className="st-select st-rt-e" value={r.effort} aria-label={`Riga ${i + 1}: sforzo`} onChange={e => put(i, { effort: e.target.value as EditRow['effort'] })}>

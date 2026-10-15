@@ -37,7 +37,7 @@ export const BRAIN_PAGES: { id: BrainPageId; label: string; key: string }[] = [
   { id: 'qualita', label: 'Qualità', key: 'G Q' },
   { id: 'procedure', label: 'Procedure', key: 'G L' },
   { id: 'confronto', label: 'Confronto modelli', key: 'G M' },
-  { id: 'miglioramento', label: 'Miglioramento', key: 'G R' },
+  { id: 'miglioramento', label: 'Regole imparate', key: 'G R' },
   { id: 'esplora', label: 'Esplora', key: 'G E' },
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
   { id: 'skill', label: 'Skill e agenti', key: 'G S' },

@@ -24,12 +24,16 @@ export function pickable(reg: ModelRegistry | null, keep: string[] = []): Regist
  *  effort only to Claude: a Cursor row runs at the model's own). */
 export const tableEfforts = (m: RegistryModel | undefined, takes: TakesEffort): Effort[] => (m && takes(m.harness) ? m.efforts ?? [] : []).filter(e => e !== 'max');
 
-/** One editable row: area as text ("App, Pers · App"; empty = any area); `ai` = «L'AI può cambiarla» (the row's `locked` off). */
-export interface EditRow { kind: TaskKind | '*'; area: string; model: string; effort: Effort | ''; why: string; evidence: string; since: string; ai: boolean }
+/** One editable row: area as text ("App, Pers · App"; empty = any area); `ai` = «L'AI può cambiarla» (the row's `locked`
+ *  off); `onApi` = «Sui crediti API» (writing rows only, ADR 0052). */
+export interface EditRow { kind: TaskKind | '*'; area: string; model: string; effort: Effort | ''; why: string; evidence: string; since: string; ai: boolean; onApi: boolean }
+
+/** May this row run on the user's API credits: a writing row on an Anthropic model (the API engine is text only). */
+export const apiCapable = (e: Pick<EditRow, 'kind'>, m: RegistryModel | undefined): boolean => e.kind === 'writing' && m?.provider === 'anthropic';
 
 export const toEdit = (r: RoutingRow): EditRow => ({
   kind: r.kind, area: Array.isArray(r.area) ? r.area.join(', ') : r.area ?? '', model: r.model, effort: r.effort ?? '',
-  why: r.why, evidence: r.evidence, since: r.since, ai: r.locked !== true,
+  why: r.why, evidence: r.evidence, since: r.since, ai: r.locked !== true, onApi: r.onApi === true,
 });
 
 /** Back to the table's shape; the harness is the model's own (a model runs on one harness only). */
@@ -39,7 +43,8 @@ export function fromEdit(e: EditRow, reg: ModelRegistry | null, today: string): 
   return {
     kind: e.kind, ...(areas.length ? { area: areas.length === 1 ? areas[0]! : areas } : {}),
     harness: m?.harness ?? 'claude', model: e.model, effort: e.effort || null,
-    why: e.why.trim(), since: e.since || today, evidence: e.evidence.trim(), ...(e.ai ? {} : { locked: true }),
+    why: e.why.trim(), since: e.since || today, evidence: e.evidence.trim(),
+    ...(e.onApi && apiCapable(e, m) ? { onApi: true } : {}), ...(e.ai ? {} : { locked: true }),
   };
 }
 
@@ -49,7 +54,7 @@ export const startEffort = (m: RegistryModel | undefined, takes: TakesEffort): E
 /** A new row: any kind and area, the first pickable model at its default effort. */
 export function blankRow(reg: ModelRegistry | null, today: string, takes: TakesEffort): EditRow {
   const m = pickable(reg)[0];
-  return { kind: '*', area: '', model: m?.id ?? '', effort: startEffort(m, takes), why: '', evidence: '', since: today, ai: true };
+  return { kind: '*', area: '', model: m?.id ?? '', effort: startEffort(m, takes), why: '', evidence: '', since: today, ai: true, onApi: false };
 }
 
 /** "Nuova chat"'s one line: which model starts and why (the table's row, the user's pick, the defaults), from

@@ -1,17 +1,12 @@
-// Estimates (src/main/brain/estimates.ts): the kind classifier (Italian + English), percentiles, the 5-case threshold,
-// widening from specific to coarse groups, the cost.mjs backfill parser on a fixture, the ledger (upsert, last wins,
-// prompt never stored, backfill never overrides app jobs).
+// The job ledger (src/main/brain/estimates.ts): the kind classifier (Italian + English), the cost.mjs backfill parser
+// on a fixture, the ledger (upsert, last wins, prompt never stored, backfill never overrides app jobs). ADR 0053
+// removed the per-job cost/time estimate this module used to compute for the UI.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FileJobStore, Ledger, MIN_SAMPLES, backfillFromCost, classify, estimateFrom, percentile, type JobRecord } from '../../../src/main/brain/estimates';
+import { FileJobStore, Ledger, backfillFromCost, classify } from '../../../src/main/brain/estimates';
 import type { JobKind } from '../../../src/shared/contract';
 import { FIXTURES, plainNode, tmpDir } from './helpers';
-
-const job = (kind: JobKind, usd: number, minutes: number | null, extra: Partial<JobRecord> = {}): JobRecord => ({
-  id: `j${Math.random()}`, at: 0, harness: 'claude', model: 'claude-opus-5-5', effort: 'high', kind, promptChars: 100, estimate: null,
-  actual: { usd, minutes, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: null }, source: 'app', ...extra,
-});
 
 describe('classify', () => {
   const cases: [string, JobKind][] = [
@@ -35,43 +30,6 @@ describe('classify', () => {
 });
 
 describe('estimates', () => {
-  it('percentile interpolates linearly', () => {
-    expect(percentile([1, 2, 3, 4, 5], 0.25)).toBe(2);
-    expect(percentile([1, 2, 3, 4], 0.75)).toBe(3.25);
-    expect(percentile([7], 0.5)).toBe(7);
-    expect(Number.isNaN(percentile([], 0.5))).toBe(true);
-  });
-
-  it('under 5 similar jobs there is no estimate ("stima senza dati")', () => {
-    const jobs = Array.from({ length: MIN_SAMPLES - 1 }, (_, i) => job('fix', i + 1, 10));
-    const r = estimateFrom(jobs, { harness: 'cursor', model: null, effort: null, kind: 'fix' });
-    expect(r.estimate).toBeNull();
-    expect(r.basis).toMatchObject({ count: 4, scope: 'none' });
-    expect(r.basis.label).toBe('stima senza dati: 4 lavori simili (correzione), ne servono 5');
-  });
-
-  it('p25-p75 of the most specific group with 5+ jobs; durations need 5+ known minutes', () => {
-    const jobs = [
-      ...[1, 2, 3, 4, 5].map(u => job('fix', u, u * 10)),                       // same kind, model, effort
-      ...[50, 60, 70].map(u => job('fix', u, null, { effort: 'low' })),        // same kind and model, other effort
-      ...[100, 200, 300, 400, 500, 600].map(u => job('feature', u, 60)),        // other kind
-    ];
-    const r = estimateFrom(jobs, { harness: 'claude', model: 'opus-5-5', effort: 'high', kind: 'fix' });
-    expect(r.basis.scope).toBe('kind+harness+model+effort');
-    expect(r.estimate).toEqual({ usdLow: 2, usdHigh: 4, minLow: 20, minHigh: 40 });
-    const wide = estimateFrom(jobs, { harness: 'claude', model: 'opus-5-5', effort: 'max', kind: 'fix' });
-    expect(wide.basis).toMatchObject({ scope: 'kind+harness+model', count: 8 });
-    expect(wide.estimate).toEqual({ usdLow: 2.75, usdHigh: 52.5, minLow: 20, minHigh: 40 }); // $ of all 8, minutes of the 5 known
-    // a chat's span (backfill) or the CLI's turn time is not work time: no duration from them
-    const spans = jobs.map(j => ({ ...j, actual: { ...j.actual!, minutesKind: undefined } }));
-    expect(estimateFrom(spans, { harness: 'claude', model: 'opus-5-5', effort: 'high', kind: 'fix' }).estimate).toEqual({ usdLow: 2, usdHigh: 4, minLow: null, minHigh: null });
-    const other = estimateFrom(jobs, { harness: 'cursor', model: 'gpt-x', effort: null, kind: 'question' });
-    expect(other.estimate).toBeNull(); // no Cursor jobs at all
-    const coarse = estimateFrom(jobs, { harness: 'claude', model: 'sonnet-5', effort: null, kind: 'question' });
-    expect(coarse.basis.scope).toBe('harness');
-    expect(coarse.basis.label).toMatch(/stima grezza/);
-  });
-
   it('backfill: one Claude job per chat from cost.mjs; chats cut by the window or still active are left out', () => {
     const j = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'cost-1day.json'), 'utf8')) as { from: string; chats: Record<string, { from: number; to: number }> };
     const start = Date.parse(`${j.from}T00:00:00+02:00`) - 2 * 864e5; // pretend a window that began two days earlier
@@ -101,7 +59,7 @@ describe('estimates', () => {
     expect(() => l.record({ harness: 'claude', model: null, effort: null, actual: { usd: -1, minutes: null, tokensIn: null, tokensOut: null, turns: null } })).toThrow(/≥ 0/);
   });
 
-  it('ledger estimate from recorded jobs, and a backfill that never overrides app jobs', async () => {
+  it('a backfill never overrides app jobs', async () => {
     const dir = tmpDir();
     const root = tmpDir();
     fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });
@@ -116,10 +74,6 @@ describe('estimates', () => {
     expect(r).toEqual({ added: 1, skipped: null });
     expect(l.all().find(x => x.id.startsWith('claude:1111'))!.actual!.usd).toBe(9); // the app's record stays
     expect((await l.backfill(root, plainNode, now + 3600e3)).skipped).toMatch(/20 ore/);
-    for (let i = 0; i < 5; i++) l.record({ harness: 'claude', model: 'opus-5-5', effort: 'high', prompt: 'Review this PR', actual: { usd: 1 + i, minutes: 5 + i, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: 1 } });
-    const e = l.estimate({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high', prompt: 'Fai la review della PR' });
-    expect(e.kind).toBe('review');
-    expect(e.estimate).toEqual({ usdLow: 2, usdHigh: 4, minLow: 6, minHigh: 8 });
     expect((await l.backfill(null, plainNode)).skipped).toMatch(/cost\.mjs/);
   });
 });

@@ -64,7 +64,7 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
           <IconButton label={maximized ? 'Ripristina' : 'Ingrandisci'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
           </IconButton>
-          <IconButton label="Chiudi scheda" shortcut="Ctrl+W" onClick={() => closeFromX(() => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
+          <IconButton label="Chiudi scheda" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
         </div>
         <div className="th-sub">
           {owner ? (

@@ -129,30 +129,6 @@ export function minutes(ms: number): string {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
 }
 
-/** The estimate shown beside a chat's cost: $ range and minutes range (the brain's honest 80% range, or p25-p75 of
- *  similar past jobs: the tooltip says which), "stima senza dati" without enough of them. */
-export function estimateText(e: ChatSummary['estimate']): string | null {
-  if (e === undefined) return null;
-  if (e === null) return 'stima senza dati';
-  const usd = `${formatCost(e.usdLow).replace(' $', '')}–${formatCost(e.usdHigh)}`;
-  const min = e.minLow == null || e.minHigh == null ? 'durata senza dati'
-    : e.minHigh < 60 ? `${Math.round(e.minLow)}–${Math.round(e.minHigh)} min` : `${minutes(e.minLow * 6e4)}–${minutes(e.minHigh * 6e4)}`;
-  return `stima ${usd} · ${min}`;
-}
-
-/** The estimate's tooltip: where it comes from, the error measured on the past chats (brain table), the chat so far. */
-export function estimateTip(e: ChatSummary['estimate'], soFar: string): string {
-  if (!e) return 'Meno di 5 lavori simili: niente stima';
-  if (e.from !== 'brain') return `Stima da ${e.basis} lavori simili; finora ${soFar}`;
-  const err = e.errMin != null ? `; sulle chat passate sbaglia in media di ${minutes(e.errMin * 6e4)}${e.errUsd != null ? ` e ${formatCost(e.errUsd)}` : ''}` : '';
-  // what the range promises and how often it held on the past chats (each estimated before it ran)
-  const range = e.cover === 0.8
-    ? `; intervallo che contiene il reale 8 volte su 10${e.held ? ` (sulle ultime ${e.held.n} chat: durata ${Math.round(e.held.min * 100)}%${e.held.usd != null ? `, costo ${Math.round(e.held.usd * 100)}%` : ''})` : ''}`
-    : e.cover === 0.5 ? '; intervallo della metà centrale delle chat simili' : '';
-  const mid = e.minMid !== undefined && e.usdMid !== undefined ? `; valore tipico ${minutes(e.minMid * 6e4)}, ${formatCost(e.usdMid)}` : '';
-  return `Stima da ${e.basis} chat passate (${e.label ?? 'simili'})${range}${mid}${err}; finora ${soFar}`;
-}
-
 /** Same calendar day (local time). */
 export function sameDay(a: number, b: number): boolean {
   const x = new Date(a);

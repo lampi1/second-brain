@@ -111,7 +111,7 @@ test("Idee · Dall'IA: the AI's ideas with their reasoning in the peek, filter b
   await expect(p.getByTestId('bx-table-idee')).toContainText('9 righe');
 });
 
-test('Costi: KPIs, savings, charts by day / kind / model / area, chats table, estimates; period switch', async () => {
+test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; period switch', async () => {
   await open('costi');
   const p = page.getByTestId('brain-page-costi');
   await settled();
@@ -119,13 +119,9 @@ test('Costi: KPIs, savings, charts by day / kind / model / area, chats table, es
   await expect(p.getByTestId('bx-advice')).toContainText('Chat lunghe');
   for (const c of ['spesa-giorni-7', 'spesa-tipo-7', 'spesa-modello-7', 'spesa-area-7']) await expect(p.getByTestId(`bx-chart-${c}`).locator('svg[role=img]')).toBeVisible();
   await expect(p.getByTestId('bx-cost-chats')).toContainText('Regia');
-  await expect(p.getByTestId('bx-estimates')).toContainText('Ancora nessuna stima');
   await shot(page, 'brain-costi');
   await p.getByTestId('bx-chart-spesa-chat-7').scrollIntoViewIfNeeded();
   await shot(page, 'brain-costi-chat');
-  await p.getByTestId('bx-calc').getByLabel('Il lavoro da stimare').fill('Fix the login bug');
-  await p.getByTestId('bx-calc').getByRole('button', { name: 'Stima' }).click();
-  await expect(p.getByTestId('bx-calc-result')).toContainText('Stima senza dati');
   await p.getByRole('button', { name: '30 giorni' }).click();
   await expect(p.getByTestId('bx-lead')).toContainText('in 30 giorni');
 });

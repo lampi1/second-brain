@@ -44,8 +44,8 @@ keeps its own stream-json protocol, which the app already speaks in full.
   }
   ```
   Claude and Cursor are built in: their start is app code and the brain cannot redefine them. Kimi (`kimi acp`, login
-  `kimi login`; it reads no key from the environment) and Gemini (`gemini --acp`, model `-m`, key `GEMINI_API_KEY`)
-  are app presets, off; a brain entry with their id may change them (e.g. the command's full path). An entry is
+  `kimi login`; it reads no key from the environment) is an app preset, off (Gemini CLI was one until 2026-10-15, see
+  the end); a brain entry with a preset's id may change it (e.g. the command's full path). An entry is
   validated (`brainEngine`: command a name or an absolute path without shell characters, args from a safe set, `keyEnv`
   only `*_KEY`/`*_TOKEN`, `baseUrl` https or http on this machine, without credentials or query); an invalid one is
   left out and logged once. Settings → "Motori" lists every engine with how it starts ("Avvio: kimi acp", the URL) and
@@ -127,19 +127,30 @@ quest app voglio farla cross OS").
   (today: the Cursor subagents' hook capture; next: any app chat of a kind, re-run on side b). Files per round become
   `a.md / a.json / b.md / b.json` (was `cursor.* / claude.*`); `key.json`, totals and reports say `a` / `b` and the
   engines' labels from the registry. Old rounds are read through a one-time rename.
-- **Side b runs inside the app**, as a hidden read-only chat on its engine (same adapters, same keys, same budget;
-  brain scripts never get a key): a new app MCP tool `app_compare_run { experiment, round }`; `run-claude.mjs` goes.
+- **Side b runs inside the app**, as a hidden read-only session on its engine (same adapters, same keys; brain
+  scripts never get a key; `src/main/compare/`): only the stable app polls the brain's `harness/compare/app-queue.mjs`
+  (`list` / `start` / `record` / `fail`, every 60 s, at most 2 runs, 45 min each, under the brain's 60 min claim);
+  `run-claude.mjs` goes. A run starts only on an engine that is on, trusted and that the Regie may use, never on Fable
+  or effort `max` (the experiment is a file agents write); otherwise it waits and nothing is written back. Read-only
+  per engine: Claude in plan mode with only Read/Grep/Glob, hooks off, no MCP, no saved session; an ACP CLI in its ask
+  or plan mode (none → the run stops before the prompt), Cursor with its own per-run config copy without allow rules;
+  an HTTP model has no tools. The app answers every permission: reads and searches only, never inside the brain's
+  `reviews/compare` or the folders `list` names in `denyRead` (side a's answer), never a network path. What an ACP CLI
+  approves by itself from the user's own config never reaches the app: that is the limit of this guarantee.
 - **One judge**: `ops/improve/judge.mjs` (from `routing-judge.mjs`) with two modes, `success` (one work: did it
   succeed?) and `pair` (two anonymous answers, per-finding verdicts, today's `judge.mjs`); one read-only runner (the
-  deny lists and JSON parsing copied today between `run-claude.mjs` and `routing-judge.mjs` go into one place). The
-  judge's engine and model are the experiment's `judge` (any enabled engine, never one of the two sides').
+  deny lists and JSON parsing copied today between `run-claude.mjs` and `routing-judge.mjs` go into one place:
+  `ops/improve/claude-readonly.mjs`). The judge's engine and model are the experiment's `judge`, refused when it is
+  one of the two sides (same engine and model, or a side's model unknown) or Fable; today Claude or Cursor (run by the
+  brain, as before) or `manual`, other engines later (through the app, like side b).
 - **One ledger**: every judged pair also writes one outcome per side to `ops/state/improve/outcomes.jsonl` (source
-  `compare`, arm `harness|model|effort`), so the routing loop (ADR 0032, Thompson sampling) learns from comparisons
+  `compare`, arm `harness|model|effort`, id `compare:<round>:<side>`; a side succeeds when at least half its findings
+  were judged correct, weight 2 like the judge), so the routing loop (ADR 0032, Thompson sampling) learns from comparisons
   as from real work, through the same priority (explicit > judge > proxy). The app's "Confronto tra modelli" group
   (`compare.ts`, contract `CompareExperiment`) shows `a` / `b` with engine and model instead of source / contender.
 
 ### What changes in the brain
-`harness/models.json` (`harnesses` → `engines` with start definitions; Kimi / Gemini entries off), `harness/models.md`
+`harness/models.json` (`harnesses` → `engines` with start definitions; the Kimi entry off), `harness/models.md`
 (one rule: "chats on another engine only if the cross-engine switch allows it"; Cursor-specific lines go, the App row
 stays), `ops/tools/routing.mjs` (same rules as `routing.ts`), `ops/improve/routing-judge.mjs` → `judge.mjs`,
 `harness/compare/*` (sides a/b, no `run-claude.mjs`); `brain-settings.json` keeps `crossHarnessMessages`.
@@ -153,3 +164,11 @@ stays), `ops/tools/routing.mjs` (same rules as `routing.ts`), `ops/improve/routi
   and Cursor inside; (2) the single switch; (3) keys, only after the owner's yes; (4) the comparison.
 - Cost: about 40 files touched by (1), mostly mechanical (string id instead of the union, records instead of
   `claude`/`cursor` fields); settings migration for (2) keeps the owner's current values.
+
+## Amendment 2026-10-15: Gemini CLI removed
+The owner, 15/10: Gemini no longer supports the Gemini CLI, so the app drops its preset. `REMOVED_ENGINES`
+(`engines/registry.ts`) names it: a `gemini` entry in the brain's `harness/models.json` is left out and logged once like an
+invalid one (it never starts, whatever it says), and `config.json` saved by an older release loads without
+`engineOn.gemini` / `engines.gemini`, with the Regia's engine back on Claude when it was Gemini (`brain/config.ts
+fromSaved`). A routing row on `gemini` already falls back to the user's defaults (no such engine); a chat saved on it
+stays readable and cannot start. Gemini models run through Cursor stay (they are Cursor's).

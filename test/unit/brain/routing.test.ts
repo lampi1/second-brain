@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { agentLimits, armKey, checkTable, explore, EXPLORE_MIN, match, modelRow, predictionLine, resolve, routeChat, Routing, taskOf, validRoute, type RouteDefaults } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
-import { blankRow, fromEdit, pickable, routeLine, tableEfforts, toEdit } from '../../../src/renderer/lib/routing';
+import { apiCapable, blankRow, fromEdit, pickable, routeLine, tableEfforts, toEdit } from '../../../src/renderer/lib/routing';
 import type { RouteDecision, RoutingRow } from '../../../src/shared/contract';
 
 const row = (p: Partial<RoutingRow>): RoutingRow => ({ kind: '*', harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'w', since: '2026-10-13', evidence: 'e', ...p });
@@ -438,11 +438,76 @@ describe('routing: the settings editor helpers', () => {
     expect(fromEdit(e, REG, '2026-10-14')).toEqual(ROUTES[0]);
     expect(fromEdit({ ...e, area: ' ', effort: '', since: '' }, REG, '2026-10-14')).toEqual({ ...ROUTES[0], area: undefined, effort: null, since: '2026-10-14' });
     expect(fromEdit({ ...e, area: 'Magazzino' }, REG, 'd').area).toBe('Magazzino');
-    expect(blankRow(REG, '2026-10-14', h => h === 'claude')).toEqual({ kind: '*', area: '', model: 'claude-opus-5-5', effort: 'medium', why: '', evidence: '', since: '2026-10-14', ai: true });
+    expect(blankRow(REG, '2026-10-14', h => h === 'claude')).toEqual({ kind: '*', area: '', model: 'claude-opus-5-5', effort: 'medium', why: '', evidence: '', since: '2026-10-14', ai: true, onApi: false });
     // «L'AI può cambiarla» off = the row's locked flag, and back
     expect(e.ai).toBe(true);
     expect(toEdit({ ...ROUTES[0]!, locked: true }).ai).toBe(false);
     expect(fromEdit({ ...e, ai: false }, REG, 'd').locked).toBe(true);
+  });
+});
+
+describe('routing: «Sui crediti API» (ADR 0052)', () => {
+  const W = row({ kind: 'writing', why: 'scrittura', onApi: true });
+  const table = (routes: RoutingRow[]) => ({ version: 3, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes });
+  const ask = { title: 'Posta · mail', prompt: '', kind: 'writing' as const, ask: {}, defaults: DEF };
+
+  it('is allowed only on a writing row with an Anthropic model', () => {
+    expect(checkTable([ROUTES[0]!, W], REG)).toEqual([]);
+    expect(checkTable([ROUTES[0]!, { ...W, kind: 'review' }], REG)).toEqual([expect.stringMatching(/solo sulle righe Scrittura/)]);
+    expect(checkTable([{ ...W, harness: 'cursor', model: 'grok-4.7', effort: null }], REG)).toEqual(expect.arrayContaining([expect.stringMatching(/solo con un modello Anthropic/)]));
+  });
+
+  it('sends a writing chat to the API engine with the row’s model and no effort, only when that engine may run', () => {
+    expect(routeChat({ ...ask, api: 'anthropic' }, table([W]), REG, null, 9)).toEqual({ harness: 'anthropic', model: 'claude-opus-5-5', effort: null,
+      route: { policy: 'routing', version: 3, source: 'table', reason: 'scrittura · sui crediti API', kind: 'writing', area: 'Posta', at: 9 } });
+    // engine off or without a key (api null), or not startable by this caller: the row as it is
+    const plain = { harness: 'claude', model: 'claude-opus-5-5', effort: 'medium' };
+    expect(routeChat({ ...ask, api: null }, table([W]), REG, null, 9)).toMatchObject(plain);
+    expect(routeChat({ ...ask, api: 'anthropic', canRun: h => h === 'claude' }, table([W]), REG, null, 9)).toMatchObject(plain);
+    // the switch off (the default), another kind, or a model the user named: no API
+    expect(routeChat({ ...ask, api: 'anthropic' }, table([{ ...W, onApi: undefined }]), REG, null, 9)).toMatchObject(plain);
+    expect(routeChat({ ...ask, kind: 'review', api: 'anthropic' }, table([W, row({ kind: 'review' })]), REG, null, 9)).toMatchObject(plain);
+    expect(routeChat({ ...ask, ask: { model: 'claude-sonnet-5-5', reason: 'più veloce' }, api: 'anthropic' }, table([W]), REG, null, 9)).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5' });
+  });
+
+  it('counts only where the user saved it: a brain file an agent wrote by hand does not turn it on', () => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, 'harness'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'harness', 'models.json'), JSON.stringify(REG));
+    const apiFile = path.join(tmp(), 'routing-api.json');
+    const r = new Routing(() => root, apiFile);
+    r.save([ROUTES[0]!, { ...W, onApi: undefined }], 'utente (Impostazioni)', null);
+    // an agent edits the version in force by hand
+    const v = path.join(root, 'ops', 'state', 'improve', 'routing', `v${r.stored()!.version}.json`);
+    const j = JSON.parse(fs.readFileSync(v, 'utf8')) as { routes: RoutingRow[] };
+    j.routes[1]!.onApi = true;
+    fs.writeFileSync(v, JSON.stringify(j));
+    expect(r.table()!.routes[1]!.onApi).toBeUndefined();
+    // the user's own save turns it on, and an agent's later save keeps it
+    r.save([ROUTES[0]!, W], 'utente (Impostazioni)', null);
+    expect(r.table()!.routes[1]!.onApi).toBe(true);
+    expect(JSON.parse(fs.readFileSync(apiFile, 'utf8'))).toEqual({ rows: ['writing|'] });
+    r.save([ROUTES[0]!, { ...W, why: 'nuovo perché' }], 'agente: loop', 'perché');
+    expect(r.table()!.routes[1]!.onApi).toBe(true);
+  });
+
+  it('is the user’s switch: an agent neither turns it on or off nor removes such a row', () => {
+    const off = { ...W, onApi: undefined };
+    expect(agentLimits(table([off]), [{ ...off, why: 'nuovo perché' }])).toEqual([]);
+    expect(agentLimits(table([off]), [W])).toEqual([expect.stringMatching(/lo cambia solo l’utente/)]);
+    expect(agentLimits(table([W]), [off])).toEqual([expect.stringMatching(/lo cambia solo l’utente/)]);
+    expect(agentLimits(table([W]), [])).toEqual([expect.stringMatching(/solo l’utente la toglie/)]);
+    expect(agentLimits(table([]), [W])).toEqual([expect.stringMatching(/lo cambia solo l’utente/)]);
+  });
+
+  it('the editor keeps it only where it can work', () => {
+    const opus = REG.models[0], grok = REG.models.find(m => m.id === 'grok-4.7');
+    expect(apiCapable({ kind: 'writing' }, opus)).toBe(true);
+    expect(apiCapable({ kind: 'review' }, opus)).toBe(false);
+    expect(apiCapable({ kind: 'writing' }, grok)).toBe(false);
+    expect(toEdit(W).onApi).toBe(true);
+    expect(fromEdit(toEdit(W), REG, 'd')).toEqual(W);
+    expect(fromEdit({ ...toEdit(W), kind: 'review' }, REG, 'd').onApi).toBeUndefined();
   });
 });
 

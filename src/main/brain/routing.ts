@@ -111,6 +111,8 @@ export function checkTable(routes: unknown, reg: ModelRegistry | null): string[]
     const ac = reg.appChats;
     if (ac && areas.some(isApp) && (modelRow(ac.model, reg) !== m || (r.effort ?? null) !== (ac.effort ?? null))) errs.push(`${at}: le chat sull’app vanno sempre su ${ac.model}${ac.effort ? ` ${ac.effort}` : ''} (altri modelli solo con l’esplorazione)`);
     if (r.harness !== appEngine(reg) && (areas.some(isApp) || !areas.length)) errs.push(`${at}: ${appRefusal(reg)}`);
+    if (r.onApi === true && r.kind !== 'writing') errs.push(`${at}: «Sui crediti API» solo sulle righe Scrittura (il motore API è solo testo)`);
+    else if (r.onApi === true && m.provider !== 'anthropic') errs.push(`${at}: «Sui crediti API» solo con un modello Anthropic, non ${m.id}`);
     if (r.effort === 'max') errs.push(`${at}: sforzo max solo su richiesta, mai dalla tabella`);
     else if (r.effort && !(m.efforts ?? []).includes(r.effort)) errs.push(`${at}: ${m.id} non ha lo sforzo «${r.effort}»`);
   });
@@ -146,9 +148,10 @@ const overlaps = (a: RoutingRow, b: RoutingRow): boolean => (a.kind === '*' || b
 const beats = (list: RoutingRow[], n: RoutingRow, p: RoutingRow): boolean => overlaps(n, p) && (rank(n) > rank(p) || (rank(n) === rank(p) && list.indexOf(n) < list.indexOf(p)));
 /** What an agent may not do to the table in force (the user, 2026-10-14: a switch per row «se lo disabilito blocca all'app
  *  la possibilità di modificare quel modello per quel task in autonomia»): change or remove a locked row, lock or unlock a
- *  row, change the cost weight (the user's λ); and an agent always writes each row's "perché" (the user may leave it out:
- *  "non deve essere richiesto il motivo… lo scrivi te non io", 2026-10-14; the brain's loop fills it). Italian errors;
- *  [] = allowed. Same rule as routing.mjs agentLimits(). */
+ *  row, turn a writing row «Sui crediti API» on or off or remove it (ADR 0052), change the cost weight (the user's λ);
+ *  and an agent always writes each row's "perché" (the user may leave it out: "non deve essere richiesto il motivo… lo
+ *  scrivi te non io", 2026-10-14; the brain's loop fills it). Italian errors; [] = allowed. Same rule as routing.mjs
+ *  agentLimits(). */
 export function agentLimits(prev: (Pick<RoutingTable, 'routes'> & { costWeight?: number }) | null, routes: RoutingRow[], costWeight?: number): string[] {
   const errs: string[] = [];
   const was = prev?.routes ?? [];
@@ -169,6 +172,9 @@ export function agentLimits(prev: (Pick<RoutingTable, 'routes'> & { costWeight?:
       errs.push(`la riga «${rowName(n)}» prenderebbe le chat della riga bloccata «${rowName(p)}»: l’AI non la mette`);
     }
   }
+  // «Sui crediti API» is the user's alone (ADR 0052): an agent keeps each row's switch as it was, and a new row has it off
+  for (const n of routes) if ((n.onApi === true) !== (was.find(p => rowKey(p) === rowKey(n))?.onApi === true)) errs.push(`«Sui crediti API» della riga «${rowName(n)}» lo cambia solo l’utente`);
+  for (const p of was.filter(r => r.onApi === true)) if (!routes.some(n => rowKey(n) === rowKey(p))) errs.push(`la riga «${rowName(p)}» è «Sui crediti API»: solo l’utente la toglie`);
   if (costWeight !== undefined && costWeight !== (prev?.costWeight ?? COST_WEIGHT)) errs.push('il peso del costo lo decide l’utente');
   routes.forEach((r, i) => { if (typeof r.why !== 'string' || !r.why.trim()) errs.push(`riga ${i + 1}: manca il perché (l’AI lo scrive sempre)`); });
   return errs;
@@ -280,6 +286,9 @@ export interface RouteRequest {
   ask: RouteAsk; defaults: RouteDefaults;
   /** the engines this caller may start now (settings engines.*, Claude <-> Cursor messages) */
   canRun?: (h: Harness) => boolean;
+  /** the Anthropic API engine when it is on and has a key (brain/index.ts apiRoute): a writing row «Sui crediti API»
+   *  sends its chats there, if this caller may start it (canRun); null = the row's own harness (ADR 0052) */
+  api?: Harness | null;
   /** the ledger's samples per arm for a kind (Routing.armCounts) and the dice, for exploration; none = no exploration */
   counts?: (kind: TaskKind) => Map<string, number>;
   rnd?: () => number;
@@ -294,6 +303,12 @@ export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: Mo
   const area = req.appSpace ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
   const r = resolve(table, { kind, area }, req.ask, req.defaults, reg, req.canRun);
   if ('error' in r) return r;
+  // a writing row the user set «Sui crediti API»: the same model on the user's API key, no effort (the API engine takes
+  // none from the app), when that engine may run for this caller; else the row as it is
+  const row = r.source === 'table' ? match(table?.routes, { kind, area }) : null;
+  if (row?.onApi === true && row.kind === 'writing' && req.api && (req.canRun ?? (() => true))(req.api))
+    return { harness: req.api, model: r.model, effort: null,
+      route: { policy: 'routing', version: table?.version ?? null, source: 'table', reason: `${r.reason ? `${r.reason} · ` : ''}sui crediti API`, kind, area, at: now } };
   const named = req.ask.harness !== undefined || req.ask.model !== undefined || req.ask.effort !== undefined;
   // a row the user locked keeps all its chats: exploration never tries another model there
   const x = !named && req.counts && !match(table?.routes, { kind, area })?.locked ? explore(table, { kind, area }, r, reg, req.canRun ?? (() => true), req.counts, req.rnd) : null;
@@ -344,7 +359,21 @@ export interface SaveOptions { exploration?: number; costWeight?: number; eviden
 export class Routing {
   private regCache: { mtime: number; reg: ModelRegistry | null } | null = null;
 
-  constructor(private root: () => string | null) {}
+  /** `apiFile` (in userData, out of the agents' reach): the rows the user put «sui crediti API» at their last save. The
+   *  brain's files can be written by any agent, so a row counts as onApi only when it is listed there too (ADR 0052). */
+  constructor(private root: () => string | null, private apiFile?: string) {}
+
+  /** The table's rows with onApi only where the user set it (no apiFile: the file as is, for tests and tools). */
+  private userApi(routes: RoutingRow[]): RoutingRow[] {
+    if (!this.apiFile) return routes;
+    const j = readJson(this.apiFile) as { rows?: unknown } | null;
+    const mine = new Set(Array.isArray(j?.rows) ? j.rows.filter((k): k is string => typeof k === 'string') : []);
+    return routes.map(r => {
+      if (r?.onApi !== true || mine.has(rowKey(r))) return r;
+      const { onApi: _drop, ...rest } = r;
+      return rest;
+    });
+  }
 
   private dir(): string | null { const r = this.root(); return r ? path.join(r, 'ops', 'state', 'improve') : null; }
 
@@ -372,7 +401,7 @@ export class Routing {
     const t = readJson(path.join(d, 'routing', `v${v}.json`)) as { routes?: unknown; exploration?: unknown; costWeight?: unknown } | null;
     if (!t || !Array.isArray(t.routes)) return null;
     return { version: v, appliedAt: typeof c?.appliedAt === 'string' ? c.appliedAt : null, by: typeof c?.by === 'string' ? c.by : null,
-      exploration: typeof t.exploration === 'number' ? t.exploration : 0, routes: t.routes as RoutingRow[],
+      exploration: typeof t.exploration === 'number' ? t.exploration : 0, routes: this.userApi(t.routes as RoutingRow[]),
       costWeight: typeof t.costWeight === 'number' ? t.costWeight : COST_WEIGHT };
   }
 
@@ -460,6 +489,7 @@ export class Routing {
       harness: r.harness, model: String(r.model ?? '').trim(), effort: r.effort || null,
       why: String(r.why ?? '').trim().slice(0, 300), since: String(r.since ?? '').trim().slice(0, 20) || new Date(now).toISOString().slice(0, 10),
       evidence: String(r.evidence ?? '').trim().slice(0, 300) || evidence?.trim().slice(0, 300) || (by.startsWith('utente') ? 'scelta dell’utente (Impostazioni)' : by),
+      ...(r.onApi === true ? { onApi: true } : {}),
       ...(r.locked === true ? { locked: true } : {}),
     })) : routes;
     const errors = [...checkTable(clean, this.registry()), ...(isAgent(by) && Array.isArray(clean) ? agentLimits(this.stored(), clean, costWeight) : [])];
@@ -470,6 +500,7 @@ export class Routing {
     const cwBefore = was?.costWeight ?? COST_WEIGHT, cw = costWeight === undefined ? cwBefore : Math.round(costWeight * 10) / 10;
     writeAtomic(path.join(d, 'routing', `v${version}.json`), `${JSON.stringify({ version, exploration: x, costWeight: cw, routes: clean }, null, 1)}\n`);
     writeAtomic(path.join(d, 'routing', 'current.json'), `${JSON.stringify({ version, appliedAt: new Date(now).toISOString(), by })}\n`);
+    if (this.apiFile && !isAgent(by) && Array.isArray(clean)) writeAtomic(this.apiFile, `${JSON.stringify({ rows: clean.filter(r => r.onApi === true).map(rowKey) })}\n`);
     fs.appendFileSync(path.join(d, 'audit.jsonl'), `${JSON.stringify({ at: new Date(now).toISOString(), domain: 'routing', from: was?.version ?? null, to: version, by, reason,
       ...(evidence ? { evidence: evidence.slice(0, 300) } : {}), ...(x !== before ? { exploration: { from: before, to: x } } : {}),
       ...(cw !== cwBefore ? { costWeight: { from: cwBefore, to: cw } } : {}) })}\n`);

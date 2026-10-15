@@ -135,7 +135,7 @@ describe('ChatManager', () => {
     await expect(m.create({ harness: 'claude', cwd: e.cwd, permissionMode: 'yolo' as never })).rejects.toThrow(/permessi/);
     await expect(m.create({ harness: 'claude', cwd: e.cwd, resumeSessionId: '../x', fork: true })).rejects.toThrow(/duplicare/);
     await expect(m.create({ harness: 'claude', cwd: e.cwd, model: 'x" & calc' })).rejects.toThrow(/Modello non valido/);
-    // a model an ACP CLI would read as one of its flags (gemini -m --yolo)
+    // a model an ACP CLI would read as one of its flags (qwen -m --yolo)
     await expect(m.create({ harness: 'cursor', cwd: e.cwd, model: '--yolo' })).rejects.toThrow(/Modello non valido/);
     await expect(m.create({ harness: 'cursor', cwd: e.cwd, effort: 'high' })).rejects.toThrow(/effort/i);
     await expect(m.send('nope', 'x')).rejects.toThrow(/non trovata/);
@@ -471,18 +471,16 @@ describe('ChatManager', () => {
   });
 
   // brain hooks (wiring.ts connects them to BrainService)
-  it('calls the brain hooks: estimate at the first send, waiting, turn end with the first prompt, done, rate limits', async () => {
+  it('calls the brain hooks: waiting, turn end with the first prompt, done, rate limits', async () => {
     const e = env();
-    const calls = { rate: [] as unknown[], turns: [] as TurnEndInfo[], waiting: [] as string[], done: [] as string[], est: [] as string[] };
+    const calls = { rate: [] as unknown[], turns: [] as TurnEndInfo[], waiting: [] as string[], done: [] as string[] };
     const { m } = manager(e, {
       onRateLimit: msg => calls.rate.push(msg),
       onTurnEnd: i => calls.turns.push(i),
       onWaiting: (id, p) => calls.waiting.push(`${id}:${p.type}`),
       onDone: id => calls.done.push(id),
-      estimateFor: req => { calls.est.push(req.prompt); return { kind: 'question', estimate: { usdLow: 0.01, usdHigh: 0.05, minLow: 1, minHigh: 3 }, basis: { count: 7, scope: 'kind+model', label: 'da 7 lavori simili' } }; },
     });
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'ask me', model: 'sonnet' });
-    expect(m.list()[0]?.estimate).toEqual({ usdLow: 0.01, usdHigh: 0.05, minLow: 1, minHigh: 3, basis: 7 });
     const p = await waitFor(() => m.pending()[0], 'question');
     expect(calls.waiting).toEqual([`${c.id}:question`]);
     expect(calls.done).toEqual([]); // waiting for the user is not done
@@ -490,35 +488,30 @@ describe('ChatManager', () => {
     await waitFor(() => calls.done.length === 1, 'done after the turn');
     expect(calls.done).toEqual([c.id]);
     expect(calls.turns).toHaveLength(1);
-    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, kind: 'question', firstPrompt: 'ask me', jobAt: expect.any(Number), jobTitle: expect.any(String), costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false });
+    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, firstPrompt: 'ask me', costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false });
     // the stream's rate_limit_event and the get_usage answer both reach the brain
     await waitFor(() => calls.rate.some(x => (x as { type?: string }).type === 'rate_limit_event') && calls.rate.some(x => !!(x as { rate_limits?: unknown }).rate_limits), 'rate limits');
     await m.send(c.id, 'hello');
     await waitFor(() => calls.turns.length === 2 && calls.done.length === 2, 'second turn');
-    expect(calls.turns[1]?.firstPrompt).toBeUndefined();
-    expect(calls.turns[1]?.jobAt).toBeUndefined(); // the job's start goes with its first turn only
-    expect(calls.est).toEqual(['ask me']); // one estimate per job
+    expect(calls.turns[1]?.firstPrompt).toBeUndefined(); // the job's start goes with its first turn only
     expect(m.isOwnSession(c.sessionId ?? '')).toBe(true);
     expect(m.isOwnSession((c.sessionId ?? '').slice(0, 8).toUpperCase())).toBe(true);
     expect(m.isOwnSession('deadbeef')).toBe(false);
     expect(m.isOwnSession('1234')).toBe(false);
   });
 
-  it('a throwing hook never breaks the chat; a restored chat starts no new job', async () => {
+  it('a throwing hook never breaks the chat; a restored chat resumes without a new job', async () => {
     const e = env();
     const boom = (): never => { throw new Error('listener bug'); };
-    const est: string[] = [];
-    const first = manager(e, { onRateLimit: boom, onTurnEnd: boom, onWaiting: boom, onDone: boom, estimateFor: req => { est.push(req.prompt); return boom(); } });
+    const first = manager(e, { onRateLimit: boom, onTurnEnd: boom, onWaiting: boom, onDone: boom });
     const c = await first.m.create({ harness: 'claude', cwd: e.cwd, prompt: 'bash' });
     const p = await waitFor(() => first.m.pending()[0], 'permission');
     await first.m.answer(c.id, p.id, { kind: 'permission', allow: true });
     await waitFor(() => results(first.m, c.id).length === 1 && first.m.list()[0]?.state === 'idle', 'turn completes');
-    expect(first.m.list()[0]?.estimate).toBeUndefined();
     await first.m.shutdown();
-    const { m } = manager(e, { estimateFor: req => { est.push(req.prompt); return null; } });
+    const { m } = manager(e, {});
     await m.send(c.id, 'again');
     await waitFor(() => results(m, c.id).length === 1, 'resumed turn');
-    expect(est).toEqual(['bash']);
   });
 
   // several Regie (ADR 0021): a chats.json keeps every Regia with its tab name, and each work chat its Regia

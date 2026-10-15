@@ -113,6 +113,13 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
+/** Runs an action of the top bar's "…" menu (browsers, questions window, Credenziali, Migliora: TopBar.tsx MoreButton). */
+export async function moreAction(page: Page, item: 'more-browsers' | 'more-qwin' | 'more-credentials' | 'more-improve'): Promise<void> {
+  await page.getByTestId('topbar-more').click();
+  await page.getByTestId(item).click();
+  await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
+}
+
 export async function shot(page: Page, name: string): Promise<string> {
   const dir = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots');
   fs.mkdirSync(dir, { recursive: true });

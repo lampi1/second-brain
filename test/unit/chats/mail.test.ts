@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatSummary } from '../../../src/shared/contract';
-import { ChatMail, inboxDir, mailTools, MAX_SENDS_PER_MINUTE, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaWait, render, sendMail, slug, take, unread, verified, type MailMsg } from '../../../src/main/chats/mail';
+import { mailClassifier } from '../../../src/main/chats/regia-delivery';
+import { ChatMail, inboxDir, mailTools, MAX_SENDS_PER_MINUTE, REGIA_GROUP_MS, REGIA_HOLD_MS, render, sendMail, slug, take, unread, verified, type MailMsg } from '../../../src/main/chats/mail';
 import { AgentMayNotWake } from '../../../src/main/engines/policy';
 import { tmp } from './helpers';
 
@@ -207,7 +208,8 @@ describe('mail to an idle Regia', () => {
     return { ...s, mail, list, post };
   }
 
-  it('regiaWait: urgent at once, only pure progress held, anything else (a request, a report, unknown) within the group window', () => {
+  it('the default words: urgent at once, only pure progress held, anything else (a request, a report, unknown) grouped', () => {
+    const regiaWait = mailClassifier();
     for (const t of ['feat/x pronto: 3c6f315', 'merge di main fatto', 'check rosso: e2e fallito', 'posso partire?', 'the user asks for a change', 'ready to merge',
       // a request inside a progress-looking note, and the reviewer's misses (13/10 wording of real reports)
       'sb-tests rilasciato, tocca a te', 'Fatto: feat/regia-msg committato, check:branch verde', 'PR aperta: https://git.example.com/pr/1234', 'pushed feat/x',
@@ -216,13 +218,57 @@ describe('mail to an idle Regia', () => {
       // a request inside a progress note (second review)
       'Sto aspettando il tuo ok per procedere', 'Per info: ho bisogno della tua conferma', 'Nota: devi lanciare tu il comando di deploy',
       'In corso, ma mi manca l’accesso', 'FYI the build broke', 'Sto provando, crash all’avvio', 'Nota: 3 test non passano', 'Tengo fermo il deploy finché non mi dici'])
-      expect(regiaWait(t), t).toBe(REGIA_GROUP_MS);
-    expect(regiaWait('URGENTE: CPU al 100%')).toBe(0);
+      expect(regiaWait(t), t).toBe('group');
+    expect(regiaWait('URGENTE: CPU al 100%')).toBe('now');
     for (const t of ['sb-tests rilasciato, tenuto 3 min', 'Nota: analisi scritta in reviews/telemetria.md', 'confermato: la finestra è per processo'])
-      expect(regiaWait(t), t).toBe(REGIA_HOLD_MS);
+      expect(regiaWait(t), t).toBe('quiet');
   });
 
-  it('a request waits up to a minute and takes the held progress with it; nothing is dropped', async () => {
+  it('the sender\'s kind wins over the words', () => {
+    const cls = mailClassifier();
+    expect(cls('feat/x pronto: 3c6f315', 'info')).toBe('quiet');
+    expect(cls('nota: rilasciato', 'urgent')).toBe('now');
+    expect(cls('nota: rilasciato', 'request')).toBe('group');
+    expect(cls('nota: rilasciato', 'bogus')).toBe('quiet'); // an unknown kind: the words decide
+  });
+
+  it('a Regia waiting for the user gets only urgent mail; the rest goes once it is free', async () => {
+    const { mail, sent, post, list } = regiaSetup('waiting', { isRegia: true, pending: 1 });
+    post('feat/x pronto da unire: 3c6f315');
+    clock.t += REGIA_GROUP_MS * 2;
+    expect(await mail.tick()).toBe(0); // it waits for the user: no interruption
+    post('URGENTE: produzione giù');
+    expect(await mail.tick()).toBe(2); // urgent passes and takes the box with it
+    expect(sent).toHaveLength(1);
+    list[1] = { ...list[1]!, state: 'idle', pending: 0 };
+  });
+
+  it('only mail signed by the app may say its kind: an edited or hand-written "urgent" does not pass a waiting Regia', async () => {
+    const { mail, sent, dir, list } = regiaSetup('waiting', { isRegia: true, pending: 1 });
+    const m = sendMail(dir, { from: 'App · Lavoro', fromHarness: 'claude', to: 'Regia', toHarness: null, text: 'feat/x pronto', kind: 'info', refusal: () => null, now: new Date(clock.t) })!;
+    expect(verified(m)).toBe(true);
+    expect(verified({ ...m, kind: 'urgent' })).toBe(false); // the kind is signed
+    const file = unread(dir, 'regia')[0]!.file;
+    fs.writeFileSync(file, JSON.stringify({ ...m, kind: 'urgent' }));
+    fs.writeFileSync(path.join(path.dirname(file), 'hand.json'), JSON.stringify({ id: 'hand', from: 'x', to: 'Regia', at: new Date(clock.t).toISOString(), text: 'feat/y pronto', kind: 'urgent' }));
+    clock.t += REGIA_GROUP_MS * 2;
+    expect(await mail.tick()).toBe(0);
+    expect(sent).toHaveLength(0);
+    list[1] = { ...list[1]!, state: 'idle', pending: 0 };
+  });
+
+  it('send_to_chat stores the kind and says when an idle Regia gets it', async () => {
+    const { call, dir } = regiaSetup();
+    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'feat/x pronto', kind: 'info' })).toMatch(/solo un avanzamento/);
+    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'nota: scritto in x.md', kind: 'urgent' })).toMatch(/adesso/);
+    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'feat/x pronto' })).toMatch(/entro 30 secondi/);
+    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'x', kind: 'bogus' })).toMatch(/entro 30 secondi/);
+    const kinds = unread(dir, 'regia').map(u => u.msg.kind);
+    expect(kinds.every(k => k === undefined || k === 'info' || k === 'urgent')).toBe(true);
+    expect(kinds).not.toContain('bogus');
+  });
+
+  it('a request waits the group window and takes the held progress with it; nothing is dropped', async () => {
     const { mail, sent, dir, post } = regiaSetup();
     post('sb-tests rilasciato, tenuto 3 min');
     expect(await mail.tick()).toBe(0);
@@ -277,7 +323,7 @@ describe('mail to an idle Regia', () => {
 
   it('send_to_chat tells the sender when an idle Regia gets it', () => {
     const { call } = regiaSetup();
-    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'feat/x pronto: 3c6f315' })).toMatch(/entro un minuto/);
+    expect(call('send_to_chat', 'w', { to: 'Regia', text: 'feat/x pronto: 3c6f315' })).toMatch(/entro 30 secondi/);
     expect(call('send_to_chat', 'w', { to: 'Regia', text: 'nota: analisi scritta in x.md' })).toMatch(/prossimo turno, al più tardi fra 30 minuti/);
     expect(call('send_to_chat', 'w', { to: 'Regia', text: 'urgente: CPU al 100%' })).toMatch(/consegna adesso/);
   });

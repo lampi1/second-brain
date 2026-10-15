@@ -1,25 +1,24 @@
-// The top bar: brand, back/forward (Alt+←/→) and the recent places, the Regia button (RegiaOverlay.tsx, Ctrl+R), search/palette trigger (Ctrl+K), view toggle
-// Mosaico/Corsie (Ctrl+Shift+V), "Nascondi browser" (Ctrl+Shift+B: browser tiles off, the tabs keep working), "Credenziali" (CredentialsDialog.tsx), the
-// "Domande in finestra" switch, the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status (each engine's CLI found,
-// version, login, "Accedi"), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi dopo" is on, "Da rispondere":
-// the queue's counter, it opens the queue, lib/later.ts), "＋ Nuova chat" (Ctrl+N), "■ Ferma tutto"
-// (confirm only with >1 running), the notification bell (Ctrl+Shift+N) and the settings menu. Used by App.tsx.
-// On a bar too full for its width (useFit) the labels go first, then the lesser actions move to a "…" menu; the bell and
-// the settings sit in an end group that never shrinks, so they stay on screen at any width (2026-10-13).
+// The top bar: brand, back/forward (Alt+←/→) and the recent places, the Stato button, search/palette trigger (Ctrl+K), view
+// toggle Mosaico/Corsie (Ctrl+Shift+V), the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status
+// (each engine's CLI found, version, login, "Accedi"), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi
+// dopo" is on, "Da rispondere": the queue's counter, it opens the queue, lib/later.ts), "＋ Nuova chat" (Ctrl+N),
+// "■ Ferma tutto" (confirm only with >1 running), then the end group: "…" (browsers on/off, Credenziali, the questions
+// window, Migliora l'app: always there, 2026-10-15), the notification bell (Ctrl+Shift+N) and the settings menu (look and
+// the way to Settings). Used by App.tsx. On a bar too full for its width (useFit) the labels go first; the end group never
+// shrinks, so it stays on screen at any width (2026-10-13).
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { CliStatus, EngineInfo } from '@shared/contract';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
-import { cliCheck, cliLogin, setSetting, useApp } from '../store/store';
-import { EVERY_CHOICES, refreshDevops } from '../store/devops';
+import { cliCheck, cliLogin, useApp } from '../store/store';
 import { openModal, setPrefs, setView, toggleBrowsers, ui, type Density, type Theme } from '../store/ui';
 import { back, focusChat, forward, go, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
-import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconColumns, IconGlobe, IconGrid, IconHistory, IconLogin, IconMore, IconPanel, IconPlus, IconRefresh, IconSearch, IconSettings, IconSparkle, IconStop } from './Icons';
+import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconColumns, IconGrid, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { StatoButton } from './RegiaOverlay';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover, Segmented } from './ui';
@@ -45,7 +44,7 @@ function CliStatusButton() {
   const cli = useApp(s => s.info?.cli ?? null);
   const engines = useEngines();
   const on = useApp(s => s.settings?.engineOn);
-  // on the bar only the engines that are on (Kimi, Gemini and the brain's ship off: they would only widen it); the
+  // on the bar only the engines that are on (Kimi and the brain's ship off: they would only widen it); the
   // menu lists every engine
   const shown = engines.filter(e => on?.[e.id] === true && e.trusted);
   const [open, setOpen] = useState(false);
@@ -74,34 +73,23 @@ function CliStatusButton() {
   );
 }
 
+/** The gear: only the look of the app and the way to every setting (2026-10-15: the DevOps interval and "chat tra motori
+ *  diversi" live on the DevOps page and in Settings → Motori, not in two places). */
 function SettingsButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const density = ui.use(s => s.prefs.density);
   const theme = ui.use(s => s.prefs.theme);
-  const cross = useApp(s => s.settings?.messaging?.crossHarness ?? true);
-  const dvOn = useApp(s => s.settings?.devops?.enabled ?? false);
-  const dvEvery = useApp(s => s.settings?.devops?.everyMin ?? 30);
   const set = (patch: { density?: Density; theme?: Theme }) => { setPrefs(patch); setOpen(false); };
   return (
     <>
       <IconButton ref={ref} label="Impostazioni" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={248}>
+        <MenuLabel>Tema</MenuLabel>
+        {(['system', 'dark', 'light'] as Theme[]).map(t => <MenuItem key={t} checked={theme === t} onSelect={() => set({ theme: t })} testid={`theme-${t}`}>{t === 'system' ? 'Come il sistema' : t === 'dark' ? 'Scuro' : 'Chiaro'}</MenuItem>)}
+        <MenuSep />
         <MenuLabel>Densità</MenuLabel>
         {(['comfortable', 'compact'] as Density[]).map(d => <MenuItem key={d} checked={density === d} onSelect={() => set({ density: d })} testid={`density-${d}`}>{d === 'compact' ? 'Compatta' : 'Comoda'}</MenuItem>)}
-        <MenuSep />
-        <MenuLabel>Tema</MenuLabel>
-        {(['system', 'dark', 'light'] as Theme[]).map(t => <MenuItem key={t} checked={theme === t} onSelect={() => set({ theme: t })} testid={`theme-${t}`}>{t === 'system' ? 'Come Windows' : t === 'dark' ? 'Scuro' : 'Chiaro'}</MenuItem>)}
-        <MenuSep />
-        <MenuSep />
-        <MenuLabel>Chat</MenuLabel>
-        <MenuItem checked={cross} onSelect={() => { setOpen(false); void setSetting({ messaging: { crossHarness: !cross } }); }} testid="settings-cross-harness">Chat tra motori diversi</MenuItem>
-        <MenuSep />
-        <MenuLabel>DevOps (zero token)</MenuLabel>
-        <MenuItem checked={dvOn} onSelect={() => { setOpen(false); void setSetting({ devops: { enabled: !dvOn } }); }} testid="settings-devops-auto">Aggiornamento automatico</MenuItem>
-        {dvOn && !(EVERY_CHOICES as readonly number[]).includes(dvEvery) && <MenuItem checked onSelect={() => setOpen(false)} testid="settings-devops-every-custom">{`Ogni ${dvEvery} minuti (personalizzato)`}</MenuItem>}
-        {dvOn && EVERY_CHOICES.map(m => <MenuItem key={m} checked={dvEvery === m} onSelect={() => { setOpen(false); void setSetting({ devops: { everyMin: m } }); }} testid={`settings-devops-every-${m}`}>{m < 60 ? `Ogni ${m} minuti` : m === 60 ? 'Ogni ora' : `Ogni ${m / 60} ore`}</MenuItem>)}
-        <MenuItem onSelect={() => { setOpen(false); refreshDevops(); }} testid="settings-devops-refresh">Aggiorna DevOps ora</MenuItem>
         <MenuSep />
         <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">Scorciatoie da tastiera</MenuItem>
         <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">Tutte le impostazioni</MenuItem>
@@ -150,46 +138,13 @@ function Bell() {
   );
 }
 
-/** "Domande in finestra" at hand (the user, 2026-10-12: "un toggle"): pressed = questions in the window in front. */
-function QuestionsToggle() {
-  const on = useApp(questionsModalOn);
-  const tip = on ? 'Domande in finestra: accese|le domande compaiono in primo piano, una alla volta' : 'Domande in finestra: spente|le domande restano nelle chat e nella Regia';
-  return (
-    <button type="button" className={`btn btn-m btn-ghost browsers-toggle qwin-toggle ${on ? 'on' : ''}`} onClick={toggleQuestionsModal} aria-pressed={on} data-testid="topbar-qwin"
-      data-tip={tip} aria-label={`Domande in finestra: ${on ? 'accese' : 'spente'}`}>
-      <IconPanel size={14} /><span className="qwin-toggle-k">Domande</span>
-    </button>
-  );
-}
-
-/** The "Credenziali" panel (URL, user, Copia password of each environment), next to the browsers it is for. */
-function CredentialsButton() {
-  return (
-    <button type="button" className="btn btn-m btn-ghost browsers-toggle" onClick={() => openModal('credentials')} data-testid="topbar-credentials"
-      data-tip="Credenziali|URL, utente e Copia password degli ambienti" aria-label="Credenziali degli ambienti">
-      <IconLogin size={14} /><span>Credenziali</span>
-    </button>
-  );
-}
-
-function BrowsersToggle() {
-  const hide = ui.use(s => s.prefs.browsersHidden);
-  const n = useApp(s => s.tabs.length);
-  const tip = hide ? 'Mostra i browser|Ctrl+Shift+B' : 'Nascondi i browser: continuano a lavorare|Ctrl+Shift+B';
-  return (
-    <button type="button" className={`btn btn-m btn-ghost browsers-toggle ${hide ? 'on' : ''}`} onClick={toggleBrowsers} aria-pressed={hide} data-testid="topbar-browsers"
-      data-tip={tip} aria-label={`${hide ? 'Mostra i browser' : 'Nascondi i browser'}: ${n} aperti (Ctrl+Shift+B)`}>
-      <IconGlobe size={14} /><span>{hide ? 'Mostra browser' : 'Nascondi browser'}</span>
-      {hide && n > 0 && <span className="count-badge" data-testid="topbar-browsers-count">{n}</span>}
-    </button>
-  );
-}
-
-/** The actions the fit steps take off the bar ("…", shown only then): browsers, Credenziali, questions window, Migliora;
- *  the view switch too, only at the last step (it is a primary action). */
+/** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width): the
+ *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, the questions window, Migliora l'app; the
+ *  view switch too, only at the last fit step (it is a primary action). */
 function MoreButton({ head }: { head: RefObject<HTMLElement | null> }) {
   const view = ui.use(s => s.prefs.view);
   const hide = ui.use(s => s.prefs.browsersHidden);
+  const tabs = useApp(s => s.tabs.length);
   const qwin = useApp(questionsModalOn);
   const [open, setOpen] = useState(false);
   const [withView, setWithView] = useState(false);
@@ -198,7 +153,8 @@ function MoreButton({ head }: { head: RefObject<HTMLElement | null> }) {
   const toggle = () => { setWithView(head.current?.dataset.fit?.split(' ').includes(String(FIT_VIEW)) ?? false); setOpen(o => !o); };
   return (
     <span className="topbar-more">
-      <IconButton ref={ref} label="Altre azioni" onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
+      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? `Altre azioni: ${tabs} browser nascosti` : 'Altre azioni: browser nascosti') : 'Altre azioni'} data-tip={hide ? 'Altre azioni|browser nascosti: continuano a lavorare (Ctrl+Shift+B li mostra)' : "Altre azioni|browser, credenziali, domande in finestra, Migliora l'app"} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
+      {hide && tabs > 0 && <span className="count-badge more-badge" aria-hidden="true" data-testid="topbar-browsers-count">{tabs}</span>}
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
         {withView && <>
           <MenuLabel>Vista</MenuLabel>
@@ -206,21 +162,21 @@ function MoreButton({ head }: { head: RefObject<HTMLElement | null> }) {
           <MenuItem checked={view === 'corsie'} onSelect={run(() => setView('corsie'))} testid="more-view-corsie">Corsie</MenuItem>
           <MenuSep />
         </>}
-        <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">Nascondi browser</MenuItem>
-        <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">Credenziali</MenuItem>
-        <MenuItem checked={qwin} onSelect={run(toggleQuestionsModal)} testid="more-qwin">Domande in finestra</MenuItem>
+        <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? `Browser nascosti (${tabs}): continuano a lavorare` : 'Nascondi i browser'}</MenuItem>
+        <MenuItem checked={qwin} onSelect={run(toggleQuestionsModal)} testid="more-qwin">Domande in finestra, una alla volta</MenuItem>
+        <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">Credenziali degli ambienti…</MenuItem>
         <MenuSep />
-        <MenuItem onSelect={run(() => go({ page: 'migliora' }))} testid="more-improve">Migliora l'app</MenuItem>
+        <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">Migliora l'app</MenuItem>
       </Popover>
     </span>
   );
 }
 
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
- *  buttons, 2 shorter usage strip, 3 icon-only search / next / Migliora, 4 no Cursor in the strip, 5 the "…" menu,
- *  6 icon-only "Nuova chat", 7 the view switch into "…" too (kept on the bar down to 1280 px). Read by app.css (data-fit). */
-const FIT_STEPS = 7;
-const FIT_VIEW = 7;
+ *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only "Nuova chat", 6 the
+ *  view switch into "…" too (kept on the bar down to 1280 px). Read by app.css (data-fit). */
+const FIT_STEPS = 6;
+const FIT_VIEW = 6;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const h = head.current, m = main.current;
@@ -272,9 +228,6 @@ export function TopBar() {
         { value: 'mosaico', label: 'Mosaico', icon: <IconGrid size={14} />, tip: 'Mosaico|Ctrl+Shift+V' },
         { value: 'corsie', label: 'Corsie', icon: <IconColumns size={14} />, tip: 'Corsie|Ctrl+Shift+V' },
       ]} />
-      <BrowsersToggle />
-      <CredentialsButton />
-      <QuestionsToggle />
       <span className="sp" />
       <UsageBar />
       {queued > 0 && (
@@ -290,9 +243,6 @@ export function TopBar() {
         aria-label={inQueue ? `Da rispondere: ${waiting} (Ctrl+J)` : paused ? 'Popup in pausa: clic per riaccenderli' : `Prossima cosa per te: ${waiting} (Ctrl+J)`}>
         <IconBolt size={14} /><span className="next-label">{inQueue ? 'Da rispondere' : paused ? 'Popup in pausa' : waiting ? 'Prossima cosa per te' : 'Niente ti aspetta'}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
-      </button>
-      <button type="button" className="btn btn-ghost btn-m improve-btn" onClick={() => go({ page: 'migliora' })} data-testid="topbar-improve" data-tip="Migliora l'app: cambiala e personalizzala, poi Aggiorna|G U" aria-label="Migliora l'app">
-        <IconSparkle size={14} /><span className="improve-label">Migliora</span>
       </button>
       <button type="button" className="btn btn-primary btn-m" onClick={() => openModal('newChat')} data-testid="topbar-new" data-tip="Nuova chat|Ctrl+N"><IconPlus size={14} /><span>Nuova chat</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."

@@ -1,6 +1,7 @@
 # ADR 0030: one shared, honest self-improvement loop (step 1: estimates)
 
-Date: 2026-10-13 · Status: accepted (step 1 of 3)
+Date: 2026-10-13 · Status: accepted (step 1 of 3) · the app's per-job estimate (this ADR's "one estimator in the app")
+is superseded by ADR 0053: removed end to end, 47% hit rate on 178 chats. Model routing still reads the brain's table.
 
 ## Context
 
