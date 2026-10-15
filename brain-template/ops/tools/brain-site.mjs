@@ -28,9 +28,9 @@ const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch { return nu
 const romeDay = (t = Date.now()) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t));
 
 // Files the site may show: tracked by git (gitignored = secrets, state, outputs) + the comparison reports.
-export function allowedFiles(root) {
-  const r = spawnSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8', maxBuffer: 1e8 });
-  const files = (r.stdout ?? '').split('\n').filter(Boolean);
+export const trackedFiles = root => (spawnSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8', maxBuffer: 1e8 }).stdout ?? '').split('\n').filter(Boolean);
+export function allowedFiles(root, tracked = trackedFiles(root)) {
+  const files = [...tracked];
   const cmp = path.join(root, 'reviews', 'compare');
   const walk = (d, depth = 0) => { for (const e of (fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }) : [])) {
     const p = path.join(d, e.name);
@@ -40,6 +40,26 @@ export function allowedFiles(root) {
   for (const f of ['report.md', 'report.html', 'summary.md']) if (fs.existsSync(path.join(cmp, f))) files.push(`reviews/compare/${f}`);
   walk(path.join(cmp, 'reports'));
   return [...new Set(files)].filter(f => !/(^|\/)\.env|credentials|secret/i.test(f)).sort();
+}
+
+// What git knows changes only when its index or HEAD's log does: their mtimes are the cache key (1 ms, no process).
+// Why: every git process cost 0.9-2.4 s on a busy PC, and the app's Esplora page paid one or two per opened file
+// (2026-10-15). No .git folder (a worktree, a copy) = null: the callers fall back to a 60 s cache.
+export function gitKey(root) {
+  try { return ['index', 'logs/HEAD'].map(f => fs.statSync(path.join(root, '.git', f)).mtimeMs).join(':'); } catch { return null; }
+}
+
+// Last commit date of every tracked file, from one `git log` (async: the server keeps answering while it runs); -c lists
+// a merge's own changes (a resolved conflict), as `git log -1 -- <file>` would date them.
+export function lastCommitDates(root) {
+  return new Promise(resolve => execFile('git', ['-C', root, 'log', '-c', '--format=%x00%cI', '--name-only', '--no-renames'], { maxBuffer: 1e8, windowsHide: true }, (err, out) => {
+    const dates = new Map();
+    if (!err) for (const block of String(out).split('\0').slice(1)) {
+      const [when, ...names] = block.split('\n');
+      for (const n of names) if (n && !dates.has(n)) dates.set(n, when.trim());
+    }
+    resolve(dates);
+  }));
 }
 
 // Stale-while-revalidate cache: answer at once with the last value, refresh in the background when older than ttl.
@@ -174,8 +194,21 @@ async function sendMessage(root, { to, text }) {
 
 const TTL = { map: 10 * 60e3, cost: 3 * 60e3, day: 5 * 60e3, brief: 15 * 60e3, now: 20e3, improve: 60e3 };
 export function makeServer(root, { port = 4317 } = {}) {
-  let files = null, filesAt = 0;
-  const allowed = () => { if (!files || Date.now() - filesAt > 60e3) { files = allowedFiles(root); filesAt = Date.now(); } return files; };
+  // git's answers are kept until git changes (gitKey); the comparison reports (not in git) are walked again after 60 s
+  let tracked = null, trackedKey = null, files = null, filesAt = 0, dates = null, datesKey = null, version = null, versionKey = null;
+  const stale = (key, k) => k === null || key !== k;
+  const allowed = () => {
+    const key = gitKey(root);
+    if (!tracked || stale(key, trackedKey) || (key === null && Date.now() - filesAt > 60e3)) { tracked = trackedFiles(root); trackedKey = key; files = null; }
+    if (!files || Date.now() - filesAt > 60e3) { files = allowedFiles(root, tracked); filesAt = Date.now(); }
+    return files;
+  };
+  const commitDates = () => {
+    const key = gitKey(root);
+    if (!dates || stale(key, datesKey)) { dates = lastCommitDates(root); datesKey = key; }
+    return dates;
+  };
+  commitDates(); // built at start: the first file opened does not wait for it
   const json = (res, code, v) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(v)); };
   const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml' };
 
@@ -200,7 +233,11 @@ export function makeServer(root, { port = 4317 } = {}) {
       if (p === '/api/tables') return json(res, 200, await tables(root));
       if (p === '/api/now') return json(res, 200, await cached('now', TTL.now, () => nowData(root), { force }));
       // which code is serving the page (so "it looks unchanged" can be checked at a glance)
-      if (p === '/api/version') return json(res, 200, { site: spawnSync('git', ['-C', HERE, 'log', '-1', '--format=%h %cI'], { encoding: 'utf8' }).stdout.trim(), root, here: HERE.replace(/\\/g, '/') });
+      if (p === '/api/version') {
+        const key = gitKey(root);
+        if (version === null || stale(key, versionKey)) { version = spawnSync('git', ['-C', HERE, 'log', '-1', '--format=%h %cI'], { encoding: 'utf8' }).stdout.trim(); versionKey = key; }
+        return json(res, 200, { site: version, root, here: HERE.replace(/\\/g, '/') });
+      }
       if (p === '/api/map') return json(res, 200, await cached('map', TTL.map, async () => {
         // in a child process: brain-map runs brain-usage and brain-lint synchronously (~18 s), which would freeze the server
         return JSON.parse(await runNode('brain-map.mjs', ['--json', '--root', root], root));
@@ -232,7 +269,7 @@ export function makeServer(root, { port = 4317 } = {}) {
         const f = String(u.searchParams.get('p') ?? '').replace(/\\/g, '/');
         if (!allowed().includes(f)) return json(res, 404, { error: 'file non trovato o non mostrabile' });
         const abs = path.join(root, f), st = fs.statSync(abs);
-        const log = spawnSync('git', ['-C', root, 'log', '-1', '--format=%cI', '--', f], { encoding: 'utf8' }).stdout.trim();
+        const log = (await commitDates()).get(f) ?? '';
         if (u.searchParams.get('raw') === '1') {
           res.writeHead(200, { 'content-type': types[path.extname(f)] ?? 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="${path.basename(f)}"` });
           return res.end(fs.readFileSync(abs));

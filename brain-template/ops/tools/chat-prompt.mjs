@@ -6,6 +6,8 @@
 // Usage:
 //   node "{{BRAIN}}/ops/tools/chat-prompt.mjs" --title "A · Fix login" --kind code|qa|prod|os|research
 //        [--harness claude|cursor] [--repo my-app] [--words "<{{OWNER}}'s words>"] (--job "<task>" | --job-file <path>)
+//        [--thread "<words of its now.md line>"]  (a resume: the ctx.mjs pack of that line goes into the prompt, so the
+//                    chat starts with the line and its files/branches/worktrees checked on disk, 2026-10-15)
 //        [--app]    (the chat runs in the second-brain app: no inbox `wait` line, the app delivers the mail)
 //        [--open]   (cursor only: opens the chat in Cursor with the prompt link, {{OWNER}} clicks "Create Chat"; the
 //                    copy block is printed instead when the link is too long or Cursor refuses it)
@@ -17,13 +19,14 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { slug } from './inbox.mjs';
+import { pack as ctxPack } from './ctx.mjs';
 
 export const OPS = '{{BRAIN_JS}}';
 const REPOS = '{{REPOS_JS}}';
 const AREAS = ['A', 'B', 'Prod', 'OS', 'Pers'];
 const rome = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
-const READ = {
+export const READ = {
   code: ['code.md'],
   qa: ['code.md', 'rules\\qa.md'],
   prod: ['ops\\AGENTS.md', 'ops\\runbook\\index.md'],
@@ -48,7 +51,7 @@ export function checkTitle(title) {
   return null;
 }
 
-export function buildPrompt({ title, kind, harness = 'claude', repo, words, job, date = rome(), app = false }) {
+export function buildPrompt({ title, kind, harness = 'claude', repo, words, job, date = rome(), app = false, context }) {
   const err = checkTitle(title) ?? (!READ[kind] ? `--kind deve essere uno tra ${Object.keys(READ).join(', ')}` : null) ?? (!job?.trim() ? 'manca il lavoro (--job o --job-file)' : null);
   if (err) throw new Error(err);
   const repoPath = repo ? (/^[A-Za-z]:[\\/]/.test(repo) ? repo : `${REPOS}\\${repo}`) : null;
@@ -62,6 +65,7 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   L.push(`Prima di tutto leggi ${read.join(', ')}.`, '');
   if (words?.trim()) L.push(`Parole di {{OWNER}} (${date}): "${words.trim()}"`, '');
   L.push('Compito:', job.trim(), '');
+  if (context?.trim()) L.push(`Contesto del filo (ctx.mjs, letto dai file veri al lancio: parti da qui, i file interi solo se servono):`, context.trim(), '');
   L.push('Regole:');
   L.push(`- ${KIND_RULES[kind]}`);
   const me = slug(title);
@@ -164,7 +168,13 @@ function main() {
   const job = arg('--job-file') ? fs.readFileSync(arg('--job-file'), 'utf8') : arg('--job');
   const title = arg('--title');
   try {
-    const prompt = buildPrompt({ title, kind: arg('--kind'), harness: arg('--harness') ?? 'claude', repo: arg('--repo'), words: arg('--words'), job, app: argv.includes('--app') });
+    let context;
+    if (arg('--thread')) {
+      const r = ctxPack({ match: arg('--thread'), footer: false });
+      if (!r.ok) throw new Error(`--thread: ${r.text}`);
+      context = r.text;
+    }
+    const prompt = buildPrompt({ title, kind: arg('--kind'), harness: arg('--harness') ?? 'claude', repo: arg('--repo'), words: arg('--words'), job, app: argv.includes('--app'), context });
     const nowFile = arg('--now') ?? path.join(OPS, 'now.md');
     const dup = fs.existsSync(nowFile) ? sameLabel(title, fs.readFileSync(nowFile, 'utf8')) : [];
     if (dup.length) console.error(`attenzione: in now.md c'è già una riga "${title}" (${dup[0].slice(0, 90)}…): titolo unico tra le chat aperte, o è la stessa chat?`);

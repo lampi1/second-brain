@@ -157,8 +157,9 @@ await T('brain-site: only tracked files, only localhost, only GET', async () => 
   const srv = makeServer(root);
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   const port = srv.address().port;
+  // agent: false = a new connection each time: a git call in the test may outlast the server's 5 s keep-alive
   const get = (p, host = 'localhost', method = 'GET') => new Promise((res, rej) => {
-    const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host } }, r => { let b = ''; r.on('data', d => { b += d; }); r.on('end', () => res({ status: r.statusCode, body: b })); });
+    const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host }, agent: false }, r => { let b = ''; r.on('data', d => { b += d; }); r.on('end', () => res({ status: r.statusCode, body: b })); });
     req.on('error', rej); req.end();
   });
   try {
@@ -184,6 +185,25 @@ await T('brain-site: only tracked files, only localhost, only GET', async () => 
     ok((await get('/api/file?p=../../etc/hosts')).status === 404, 'path outside not served');
     const f = await get('/api/file?p=hub.md');
     ok(f.status === 200 && JSON.parse(f.body).text.includes('hub chat'), 'tracked file served');
+    const first = git('log', '-1', '--format=%cI', '--', 'hub.md').stdout.trim();
+    ok(first && JSON.parse(f.body).modified === first, `modified = last commit date, from the cached map: ${JSON.parse(f.body).modified} vs ${first}`);
+    // a new commit (git's index and HEAD log change): the list and the dates follow it at once, no 60 s wait
+    put(root, 'hub.md', '{{OWNER}} talks only to the hub chat.\nnew line\n');
+    put(root, 'later.md', 'added later\n');
+    git('add', '-A');
+    spawnSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'second'], { encoding: 'utf8', env: { ...process.env, GIT_COMMITTER_DATE: '2030-01-02T03:04:05Z' } });
+    ok(JSON.parse((await get('/api/files')).body).includes('later.md'), 'a newly committed file is listed at once');
+    const f2 = JSON.parse((await get('/api/file?p=hub.md')).body);
+    ok(f2.modified.startsWith('2030-01-02') && f2.text.includes('new line'), `the new commit date is served: ${f2.modified}`);
+    // a merge that resolves a conflict changes the file itself: its date is the merge's (as `git log -1 -- f` says)
+    const G = (date, ...a) => spawnSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8', env: { ...process.env, GIT_COMMITTER_DATE: date } });
+    const base = git('rev-parse', '--abbrev-ref', 'HEAD').stdout.trim();
+    git('checkout', '-qb', 'side'); put(root, 'hub.md', 'side\n'); G('2030-02-01T00:00:00Z', 'commit', '-qam', 'side');
+    git('checkout', '-q', base); put(root, 'hub.md', 'main\n'); G('2030-02-02T00:00:00Z', 'commit', '-qam', 'main');
+    G('2030-02-03T00:00:00Z', 'merge', '-q', 'side'); put(root, 'hub.md', '{{OWNER}} talks only to the hub chat.\nresolved\n'); git('add', 'hub.md'); G('2030-02-03T00:00:00Z', 'commit', '-qm', 'merge');
+    const r3 = await get('/api/file?p=hub.md').catch(e => ({ status: 0, body: String(e) }));
+    const f3 = r3.status === 200 ? JSON.parse(r3.body) : { modified: `${r3.status} ${r3.body}`, text: '' };
+    ok(f3.modified.startsWith('2030-02-03') && f3.text.includes('resolved'), `a resolved merge dates the file: ${f3.modified}`);
     const t = JSON.parse((await get('/api/tables')).body);
     ok(Array.isArray(t.errors) && Array.isArray(t.now) && t.today, 'tables');
     ok((await get('/../brain-site.mjs')).status === 404, 'no files outside the assets folder');
