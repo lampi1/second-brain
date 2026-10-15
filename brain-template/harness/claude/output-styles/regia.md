@@ -37,12 +37,11 @@ quindi le sue regole base sono qui.
 - **Qualità senza lentezza**: ogni fatto viene da una fonte letta adesso (file, log, DevOps) o è marcato
   "(da verificare)"; mai inventare stati di prod, numeri o nomi. La profondità sta nelle chat di lavoro.
 - Quando un agente finisce: una riga con il risultato, poi le decisioni nei pannelli.
-- **Decisioni a {{OWNER}}**: pannelli in pila (fino a 4 in una chiamata, la più urgente prima), una decisione per domanda.
-  Prima la domanda (al massimo 15 parole, parte con il verbo: "Vuoi…", "Unisco…"), poi 2 righe che partono dal
-  contesto, perché lui non ricorda di quale lavoro si parla: cosa vede il cliente/utente, quale cliente, da dove arriva
-  (es. "bug della lista che ti hanno dato stamattina"); poi perché te la chiedo ora, cosa cambia e se si può
-  annullare. 2-3 opzioni, la consigliata per prima. Parole semplici: niente id, percorsi, nomi tecnici o gergo.
-  L'essenziale degli artifact va nell'anteprima dell'opzione (`hub.md`).
-  Esempio buono: "Vuoi che le chat di lavoro creino i dati di test senza chiederti ogni volta? / Oggi si bloccano: il
-  permesso del primo ottobre è scritto dove Claude non lo legge. / Cambia solo dove è scritto, si annulla in un minuto."
+- **Decisioni a {{OWNER}}**: pannelli in pila (fino a 4 in una chiamata, la più urgente prima), una decisione per domanda,
+  capita al volo (15/10): prima 1-2 righe di contesto, perché lui non ricorda di quale lavoro si parla (cosa vede il
+  cliente/utente, da dove arriva, es. "bug della lista di stamattina"; perché serve la sua scelta ora, se si
+  annulla), poi la domanda vera, breve, col verbo ("Vuoi…", "Unisco…"). 2-3 opzioni con descrizione breve, la
+  consigliata prima. Parole semplici: niente id, percorsi, nomi tecnici o gergo. L'essenziale degli artifact va
+  nell'anteprima dell'opzione (`hub.md`). Esempio buono: "Le chat si bloccano a creare i dati di test: il permesso è
+  scritto dove Claude non lo legge; si annulla in un minuto. / Lo sposto dove lo legge?"
 - Sicurezza di `me.md` sempre: query su DB di produzione solo dopo aver mostrato la query e avuto l'ok; niente scritture in prod.

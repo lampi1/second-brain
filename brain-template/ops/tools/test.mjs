@@ -310,7 +310,16 @@ T('compact-now hook', () => {
   const h = input => spawnSync(process.execPath, [hook], { input: JSON.stringify(input), encoding: 'utf8' }).stdout;
   const o = JSON.parse(h({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: tr }) || '{}');
   ok(/--label "A · Fix login"/.test(o.hookSpecificOutput?.additionalContext || ''), `compact-now: ${JSON.stringify(o)}`);
+  ok(/primo messaggio ti ha fatto leggere/.test(o.hookSpecificOutput?.additionalContext || ''), 'compact-now: generic re-read without a brief');
   ok(h({ hook_event_name: 'SessionStart', source: 'startup', transcript_path: tr }) === '', 'compact-now: silent on startup');
+  fs.writeFileSync(tr, [
+    { type: 'custom-title', customTitle: 'A · Fix login' },
+    { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'leggi C:\\x\\not-this.md' }] } },
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'Leggi il brief: C:\\Users\\d\\{{BRAIN_NAME}}\\tmp\\prompt-x.md. Vedi https://github.com/o/r/blob/main/README.md. Poi C:/r/code.md, C:/r/code.md' }] } },
+    { type: 'user', message: { role: 'user', content: 'dopo: C:\\x\\later.md' } },
+  ].map(r => JSON.stringify(r)).join('\n'));
+  const b = JSON.parse(h({ source: 'compact', transcript_path: tr }) || '{}').hookSpecificOutput?.additionalContext || '';
+  ok(b.includes('C:\\Users\\d\\{{BRAIN_NAME}}\\tmp\\prompt-x.md, C:/r/code.md)') && !/not-this|later|README/.test(b), `compact-now: brief files (no URLs): ${b}`);
   fs.writeFileSync(tr, JSON.stringify({ type: 'custom-title', customTitle: 'Regia' }));
   ok(h({ source: 'compact', transcript_path: tr }) === '', 'compact-now: silent for the Regia');
   ok(spawnSync(process.execPath, [hook], { input: 'garbage', encoding: 'utf8' }).status === 0, 'compact-now: never fails');
