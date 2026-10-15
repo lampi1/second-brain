@@ -90,9 +90,50 @@ const clean = t => String(t).replace(/<system-reminder[\s\S]*?<\/system-reminder
 // Transcripts reach tens of MB (771 MB in all, review 10/10): title and folder come from a string scan, the state from
 // the last rows only; a whole file is parsed only by `read`, and only for the chat it shows.
 const jstr = s => { try { return JSON.parse(`"${s}"`); } catch { return s; } };
-const TAIL = 400;
+// The app's live feed runs `list` every 15 s: reading every transcript in full each time cost 32 s, 5 s of CPU and
+// 370 MB a run on 15/10 (99 files, 396 MB). A cache keeps each file's title and folder with the offset scanned so far:
+// a run scans only the bytes added since (a file that shrank is scanned again), and the state comes from the tail.
+const CACHE = process.env.BRAIN_CHATS_CACHE || path.join(import.meta.dirname, '..', '..', 'ops', 'state', 'chats-cache.json');
+const CACHE_DAYS = 31; // `read` looks back 30 days by title
+function loadCache() { try { return JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch { return {}; } }
+function saveCache(c) {
+  const old = Date.now() - CACHE_DAYS * 864e5;
+  for (const [k, v] of Object.entries(c)) if (!(v.mtime >= old)) delete c[k];
+  try { fs.mkdirSync(path.dirname(CACHE), { recursive: true }); const tmp = `${CACHE}.${process.pid}`; fs.writeFileSync(tmp, JSON.stringify(c)); fs.renameSync(tmp, CACHE); } catch { /* read-only: next run scans again */ }
+}
+function readRange(fd, from, to) {
+  const b = Buffer.alloc(Math.max(0, to - from));
+  let n = 0;
+  while (n < b.length) { const r = fs.readSync(fd, b, n, b.length - n, from + n); if (!r) break; n += r; }
+  return b.subarray(0, n);
+}
+/** Title (last custom-title) and folder (first cwd) of a transcript, scanning only what was appended since the cache. */
+function scanHead(cache, file, fd, st) {
+  let e = cache[file];
+  if (!e || st.size < e.scanned) e = { scanned: 0, name: '', cwd: '' }; // new, or rewritten shorter
+  const chunk = readRange(fd, e.scanned, st.size);
+  const end = chunk.lastIndexOf(10) + 1; // whole lines only: a line being written is scanned next run
+  const text = chunk.subarray(0, end).toString('utf8');
+  let name = e.name;
+  for (const m of text.matchAll(/"customTitle":"((?:[^"\\]|\\.)*)"/g)) name = jstr(m[1]);
+  const cwd = e.cwd || jstr(text.match(/"cwd":"((?:[^"\\]|\\.)*)"/)?.[1] ?? '');
+  cache[file] = { scanned: e.scanned + end, name, cwd, mtime: st.mtimeMs };
+  return { name, cwd };
+}
+/** The file's last rows, reading back from the end (256 KB, then 4x) until they hold an assistant row with text: from
+ *  there on claudeState sees what it would see in the whole file (last message, last stop, last answer's text). */
+function tailRows(fd, size) {
+  for (let want = 256 << 10; ; want *= 4) {
+    const from = Math.max(0, size - want);
+    const buf = readRange(fd, from, size);
+    const rows = buf.subarray(from > 0 ? buf.indexOf(10) + 1 : 0).toString('utf8').split('\n') // the first line is cut
+      .map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    if (from === 0 || rows.some(r => r.type === 'assistant' && !r.isSidechain && textOf(r.message?.content).trim())) return rows;
+  }
+}
 function claudeChats({ since = 0, idPrefix = '', titleQ = '' } = {}) {
   const out = [];
+  const cache = loadCache();
   let dirs = [];
   try { dirs = fs.readdirSync(CLAUDE, { withFileTypes: true }).filter(d => d.isDirectory()); } catch { return out; }
   for (const d of dirs) {
@@ -100,20 +141,21 @@ function claudeChats({ since = 0, idPrefix = '', titleQ = '' } = {}) {
     try { files = fs.readdirSync(path.join(CLAUDE, d.name)).filter(f => f.endsWith('.jsonl') && f.startsWith(idPrefix)); } catch { continue; }
     for (const f of files) {
       const file = path.join(CLAUDE, d.name, f);
-      let mtime; try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
+      let st; try { st = fs.statSync(file); } catch { continue; }
+      const mtime = st.mtimeMs;
       if (mtime < since) continue;
-      let raw; try { raw = fs.readFileSync(file, 'utf8'); } catch { continue; }
-      if (titleQ && !raw.includes('"custom-title"')) continue;
-      let name = '';
-      for (const m of raw.matchAll(/"customTitle":"((?:[^"\\]|\\.)*)"/g)) name = jstr(m[1]);
-      if (titleQ && !name.toLowerCase().includes(titleQ)) continue;
-      const cwd = jstr(raw.match(/"cwd":"((?:[^"\\]|\\.)*)"/)?.[1] ?? '');
-      const tail = raw.split('\n').slice(-TAIL).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-      if (!tail.some(r => r.type === 'user' || r.type === 'assistant')) continue;
-      const wt = cwd.split(/[\\/]\.claude[\\/]worktrees[\\/]/); // a worktree shows its repo ({{BRAIN_NAME}}), not its random name
-      out.push({ harness: 'Claude', id: f.slice(0, -6), at: mtime, name, folder: wt[0], worktree: wt.length > 1, file, rows: tail });
+      let fd; try { fd = fs.openSync(file, 'r'); } catch { continue; }
+      try {
+        const { name, cwd } = scanHead(cache, file, fd, st);
+        if (titleQ && !name.toLowerCase().includes(titleQ)) continue;
+        const tail = tailRows(fd, st.size);
+        if (!tail.some(r => r.type === 'user' || r.type === 'assistant')) continue;
+        const wt = cwd.split(/[\\/]\.claude[\\/]worktrees[\\/]/); // a worktree shows its repo ({{BRAIN_NAME}}), not its random name
+        out.push({ harness: 'Claude', id: f.slice(0, -6), at: mtime, name, folder: wt[0], worktree: wt.length > 1, file, rows: tail });
+      } catch { continue; } finally { fs.closeSync(fd); }
     }
   }
+  saveCache(cache);
   return out;
 }
 

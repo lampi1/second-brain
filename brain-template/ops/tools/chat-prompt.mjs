@@ -80,6 +80,8 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   L.push('- Se {{OWNER}} ti corregge o scopri un tuo errore: una riga con `node "{{BRAIN}}/ops/tools/mem.mjs" error --text "<riga>"` (formato in ai-errors.md).');
   // 2026-10-11: 10 chats ran full suites together, CPU 100%, ~1 h lost (code.md "Heavy test suites")
   L.push('- Suite di test pesanti (check completo, e2e, vitest intero): una alla volta sulla macchina, con lo stesso turno sull\'ambiente dei test del repo (`sb-tests` per second-brain-app): `wait` in background → suite → `release` sempre, anche se fallisce; senza turno solo singoli file di test; un timeout preso a PC carico non prova niente.');
+  // 2026-10-15: a CPU load generator + repeated e2e by day blocked his work chats for over an hour (code.md "Load tests only at night")
+  L.push('- Test di carico, stress, generatori di CPU/RAM, benchmark sotto carico, e2e ripetuti per caricare la macchina: solo di notte, fuori dal suo orario di lavoro, mai di giorno su questo PC (è il PC in cui lavora); di giorno programmali per la notte e dillo.');
   return L.join('\n');
 }
 
