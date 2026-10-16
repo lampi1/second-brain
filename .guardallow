@@ -26,3 +26,4 @@ docs/screenshots/devops.webp binary-media sha256:2b5964949e48f74e3ef170a3275d30b
 docs/screenshots/mosaic.webp binary-media sha256:2a6c7ab702f263fb64556cc1f706bfb2b119a941a8160070e9d29191848345b2
 docs/screenshots/quality.webp binary-media sha256:30a801b0dcc8b617854a6623bd165b580567f07b4baae1ef772df54055cd61a7
 docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42eb3e06e72439883bc4b6af75c872421c
+test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4adbcde2e77beea32d931cdb55459e803194f1c0476b8248da327f
