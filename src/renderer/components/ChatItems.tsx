@@ -20,7 +20,7 @@ import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
 import { IconAlert, IconArrowDown, IconBell, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
-import { FOREIGN_LABEL, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
+import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
 import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp } from '../store/store';
@@ -30,6 +30,7 @@ import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { ArtifactCard } from './GenUi';
 import { useLinkPeek } from './LinkPeek';
+import { sysText, t } from '../i18n';
 import { ThoughtText } from './CorrectThought';
 import { correctedThoughts, parseCorrection } from '../lib/correction';
 
@@ -91,7 +92,7 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
 
 /** The live line of a running turn. */
 export function Typing({ what, testid }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string }) {
-  const text = what === 'scrive' ? 'sta scrivendo…' : what === 'pensa' ? 'sta pensando…' : 'sta lavorando…';
+  const text = what === 'scrive' ? t('chat.items.typing.writing') : what === 'pensa' ? t('chat.items.typing.thinking') : t('chat.items.typing.working');
   return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span>{text}</div>;
 }
 
@@ -131,7 +132,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: Tool }) {
   return (
     <div className={`tool tool-${item.status} ${open ? 'open' : ''}`} data-testid={`tool-${item.id}`} data-status={item.status}>
       <button type="button" className="tool-row" data-testid={`tool-toggle-${item.id}`} onClick={() => hasMore && setOpen(o => !o)} aria-expanded={hasMore ? open : undefined} disabled={!hasMore}
-        aria-label={`${ex.line} (${item.status === 'running' ? 'in corso' : item.status === 'ok' ? 'fatto' : 'errore'})`} title={item.summary}>
+        aria-label={`${ex.line} (${t(`chat.items.toolStatus.${item.status}`)})`} title={item.summary}>
         <span className="tool-icon">{item.status === 'running' ? <IconSpinner size={13} /> : item.status === 'ok' ? <IconCheck size={13} /> : <IconX size={13} />}</span>
         <span className="tool-line" data-testid={`tool-line-${item.id}`}>{ex.line}</span>
         {/^(Bash|PowerShell|Shell)$/.test(item.name) && <span className="tool-name">{label}</span>}
@@ -161,7 +162,7 @@ const Thinking = memo(function Thinking({ text, beforeAsk, marks }: { text: stri
   return (
     <div className={`thinking ${open ? 'open' : ''} ${beforeAsk ? 'before-ask' : ''}`} data-before-ask={beforeAsk ? '' : undefined}>
       <button type="button" className="thinking-row" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="thinking-toggle">
-        <IconSparkle size={13} /><span>{beforeAsk ? 'Ragionamento · prima della domanda' : 'Ragionamento'}</span><IconChevronRight size={12} className="tool-chev" />
+        <IconSparkle size={13} /><span>{beforeAsk ? t('chat.items.thinkingBeforeAskLabel') : t('chat.items.thinkingLabel')}</span><IconChevronRight size={12} className="tool-chev" />
       </button>
       {open && <ThoughtText chatId={chatId} text={text} marks={marks} />}
     </div>
@@ -179,13 +180,13 @@ const ForeignMsg = memo(function ForeignMsg({ item, f }: { item: Extract<ChatIte
   return (
     <div className={`msg-foreign foreign-${f.kind} ${open ? 'open' : ''}`} data-testid={`item-${item.id}`} data-foreign={f.kind}>
       <button type="button" className="foreign-row" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`item-${item.id}-toggle`}
-        title={open ? 'Chiudi' : 'Apri il messaggio intero'}>
+        title={open ? t('common.close') : t('chat.items.foreignOpen')}>
         {FOREIGN_ICON[f.kind]}
-        <span className="foreign-who">{FOREIGN_LABEL[f.kind]}{showsSender(f) ? <> · «{f.sender}»</> : null}</span>
+        <span className="foreign-who">{getForeignLabel()[f.kind]}{showsSender(f) ? <> · «{f.sender}»</> : null}</span>
         {!open && f.summary && <span className="foreign-sum">{f.summary}</span>}
         <IconChevronRight size={12} className="tool-chev" />
       </button>
-      {open && <div className="foreign-body" data-testid={`item-${item.id}-body`}>{f.body}<span className="foreign-note">{f.kind === 'done' ? 'Segnato da te con un clic: la chat ha solo queste righe.' : 'Non scritto da te: non vale come tuo ok.'}</span></div>}
+      {open && <div className="foreign-body" data-testid={`item-${item.id}-body`}>{f.body}<span className="foreign-note">{f.kind === 'done' ? t('chat.items.foreignDoneNote') : t('chat.items.foreignNotYoursNote')}</span></div>}
     </div>
   );
 });
@@ -208,7 +209,7 @@ function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> 
 function CorrectionBubble({ quote, fix }: { quote: string; fix: string }) {
   return (
     <div className="bubble correction" data-testid="correction-bubble">
-      <div className="correction-label">Correzione del ragionamento</div>
+      <div className="correction-label">{t('chat.correct.label')}</div>
       <div className="correction-quote">«{quote}»</div>
       <div>{fix}</div>
     </div>
@@ -228,9 +229,9 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
       const fix = item.from ? null : parseCorrection(text);
       return (
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-new-chat={nc?.newChat ? '' : undefined}>
-        {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{item.images === 1 ? '1 immagine' : `${item.images} immagini`}</span> : null}
-        {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>Da «{item.from}» · non scritto da te</div>}
-        {nc?.newChat && <div className="msg-newchat" data-testid={`item-${item.id}-newchat`} data-tip="La Regia apre una chat nuova per questa richiesta"><IconPlus size={11} />Nuova chat</div>}
+        {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
+        {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
+        {nc?.newChat && <div className="msg-newchat" data-testid={`item-${item.id}-newchat`} data-tip={t('chat.items.newChatTip')}><IconPlus size={11} />{t('chat.items.newChat')}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
       </div>
@@ -241,10 +242,10 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
     case 'tool': return <ToolItem item={item} />;
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
-      const recap = /^dove eravamo/i.test(item.text);
+      const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
       return (
         <div className={`notice notice-${item.level} ${recap ? 'recap' : ''}`} role={item.level === 'error' ? 'alert' : undefined}>
-          {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{item.text}</span>
+          {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
         </div>
       );
     }
@@ -253,7 +254,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
       return (
         <div className={`result ${item.isError ? 'err' : ''}`} data-testid={`item-${item.id}`}>
           <span className="result-line" />
-          <span>{item.isError ? 'Turno finito con errore' : item.interrupted ? 'Turno interrotto da te' : 'Turno finito'} · {formatCost(item.costUsd)} · {duration(item.durationMs)}{item.turns > 1 ? ` · ${item.turns} passi` : ''}</span>
+          <span>{item.isError ? t('chat.items.resultError') : item.interrupted ? t('chat.items.resultInterrupted') : t('chat.items.resultSuccess')} · {formatCost(item.costUsd)} · {duration(item.durationMs)}{item.turns > 1 ? t('chat.items.resultSteps', { n: item.turns }) : ''}</span>
           <span className="result-line" />
         </div>
       );
@@ -266,8 +267,8 @@ function ColdDivider({ session }: { session: string | undefined }) {
   return (
     <div className="cold-divider" role="separator" data-testid="cold-divider">
       <span className="result-line" />
-      <span>Continua da qui</span>
-      {chatId && <button type="button" className="link-btn" onClick={() => openHandoff(chatId, session)} data-tip="La sessione precedente era ferma da più di un'ora: questa riparte dal suo passaggio di consegne invece di rileggerla tutta" data-testid="cold-note">passaggio di consegne</button>}
+      <span>{t('chat.items.coldDividerStart')}</span>
+      {chatId && <button type="button" className="link-btn" onClick={() => openHandoff(chatId, session)} data-tip={t('chat.items.coldDividerNote')} data-testid="cold-note">{t('chat.items.coldNoteButton')}</button>}
       <span className="result-line" />
     </div>
   );
@@ -277,7 +278,7 @@ function ColdDivider({ session }: { session: string | undefined }) {
 function FoldedPast({ count, onOpen }: { count: number; onOpen: () => void }) {
   return (
     <button type="button" className="cold-past" onClick={onOpen} data-testid="cold-past">
-      <IconChevronRight size={12} /> Sessione precedente · {count === 1 ? '1 riga' : `${count} righe`}
+      <IconChevronRight size={12} /> {t('chat.items.coldPastSession', { count })}
     </button>
   );
 }
@@ -369,7 +370,7 @@ export function ItemList({ items, empty, footer, chatId = null }: { items: reado
       {peek.popover}
       {unseen && (
         <button type="button" className="unseen" data-testid="unseen" onClick={() => { const el = ref.current; if (el) { toBottom(el); stick.current = true; setUnseen(false); } }}>
-          <IconArrowDown size={13} /> nuove righe
+          <IconArrowDown size={13} /> {t('chat.items.unseenButton')}
         </button>
       )}
     </div>

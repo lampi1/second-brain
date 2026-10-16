@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { sb } from '../sb';
 import { refreshInfo, useApp } from '../store/store';
+import { t } from '../i18n';
 
 export function BrainSetupBanner() {
   const problem = useApp(s => s.info?.brainProblem ?? null);
@@ -24,11 +25,11 @@ export function BrainSetupBanner() {
   return (
     <div className="brain-setup" role="alert" data-testid="brain-setup">
       <div className="brain-setup-text">
-        <b>Il cervello non è collegato.</b> <span>{problem}.</span>
+        <b>{t('dialogs.brainSetup.notConnected')}</b> <span>{problem}.</span>
         {error && <span className="brain-setup-err"> {error}</span>}
       </div>
       <button type="button" className="btn btn-primary btn-s" onClick={() => void pick()} disabled={busy} data-testid="brain-setup-pick">
-        {busy ? 'Apro…' : 'Scegli la cartella del cervello'}
+        {busy ? t('dialogs.brainSetup.picking') : t('dialogs.brainSetup.pickButton')}
       </button>
     </div>
   );

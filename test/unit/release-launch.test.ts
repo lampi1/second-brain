@@ -10,7 +10,8 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const script = path.resolve(import.meta.dirname, '..', '..', 'scripts', 'release.mjs');
-const exe = process.platform === 'win32' ? 'electron.exe' : 'electron';
+// the shared runtime's executable per OS, as release.mjs electronFor (macOS: inside the app bundle)
+const exe = process.platform === 'win32' ? 'electron.exe' : process.platform === 'darwin' ? path.join('Electron.app', 'Contents', 'MacOS', 'Electron') : 'electron';
 let root = '';
 
 // the fake app: SB_FAKE_PLAN is a comma list, one entry per start ("busy" → exit 75, "fail" → exit 1, "ready" → write
@@ -26,7 +27,7 @@ setTimeout(()=>{},1500);`;
 
 function setup(ids: string[]): { base: string; userData: string } {
   const base = fs.mkdtempSync(path.join(root, 'rel-'));
-  fs.mkdirSync(path.join(base, 'electron', '1.0.0'), { recursive: true });
+  fs.mkdirSync(path.dirname(path.join(base, 'electron', '1.0.0', exe)), { recursive: true });
   fs.copyFileSync(process.execPath, path.join(base, 'electron', '1.0.0', exe));
   for (const id of ids) {
     const dir = path.join(base, 'releases', id);

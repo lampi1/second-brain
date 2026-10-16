@@ -1,12 +1,13 @@
 // Work on this app, told apart from the work of the work Regia: Fatto shows only the latter (the owner, 2026-10-13:
-// "mi interessa solo il Fatto, non dell'app che lo vedo già nella sezione Migliora l'app, ma della Regia del lavoro").
-// The brain's day report mixes both, so the page filters here: the chats of "Migliora l'app" (titles «App · …»,
-// «Pers · App: …», «Regia dell'app»; any chat whose project folder is the app's repo or one of its worktrees; untitled
+// "mi interessa solo il Fatto, non dell’app che lo vedo già nella sezione Migliora l’app, ma della Regia del lavoro").
+// The brain’s day report mixes both, so the page filters here: the chats of "Migliora l’app" (titles «App · …»,
+// «Pers · App: …», «Regia dell’app»; any chat whose project folder is the app’s repo or one of its worktrees; untitled
 // chats with no folder, from reports older than the folder field), diary lines that start with "app:", the brain
 // commits about the app and the lines of the technical report that name them. Used by pages/Fatto.tsx (rows, report text, diary table, stand-up).
+import { t } from '../../i18n';
 import { normBrief, normReport, type Brief, type DayReport, type DayRow, type JournalRow } from '../types';
 
-/** A chat or thread title of the app's own work: «App · …», «Pers · App: …», «Regia dell'app», older «… second-brain …». */
+/** A chat or thread title of the app’s own work: «App · …», «Pers · App: …», «Regia dell’app», older «… second-brain …». */
 const APP_TITLE = /^(?:\*\*)?(?:Pers\s*·\s*)?App\s*[·:]|^Regia dell['’]app\b|second-brain/i;
 /** A diary line about the app: "app: …" (after the time and the tag), or one that names its repo. */
 const APP_NOTE = /^(?:\[personale\]\s*)?app:|second-brain/i;
@@ -14,20 +15,19 @@ const APP_NOTE = /^(?:\[personale\]\s*)?app:|second-brain/i;
 const APP_COMMIT = /^(?:\w+\()?(?:app|product)\)?!?:|\bthe app\b|\bapp's\b|second-brain/i;
 /** A chat line of the Cursor/Claude chat list: "Claude · App · X · folder · 13/10, 19:48 · finito" → "App · X". */
 const listedChat = (s: string) => s.replace(/^(?:Cursor|Claude)\s*·\s*/i, '');
-/** The app's repo or one of its worktrees (…\second-brain-app, …\second-brain-app-wt\<name>). */
+/** The app’s repo or one of its worktrees (…\second-brain-app, …\second-brain-app-wt\<name>). */
 const APP_FOLDER = /[\\/]second-brain-app(?:-wt)?(?:[\\/]|$)/i;
-const UNTITLED = '(senza titolo)';
 
 export const isAppTitle = (title: string): boolean => APP_TITLE.test(title.trim());
 export const isAppNote = (text: string): boolean => APP_NOTE.test(text.trim());
 export const isAppCommit = (msg: string): boolean => APP_COMMIT.test(msg.trim());
 
-/** A row of the day report about the app's own work. */
+/** A row of the day report about the app’s own work. */
 export function isAppRow(r: DayRow): boolean {
   if (r.kind === 'diario') return isAppNote(r.title);
   const cwd = typeof r.cwd === 'string' ? r.cwd : '';
   if (r.kind === 'chat' && cwd) return APP_FOLDER.test(cwd) || isAppTitle(r.title);
-  if (r.kind === 'chat' && r.title === UNTITLED) return true; // no folder to tell: an untitled chat is no work to report
+  if (r.kind === 'chat' && r.title === t('brainLib.appwork.untitled')) return true; // no folder to tell: an untitled chat is no work to report
   if (r.kind === 'chat' || r.kind.startsWith('chat-')) return isAppTitle(listedChat(r.title));
   return /second-brain/i.test(r.title);
 }

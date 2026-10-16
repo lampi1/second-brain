@@ -166,6 +166,15 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .ub-row > .ub-label { flex: 1; min-width: 0; }
 .ub-row b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ub-chat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* live costs (LiveCosts.tsx): today's chats by cost, in the usage popup and on the Costi page */
+.lc-list { list-style: none; margin: 0; padding: 0; }
+.lc-row { width: 100%; }
+button.lc-row { background: none; border: 0; padding: 2px 4px; margin: 0 -4px; border-radius: 6px; font: inherit; color: inherit; text-align: left; cursor: pointer; width: calc(100% + 8px); }
+button.lc-row:hover { background: var(--hover, color-mix(in srgb, var(--text) 6%, transparent)); }
+button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lc-tag { font-size: 10.5px; color: var(--text-3, var(--text-2)); white-space: nowrap; }
+.lc-tag.run { color: var(--green, var(--accent)); font-weight: 600; }
+.lc-more { margin-top: 6px; font-size: 12px; }
 .ub-note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-3); }
 .ub-plan { display: flex; flex-direction: column; gap: 5px; }
 .ub-plan-head { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-2); }
@@ -191,6 +200,21 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .cli-dot.ok { background: var(--green); }
 .cli-dot.bad { background: var(--red); }
 .cli-dot.unknown { background: var(--text-4); }
+/* brain-sync status (SyncStatus.tsx, ADR 0059) */
+.sync-btn.bad { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-2); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; background: var(--text-4); }
+.sync-dot.ok { background: var(--green); }
+.sync-dot.busy { background: var(--amber); }
+.sync-dot.bad { background: var(--red); }
+.sync-domain { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+.sync-domain + .sync-domain { border-top: 1px solid var(--border); }
+.sync-head { display: flex; align-items: center; gap: 6px; }
+.sync-head small, .sync-line { color: var(--text-3); font-size: 11.5px; }
+.sync-block { margin-top: 4px; padding: 6px 8px; border-radius: var(--r-s); background: color-mix(in srgb, var(--red) 8%, transparent); font-size: 12px; }
+.sync-block ul { margin: 4px 0; padding-left: 16px; color: var(--text-2); word-break: break-word; }
+.sync-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.sync-now { align-self: flex-start; margin-top: 2px; }
+.sync-err { color: var(--red); }
 .next-btn .next-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
 .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--gap); }
@@ -476,6 +500,8 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .ask .step { margin-left: 0; }
 .ask-age { font-size: 11px; color: var(--text-3); flex: none; }
 .ask-q { font: 600 14px/1.45 var(--font-display); color: var(--text); letter-spacing: -0.003em; }
+/* the agent's context sentence in front of its question (lib/askSplit.ts): muted, the question stays the eye's first stop */
+.ask-lead { margin-bottom: -6px; font-size: 12.5px; line-height: 1.45; color: var(--text-3); overflow-wrap: anywhere; }
 .ask-opts { display: flex; flex-direction: column; gap: 6px; }
 .ask-opt {
   position: relative; display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; text-align: left; border-radius: var(--r-s);
@@ -866,17 +892,17 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 }
 .modal:focus, .modal:focus-visible { outline: none; }
 .modal > form { display: flex; flex-direction: column; min-height: 0; }
-.modal-head { display: flex; align-items: center; gap: 8px; padding: 16px 18px 4px; }
-.modal-head h2 { margin: 0; font: 600 16px var(--font-display); }
+.modal-head { display: flex; align-items: center; gap: 8px; padding: 18px 20px 4px; }
+.modal-head h2 { margin: 0; font: 600 17px/1.3 var(--font-display); letter-spacing: -0.01em; }
 .modal-head-hint { font-size: 11.5px; color: var(--text-3); }
-.modal-body { padding: 10px 18px 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px 16px; }
+.modal-body { padding: 12px 20px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 20px 18px; }
 .modal-confirm { width: min(440px, calc(100vw - 32px)); }
 .modal-renew { width: min(500px, calc(100vw - 32px)); }
 .modal-renew .modal-head { gap: 10px; }
 .modal-renew .harness-card.on { border-color: var(--violet); background: var(--violet-bg); }
 .modal-renew .harness-card:disabled { opacity: 0.55; cursor: not-allowed; }
-.confirm-body { margin: 0; color: var(--text-2); line-height: 1.5; }
+.confirm-body { margin: 0; max-width: 60ch; color: var(--text-2); font-size: 14px; line-height: 1.55; }
 /* hand-off dialog (HandoffDialog.tsx) */
 .modal-handoff { width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 48px)); display: flex; flex-direction: column; }
 .modal-handoff .modal-head > svg { color: var(--amber); flex: none; }

@@ -1,6 +1,6 @@
-// CLI format drift: the app reads other programs' output (Claude Code's stream-json, every ACP engine's JSON-RPC), and a
-// CLI update can rename a field or add an event the parsers do not know. Nothing breaks loudly then: a switch falls to
-// its default and the chat silently shows less. This module makes that visible and testable (ADR 0055):
+// CLI format drift: the app reads other programs' output (Claude Code's stream-json, every ACP engine's and Codex
+// app-server's JSON-RPC), and a CLI update can rename a field or add an event the parsers do not know. Nothing breaks
+// loudly then: a switch falls to its default and the chat silently shows less. This module makes that visible and testable (ADR 0055):
 //   - drift(): one warn per CLI, version and unknown shape per process (scope `drift`), with the sanitized message, so
 //     `npm run logs -- --scope drift` and `npm run doctor` show it the day it happens;
 //   - record(): in the dev instance, up to RECORD_PER_KEY sanitized samples of every message shape a real CLI sends,
@@ -9,7 +9,7 @@
 //     parsers without spending a token;
 //   - sanitize(): every string becomes a placeholder except the protocol's own enum values (type, subtype, kind…), so
 //     no prompt, answer, path or id of the user ever reaches a log or a fixture.
-// Used by chats/claude.ts and chats/acp.ts; the recorder is turned on by wiring.ts (dev instance only).
+// Used by chats/claude.ts, chats/acp.ts and chats/codex.ts (ADR 0060); the recorder is turned on by wiring.ts (dev instance only).
 import fs from 'node:fs';
 import path from 'node:path';
 import { log } from '../log';
@@ -61,7 +61,7 @@ export function drift(cli: string, version: string | null | undefined, kind: str
   log.warn('drift', 'CLI format changed', {
     ...(chat ? { chat } : {}),
     cause: `${cli} ${v}: ${kind} "${what}"`,
-    hint: `the ${cli} CLI sends something the app does not know: update chats/${cli === 'claude' ? 'claude' : 'acp'}.ts (or its known list), record the version (scripts/cli-fixtures.mjs) and run test/unit/chats/cli-contract.test.ts`,
+    hint: `the ${cli} CLI sends something the app does not know: update chats/${cli === 'claude' ? 'claude' : cli === 'codex' ? 'codex' : 'acp'}.ts (or its known list), record the version (scripts/cli-fixtures.mjs) and run test/unit/chats/cli-contract.test.ts`,
     data: { cli, version: v, kind, what, ...(sample === undefined ? {} : { sample: sanitize(sample) }) },
   });
 }

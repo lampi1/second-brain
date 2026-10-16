@@ -45,7 +45,7 @@ export async function launch(env: Record<string, string> = {}, userData = fs.mkd
     args: ['.'],
     cwd: path.resolve(import.meta.dirname, '..', '..'),
     // SB_HIDDEN: the app runs off screen and never takes focus (the user keeps working while tests run)
-    env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', SB_HIDDEN: '1', ...env } as Record<string, string>,
+    env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', SB_HIDDEN: '1', SB_LANG: 'it', ...env } as Record<string, string>,
   });
   fastClose(app, userData);
   await app.firstWindow();
@@ -141,6 +141,27 @@ export async function layerPage(app: ElectronApplication): Promise<Page> {
 export type LayerState = { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; cards: number; toasts: number };
 export async function layerState(app: ElectronApplication): Promise<LayerState> {
   return app.evaluate(() => (globalThis as unknown as { __sbOverlay: { state(): LayerState } }).__sbOverlay.state());
+}
+
+/** A real Ctrl+W (sendInputEvent: only a real key reaches Electron's default menu, whose "Close" quits the app) on the
+ *  app's window or its requests layer, then F13 as a sentinel. Key events go to a page one at a time, each after the
+ *  page (and, if unhandled, the window menu) dealt with the one before: once F13 reaches the page, Ctrl+W was fully
+ *  handled. A test waits for that, not for time. Returns how many times the main window started closing meanwhile. */
+export async function ctrlWHandled(app: ElectronApplication, where: 'window' | 'layer'): Promise<number> {
+  return app.evaluate(async ({ BrowserWindow, webContents }, where) => {
+    const main = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().startsWith('file:') && !x.webContents.getURL().includes('#overlay'))!;
+    const wc = where === 'window' ? main.webContents : webContents.getAllWebContents().find(w => w.getURL().includes('#overlay'))!;
+    let closes = 0;
+    const closing = () => { closes++; };
+    main.on('close', closing);
+    await wc.executeJavaScript("void (window.__sbF13 = new Promise(r => addEventListener('keyup', e => { if (e.key === 'F13') r(1); }, true))); 1");
+    if (where === 'layer') wc.focus();
+    const keys = [['keyDown', 'W', ['control']], ['keyUp', 'W', ['control']], ['keyDown', 'F13', []], ['keyUp', 'F13', []]] as const;
+    for (const [type, keyCode, modifiers] of keys) wc.sendInputEvent({ type, keyCode, modifiers: [...modifiers] });
+    await wc.executeJavaScript('window.__sbF13');
+    main.off('close', closing);
+    return closes;
+  }, where);
 }
 
 /** A screenshot of the whole window as Windows composes it (app page + browser views + the layer on top). */

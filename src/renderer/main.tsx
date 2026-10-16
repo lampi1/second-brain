@@ -18,6 +18,7 @@ import { startTypingWatch } from './lib/questions';
 import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
 import { startLater } from './lib/later';
+import { LangRoot, startLang } from './i18n/LangRoot';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/shell.css';
@@ -48,5 +49,6 @@ if (isBrainTestRoute()) {
   setInterval(() => checkDnd(now()), 60_000);
   sb.on('ui:command', uiCommand);
   sb.on('focus:next', () => nextThing());
-  root.render(<StrictMode><App /></StrictMode>);
+  // the language first (ADR 0057): the first render is already in the right one
+  void startLang().then(() => root.render(<StrictMode><LangRoot><App /></LangRoot></StrictMode>));
 }

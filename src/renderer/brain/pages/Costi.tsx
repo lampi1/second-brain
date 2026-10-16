@@ -3,9 +3,10 @@
 // longest context and what restarting it would have saved ('chat:list').
 // The period's total is read against the period before (ADR 0037: /api/cost?days=2N, the brain caps at 90 days, so
 // "90 giorni" says it has no comparison), and the total, the advice and every chart end with the discussion bar.
+// On top, "Adesso": every chat of today by cost, live from the app's own streams (LiveCosts.tsx, zero tokens).
 // Data: /api/cost?days=N (the brain's cost tool). The per-job cost/time estimate and its calculator were removed
 // (ADR 0053): measured on 178 past chats, the real cost fell inside the estimate's range only 47% of the time.
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import type { Usage } from '@shared/contract';
 import { normCost, type CostChat } from '../types';
 import { useBrain } from '../api';
@@ -18,8 +19,11 @@ import { Async, PageHead } from '../components/States';
 import { BarChart, HBarChart } from '../components/Charts';
 import { DataTable, type Col } from '../components/DataTable';
 import { Kpi, Pill, Section, Seg } from '../components/ui';
-import { DiscussBar } from '../components/Discuss';
+import { DiscussBar, DiscussContext } from '../components/Discuss';
 import { Reading } from '../components/Stats';
+import { useAppChats } from '../components/Composer';
+import { LiveCostList } from '../../components/LiveCosts';
+import { costRows } from '../../lib/live-costs';
 
 const PERIODS = [1, 7, 30, 90] as const;
 /** the brain's cost API reads at most 90 days: the period before is known up to 45 */
@@ -32,6 +36,20 @@ const HELP = {
   saveKpi: 'Ogni messaggio rilegge tutta la chat, quindi una chat lunga costa sempre di più. È quanto avresti risparmiato riprendendo in una chat nuova quando il contesto arrivava a ~200k token.',
   fixed: 'I file del cervello che ogni chat carica sempre (istruzioni e memoria): vengono riletti a ogni messaggio, quindi ogni carattere in più costa in tutte le chat.',
 };
+
+/** "Adesso": today's chats by cost, re-sorted at each message (the app's streams + the brain's last count). */
+function LiveNow() {
+  const usage = useAppUsage();
+  const chats = useAppChats();
+  const bridge = useContext(DiscussContext);
+  const rows = useMemo(() => costRows(usage, chats ?? []), [usage, chats]);
+  const unpriced = usage?.cursorUnpriced?.models;
+  return (
+    <Section title="Adesso" count={rows.length} note="le chat di oggi, dalla più cara: si aggiorna a ogni messaggio, zero token" testId="bx-cost-live">
+      <div className="bx-card tight"><LiveCostList rows={rows} onOpen={bridge ? id => bridge.showChat(id) : undefined} unpricedModels={unpriced} testid="bx-cost-live-list" /></div>
+    </Section>
+  );
+}
 
 /** The app's usage snapshot ('app:usage', then 'usage' events): today's Cursor from the ledger, estimated or exact. */
 function useAppUsage(): Usage | null {
@@ -94,6 +112,7 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
         lead={c ? <><b>{fmt.usd(c.total)} in {days === 1 ? 'un giorno' : `${days} giorni`}</b>, {fmt.usd(c.total / nDays)} al giorno.{advice[0] ? <> Il risparmio più grande: <b>{advice[0].text.split(':')[0]?.toLowerCase()}, {fmt.usd(advice[0].usd)}</b>.</> : null}</> : undefined}
         what="Prezzi di listino delle API: con l'abbonamento non è una fattura, serve a vedere dove va il lavoro. Calcolato dal cervello sulle chat vere, zero token."
         actions={<Seg label="Periodo" value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? 'Oggi' : `${d} giorni` }))} />} />
+      <LiveNow />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label="Calcolo i costi (fino a 20 secondi la prima volta)…" lines={5} block>
         {() => c && (
           <>

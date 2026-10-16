@@ -11,6 +11,7 @@ import { closeModal, openModal, ui } from '../store/ui';
 import { openFile } from './GenUi';
 import { IconArrowLeft, IconArrowRight, IconX } from './Icons';
 import { Modal } from './ui';
+import { t } from '../i18n';
 
 /** Each image read once per session (a question re-rendered, or shown again in another size, asks nothing more); a
  *  file missing, refused or busy is asked again next time (it may be there by then). */
@@ -63,7 +64,7 @@ export const AskImages = memo(function AskImages({ images, testBase, size = 'm' 
           const idx = shown.findIndex(x => x.im === im);
           return (
             <figure key={im.path} className="ask-img" data-testid={`${testBase}-img-${i}`}>
-              <button type="button" className="ask-img-open" onClick={() => idx >= 0 && setOpen(idx)} disabled={!r} aria-label={`Apri l’immagine: ${im.caption}`} data-tip="Clic per vederla grande">
+              <button type="button" className="ask-img-open" onClick={() => idx >= 0 && setOpen(idx)} disabled={!r} aria-label={t('chat.images.openButtonLabel', { caption: im.caption })} data-tip={t('chat.images.openTip')}>
                 {r ? <img src={r.dataUrl} alt={im.caption} draggable={false} /> : <span className="ask-img-wait" aria-hidden="true" />}
               </button>
               <figcaption title={im.caption}>{im.caption}</figcaption>
@@ -73,20 +74,20 @@ export const AskImages = memo(function AskImages({ images, testBase, size = 'm' 
       </div>
       {bad.map(x => (
         <div key={x.im.path} className="ask-img-bad" data-testid={`${testBase}-img-bad`}>
-          <span>Immagine non mostrata ({x.im.caption}): {x.r!.kind === 'image' ? '' : x.r!.reason}</span>
-          {x.r!.kind === 'refused' && <button type="button" className="gu-link" onClick={() => void openFile(x.im.path)} data-testid={`${testBase}-img-bad-open`}>Apri</button>}
+          <span>{t('chat.images.notShown', { caption: x.im.caption, reason: x.r!.kind === 'image' ? '' : x.r!.reason })}</span>
+          {x.r!.kind === 'refused' && <button type="button" className="gu-link" onClick={() => void openFile(x.im.path)} data-testid={`${testBase}-img-bad-open`}>{t('chat.images.openFile')}</button>}
         </div>
       ))}
       {cur && (
         <Viewer onClose={() => setOpen(null)}>
-        <Modal onClose={() => setOpen(null)} label={`Immagine: ${cur.im.caption}`} testid={`${testBase}-img-viewer`} className="img-viewer ask-img-viewer">
+        <Modal onClose={() => setOpen(null)} label={t('chat.images.viewerLabel', { caption: cur.im.caption })} testid={`${testBase}-img-viewer`} className="img-viewer ask-img-viewer">
           <img src={cur.r.dataUrl} alt={cur.im.caption} />
           <div className="ask-img-bar">
-            {shown.length > 1 && <button type="button" className="img-viewer-nav" onClick={() => move(-1)} aria-label="Immagine precedente" data-testid={`${testBase}-img-prev`}><IconArrowLeft size={14} /></button>}
-            <span className="ask-img-cap">{cur.im.caption}{shown.length > 1 ? ` · ${(open ?? 0) + 1} di ${shown.length}` : ''}</span>
-            {shown.length > 1 && <button type="button" className="img-viewer-nav" onClick={() => move(1)} aria-label="Immagine successiva" data-testid={`${testBase}-img-next`}><IconArrowRight size={14} /></button>}
+            {shown.length > 1 && <button type="button" className="img-viewer-nav" onClick={() => move(-1)} aria-label={t('chat.images.previous')} data-testid={`${testBase}-img-prev`}><IconArrowLeft size={14} /></button>}
+            <span className="ask-img-cap">{cur.im.caption}{shown.length > 1 ? t('chat.images.count', { current: (open ?? 0) + 1, total: shown.length }) : ''}</span>
+            {shown.length > 1 && <button type="button" className="img-viewer-nav" onClick={() => move(1)} aria-label={t('chat.images.next')} data-testid={`${testBase}-img-next`}><IconArrowRight size={14} /></button>}
           </div>
-          <button type="button" className="img-viewer-x" onClick={() => setOpen(null)} aria-label="Chiudi" data-autofocus><IconX size={14} /></button>
+          <button type="button" className="img-viewer-x" onClick={() => setOpen(null)} aria-label={t('chat.images.close')} data-autofocus><IconX size={14} /></button>
         </Modal>
         </Viewer>
       )}

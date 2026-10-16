@@ -1,12 +1,13 @@
 // What a question or permission needs around it (the user, 2026-10-12: "quando mi fai le domande voglio sempre il
 // contesto e il contenuto ... o il link dei report o pr"): the prose the chat wrote for the request (since the
 // previous question it asked in the same turn, never that one's reasoning), whether it asks again the question just
-// answered, the links it named (web pages, PRs, local files: file:///, C:\…) and the documents it wrote (Write/Edit of a
+// answered, the links it named (web pages, PRs, local files: file:///, C:\…, /Users/…) and the documents it wrote (Write/Edit of a
 // report, a screenshot). Also which "Ragionamento" blocks hold the only prose before a question: models often write
 // what they mean to ask about only in their reasoning, and the transcript must not fold it away (transcripts of
 // 2026-10-11/12: 128 questions of 177 had no visible text before them). Pure: used by RequestPanel.tsx (the "Contesto"
 // block) and ChatItems.tsx (thinking shown open); pinned by test/unit/askContext.test.ts.
 import type { ChatItem, PendingRequest } from '@shared/contract';
+import { LOCAL_START } from './pathPatterns';
 
 export interface ContextPiece { id: string; kind: 'text' | 'thinking'; text: string }
 export interface ContextLink { kind: 'web' | 'file'; href: string; label: string }
@@ -33,8 +34,9 @@ export function turnItems(items: readonly ChatItem[] | undefined): readonly Chat
 const trimUrl = (u: string) => u.replace(/[.,;:!?'"»)\]]+$/, '');
 const MD_LINK = /\[([^\]\n]{1,120})\]\(\s*<?((?:https?|file):[^)\s>]+)>?\s*\)/gi;
 const URL_RE = /\b(?:https?:\/\/|file:\/\/\/)[^\s<>"'`)\]]+/gi;
-// C:\x\y.md or C:/x/y.md (spaces end a path: a path with spaces is caught only as a markdown link or a file:/// URL)
-const WIN_PATH = /(?<![\w/\\])[a-zA-Z]:[\\/][^\s<>"'`|*?]+\.[A-Za-z0-9]{1,6}\b/g;
+// C:\x\y.md, C:/x/y.md or /Users/x/y.md (pathPatterns.ts; spaces end a path: a path with spaces is caught only as a
+// markdown link or a file:/// URL)
+const LOCAL_PATH = new RegExp(String.raw`(?<![\w/\\])${LOCAL_START}[^\s<>"'\`|*?]+\.[A-Za-z0-9]{1,6}\b`, 'g');
 
 function webLabel(href: string): string {
   try {
@@ -70,7 +72,7 @@ export function linksIn(texts: readonly string[], written: readonly string[] = [
       const href = trimUrl(m[0]);
       if (/^file:/i.test(href)) add('file', href, fileLabel(href)); else add('web', href, webLabel(href));
     }
-    for (const m of t.matchAll(WIN_PATH)) add('file', trimUrl(m[0]), fileLabel(m[0]));
+    for (const m of t.matchAll(LOCAL_PATH)) add('file', trimUrl(m[0]), fileLabel(m[0]));
   }
   for (const p of written) add('file', p, fileLabel(p));
   return out;
@@ -89,7 +91,7 @@ export function writtenDocs(turn: readonly ChatItem[]): string[] {
   for (const it of turn) {
     if (it.kind !== 'tool' || it.status === 'error' || !/^(Write|Edit|MultiEdit|edit|write)$/i.test(it.name.replace(/^mcp__.*__/, ''))) continue;
     const p = pathOf(it.input);
-    if (/^[a-zA-Z]:[\\/]/.test(p) && DOC_EXT.test(p)) out.push(p);
+    if ((/^[a-zA-Z]:[\\/]/.test(p) || /^\/[^/]/.test(p)) && DOC_EXT.test(p)) out.push(p);
   }
   return out;
 }

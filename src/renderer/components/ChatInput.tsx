@@ -23,6 +23,7 @@ import { toast } from '../store/ui';
 import { IconBolt, IconPlus, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
 import { Kbd } from './ui';
+import { t } from '../i18n';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Regia moving to the dock) and never follow the input to another chat
@@ -68,7 +69,7 @@ function SlashMenu({ items, sel, onPick, testid }: { items: ChatCommand[]; sel: 
   useEffect(() => { list.current?.querySelector<HTMLElement>('.slash-item.on')?.scrollIntoView({ block: 'nearest' }); }, [sel]);
   return (
     <div className="slash-menu" data-testid={`${testid}-slash`} onMouseDown={e => e.preventDefault()}>
-      <ul ref={list} role="listbox" aria-label="Comandi e skill" id={`${testid}-slash-list`}>
+      <ul ref={list} role="listbox" aria-label={t('chat.input.slashMenu')} id={`${testid}-slash-list`}>
         {items.map((c, i) => (
           <li key={c.name} id={`${testid}-slash-o${i}`} role="option" aria-selected={i === sel} className={`slash-item ${i === sel ? 'on' : ''}`} onClick={() => onPick(c)} data-testid={`${testid}-slash-${c.name}`}>
             <b>/{c.name}{c.hint && <i>{c.hint}</i>}{c.skill && <em>skill</em>}</b>
@@ -76,7 +77,7 @@ function SlashMenu({ items, sel, onPick, testid }: { items: ChatCommand[]; sel: 
           </li>
         ))}
       </ul>
-      <div className="slash-foot">↑↓ scegli · Tab completa · Esc chiudi</div>
+      <div className="slash-foot">{t('chat.input.slashHelp')}</div>
     </div>
   );
 }
@@ -162,11 +163,11 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   };
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = enterNow ? 'Invio di nuovo: manda subito l’ultimo in coda' : regia && asNew ? 'Cosa deve fare la nuova chat…' : regia ? 'Scrivi alla Regia…' : chat.pending > 0 ? 'Rispondi sopra o scrivi…' : busy ? 'Scrivi: va in coda…' : chat.state === 'closed' ? 'Scrivi per riprendere la chat…' : 'Scrivi a questa chat…';
+  const placeholder = enterNow ? t('chat.input.placeholderEnter') : regia && asNew ? t('chat.input.placeholderNewChat') : regia ? t('chat.input.placeholderRegia') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (newChat = asNew) => {
     if (reading) return; // a screenshot is still being read: it goes with this message, so wait for it
-    if (newChat && !text.trim()) { toast('Scrivi cosa deve fare la nuova chat.', 'info'); return; } // a new chat needs a request in words
+    if (newChat && !text.trim()) { toast(t('chat.input.emptyNewChat'), 'info'); return; } // a new chat needs a request in words
     const r = send(chat.id, newChat && regia ? withNewChat(text) : text, images);
     if (r === 'empty') return;
     if (regia) setAsNew(false);
@@ -181,9 +182,9 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const addFiles = (files: File[]): boolean => {
     if (!files.length) return false;
     const room = roomFor((draftImages.get(chat.id)?.length ?? 0) + (readingN.get(chat.id) ?? 0));
-    if (room === 0) { toast('Al massimo 10 immagini per messaggio.', 'info'); return true; }
+    if (room === 0) { toast(t('chat.input.maxImages'), 'info'); return true; }
     const take = files.slice(0, room);
-    if (files.length > room) toast(`Prese ${room} immagini su ${files.length}: al massimo 10 per messaggio.`, 'info');
+    if (files.length > room) toast(t('chat.input.partialImages', { room, total: files.length }), 'info');
     const chatId = chat.id;
     bumpReading(chatId, take.length);
     for (const f of take) {
@@ -192,10 +193,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           // into this chat's draft, whichever input shows it now (or none: the image waits there)
           const cur = draftImages.get(chatId) ?? NO_IMAGES;
           const weight = [...cur, im].reduce((n, x) => n + (x.data.length * 3) / 4, 0);
-          if (weight > IMAGES_MAX_TOTAL) { toast(`Immagine non aggiunta: insieme superano ${IMAGES_MAX_TOTAL / 1e6} MB per messaggio.`, 'info'); return; }
+          if (weight > IMAGES_MAX_TOTAL) { toast(t('chat.input.imagesTooHeavy', { max: IMAGES_MAX_TOTAL / 1e6 }), 'info'); return; }
           draftImages.set(chatId, [...cur, im]);
         })
-        .catch((e: unknown) => toast(`Immagine non aggiunta: ${e instanceof Error ? e.message : String(e)}`, 'err'))
+        .catch((e: unknown) => toast(t('chat.input.imageFailed', { error: e instanceof Error ? e.message : String(e) }), 'err'))
         .finally(() => bumpReading(chatId, -1));
     }
     return true;
@@ -211,10 +212,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     void window.sb.invoke('clipboard:image', { seen: p.seen }).then(
       im => {
         bumpReading(chatId, -1);
-        if (!im) { toast('Negli appunti non c’è un’immagine né del testo.', 'info'); return; }
+        if (!im) { toast(t('chat.input.clipboardNoImage'), 'info'); return; }
         addFiles([new File([im.bytes as Uint8Array<ArrayBuffer>], 'immagine', { type: im.mimeType })]);
       },
-      () => { bumpReading(chatId, -1); toast('Appunti non leggibili: copia di nuovo l’immagine.', 'err'); },
+      () => { bumpReading(chatId, -1); toast(t('chat.input.clipboardUnreadable'), 'err'); },
     );
   };
   const hasImages = (e: DragEvent) => [...e.dataTransfer.items].some(i => i.kind === 'file' && i.type.startsWith('image/'));
@@ -236,23 +237,23 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   return (
     <div className={`composer ${regia ? 'composer-regia' : ''}`}>
       {queued.length > 0 && (
-        <div className="queued" aria-label="Messaggi in coda">
+        <div className="queued" aria-label={t('chat.input.queuedLabel')}>
           {queued.map((q, i) => {
             const going = pushing === q.id && i === 0;
             const nc = splitNewChat(q.text);
-            const label = (nc.newChat ? `Nuova chat · ${nc.text}` : q.text) || (q.images?.length === 1 ? 'immagine' : 'immagini');
+            const label = (nc.newChat ? t('chat.input.queuedNewChatLabel', { text: nc.text }) : q.text) || t('chat.input.queuedImagesWord', { n: q.images?.length ?? 1 });
             return (
               <span className={`queued-chip ${going ? 'is-going' : ''}`} key={q.id} data-testid={`${testid}-queued-${i}`} title={label}>
-                <span className="queued-k">{going ? <><IconSpinner size={10} /> invio</> : queued.length > 1 ? `in coda · ${i + 1}` : 'in coda'}</span>
-                {q.images?.length ? <span className="queued-img" data-tip={q.images.length === 1 ? '1 immagine' : `${q.images.length} immagini`}>{q.images[0]?.thumb && <img src={q.images[0].thumb} alt="" />}{q.images.length > 1 && <b>{q.images.length}</b>}</span> : null}
+                <span className="queued-k">{going ? <><IconSpinner size={10} /> {t('chat.input.queuedSending')}</> : queued.length > 1 ? t('chat.input.queuedPosition', { n: i + 1 }) : t('chat.input.queuedInQueue')}</span>
+                {q.images?.length ? <span className="queued-img" data-tip={t('chat.input.queuedImages', { n: q.images.length })}>{q.images[0]?.thumb && <img src={q.images[0].thumb} alt="" />}{q.images.length > 1 && <b>{q.images.length}</b>}</span> : null}
                 <span className="queued-t">{label}</span>
                 {!going && (
                   <button
                     type="button" className="queued-now" onClick={() => sendNow(q.id)} disabled={stopping}
-                    aria-label="Invia subito: interrompe il turno in corso" data-tip="Interrompe il turno in corso e lo manda adesso" data-testid={`${testid}-sendnow-${i}`}
-                  ><IconBolt size={11} /><span>Invia subito</span></button>
+                    aria-label={t('chat.input.sendNowLabel')} data-tip={t('chat.input.sendNowTip')} data-testid={`${testid}-sendnow-${i}`}
+                  ><IconBolt size={11} /><span>{t('chat.input.sendNowButton')}</span></button>
                 )}
-                <button type="button" className="queued-x" aria-label="Togli dalla coda" onClick={() => unqueue(chat.id, q.id)} data-testid={`${testid}-unqueue-${i}`}><IconX size={11} /></button>
+                <button type="button" className="queued-x" aria-label={t('chat.input.unqueueLabel')} onClick={() => unqueue(chat.id, q.id)} data-testid={`${testid}-unqueue-${i}`}><IconX size={11} /></button>
               </span>
             );
           })}
@@ -262,13 +263,13 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         {(images.length > 0 || reading > 0) && (
           <div className="composer-images">
             <ImageStrip images={images.map(im => ({ thumb: im.thumb ?? fullSrc(im), full: fullSrc(im) }))} onRemove={i => setImages(cur => cur.filter((_, k) => k !== i))} testid={`${testid}-images`} />
-            {reading > 0 && <span className="img-reading" aria-live="polite">Leggo {reading === 1 ? 'l’immagine' : `${reading} immagini`}…</span>}
+            {reading > 0 && <span className="img-reading" aria-live="polite">{t('chat.input.readingImage', { n: reading })}</span>}
           </div>
         )}
         <div className="composer-row">
           {slashOpen && <SlashMenu items={matches} sel={Math.min(sel, matches.length - 1)} onPick={pick} testid={testid} />}
           <textarea
-            ref={ta} rows={1} value={text} placeholder={placeholder} aria-label={regia ? 'Messaggio alla Regia' : `Messaggio a ${chat.title}`} data-testid={testid} spellCheck={false}
+            ref={ta} rows={1} value={text} placeholder={placeholder} aria-label={regia ? t('chat.input.messageToRegia') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
             aria-expanded={slashOpen} aria-controls={slashOpen ? `${testid}-slash-list` : undefined} aria-autocomplete="list"
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
             onChange={e => { setText(e.target.value); setCaret(e.target.selectionStart); drafts.set(chat.id, e.target.value); if (!e.target.value.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); }}
@@ -290,13 +291,13 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           />
           {regia && (
             <button type="button" className={`newchat-toggle ${asNew ? 'on' : ''}`} aria-pressed={asNew} onClick={() => { setAsNew(!asNew); ta.current?.focus(); }}
-              data-tip={asNew ? 'La Regia apre una chat nuova per questo messaggio: clic per toglierlo' : 'Nuova chat: la Regia apre una chat per questa richiesta|Ctrl+Shift+Invio'}
-              data-testid={`${testid}-newchat`}><IconPlus size={12} /><span>Nuova chat</span></button>
+              data-tip={asNew ? t('chat.input.newChatTip') : t('chat.input.newChatTipOn')}
+              data-testid={`${testid}-newchat`}><IconPlus size={12} /><span>{t('chat.input.newChatButton')}</span></button>
           )}
           {ready ? (
-            <button type="button" className="send" onClick={() => submit()} aria-label={asNew ? (busy ? 'Metti in coda come nuova chat' : 'Invia come nuova chat') : busy ? 'Metti in coda' : 'Invia'} data-tip={asNew ? (busy ? 'Metti in coda come nuova chat|Invio' : 'Invia come nuova chat|Invio') : busy ? 'Metti in coda|Invio' : 'Invia|Invio'} data-testid={`${testid}-send`}><IconSend size={14} /></button>
+            <button type="button" className="send" onClick={() => submit()} aria-label={asNew ? (busy ? t('chat.input.sendAsNew') : t('chat.input.sendAsNewDirect')) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={asNew ? (busy ? t('chat.input.sendAsNewOnBusy') : t('chat.input.sendAsNewDirectOnBusy')) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : (
-            <span className="composer-hint" aria-hidden="true">{enterNow ? 'subito' : busy && !regia ? 'in coda' : ''} <Kbd>Invio</Kbd></span>
+            <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !regia ? t('chat.input.queuedInQueue') : ''} <Kbd>Invio</Kbd></span>
           )}
         </div>
       </div>

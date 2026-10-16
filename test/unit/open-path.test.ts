@@ -16,15 +16,30 @@ const fakeShell = () => {
 
 describe('localPath', () => {
   it('file:/// URLs and drive paths; never UNC, file://host, relative or another scheme', () => {
-    expect(localPath('file:///C:/rep/tc16.md')).toBe('C:\\rep\\tc16.md');
-    expect(localPath('C:/rep/x.md')).toBe('C:\\rep\\x.md');
-    expect(localPath('\\\\host\\share\\x.md')).toBeNull();
-    expect(localPath('//host/share/x.md')).toBeNull();
-    expect(localPath('file://host/share/x.md')).toBeNull();
-    expect(localPath('\\\\?\\C:\\x.md')).toBeNull();
-    expect(localPath('rep/x.md')).toBeNull();
-    expect(localPath('C:\\rep\\evil.exe:a.md')).toBeNull(); // an alternate data stream
-    expect(localPath('https://example.com/x.md')).toBeNull();
+    const w = (p: string) => localPath(p, 'win32');
+    expect(w('file:///C:/rep/tc16.md')).toBe('C:\\rep\\tc16.md');
+    expect(w('C:/rep/x.md')).toBe('C:\\rep\\x.md');
+    expect(w('\\\\host\\share\\x.md')).toBeNull();
+    expect(w('//host/share/x.md')).toBeNull();
+    expect(w('file://host/share/x.md')).toBeNull();
+    expect(w('\\\\?\\C:\\x.md')).toBeNull();
+    expect(w('rep/x.md')).toBeNull();
+    expect(w('C:\\rep\\evil.exe:a.md')).toBeNull(); // an alternate data stream
+    expect(w('https://example.com/x.md')).toBeNull();
+    expect(w('/Users/u/x.md')).toBeNull();
+  });
+  it('macOS and Linux: /-rooted paths and file:/// URLs; never //host, file://host, a drive path or relative', () => {
+    for (const os of ['darwin', 'linux'] as const) {
+      const u = (p: string) => localPath(p, os);
+      expect(u('/Users/u/rep/x.md')).toBe('/Users/u/rep/x.md');
+      expect(u('/home/u/a/../rep/x.md')).toBe('/home/u/rep/x.md');
+      expect(u('file:///home/u/my%20rep/x.md')).toBe('/home/u/my rep/x.md');
+      expect(u('//host/share/x.md')).toBeNull();
+      expect(u('file://host/share/x.md')).toBeNull();
+      expect(u('C:\\rep\\x.md')).toBeNull();
+      expect(u('rep/x.md')).toBeNull();
+      expect(u('https://example.com/x.md')).toBeNull();
+    }
   });
 });
 

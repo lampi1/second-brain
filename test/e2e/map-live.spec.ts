@@ -116,17 +116,22 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await page.evaluate(() => { delete (document as unknown as { hasFocus?: unknown }).hasFocus; });
   // the window minimized: no display frames, so no pulse
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
-  await page.waitForTimeout(800);
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized())).toBe(true);
+  // ... and Chromium has throttled its frames (the frames already on their way are painted): one frame comes after a gap
+  await page.evaluate(() => new Promise<void>(res => { let last = performance.now(); const f = (t: number) => { if (t - last > 400) res(); else { last = t; requestAnimationFrame(f); } }; requestAnimationFrame(f); }));
   const minimizedFps = await rate(3000);
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w?.restore(); w?.showInactive(); });
-  await page.waitForTimeout(1000);
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized())).toBe(false);
   await m.getByTestId('bx-map-live-toggle').click();
   await expect(legend).toContainText('Spenta');
   await page.waitForTimeout(4500); // the live neurons leave: the map settles again (about 2.5 s), then rests
   await cpu();
   const offFps = await rate(4000);
   const offCpu = await cpu();
-  const res = { liveFps, liveFrames, focusedFps, focusedFrames, minimizedFps, offFps, cpu: { live: liveCpu, focused: focusedCpu, off: offCpu } };
+  // frames at rest: measured again 10 s later, so a failure says which it is: a settle that ended late (load, 0 now)
+  // or a loop that never stops (a bug, still drawing); main red at 100% CPU, 2026-10-16: 61.5 fps, cause unknown
+  const offLaterFps = offFps ? (await page.waitForTimeout(10000), await rate(4000)) : 0;
+  const res = { liveFps, liveFrames, focusedFps, focusedFrames, minimizedFps, offFps, offLaterFps, cpu: { live: liveCpu, focused: focusedCpu, off: offCpu } };
   fs.mkdirSync(path.resolve('test-results'), { recursive: true });
   fs.writeFileSync(path.resolve('test-results', 'map-live-perf.json'), JSON.stringify(res, null, 2));
   console.log(`map-live-perf ${JSON.stringify(res)}`);
@@ -136,7 +141,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   expect(liveFrames.workP95).toBeLessThan(8); // the main thread stays mostly free (ms of work per frame)
   expect(focusedFrames.workP95).toBeLessThan(8);
   expect(minimizedFps).toBeLessThan(2); // Chromium still gives a minimized window about one frame a second
-  expect(offFps).toBe(0); // at rest: not one frame
+  expect(offFps, `at rest; 14 s later: ${offLaterFps} fps`).toBe(0); // at rest: not one frame
   await m.getByTestId('bx-map-live-toggle').click();
   await expect(legend).toContainText('Fix totale ordine');
 

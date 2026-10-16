@@ -92,9 +92,25 @@ test.describe.serial('closing a browser tile', () => {
     await page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' }).getByTestId('toast-action').click();
     await expect(page.getByTestId(`tile-browser-${only!.id}`)).toBeVisible();
 
-    // an agent's own Ctrl+W (CDP input) never closes its tab as if the user did
+    // an agent's own Ctrl+W (CDP input) never closes its tab as if the user did. main decides while the key is
+    // dispatched, before the tool answers: no "close this tab" ever left for the UI (counted on the way out)
+    await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().startsWith('file:') && !x.webContents.getURL().includes('#overlay'))!.webContents;
+      const g = globalThis as unknown as { __sbCloseTabs: number; __sbSend: typeof wc.send };
+      g.__sbCloseTabs = 0;
+      g.__sbSend = wc.send;
+      wc.send = (channel: string, ...args: unknown[]) => {
+        if (channel === 'ui:command' && (args[0] as { action?: string })?.action === 'closeTab') g.__sbCloseTabs++;
+        g.__sbSend.call(wc, channel, ...args);
+      };
+    });
     await agent.ok('key', { keys: 'ctrl+w' });
-    await page.waitForTimeout(800);
+    expect(await app.evaluate(({ BrowserWindow }) => {
+      const wc = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().startsWith('file:') && !x.webContents.getURL().includes('#overlay'))!.webContents;
+      const g = globalThis as unknown as { __sbCloseTabs: number; __sbSend: typeof wc.send };
+      wc.send = g.__sbSend;
+      return g.__sbCloseTabs;
+    })).toBe(0);
     await expect(page.getByTestId(`tile-browser-${only!.id}`)).toBeVisible();
 
     // the keyboard inside the page (a native view the UI cannot see): main forwards the user's Ctrl+W to the UI

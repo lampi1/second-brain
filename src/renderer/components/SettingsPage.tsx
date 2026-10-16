@@ -12,9 +12,9 @@
 // Claude Code's own settings (~/.claude/settings.json: permissions, hooks) stay out by design (AGENTS.md rule 6).
 // Rendered by App.tsx PageFrame for the 'impostazioni' place, inside the brain page frame (.bx classes).
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ANTHROPIC_API, type ApiSpendInfo, type BudgetLimits, type BudgetMode, type CompareExperiment, type CompareState, type CursorReasoning, type Effort, type EngineInfo, type Harness, type RegiaChatDefaults, type SecretsStatus, type ToastLevel } from '@shared/contract';
+import { ANTHROPIC_API, type ApiSpendInfo, type BudgetLimits, type BudgetMode, type CompareExperiment, type CompareState, type CursorReasoning, type Effort, type EngineInfo, type Harness, type RegiaChatDefaults, type LanguageMode, type SecretsStatus, type ToastLevel } from '@shared/contract';
 import { PageHead } from '../brain/components/States';
-import { AGENT, autoLine, costLine, sideName, sidesLine } from '../lib/compare';
+import { getAgent, autoLine, costLine, sideName, sidesLine } from '../lib/compare';
 import { EFFORTS, effortLabel, formatCost } from '../lib/format';
 import { modelOptions, useModelsSeen } from '../lib/models';
 import { useEngines } from '../lib/engines';
@@ -25,6 +25,7 @@ import { setPrefs, setView, toast, ui, type Density, type Theme } from '../store
 import { questionsModalOn } from '../lib/questions';
 import { RoutingGroup } from './RoutingGroup';
 import { HelpTip } from './HelpTip';
+import { t } from '../i18n';
 import '../styles/settings.css';
 
 /** An on/off switch (role switch, Space/Enter like a button). */
@@ -91,7 +92,7 @@ function Experiment({ e, busy, onSet }: { e: CompareExperiment; busy: string | n
         <div className="st-sub" role="group" aria-label={`Agenti di ${sideName(e.a)} confrontati`}>
           <div className="st-sub-head">Quali agenti di {sideName(e.a)}{!e.on && <span> · valgono solo con l'interruttore sopra acceso</span>}</div>
           {e.agents.map(a => (
-            <Row key={a.name} dim={!e.on} title={<span className="mono">{a.name}</span>} desc={AGENT[a.name] ? `Le esecuzioni di ${AGENT[a.name]}.` : undefined} testid={`st-agent-${e.name}-${a.name}`}
+            <Row key={a.name} dim={!e.on} title={<span className="mono">{a.name}</span>} desc={getAgent()[a.name] ? `Le esecuzioni di ${getAgent()[a.name]}.` : undefined} testid={`st-agent-${e.name}-${a.name}`}
               control={<Switch on={a.on} busy={busy === `${e.name}/${a.name}`} onChange={on => onSet(on, a.name)} label={`${a.name}: ${a.on ? 'confrontato' : 'non confrontato'}`} testid={`st-agent-switch-${e.name}-${a.name}`} />} />
           ))}
         </div>
@@ -270,6 +271,8 @@ function EnginesGroup() {
   const on = useApp(s => s.settings?.engineOn);
   const regie = useApp(s => s.settings?.engines);
   const cross = useApp(s => s.settings?.messaging?.crossHarness);
+  const rulesClaude = useApp(s => s.settings?.launchRulesClaude === true);
+  const rulesCodex = useApp(s => s.settings?.launchRulesCodex !== false);
   const [keys, setKeys] = useState<SecretsStatus | null>(null);
   const [spend, setSpend] = useState<ApiSpendInfo | null>(null);
   useEffect(() => {
@@ -312,6 +315,12 @@ function EnginesGroup() {
         </HelpTip>}
         desc="Una chat o una Regia può aprire, riprendere o scrivere a chat su un altro motore. Spento: solo sul proprio; le tue chat da Nuova chat restano libere. Vale anche per la posta tra chat fuori dall'app."
         control={<Switch on={cross} onChange={v => void setSetting({ messaging: { crossHarness: v } })} label={`Chat tra motori diversi: ${cross ? 'accese' : 'spente'}`} testid="st-cross-switch" />} />
+      <Row title="Regole del cervello alle chat Claude" testid="st-rules-claude"
+        desc="A ogni avvio di una chat Claude l’app le passa le regole del cervello (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni. Vale dal prossimo avvio di ogni chat."
+        control={<Switch on={rulesClaude} onChange={v => void setSetting({ launchRulesClaude: v })} label={`Regole del cervello alle chat Claude: ${rulesClaude ? 'sì' : 'no'}`} testid="st-rules-claude-switch" />} />
+      <Row title="Regole del cervello alle chat Codex" testid="st-rules-codex"
+        desc="A ogni avvio di una chat Codex l’app le passa le regole del cervello (AGENTS.md come istruzioni e le cartelle delle skill). Spento: Codex legge solo le sue impostazioni. Vale dal prossimo avvio di ogni chat."
+        control={<Switch on={rulesCodex} onChange={v => void setSetting({ launchRulesCodex: v })} label={`Regole del cervello alle chat Codex: ${rulesCodex ? 'sì' : 'no'}`} testid="st-rules-codex-switch" />} />
     </Group>
   );
 }
@@ -455,6 +464,7 @@ export function SettingsPage() {
   const lqRam = useApp(s => s.settings?.loadQueueRam ?? 15);
   const compactAt = useApp(s => s.settings?.compactWindowTokens ?? 200_000);
   const regiaDay = useApp(s => s.settings?.regiaDayCompact !== false);
+  const language = useApp(s => s.settings?.language ?? 'system');
   return (
     <div className="st-page" data-testid="settings-page">
       <PageHead title="Impostazioni" lead="Come lavora l'app. Ogni modifica vale subito e resta salvata." />
@@ -490,6 +500,9 @@ export function SettingsPage() {
         <Row title="Tema" desc="Scuro, chiaro o come il sistema." testid="st-theme"
           control={<Choice<Theme> value={theme} onChange={t => setPrefs({ theme: t })} label="Tema" testid="st-theme-choice"
             options={[{ value: 'dark', label: 'Scuro' }, { value: 'light', label: 'Chiaro' }, { value: 'system', label: 'Come il sistema' }]} />} />
+        <Row title={t('settings.language')} desc={t('settings.languageDesc')} testid="st-language"
+          control={<Choice<LanguageMode> value={language} onChange={l => void setSetting({ language: l })} label={t('settings.language')} testid="st-language-choice"
+            options={(['system', 'it', 'en'] as const).map(l => ({ value: l, label: t(`settings.language.${l}`) }))} />} />
         <Row title="Densità" desc="Compatta mostra più righe nello stesso spazio." testid="st-density"
           control={<Choice<Density> value={density} onChange={d => setPrefs({ density: d })} label="Densità" testid="st-density-choice"
             options={[{ value: 'comfortable', label: 'Comoda' }, { value: 'compact', label: 'Compatta' }]} />} />

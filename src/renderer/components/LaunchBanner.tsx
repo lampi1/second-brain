@@ -5,6 +5,7 @@
 import { dismissLaunch, useImprove } from '../store/improve';
 import '../styles/improve.css';
 import { go } from '../actions';
+import { t } from '../i18n';
 import { IconAlert, IconCheck, IconX } from './Icons';
 
 export function LaunchBanner() {
@@ -16,13 +17,13 @@ export function LaunchBanner() {
       {fallback ? <IconAlert size={15} /> : <IconCheck size={15} />}
       <div className="launch-text">
         {fallback ? (
-          <><b>La versione nuova non è partita.</b> <span className="mono">{l.wanted}</span> {l.reason}: l’app è tornata a <span className="mono">{l.running}</span>.</>
+          <><b>{t('dialogs.launch.failedPrefix')}</b> <span className="mono">{l.wanted}</span> {t('dialogs.launch.failedReason', { reason: l.reason })} <span className="mono">{l.running}</span>.</>
         ) : (
-          <><b>Partita la versione nuova</b> <span className="mono">{l.running}</span>.</>
+          <><b>{t('dialogs.launch.startedPrefix')}</b> <span className="mono">{l.running}</span>.</>
         )}
       </div>
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'migliora' })} data-testid="launch-open">Migliora l’app</button>
-      <button type="button" className="icon-btn" aria-label="Chiudi l'avviso" data-tip="Chiudi" onClick={dismissLaunch} data-testid="launch-dismiss"><IconX size={13} /></button>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'migliora' })} data-testid="launch-open">{t('dialogs.launch.improveButton')}</button>
+      <button type="button" className="icon-btn" aria-label={t('dialogs.launch.dismissLabel')} data-tip={t('dialogs.launch.dismissTip')} onClick={dismissLaunch} data-testid="launch-dismiss"><IconX size={13} /></button>
     </div>
   );
 }

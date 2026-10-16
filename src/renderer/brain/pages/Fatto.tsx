@@ -12,8 +12,9 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Markdown } from '../components/Markdown';
 import { IconChevL, IconChevR, Pill, type Navigate, type Tone } from '../components/ui';
 import { DoneView, DONE_TAGS, Standup } from './day';
+import { t as tr } from '../../i18n';
 
-const tagTone = (t: string): Tone => (/fatto|verificato/.test(t) ? 'good' : /decisione/.test(t) ? 'violet' : /attrito/.test(t) ? 'warn' : /lezione/.test(t) ? 'blue' : '');
+const tagTone = (tag: string): Tone => (/fatto|verificato/.test(tag) ? 'good' : /decisione/.test(tag) ? 'violet' : /attrito/.test(tag) ? 'warn' : /lezione/.test(tag) ? 'blue' : '');
 
 export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
   const t = useBrain('/api/tables', normTables);
@@ -27,40 +28,40 @@ export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
   const isToday = day === today;
   const go = (d: string) => nav(d === today ? 'fatto' : `fatto/${d}`);
   const cols: Col<JournalRow>[] = [
-    { key: 'ora', label: 'Ora', nowrap: true, width: '70px' },
-    { key: 'tag', label: 'Tipo', width: '120px', help: 'fatto = un esito; decisione; lezione = cosa hai imparato; attrito = tempo perso', render: r => <Pill tone={tagTone(r.tag)}>{r.tag || '—'}</Pill> },
-    { key: 'area', label: 'Area', width: '100px' },
-    { key: 'testo', label: 'Cosa', clip: true },
+    { key: 'ora', label: tr('brainPages.fatto.colTime'), nowrap: true, width: '70px' },
+    { key: 'tag', label: tr('brainPages.fatto.colType'), width: '120px', help: tr('brainPages.fatto.colTypeHelp'), render: r => <Pill tone={tagTone(r.tag)}>{r.tag || '—'}</Pill> },
+    { key: 'area', label: tr('brainPages.fatto.colArea'), width: '100px' },
+    { key: 'testo', label: tr('brainPages.fatto.colWhat'), clip: true },
   ];
 
   return (
     <>
-      <PageHead title={isToday ? 'Fatto oggi' : `Fatto ${dayName(day, today).toLowerCase() === 'ieri' ? 'ieri' : `il ${fmt.dayLong(day)}`}`}
+      <PageHead title={isToday ? tr('brainPages.fatto.titleToday') : tr('brainPages.fatto.titleDay', { day: dayName(day, today).toLowerCase(), dayLong: fmt.dayLong(day) })}
         at={rep.at} refreshing={rep.refreshing} onRefresh={() => rep.reload(true)}
-        lead={rep.data ? <><b>{outcomes.length} {outcomes.length === 1 ? 'esito' : 'esiti'}</b>{prs ? `, ${prs} PR` : ''}{items ? `, ${items} work item` : ''} · {journal.length} righe di diario.</> : undefined}
-        what="Gli esiti del giorno per argomento: PR, bug, chat e diario. I link aprono DevOps fuori dall'app."
+        lead={rep.data ? <><b>{tr('brainPages.fatto.outcomes', { n: outcomes.length })}</b>{prs ? `, ${prs} ${tr('brainPages.fatto.pr')}` : ''}{items ? `, ${items} ${tr('brainPages.fatto.workItem')}` : ''} · {tr('brainPages.fatto.diaryRows', { n: journal.length })}</> : undefined}
+        what={tr('brainPages.fatto.what')}
         actions={day && (
-          <div className="bx-row" role="group" aria-label="Giorno">
-            <button type="button" className="bx-btn s" aria-label="Giorno prima" onClick={() => go(shiftDay(day, -1))}><IconChevL /></button>
-            <input className="bx-input" style={{ height: 24, fontSize: 12 }} type="date" value={day} max={today} aria-label="Scegli il giorno" onChange={e => { if (isDay(e.target.value)) go(e.target.value); }} />
-            <button type="button" className="bx-btn s" aria-label="Giorno dopo" disabled={isToday} onClick={() => go(shiftDay(day, 1))}><IconChevR /></button>
-            {!isToday && <button type="button" className="bx-btn s" onClick={() => go(today)}>Oggi</button>}
+          <div className="bx-row" role="group" aria-label={tr('brainPages.fatto.dayGroup')}>
+            <button type="button" className="bx-btn s" aria-label={tr('brainPages.fatto.prevDay')} onClick={() => go(shiftDay(day, -1))}><IconChevL /></button>
+            <input className="bx-input" style={{ height: 24, fontSize: 12 }} type="date" value={day} max={today} aria-label={tr('brainPages.fatto.chooseDay')} onChange={e => { if (isDay(e.target.value)) go(e.target.value); }} />
+            <button type="button" className="bx-btn s" aria-label={tr('brainPages.fatto.nextDay')} disabled={isToday} onClick={() => go(shiftDay(day, 1))}><IconChevR /></button>
+            {!isToday && <button type="button" className="bx-btn s" onClick={() => go(today)}>{tr('brainPages.fatto.today')}</button>}
           </div>
         )} />
       {isToday && t.data && <Standup tables={t.data} owner={owner} />}
       <Async loading={rep.loading && !rep.data} error={rep.data ? null : rep.error} onRetry={() => rep.reload()}
-        label={`Preparo il giorno: leggo DevOps e le chat (${isToday ? 'pochi secondi' : 'fino a 40 secondi per un giorno passato'} la prima volta)…`} lines={4} block>
+        label={tr('brainPages.fatto.preparing', { isToday })} lines={4} block>
         {() => rep.data && <DoneView rep={rep.data} />}
       </Async>
       <details className="bx-details" open={!isToday || undefined} data-testid="bx-diary">
-        <summary>Il diario del giorno · {journal.length} righe</summary>
+        <summary>{tr('brainPages.fatto.diaryTitle', { n: journal.length })}</summary>
         <div className="body">
-          <DataTable name={`diario-${day}`} label="Diario del giorno" rows={journal} cols={cols} filters={['tag', 'area']} search={false} empty="Nessuna riga nel diario per questo giorno." />
+          <DataTable name={`diario-${day}`} label={tr('brainPages.fatto.diaryLabel')} rows={journal} cols={cols} filters={['tag', 'area']} search={false} empty={tr('brainPages.fatto.diaryEmpty')} />
         </div>
       </details>
       {rep.data?.text && (
         <details className="bx-details">
-          <summary>Dettaglio tecnico (report completo{rep.data.commits.length ? `, ${rep.data.commits.length} commit` : ''})</summary>
+          <summary>{tr('brainPages.fatto.detailTitle', { commits: rep.data.commits.length })}</summary>
           <div className="body"><Markdown text={rep.data.text} name={`giornata-${day}`} /></div>
         </details>
       )}

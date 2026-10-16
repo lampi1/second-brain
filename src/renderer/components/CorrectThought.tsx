@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { canCorrectAtNextStep, cleanQuote, correctionBlocked, markPieces } from '../lib/correction';
 import { correctThought, useApp } from '../store/store';
 import { toast } from '../store/ui';
+import { t } from '../i18n';
 
 /** The selection inside `box`, as text (empty: none, or outside). */
 function selectedIn(box: HTMLElement | null): string {
@@ -69,11 +70,11 @@ export function ThoughtText({ chatId, text, marks }: { chatId: string | null; te
   return (
     <div className="thinking-body">
       <div className="thinking-text" ref={box} onMouseDown={() => { if (chatId && !form) setFrozen(text); }} onMouseUp={onUp} data-testid="thinking-text">
-        {markPieces(shown, marks ?? []).map((p, i) => (p.mark ? <mark key={i} className="thought-fixed" title="Corretto da te">{p.text}</mark> : p.text))}
+        {markPieces(shown, marks ?? []).map((p, i) => (p.mark ? <mark key={i} className="thought-fixed" title={t('chat.correct.fixedTip')}>{p.text}</mark> : p.text))}
       </div>
       {pick && (
         <button type="button" className="thought-pick" style={{ left: pick.x, top: pick.y }} data-testid="thought-pick"
-          onMouseDown={e => e.preventDefault()} onClick={() => open(pick.quote)} data-tip="Correggi questa frase (Ctrl+Maiusc+X)">
+          onMouseDown={e => e.preventDefault()} onClick={() => open(pick.quote)} data-tip={t('chat.correct.pickTip')}>
           No, così
         </button>
       )}
@@ -82,8 +83,8 @@ export function ThoughtText({ chatId, text, marks }: { chatId: string | null; te
           if (!chatId) return null;
           const r = await correctThought(chatId, form, fix, mode);
           if ('blocked' in r) return r.blocked;
-          if (r.done === 'stopping') toast('Fermo il turno: riparte dalla tua correzione', 'info');
-          else if (r.done === 'step') toast('Correzione mandata: Claude la legge al prossimo passo', 'info');
+          if (r.done === 'stopping') toast(t('chat.correct.stoppingToast'), 'info');
+          else if (r.done === 'step') toast(t('chat.correct.stepToast'), 'info');
           window.getSelection()?.removeAllRanges();
           return null;
         }} />}
@@ -114,13 +115,13 @@ function FixForm({ quote, blocked, step, onSend, onDone }: { quote: string; bloc
     <div className="thought-fix" data-testid="thought-fix">
       <div className="thought-fix-quote" title={quote}>«{quote}»</div>
       <input ref={input} className="thought-fix-input" value={fix} onChange={e => { setFix(e.target.value); setWhy(null); }} onKeyDown={onKey}
-        placeholder="No, così: scrivi la correzione" aria-label="Correzione del ragionamento" data-testid="thought-fix-input" maxLength={600} />
+        placeholder={t('chat.correct.placeholder')} aria-label={t('chat.correct.label')} data-testid="thought-fix-input" maxLength={600} />
       {reason && <div className="thought-fix-why" role="alert" data-testid="thought-fix-why">{reason}</div>}
       <div className="thought-fix-actions">
         <button type="button" className="btn btn-primary btn-s" disabled={busy || !fix.trim() || !!blocked} onClick={() => void go('stop')} data-testid="thought-fix-stop"
-          data-tip="Ferma il turno e lo fa ripartire dalla correzione (Invio)">Correggi</button>
+          data-tip={t('chat.correct.stopTip')}>{t('chat.correct.stop')}</button>
         {step && <button type="button" className="btn btn-ghost btn-s" disabled={busy || !fix.trim() || !!blocked} onClick={() => void go('step')} data-testid="thought-fix-step"
-          data-tip="Non ferma: Claude la legge dopo il prossimo strumento (Maiusc+Invio)">Al prossimo passo</button>}
+          data-tip={t('chat.correct.stepTip')}>{t('chat.correct.step')}</button>}
         <button type="button" className="btn btn-ghost btn-s" onClick={onDone} data-testid="thought-fix-cancel">Annulla</button>
       </div>
     </div>

@@ -23,7 +23,7 @@ export function createWindow(outDir: string): BrowserWindow {
     // right of every display, frameless (off every monitor Windows draws no frame: content size = window size)
     ...(hidden ? { x: Math.max(...screen.getAllDisplays().map(d => d.bounds.x + d.bounds.width)) + 400, y: 0, skipTaskbar: true, frame: false } : {}),
     width: 1600, height: 1000, minWidth: 1000, minHeight: 640,
-    title: 'second-brain', icon: path.join(outDir, 'icon.ico'), backgroundColor: '#0b0d12', autoHideMenuBar: true, show: false,
+    title: 'second-brain', icon: path.join(outDir, process.platform === 'win32' ? 'icon.ico' : 'icon.png'), backgroundColor: '#0b0d12', autoHideMenuBar: true, show: false,
     webPreferences: {
       preload: path.join(outDir, 'preload', 'index.cjs'),
       contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false,

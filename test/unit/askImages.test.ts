@@ -20,6 +20,14 @@ describe('imagesIn', () => {
     expect(imagesIn([{ text: 'Anteprima C:/ev/b.png', caption: 'Variante B' }])).toEqual([{ path: r`C:\ev\b.png`, caption: 'Variante B' }]);
     expect(imagesIn([{ text: r`C:\ev\a.pdf https://x.example.com/a.png shots/a.png \\host\s\a.png` }])).toEqual([]);
   });
+  it('macOS and Linux paths under a usual root: markdown, file:/// and bare; never a URL path or an API route', () => {
+    expect(imagesIn([{ text: '![prima](/Users/u/ev/a.png) poi /home/u/ev/b.jpg e file:///tmp/con%20spazio.webp' }])).toEqual([
+      { path: '/Users/u/ev/a.png', caption: 'prima' },
+      { path: '/tmp/con spazio.webp', caption: 'con spazio.webp' },
+      { path: '/home/u/ev/b.jpg', caption: 'b.jpg' },
+    ]);
+    expect(imagesIn([{ text: 'https://x.example.com/Users/a.png /api/v1/a.png src//home/a.png' }])).toEqual([]);
+  });
   it('at most eight', () => {
     expect(imagesIn([{ text: Array.from({ length: 12 }, (_, i) => `C:\\ev\\${i}.png`).join(' ') }])).toHaveLength(8);
   });

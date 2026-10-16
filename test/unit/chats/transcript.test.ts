@@ -63,7 +63,7 @@ describe('transcript', () => {
     expect(h.items[1]).toMatchObject({ kind: 'user', text: '/stato tutto' });
     expect(h.items[3]).toMatchObject({ kind: 'tool', id: 't-tu1', summary: 'Write: n.txt', status: 'ok', output: 'written', diff: [{ path: 'n.txt', added: 2, removed: 0 }] });
     expect(h.items[4]).toMatchObject({ kind: 'tool', summary: 'Bash: ls', status: 'error', output: 'senza risultato' });
-    expect(h.items[5]).toMatchObject({ kind: 'system', text: 'Interrotto.' });
+    expect(h.items[5]).toMatchObject({ kind: 'system', code: 'interrupted' });
   });
 
   it('a pasted screenshot (one huge base64 line) does not push the conversation out of the history', () => {

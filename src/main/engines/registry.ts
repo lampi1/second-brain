@@ -53,13 +53,17 @@ const ACP_CAPS: EngineCaps = {
 /** an HTTP model: text only (the owner, 14/10: "solo testo per ora"), the model changes between turns, its cost from the
  *  usage it returns */
 const API_CAPS: EngineCaps = { ...ACP_CAPS, liveModel: true, cost: true, tools: false };
-const CAPS: Record<EngineKind, EngineCaps> = { claude: CLAUDE_CAPS, acp: ACP_CAPS, api: API_CAPS };
+/** Codex app-server (ADR 0060): effort and model per turn, a message steers the running turn; no transcript the app
+ *  reads, no cost (tokens only), no permission modes (it asks for each command outside its sandbox) */
+const CODEX_CAPS: EngineCaps = { ...ACP_CAPS, effort: true, liveModel: true };
+const CAPS: Record<EngineKind, EngineCaps> = { claude: CLAUDE_CAPS, acp: ACP_CAPS, codex: CODEX_CAPS, api: API_CAPS };
 
 export type EngineEntry = Omit<EngineDef, 'caps' | 'source' | 'key' | 'runs' | 'trusted'>;
 
 const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
+  { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: false },
   { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login'], defaultOn: false },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];

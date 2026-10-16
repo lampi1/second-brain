@@ -10,9 +10,10 @@
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, layerPage, layerState, shot, windowShot } from './helpers';
 
-type Demo = { turn(c: string, t: string): void };
+type Demo = { turn(c: string, t: string): void; asks(): { reads: number; pending: string[] } };
 const turn = (app: ElectronApplication, chatId: string, text: string) =>
   app.evaluate((_e, [c, t]) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.turn(c, t); }, [chatId, text] as const);
+const asksState = (app: ElectronApplication) => app.evaluate(() => (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.asks());
 
 const EXAMPLE = [
   'Il comando si scrive così:',
@@ -32,10 +33,12 @@ test('a command left by a chat waits in its tile and runs from there; an example
   const asks = page.locator('[data-request-key]');
   await expect(asks).toHaveCount(2);
 
-  // an example in the middle of an explanation: no request
+  // an example in the middle of an explanation: no request (the turn's end was read, nothing asked)
+  const reads = (await asksState(app)).reads;
   await turn(app, 'mappa', EXAMPLE);
   await expect(page.getByTestId('tile-chat-mappa').getByTestId('codeblock')).toHaveCount(1);
-  await page.waitForTimeout(800);
+  await expect.poll(async () => (await asksState(app)).reads).toBeGreaterThan(reads);
+  expect((await asksState(app)).pending).not.toContain('mappa');
   await expect(page.locator('[data-kind="command"]')).toHaveCount(0);
   await expect(asks).toHaveCount(2);
 

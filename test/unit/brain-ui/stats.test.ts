@@ -89,13 +89,13 @@ describe('caughtWeeks', () => {
 describe('quote topics', () => {
   const t: Topic = { kind: 'quote', quote: { id: 'err|fatto-non-verificato', what: 'errore', title: 'fatto non verificato', source: 'ai-errors.md', facts: ['3 volte', '', 'aree: QA (2)'] } };
   it('quotes source and facts and ends with the error question', () => {
-    expect(discussText(t, null)).toBe(`Discutiamo l'errore che si ripete «fatto non verificato» (fonte: ai-errors.md).\n\n- 3 volte\n- aree: QA (2)\n\n${ERROR_QUESTION}`);
+    expect(discussText(t, null)).toBe(`Let's discuss the recurring error «fatto non verificato» (source: ai-errors.md).\n\n- 3 volte\n- aree: QA (2)\n\n${ERROR_QUESTION}`);
   });
   it('keys by id and titles the chat by kind', () => {
     expect(topicKey(t)).toBe('quote|err|fatto-non-verificato');
     expect(chatTitle(t)).toBe('Errore · fatto non verificato');
     expect(chatTitle({ kind: 'quote', quote: { ...(t as { quote: object }).quote, what: 'numero', title: 'spesa' } as never })).toBe('Numero · spesa');
-    expect(chatPrompt(t, null)).toContain('sull\'errore che si ripete «fatto non verificato» (fonte: ai-errors.md');
+    expect(chatPrompt(t, null)).toContain('on the recurring error «fatto non verificato» (source: ai-errors.md');
   });
 });
 

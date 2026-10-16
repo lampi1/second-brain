@@ -2,6 +2,7 @@
 // (/api/quality): errors the user had to catch per 100 turns, rules whose error came back, PRs held by QA or a build,
 // bugs sent back after his fix. Each result carries the range it covers, so the page can say "dal … al …". Pure (no
 // DOM), unit-tested in test/unit/brain-ui/quality.test.ts.
+import { locale } from '../../i18n';
 import type { AppQuality } from '@shared/contract';
 import type { ErrQuality, QRule, RuleStatus, SeenDay } from '../types';
 import { shiftDay } from './format';
@@ -38,7 +39,7 @@ export function caughtPer100(seen: SeenDay[], turns: AppQuality['turns']): Caugh
 }
 
 /** "2,4" per 100 on one day (— when no turns). */
-export const rate = (caught: number, turns: number): string => (turns ? (Math.round((caught / turns) * 1000) / 10).toLocaleString('it-IT') : '—');
+export const rate = (caught: number, turns: number): string => (turns ? (Math.round((caught / turns) * 1000) / 10).toLocaleString(locale()) : '—');
 
 export interface RuleStats { tornato: number; nonTornato: number; presto: number; senzaTipo: number; judged: number; rules: QRule[] }
 const ORDER: Record<RuleStatus, number> = { tornato: 0, 'non-tornato': 1, 'troppo-presto': 2, 'senza-tipo': 3 };

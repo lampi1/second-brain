@@ -174,17 +174,19 @@ test.describe.serial('login hand-off', () => {
   });
 
   test('when the agent stopped waiting, Fatto wakes its chat with a message', async () => {
+    const asked = Date.now();
     const r = await agent.ok('handoff_to_user', { kind: 'login', reason: 'Login richiesto', wait_seconds: 5 });
     expect(r).toContain('Still waiting for the user');
     expect(r).toContain('the app messages you when they answer');
     await page.getByTestId(/^handoff-done-/).click();
     const woken = async () => {
       const items: ChatItem[] = await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chat.id);
-      return items.some(i => i.kind === 'user' && /Ho fatto l'accesso nel browser/.test(i.text));
+      return items.find(i => i.kind === 'user' && /Ho fatto l'accesso nel browser/.test(i.text));
     };
-    // the agent just got "still waiting": it has the recall grace (8 s here) to call again before the chat is messaged
-    await page.waitForTimeout(4500);
-    expect(await woken()).toBe(false);
-    await expect.poll(woken, { timeout: 20_000 }).toBe(true);
+    // the agent just got "still waiting": it has the recall grace (8 s here) to call again before the chat is messaged.
+    // The grace starts when that call returned, after its 5 s wait, so after asked + 5 s: the message comes at asked + 13 s
+    // at the earliest, however slow the machine. Without the grace it would come 4 s after the click (~asked + 9 s)
+    await expect.poll(async () => !!(await woken()), { timeout: 20_000 }).toBe(true);
+    expect((await woken())!.at - asked).toBeGreaterThanOrEqual(5000 + 8000);
   });
 });

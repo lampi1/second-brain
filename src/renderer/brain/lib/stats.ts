@@ -4,6 +4,7 @@
 // 7 before; and the plain-Italian reading of any number against its previous period ("in calo: 3 contro 7"). Computed
 // locally from the brain's tables, zero tokens. Pure (no DOM), unit-tested in test/unit/brain-ui/stats.test.ts; used by
 // pages/Qualita.tsx and pages/Costi.tsx.
+import { t, locale } from '../../i18n';
 import type { ErrorRow, QRule, RuleStatus } from '../types';
 import { shiftDay } from './format';
 
@@ -20,15 +21,16 @@ export interface Trend { dir: Dir | null; good: boolean | null; text: string }
 /** "in calo: 3 errori questa settimana contro 7". `fmtN` formats both numbers; `lowerIsBetter` decides the tone; `prev`
  *  null = the previous period has no data (said, never guessed). Within 10% (and both non-zero) = stable. */
 export function trend(cur: number, prev: number | null, o: { what: string; now: string; before: string; lowerIsBetter?: boolean; fmtN?: (n: number) => string }): Trend {
-  const f = o.fmtN ?? ((n: number) => n.toLocaleString('it-IT', { maximumFractionDigits: 1 }));
+  const f = o.fmtN ?? ((n: number) => n.toLocaleString(locale(), { maximumFractionDigits: 1 }));
   const w = (...xs: string[]) => xs.filter(Boolean).join(' ');
-  if (prev === null) return { dir: null, good: null, text: `${w(f(cur), o.what, o.now)}; ${o.before} nessun dato per confrontare` };
+  if (prev === null) return { dir: null, good: null, text: t('brainLib.stats.trendNoData', { value: w(f(cur), o.what, o.now), before: o.before }) };
   const same = cur === prev || (cur > 0 && prev > 0 && Math.abs(cur - prev) / prev < 0.1);
   const dir: Dir = same ? 'uguale' : cur > prev ? 'su' : 'giu';
   const low = o.lowerIsBetter ?? true;
   const good = dir === 'uguale' ? null : (dir === 'giu') === low;
-  const word = dir === 'uguale' ? 'stabile' : dir === 'su' ? 'in aumento' : 'in calo';
-  return { dir, good, text: `${word}: ${w(f(cur), o.what, o.now)} contro ${w(f(prev), o.before)}` };
+  const words = { uguale: t('brainLib.stats.trendStable'), su: t('brainLib.stats.trendUp'), giu: t('brainLib.stats.trendDown') } as const;
+  const word = words[dir];
+  return { dir, good, text: t('brainLib.stats.trendWithData', { word, cur: w(f(cur), o.what, o.now), prev: w(f(prev), o.before) }) };
 }
 
 // ── error patterns ────────────────────────────────────────────────────────────────────────────────────────────────

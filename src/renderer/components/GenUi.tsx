@@ -15,30 +15,34 @@ import { closeModal, openModal, toast, ui } from '../store/ui';
 import { IconAlert, IconChart, IconCheck, IconColumns, IconCopy, IconFile, IconGlobe, IconLayers, IconList, IconMaximize, IconX } from './Icons';
 import { Modal } from './ui';
 import { copyText } from '../brain/components/ui';
+import { locale, t } from '../i18n';
 
 type Art = Extract<ChatItem, { kind: 'artifact' }>;
+
+const getStatus = (): Record<UiStatus, string> => ({ ok: t('tools.genui.statusOk'), fail: t('tools.genui.statusFail'), blocked: t('tools.genui.statusBlocked'), running: t('tools.genui.statusRunning'), todo: t('tools.genui.statusTodo'), info: t('tools.genui.statusInfo'), warn: t('tools.genui.statusWarn') });
+
+const getKind = (): Record<UiSpec['component'], { label: string; icon: ReactNode }> => ({
+  table: { label: t('tools.genui.kindTable'), icon: <IconList size={13} /> },
+  cards: { label: t('tools.genui.kindCards'), icon: <IconColumns size={13} /> },
+  board: { label: t('tools.genui.kindBoard'), icon: <IconLayers size={13} /> },
+  diffList: { label: t('tools.genui.kindDiffList'), icon: <IconFile size={13} /> },
+  barChart: { label: t('tools.genui.kindBarChart'), icon: <IconChart size={13} /> },
+});
+
+const getRisk = () => ({ low: t('tools.genui.riskLow'), medium: t('tools.genui.riskMedium'), high: t('tools.genui.riskHigh') } as const);
 
 /** A local file named by a chat, opened on the user's click (main/open-path.ts decides how: documents open, the rest
  *  is only shown in its folder). */
 export async function openFile(href: string): Promise<void> {
   try {
     const r = await sb.invoke('app:openPath', { path: href });
-    if (r.how === 'folder') toast('Mostrato nella sua cartella: non è un documento da aprire qui.', 'info');
+    if (r.how === 'folder') toast(t('tools.genui.shownInFolder'), 'info');
     else if (r.how === 'missing' || r.how === 'refused') toast(r.reason, 'err');
-  } catch (e) { toast(`File non aperto: ${e instanceof Error ? e.message : String(e)}`, 'err'); }
+  } catch (e) { toast(`${t('tools.genui.fileNotOpened')} ${e instanceof Error ? e.message : String(e)}`, 'err'); }
 }
 
-const STATUS: Record<UiStatus, string> = { ok: 'OK', fail: 'Fallito', blocked: 'Bloccato', running: 'In corso', todo: 'Da fare', info: 'Info', warn: 'Attenzione' };
-const KIND: Record<UiSpec['component'], { label: string; icon: ReactNode }> = {
-  table: { label: 'Tabella', icon: <IconList size={13} /> },
-  cards: { label: 'Opzioni', icon: <IconColumns size={13} /> },
-  board: { label: 'Bacheca', icon: <IconLayers size={13} /> },
-  diffList: { label: 'File cambiati', icon: <IconFile size={13} /> },
-  barChart: { label: 'Grafico', icon: <IconChart size={13} /> },
-};
-const RISK = { low: 'basso', medium: 'medio', high: 'alto' } as const;
-
 function Status({ s }: { s: UiStatus }) {
+  const STATUS = getStatus();
   return <span className={`gu-status gu-${s}`}><i aria-hidden="true" />{STATUS[s]}</span>;
 }
 
@@ -54,7 +58,7 @@ function Table({ p }: { p: UiTable }) {
   return (
     <div className="gu-table-wrap">
       <table className="gu-table">
-        <thead><tr>{status && <th>Stato</th>}{p.columns.map((c, i) => <th key={i}>{c}</th>)}{link && <th />}</tr></thead>
+        <thead><tr>{status && <th>{t('tools.genui.stateHeader')}</th>}{p.columns.map((c, i) => <th key={i}>{c}</th>)}{link && <th />}</tr></thead>
         <tbody>
           {p.rows.map((r, i) => (
             <tr key={i} className={r.status ? `gu-row-${r.status}` : undefined}>
@@ -70,18 +74,19 @@ function Table({ p }: { p: UiTable }) {
 }
 
 function Cards({ p }: { p: UiCards }) {
+  const RISK = getRisk();
   return (
     <div className="gu-cards">
       {p.options.map((o, i) => (
         <div key={i} className={`gu-card ${o.recommended ? 'rec' : ''}`}>
-          <div className="gu-card-head"><b>{o.title}</b>{o.recommended && <span className="gu-rec">Consigliata</span>}</div>
+          <div className="gu-card-head"><b>{o.title}</b>{o.recommended && <span className="gu-rec">{t('tools.genui.recommended')}</span>}</div>
           {o.summary && <p className="gu-card-sum">{o.summary}</p>}
           {!!o.pros?.length && <ul className="gu-pros">{o.pros.map((x, j) => <li key={j}><IconCheck size={11} />{x}</li>)}</ul>}
           {!!o.cons?.length && <ul className="gu-cons">{o.cons.map((x, j) => <li key={j}><IconX size={11} />{x}</li>)}</ul>}
           {(o.effort || o.risk) && (
             <div className="gu-card-foot">
-              {o.effort && <span>Sforzo: <b>{o.effort}</b></span>}
-              {o.risk && <span className={`gu-risk gu-risk-${o.risk}`}>Rischio: <b>{RISK[o.risk]}</b></span>}
+              {o.effort && <span>{t('tools.genui.effort')} <b>{o.effort}</b></span>}
+              {o.risk && <span className={`gu-risk gu-risk-${o.risk}`}>{t('tools.genui.risk')} <b>{RISK[o.risk]}</b></span>}
             </div>
           )}
         </div>
@@ -92,7 +97,7 @@ function Cards({ p }: { p: UiCards }) {
 
 /** A lane's status: the dot, and its word unless the lane's title already says it ("Falliti" for fail), never color alone. */
 function LaneStatus({ s, title }: { s: UiStatus; title: string }) {
-  const said = title.toLowerCase().includes(STATUS[s].toLowerCase().slice(0, 5));
+  const said = title.toLowerCase().includes(getStatus()[s].toLowerCase().slice(0, 5));
   return said ? <i className={`gu-dot gu-${s}`} aria-hidden="true" /> : <Status s={s} />;
 }
 
@@ -109,7 +114,7 @@ function Board({ p }: { p: UiBoard }) {
               {!!it.links?.length && <div className="gu-item-links">{it.links.map((x, k) => <Link key={k} l={x} />)}</div>}
             </div>
           ))}
-          {!l.items.length && <div className="gu-empty">vuota</div>}
+          {!l.items.length && <div className="gu-empty">{t('tools.genui.empty')}</div>}
         </div>
       ))}
     </div>
@@ -128,8 +133,8 @@ function CopyBtn({ text, label, testid }: { text: string; label: string; testid?
   const [done, setDone] = useState(false);
   useEffect(() => { if (!done) return; const t = setTimeout(() => setDone(false), 1500); return () => clearTimeout(t); }, [done]);
   return (
-    <button type="button" className="gu-btn gu-copy" onClick={() => { void copyText(text).then(ok => (ok ? setDone(true) : toast('Copia non riuscita', 'err'))); }}
-      aria-label={done ? 'Copiato' : label} data-tip={done ? 'Copiato' : label} data-testid={testid}>
+    <button type="button" className="gu-btn gu-copy" onClick={() => { void copyText(text).then(ok => (ok ? setDone(true) : toast(t('tools.genui.copyFailed'), 'err'))); }}
+      aria-label={done ? t('tools.genui.copyDone') : label} data-tip={done ? t('tools.genui.copyDone') : label} data-testid={testid}>
       {done ? <IconCheck size={12} /> : <IconCopy size={12} />}
     </button>
   );
@@ -151,7 +156,7 @@ function DiffList({ p, cwd }: { p: UiDiffList; cwd?: string }) {
                   : <button type="button" className="gu-path" onClick={() => void openFile(h)} title={h}>{name}</button>)
                   : <span className="gu-path off">{name}</span>}
                 {(f.added !== undefined || f.removed !== undefined) && <span className="gu-diff-n"><span className="add">+{f.added ?? 0}</span> <span className="del">−{f.removed ?? 0}</span></span>}
-                <CopyBtn text={f.path} label={`Copia il percorso ${f.path}`} />
+                <CopyBtn text={f.path} label={t('tools.genui.copyPath', { path: f.path })} />
                 {f.why && <span className="gu-why">{f.why}</span>}
               </div>
             );
@@ -162,7 +167,7 @@ function DiffList({ p, cwd }: { p: UiDiffList; cwd?: string }) {
   );
 }
 
-const fmt = (v: number) => (Math.abs(v) >= 100 ? Math.round(v).toLocaleString('it-IT') : v.toLocaleString('it-IT', { maximumFractionDigits: 2 }));
+const fmt = (v: number) => (Math.abs(v) >= 100 ? Math.round(v).toLocaleString(locale()) : v.toLocaleString(locale(), { maximumFractionDigits: 2 }));
 
 /** One series of horizontal bars (inline SVG): one hue, rounded data end, 2 px gap, value at the bar's end, a tooltip
  *  per bar; a zero line when values go negative. */
@@ -240,11 +245,11 @@ function FullView({ item, cwd, onClose }: { item: Art; cwd?: string; onClose: ()
     <span className="gu-full-events" onKeyDown={stop} onMouseDown={stop} onPointerDown={stop} onClick={stop}>
       <Modal onClose={onClose} label={item.title} testid={`artifact-full-${item.key}`} className="gu-full">
         <div className="gu-head">
-          {KIND[item.ui.component].icon}<b className="gu-title">{item.title}</b><span className="gu-kind">{KIND[item.ui.component].label}</span>
-          {item.from && <span className="gu-from">da «{item.from}»</span>}
+          {getKind()[item.ui.component].icon}<b className="gu-title">{item.title}</b><span className="gu-kind">{getKind()[item.ui.component].label}</span>
+          {item.from && <span className="gu-from">{t('tools.genui.fromItem', { from: item.from })}</span>}
           <span className="sp" />
-          <CopyBtn text={textOfUi(item.ui, item.title)} label="Copia come testo" />
-          <button type="button" className="gu-btn" onClick={onClose} aria-label="Chiudi (Esc)" data-autofocus data-testid={`artifact-close-${item.key}`}><IconX size={14} /></button>
+          <CopyBtn text={textOfUi(item.ui, item.title)} label={t('tools.genui.copyAsText')} />
+          <button type="button" className="gu-btn" onClick={onClose} aria-label={t('tools.genui.closeEsc')} data-autofocus data-testid={`artifact-close-${item.key}`}><IconX size={14} /></button>
         </div>
         <p className="gu-sum">{item.summary}</p>
         <div className="gu-full-body"><SafeView spec={item.ui} summary={item.summary} cwd={cwd} /></div>
@@ -257,16 +262,16 @@ function FullView({ item, cwd, onClose }: { item: Art; cwd?: string; onClose: ()
 export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached }: { item: Art; cwd?: string; attached?: boolean }) {
   const [full, setFull] = useState(false);
   const close = useCallback(() => setFull(false), []);
-  const k = KIND[item.ui.component];
+  const k = getKind()[item.ui.component];
   return (
     <div className={`gu-art ${attached ? 'attached' : ''}`} data-testid={`artifact-${item.key}`} data-component={item.ui.component}>
       <div className="gu-head">
         {k.icon}<b className="gu-title">{item.title}</b><span className="gu-kind">{k.label}</span>
-        {item.from && <span className="gu-from" data-testid={`artifact-from-${item.key}`}>da «{item.from}»</span>}
-        {item.askId && !attached && <span className="gu-kind">sulla domanda</span>}
+        {item.from && <span className="gu-from" data-testid={`artifact-from-${item.key}`}>{t('tools.genui.fromItem', { from: item.from })}</span>}
+        {item.askId && !attached && <span className="gu-kind">{t('tools.genui.onTheQuestion')}</span>}
         <span className="sp" />
-        <CopyBtn text={textOfUi(item.ui, item.title)} label="Copia come testo" testid={`artifact-copy-${item.key}`} />
-        <button type="button" className="gu-btn" onClick={() => setFull(true)} aria-label={`Apri «${item.title}» a tutta larghezza`} data-tip="Apri a tutta larghezza"
+        <CopyBtn text={textOfUi(item.ui, item.title)} label={t('tools.genui.copyAsText')} testid={`artifact-copy-${item.key}`} />
+        <button type="button" className="gu-btn" onClick={() => setFull(true)} aria-label={t('tools.genui.openFullWidthTitle', { title: item.title })} data-tip={t('tools.genui.openFullWidth')}
           data-testid={`artifact-expand-${item.key}`}><IconMaximize size={13} /></button>
       </div>
       <p className="gu-sum">{item.summary}</p>

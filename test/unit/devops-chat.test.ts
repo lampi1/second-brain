@@ -26,10 +26,10 @@ describe('recordChat', () => {
   it('a bug: title, link, type and state, read it all then a plan; the brain folder (no cwd)', () => {
     const c = recordChat({ kind: 'workitem', item: item() });
     expect(c.title).toBe('Shop · Rimborso sbagliato con sconto');
-    expect(c.prompt).toContain('questo bug di Azure DevOps: «Rimborso sbagliato con sconto»');
+    expect(c.prompt).toContain('this bug from Azure DevOps: «Rimborso sbagliato con sconto»');
     expect(c.prompt).toContain(`Link: ${ORG}/Shop/_workitems/edit/4711`);
-    expect(c.prompt).toContain('Tipo: Bug · stato: New · priorità 2 · assegnato a Giulia Bianchi');
-    expect(c.prompt).toContain('proponimi un piano');
+    expect(c.prompt).toContain('Type: Bug · status: New · priority 2 · assigned to Giulia Bianchi');
+    expect(c.prompt).toContain('propose me a plan');
     expect(c.cwd).toBeUndefined();
   });
   it('a work item with no project is "DevOps"; a long title is clipped', () => {
@@ -41,29 +41,29 @@ describe('recordChat', () => {
   it('a PR to review: review + QA, in the repo\'s clone when known', () => {
     const c = recordChat({ kind: 'pr', pr: pr(), mine: false }, { 'shop-web': 'C:/src/shop-web' });
     expect(c.title).toBe('shop-web · Rimborso: lo sconto entra nel totale');
-    expect(c.prompt).toContain('fai la review della PR');
-    expect(c.prompt).toContain('cosa testare in QA');
+    expect(c.prompt).toContain('review the PR');
+    expect(c.prompt).toContain('what to test in QA');
     expect(c.prompt).toContain(`Link: ${ORG}/Shop/_git/shop-web/pullrequest/21`);
     expect(c.cwd).toBe('C:/src/shop-web');
   });
   it('my own PR: what is missing to close it; no clone → no cwd', () => {
     const c = recordChat({ kind: 'pr', pr: pr({ repo: 'shop-web', project: 'Shop' }), mine: true }, {});
     expect(c.title).toBe('shop-web · Rimborso: lo sconto entra nel totale');
-    expect(c.prompt).toContain('cosa manca per chiuderla');
+    expect(c.prompt).toContain('what is missing to close it');
     expect(c.cwd).toBeUndefined();
   });
   it('a test plan and a test case: run or check, with the PR and the plan link', () => {
     const p = recordChat({ kind: 'testplan', plan, pr: pr() }, { 'shop-web': 'C:/src/O' });
     expect(p.title).toBe('shop-web · Rimborsi');
-    expect(p.prompt).toContain('test plan di Azure DevOps: «Rimborsi», della PR «Rimborso: lo sconto entra nel totale»');
-    expect(p.prompt).toContain('2 test case eseguiti su 4, 1 falliti, 2 da fare');
-    expect(p.prompt).toContain('quali eseguire o rieseguire');
+    expect(p.prompt).toContain('test plan from Azure DevOps: «Rimborsi», from the PR «Rimborso: lo sconto entra nel totale»');
+    expect(p.prompt).toContain('2 test cases executed out of 4, 1 failed, 2 to do');
+    expect(p.prompt).toContain('which ones to run or re-run');
     expect(p.cwd).toBe('C:/src/O');
     const t = recordChat({ kind: 'testcase', point, plan, pr: null });
     expect(t.title).toBe('DevOps · Reso parziale con sconto');
     expect(t.prompt).toContain(`Link: ${ORG}/Shop/_workitems/edit/5101`);
-    expect(t.prompt).toContain('esito: Failed (da Anna) · 1 bug collegati');
-    expect(t.prompt).toContain('come eseguirlo o verificarlo');
+    expect(t.prompt).toContain('result: Failed (by Anna) · 1 related bugs');
+    expect(t.prompt).toContain('how to run or verify it');
   });
 });
 

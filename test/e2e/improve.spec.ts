@@ -58,12 +58,16 @@ test("Migliora l'app: the start notice, the stages, the app's Regia, Aggiorna", 
   await page.getByTestId('launch-open').click();
   const sec = page.getByTestId('improve');
   await expect(sec).toBeVisible();
-  await expect(sec.getByTestId('improve-running')).toHaveText(repo.running);
-  await expect(sec.getByTestId('improve-candidate')).toContainText('Unisci scorciatoie');
-  await expect(sec.getByTestId('improve-stage-work')).toContainText('feat/mappa');
-  await expect(sec.getByTestId('improve-stage-tested')).toContainText('feat/barra-costi');
-  await expect(sec.getByTestId('improve-stage-approved')).toContainText('feat/scorciatoie');
-  await expect(sec.getByTestId('improve-stage-promoted')).toContainText('feat/tema-scuro');
+  // words, not hashes: the version by its date, the changes by their subject (the codes only in the tooltips)
+  await expect(sec.getByTestId('improve-running')).toHaveText(/^del \d\d\/\d\d alle \d\d:\d\d$/);
+  await expect(sec.getByTestId('improve-running')).toHaveAttribute('data-tip', new RegExp(repo.running));
+  await expect(sec.getByTestId('improve-candidate')).toContainText('Pronta una versione nuova con 1 modifica: Scorciatoie per le chat');
+  await expect(sec.getByTestId('improve-stage-work')).toContainText('Mappa più veloce');
+  await expect(sec.getByTestId('improve-stage-tested')).toContainText('Barra dei costi compatta');
+  await expect(sec.getByTestId('improve-stage-approved')).toContainText('Scorciatoie per le chat');
+  await expect(sec.getByTestId('improve-stage-promoted')).toContainText('Tema scuro più leggibile');
+  await expect(sec.getByTestId('improve-stage-approved')).toContainText('(1)');
+  await expect(sec).not.toContainText('feat/');
   const promote = sec.getByTestId('improve-promote');
   await expect(promote).toBeEnabled();
 

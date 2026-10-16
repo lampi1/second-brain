@@ -3,7 +3,9 @@
 // does, a chat gets a real cost, otherwise ChatSummary.costKnown = false and the UI shows the estimate only (ADR 0010).
 // Source: https://cursor.com/docs/models, read 2026-10-11 (docs/research/research-cursor-cost.md §5.5; the page shows
 // no date). USD per 1M tokens. "Auto" bills at the routed model's price, which the CLI does not say: unknown → null.
-// Used by acp.ts (the Cursor entry's priceFallback) and brain/cursor-ledger.ts.
+// Used by acp.ts (the Cursor entry's priceFallback) and brain/cursor-ledger.ts. A model with no price is never a silent
+// 0: warned once per model in the log (here) and shown as «prezzo sconosciuto» (Usage.cursorUnpriced, the live costs).
+import { log } from '../log';
 
 export const PRICES_READ_ON = '2026-10-11';
 
@@ -53,12 +55,23 @@ export function modelKey(model: string | null | undefined): string | null {
   return best?.key ?? null;
 }
 
+const warned = new Set<string>();
+
+/** Logs once per model (per run) that it has no list price, so its turns cost "n/d": a model to add to TABLE. */
+export function warnUnpriced(model: string | null | undefined): void {
+  const m = model?.trim() || '(nessun modello)';
+  if (warned.has(m)) return;
+  warned.add(m);
+  log.warn('brain', 'cursor model without a list price', { data: { model: m }, cause: `"${m}" is not in the Cursor price table (or is "auto", billed at a model Cursor does not name)`, hint: 'add it to TABLE in src/main/chats/cursor-prices.ts from cursor.com/docs/models; until then its turns show «prezzo sconosciuto»' });
+}
+
 export interface AcpUsage { inputTokens?: number; outputTokens?: number; cachedReadTokens?: number; cachedWriteTokens?: number; thoughtTokens?: number; totalTokens?: number }
 
 /** USD of one turn at list price, or null when the model or the usage is unknown. */
 export function costOf(model: string | null | undefined, usage: AcpUsage | null | undefined): number | null {
   const p = priceOf(model);
-  if (!p || !usage) return null;
+  if (!p) { if (usage) warnUnpriced(model); return null; }
+  if (!usage) return null;
   const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
   if (!n(usage.inputTokens) && !n(usage.outputTokens) && !n(usage.cachedReadTokens) && !n(usage.cachedWriteTokens)) return null;
   const usd = (n(usage.inputTokens) * p.input + n(usage.cachedWriteTokens) * p.cacheWrite + n(usage.cachedReadTokens) * p.cacheRead + n(usage.outputTokens) * p.output) / 1e6;

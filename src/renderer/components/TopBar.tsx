@@ -1,6 +1,6 @@
 // The top bar: brand, back/forward (Alt+←/→) and the recent places, the Stato button, search/palette trigger (Ctrl+K), view
 // toggle Mosaico/Corsie (Ctrl+Shift+V), the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status
-// (each engine's CLI found, version, login, "Accedi"), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi
+// (each engine's CLI found, version, login, "Accedi"), the brain-sync status (SyncStatus: only when a domain syncs), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi
 // dopo" is on, "Da rispondere": the queue's counter, it opens the queue, lib/later.ts), "＋ Nuova chat" (Ctrl+N),
 // "■ Ferma tutto" (confirm only with >1 running), then the end group: "…" (browsers on/off, Credenziali, the questions
 // window, Migliora l'app: always there, 2026-10-15), the notification bell (Ctrl+Shift+N) and the settings menu (look and
@@ -20,6 +20,7 @@ import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconColumns, IconGrid, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
+import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './RegiaOverlay';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover, Segmented } from './ui';
 
@@ -238,6 +239,7 @@ export function TopBar() {
         </button>
       )}
       <CliStatusButton />
+      <SyncStatus />
       <button type="button" className={`btn btn-m ${waiting ? 'btn-amber' : 'btn-ghost'} next-btn`} onClick={() => (paused ? openQueue(null) : nextThing())} data-testid="topbar-next" data-queue={inQueue ? '' : undefined} data-paused={paused ? '' : undefined}
         data-tip={inQueue ? 'Da rispondere: le richieste lasciate per dopo, una alla volta; aprirla riaccende i popup|Ctrl+J' : paused ? 'Rispondi dopo è attivo: le nuove richieste vanno in «Da rispondere» senza popup. Clic per riaccendere i popup' : 'La cosa più vecchia che ti aspetta|Ctrl+J'}
         aria-label={inQueue ? `Da rispondere: ${waiting} (Ctrl+J)` : paused ? 'Popup in pausa: clic per riaccenderli' : `Prossima cosa per te: ${waiting} (Ctrl+J)`}>

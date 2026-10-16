@@ -4,6 +4,8 @@
 // is clean; why not, in one line), with the promotion's progress. Left: the section's own Regia (one chat, separate
 // from the work Regia), or a button to create it. Right: the changes (branches) by stage, In lavoro → Testata →
 // Approvata → In uso, and the app chats; one of them opens in a tile below. Rendered by App.tsx (PageFrame).
+// Words, not hashes (the user, 2026-10-15: numbers he did not understand): the version in use is a date, "Aggiorna"
+// says how many changes it brings and which, each stage says what happens next; hashes and branch names stay in tooltips.
 import { useEffect } from 'react';
 import type { ImproveBranch, ImproveStage, ImproveState } from '@shared/contract';
 import { ago } from '../lib/format';
@@ -20,31 +22,50 @@ import { HelpTip } from './HelpTip';
 import '../styles/improve.css';
 
 const STAGES: { id: ImproveStage; label: string; hint: string }[] = [
-  { id: 'work', label: 'In lavoro', hint: 'non ancora testata' },
-  { id: 'tested', label: 'Testata', hint: 'check verde: la Regia dell’app la unisce' },
-  { id: 'approved', label: 'Approvata', hint: 'in main: entra al prossimo aggiornamento' },
-  { id: 'promoted', label: 'In uso', hint: 'nella versione che stai usando' },
+  { id: 'work', label: 'In lavoro', hint: 'una chat ci sta lavorando, test non ancora verdi' },
+  { id: 'tested', label: 'Pronta da unire', hint: 'test leggeri verdi: la Regia dell’app la unisce' },
+  { id: 'approved', label: 'Entra al prossimo «Aggiorna»', hint: 'già unita, non ancora nella versione che usi' },
+  { id: 'promoted', label: 'Già nell’app', hint: 'nella versione che stai usando' },
 ];
+
+const when = (t: number) => new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(t)).replace(', ', ' alle ');
+const changes = (n: number) => `${n} ${n === 1 ? 'modifica' : 'modifiche'}`;
+
+/** "del 14/10 alle 18:30" for the version in use; the release id only in its tooltip */
+function versionText(s: ImproveState): string {
+  if (s.running === 'dev') return 'di sviluppo (dal codice)';
+  return s.runningAt ? `del ${when(s.runningAt)}` : 'senza data';
+}
+
+/** What "Aggiorna" brings: the merged changes not in use yet (by their last commit's subject), else main's last commit. */
+function candidateText(s: ImproveState, approved: ImproveBranch[]): string {
+  if (!approved.length) return s.candidate?.subject ?? '';
+  const names = approved.slice(0, 2).map(b => b.subject).join(', ');
+  return approved.length === 3 ? `${names} e un’altra` : approved.length > 3 ? `${names} e altre ${approved.length - 2}` : names;
+}
 
 function PromoteBar({ s }: { s: ImproveState }) {
   const p = s.promote;
   const busy = p?.state === 'running' || p?.state === 'restarting';
-  const label = s.candidate ? `Aggiorna a ${s.candidate.sha}` : 'Aggiorna';
+  const approved = s.branches.filter(b => b.stage === 'approved');
+  const label = s.candidate && approved.length ? `Aggiorna (${changes(approved.length)})` : 'Aggiorna';
   return (
     <div className="imp-top" data-testid="improve-top">
       <div className="imp-ver">
-        <span className="imp-k">In uso</span>
-        <b className="mono" data-testid="improve-running">{s.running === 'dev' ? 'sviluppo' : s.running}</b>
+        <span className="imp-line">
+          <span className="imp-k">Versione in uso</span>
+          <b data-testid="improve-running" data-tip={s.running === 'dev' ? undefined : `Codice della versione: ${s.running}`}>{versionText(s)}</b>
+        </span>
         {s.candidate && (
-          <span className="imp-cand" data-testid="improve-candidate">
-            nuova: <span className="mono">{s.candidate.sha}</span> · {s.candidate.subject}
-            {s.candidate.checkAt ? <span className="imp-ok"> · testata</span> : <span className="imp-dim"> · da testare</span>}
+          <span className="imp-cand" data-testid="improve-candidate" data-tip={`Ultima modifica in main: ${s.candidate.sha}`}>
+            Pronta una versione nuova{approved.length ? <> con {changes(approved.length)}</> : null}: {candidateText(s, approved)}
+            {s.candidate.checkAt ? <span className="imp-ok"> · test completi verdi</span> : <span className="imp-dim"> · i test completi li fa «Aggiorna»</span>}
           </span>
         )}
       </div>
       <span className="sp" />
       <button type="button" className="btn btn-primary btn-m imp-promote" disabled={!s.canPromote || busy} onClick={() => askPromote(s)} data-testid="improve-promote"
-        data-tip={s.canPromote ? 'Testa, copia e riavvia l’app sulla versione nuova' : s.promoteWhy}>
+        data-tip={s.canPromote ? `Testa, copia e riavvia l’app sulla versione nuova${s.candidate ? ` (${s.candidate.sha})` : ''}` : s.promoteWhy}>
         <IconSparkle size={14} /><span>{busy ? 'Aggiornamento in corso…' : label}</span>
       </button>
       <HelpTip label="Aggiorna" title="Aggiorna" testid="improve-help-promote">
@@ -71,16 +92,18 @@ function PromoteProgress({ s }: { s: ImproveState }) {
   );
 }
 
+/** "modificata ora" / "modificata 5 min fa" */
+const agoText = (t: number, now: number) => { const a = ago(t, now); return a === 'ora' ? 'modificata ora' : `modificata ${a} fa`; };
+
 function BranchRow({ b, now }: { b: ImproveBranch; now: number }) {
   return (
     <li className={`imp-branch st-${b.stage}`} data-testid={`improve-branch-${b.name}`} data-stage={b.stage}>
       <span className="imp-dot" aria-hidden="true" />
-      <span className="imp-bname mono">{b.name}</span>
-      <span className="imp-bsub" title={b.subject}>{b.subject}</span>
+      <span className="imp-bsub" data-tip={`Ramo git ${b.name} · ${b.sha}`}>{b.subject}</span>
       {b.chatId
-        ? <button type="button" className="link-btn imp-bchat" onClick={() => showAppChat(b.chatId!)} data-testid={`improve-branch-chat-${b.name}`}>{b.chatTitle}</button>
-        : <span className="imp-bchat imp-dim">—</span>}
-      <span className="imp-age">{ago(b.at, now)}</span>
+        ? <button type="button" className="link-btn imp-bchat" onClick={() => showAppChat(b.chatId!)} data-testid={`improve-branch-chat-${b.name}`} data-tip="Apri la chat che ci lavora">{b.chatTitle}</button>
+        : <span className="imp-bchat" />}
+      <span className="imp-age">{agoText(b.at, now)}</span>
     </li>
   );
 }
@@ -91,7 +114,7 @@ function Changes({ s }: { s: ImproveState }) {
     <section className="imp-card" aria-label="Modifiche" data-testid="improve-changes">
       <header className="imp-card-head"><h3>Modifiche</h3>
         <HelpTip label="Modifiche e rami" title="Un ramo per modifica" testid="improve-help-branches">
-          Ogni modifica vive su un suo ramo git, lavorato da una chat dell'app. Passa da In lavoro a Testata (test leggeri verdi), Approvata (unita in main) e Promossa (nella versione che usi).
+          Ogni modifica vive su un suo ramo git, lavorato da una chat dell’app. Passa da In lavoro a Pronta da unire (test leggeri verdi), poi Entra al prossimo «Aggiorna» (unita in main) e infine Già nell’app (nella versione che usi). Accanto a ogni modifica: la chat che ci lavora e quando è cambiata l’ultima volta (il nome del ramo è nel suggerimento).
         </HelpTip>
         <span className="sp" />
         <button type="button" className="icon-btn" aria-label="Rileggi i rami" data-tip="Rileggi i rami" onClick={refreshImprove} data-testid="improve-refresh"><IconRefresh size={13} /></button>
@@ -102,7 +125,7 @@ function Changes({ s }: { s: ImproveState }) {
         if (!list.length) return null;
         return (
           <div key={st.id} className="imp-stage" data-testid={`improve-stage-${st.id}`}>
-            <div className="imp-stage-head"><span className={`imp-pill st-${st.id}`}>{st.label}</span><span className="imp-count">{list.length}</span><span className="imp-hint">{st.hint}</span>{st.id === 'tested' && (
+            <div className="imp-stage-head"><span className={`imp-pill st-${st.id}`}>{st.label} ({list.length})</span><span className="imp-hint">{st.hint}</span>{st.id === 'tested' && (
               <HelpTip label="Test leggeri e test completi" title="Test leggeri e completi" testid="improve-help-tests">
                 <p><b>Leggeri</b>, sul ramo: tipi, lint e solo i test dell'area cambiata. Bastano per unire il ramo in main.</p>
                 <p><b>Completi</b>, su main dopo l'unione: tutti i test, anche quelli che usano l'app vera. «Aggiorna» li vuole verdi.</p>
@@ -121,8 +144,8 @@ function AppChats() {
   const ids = useApp(s => s.order.filter(id => s.chats[id]?.space === 'app' && !s.chats[id]?.appRegia && !s.chats[id]?.closedAt && !hidden.includes(id)), sameList);
   const selected = improveUi.use(s => s.selected);
   return (
-    <section className="imp-card" aria-label="Chat dell'app" data-testid="improve-chats">
-      <header className="imp-card-head"><h3>Chat dell’app</h3><span className="imp-count">{ids.length}</span></header>
+    <section className="imp-card" aria-label="Chat dell’app" data-testid="improve-chats">
+      <header className="imp-card-head"><h3>Chat dell’app</h3></header>
       {ids.length === 0 ? <p className="imp-empty">Le apre la Regia dell’app, una per modifica.</p> : (
         <ul className="imp-chats">{ids.map(id => <AppChatRow key={id} id={id} on={id === selected} />)}</ul>
       )}

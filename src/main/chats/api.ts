@@ -16,6 +16,7 @@ import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { Root } from './proctree';
+import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { cut, lastLine, nextId, tokenUsage, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 
 export type ApiProtocol = 'openai' | 'anthropic';
@@ -48,8 +49,6 @@ export type ListPrice = { inputPerMTok: number; outputPerMTok: number };
 /** user: the user's Stop / "Invia subito" · app: the app's own interrupt · close: the chat closes · timeout: no first byte */
 type Stop = 'user' | 'app' | 'close' | 'timeout';
 
-export const MISSING_KEY = 'Manca la chiave API: impostala in Impostazioni → Motori.';
-export const TEXT_ONLY = 'Questo motore accetta solo testo: le immagini non sono state inviate.';
 const DEFAULT_MAX_TOKENS = 8192;
 const FIRST_BYTE_MS = 60_000;
 const LOCAL_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
@@ -156,7 +155,7 @@ export class ApiSession implements HarnessSession {
 
   send(text: string, images: readonly ImageAttachment[] = []): void {
     if (this.exited) throw new Error('La chat non è più attiva.');
-    if (images.length) this.sys(TEXT_ONLY, 'warn');
+    if (images.length) this.sysCode('apiTextOnly', undefined, 'warn');
     this.queue.push(text);
     this.setState('running');
     this.drain();
@@ -179,7 +178,7 @@ export class ApiSession implements HarnessSession {
     const item: Extract<ChatItem, { kind: 'assistant' }> = { kind: 'assistant', id: nextId('a'), at: t0, text: '', streaming: true };
     let emitted = false;
     const usage: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-    let error: string | null = null;
+    let error: { code: SysCode; params?: SysParams } | null = null;
     const model = this.model; // the turn's model: a change during the turn applies to the next one, its price too
     try {
       await this.request(turn, model, delta => {
@@ -196,15 +195,15 @@ export class ApiSession implements HarnessSession {
     if (emitted) this.sink.item({ ...item, streaming: false }, true);
     if (item.text) this.sink.changed({ lastText: lastLine(item.text) });
     const interrupted = turn.stop === 'user';
-    if (error) this.sys(error, 'error');
-    else if (interrupted) this.sys(turn.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
-    else if (turn.stop === 'app') this.sys('Interrotto.', 'info');
+    if (error) this.sysCode(error.code, error.params, 'error');
+    else if (interrupted) this.sysCode(turn.sendNow ? 'stoppedByYouResend' : 'stoppedByYou', undefined, 'info');
+    else if (turn.stop === 'app') this.sysCode('interrupted', undefined, 'info');
     const cost = this.costOf(usage, model);
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - t0, turns: 1, isError: !!error || turn.stop === 'app', ...(interrupted ? { interrupted } : {}) }, false);
     const context = usage.input + usage.cacheRead + usage.cacheWrite + usage.output;
     const turnTokens = tokenUsage(usage.input, usage.cacheRead, usage.cacheWrite, usage.output);
     this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(context ? { contextTokens: context, contextEstimated: false } : {}), ...(turnTokens ? { turnTokens } : {}) });
-    log.info('chats', 'api turn done', { chat: this.opts.chatId, data: { host: this.host, ms: Date.now() - t0, usage, costUsd: cost, stop: turn.stop, error } });
+    log.info('chats', 'api turn done', { chat: this.opts.chatId, data: { host: this.host, ms: Date.now() - t0, usage, costUsd: cost, stop: turn.stop, error: error ? sysEn(error.code, error.params) : null } });
     this.turn = null;
     if (this.queue.length) this.drain();
     else this.setState('idle');
@@ -214,8 +213,8 @@ export class ApiSession implements HarnessSession {
   private async request(turn: NonNullable<ApiSession['turn']>, model: string | null, onText: (t: string) => void, usage: Usage): Promise<void> {
     let key: string | null = null;
     try { key = this.opts.apiKey(); } catch (e) { log.warn('chats', 'api key not readable', { chat: this.opts.chatId, data: errText(e), cause: 'the key store failed to decrypt', hint: 'set the key again in Settings → Motori' }); }
-    if (!key) throw new ApiError(MISSING_KEY);
-    if (!model) throw new ApiError('Manca il modello: sceglilo per questa chat.');
+    if (!key) throw new ApiError('apiMissingKey');
+    if (!model) throw new ApiError('apiMissingModel');
     const anthropic = this.opts.protocol === 'anthropic';
     const base = this.url!.href.replace(/\/+$/, '');
     const messages = alternate(this.messages);
@@ -233,7 +232,7 @@ export class ApiSession implements HarnessSession {
         method: 'POST', headers, body: JSON.stringify(body), redirect: 'error', signal: turn.ctrl.signal,
       });
       if (!res.ok) throw new HttpError(res.status, await res.text().catch(() => ''));
-      if (!res.body) throw new ApiError(`${this.host} non ha mandato una risposta.`);
+      if (!res.body) throw new ApiError('apiNoBody', { host: this.host });
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       // an abort does not always reject a read already waiting on the body: race it, and let go of the body
       const signal = turn.ctrl.signal;
@@ -260,7 +259,7 @@ export class ApiSession implements HarnessSession {
 
   /** true = the stream is over */
   private openaiEvent(ev: Obj, onText: (t: string) => void, usage: Usage): boolean {
-    if (ev.error) throw new ApiError(`Errore da ${this.host}: ${this.providerText(o(ev.error).message)}`);
+    if (ev.error) throw new ApiError('apiProviderError', { host: this.host, detail: this.providerText(o(ev.error).message) });
     const delta = o(o((ev.choices as unknown[] | undefined)?.[0]).delta);
     if (typeof delta.content === 'string' && delta.content) onText(delta.content);
     const u = o(ev.usage);
@@ -287,7 +286,7 @@ export class ApiSession implements HarnessSession {
         return false;
       }
       case 'message_stop': return true;
-      case 'error': throw new ApiError(`Errore da ${this.host}: ${this.providerText(o(ev.error).message)}`);
+      case 'error': throw new ApiError('apiProviderError', { host: this.host, detail: this.providerText(o(ev.error).message) });
       default: return false;
     }
   }
@@ -298,26 +297,26 @@ export class ApiSession implements HarnessSession {
     return p ? usageCost(u, p) : null;
   }
 
-  /** A short Italian line; never the key, never a header. */
-  private errorText(e: unknown, turn: NonNullable<ApiSession['turn']>): string {
+  /** A code + params, never the key, never a header (sys.ts; the dictionary renders the sentence). */
+  private errorText(e: unknown, turn: NonNullable<ApiSession['turn']>): { code: SysCode; params?: SysParams } {
     const host = this.host;
-    if (turn.stop === 'timeout') return `${host} non ha risposto entro ${Math.round((this.opts.firstByteMs ?? FIRST_BYTE_MS) / 1000)} s.`;
-    if (e instanceof ApiError) return this.redact(e.message);
+    if (turn.stop === 'timeout') return { code: 'apiTimeout', params: { host, seconds: Math.round((this.opts.firstByteMs ?? FIRST_BYTE_MS) / 1000) } };
+    if (e instanceof ApiError) return { code: e.code, params: e.params };
     if (e instanceof HttpError) {
       const s = e.status;
-      if (s === 401 || s === 403) return `Chiave API rifiutata da ${host}.`;
-      if (s === 429) return `Troppe richieste a ${host} (429): riprova tra poco.`;
-      if (s >= 500) return `${host} ha un problema (errore ${s}): riprova tra poco.`;
-      if (s >= 300 && s < 400) return `${host} ha risposto con un reindirizzamento: richiesta non seguita.`;
+      if (s === 401 || s === 403) return { code: 'apiKeyRejected', params: { host } };
+      if (s === 429) return { code: 'apiTooManyRequests', params: { host } };
+      if (s >= 500) return { code: 'apiServerError', params: { host, status: s } };
+      if (s >= 300 && s < 400) return { code: 'apiRedirect', params: { host } };
       let detail = '';
       try { detail = this.providerText(o(o(JSON.parse(e.body)).error).message); } catch { /* not JSON */ }
-      return `Richiesta rifiutata da ${host} (${s})${detail ? `: ${detail}` : '.'}`;
+      return { code: 'apiRequestRejected', params: { host, status: s, detail } };
     }
     const cause = o((e as { cause?: unknown } | null)?.cause);
     const why = `${typeof cause.code === 'string' ? cause.code : ''} ${typeof cause.message === 'string' ? cause.message : ''}`;
-    if (/redirect/i.test(why)) return `${host} ha risposto con un reindirizzamento: richiesta non seguita.`;
+    if (/redirect/i.test(why)) return { code: 'apiRedirect', params: { host } };
     log.warn('chats', 'api request failed', { chat: this.opts.chatId, data: { host, error: this.redact(errText(e)), cause: this.redact(why.trim()) } });
-    return `Rete: ${host} non raggiungibile${typeof cause.code === 'string' ? ` (${cause.code})` : ''}.`;
+    return { code: 'apiNetworkUnreachable', params: { host, code: typeof cause.code === 'string' ? cause.code : '' } };
   }
 
   /** A provider's own error message, shortened and with the key (if it echoed it) masked. */
@@ -348,7 +347,7 @@ export class ApiSession implements HarnessSession {
 
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (this.exited) return;
-    if (this.queue.length && !opts?.keepQueued) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
+    if (this.queue.length && !opts?.keepQueued) { this.sysCode('queueCancelled', { n: this.queue.length }, 'info'); this.queue = []; }
     const turn = this.turn;
     if (!turn) return this.setState('idle');
     // the user's own stop is no error ("Interrotto da te"); the app's own interrupt ends the turn as cut, like the CLIs
@@ -397,13 +396,15 @@ export class ApiSession implements HarnessSession {
     this.sink.changed({ state: st });
   }
 
-  private sys(text: string, level: 'info' | 'warn' | 'error'): void {
-    this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text, level }, false);
+  private sysCode<C extends SysCode>(code: C, params: SysParams | undefined, level: 'info' | 'warn' | 'error'): void {
+    this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text: sysEn(code, params), level, code, params }, false);
   }
 }
 
-/** A failure already worded for the user (Italian, no secrets). */
-class ApiError extends Error {}
+/** A failure with a code + params, never the key, never a header. */
+class ApiError extends Error {
+  constructor(readonly code: SysCode, readonly params?: SysParams) { super(sysEn(code, params)); }
+}
 /** A non-2xx answer; the body is read only for a 4xx's own message (redacted). */
 class HttpError extends Error {
   constructor(readonly status: number, readonly body: string) { super(`HTTP ${status}`); }

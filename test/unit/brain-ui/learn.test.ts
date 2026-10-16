@@ -48,12 +48,12 @@ describe('learn page data', () => {
   });
 
   it('every "?" explains in plain words, no jargon', () => {
-    for (const [k, t] of Object.entries(HELP)) {
+    for (const [k, t] of Object.entries(HELP())) {
       expect(t.length, k).toBeGreaterThan(40);
       expect(t, k).not.toMatch(/champion|challenger|bootstrap|conformal|backtest|baseline/i);
     }
-    expect(HELP.intro).toMatch(/Applica/);
-    expect(HELP.intro).toMatch(/Ripristina/);
+    expect(HELP().intro).toMatch(/Applica/);
+    expect(HELP().intro).toMatch(/Ripristina/);
   });
 
   it('the after-check in words', () => {

@@ -1,5 +1,5 @@
 // doctor: is this machine ready to run second-brain? Checks the build, Electron, the Claude and Cursor CLIs (found,
-// version, Claude login), whether their versions are covered by the CLI contract fixtures and whether a CLI format
+// version, Claude login), the Codex CLI (found, its npm version; never run), whether their versions are covered by the CLI contract fixtures and whether a CLI format
 // changed today (ADR 0055), the brain folder, the MCP port and recent errors in the logs. No model calls, no Cursor calls
 // beyond `--version` (each harness spends only its own tokens; a Claude agent may run this). Readable by agents:
 //   node scripts/doctor.mjs           human lines: ✓/✗/! name · detail · → next step
@@ -14,7 +14,10 @@ import { fileURLToPath } from 'node:url';
 import { testedVersions } from './cli-fixtures.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const userData = process.env.SB_USER_DATA ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain');
+// Electron's appData per OS (same rule as scripts/release.mjs)
+const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+  : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+const userData = process.env.SB_USER_DATA ?? path.join(appData, process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain');
 const checks = [];
 const add = (id, ok, detail, hint = '', level = ok ? 'ok' : 'fail') => checks.push({ id, ok, level, detail, hint });
 // .cmd/.bat shims (the Cursor CLI on Windows) need cmd.exe; our arguments are fixed flags, never user text
@@ -52,6 +55,19 @@ else {
   const v = run(cursor, ['--version']);
   add('cursor-cli', v.status === 0, `${cursor} · ${(v.stdout ?? '').trim()}`, 'reinstall the Cursor CLI');
   add('cursor-login', true, 'not checked here (only the app or the user check it: Cursor tokens are spent only by Cursor)', '', 'info');
+}
+
+// 3c. Codex CLI (ADR 0060): only presence, and the version read from its npm package next to the shim. Never run here,
+// not even `--version`: an agent may run doctor, and no agent ever starts the Codex CLI (repo rule 4)
+const codex = process.env.SB_CODEX_PATH ?? which('codex');
+if (!codex) add('codex-cli', true, 'Codex CLI (codex) not found: optional engine', 'to use it: npm i -g @openai/codex, then the user runs: codex login (or a key in Settings → Motori), and turns Codex on in Settings → Motori', 'info');
+else {
+  let version = null;
+  for (const pkg of [path.join(path.dirname(codex), 'node_modules', '@openai', 'codex', 'package.json'), path.join(path.dirname(codex), '..', 'lib', 'node_modules', '@openai', 'codex', 'package.json')]) {
+    try { version = JSON.parse(fs.readFileSync(pkg, 'utf8')).version ?? null; break; } catch { /* not this layout */ }
+  }
+  add('codex-cli', true, `${codex}${version ? ` · ${version}` : ' · version not read (not an npm install)'}`, '', 'ok');
+  add('codex-login', true, 'not checked here (only the app or the user check it: Codex tokens are spent only by Codex)', '', 'info');
 }
 
 // 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the embedded engine; Cursor: its newest
@@ -114,7 +130,7 @@ if (fs.existsSync(logs)) {
   const today = path.join(logs, `app-${new Date().toISOString().slice(0, 10)}.jsonl`);
   const drift = fs.existsSync(today) ? [...new Set(fs.readFileSync(today, 'utf8').split('\n').filter(l => l.includes('"scope":"drift"') && l.includes('"lvl":"warn"')).map(l => { try { return JSON.parse(l).cause; } catch { return null; } }).filter(Boolean))] : [];
   add('cli-drift', drift.length === 0, drift.length ? `${drift.length} CLI format changes today: ${drift.slice(0, 3).join(' · ')}` : 'no CLI format change today',
-    'npm run logs -- --scope drift --since 24h; update chats/claude.ts or chats/acp.ts (or their known lists), then the contract test', drift.length ? 'warn' : 'ok');
+    'npm run logs -- --scope drift --since 24h; update chats/claude.ts, chats/acp.ts or chats/codex.ts (or their known lists), then the contract test', drift.length ? 'warn' : 'ok');
 }
 
 if (process.argv.includes('--json')) console.log(JSON.stringify(checks, null, 1));

@@ -130,7 +130,7 @@ describe('RegiaWake', () => {
   });
 
   it('into the Regia\'s running turn at once; while it waits for the user only a failure; the rest when it is free', async () => {
-    const { sent, up, finish } = make();
+    const { w, sent, up, finish } = make();
     up({ id: 'regia', isRegia: true, state: 'running' });
     finish('qa', 'fatto');
     await vi.advanceTimersByTimeAsync(10);
@@ -139,6 +139,7 @@ describe('RegiaWake', () => {
     finish('dev', 'fatto anche io');
     await vi.advanceTimersByTimeAsync(3000);
     expect(sent).toHaveLength(1); // it waits for the user: no interruption
+    expect(w.held()).toBe(1); // held by its gate (the e2e waits on it)
     up({ id: 'fail', state: 'running' }); up({ id: 'fail', state: 'error', lastError: 'ECONNRESET' });
     await vi.advanceTimersByTimeAsync(10);
     expect(sent).toHaveLength(2); // a failure goes at once

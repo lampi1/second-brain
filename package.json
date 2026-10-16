@@ -49,7 +49,6 @@
     "test:stable": "playwright test --config playwright.stable.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk-win32-x64": "0.3.283",
     "3d-force-graph": "1.79.1",
     "dompurify": "3.4.16",
     "marked": "18.0.14",
@@ -57,6 +56,14 @@
     "react-dom": "19.3.0",
     "three": "0.186.1",
     "three-spritetext": "1.9.6"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/claude-agent-sdk-darwin-arm64": "0.3.283",
+    "@anthropic-ai/claude-agent-sdk-darwin-x64": "0.3.283",
+    "@anthropic-ai/claude-agent-sdk-linux-arm64": "0.3.283",
+    "@anthropic-ai/claude-agent-sdk-linux-x64": "0.3.283",
+    "@anthropic-ai/claude-agent-sdk-win32-arm64": "0.3.283",
+    "@anthropic-ai/claude-agent-sdk-win32-x64": "0.3.283"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

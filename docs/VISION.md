@@ -39,6 +39,27 @@ the attention management and the memory.
 - **Safe by default.** Electron's security baseline, a local-only MCP server, no credentials handled by the app, no
   production access wired in.
 
+## The agent's UX: the beating heart (2026-10-15)
+
+Besides an orchestrator, the app is **the user interface of the agent itself**, and this is its most innovative part.
+The owner's words: "quest'app oltre ad essere di orchestrazione è anche una perfetta UX di agente, è questo anche il
+suo cuore pulsante e innovativo".
+
+The principle: the app sees the agent's flow live (Claude's stream-json, Cursor's ACP): its reasoning, its tool calls,
+its questions, its permission requests. So the user should act **with direct gestures on that live flow**, not only
+type into a text-only chat. The goal is ways of working with an agent that the vendors' own apps do not offer yet.
+
+First steps, already in "Built today": an agent's questions open as a panel in front of everything, with their
+options; permission requests are panels with their context, answered where the user is looking.
+
+Open ideas (not decided):
+
+- **Correct the reasoning**: select a sentence of the agent's thinking and fix it in place.
+- **Point with the finger**: show the agent an element in the internal browser instead of describing it.
+- **Rewind**: go back to a point of the chat and continue from there in a copy, the original untouched.
+- **A draggable plan**: reorder, drop or add the agent's steps by dragging them.
+- **Permissions by gesture**: allow or deny with a gesture instead of a dialog.
+
 ## Built today
 
 Chats as tiles with streaming, tools and diffs; questions and permissions as panels with their context; one or more

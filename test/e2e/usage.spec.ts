@@ -47,7 +47,9 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(page.getByTestId('usage-pop-kimi-total')).toHaveText('1,8M token');
     await expect(page.getByTestId('usage-pop-kimi')).toContainText('K3-256k');
     await expect(page.getByTestId('usage-pop-kimi')).toContainText('/usage');
-    await expect(pop).toContainText('Chat aperte');
+    // every chat of the day by cost, most first, live
+    await expect(page.getByTestId('usage-pop-chats')).toContainText('Chat di oggi, dalla più cara');
+    await expect(page.getByTestId('usage-pop-list').locator('li').first()).toBeVisible();
     await clip(page, `usage-pop-${scheme}`, 'usage-pop');
     await shot(page, `usage-${scheme}`);
     await page.keyboard.press('Escape');

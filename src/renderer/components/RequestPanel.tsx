@@ -14,15 +14,16 @@
 // in the chat's own tile, open in a work chat's Regia card and in the questions window (`ctxOpen`).
 // With `onLater` a "Rispondi dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
-// The questions window has its own size (`window`, ADR 0049): the question large on top, two lines of why, a text to
-// approve as a document, the options as large cards (the recommended one marked by color, border and a label), the
+// The questions window has its own size (`window`, ADR 0049): a muted lead on top (the agent's context sentence split
+// from its question by lib/askSplit.ts when certain, else two lines of why), the question large, a text to approve as a
+// document, the options as large cards (the recommended one marked by color, border and a label), the
 // keys in the window's footer.
 // Used by NeedsLane, ChatTile, RegiaTile, OverlayApp, QuestionsWindow.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { explainTool } from '@shared/explain';
 import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
-import { answerText, cleanDescription, cleanLabel, confirmPicks, initialDraft, markedRecommended, PERMISSION_OPTIONS, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
+import { answerText, cleanDescription, cleanLabel, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineOf } from '../lib/engines';
@@ -32,6 +33,7 @@ import { CommandRequest, type CommandHandlers } from './CommandRequest';
 import { AskContext } from './AskContext';
 import { qwinStats } from '../lib/questions';
 import { withoutImages } from '../lib/askImages';
+import { splitAsk } from '../lib/askSplit';
 import { HarnessMark, IconCheck, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
 
@@ -167,7 +169,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   };
   const closeOther = () => { setOther(null); ref.current?.focus(); };
   // a click on the context's toggle: the keyboard stays on the panel (1-9 / Enter keep answering)
-  const refocus = () => requestAnimationFrame(() => ref.current?.focus());
+  const refocus = () => requestAnimationFrame(() => ref.current?.focus({ preventScroll: true }));
 
   const ex = isPerm ? explainTool(req.tool, req.input, req.title) : null;
   // the raw part: the command (or path, url) first, then the detail lines that say something more (reason, path)
@@ -210,7 +212,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   // ---------- chips (lane, regia, compact)
   const chips = () => {
     if (isPerm) {
-      return PERMISSION_OPTIONS.map((o, i) => (i === 1 && req.noAlways ? null : (
+      return getPermissionOptions().map((o, i) => (i === 1 && req.noAlways ? null : (
         <button key={o.label} type="button" className={`chip-opt ${i === 0 ? 'rec' : ''} ${i === 2 ? 'deny' : ''}`} onClick={() => finish(permissionAnswer(i))} disabled={sent} data-testid={`${testBase}-opt-${i + 1}`}
           title={i === 1 && req.alwaysRules?.length ? `Per questa sessione: ${req.alwaysRules.join(', ')}` : undefined}>
           <Kbd>{i === 2 && onEscape ? '3' : o.hint}</Kbd><span className="chip-l">{i === 1 ? 'Sempre' : o.label}</span>
@@ -251,6 +253,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (variant === 'window') {
     qwinStats.cardRenders++;
     const kicker = isPerm ? `Permesso · ${toolLabel(req.tool)}` : (q?.header ?? 'Domanda');
+    // the agent's context sentence muted on top, the real question large under it (only when the split is certain)
+    const split = isPerm ? null : splitAsk(title);
     return (
       <div {...common} className={`wq ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
         {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd> scegli <Kbd>↑</Kbd><Kbd>↓</Kbd> muovi <Kbd>Invio</Kbd> conferma</>, keysTo)}
@@ -260,8 +264,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>domanda {draft.step + 1} di {total}</span>}
           {q?.multiSelect && <span className="wq-step">più scelte</span>}
         </div>
-        <h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{title}</h2>
-        <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} layout="window" />
+        <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} layout="window" lead={split?.lead}
+          question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>} />
         {isPerm ? (
           <>
             {/* the whole command, wrapped: it is what the user approves */}
@@ -355,6 +359,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
 
   // ---------- full inline panel of a tile (and the global layer)
   const n = q?.options.length ?? 0;
+  const tileSplit = isPerm ? null : splitAsk(title);
   return (
     <div {...common} className={`ask ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
       <div className="ask-head">
@@ -367,7 +372,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         <span className="ask-age">{age}</span>
         {laterBtn}
       </div>
-      <div className="ask-q" data-testid={isPerm ? `${testBase}-explain` : undefined}>{title}</div>
+      {tileSplit && <div className="ask-lead" data-testid={`${testBase}-ctx-lead`}>{tileSplit.lead}</div>}
+      <div className="ask-q" data-testid={isPerm ? `${testBase}-explain` : undefined}>{tileSplit?.ask ?? title}</div>
       {/* not in the global layer (onAnswer): its page can neither read the chat nor open links; "Apri" leads to the chat */}
       {!onAnswer && <AskContext req={req} defaultOpen={!!ctxOpen} testBase={testBase} onToggle={refocus} />}
       {isPerm ? (

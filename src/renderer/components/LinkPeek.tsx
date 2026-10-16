@@ -12,6 +12,7 @@ import { sb } from '../sb';
 import { useApp } from '../store/store';
 import { toast } from '../store/ui';
 import { lineless } from '../lib/copyable';
+import { t } from '../i18n';
 import { openFile } from './GenUi';
 import { IconCopy, IconFile, IconGlobe } from './Icons';
 import { Popover } from './ui';
@@ -48,7 +49,7 @@ export function useLinkPeek(chatId: string | null) {
         void sb.invoke('app:peekFile', { path: lineless(text), cwd }).then(res => setPeek(p => (p?.kind === 'file' && p.raw === text ? { ...p, res } : p)))
           .catch((err: unknown) => setPeek(p => (p?.kind === 'file' && p.raw === text ? { ...p, res: { kind: 'refused', reason: err instanceof Error ? err.message : String(err) } } : p)));
       } else {
-        void copyText(text).then(ok => (ok ? flash(code) : toast('Copia non riuscita', 'err')));
+        void copyText(text).then(ok => (ok ? flash(code) : toast(t('dialogs.linkPeek.copyError'), 'err')));
       }
       return;
     }
@@ -86,9 +87,9 @@ function LinkBody({ url, close }: { url: string; close: () => void }) {
         <Act icon={<IconGlobe size={12} />} testid="peek-open-app" onSelect={() => {
           close();
           void openInAppBrowser(url);
-        }}>Apri nel browser dell'app</Act>
-        <Act icon={<IconGlobe size={12} />} testid="peek-open-out" onSelect={() => { close(); window.open(url, '_blank', 'noopener'); }}>Apri fuori</Act>
-        <Act icon={<IconCopy size={12} />} testid="peek-copy" onSelect={() => { close(); void copyText(url).then(ok => toast(ok ? 'Link copiato' : 'Copia non riuscita', ok ? 'ok' : 'err')); }}>Copia</Act>
+        }}>{t('dialogs.linkPeek.openInApp')}</Act>
+        <Act icon={<IconGlobe size={12} />} testid="peek-open-out" onSelect={() => { close(); window.open(url, '_blank', 'noopener'); }}>{t('dialogs.linkPeek.openOutside')}</Act>
+        <Act icon={<IconCopy size={12} />} testid="peek-copy" onSelect={() => { close(); void copyText(url).then(ok => toast(ok ? t('dialogs.linkPeek.copyLinkSuccess') : t('dialogs.linkPeek.copyError'), ok ? 'ok' : 'err')); }}>{t('dialogs.linkPeek.copyLink')}</Act>
       </div>
     </div>
   );
@@ -102,14 +103,14 @@ function FileBody({ raw, res, close }: { raw: string; res: PeekResult | null; cl
     <div className="peek">
       <div className="peek-head"><IconFile size={13} /><b title={full}>{name}</b>{res && 'size' in res && res.size > 0 && <span className="peek-size">{size(res.size)}</span>}</div>
       <div className="peek-url mono" title={full}>{full}</div>
-      {!res && <div className="peek-note">Leggo il file…</div>}
+      {!res && <div className="peek-note">{t('dialogs.linkPeek.readingFile')}</div>}
       {res?.kind === 'text' && <pre className="peek-text" data-testid="peek-text">{res.text}{res.more ? '\n…' : ''}</pre>}
       {res?.kind === 'image' && <img className="peek-img" src={res.dataUrl} alt={name} data-testid="peek-img" />}
-      {res?.kind === 'other' && <div className="peek-note">Nessuna anteprima ({res.what}).</div>}
+      {res?.kind === 'other' && <div className="peek-note">{t('dialogs.linkPeek.noPreview', { what: res.what })}</div>}
       {(res?.kind === 'missing' || res?.kind === 'refused') && <div className="peek-note warn" data-testid="peek-note">{res.reason}</div>}
       <div className="peek-acts">
-        {canOpen && <Act icon={<IconFile size={12} />} testid="peek-open-file" onSelect={() => { close(); void openFile(full); }}>Apri</Act>}
-        <Act icon={<IconCopy size={12} />} testid="peek-copy" onSelect={() => { close(); void copyText(raw).then(ok => toast(ok ? 'Percorso copiato' : 'Copia non riuscita', ok ? 'ok' : 'err')); }}>Copia percorso</Act>
+        {canOpen && <Act icon={<IconFile size={12} />} testid="peek-open-file" onSelect={() => { close(); void openFile(full); }}>{t('dialogs.linkPeek.openFile')}</Act>}
+        <Act icon={<IconCopy size={12} />} testid="peek-copy" onSelect={() => { close(); void copyText(raw).then(ok => toast(ok ? t('dialogs.linkPeek.copyPathSuccess') : t('dialogs.linkPeek.copyError'), ok ? 'ok' : 'err')); }}>{t('dialogs.linkPeek.copyPath')}</Act>
       </div>
     </div>
   );

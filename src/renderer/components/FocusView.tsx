@@ -11,6 +11,7 @@ import { BrowserTile } from './BrowserTile';
 import { ChatTile } from './ChatTile';
 import { IconFocus } from './Icons';
 import { Kbd, Keys } from './ui';
+import { t } from '../i18n';
 
 export function FocusView({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
@@ -26,17 +27,17 @@ export function FocusView({ chatId }: { chatId: string }) {
   return (
     <div className="focus-view" data-testid="focus-view">
       <div className="focus-bar">
-        <IconFocus size={14} /><span>Modalità focus</span><span className="focus-title">{chat.title}</span>
+        <IconFocus size={14} /><span>{t('chat.focus.title')}</span><span className="focus-title">{chat.title}</span>
         <span className="sp" />
         {others > 0 ? (
-          <button type="button" className="btn btn-amber btn-s" onClick={() => nextThing()} data-testid="focus-waiting">{others} ti aspettano <Keys combo="Ctrl+J" /></button>
-        ) : <span className="focus-calm">Niente ti aspetta</span>}
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => setFocusMode(null)} data-testid="focus-exit">Esci <Kbd>Esc</Kbd></button>
+          <button type="button" className="btn btn-amber btn-s" onClick={() => nextThing()} data-testid="focus-waiting">{t('chat.focus.waiting', { n: others })} <Keys combo="Ctrl+J" /></button>
+        ) : <span className="focus-calm">{t('chat.focus.calm')}</span>}
+        <button type="button" className="btn btn-ghost btn-s" onClick={() => setFocusMode(null)} data-testid="focus-exit">{t('chat.focus.exit')} <Kbd>Esc</Kbd></button>
       </div>
       <div className="focus-body" ref={ref} style={{ gridTemplateColumns: tabs.length ? `minmax(0, ${split}fr) 8px minmax(0, ${1 - split}fr)` : '1fr' }}>
         <ChatTile chatId={chatId} focus />
         {tabs.length > 0 && (
-          <div className="splitter v static" role="separator" aria-orientation="vertical" aria-label="Ridimensiona" tabIndex={0}
+          <div className="splitter v static" role="separator" aria-orientation="vertical" aria-label={t('chat.focus.resizer')} tabIndex={0}
             onPointerDown={e => {
               const el = e.currentTarget;
               el.setPointerCapture(e.pointerId);

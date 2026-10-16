@@ -16,6 +16,7 @@ import { go } from '../actions';
 import {
   IconBook, IconBrain, IconChart, IconChevronRight, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconMap, IconSettings, IconSparkle, IconTarget, IconTicket,
 } from './Icons';
+import { t } from '../i18n';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   fatto: <IconBook />, idee: <IconLightbulb />,
@@ -28,7 +29,7 @@ const APP_GROUP: BrainPageId[] = ['costi', 'qualita', 'confronto', 'skill'];
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;
-  return <span className={`nav-badge ${warn ? 'warn' : ''}`} aria-label={`${n} nuove`}>{warn ? '!' : n > 99 ? '99+' : n}</span>;
+  return <span className={`nav-badge ${warn ? 'warn' : ''}`} aria-label={t('dialogs.sidebar.new', { count: n })}>{warn ? '!' : n > 99 ? '99+' : n}</span>;
 }
 
 export function Sidebar() {
@@ -57,30 +58,30 @@ export function Sidebar() {
       key: p.key, testid: `nav-${p.id}`, badge: <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
-  const title = (t: string, id: string) => (collapsed ? <div className="nav-sep" role="separator" aria-label={t} data-testid={`nav-group-${id}`} /> : <div className="nav-title" data-testid={`nav-group-${id}`}>{t}</div>);
+  const title = (txt: string, id: string) => (collapsed ? <div className="nav-sep" role="separator" aria-label={txt} data-testid={`nav-group-${id}`} /> : <div className="nav-title" data-testid={`nav-group-${id}`}>{txt}</div>);
   return (
-    <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Sezioni" data-testid="sidebar">
+    <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
-        {!collapsed && <div className="nav-title" data-testid="nav-group-work">Lavoro</div>}
-        {item('workspace', 'Chat', <IconGrid />, !page && !map, () => go({ page: 'workspace' }), {
-          key: 'Ctrl+1', testid: 'nav-workspace',
-          badge: waiting ? <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={`${waiting} ti aspettano`}>{waiting}</span> : <span data-testid="nav-badge-workspace"><Badge n={b.workspace ?? 0} /></span>,
+        {!collapsed && <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>}
+        {item('workspace', t('dialogs.sidebar.chat'), <IconGrid />, !page && !map, () => go({ page: 'workspace' }), {
+          key: t('dialogs.sidebar.chatShortcut'), testid: 'nav-workspace',
+          badge: waiting ? <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span> : <span data-testid="nav-badge-workspace"><Badge n={b.workspace ?? 0} /></span>,
         })}
         {devopsOn && page1('devops')}
         {page1('fatto')}
-        {title('Brain', 'brain')}
+        {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_GROUP.map(page1)}
-        {item('mappa', 'Mappa 3D', <IconMap />, map, () => go({ page: 'mappa' }), { key: 'Ctrl+Shift+M', testid: 'nav-map', onHover: () => preloadMap(true) })}
-        {title('App', 'app')}
+        {item('mappa', t('dialogs.sidebar.map'), <IconMap />, map, () => go({ page: 'mappa' }), { key: t('dialogs.sidebar.mapShortcut'), testid: 'nav-map', onHover: () => preloadMap(true) })}
+        {title(t('dialogs.sidebar.app'), 'app')}
         {APP_GROUP.map(page1)}
-        {item('migliora', "Migliora l'app", <IconSparkle />, page === 'migliora' && !map, () => go({ page: 'migliora' }), { key: 'G U', testid: 'nav-migliora' })}
+        {item('migliora', t('dialogs.sidebar.improve'), <IconSparkle />, page === 'migliora' && !map, () => go({ page: 'migliora' }), { key: t('dialogs.sidebar.improveShortcut'), testid: 'nav-migliora' })}
       </div>
       <div className="nav-sep" role="separator" />
       <div className="nav-group">
-        <button type="button" className="nav-item nav-collapse" onClick={() => setPrefs({ navCollapsed: !collapsed })} aria-label={collapsed ? 'Espandi il menu' : 'Comprimi il menu'}
-          data-tip={collapsed ? 'Espandi il menu' : undefined} data-testid="nav-collapse" aria-expanded={!collapsed}>
+        <button type="button" className="nav-item nav-collapse" onClick={() => setPrefs({ navCollapsed: !collapsed })} aria-label={collapsed ? t('dialogs.sidebar.expandLabel') : t('dialogs.sidebar.collapseLabel')}
+          data-tip={collapsed ? t('dialogs.sidebar.expandLabel') : undefined} data-testid="nav-collapse" aria-expanded={!collapsed}>
           <span className="nav-icon"><IconChevronRight style={{ transform: collapsed ? 'none' : 'rotate(180deg)' }} /></span>
-          {!collapsed && <span className="nav-label">Comprimi</span>}
+          {!collapsed && <span className="nav-label">{t('dialogs.sidebar.collapse')}</span>}
         </button>
       </div>
     </nav>

@@ -8,8 +8,9 @@ import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { ui } from '../store/ui';
 import { answerLater } from '../lib/later';
+import { t } from '../i18n';
 import { RequestPanel } from './RequestPanel';
-import { Kbd, Keys } from './ui';
+import { Keys } from './ui';
 
 const LaneCard = memo(function LaneCard({ req }: { req: PendingRequest }) {
   const chat = useApp(s => s.chats[req.chatId]);
@@ -27,17 +28,17 @@ export function NeedsLane({ peek }: { peek?: boolean }) {
   const pending = useApp(s => s.pending.filter(p => !hidden.includes(p.chatId) && s.chats[p.chatId]?.space !== 'app'), sameList);
   if (pending.length === 0 || later) return null;
   return (
-    <section className={`lane ${peek ? 'peek' : ''}`} aria-label={`Ti aspettano: ${pending.length}`} data-testid="needs-lane">
+    <section className={`lane ${peek ? 'peek' : ''}`} aria-label={t('dialogs.needsLane.label', { count: pending.length })} data-testid="needs-lane">
       <div className="lane-label">
-        <span className="lane-title">Ti aspettano</span>
+        <span className="lane-title">{t('dialogs.needsLane.title')}</span>
         <span className="lane-count" data-testid="needs-count">{pending.length}</span>
       </div>
       <div className="lane-cards" role="list">
         {pending.map(p => <LaneCard key={`${p.chatId}/${p.id}`} req={p} />)}
       </div>
       <div className="lane-keys" aria-hidden="true">
-        <span><Keys combo="Ctrl+J" /> prossima</span>
-        <span><Kbd>1-9</Kbd><Kbd>Invio</Kbd><Kbd>Esc</Kbd> rispondi</span>
+        <span><Keys combo="Ctrl+J" /> {t('dialogs.needsLane.nextKey')}</span>
+        <span><Keys combo={t('dialogs.needsLane.answerCombo')} /> {t('dialogs.needsLane.respondKeys')}</span>
       </div>
     </section>
   );

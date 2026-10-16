@@ -1,6 +1,6 @@
 /* The questions window (components/QuestionsWindow.tsx, RequestPanel.tsx and CommandRequest.tsx size `window`,
-   AskContext.tsx layout `window`; ADR 0049). One page read top to bottom: who asks (small), the question (large), two
-   lines of why, the text to approve as a document, the options as large cards, the keys in the footer; the other
+   AskContext.tsx layout `window`; ADR 0049). One page read top to bottom: who asks (small), a muted lead (the agent's
+   context sentence or two lines of why), the question (large), the text to approve as a document, the options as large cards, the keys in the footer; the other
    waiting requests in a rail on the left. Anchored near the top like a command palette, so content that loads late
    grows downward and nothing already on screen moves. Lines stay under ~72 characters. Tokens: styles/tokens.css. */
 
@@ -55,14 +55,24 @@
 .qwin-keys .kbd { margin-left: 6px; }
 .qwin-keys .kbd:first-child, .qwin-keys .kbd + .kbd { margin-left: 0; }
 
-/* ---------- the request itself (size `window`) */
-.wq { display: flex; flex-direction: column; gap: 16px; outline: none; }
+/* ---------- the request itself (size `window`): kind, a muted lead (what it is about, why), the question large, the
+   choices. The lead is the agent's own context sentence (lib/askSplit.ts) or two lines of the turn's why. */
+.wq { display: flex; flex-direction: column; gap: 16px; outline: none; animation: wqIn var(--dur) var(--ease); }
+/* the next request fades in where the last one was: opacity only, nothing moves under the pointer */
+@keyframes wqIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wq { animation: none; } }
 .wq.sent { opacity: 0.45; pointer-events: none; }
-.wq-kicker { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: -8px; }
+.wq-kicker { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); margin-bottom: -6px; }
 .wq.perm .wq-kicker, .wq.cmd-ask .wq-kicker { color: var(--blue); }
-.wq-step { font-weight: 500; color: var(--text-3); }
+.wq-step { font-weight: 600; color: var(--text-3); }
 .wq-step::before { content: "·"; margin-right: 7px; }
-.wq-q { margin: 0; max-width: 62ch; font: 600 21px/1.35 var(--font-display); letter-spacing: -0.01em; color: var(--text); overflow-wrap: anywhere; text-wrap: pretty; }
+.wq-q { margin: 0; max-width: 58ch; font: 600 22px/1.3 var(--font-display); letter-spacing: -0.015em; color: var(--text); overflow-wrap: anywhere; text-wrap: pretty; }
+.wq-lead { margin: 0 0 -6px; max-width: 68ch; font-size: 14.5px; line-height: 1.55; color: var(--text-3); overflow-wrap: anywhere; }
+/* the turn's why as a lead: two lines, the whole of it under "Contesto completo" below the question */
+.wq-lead.why { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.wq-ctx-more { align-self: flex-start; padding: 0; border: 0; background: none; font-family: inherit; cursor: pointer; }
+.wq-ctx-more:hover { text-decoration: underline; }
+.wq-ctx-more:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); border-radius: 4px; }
 .wq-label { font-size: 12px; font-weight: 600; color: var(--text-3); margin-bottom: 6px; }
 
 /* the context: two lines of why that unfold, the links, the text to approve as a document */
@@ -100,6 +110,7 @@
   transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 .wq-opt:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-3); }
+.wq-opt.rec:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 14%, var(--surface-2)); border-color: var(--blue); }
 .wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 2px var(--focus); }
 .wq-key {
@@ -108,7 +119,8 @@
 }
 .wq-opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .wq-opt-label { font-size: 15px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.wq-opt-desc { max-width: 68ch; font-size: 13.5px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+.wq-opt-desc { max-width: 68ch; font-size: 13.5px; line-height: 1.5; color: var(--text-3); overflow-wrap: anywhere; }
+.wq-opt.rec .wq-opt-desc, .wq-opt.cur .wq-opt-desc { color: var(--text-2); }
 .wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--on-accent); background: var(--blue); }
 .wq-opt.rec { border-color: var(--blue-line); background: color-mix(in srgb, var(--blue) 9%, var(--surface-2)); }
 .wq-opt.rec .wq-key { color: var(--on-accent); background: var(--blue); border-color: var(--blue); }
@@ -134,7 +146,7 @@
 
 @media (max-width: 1100px) {
   .qwin-rail { width: 210px; }
-  .wq-q { font-size: 19px; }
+  .wq-q { font-size: 20px; }
 }
 
 /* the images a question names (AskImages.tsx): thumbnails with their caption, a click opens them large */

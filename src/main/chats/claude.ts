@@ -16,9 +16,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
+import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
 import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from './cli';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
@@ -28,6 +28,7 @@ import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissio
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
 import { drift, record } from './drift';
+import { ownProcessGroup, sharedDir } from '../platform';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -36,7 +37,7 @@ export interface ClaudeOptions extends SessionOptions {
   settings?: Record<string, unknown> | null;
   /** run by the STABLE app (ADR 0007): add the guard rails; default = this process is a release (release.ts) */
   stable?: boolean;
-  /** %LOCALAPPDATA% (where the stable releases live); default from the environment */
+  /** a %LOCALAPPDATA%-like parent of second-brain/ (tests); default the app's shared folder, platform.ts */
   localAppData?: string;
 }
 
@@ -62,13 +63,13 @@ export function compactSettings(tokens: number | null | undefined): Record<strin
 /** Guard rails for chats run by the STABLE app (ADR 0007): they must never stop the app they run in nor change its
  *  releases. Session-only deny rules (deny wins over every allow, at any level). `Edit(path)` covers every file-editing
  *  tool (Write, MultiEdit, NotebookEdit): path rules written for those tools are ignored by Claude Code. */
-export function stableGuards(localAppData: string): Record<string, unknown> {
+export function stableGuards(shared: string): Record<string, unknown> {
   return {
     permissions: {
       deny: [
         'Bash(taskkill:*)', 'Bash(Stop-Process:*)', 'Bash(kill:*)', 'Bash(pkill:*)', 'Bash(killall:*)',
         'PowerShell(Stop-Process:*)', 'PowerShell(taskkill:*)',
-        `Edit(${rulePath(path.join(localAppData, 'second-brain'))}/**)`,
+        `Edit(${rulePath(shared)}/**)`,
       ],
     },
   };
@@ -126,22 +127,11 @@ interface Control { resolve(v: Obj): void; reject(e: Error): void; timer: NodeJS
 interface Stream { key: string; item: Extract<ChatItem, { kind: 'assistant' | 'thinking' }>; emitted: boolean; done: boolean }
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
 
-const API_ERRORS: Record<string, string> = {
-  authentication_failed: 'Login di Claude non valido: esegui `claude` nel terminale e fai /login, poi riprova.',
-  oauth_org_not_allowed: 'Questo account non può usare Claude Code: controlla il login (`claude /login`).',
-  rate_limit: 'Limite di utilizzo raggiunto: aspetta il reset o cambia modello.',
-  overloaded: 'API di Anthropic sovraccarica: riprova tra poco.',
-  billing_error: 'Problema di fatturazione sull’account Claude.',
-  model_not_found: 'Modello non trovato: scegline un altro.',
-  max_output_tokens: 'Risposta troncata: raggiunto il limite di token in uscita.',
-};
-/** A failed result's subtype, when the CLI gives no other words (stream-json result subtypes) */
-const RESULT_ERRORS: Record<string, string> = {
-  error_max_turns: 'raggiunto il limite di passi del turno',
-  error_max_budget_usd: 'raggiunto il budget massimo del turno',
-  error_during_execution: 'errore durante l’esecuzione (il motore non ha detto altro)',
-  error_max_structured_output_retries: 'risposta strutturata non valida dopo più tentativi',
-};
+/** stream-json API error kinds with their own sys.api.<kind> code (src/shared/sys.ts); anything else is sys.api.other */
+const API_ERROR_CODES = new Set(['authentication_failed', 'oauth_org_not_allowed', 'rate_limit', 'overloaded', 'billing_error', 'model_not_found', 'max_output_tokens']);
+/** A failed result's subtype, when the CLI gives no other words: its own sys.turnFailed.<subtype> code; anything else
+ *  is sys.turnFailed.other (subtype present) or sys.turnFailed.none (no subtype at all). */
+const RESULT_ERROR_CODES = new Set(['error_max_turns', 'error_max_budget_usd', 'error_during_execution', 'error_max_structured_output_retries']);
 
 /** task statuses that end it (the CLI's terminal ones); any other (pending, running, a workflow's paused) keeps it */
 const END_TASK = new Set(['completed', 'failed', 'killed', 'stopped']);
@@ -265,7 +255,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, stable ? stableGuards(op.localAppData ?? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];
@@ -275,7 +265,7 @@ export class ClaudeSession implements HarnessSession {
     const chat = this.opts.chatId;
     // embedded engine by default (ADR 0010); an explicit path (tests, SB_CLAUDE_PATH) wins
     const cli = this.opts.claudePath ? findCli(this.opts.claudePath) : resolveClaude()?.path ?? null;
-    if (!cli || !fs.existsSync(cli)) return this.fail(`Motore Claude non trovato${cli ? `: ${cli}` : ''}. Reinstalla l’app (il motore è incluso) o imposta SB_CLAUDE_PATH.`, `claude engine not found (${cli ?? 'embedded/PATH'})`, 'run npm ci (embedded engine in node_modules/@anthropic-ai/claude-agent-sdk-win32-x64) or set SB_ENGINE_CLAUDE / SB_CLAUDE_PATH');
+    if (!cli || !fs.existsSync(cli)) return this.fail(`Motore Claude non trovato${cli ? `: ${cli}` : ''}. Reinstalla l’app (il motore è incluso) o imposta SB_CLAUDE_PATH.`, `claude engine not found (${cli ?? 'embedded/PATH'})`, 'run npm ci (embedded engine in node_modules/@anthropic-ai/claude-agent-sdk-<os>-<cpu>) or set SB_ENGINE_CLAUDE / SB_CLAUDE_PATH');
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
     this.recording = !/\.m?js$/i.test(cli);
     const env = { ...process.env, ...this.opts.env };
@@ -286,7 +276,7 @@ export class ClaudeSession implements HarnessSession {
     const startedAt = Date.now();
     this.spawnedAt = startedAt;
     try {
-      this.proc = spawn(c.command, c.args, { cwd: this.opts.cwd, env: c.env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      this.proc = spawn(c.command, c.args, { cwd: this.opts.cwd, env: c.env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
       return this.fail(`Avvio di Claude non riuscito: ${errText(e)}`, errText(e), 'check the claude path and the folder');
     }
@@ -596,6 +586,10 @@ export class ClaudeSession implements HarnessSession {
     this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text, level }, false);
   }
 
+  private sysCode<C extends SysCode>(code: C, params: SysParams | undefined, level: 'info' | 'warn' | 'error'): void {
+    this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text: sysEn(code, params), level, code, params }, false);
+  }
+
   // ---- protocol ----
 
   private onMessage(m: Obj): void {
@@ -775,7 +769,10 @@ export class ClaudeSession implements HarnessSession {
       }
     }
     const err = s(m.error);
-    if (err) this.sys(API_ERRORS[err] ?? `Errore dell’API: ${err}`, 'error');
+    if (err) {
+      if (API_ERROR_CODES.has(err)) this.sysCode(`api.${err}` as SysCode, undefined, 'error');
+      else this.sysCode('api.other', { err }, 'error');
+    }
     const ctx = num(o(m.context_usage).total_tokens);
     if (ctx !== undefined) this.sink.changed({ contextTokens: ctx });
   }
@@ -783,7 +780,7 @@ export class ClaudeSession implements HarnessSession {
   private onUser(m: Obj): void {
     const content = o(m.message).content;
     // the user's own interrupt is told once, by its result (onResult); one the CLI reports by itself shows here
-    if (typeof content === 'string') { if (/^\[Request interrupted/.test(content) && !this.stopping) this.sys('Interrotto.', 'info'); return; }
+    if (typeof content === 'string') { if (/^\[Request interrupted/.test(content) && !this.stopping) this.sysCode('interrupted', undefined, 'info'); return; }
     for (const raw of arr(content)) {
       const b = o(raw);
       if (b.type === 'tool_result') {
@@ -794,7 +791,7 @@ export class ClaudeSession implements HarnessSession {
         const diff = diffFromResult(t.item.name, t.input, m.tool_use_result, this.opts.cwd);
         const item: ToolItem = { ...t.item, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content), ...(diff ? { diff } : {}) };
         this.sink.item(item, true);
-      } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sys('Interrotto.', 'info');
+      } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sysCode('interrupted', undefined, 'info');
     }
   }
 
@@ -823,11 +820,16 @@ export class ClaudeSession implements HarnessSession {
     const errors = arr(m.errors).map(x => stripAnsi(String(x))).filter(Boolean);
     if (interrupted) {
       if (errors.length) log.info('chats', 'interrupted turn: abort errors not shown', { chat: this.opts.chatId, data: { errors: errors.slice(0, 3) } });
-      this.sys(stopped.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
+      this.sysCode(stopped.sendNow ? 'stoppedByYouResend' : 'stoppedByYou', undefined, 'info');
     } else if (errors.length) this.sys(cut(errors.join(' · '), 600), 'error');
     else if (isError && s(m.result)) this.sys(cut(stripAnsi(s(m.result)), 600), 'error');
     // a failure with no words from the CLI still says why: its subtype (max turns, budget…)
-    else if (isError) this.sys(`Turno finito con errore: ${RESULT_ERRORS[s(m.subtype)] ?? (s(m.subtype) || 'il motore non ha detto il motivo')}.`, 'error');
+    else if (isError) {
+      const subtype = s(m.subtype);
+      if (RESULT_ERROR_CODES.has(subtype)) this.sysCode(`turnFailed.${subtype}` as SysCode, undefined, 'error');
+      else if (subtype) this.sysCode('turnFailed.other', { subtype }, 'error');
+      else this.sysCode('turnFailed.none', undefined, 'error');
+    }
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: Math.round(turn * 1e6) / 1e6, durationMs: num(m.duration_ms) ?? 0, turns: num(m.num_turns) ?? 0, isError, ...(interrupted ? { interrupted } : {}) }, false);
     const u = o(m.usage);
     const turnTokens = tokenUsage(u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens, u.output_tokens);
@@ -903,7 +905,7 @@ export class ClaudeSession implements HarnessSession {
       case 'status': {
         const mode = s(m.permissionMode) as PermissionMode;
         if (PERMISSION_MODES.includes(mode)) this.sink.changed({ permissionMode: mode });
-        if (m.status === 'compacting') this.sys('Compattazione del contesto…', 'info');
+        if (m.status === 'compacting') this.sysCode('compacting', undefined, 'info');
         return;
       }
       case 'commands_changed': if (Array.isArray(m.commands)) { this.cmdList = m.commands; this.reportCommands(); } return;
@@ -924,15 +926,19 @@ export class ClaudeSession implements HarnessSession {
       case 'compact_boundary': {
         const meta = o(m.compact_metadata);
         this.sink.changed({ compacted: { pre: num(meta.pre_tokens) ?? null, post: num(meta.post_tokens) ?? null } });
-        this.sys(`Contesto compattato (${num(meta.pre_tokens) ?? '?'} → ${num(meta.post_tokens) ?? '?'} token).`, 'info');
+        this.sysCode('compacted', { pre: num(meta.pre_tokens) ?? '?', post: num(meta.post_tokens) ?? '?' }, 'info');
         return;
       }
-      case 'api_retry': this.sys(`Nuovo tentativo API ${num(m.attempt) ?? '?'}/${num(m.max_retries) ?? '?'} (${s(m.error) || num(m.error_status) || 'errore'}).`, 'warn'); return;
-      case 'permission_denied': this.sys(`Permesso negato: ${s(m.tool_name)}${s(m.message) ? ` · ${cut(stripAnsi(s(m.message)), 200)}` : ''}`, 'warn'); return;
+      case 'api_retry': this.sysCode('apiRetry', { attempt: num(m.attempt) ?? '?', max: num(m.max_retries) ?? '?', error: s(m.error) || num(m.error_status) || '' }, 'warn'); return;
+      case 'permission_denied': this.sysCode('permissionDenied', { tool: s(m.tool_name), message: s(m.message) ? cut(stripAnsi(s(m.message)), 200) : '' }, 'warn'); return;
       case 'notification': if (s(m.text)) this.sys(cut(stripAnsi(s(m.text)), 400), 'info'); return;
       case 'informational': if (s(m.content)) this.sys(cut(stripAnsi(s(m.content)), 400), s(m.level) === 'warning' ? 'warn' : 'info'); return;
       case 'local_command_output': if (s(m.content)) this.sys(cut(stripAnsi(s(m.content)), 2000), 'info'); return;
-      case 'model_refusal_fallback': case 'model_refusal_no_fallback': this.sys(cut(stripAnsi(s(m.content)) || 'Il modello ha rifiutato la richiesta.', 400), 'warn'); return;
+      case 'model_refusal_fallback': case 'model_refusal_no_fallback': {
+        const content = cut(stripAnsi(s(m.content)), 400);
+        if (content) this.sys(content, 'warn'); else this.sysCode('modelRefusal', undefined, 'warn');
+        return;
+      }
       default: if (!QUIET_SYSTEM.has(s(m.subtype))) this.drift('system subtype', s(m.subtype), m); return;
     }
   }

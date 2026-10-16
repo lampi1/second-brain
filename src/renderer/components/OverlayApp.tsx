@@ -14,6 +14,7 @@ import { freezeClock } from '../lib/clock';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconInfo, IconX } from './Icons';
 import { RequestPanel } from './RequestPanel';
 import { Keys } from './ui';
+import { lang, setLang } from '../i18n';
 
 const act = (a: OverlayAction) => { void sb.invoke('overlay:action', a).catch(() => {}); };
 
@@ -66,6 +67,8 @@ function EventToast({ t }: { t: OverlayToast }) {
 
 export function OverlayApp() {
   const model = useSyncExternalStore(subscribe, () => latest);
+  // the app page's language (ADR 0057): the root below re-mounts when it changes
+  if (model?.lang && model.lang !== lang()) setLang(model.lang);
   const ref = useRef<HTMLDivElement>(null);
   // the app page's clock (frozen in the demo) drives every "4 min" label here too
 
@@ -121,7 +124,7 @@ export function OverlayApp() {
   const cards = model?.cards ?? [];
   const toasts = model?.toasts ?? [];
   return (
-    <div className="layer" ref={ref} data-testid="layer" role="region" aria-label="Richieste e avvisi per te" aria-live="polite">
+    <div key={lang()} className="layer" ref={ref} data-testid="layer" role="region" aria-label="Richieste e avvisi per te" aria-live="polite">
       {toasts.map(t => <EventToast key={t.id} t={t} />)}
       {cards[0] && <LayerCard card={cards[0]} queue={cards.slice(1)} waiting={model?.waiting ?? cards.length} now={model?.now ?? Date.now()} />}
       {cards[0] && <div className="layer-hint" aria-hidden="true"><Keys combo="Ctrl+J" /> per rispondere da tastiera</div>}

@@ -18,7 +18,9 @@ import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
 import { createBrain } from './brain';
+import { setLaunchRules } from './brain/adapters/domains';
 import { doneEvent } from './brain/live';
+import { syncBeforeCreate } from './brain/sync';
 import { predictionLine } from './brain/routing';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
@@ -47,6 +49,7 @@ import { log, errText } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
+import { launcherName, restartWaiter, sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
@@ -183,7 +186,7 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
 export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'create'>, appRepo: () => string | null, routing?: ImproveDeps['routing']): ImproveService {
   const fake = process.env.SB_IMPROVE_STABLE;
   const running = fake ?? releaseId() ?? 'dev';
-  const releasesBase = process.env.SB_RELEASES_ROOT ?? path.join(process.env.LOCALAPPDATA ?? path.join(ctx.userData, '..'), 'second-brain');
+  const releasesBase = process.env.SB_RELEASES_ROOT ?? sharedDir();
   const real = !!releaseId() && !fake && !process.env.SB_TEST;
   const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const devRepo = process.env.SB_IMPROVE_REPO ?? (fs.existsSync(path.join(outDir, '.git')) ? outDir : null);
@@ -198,14 +201,13 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
       // the launcher starts the new current release (and falls back by itself) once this process is gone: this app
       // holds the single-instance lock until its quit ends (chats close, up to seconds), and a release started before
       // would exit at once and be marked bad (reviews 2026-10-12). After 60 s it starts anyway.
-      const launcher = path.join(releasesBase, 'launch.cmd');
-      const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
-      const script = `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue; & cmd.exe /d /c ${q(launcher)}`;
+      const launcher = path.join(releasesBase, launcherName());
+      const waiter = restartWaiter(process.pid, launcher);
       // quit only once the waiter really started: a powershell.exe that cannot start (blocked, missing) reports it
       // asynchronously, and the app must then stay open rather than close with nothing to reopen it (review 2026-10-12)
       const fail = (e: unknown) => { log.error('improve', 'launcher not started: the app stays open on the old version', { cause: errText(e), hint: `start it by hand: ${launcher}` }); failed(); };
       try {
-        const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], { detached: true, stdio: 'ignore', windowsHide: true, env: cleanEnv(process.env) });
+        const child = spawn(waiter.command, waiter.args, { detached: true, stdio: 'ignore', windowsHide: true, env: cleanEnv(process.env) });
         child.once('error', fail);
         child.once('spawn', () => {
           child.unref();
@@ -238,6 +240,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   let apiRoute: () => Harness | null = () => null;
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
     scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute() });
+  // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
+  // brain folder counts from the next chat
+  setLaunchRules(() => {
+    const s = brain.settings();
+    const root = brain.info().brainRoot;
+    return { domains: root ? [{ name: 'brain', root }] : [], claude: s.launchRulesClaude === true, codex: s.launchRulesCodex !== false };
+  });
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
@@ -346,6 +355,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     for (const t of browser.list()) if (t.ownerChatId === chatId) browser.close(t.id);
     return c;
   };
+  // brain domains (ADR 0059): a new chat reads the brain, so the remote's changes land first (bounded, throttled)
+  syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
@@ -422,7 +433,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
   if (releaseId() && !process.env.SB_TEST && process.env.SB_NO_SYNC !== '1') {
-    sync = new ProductSync({ base: path.join(process.env.LOCALAPPDATA ?? ctx.userData, 'second-brain'), brainRoot: () => brain.info().brainRoot, brain, nodeExe: process.execPath });
+    sync = new ProductSync({ base: sharedDir(), brainRoot: () => brain.info().brainRoot, brain, nodeExe: process.execPath });
     sync.start();
   }
 

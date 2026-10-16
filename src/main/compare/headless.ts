@@ -85,6 +85,9 @@ export const DENIED_READ = 'Cartella vietata: contiene le risposte dell\'altro l
 const READ_TOOLS: Record<EngineDef['kind'], ReadonlySet<string>> = {
   claude: new Set(READ_ONLY_TOOLS),
   acp: new Set([KIND_NAME.read, KIND_NAME.search, KIND_NAME.think].filter((x): x is string => !!x)),
+  // Codex: its read-only sandbox reads without asking; every request it does send (a command or edit out of the
+  // sandbox) is refused (chats/codex.ts also refuses a run with folders it cannot keep it from reading)
+  codex: new Set(),
   api: new Set(),
 };
 

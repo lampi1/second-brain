@@ -6,13 +6,15 @@
 // off closes «Le Regie possono usare» for it too (ADR 0046: the key an older release reads). Env overrides for
 // tests and agents: SB_BRAIN, SB_MCP_PORT are effective and locked, never written back. Never secrets. Used by
 // brain/index.ts for the settings:* channels and by the parts that read settings live (notify, budget, feed restart);
-// scripts/doctor.mjs reads config.json too (same nested shape).
+// scripts/doctor.mjs reads config.json too (same nested shape). config.json may also list the brain's other domain
+// folders (`domains`, ADR 0059, written by scripts/setup-pc.mjs): not a setting, kept as it is on every save.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, SettingProposal, SettingRequestResult, SettingsPatch } from '../../shared/contract';
 import { COMPACT_WINDOW, OLD_COMPACT_WINDOW, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
 import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
+import { domainsOfConfig } from './domains';
 import { log } from '../log';
 
 export { validate, schema };
@@ -73,6 +75,8 @@ export class ConfigStore {
   private saved: Settings;
   private changes: SettingChange[] = [];
   private proposals = new Map<string, SettingProposal>();
+  /** the brain's other domain folders (config.json `domains`, ADR 0059); SB_DOMAINS (newline-separated) overrides it */
+  private domainList: string[] = [];
   /** set when config.json exists but could not be read (shown by the UI next to the brain folder chooser) */
   loadError: string | null = null;
   private listeners = new Set<ChangeListener>();
@@ -92,6 +96,7 @@ export class ConfigStore {
       }
     }
     this.saved = fromSaved(raw);
+    this.domainList = domainsOfConfig(raw);
     this.loadChanges();
     this.migrateCompactWindow(raw !== undefined && raw !== null);
   }
@@ -133,6 +138,12 @@ export class ConfigStore {
   }
 
   schema(): SettingDef[] { return schema(); }
+
+  /** The domain folders listed besides brainRoot (absolute paths). */
+  domains(): string[] {
+    if (this.env.SB_DOMAINS !== undefined) return domainsOfConfig({ domains: this.env.SB_DOMAINS.split(/\r?\n/).map(s => s.trim()) });
+    return [...this.domainList];
+  }
 
   /** The user's patch from the UI: every key validated first (all or none), then each applied and logged. */
   set(patch: SettingsPatch, origin: Origin = { by: 'user' }): Settings {
@@ -243,7 +254,10 @@ export class ConfigStore {
    *  while an antivirus or the indexer holds the file): retry briefly, then write the file directly. */
   private save(s: Settings): void {
     fs.mkdirSync(this.userData, { recursive: true });
-    const text = JSON.stringify(s, null, 2);
+    // the domains list is not a setting: whoever edited the file since (setup-pc.mjs, the user) wins, re-read it now
+    try { if (fs.existsSync(this.file)) this.domainList = domainsOfConfig(JSON.parse(fs.readFileSync(this.file, 'utf8').replace(/^﻿/, ''))); }
+    catch { /* unreadable now: keep the list read at start */ }
+    const text = JSON.stringify(this.domainList.length ? { ...s, domains: this.domainList } : s, null, 2);
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, text);
     for (let i = 0; i < 5; i++) {

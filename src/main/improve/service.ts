@@ -100,6 +100,7 @@ export class ImproveService {
     let branches: ImproveState['branches'] = [];
     let candidate: ImproveState['candidate'] = null;
     let mainChecked = false;
+    let runningAt: number | null = null;
     const runningSha = this.d.stable ? shaOfRelease(this.d.running) : null;
     if (!repo) repoProblem = "Non so dov'è il codice dell'app: impostalo nelle Impostazioni («Cartella del codice dell'app»).";
     else if (!fs.existsSync(repo)) repoProblem = `La cartella del codice non esiste: ${repo}`;
@@ -121,10 +122,13 @@ export class ImproveService {
         branch = head.trim();
         dirty = status.trim() !== '';
         const names = (out: string) => new Set(out.split('\n').map(s => s.trim()).filter(Boolean));
-        const [merged, inUse] = await Promise.all([
+        const [merged, inUse, madeAt] = await Promise.all([
           git(repo, ['branch', '--format=%(refname:short)', '--merged', main]).then(names),
           runningSha ? git(repo, ['branch', '--format=%(refname:short)', '--merged', runningSha]).then(names, () => null) : null,
+          // the version in use as a date for the user ("del 14/10 alle 18:30"), not a hash
+          runningSha ? git(repo, ['show', '-s', '--format=%ct', runningSha]).then(o => (Number(o.trim()) * 1000) || null, () => null) : null,
         ]);
+        runningAt = madeAt;
         const common = path.resolve(repo, commonOut.trim());
         const checks = readJson<Checks>(path.join(common, 'sb-checks.json')) ?? {};
         mainChecked = !!mainSha && checkAt(checks, mainSha, 'full') !== null;
@@ -146,7 +150,7 @@ export class ImproveService {
       }
     }
     const gate = promoteGate({ stable: this.d.stable, repo, repoProblem, branch, main, dirty, mainSha, runningSha, busy: this.promoteRun?.state === 'running' || this.promoteRun?.state === 'restarting', node: !!this.d.node, mainChecked, failedBefore: !!mainSha && failedSha.some(x => mainSha!.startsWith(x)) });
-    this.st = { ...this.st, repo, repoProblem, ...state, candidate, canPromote: gate.ok, promoteWhy: gate.why, promote: this.promoteRun, branches, at: Date.now() };
+    this.st = { ...this.st, repo, repoProblem, ...state, candidate, runningAt, canPromote: gate.ok, promoteWhy: gate.why, promote: this.promoteRun, branches, at: Date.now() };
     this.d.emit(this.st);
     return this.st;
   }

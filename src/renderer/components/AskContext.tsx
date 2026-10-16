@@ -9,9 +9,9 @@
 // catalog views (GenUi.tsx). A text to send in that prose (a mail, a comment: lib/sendable.ts) shows as the chat's own
 // code block, with Copia and Mandato (ADR 0038); the other code blocks stay plain (the Regia's card lists the turn's
 // commands with Esegui apart). In the questions window (`layout="window"`, ADR 0049) it reads as a page: a text to approve
-// stands on its own as a document (never folded, never inside a scrolling box), the prose is two lines of "why" that
-// unfold with a click, the links stay chips. Used by RequestPanel.tsx and CommandRequest.tsx.
-import { memo, useEffect, useMemo, useState } from 'react';
+// stands on its own as a document (never folded, never inside a scrolling box), the lead above the question is the
+// agent's context sentence or two lines of "why" that unfold with a click, the links stay chips. Used by RequestPanel.tsx and CommandRequest.tsx.
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { askContext, type ContextLink } from '../lib/askContext';
 import { markdownParts, renderMarkdown } from '../lib/markdown';
@@ -23,6 +23,7 @@ import { AskArtifacts, UiPreview, openFile } from './GenUi';
 import { AskImages } from './AskImages';
 import { imagesIn, withoutImages, type AskImage } from '../lib/askImages';
 import { cleanLabel } from '../lib/keys';
+import { t } from '../i18n';
 
 /** The images the request names: its questions and options first (captioned with the option), then the turn's prose. */
 function useAskImages(req: PendingRequest, pieces: readonly { kind: string; text: string }[]): AskImage[] {
@@ -78,16 +79,34 @@ function docsOf(pieces: readonly { id: string; kind: string; text: string }[]): 
     : []));
 }
 
-export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel' }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window' }) {
-  if (layout === 'window') return <WindowContext req={req} testBase={testBase} onToggle={onToggle} />;
+export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead }: {
+  req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
+  /** the questions window: the question itself, drawn between the lead and the rest of the context */
+  question?: ReactNode;
+  /** the questions window: the context sentence the agent wrote in front of its question (lib/askSplit.ts) */
+  lead?: string;
+}) {
+  if (layout === 'window') return <WindowContext req={req} testBase={testBase} onToggle={onToggle} question={question} lead={lead} />;
   return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} />;
 });
 
-/** The questions window's context: the text to approve as a document, two lines of why (the rest one click away), the links. */
-function WindowContext({ req, testBase, onToggle }: { req: PendingRequest; testBase: string; onToggle?: () => void }) {
+/** The questions window's context. With `question` (a question or permission) it reads top to bottom: a short muted
+ *  lead, the question, then the rest (the full context one click away, images, links, the text to approve). The lead is
+ *  the agent's own context sentence (`lead`, lib/askSplit.ts), else the two lines of the turn's why as they were when the
+ *  card opened (only if the chat's items were already there). What is above the question is fixed at mount and never
+ *  grows: what loads or unfolds later (the full context, "te la richiede", images) goes under it, so the question never
+ *  moves. Without `question` (a command card) the old order: two lines of why, the links, the documents. */
+function WindowContext({ req, testBase, onToggle, question, lead }: { req: PendingRequest; testBase: string; onToggle?: () => void; question?: ReactNode; lead?: string }) {
   const items = useApp(s => s.items[req.chatId]);
   useEffect(() => { if (items === undefined) void loadItems(req.chatId); }, [items, req.chatId]);
   const ctx = useMemo(() => askContext(items, req), [items, req]);
+  // the lead above the question: the agent's own sentence follows the current step (it changes only with the question);
+  // the turn's "why" is frozen as the card opens, so late-loaded items never push the question down
+  const [why] = useState(() => {
+    const last = items === undefined ? undefined : ctx.pieces[ctx.pieces.length - 1];
+    return last ? oneLine(last.text) : '';
+  });
+  const top = question === undefined ? '' : lead || why;
   const docs = useMemo(() => docsOf(ctx.pieces), [ctx.pieces]);
   const images = useAskImages(req, ctx.pieces);
   const links = useMemo(() => linksBut(ctx.links, images), [ctx.links, images]);
@@ -97,37 +116,40 @@ function WindowContext({ req, testBase, onToggle }: { req: PendingRequest; testB
   const summary = last ? oneLine(last.text) : '';
   const hasBody = ctx.pieces.length > 0 || previews.length > 0;
   const visuals = (items ?? []).some(i => i.kind === 'artifact' && i.askId === req.id);
-  if (!hasBody && !links.length && !ctx.again && !visuals && !images.length) return null;
-  return (
-    <div className={`wctx ${open ? 'open' : ''}`} data-testid={`${testBase}-ctx`}>
+  const toggle = (to: boolean) => { setOpen(to); onToggle?.(); };
+  const rest = (
+    <>
       <AskImages images={images} testBase={testBase} size="l" />
       {ctx.again && (
         <div className="ctx-again" role="note" data-testid={`${testBase}-ctx-again`}>
-          Te la richiede: {ctx.again.answer ? <>avevi risposto «{ctx.again.answer}».</> : 'hai appena risposto.'}
+          {t('chat.context.again', { answer: ctx.again.answer })}
         </div>
       )}
       <AskArtifacts req={req} testBase={testBase} />
-      {hasBody && !open && (
-        <button type="button" className="wctx-why" onClick={() => { setOpen(true); onToggle?.(); }} aria-expanded={false} data-testid={`${testBase}-ctx-toggle`}>
-          <span className="wctx-text">{summary || `Anteprima: ${previews[0]?.label ?? ''}`}</span>
-          <span className="wctx-more">Contesto completo <IconChevronDown size={12} /></span>
+      {hasBody && !open && (top ? (
+        // the lead is already on top: only the way to the whole context here
+        <button type="button" className="wctx-more wq-ctx-more" onClick={() => toggle(true)} aria-expanded={false} data-testid={`${testBase}-ctx-toggle`}>{t('chat.context.more')} <IconChevronDown size={12} /></button>
+      ) : (
+        <button type="button" className="wctx-why" onClick={() => toggle(true)} aria-expanded={false} data-testid={`${testBase}-ctx-toggle`}>
+          <span className="wctx-text">{summary || t('chat.context.summaryPreview', { label: previews[0]?.label ?? '' })}</span>
+          <span className="wctx-more">{t('chat.context.more')} <IconChevronDown size={12} /></span>
         </button>
-      )}
+      ))}
       {hasBody && open && (
         <div className="wctx-body" data-testid={`${testBase}-ctx-body`}>
           {ctx.pieces.map(p => (
             <div key={p.id} className={`ctx-piece ${p.kind}`}>
-              {p.kind === 'thinking' && <div className="ctx-from">dal ragionamento della chat</div>}
+              {p.kind === 'thinking' && <div className="ctx-from">{t('chat.context.thinking')}</div>}
               {p.kind === 'thinking' ? <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text) }} /> : <Prose chatId={req.chatId} itemId={p.id} text={p.text} docs={false} />}
             </div>
           ))}
           {previews.map((p, i) => (
             <div key={i} className="ctx-piece preview">
-              <div className="ctx-from">Anteprima · {p.label}</div>
+              <div className="ctx-from">{t('chat.context.preview', { label: p.label })}</div>
               <UiPreview text={p.text} />
             </div>
           ))}
-          <button type="button" className="wctx-less" onClick={() => { setOpen(false); onToggle?.(); }} aria-expanded data-testid={`${testBase}-ctx-toggle`}>Riduci <IconChevronDown size={12} className="up" /></button>
+          <button type="button" className="wctx-less" onClick={() => toggle(false)} aria-expanded data-testid={`${testBase}-ctx-toggle`}>{t('chat.context.less')} <IconChevronDown size={12} className="up" /></button>
         </div>
       )}
       {links.length > 0 && (
@@ -136,11 +158,21 @@ function WindowContext({ req, testBase, onToggle }: { req: PendingRequest; testB
         </div>
       )}
       {docs.map((d, i) => (
-        <section key={`${d.itemId}.${i}`} className="wdoc" data-testid={`${testBase}-doc`} aria-label="Testo da approvare">
-          <CodeBlock chatId={req.chatId} itemId={d.itemId} lang={d.lang} code={d.code} label="Testo da approvare" />
+        <section key={`${d.itemId}.${i}`} className="wdoc" data-testid={`${testBase}-doc`} aria-label={t('chat.context.document')}>
+          <CodeBlock chatId={req.chatId} itemId={d.itemId} lang={d.lang} code={d.code} label={t('chat.context.document')} />
         </section>
       ))}
-    </div>
+    </>
+  );
+  const empty = !hasBody && !links.length && !ctx.again && !visuals && !images.length;
+  const body = empty ? null : <div className={`wctx ${open ? 'open' : ''}`} data-testid={`${testBase}-ctx`}>{rest}</div>;
+  if (question === undefined) return body;
+  return (
+    <>
+      {top && <p className={`wq-lead ${lead ? 'own' : 'why'}`} data-testid={`${testBase}-ctx-lead`}>{top}</p>}
+      {question}
+      {body}
+    </>
   );
 }
 
@@ -156,19 +188,19 @@ const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, on
   const links = useMemo(() => linksBut(ctx.links, images), [ctx.links, images]);
   if (!hasBody && !links.length && !ctx.again && !visuals && !images.length) return null;
   const last = ctx.pieces[ctx.pieces.length - 1];
-  const summary = last ? oneLine(last.text) : previews.length ? `Anteprima: ${previews[0]!.label}` : '';
+  const summary = last ? oneLine(last.text) : previews.length ? t('chat.context.summaryPreview', { label: previews[0]!.label }) : '';
   return (
     <div className={`ask-ctx ${open ? 'open' : ''}`} data-testid={`${testBase}-ctx`}>
       {ctx.again && (
         <div className="ctx-again" role="note" data-testid={`${testBase}-ctx-again`}>
-          Te la richiede: {ctx.again.answer ? <>avevi risposto «{ctx.again.answer}».</> : 'hai appena risposto.'}
+          {t('chat.context.again', { answer: ctx.again.answer })}
         </div>
       )}
       <AskArtifacts req={req} testBase={testBase} />
       <AskImages images={images} testBase={testBase} />
       {hasBody && (
         <button type="button" className="ctx-toggle" onClick={() => { setOpen(o => !o); onToggle?.(); }} aria-expanded={open} data-testid={`${testBase}-ctx-toggle`}>
-          <IconInfo size={12} /><b>Contesto</b>
+          <IconInfo size={12} /><b>{t('chat.context.label')}</b>
           {!open && summary && <span className="ctx-summary">{summary}</span>}
           <IconChevronRight size={12} className="tool-chev" />
         </button>
@@ -177,13 +209,13 @@ const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, on
         <div className="ctx-body" data-testid={`${testBase}-ctx-body`}>
           {ctx.pieces.map(p => (
             <div key={p.id} className={`ctx-piece ${p.kind}`}>
-              {p.kind === 'thinking' && <div className="ctx-from">dal ragionamento della chat</div>}
+              {p.kind === 'thinking' && <div className="ctx-from">{t('chat.context.thinking')}</div>}
               {p.kind === 'thinking' ? <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text) }} /> : <Prose chatId={req.chatId} itemId={p.id} text={p.text} />}
             </div>
           ))}
           {previews.map((p, i) => (
             <div key={i} className="ctx-piece preview">
-              <div className="ctx-from">Anteprima · {p.label}</div>
+              <div className="ctx-from">{t('chat.context.preview', { label: p.label })}</div>
               <UiPreview text={p.text} />
             </div>
           ))}

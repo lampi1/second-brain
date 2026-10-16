@@ -6,6 +6,7 @@ import { sessionFor } from '../../../src/main/engines/sessions';
 import { ApiSession } from '../../../src/main/chats/api';
 import { ClaudeSession } from '../../../src/main/chats/claude';
 import { AcpSession } from '../../../src/main/chats/acp';
+import { CodexSession } from '../../../src/main/chats/codex';
 import type { SessionOptions, SessionSink } from '../../../src/main/chats/session';
 
 const sink: SessionSink = { item: () => {}, pending: () => {}, resolved: () => {}, changed: () => {}, exit: () => {} };
@@ -13,7 +14,7 @@ const opts: SessionOptions = { chatId: 'c_x', cwd: process.cwd(), model: null, e
 
 describe('engine registry', () => {
   it('knows Claude, Cursor and the presets, in display order, by caps', () => {
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'kimi', 'anthropic']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'kimi', 'anthropic']);
     expect(engineOf('claude')?.caps.effort).toBe(true);
     expect(engineOf('cursor')?.caps.effort).toBe(false);
     expect(engineOf('cursor')?.kind).toBe('acp');
@@ -41,6 +42,14 @@ describe('engine registry', () => {
     for (const k of ['login', 'command', 'args', 'keyEnv', 'baseUrl']) expect(Object.keys(engineInfos()[1]!)).not.toContain(k);
   });
 
+  it('has Codex as an off preset over app-server, its key in CODEX_API_KEY, model and effort per turn (ADR 0060)', () => {
+    const c = engineOrThrow('codex');
+    expect(c).toMatchObject({ kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: false, key: 'optional', trusted: false, runs: 'codex app-server · accesso: codex login' });
+    expect(c.caps).toMatchObject({ effort: true, liveModel: true, tools: true, transcript: false, cost: false, permissionMode: false });
+    expect(enginePathsFromEnv({ SB_CODEX_PATH: 'x.mjs' })).toEqual({ codex: 'x.mjs' });
+    expect(brainEngine('codex2', { kind: 'codex', label: 'C', command: 'codex' })).toEqual(expect.any(String));
+  });
+
   it('reads each engine\'s override from SB_<ID>_PATH only', () => {
     expect(enginePathsFromEnv({ SB_CLAUDE_PATH: 'a.mjs', SB_CURSOR_PATH: 'b.mjs', SB_KIMI_PATH: 'k.mjs', SB_OTHER_PATH: 'c' })).toEqual({ claude: 'a.mjs', cursor: 'b.mjs', kimi: 'k.mjs' });
     expect(enginePathsFromEnv({})).toEqual({});
@@ -57,6 +66,7 @@ describe('engine registry', () => {
     expect(sessionFor(engineOrThrow('claude'), opts, sink, ctx)).toBeInstanceOf(ClaudeSession);
     expect(sessionFor(engineOrThrow('cursor'), opts, sink, ctx)).toBeInstanceOf(AcpSession);
     expect(sessionFor(engineOrThrow('kimi'), opts, sink, ctx)).toBeInstanceOf(AcpSession);
+    expect(sessionFor(engineOrThrow('codex'), opts, sink, ctx)).toBeInstanceOf(CodexSession);
     const api = brainEngine('local', { kind: 'api', label: 'Locale', baseUrl: 'http://127.0.0.1:1/v1', protocol: 'openai' });
     if (typeof api === 'string') throw new Error(api);
     setBrainEngines([api]);

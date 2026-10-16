@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg">
-  <img alt="Platform: Windows 10/11" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6.svg">
+  <img alt="Platform: Windows 10/11 (Linux, macOS: not yet tried)" src="https://img.shields.io/badge/platform-Windows%2010%2F11%20(Linux%2C%20macOS%3A%20not%20yet%20tried)-0078D6.svg">
   <img alt="Node 22+" src="https://img.shields.io/badge/node-%E2%89%A522-339933.svg">
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
@@ -40,7 +40,9 @@ npm run setup      # npm ci (scripts off) + the Electron binary
 npm run demo       # builds and opens the app with demo chats, browser tabs and a sample brain
 ```
 
-Requirements: Windows 10/11, [Node.js](https://nodejs.org) 22+, Git.
+Requirements: Windows 10/11 (Linux and macOS: built for, not yet tried on a real machine, ADR 0054), [Node.js](https://nodejs.org) 22+, Git.
+On macOS and Linux, "Esegui" runs commands in your login shell instead of PowerShell, and the stable app starts from
+`launch.sh` (a `second-brain.command` on the macOS desktop, a menu entry on Linux).
 
 ## Features
 
@@ -166,8 +168,8 @@ AI agents working on the repo read [AGENTS.md](AGENTS.md).
 ## Roadmap
 
 - English UI (the strings are Italian today).
-- macOS and Linux: the app is Electron, but install, the bundled Claude engine, "Esegui" (PowerShell) and the release
-  launcher are Windows-only today.
+- Linux and macOS proved on real machines (CI runs them on GitHub's runners, ADR 0054); installers (.dmg, .AppImage) with
+  signing.
 - More connectors behind the same interface (issue trackers beyond Azure DevOps).
 - Team features: handing a to-do to a colleague, a shared team layer next to each person's brain.
 

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem } from '../../shared/contract';
+import { sysEn, type SysCode } from '../../shared/sys';
 import { diffFor, diffFromResult, resultText, toolSummary } from './claude-map';
 import { lastLine, trimInput } from './session';
 import { coldUserText } from './handoff';
@@ -68,19 +69,24 @@ function historyLines(file: string, maxBytes: number): string[] {
 
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 
-/** User text as typed (a cold continuation's note left out): slash commands shown as "/name args", injected reminders dropped. */
-export function userText(raw: string): { text: string; system?: string } | null {
+/** User text as typed (a cold continuation's note left out): slash commands shown as "/name args", injected reminders
+ *  dropped. A system result (interrupted, a command's output) carries sysCode when it is a fixed frame, or a plain
+ *  system text when it is the command's own output (passthrough). */
+export function userText(raw: string): { text: string; system?: string; sysCode?: SysCode } | null {
   // a cold continuation's first message (ADR 0031): only the user's part, the note stays behind the divider
   const t = coldUserText(raw.replace(REMINDER, '').trim()).trim();
   if (!t) return null;
-  if (/^\[Request interrupted/.test(t)) return { text: '', system: 'Interrotto.' };
+  if (/^\[Request interrupted/.test(t)) return { text: '', sysCode: 'interrupted' };
   const cmd = t.match(/<command-name>([\s\S]*?)<\/command-name>/);
   if (cmd) {
     const args = t.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1]?.trim();
     return { text: `${cmd[1]?.trim() ?? ''}${args ? ` ${args}` : ''}` };
   }
   const out = t.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/);
-  if (out) return { text: '', system: out[1]?.trim() || '(comando eseguito)' };
+  if (out) {
+    const content = out[1]?.trim();
+    return content ? { text: '', system: content } : { text: '', sysCode: 'commandNoOutput' };
+  }
   if (/^<(local-command|command-message|bash-|user-memory)/.test(t)) return null;
   return { text: t };
 }
@@ -102,13 +108,14 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
     if (m.isSidechain === true || m.isMeta === true || m.isCompactSummary === true) continue;
     const at = Date.parse(s(m.timestamp)) || 0;
     const uuid = s(m.uuid) || `${items.length}`;
-    if (m.type === 'system' && m.subtype === 'compact_boundary') { items.push({ kind: 'system', id: `h-${uuid}`, at, text: 'Contesto compattato.', level: 'info' }); continue; }
+    if (m.type === 'system' && m.subtype === 'compact_boundary') { items.push({ kind: 'system', id: `h-${uuid}`, at, text: sysEn('compactedPlain'), level: 'info', code: 'compactedPlain' }); continue; }
     if (m.type !== 'user' && m.type !== 'assistant') continue;
     const content = o(m.message).content;
     if (m.type === 'user') {
       if (typeof content === 'string') {
         const u = userText(content);
-        if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
+        if (u?.sysCode) items.push({ kind: 'system', id: `h-${uuid}`, at, text: sysEn(u.sysCode), level: 'info', code: u.sysCode });
+        else if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
         else if (u?.text) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u.text });
         continue;
       }
@@ -128,7 +135,8 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
         }
       }
       const u = texts.length ? userText(texts.join('\n')) : null;
-      if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
+      if (u?.sysCode) items.push({ kind: 'system', id: `h-${uuid}`, at, text: sysEn(u.sysCode), level: 'info', code: u.sysCode });
+      else if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
       else if (u?.text || images) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u?.text ?? '', ...(images ? { images } : {}) });
       continue;
     }

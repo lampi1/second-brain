@@ -1,4 +1,4 @@
-// Runs a code block of a chat in Windows PowerShell 5.1 when the user clicks "Esegui" under it, and streams the output
+// Runs a code block of a chat in Windows PowerShell 5.1 (macOS/Linux: the user's login shell, platform.ts userShell) when the user clicks "Esegui" under it, and streams the output
 // back under the block (event run:updated). Why: the user runs the commands his chats propose (the user's brain rules: "Commands
 // for him to run: one at a time … one click"); now the click is in the app and the chat can read the outcome (exit code
 // + output: app_command_runs on /mcp/app, or "Manda l'esito alla chat").
@@ -17,6 +17,7 @@ import os from 'node:os';
 import type { RunInfo } from '../../shared/contract';
 import { MAX_RUN_CODE, prodRisk } from '../../shared/runnable';
 import { killTrees } from '../chats/cli';
+import { ownProcessGroup, userShell } from '../platform';
 import { errText, log } from '../log';
 
 const KEEP = 64_000;       // characters of output kept per run (the tail)
@@ -29,7 +30,7 @@ export interface RunnerDeps {
   /** the chat's working folder, or null */
   cwdOf(chatId: string): string | null;
   emit(run: RunInfo): void;
-  /** test hook: the shell to start (default powershell.exe) */
+  /** test hook: the shell to start (default powershell.exe; $SHELL on macOS/Linux) */
   shell?: string;
 }
 
@@ -88,17 +89,18 @@ export class CommandRunner {
     const run: RunInfo = { id, chatId: req.chatId, itemId: req.itemId, code, cwd: dir, state: 'running', exitCode: null, output: '', startedAt: Date.now(), ...(risk ? { prod: risk } : {}) };
     this.runs.set(id, run);
     this.trim();
-    const shell = this.d.shell ?? 'powershell.exe';
+    const sh = userShell(code);
+    const shell = this.d.shell ?? sh.command;
     log.info('run', 'start', { chat: req.chatId, data: { id, cwd: dir, chars: code.length, prod: risk ?? null } });
     let p: ChildProcess;
     try {
-      p = spawn(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'], { cwd: dir, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      p = spawn(shell, sh.args, { cwd: dir, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
       return this.end(id, 'error', null, `\nNon parte: ${errText(e)}`);
     }
     this.procs.set(id, p);
     p.stdin?.on('error', () => {}); // a shell that dies at once closes stdin under us: the close handler reports it
-    p.stdin?.end(bootstrap(code));
+    p.stdin?.end(sh.stdin ? bootstrap(code) : undefined);
     p.stdout?.setEncoding('utf8'); // decoded across chunks: an accent split in two stays one letter
     p.stderr?.setEncoding('utf8');
     const add = (d: Buffer | string) => { this.append(id, typeof d === 'string' ? d : d.toString('utf8')); };

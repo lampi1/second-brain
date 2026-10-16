@@ -20,6 +20,7 @@ import { sb } from '../sb';
 import { closeModal, setPrefs, setRegiaTab, ui } from '../store/ui';
 import { focusChat, regiaId } from '../actions';
 import { cleanRegiaName } from '@shared/regia';
+import { t } from '../i18n';
 import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
 
@@ -58,7 +59,7 @@ export function NewChatDialog() {
   const can = { effort: engineCan(harness, 'effort'), perm: engineCan(harness, 'permissionMode'), worktree: engineCan(harness, 'worktree') };
   const seen = useModelsSeen();
   // the empty option is "automatico" here: picking it gives the choice back to the table
-  const models = useMemo(() => modelOptions(harness, seen, model).map(m => m.id ? m : { ...m, label: 'automatico' }), [harness, seen, model]);
+  const models = useMemo(() => modelOptions(harness, seen, model).map(m => m.id ? m : { ...m, label: t('dialogs.newChat.reasoningAutomatic') }), [harness, seen, model]);
 
   const name = cleanRegiaName(regiaName);
   const request = (): RoutedNewChat => {
@@ -66,11 +67,12 @@ export function NewChatDialog() {
     const asked = { ...(pick.harness ? { harness: pick.harness } : {}), ...(pick.model ? { model: pick.model } : {}), ...(pick.effort && engineCan(harness, 'effort') ? { effort: pick.effort } : {}) };
     return {
       title: title.trim(), cwd: cwd.trim(), prompt: prompt.trim() || undefined,
-      ...(Object.keys(asked).length ? { ask: { ...asked, reason: 'scelta dell’utente (Nuova chat)' } } : {}),
+      ...(Object.keys(asked).length ? { ask: { ...asked, reason: askReason } } : {}),
       defaults: { harness: h, ...(modelOf(h) ? { model: modelOf(h) } : {}), ...(effort0 && engineCan(h, 'effort') ? { effort: effort0 } : {}) },
       ...(regia ? { regia: true, ...(name ? { regiaName: name } : {}) } : regiaId() ? { regiaOf: regiaId()! } : {}),
     };
   };
+  const askReason = 'user choice (New chat)'; // sent to agent, in English
   // the table’s choice while the user types (no tokens, in main): one line and the fields follow it; `key` holds what
   // the route depends on (the tab name does not change it)
   const key = JSON.stringify([title.trim(), prompt.trim().slice(0, 2000), pick, regia, harness0, effort0, def?.claudeModel, def?.cursorModel]);
@@ -82,10 +84,10 @@ export function NewChatDialog() {
   const line = routeLine(preview, engineLabel);
 
   const create = async () => {
-    if (!cwd.trim()) { setError('Scegli la cartella in cui lavora la chat.'); return; }
-    if (!regia && !prompt.trim()) { setError('Scrivi cosa deve fare la chat.'); return; }
-    if (line?.error) { setError(`La chat non parte: ${line.why}. Scegli un altro motore o modello.`); return; }
-    if (regia && hasRegia && !name) { setError('Dai un nome alla nuova Regia (es. App): è il nome della sua tab.'); return; }
+    if (!cwd.trim()) { setError(t('dialogs.newChat.chooseFolder')); return; }
+    if (!regia && !prompt.trim()) { setError(t('dialogs.newChat.writeTask')); return; }
+    if (line?.error) { setError(t('dialogs.newChat.chatFailedPrefix', { why: line.why })); return; }
+    if (regia && hasRegia && !name) { setError(t('dialogs.newChat.nameRegiaRequired')); return; }
     setBusy(true);
     setPrefs({ newChat: { harness, cwd: cwd.trim(), model, effort, permissionMode: perm } });
     const c = await createRoutedChat({
@@ -93,7 +95,7 @@ export function NewChatDialog() {
     });
     setBusy(false);
     if (c) { closeModal(); if (c.isRegia) setRegiaTab(c.id); requestAnimationFrame(() => focusChat(c.id)); }
-    else setError('La chat non è partita: il motivo è nell\'avviso in basso a sinistra.');
+    else setError(t('dialogs.newChat.chatDidNotStart'));
   };
 
   // each CLI shows as soon as it answers; missing = still asking, null = no answer in time
@@ -107,30 +109,30 @@ export function NewChatDialog() {
   }, [known, engines]);
   const on = useApp(s => s.settings?.engineOn);
   const status = (h: Harness) => {
-    if (on && on[h] !== true) return 'spento nelle impostazioni';
+    if (on && on[h] !== true) return t('dialogs.newChat.cliOffInSettings');
     const st = info?.cli?.[h] ?? asked[h];
-    if (st === undefined) return 'controllo…';
-    if (st === null) return 'non verificato';
-    if (!st.found) return 'CLI non trovata';
-    return st.loggedIn === false ? 'accesso da fare' : (st.version ?? 'pronta');
+    if (st === undefined) return t('dialogs.newChat.cliChecking');
+    if (st === null) return t('dialogs.newChat.cliNotVerified');
+    if (!st.found) return t('dialogs.newChat.cliNotFound');
+    return st.loggedIn === false ? t('dialogs.newChat.cliNeedsLogin') : (st.version ?? t('dialogs.newChat.cliReady'));
   };
 
   return (
-    <Modal onClose={closeModal} label={asRegia ? 'Nuova Regia' : 'Nuova chat'} testid="newchat" className="modal-newchat">
+    <Modal onClose={closeModal} label={asRegia ? t('dialogs.newChat.titleNewRegia') : t('dialogs.newChat.titleNewChat')} testid="newchat" className="modal-newchat">
       <form onSubmit={e => { e.preventDefault(); void create(); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void create(); } }}>
-        <div className="modal-head"><h2>{asRegia ? 'Nuova Regia' : 'Nuova chat'}</h2><span className="sp" /><Keys combo="Ctrl+Invio" /><span className="modal-head-hint">crea</span></div>
+        <div className="modal-head"><h2>{asRegia ? t('dialogs.newChat.titleNewRegia') : t('dialogs.newChat.titleNewChat')}</h2><span className="sp" /><Keys combo={t('dialogs.newChat.shortcutCombo')} /><span className="modal-head-hint">{t('dialogs.newChat.createHint')}</span></div>
         <div className="modal-body">
           <label className="field">
-            <span>{regia ? <>Primo messaggio <small>facoltativo</small></> : 'Cosa deve fare?'}</span>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={regia ? 2 : 4} placeholder={regia ? 'Es. «che si fa adesso?»' : 'Scrivi il lavoro: la chat parte dalla cartella del cervello e sceglie da sola repo e worktree'} data-testid="newchat-prompt" autoFocus={!(regia && hasRegia)} />
+            <span>{regia ? <>{t('dialogs.newChat.firstMessage')} <small>{t('dialogs.newChat.optional')}</small></> : t('dialogs.newChat.whatShouldDo')}</span>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={regia ? 2 : 4} placeholder={regia ? t('dialogs.newChat.promptRegiaBrief') : t('dialogs.newChat.promptPlaceholder')} data-testid="newchat-prompt" autoFocus={!(regia && hasRegia)} />
           </label>
           {regia && hasRegia && (
             <label className="field">
-              <span>Nome della Regia <small>il nome della sua tab, es. App</small></span>
-              <input value={regiaName} onChange={e => { setRegiaName(e.target.value); setError(null); }} maxLength={30} placeholder="App" data-testid="newchat-regia-name" autoFocus aria-invalid={!!error && !cleanRegiaName(regiaName)} />
+              <span>{t('dialogs.newChat.regiaNameLabel')} <small>{t('dialogs.newChat.regiaNameHint')}</small></span>
+              <input value={regiaName} onChange={e => { setRegiaName(e.target.value); setError(null); }} maxLength={30} placeholder={t('dialogs.newChat.regiaNamePlaceholder')} data-testid="newchat-regia-name" autoFocus aria-invalid={!!error && !cleanRegiaName(regiaName)} />
             </label>
           )}
-          <div className="harness-pick" role="radiogroup" aria-label="Harness">
+          <div className="harness-pick" role="radiogroup" aria-label={t('dialogs.newChat.harnessLabel')}>
             {engines.map(({ id: h, name }) => (
               <button key={h} type="button" role="radio" aria-checked={harness === h} className={`harness-card ${harness === h ? 'on' : ''}`} data-testid={`newchat-harness-${h}`}
                 onClick={() => { if (h !== harness) setPick({ harness: h }); }}>
@@ -142,27 +144,27 @@ export function NewChatDialog() {
           {/* one row always (empty until the first preview): typing never moves the fields below; the whole why in its title */}
           <p className={`route-line${line?.error ? ' err' : ''}`} data-testid="newchat-route" aria-live={line?.error ? 'polite' : undefined}>
             {line && <span className="route-text" title={`${line.what} — ${line.why}`}><b>{line.what}</b> — {line.why}</span>}
-            {line && (pick.harness || pick.model || pick.effort) && <button type="button" className="link-btn" onClick={() => setPick({})} data-testid="newchat-route-reset">torna automatico</button>}
+            {line && (pick.harness || pick.model || pick.effort) && <button type="button" className="link-btn" onClick={() => setPick({})} data-testid="newchat-route-reset">{t('dialogs.newChat.returnToAutomatic')}</button>}
           </p>
           <details className="advanced" data-testid="newchat-advanced" open={asRegia || undefined}>
-          <summary>Avanzate <small>cartella, modello, permessi, titolo</small></summary>
+          <summary>{t('dialogs.newChat.advancedLabel')} <small>{t('dialogs.newChat.advancedHint')}</small></summary>
           <label className="field">
-            <span>Cartella <small>di base la cartella del cervello</small></span>
-            <input value={cwd} onChange={e => { setCwd(e.target.value); setError(null); }} list="sb-recent-cwd" placeholder="C:\percorso\del\progetto" data-testid="newchat-cwd" aria-invalid={!!error && !cwd.trim()} />
+            <span>{t('dialogs.newChat.folderLabel')} <small>{t('dialogs.newChat.folderHint')}</small></span>
+            <input value={cwd} onChange={e => { setCwd(e.target.value); setError(null); }} list="sb-recent-cwd" placeholder={t('dialogs.newChat.folderPlaceholder')} data-testid="newchat-cwd" aria-invalid={!!error && !cwd.trim()} />
             <datalist id="sb-recent-cwd">{recent.map(r => <option key={r} value={r} />)}</datalist>
           </label>
           <div className="field-row">
             <label className="field">
-              <span>Modello</span>
+              <span>{t('dialogs.newChat.modelLabel')}</span>
               <select value={model} onChange={e => setPick(p => ({ ...p, model: e.target.value || undefined }))} data-testid="newchat-model">
                 {models.map(m => <option key={m.id || 'default'} value={m.id}>{m.label}</option>)}
               </select>
             </label>
             {can.perm && (
               <label className="field">
-                <span>Permessi</span>
+                <span>{t('dialogs.newChat.permissionsLabel')}</span>
                 <select value={perm} onChange={e => setPerm(e.target.value as PermissionMode | '')} data-testid="newchat-perm">
-                  <option value="">Come da impostazioni</option>
+                  <option value="">{t('dialogs.newChat.permissionsDefault')}</option>
                   {PERMISSION_MODES.map(p => <option key={p} value={p}>{permissionLabel(p)}</option>)}
                 </select>
               </label>
@@ -170,33 +172,33 @@ export function NewChatDialog() {
           </div>
           {can.effort && (
             <div className="field">
-              <span>Ragionamento</span>
-              <div className="segmented wide" role="radiogroup" aria-label="Ragionamento">
-                <button type="button" role="radio" aria-checked={!pick.effort} className={!pick.effort ? 'on' : ''} title={`Automatico: ora ${effort ? effortLabel(effort as Effort) : 'quello del modello'}`} onClick={() => setPick(p => ({ ...p, effort: undefined }))} data-testid="newchat-effort-default">automatico</button>
+              <span>{t('dialogs.newChat.reasoningLabel')}</span>
+              <div className="segmented wide" role="radiogroup" aria-label={t('dialogs.newChat.reasoningLabel')}>
+                <button type="button" role="radio" aria-checked={!pick.effort} className={!pick.effort ? 'on' : ''} title={t('dialogs.newChat.reasoningAutoTip', { value: (effort ? effortLabel(effort as Effort) : null) ?? t('dialogs.newChat.reasoningModelDefault') })} onClick={() => setPick(p => ({ ...p, effort: undefined }))} data-testid="newchat-effort-default">{t('dialogs.newChat.reasoningAutomatic')}</button>
                 {EFFORTS.map(e => <button key={e} type="button" role="radio" aria-checked={pick.effort === e} className={pick.effort === e ? 'on' : ''} onClick={() => setPick(p => ({ ...p, effort: e }))} data-testid={`newchat-effort-${e}`}>{effortLabel(e)}</button>)}
               </div>
             </div>
           )}
           <label className="field">
-            <span>Titolo <small>facoltativo</small></span>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Es. QA · Rimborsi" data-testid="newchat-title" />
+            <span>{t('dialogs.newChat.titleLabel')} <small>{t('dialogs.newChat.titleHint')}</small></span>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder={t('dialogs.newChat.titlePlaceholder')} data-testid="newchat-title" />
           </label>
           </details>
           <div className="checks">
-            <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>È la Regia <small>la chat che coordina le altre</small></span></label>
-            {can.worktree && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>Worktree separato <small>non tocca il tuo branch</small></span></label>}
+            <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>{t('dialogs.newChat.isRegia')} <small>{t('dialogs.newChat.isRegiaHint')}</small></span></label>
+            {can.worktree && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>{t('dialogs.newChat.separateWorktree')} <small>{t('dialogs.newChat.separateWorktreeHint')}</small></span></label>}
           </div>
           {regia && current && (
             <p className="regia-note" id="newchat-regia-note" data-testid="newchat-regia-note">
               <HarnessMark harness={current.harness} regia size={16} />
-              <span>Si aggiunge come nuova tab accanto alle altre Regie: <b>«{current.title}»</b> resta com'è. Le chat che apre rispondono a lei.</span>
+              <span>{t('dialogs.newChat.regiaNote')}<b>{current.title}</b>{t('dialogs.newChat.regiaNoteSuffix')}</span>
             </p>
           )}
           {error && <p className="field-error" role="alert">{error}</p>}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="newchat-cancel">Annulla</button>
-          <button type="submit" className="btn btn-primary btn-m" disabled={busy || !!line?.error} data-testid="newchat-create">{busy ? 'Creo…' : regia ? 'Crea la Regia' : 'Crea chat'}</button>
+          <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="newchat-cancel">{t('dialogs.newChat.cancelButton')}</button>
+          <button type="submit" className="btn btn-primary btn-m" disabled={busy || !!line?.error} data-testid="newchat-create">{busy ? t('dialogs.newChat.creating') : regia ? t('dialogs.newChat.createRegiaButton') : t('dialogs.newChat.createChatButton')}</button>
         </div>
       </form>
     </Modal>

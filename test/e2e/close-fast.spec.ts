@@ -4,7 +4,7 @@
 // layer never closes the app window (Electron's default menu would).
 // Screenshots in test-results/shots/close-fast-*.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { ctrlWHandled, launchDemo, shot } from './helpers';
 
 test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the window', async () => {
   const { app, page } = await launchDemo({ regia: true });
@@ -87,23 +87,14 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   // one reaches Electron's default menu, whose Ctrl+W ("Close") would close the window and quit the app
   await page.keyboard.press('Control+N');
   await expect(page.getByTestId('newchat-cancel')).toBeVisible();
-  await app.evaluate(({ BrowserWindow }) => {
-    const w = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().startsWith('file:') && !x.webContents.getURL().includes('#overlay'))!;
-    for (const type of ['keyDown', 'keyUp'] as const) w.webContents.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
-  });
-  await page.waitForTimeout(800);
+  expect(await ctrlWHandled(app, 'window')).toBe(0);
   await expect(page.getByTestId('newchat-cancel')).toBeVisible();
   await expect(page.getByTestId('tile-chat-fix')).toBeAttached();
   await page.keyboard.press('Escape');
 
   // the requests layer (its own view over the window) focused: Ctrl+W stays there
   await expect.poll(() => app.evaluate(({ webContents }) => webContents.getAllWebContents().some(w => w.getURL().includes('#overlay')))).toBe(true);
-  await app.evaluate(({ webContents }) => {
-    const layer = webContents.getAllWebContents().find(w => w.getURL().includes('#overlay'))!;
-    layer.focus();
-    for (const type of ['keyDown', 'keyUp'] as const) layer.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
-  });
-  await page.waitForTimeout(800);
+  expect(await ctrlWHandled(app, 'layer')).toBe(0);
   await expect(page.getByTestId('tile-regia')).toBeVisible();
   await app.close();
 });

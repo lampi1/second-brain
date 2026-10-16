@@ -124,7 +124,7 @@ describe('Chat aperte dalla Regia (regiaChats)', () => {
     for (const v of ['grok 4.7', 'a;b', '"x"', 'x'.repeat(121), 7, null]) expect(validate('regiaChats.claudeModel', v).ok, String(v)).toBe(false);
     expect(validate('regiaChats.claudeEffort', 'xhigh')).toMatchObject({ ok: true });
     expect(validate('regiaChats.claudeEffort', 'huge').ok).toBe(false);
-    expect(validate('regiaChats.harness', 'codex').ok).toBe(false);
+    expect(validate('regiaChats.harness', 'nope').ok).toBe(false);
   });
   it('a config saved before this setting gets the defaults; a saved choice survives a restart', () => {
     expect(fromSaved({ view: 'corsie' }).regiaChats).toEqual(DEFAULTS.regiaChats);
@@ -289,6 +289,6 @@ describe('compaction window 300k → 200k (ADR 0051)', () => {
     // once per userData: a choice that has left the change log (it keeps only its last entries) is not undone
     fs.rmSync(path.join(dir, 'changes.jsonl'));
     expect(new ConfigStore(dir, {}).get().compactWindowTokens).toBe(300_000);
-    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, regiaDayCompact: true });
+    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true });
   });
 });

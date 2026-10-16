@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { ApiSession, MISSING_KEY, TEXT_ONLY, checkBaseUrl, historyItems, type ApiOptions } from '../../../src/main/chats/api';
+import { ApiSession, checkBaseUrl, historyItems, type ApiOptions } from '../../../src/main/chats/api';
 import { PNG_1PX, recSink, tmp, waitFor, type RecSink } from './helpers';
 
 const KEY = 'sk-test-SECRET-0123456789abcdef';
@@ -165,7 +165,7 @@ describe('ApiSession: OpenAI protocol', () => {
     await s.interrupt({ byUser: true });
     await turnDone(sink);
     expect(sink.last('result')).toMatchObject({ isError: false, interrupted: true });
-    expect(sink.last('system')?.text).toBe('Interrotto da te.');
+    expect(sink.last('system')).toMatchObject({ code: 'stoppedByYou' });
     expect(sink.last('assistant')).toMatchObject({ streaming: false });
     expect(JSON.parse(fs.readFileSync(historyFile, 'utf8')).messages.at(-1)).toEqual({ role: 'assistant', content: 'Inizio' });
   });
@@ -177,19 +177,19 @@ describe('ApiSession: OpenAI protocol', () => {
       const { s, sink } = start({ firstByteMs: 150, baseUrl: `http://127.0.0.1:${(silent.address() as AddressInfo).port}/v1` });
       s.send('x');
       await turnDone(sink);
-      expect(sink.last('system')).toMatchObject({ level: 'error', text: expect.stringMatching(/non ha risposto entro/) });
+      expect(sink.last('system')).toMatchObject({ level: 'error', code: 'apiTimeout' });
       expect(sink.last('result')).toMatchObject({ isError: true });
       expect(sink.exited).toBeNull();
     } finally { silent.closeAllConnections(); silent.close(); }
   });
 
-  it('401: "chiave API rifiutata da <host>", never the key', async () => {
+  it('401: key rejected by <host>, never the key', async () => {
     mode = 401;
     const { s, sink, historyFile } = start();
     s.send('x');
     await turnDone(sink);
     const host = new URL(base).host;
-    expect(sink.last('system')).toMatchObject({ level: 'error', text: `Chiave API rifiutata da ${host}.` });
+    expect(sink.last('system')).toMatchObject({ level: 'error', code: 'apiKeyRejected', params: { host } });
     expect(sink.last('result')).toMatchObject({ isError: true });
     expect(everything(sink, historyFile)).not.toContain(KEY);
   });
@@ -199,7 +199,8 @@ describe('ApiSession: OpenAI protocol', () => {
     const { s, sink, historyFile } = start();
     s.send('x');
     await turnDone(sink);
-    expect(sink.last('system')?.text).toMatch(/Richiesta rifiutata da .* \(400\): bad key \*\*\*/);
+    expect(sink.last('system')).toMatchObject({ code: 'apiRequestRejected', params: { status: 400 } });
+    expect(sink.last('system')?.text).toMatch(/Request rejected by .* \(400\): bad key \*\*\*/);
     expect(everything(sink, historyFile)).not.toContain(KEY);
   });
 
@@ -208,12 +209,12 @@ describe('ApiSession: OpenAI protocol', () => {
     const a = start();
     a.s.send('x');
     await turnDone(a.sink);
-    expect(a.sink.last('system')?.text).toMatch(/Troppe richieste .*429/);
+    expect(a.sink.last('system')).toMatchObject({ code: 'apiTooManyRequests' });
     mode = 503;
     const b = start();
     b.s.send('x');
     await turnDone(b.sink);
-    expect(b.sink.last('system')?.text).toMatch(/errore 503/);
+    expect(b.sink.last('system')).toMatchObject({ code: 'apiServerError', params: { status: 503 } });
   });
 
   it('does not follow a redirect (the key never goes to another URL)', async () => {
@@ -222,7 +223,7 @@ describe('ApiSession: OpenAI protocol', () => {
     s.send('x');
     await turnDone(sink);
     expect(seen.map(r => r.url)).toEqual(['/v1/chat/completions']);
-    expect(sink.last('system')).toMatchObject({ level: 'error', text: expect.stringMatching(/reindirizzamento/) });
+    expect(sink.last('system')).toMatchObject({ level: 'error', code: 'apiRedirect' });
     expect(sink.last('assistant')).toBeUndefined();
     expect(everything(sink, historyFile)).not.toContain(KEY);
   });
@@ -231,7 +232,7 @@ describe('ApiSession: OpenAI protocol', () => {
     const { s, sink } = start({ apiKey: () => null });
     s.send('x');
     await turnDone(sink);
-    expect(sink.last('system')?.text).toBe(MISSING_KEY);
+    expect(sink.last('system')).toMatchObject({ code: 'apiMissingKey' });
     expect(seen).toHaveLength(0);
   });
 
@@ -239,7 +240,7 @@ describe('ApiSession: OpenAI protocol', () => {
     const { s, sink } = start();
     s.send('guarda', [{ mimeType: 'image/png', data: PNG_1PX }]);
     await turnDone(sink);
-    expect(sink.events.find(e => e.item.kind === 'system')?.item).toMatchObject({ text: TEXT_ONLY });
+    expect(sink.events.find(e => e.item.kind === 'system')?.item).toMatchObject({ code: 'apiTextOnly' });
     expect(JSON.stringify(seen[0]!.body)).not.toContain(PNG_1PX);
     expect(seen[0]!.body.messages).toEqual([{ role: 'user', content: 'guarda' }]);
   });

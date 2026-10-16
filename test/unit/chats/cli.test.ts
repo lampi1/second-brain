@@ -18,7 +18,7 @@ describe('Claude engine resolution', () => {
     delete process.env.SB_CLAUDE_PATH; delete process.env.SB_ENGINE_CLAUDE;
     const r = resolveClaude();
     expect(r?.source).toBe('embedded');
-    expect(r?.path).toMatch(/[\\/]@anthropic-ai[\\/]claude-agent-sdk-win32-x64[\\/]claude\.exe$/);
+    expect(r?.path).toMatch(new RegExp(String.raw`[\\/]@anthropic-ai[\\/]claude-agent-sdk-${process.platform}-${process.arch}[\\/]claude(\.exe)?$`));
     expect(fs.existsSync(r?.path ?? '')).toBe(true);
   });
 

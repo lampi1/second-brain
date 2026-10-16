@@ -39,10 +39,16 @@ const BASE: readonly SettingDef[] = [
     description: 'Mosaico: le chat come riquadri. Corsie: le chat in colonne per stato.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come il sistema.' },
+  { key: 'language', type: 'enum', values: ['system', 'it', 'en'], default: 'system', protected: false, label: 'Lingua',
+    description: "Lingua dell'interfaccia: come il sistema (italiano se Windows è in italiano, altrimenti inglese), italiano o inglese." },
   { key: 'compactWindowTokens', type: 'int', min: 0, max: 1_000_000, default: COMPACT_WINDOW, protected: false, label: 'Compatta le chat Claude a (token)',
     description: 'Ogni chat Claude dell’app, Regia compresa, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
   { key: 'regiaDayCompact', type: 'boolean', default: true, protected: false, label: 'Regie corte: compatta a inizio giornata',
     description: 'Una Regia con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è ferma da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
+  { key: 'launchRulesClaude', type: 'boolean', default: false, protected: true, label: 'Regole del cervello alle chat Claude',
+    description: 'A ogni avvio di una chat Claude l’app le passa le regole del cervello (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
+  { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del cervello alle chat Codex',
+    description: 'A ogni avvio di una chat Codex l’app le passa le regole del cervello (AGENTS.md come istruzioni e le cartelle delle skill). Spento: Codex legge solo le sue impostazioni.' },
   { key: 'contextWarnTokens', type: 'int', min: 10_000, max: 2_000_000, default: 200_000, protected: false, label: 'Soglia del contesto lungo per Cursor (token)',
     description: 'Il misuratore del contesto diventa ambra sopra questa dimensione nelle chat che non dicono la loro finestra (Cursor); le chat Claude diventano ambra vicino alla loro compattazione.' },
   { key: 'contextHandoff', type: 'boolean', default: true, protected: false, label: 'Continua le chat fredde in una sessione nuova',
@@ -183,8 +189,8 @@ export function validate(key: unknown, value: unknown): Checked {
 
 export function defaults(): Settings {
   return {
-    brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', dnd: false, dndUntil: null,
-    contextWarnTokens: 200_000, contextHandoff: true, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, coldHandoffMin: 50,
+    brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
+    contextWarnTokens: 200_000, contextHandoff: true, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     messaging: { crossHarness: true },

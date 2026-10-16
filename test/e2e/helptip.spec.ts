@@ -69,8 +69,9 @@ test('keyboard focus opens the explanation, Esc closes it and stays on the page;
   // a click pins it: the pointer can leave, a press elsewhere closes it
   await mark.click();
   await expect(bubble).toBeVisible();
+  await expect(mark).toHaveAttribute('data-hover', '');
   await page.mouse.move(5, 5);
-  await page.waitForTimeout(400);
+  await expect(mark).not.toHaveAttribute('data-hover'); // the leave was handled: a pinned bubble schedules no close
   await expect(bubble).toBeVisible();
   await page.getByTestId('st-regia-opacity').locator('.st-title').click(); // a row above: the bubble opens below the mark
   await expect(bubble).toBeHidden();

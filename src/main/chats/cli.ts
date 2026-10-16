@@ -1,5 +1,5 @@
 // Finding and starting the engines (ADR 0010, ADR 0046) without a shell, so arguments are never re-parsed and nothing
-// is injected: Claude = the official binary embedded in the app (dependency @anthropic-ai/claude-agent-sdk-win32-x64; a
+// is injected: Claude = the official binary embedded in the app (the dependency for this OS and CPU, platform.ts; a
 // release passes its copy in SB_ENGINE_CLAUDE), Cursor = the user's installed CLI started as its own `node.exe
 // index.js` (no PowerShell launcher), any other ACP CLI = its command on PATH (resolveAcp). A .mjs/.js path runs with
 // Electron as Node: that is how tests swap in the fake engines, and under tests a real engine is refused (never spend
@@ -7,14 +7,17 @@
 // claude.ts, acp.ts, manager.ts, ../cli.ts.
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseEngine } from '../release';
+import { claudeEnginePackage } from '../platform';
 
 const found = new Map<string, string | null>();
 const isScript = (p: string): boolean => /\.(m?js|cjs)$/i.test(p);
 
-const EMBEDDED_CLAUDE = path.join('node_modules', '@anthropic-ai', 'claude-agent-sdk-win32-x64', 'claude.exe');
+const ENGINE_PKG = claudeEnginePackage();
+const EMBEDDED_CLAUDE = ENGINE_PKG ? path.join('node_modules', ...ENGINE_PKG.pkg.split('/'), ENGINE_PKG.bin) : null;
 
 /** First existing `rel` in `start` or one of its parents. */
 function findUp(start: string, rel: string): string | null {
@@ -39,7 +42,7 @@ export function resolveClaude(override?: string | null): { path: string; source:
   if (rel && fs.existsSync(rel)) return { path: rel, source: 'release' };
   let here = process.cwd();
   try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* not a file URL */ }
-  const emb = findUp(here, EMBEDDED_CLAUDE) ?? findUp(process.cwd(), EMBEDDED_CLAUDE);
+  const emb = EMBEDDED_CLAUDE ? findUp(here, EMBEDDED_CLAUDE) ?? findUp(process.cwd(), EMBEDDED_CLAUDE) : null;
   if (emb) return { path: emb, source: 'embedded' };
   const p = findCli('claude');
   return p ? { path: p, source: 'path' } : null;
@@ -52,29 +55,32 @@ export interface CliCommand { kind: 'fake' | 'node' | 'cmd' | 'exe'; command: st
 const VERSION_DIR = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-(\d{2})-(\d{2})-(\d{2}))?-[a-f0-9]+$/;
 
 /** Newest version folder of the Cursor CLI (same rule as its own launcher: YYYY.MM.DD[-HH-MM-SS]-commit). */
-export function newestCursorVersion(versionsDir: string): string | null {
+export function newestCursorVersion(versionsDir: string, node = 'node.exe'): string | null {
   let names: string[] = [];
   try { names = fs.readdirSync(versionsDir); } catch { return null; }
   const key = (m: RegExpMatchArray): number => Number(`${m[1]}${(m[2] ?? '').padStart(2, '0')}${(m[3] ?? '').padStart(2, '0')}${m[4] ?? '00'}${m[5] ?? '00'}${m[6] ?? '00'}`);
   const ok = names.map(n => ({ n, m: n.match(VERSION_DIR) }))
-    .filter((x): x is { n: string; m: RegExpMatchArray } => !!x.m && fs.existsSync(path.join(versionsDir, x.n, 'node.exe')) && fs.existsSync(path.join(versionsDir, x.n, 'index.js')))
+    .filter((x): x is { n: string; m: RegExpMatchArray } => !!x.m && fs.existsSync(path.join(versionsDir, x.n, node)) && fs.existsSync(path.join(versionsDir, x.n, 'index.js')))
     .sort((a, b) => key(b.m) - key(a.m));
   return ok[0] ? path.join(versionsDir, ok[0].n) : null;
 }
 
-/** The Cursor CLI: SB_CURSOR_PATH (tests) → the newest version under %LOCALAPPDATA%/cursor-agent → its shim on PATH. */
-export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env): CliCommand | null {
+/** The Cursor CLI: SB_CURSOR_PATH (tests) → the newest version under its install folder (Windows
+ *  %LOCALAPPDATA%/cursor-agent, macOS/Linux ~/.local/share/cursor-agent, ADR 0054) → its launcher on PATH. */
+export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home = os.homedir()): CliCommand | null {
+  const win = platform === 'win32';
   const o = override ?? env.SB_CURSOR_PATH;
-  const base: NodeJS.ProcessEnv = { ...env, CURSOR_INVOKED_AS: env.CURSOR_INVOKED_AS ?? 'agent.cmd' };
+  const base: NodeJS.ProcessEnv = { ...env, CURSOR_INVOKED_AS: env.CURSOR_INVOKED_AS ?? (win ? 'agent.cmd' : 'cursor-agent') };
   delete base.ELECTRON_RUN_AS_NODE;
   if (o) return commandAt(o, env, base);
-  const local = env.LOCALAPPDATA;
-  const dir = local ? newestCursorVersion(path.join(local, 'cursor-agent', 'versions')) : null;
+  const local = win ? env.LOCALAPPDATA : path.posix.join(home, '.local', 'share');
+  const node = win ? 'node.exe' : 'node';
+  const dir = local ? newestCursorVersion(path.join(local, 'cursor-agent', 'versions'), node) : null;
   if (dir) {
     const cache = env.NODE_COMPILE_CACHE ?? path.join(local ?? '', 'cursor-compile-cache');
-    return { kind: 'node', command: path.join(dir, 'node.exe'), prefix: [path.join(dir, 'index.js')], env: { ...base, NODE_COMPILE_CACHE: cache }, verbatim: false, display: dir };
+    return { kind: 'node', command: path.join(dir, node), prefix: [path.join(dir, 'index.js')], env: { ...base, NODE_COMPILE_CACHE: cache }, verbatim: false, display: dir };
   }
-  const shim = findCli('agent');
+  const shim = findCli('agent') ?? (win ? null : findCli('cursor-agent'));
   return shim ? installed(shim, base) : null;
 }
 
@@ -168,7 +174,14 @@ export function killTrees(pids: (number | null | undefined)[], opts: { fallback?
   if (!list.length) return;
   const fallback = (): void => { try { opts.fallback?.(); } catch { /* gone */ } };
   try {
-    if (process.platform !== 'win32') { for (const p of list) { try { process.kill(p, 'SIGKILL'); } catch { /* gone */ } } return; }
+    if (process.platform !== 'win32') {
+      // macOS/Linux: engines and runs lead their own process group (platform.ts ownProcessGroup): kill(-pid) takes the
+      // whole tree; a pid that leads no group (ESRCH) is killed alone
+      for (const p of list) {
+        try { if (opts.tree === false) throw new Error('alone'); process.kill(-p, 'SIGKILL'); } catch { try { process.kill(p, 'SIGKILL'); } catch { /* gone */ } }
+      }
+      return;
+    }
     const args = [...list.flatMap(p => ['/pid', String(p)]), ...(opts.tree === false ? [] : ['/T']), '/F'];
     const k = spawn('taskkill', args, { windowsHide: true, stdio: 'ignore', detached: true });
     k.on('error', fallback);

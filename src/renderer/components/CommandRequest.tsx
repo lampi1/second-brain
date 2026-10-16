@@ -19,6 +19,7 @@ import { dismissCommand, runCommand } from '../store/store';
 import { AskContext } from './AskContext';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconTerminal } from './Icons';
 import { Kbd } from './ui';
+import { t } from '../i18n';
 
 export type CommandVariant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
 
@@ -87,35 +88,35 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   const shown = open ? code : lines.slice(0, small ? 1 : 3).join('\n');
   const more = lines.length > (small ? 1 : 3) || shown.length > 110;
   const age = ago(req.at, now);
-  const prodBadge = <span className="cb-prod" data-testid={`${testBase}-prod`} title={`Sembra un comando di produzione: ${prod}`}><IconAlert size={11} /> produzione</span>;
+  const prodBadge = <span className="cb-prod" data-testid={`${testBase}-prod`} title={t('chat.codeblock.productionWarning', { warning: prod ?? '' })}><IconAlert size={11} /> {t('chat.codeblock.productionBadge')}</span>;
   const cls = variant === 'regia' ? 'decision cmd-ask' : small ? 'need-card cmd-ask cmd-small' : 'ask cmd-ask';
 
   if (variant === 'window') {
     return (
       <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`wq cmd-ask ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
-        aria-busy={busy} aria-label={`Comando da eseguire da ${chatTitle ?? 'una chat'}: ${lines[0] ?? ''}`}>
-        <div className="wq-kicker"><IconTerminal size={13} /><span>Comando da eseguire</span>{prod && prodBadge}</div>
-        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || 'Lo lanci?'}</h2>
+        aria-busy={busy} aria-label={t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? 'una chat', command: lines[0] ?? '' })}>
+        <div className="wq-kicker"><IconTerminal size={13} /><span>{t('chat.command.title')}</span>{prod && prodBadge}</div>
+        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || t('chat.command.defaultLead')}</h2>
         <div className={`ask-raw wq-code ${open ? 'open' : ''}`}>
           <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{open ? code : lines.slice(0, 6).join('\n')}</pre>
           {lines.length > 6 && (
             <button type="button" className="ask-raw-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`${testBase}-code-toggle`}>
-              {open ? 'Mostra meno' : `Mostra tutto il comando (${lines.length} righe)`}
+              {open ? t('chat.command.showLess') : t('chat.command.showMore', { lines: lines.length })}
             </button>
           )}
         </div>
         {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} layout="window" onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
         <div className="wq-perm">
           <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
-            data-tip={armed ? undefined : 'Lo esegue PowerShell 5.1 qui nell’app, nella cartella della chat; l’output resta sotto il blocco nella chat'}>
-            {armed ? <><IconAlert size={13} /> Confermi? {prod}</> : <><IconPlay size={12} /> Esegui <Kbd>Invio</Kbd></>}
+            data-tip={armed ? undefined : t('chat.command.helpWindow')}>
+            {armed ? <><IconAlert size={13} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={12} /> {t('chat.command.execWithKey')} <Kbd>Invio</Kbd></>}
           </button>
           <button type="button" className="btn btn-ghost btn-l" onClick={copy} data-testid={`${testBase}-copy`}>
-            {copied ? <><IconCheck size={13} /> Copiato</> : <><IconCopy size={13} /> Copia</>}
+            {copied ? <><IconCheck size={13} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={13} /> {t('chat.command.copy')}</>}
           </button>
           <span className="sp" />
           <button type="button" className="btn btn-ghost btn-l cmd-dismiss" onClick={dismiss} disabled={busy} data-testid={`${testBase}-dismiss`}
-            data-tip="Toglie la richiesta: il blocco resta nella chat con il suo Esegui">Non serve</button>
+            data-tip={t('chat.command.dismissTip')}>{t('chat.command.dismiss')}</button>
         </div>
       </div>
     );
@@ -123,7 +124,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
 
   return (
     <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`${cls} ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
-      aria-busy={busy} aria-label={`Comando da eseguire da ${chatTitle ?? 'una chat'}: ${lines[0] ?? ''}`} {...(variant === 'lane' ? { 'data-lane': '' } : {})}>
+      aria-busy={busy} aria-label={t('chat.command.askLabel', { chatTitle: chatTitle ?? 'una chat', command: lines[0] ?? '' })} {...(variant === 'lane' ? { 'data-lane': '' } : {})}>
       {variant === 'lane' ? (
         // the lane: who first, like the other lane cards
         <div className="need-head">
@@ -134,7 +135,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
       ) : null}
       <div className="cmd-head">
         {variant !== 'lane' && <span className="ask-icon"><IconTerminal size={14} /></span>}
-        <span className="cmd-kind">Comando da eseguire</span>
+        <span className="cmd-kind">{t('chat.command.title')}</span>
         {prod && variant !== 'lane' && prodBadge}
         <span className="sp" />
         {variant !== 'lane' && <span className="ask-age">{age}</span>}
@@ -144,28 +145,28 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
         <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{shown}</pre>
         {more && (
           <button type="button" className="ask-raw-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`${testBase}-code-toggle`}>
-            {open ? 'Mostra meno' : lines.length > 1 ? `Mostra tutto il comando (${lines.length} righe)` : 'Mostra tutto il comando'}
+            {open ? t('chat.command.showLess') : lines.length > 1 ? t('chat.command.showMore', { lines: lines.length }) : t('chat.command.showAll')}
           </button>
         )}
       </div>
       {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
       <div className="cmd-actions">
         <button type="button" className={`btn btn-primary ${small ? 'btn-s' : 'btn-m'} ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
-          data-tip={armed ? undefined : 'Lo esegue PowerShell 5.1 qui nell’app, nella cartella della chat; l’output resta sotto il blocco nella chat'}>
-          {armed ? <><IconAlert size={12} /> Confermi? {prod}</> : <><IconPlay size={11} /> Esegui</>}{!small && !armed && <Kbd>Invio</Kbd>}
+          data-tip={armed ? undefined : t('chat.command.help')}>
+          {armed ? <><IconAlert size={12} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={11} /> {t('chat.command.exec')}</>}{!small && !armed && <Kbd>Invio</Kbd>}
         </button>
         <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={copy} data-testid={`${testBase}-copy`}>
-          {copied ? <><IconCheck size={12} /> Copiato</> : <><IconCopy size={12} /> Copia</>}
+          {copied ? <><IconCheck size={12} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={12} /> {t('chat.command.copy')}</>}
         </button>
         {onOpen && (
-          <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={onOpen} data-testid={`${testBase}-open`}>Apri chat <IconArrowRight size={12} /></button>
+          <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={onOpen} data-testid={`${testBase}-open`}>{t('chat.command.openChat')} <IconArrowRight size={12} /></button>
         )}
         <span className="sp" />
         {onLater && (
-          <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={onLater} disabled={busy} data-testid={`${testBase}-later`}>Rispondi dopo{!small && onEscape && <Kbd>Esc</Kbd>}</button>
+          <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={onLater} disabled={busy} data-testid={`${testBase}-later`}>{t('chat.command.later')}{!small && onEscape && <Kbd>Esc</Kbd>}</button>
         )}
         <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'} cmd-dismiss`} onClick={dismiss} disabled={busy} data-testid={`${testBase}-dismiss`}
-          data-tip="Toglie la richiesta: il blocco resta nella chat con il suo Esegui">Non serve</button>
+          data-tip={t('chat.command.dismissTip')}>{t('chat.command.dismiss')}</button>
       </div>
     </div>
   );

@@ -39,7 +39,8 @@ test('the questions window opens fast, stays still, and other chats never render
   // nothing moves once it is open: the window's top edge and the question stay where they first painted
   const top0 = (await page.getByTestId('qwin').boundingBox())!.y;
   const q0 = (await page.getByTestId('qwin-card-q').boundingBox())!.y;
-  await page.waitForTimeout(600);
+  // twenty painted frames later (frames, not time: a busy machine paints fewer per second)
+  await page.evaluate(() => new Promise<void>(res => { let n = 0; const f = () => (++n >= 20 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
   expect((await page.getByTestId('qwin').boundingBox())!.y).toBe(top0);
   expect((await page.getByTestId('qwin-card-q').boundingBox())!.y).toBe(q0);
 

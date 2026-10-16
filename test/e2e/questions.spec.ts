@@ -4,8 +4,11 @@
 // transcript, no "Ti aspettano" strip in the Mosaico, the focus kept when a Corsie tile changes column, and the
 // questions window ("Domande in finestra"): it waits while the user types, never takes their field, it is always the one
 // modal in the middle (anchored near the top, ADR 0049) (never a second, backdrop-less copy beside the field: the user, 2026-10-14), Ctrl+J brings it,
-// 1 answers and the next card takes the keyboard, Esc is "Rispondi dopo" (closed until the queue is opened: a new
+// it reads context first (the agent's lead muted above the real question), 1 answers and the next card takes the
+// keyboard, Esc is "Rispondi dopo" (closed until the queue is opened: a new
 // question then waits silently, answer-later.spec.ts covers the queue), any waiting request can be answered first.
+// With the switch on, a question from the chat the user is in goes to the window, never inline, and the switch stays
+// on (no off button in the window: the user, 2026-10-16).
 // Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, moreAction, shot } from './helpers';
@@ -128,10 +131,40 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(page.getByTestId('qwin-chat')).not.toHaveText('Fix totale ordine');
   await expect(page.getByTestId('qwin-card')).toBeFocused();
   await expect(field).toHaveValue('sto scrivendo!'); // the draft is still there
-  // off again from the window itself (the top bar is under it): the panels go back to the tiles
-  await page.getByTestId('qwin-off').click();
+  // the window has no off switch of its own (a misclick on it turned the setting off: the user, 2026-10-16)
+  await expect(page.getByTestId('qwin-off')).toHaveCount(0);
+  await app.close();
+});
+
+test('the questions window stays on: a question from the chat the user is in goes to the window, never inline, and the switch stays on', async () => {
+  const { app, page } = await launchDemo();
+  await moreAction(page, 'more-qwin');
+  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave
   await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await expect(page.getByTestId('chat-in-window-qa')).toHaveCount(0);
+  const inline = page.locator('.tile-requests [data-request-key]');
+  // the user is in the chat: its field has the keyboard
+  await page.getByTestId('chat-input-fix').click();
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo con il commit?', ['Sì', 'No']));
+  await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Fix totale ordine');
+  await expect(page.getByTestId('chat-in-window-fix')).toBeVisible(); // the tile keeps one line
+  await expect(inline).toHaveCount(0); // no panel inline in any chat
+  await shot(page, 'questions-window-stays-on');
+  // a click on the window's head (where "Spegni" was) turns nothing off; 1 answers
+  await page.getByTestId('qwin-chat').click();
+  await expect(page.getByTestId('qwin-card')).toBeFocused();
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  // the next question from the same chat goes to the window again: the switch is still on
+  await page.getByTestId('chat-input-fix').click();
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Apro la PR?', ['Sì', 'No']));
+  await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
+  await expect(inline).toHaveCount(0);
+  await page.keyboard.press('Control+J');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await page.getByTestId('topbar-more').click();
+  await expect(page.getByTestId('more-qwin')).toHaveAttribute('aria-checked', 'true');
   await app.close();
 });
 
@@ -171,8 +204,8 @@ test('the questions window, two questions in a row: the second shows once, with 
   const q = question('Il pezzo 1 ti è chiaro?', ['Chiaro, vai avanti', 'Rispiegamelo diverso']);
   await demo(app, (d, id, req) => { d.think(id, 'Pezzo 1: la casella di posta passa i messaggi tra le chat.'); d.ask(id, req); }, 'fix', q);
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  // the why in two lines, folded (ADR 0049): here the reasoning before the question
-  await expect(page.getByTestId('qwin-card-ctx-toggle')).toContainText('la casella di posta');
+  // the why in two lines above the question (ADR 0049): here the reasoning before the question
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toContainText('la casella di posta');
   await expect(page.getByTestId('qwin-card-ctx-again')).toHaveCount(0);
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -220,5 +253,44 @@ test('the questions window answers in any order: a waiting request is one click 
   await picks.click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
   await expect(picks).toContainText('Regia');
+  await app.close();
+});
+
+test('the questions window reads context first: the agent\'s lead muted on top, the real question large under it', async () => {
+  const { app, page } = await launchDemo();
+  await moreAction(page, 'more-qwin');
+  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await demo(app, (d, id, t) => d.say(id, t), 'fix', 'Ho rilanciato il test case 7 su master e sul ramo della PR: fallisce su entrambi.');
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Il test case 7 fallisce anche su master: il bug è vecchio. Apro un bug separato?', ['Sì', 'No']));
+  await expect(page.getByTestId('qwin-card')).toBeFocused();
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toContainText('Il test case 7 fallisce anche su master: il bug è vecchio.');
+  await expect(page.getByTestId('qwin-card-q')).toHaveText('Apro un bug separato?');
+  const lead = (await page.getByTestId('qwin-card-ctx-lead').boundingBox())!;
+  const q = (await page.getByTestId('qwin-card-q').boundingBox())!;
+  expect(lead.y).toBeLessThan(q.y);
+  // the turn's prose stays one click away, opening under the question (which never moves); the keyboard stays on the card
+  await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished)));
+  const q0 = (await page.getByTestId('qwin-card-q').boundingBox())!.y;
+  await page.getByTestId('qwin-card-ctx-toggle').click();
+  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('fallisce su entrambi');
+  await expect(page.getByTestId('qwin-card')).toBeFocused();
+  expect((await page.getByTestId('qwin-card-q').boundingBox())!.y).toBeCloseTo(q0, 0);
+  await shot(page, 'questions-window-lead');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  // a bare question stays whole: nothing split off it, the lead on top is only the turn's own prose (the "why")
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Rilancio la pipeline?', ['Sì', 'No']));
+  await expect(page.getByTestId('qwin-card-q')).toHaveText('Rilancio la pipeline?');
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveClass(/(^| )why( |$)/);
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toContainText('fallisce su entrambi');
+  await page.keyboard.press('1');
+  // two questions in one request: each step shows its own lead, never the first one's
+  const q1 = 'Ho trovato il bug nel parser. Lo sistemo subito?', q2 = 'Il test in CI vuole un fix di configurazione. Lo aggiorno?';
+  await demo(app, (d, id, r) => d.ask(id, r), 'fix', { ...question(q1, ['Sì', 'No']), questions: [q1, q2].map(q => ({ question: q, header: 'Ok', multiSelect: false, options: [{ label: 'Sì' }, { label: 'No' }] })) });
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText('Ho trovato il bug nel parser.');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('qwin-card-q')).toHaveText('Lo aggiorno?');
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText('Il test in CI vuole un fix di configurazione.');
   await app.close();
 });

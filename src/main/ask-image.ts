@@ -1,7 +1,7 @@
 // The images a question shows (the user, 2026-10-14: "mi piacerebbe che le immagini si potessero vedere direttamente
 // nella domanda"): a chat names a local PNG, JPG or WebP in its question, an option or the turn's prose, and the panel
 // shows it as a thumbnail that opens large. The path comes from a model's text, so it is untrusted: an absolute local
-// path (open-path.ts rules: a drive letter, never a network share, real path checked again), inside one of the allowed
+// path (open-path.ts rules: a drive letter or a /-rooted path, never a network share, real path checked again), inside one of the allowed
 // folders (the app's evidence and profile folders, the brain, the app's code and its worktrees), with an image
 // extension AND the matching magic bytes, at most MAX_ASK_IMAGE bytes. It is handed to the renderer as a data: URL (the
 // CSP already allows img-src data:; no file: URL ever reaches the page). Nothing is written, run or sent anywhere.
@@ -22,19 +22,23 @@ export function magicMatches(mime: string, head: Buffer): boolean {
   return false;
 }
 
-const norm = (p: string) => path.win32.resolve(p).replace(/[\\/]+$/, '').toLowerCase();
-/** Is `p` the folder `root` or inside it (whole path segments, case-insensitive like Windows)? */
-export function isInside(p: string, root: string): boolean {
+/** Is `p` the folder `root` or inside it (whole path segments; case-insensitive on Windows and macOS, whose disks are
+ *  by default, case-sensitive on Linux)? */
+export function isInside(p: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
+  const lib = platform === 'win32' ? path.win32 : path.posix;
+  // macOS: APFS ignores case and Unicode form (é composed or decomposed), so both are folded; Linux keeps both
+  const fold = platform === 'linux' ? (s: string) => s : platform === 'darwin' ? (s: string) => s.normalize('NFC').toLowerCase() : (s: string) => s.toLowerCase();
+  const norm = (x: string) => fold(lib.resolve(x).replace(/[\\/]+$/, ''));
   const a = norm(p);
   const b = norm(root);
-  return a === b || a.startsWith(`${b}\\`);
+  return a === b || a.startsWith(`${b}${lib.sep}`);
 }
 
 const realOr = (p: string) => { try { return fs.realpathSync.native(p); } catch { return p; } };
 
 export function readAskImage(raw: string, roots: readonly string[]): AskImageResult {
   const p = localPath(raw);
-  if (!p) return { kind: 'refused', reason: 'Solo immagini di questo PC, con il percorso completo (C:\\…).' };
+  if (!p) return { kind: 'refused', reason: `Solo immagini di questo PC, con il percorso completo (${process.platform === 'win32' ? 'C:\\…' : '/…'}).` };
   const mime = MIME[path.extname(p).toLowerCase()];
   if (!mime) return { kind: 'refused', reason: 'Solo immagini PNG, JPG o WebP.' };
   if (linksToShare(p)) return { kind: 'refused', reason: 'Il percorso porta a una cartella di rete.' };

@@ -10,6 +10,7 @@ import { createServices } from './wiring';
 import { log } from './log';
 import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
+import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
 import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
@@ -27,9 +28,10 @@ import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
+import { systemLang } from './lang';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-app.setAppUserModelId(APP_ID);
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
 // userData (ADR 0007): a stable release (started by the launcher, SB_RELEASE set) uses %APPDATA%/second-brain; a build run
 // from the repo uses %APPDATA%/second-brain-dev and MCP port 4329, so dev never touches the stable cockpit; tests isolate it.
 // first: read the release and scrub the stable-only variables, so no CLI, shell or dev instance inherits them
@@ -46,6 +48,9 @@ let win: BrowserWindow | null = null;
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
   ensureShortcuts();
+  installAppMenu();
+  // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)
+  if (process.platform === 'darwin') app.dock?.setIcon(path.join(outDir, 'icon.png'));
   log.info('app', 'start', { data: { version: app.getVersion(), electron: process.versions.electron, userData: app.getPath('userData') } });
   win = createWindow(outDir);
   const emitter = new Emitter(() => win?.webContents ?? null);
@@ -71,7 +76,7 @@ app.whenReady().then(async () => {
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   const handlers: Handlers = {
-    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot() }),
+    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
       const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
@@ -185,6 +190,9 @@ app.whenReady().then(async () => {
     'search:query': a => search.query(String(a?.q ?? '')),
     'later:get': () => s.later.get(),
     'later:set': a => s.later.set(a?.on === true),
+    'sync:get': () => s.brain.syncState(),
+    'sync:now': a => s.brain.syncNow(a?.domain),
+    'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,

@@ -7,6 +7,9 @@ import { launchDemo, layerPage, shot, windowShot } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
+// "nothing happened" is checked after a loud event sent last has shown: events reach the page in order, so the quiet
+// ones before it were handled by then (a fixed pause can end before they even arrive on a busy machine)
+const SENTINEL = { kind: 'sync-blocked', title: 'Segnale di fine' };
 
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
   const { app, page } = await launchDemo();
@@ -25,8 +28,9 @@ test('an important event shows a toast above everything; its action opens the pl
   await event(app, { kind: 'idea', title: 'Riassunto automatico al ritorno' });
   await event(app, { kind: 'chat-done', title: 'QA', chatId: 'qa' });
   await event(app, { kind: 'error', title: 'Comando lanciato due volte' });
-  await page.waitForTimeout(600);
-  await expect(layer.locator('[data-testid^="ev-toast-"]')).toHaveCount(0);
+  await event(app, SENTINEL);
+  await expect(layer.getByTestId('ev-toast-sync-blocked')).toContainText(SENTINEL.title);
+  await expect(layer.locator('.ev-toast')).toHaveCount(1);
   await app.close();
 });
 
@@ -55,8 +59,9 @@ test('notification center: filter by kind, mark all read (remembered after a rel
   await row.locator('[data-testid^="nc-mute-"]').click();
   await page.keyboard.press('Escape');
   await event(app, { kind: 'chat-failed', title: 'Altro errore', chatId: 'qa' });
+  await event(app, SENTINEL);
   const layer = await layerPage(app);
-  await page.waitForTimeout(600);
+  await expect(layer.getByTestId('ev-toast-sync-blocked')).toContainText(SENTINEL.title);
   await expect(layer.getByTestId('ev-toast-chat-failed')).toHaveCount(0);
   await app.close();
 });
@@ -69,13 +74,13 @@ test('section badges count new events and clear when the section is visited', as
   await page.getByTestId('nav-costi').click();
   await expect(badge).toHaveText('');
   await page.getByTestId('nav-idee').click();
-  await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
-  await expect(badge).toHaveText('!');
-  // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was
+  // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was; the budget event after it
+  // shows Costi's mark, so the idea was handled by then
   const ideas = page.getByTestId('nav-badge-idee');
   const ideasBefore = await ideas.textContent();
   await event(app, { kind: 'idea', title: 'Una idea in più' });
-  await page.waitForTimeout(400);
+  await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
+  await expect(badge).toHaveText('!');
   await expect(ideas).toHaveText(ideasBefore ?? '');
   await page.getByTestId('nav-costi').click();
   await expect(page.getByTestId('page-costi')).toBeVisible();
@@ -107,13 +112,13 @@ test('the bell counts only what needs the user; the center keeps everything else
     { kind: 'chat-done', title: 'Fix totale ordine', chatId: 'qa' }, { kind: 'error', title: 'Comando lanciato due volte' }, { kind: 'idea', title: 'Riassunto al ritorno' },
     { kind: 'now', title: 'Filo aggiornato' }, { kind: 'playbook', title: 'qa' }, { kind: 'sync-ok', title: 'GitHub aggiornato' }, { kind: 'proposal', title: 'Proposta' },
   ]) await event(app, e);
-  await page.waitForTimeout(400);
-  expect(await count()).toBe(before);
-  // what needs him: counted
+  // what needs him: counted (sent after the noise: once both are in the list, the noise was handled too)
   await event(app, { kind: 'chat-failed', title: 'Mappa', detail: 'il turno è finito con un errore', chatId: 'mappa' });
   await event(app, { kind: 'sync-blocked', title: 'Pubblicazione bloccata (prodotto nel cervello)', detail: 'src/a.ts:3 rule secret' });
-  await expect.poll(count).toBe(before + 2);
   await page.keyboard.press('Control+Shift+N');
+  await expect(page.locator('[data-testid="nc-list"] [data-kind="sync-blocked"]').first()).toBeVisible();
+  await expect(page.locator('[data-testid="nc-list"] [data-kind="chat-failed"]').first()).toBeVisible();
+  expect(await count()).toBe(before + 2);
   await expect(page.getByTestId('nc-unread')).toHaveText(String(before + 2));
   await expect(page.locator('[data-testid="nc-list"] [data-kind="chat-done"]').first()).toBeVisible(); // still in the list
   await shot(page, 'notifications-bell-center');

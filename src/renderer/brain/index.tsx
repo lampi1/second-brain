@@ -24,27 +24,31 @@ import type { LiveSource } from './lib/live';
 import { preloadEngine } from './map/engine';
 import { brainClient } from './api';
 import { DiscussContext, type DiscussBridge } from './components/Discuss';
+import { t } from '../i18n';
 export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
 export type BrainPageId = 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'esplora' | 'skill' | 'impostazioni' | 'migliora';
-export const BRAIN_PAGES: { id: BrainPageId; label: string; key: string }[] = [
-  { id: 'devops', label: 'DevOps', key: 'G O' },
-  { id: 'fatto', label: 'Fatto e standup', key: 'G F' },
-  { id: 'idee', label: 'Idee', key: 'G I' },
-  { id: 'costi', label: 'Costi', key: 'G C' },
-  { id: 'qualita', label: 'Qualità', key: 'G Q' },
-  { id: 'procedure', label: 'Procedure', key: 'G L' },
-  { id: 'confronto', label: 'Confronto modelli', key: 'G M' },
-  { id: 'miglioramento', label: 'Regole imparate', key: 'G R' },
-  { id: 'esplora', label: 'Esplora', key: 'G E' },
+
+/** label is a getter (ADR 0057): read at use time, so it follows the current language */
+const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return t(`brainPages.nav.${id}`); } });
+export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
+  page('devops', 'G O'),
+  page('fatto', 'G F'),
+  page('idee', 'G I'),
+  page('costi', 'G C'),
+  page('qualita', 'G Q'),
+  page('procedure', 'G L'),
+  page('confronto', 'G M'),
+  page('miglioramento', 'G R'),
+  page('esplora', 'G E'),
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
-  { id: 'skill', label: 'Skill e agenti', key: 'G S' },
+  page('skill', 'G S'),
   // not a brain page: the app's Settings (components/SettingsPage.tsx, rendered by App.tsx); listed here for places, links and G P
-  { id: 'impostazioni', label: 'Impostazioni', key: 'G P' },
+  page('impostazioni', 'G P'),
   // not a brain page either: "Migliora l'app" (components/ImprovePage.tsx, ADR 0020), the app improving itself
-  { id: 'migliora', label: "Migliora l'app", key: 'G U' },
+  page('migliora', 'G U'),
 ];
 const IDS = new Set<string>(BRAIN_PAGES.map(p => p.id));
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);

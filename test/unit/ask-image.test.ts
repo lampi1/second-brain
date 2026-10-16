@@ -24,9 +24,17 @@ describe('magic bytes and folders', () => {
     expect(magicMatches('image/jpeg', Buffer.from('<svg'))).toBe(false);
   });
   it('inside means whole path segments, case-insensitive', () => {
-    expect(isInside(r`C:\a\evidence\x.png`, r`C:\A\Evidence`)).toBe(true);
-    expect(isInside(r`C:\a\evidence-2\x.png`, r`C:\a\evidence`)).toBe(false);
-    expect(isInside(r`C:\a\evidence\..\x.png`, r`C:\a\evidence`)).toBe(false);
+    expect(isInside(r`C:\a\evidence\x.png`, r`C:\A\Evidence`, 'win32')).toBe(true);
+    expect(isInside(r`C:\a\evidence-2\x.png`, r`C:\a\evidence`, 'win32')).toBe(false);
+    expect(isInside(r`C:\a\evidence\..\x.png`, r`C:\a\evidence`, 'win32')).toBe(false);
+  });
+  it('macOS folds case like its disks, Linux does not; segments as on Windows', () => {
+    expect(isInside('/Users/u/Evidence/x.png', '/Users/u/evidence', 'darwin')).toBe(true);
+    expect(isInside('/Users/u/Prove/café/x.png', '/Users/u/prove/café', 'darwin')).toBe(true); // Finder writes NFD
+    expect(isInside('/home/u/Evidence/x.png', '/home/u/evidence', 'linux')).toBe(false);
+    expect(isInside('/home/u/evidence/x.png', '/home/u/evidence/', 'linux')).toBe(true);
+    expect(isInside('/home/u/evidence-2/x.png', '/home/u/evidence', 'linux')).toBe(false);
+    expect(isInside('/home/u/evidence/../x.png', '/home/u/evidence', 'linux')).toBe(false);
   });
   it('the roots: profile, both evidence folders, brain, the code and its worktrees', () => {
     const roots = askImageRoots({ userData: 'U', appData: 'A', brainRoot: 'B', repos: [r`C:\src\second-brain-app`, null] });

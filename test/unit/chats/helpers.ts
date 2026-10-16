@@ -1,4 +1,5 @@
 // Shared helpers for the chats tests: the fake CLI path, a recording SessionSink, a recording emitter, waitFor.
+import { onTestFinished } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,12 +22,21 @@ export function tmp(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `sb-${prefix}-`));
 }
 
-export async function waitFor<T>(fn: () => T | undefined | null | false, what: string, ms = 10000): Promise<T> {
+/** Polls until fn() holds. Without ms it waits as long as the test may run (its own timeout): on a busy machine the
+ *  fake CLI is slow, never wrong (the owner, 2026-10-15: no step deadline of its own). With ms the step fails by itself. */
+export async function waitFor<T>(fn: () => T | undefined | null | false, what: string, ms?: number): Promise<T> {
   const t0 = Date.now();
+  let done = false, over = false;
+  if (ms === undefined) {
+    try {
+      onTestFinished(() => { if (!done) { over = true; console.error(`the test ended still waiting for ${what}`); } });
+    } catch { ms = 10000; } // outside a test (a hook): the old deadline
+  }
   for (;;) {
     const v = fn();
-    if (v) return v;
-    if (Date.now() - t0 > ms) throw new Error(`timeout waiting for ${what}`);
+    if (v) { done = true; return v; }
+    if (over) return new Promise<T>(() => {}); // the test timed out: stop polling, its own error tells
+    if (ms !== undefined && Date.now() - t0 > ms) throw new Error(`timeout waiting for ${what}`);
     await new Promise(r => setTimeout(r, 20));
   }
 }

@@ -2,16 +2,16 @@
 // can develop, break and restart the dev build without touching it.
 //   node scripts/release.mjs promote [--skip-check]   npm run check must be green (skip only for tests of this script),
 //                                                      then build → copy out/ + package.json to releases/<ver>-<sha>/,
-//                                                      share the Electron runtime, switch current.json, write launch.cmd
+//                                                      share the Electron runtime, switch current.json, write launch.cmd (launch.sh on macOS/Linux)
 //   node scripts/release.mjs rollback                 current ⇄ previous
 //   node scripts/release.mjs status [--json]           what is current/previous, where the launcher is
-//   node scripts/release.mjs launch                    (used by launch.cmd) start current; if its window does not report
+//   node scripts/release.mjs launch                    (used by launch.cmd/.sh) start current; if its window does not report
 //                                                      ready within 30 s, mark it bad and start the previous release;
 //                                                      a start refused because the app is already open (or still
 //                                                      quitting) is never "bad": an open app is left in front, a
 //                                                      quitting one (quitting.json) is waited for, then retried;
 //                                                      the outcome of each start goes to <base>/launch-result.json
-// Root: %LOCALAPPDATA%/second-brain (SB_RELEASES_ROOT overrides, for tests). Runs with plain Node or Electron-as-Node.
+// Root: the app's shared folder, %LOCALAPPDATA%/second-brain on Windows, per OS elsewhere (src/main/platform.ts; SB_RELEASES_ROOT overrides, for tests). Runs with plain Node or Electron-as-Node.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,7 +19,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const base = process.env.SB_RELEASES_ROOT ?? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), '.local', 'share'), 'second-brain');
+// the app's shared folder and Electron's appData per OS: same rule as src/main/platform.ts (this file runs without the build)
+const home = os.homedir();
+const sharedDir = process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'second-brain')
+  : process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support', 'second-brain-shared')
+  : path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'second-brain');
+const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(home, 'AppData', 'Roaming')
+  : process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+const base = process.env.SB_RELEASES_ROOT ?? sharedDir;
 const releases = path.join(base, 'releases');
 const statePath = path.join(base, 'current.json');
 const readState = () => { try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch { return { current: null, previous: null, bad: [], history: [] }; } };
@@ -27,7 +34,14 @@ const writeState = s => { fs.mkdirSync(base, { recursive: true }); fs.writeFileS
 const say = m => console.log(m);
 const cmd = process.argv[2];
 
-function electronFor(version) { return path.join(base, 'electron', version, process.platform === 'win32' ? 'electron.exe' : 'electron'); }
+// the shared runtime = a copy of node_modules/electron/dist; its executable: electron.exe, the macOS app bundle's
+// binary, or electron on Linux
+const electronDir = version => path.join(base, 'electron', version);
+function electronFor(version) {
+  const exe = process.platform === 'win32' ? ['electron.exe'] : process.platform === 'darwin' ? ['Electron.app', 'Contents', 'MacOS', 'Electron'] : ['electron'];
+  return path.join(electronDir(version), ...exe);
+}
+const launcherFile = process.platform === 'win32' ? 'launch.cmd' : 'launch.sh'; // platform.ts launcherName
 
 async function promote() {
   const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'));
@@ -55,18 +69,22 @@ async function promote() {
   const ev = JSON.parse(fs.readFileSync(path.join(repo, 'node_modules', 'electron', 'package.json'), 'utf8')).version;
   if (!fs.existsSync(electronFor(ev))) {
     say(`sharing Electron ${ev} runtime …`);
-    fs.cpSync(path.join(repo, 'node_modules', 'electron', 'dist'), path.dirname(electronFor(ev)), { recursive: true });
+    // verbatimSymlinks: the macOS bundle's frameworks are relative symlinks; rewritten they would point into the repo
+    fs.cpSync(path.join(repo, 'node_modules', 'electron', 'dist'), electronDir(ev), { recursive: true, verbatimSymlinks: true });
   }
   // the embedded Claude engine (ADR 0010): copied once per version next to the shared Electron runtime
   let claudeEngine = null;
-  const enginePkg = path.join(repo, 'node_modules', '@anthropic-ai', 'claude-agent-sdk-win32-x64');
-  if (fs.existsSync(path.join(enginePkg, 'claude.exe'))) {
+  // the package for this OS and CPU (optionalDependencies; platform.ts claudeEnginePackage)
+  const enginePkg = path.join(repo, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`);
+  const engineBin = process.platform === 'win32' ? 'claude.exe' : 'claude';
+  if (fs.existsSync(path.join(enginePkg, engineBin))) {
     const cv = JSON.parse(fs.readFileSync(path.join(enginePkg, 'package.json'), 'utf8')).version;
-    claudeEngine = path.join(base, 'engines', 'claude', cv, 'claude.exe');
+    claudeEngine = path.join(base, 'engines', 'claude', cv, engineBin);
     if (!fs.existsSync(claudeEngine)) {
       say(`sharing Claude engine ${cv} …`);
       fs.mkdirSync(path.dirname(claudeEngine), { recursive: true });
-      fs.copyFileSync(path.join(enginePkg, 'claude.exe'), claudeEngine);
+      fs.copyFileSync(path.join(enginePkg, engineBin), claudeEngine);
+      if (process.platform !== 'win32') fs.chmodSync(claudeEngine, 0o755);
     }
   }
   // cookies of the browser environments encrypted at rest (DPAPI-protected key), never plaintext on disk (ADR 0003)
@@ -85,7 +103,7 @@ async function promote() {
   // keep the last 5 releases
   const keep = new Set([s.current, s.previous, ...s.history.slice(-5).map(h => h.id)]);
   for (const d of fs.readdirSync(releases)) if (!keep.has(d)) fs.rmSync(path.join(releases, d), { recursive: true, force: true });
-  say(`promoted ${id} (previous: ${s.previous ?? 'none'}) · start it with ${path.join(base, 'launch.cmd')}`);
+  say(`promoted ${id} (previous: ${s.previous ?? 'none'}) · start it with ${path.join(base, launcherFile)}`);
   startSync(id);
 }
 
@@ -121,10 +139,33 @@ function writeLauncher() {
   fs.copyFileSync(fileURLToPath(import.meta.url), path.join(base, 'release.mjs'));
   const s = readState();
   const rel = JSON.parse(fs.readFileSync(path.join(releases, s.current, 'release.json'), 'utf8'));
+  if (process.platform !== 'win32') return writeShLauncher(rel);
   fs.writeFileSync(path.join(base, 'launch.cmd'), `@echo off\r\nrem second-brain stable launcher (scripts/release.mjs). Starts the current release, falls back to the previous one.\r\nset ELECTRON_RUN_AS_NODE=1\r\nstart "" /b "${electronFor(rel.electron)}" "%~dp0release.mjs" launch\r\n`);
   // launch.vbs runs launch.cmd without a console window: the Start-menu and desktop shortcuts point here (the stable
   // app writes them itself, with its AppUserModelId, so Windows shows its notifications)
   fs.writeFileSync(path.join(base, 'launch.vbs'), `' second-brain: starts launch.cmd hidden\r\nCreateObject("WScript.Shell").Run """" & CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName) & "\\launch.cmd""", 0, False\r\n`);
+}
+
+/** macOS/Linux (ADR 0054): launch.sh does what launch.cmd does, in the background. It first takes the login shell's
+ *  PATH: an app started from the Finder, the Dock or a desktop menu gets a minimal one, and the CLIs the chats run
+ *  (claude, agent, git, node in ~/.local/bin or Homebrew) would not be found. macOS also gets second-brain.command
+ *  (double-click in the Finder, or drag it to the Dock); Linux gets its menu entry from the app (shortcuts.ts). */
+function writeShLauncher(rel) {
+  const q = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  const sh = [
+    '#!/bin/sh',
+    '# second-brain stable launcher (scripts/release.mjs). Starts the current release, falls back to the previous one.',
+    'P=$("${SHELL:-/bin/sh}" -lc \'printf %s "$PATH"\' 2>/dev/null) && [ -n "$P" ] && PATH=$P && export PATH',
+    'cd "$(dirname "$0")" || exit 1',
+    `ELECTRON_RUN_AS_NODE=1 nohup ${q(electronFor(rel.electron))} ./release.mjs launch >/dev/null 2>&1 &`,
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(base, 'launch.sh'), sh, { mode: 0o755 });
+  fs.chmodSync(path.join(base, 'launch.sh'), 0o755);
+  if (process.platform === 'darwin') {
+    fs.writeFileSync(path.join(base, 'second-brain.command'), '#!/bin/sh\n# second-brain: starts launch.sh (scripts/release.mjs)\nexec "$(dirname "$0")/launch.sh"\n', { mode: 0o755 });
+    fs.chmodSync(path.join(base, 'second-brain.command'), 0o755);
+  }
 }
 
 function rollback() {
@@ -177,7 +218,7 @@ async function launch() {
   writeResult(result);
   for (const id of [s.current, s.previous]) if (id && (s.bad ?? []).includes(id)) note(id, 'skipped-bad', 'marked bad by an earlier start');
   const order = [s.current, s.previous].filter(id => id && !(s.bad ?? []).includes(id));
-  const userData = process.env.SB_USER_DATA ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), 'second-brain');
+  const userData = process.env.SB_USER_DATA ?? path.join(appData, 'second-brain');
   const ready = path.join(userData, 'ready.json');
   for (const id of order) {
     const rel = JSON.parse(fs.readFileSync(path.join(releases, id, 'release.json'), 'utf8'));

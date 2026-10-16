@@ -19,6 +19,7 @@ import {
 } from '../lib/discuss';
 import { useAppChats } from './Composer';
 import { toast, useEsc } from './ui';
+import { t } from '../../i18n';
 
 /** What a record tells the routing table about its chat: the kind of work, the area, the text the kind is read from. */
 export type ChatRoute = Pick<RoutedNewChat, 'kind' | 'area' | 'routeText'>;
@@ -107,7 +108,7 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
     const text = discussText(topic, await topicLine(topic));
     if (bridge) {
       const ok = bridge.draftToRegia(text, chat => markDiscussed(key, { via: 'regia', chatId: chat.id, chatTitle: chat.title, at: Date.now() }));
-      if (!ok) toast('Apri la Regia nell\'app per discuterne: Ctrl+R');
+      if (!ok) toast(t('brainPages.discuss.errorRegiaNotOpen'));
       else onRegia?.();
       return;
     }
@@ -126,14 +127,14 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
       if (box.kind === 'chat') {
         const title = chatTitle(topic);
         const c = bridge ? await bridge.newChat(title, box.text.trim()) : await createDirect(title, box.text.trim());
-        if (!c) throw new Error('la chat non è partita: il motivo è nell\'avviso dell\'app');
+        if (!c) throw new Error(t('brainPages.discuss.errorChatFailed'));
         markDiscussed(key, { via: 'chat', chatId: c.id, chatTitle: c.title, at: Date.now() });
-        if (!bridge) toast(`Chat «${c.title}» aperta`);
+        if (!bridge) toast(t('brainPages.discuss.successChatCreated', { title: c.title }));
       } else {
-        if (!regia) throw new Error('nessuna Regia aperta nell\'app');
+        if (!regia) throw new Error(t('brainPages.discuss.errorNoRegia'));
         await window.sb.invoke('chat:send', { chatId: regia.id, text: box.text.trim() });
         markDiscussed(key, { via: 'regia', chatId: regia.id, chatTitle: 'Regia', at: Date.now() });
-        toast('Mandato alla Regia');
+        toast(t('brainPages.discuss.successRegiaSent'));
       }
       closeBox();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
@@ -146,31 +147,32 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   return (
     <div className="bx-discuss" data-testid={testId}>
       <div className="bx-discuss-row">
-        <button type="button" className="bx-btn primary" onClick={() => void discuss()} data-testid={`${testId}-regia`} aria-label={`Discutine con la Regia: ${titleOf(topic)}`}
-          title={regia ? 'Apre la Regia qui accanto con un messaggio già pronto: lo modifichi e lo mandi tu' : 'Serve la Regia aperta nell\'app'} disabled={!!chats && !regia && !!bridge}>
-          <IconChat /> Discutine
+        <button type="button" className="bx-btn primary" onClick={() => void discuss()} data-testid={`${testId}-regia`} aria-label={t('brainPages.discuss.discussButtonLabel', { topic: titleOf(topic) })}
+          title={regia ? t('brainPages.discuss.discussButtonTitle') : t('brainPages.discuss.discussButtonTitleDisabled')} disabled={!!chats && !regia && !!bridge}>
+          <IconChat /> {t('brainPages.discuss.discussBtn')}
         </button>
-        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={`Apri una chat su: ${titleOf(topic)}`} aria-expanded={box?.kind === 'chat'}
-          title={topic.kind === 'procedure' ? 'Una chat di lavoro dedicata, che segue questa procedura'
-            : `Una chat di lavoro dedicata, che parte da ${topic.kind === 'idea' ? 'questa idea' : topic.kind === 'reflection' ? 'questa riflessione' : topic.quote.what === 'errore' ? 'questo errore' : 'questo numero'}`}>
-          <IconNew /> Apri una chat
+        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
+          title={topic.kind === 'procedure' ? t('brainPages.discuss.openChatTitleProcedure')
+            : topic.kind === 'idea' ? t('brainPages.discuss.openChatTitleIdea') : topic.kind === 'reflection' ? t('brainPages.discuss.openChatTitleReflection')
+              : topic.quote.what === 'errore' ? t('brainPages.discuss.openChatTitleError') : t('brainPages.discuss.openChatTitleNumber')}>
+          <IconNew /> {t('brainPages.discuss.openChatBtn')}
         </button>
         <span className="sp" />
         {last && (
           <span className="bx-discussed" data-testid={`${testId}-mark`}>
             <IconCheck />
-            <span>{topic.kind === 'quote' ? 'Discusso' : 'Discussa'}{done.length > 1 ? ` ${done.length} volte` : ''}</span>
+            <span>{topic.kind === 'quote' ? t('brainPages.discuss.discussedNeutral') : t('brainPages.discuss.discussed')}{done.length > 1 ? t('brainPages.discuss.discussedTimes', { n: done.length }) : ''}</span>
             {lastChat && bridge
-              ? <button type="button" className="bx-go" onClick={() => show(lastChat.id)} data-testid={`${testId}-open`}>{last.via === 'regia' ? 'con la Regia' : `in «${lastChat.title}»`} →</button>
-              : <span className="muted">{last.via === 'regia' ? 'con la Regia' : `in «${last.chatTitle}»${chats && !lastChat ? ' (chiusa)' : ''}`}</span>}
+              ? <button type="button" className="bx-go" onClick={() => show(lastChat.id)} data-testid={`${testId}-open`}>{last.via === 'regia' ? t('brainPages.discuss.withRegia') : t('brainPages.discuss.inChat', { title: lastChat.title })} →</button>
+              : <span className="muted">{last.via === 'regia' ? t('brainPages.discuss.withRegia') : <>{t('brainPages.discuss.inChat', { title: last.chatTitle })}{chats && !lastChat ? ' ' + t('brainPages.discuss.chatClosed') : ''}</>}</span>}
             <span className="muted">· {fmt.day(localDay(last.at))}</span>
           </span>
         )}
       </div>
       {box && (
-        <div className="bx-confirm bx-discuss-box" role="group" aria-label={box.kind === 'chat' ? `Nuova chat: ${chatTitle(topic)}` : 'Messaggio alla Regia'} data-testid={`${testId}-box`}>
-          <p className="small"><b>{box.kind === 'chat' ? `Nuova chat «${chatTitle(topic)}»` : 'Alla Regia'}</b> <span className="muted">· {box.kind === 'chat' ? 'parte dalla cartella del cervello con questo primo messaggio' : 'arriva come tuo messaggio'}</span></p>
-          <textarea ref={ta} className="bx-textarea" rows={box.kind === 'chat' ? 4 : 7} value={box.text} maxLength={4000} aria-label="Testo"
+        <div className="bx-confirm bx-discuss-box" role="group" aria-label={box.kind === 'chat' ? t('brainPages.discuss.boxAriaLabelChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxAriaLabelRegia')} data-testid={`${testId}-box`}>
+          <p className="small"><b>{box.kind === 'chat' ? t('brainPages.discuss.boxTitleChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxTitleRegia')}</b> <span className="muted">· {box.kind === 'chat' ? t('brainPages.discuss.boxDescChat') : t('brainPages.discuss.boxDescRegia')}</span></p>
+          <textarea ref={ta} className="bx-textarea" rows={box.kind === 'chat' ? 4 : 7} value={box.text} maxLength={4000} aria-label={t('brainPages.discuss.boxLabel')}
             onChange={e => setBox({ ...box, text: e.target.value })}
             onKeyDown={e => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void confirm(); }
@@ -178,11 +180,11 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
           {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
           <div className="bx-row">
             <button type="button" className="bx-btn primary" disabled={busy || !box.text.trim()} onClick={() => void confirm()} data-testid={`${testId}-confirm`}>
-              {box.kind === 'chat' ? 'Crea la chat' : 'Manda alla Regia'}
+              {box.kind === 'chat' ? t('brainPages.discuss.boxConfirmChat') : t('brainPages.discuss.boxConfirmRegia')}
             </button>
-            <button type="button" className="bx-btn ghost" onClick={() => closeBox()}>Annulla</button>
+            <button type="button" className="bx-btn ghost" onClick={() => closeBox()}>{t('brainPages.discuss.boxCancelBtn')}</button>
             <span className="sp" />
-            <span className="small muted"><kbd>Ctrl+Invio</kbd> {box.kind === 'chat' ? 'crea' : 'manda'} · <kbd>Esc</kbd> annulla</span>
+            <span className="small muted"><kbd>{t('brainPages.discuss.shortcutKey')}</kbd> {box.kind === 'chat' ? t('brainPages.discuss.shortcutCreate') : t('brainPages.discuss.shortcutSend')} · <kbd>{t('brainPages.discuss.shortcutEscKey')}</kbd> {t('brainPages.discuss.shortcutCancel')}</span>
           </div>
         </div>
       )}

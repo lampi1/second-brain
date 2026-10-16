@@ -14,6 +14,7 @@
 //               is measured right after the window (the owner's target: the app at rest under 0.1 core, 2026-10-12)
 //   --working K --asking A   with --idle: K chats stay inside a long tool call (spinner, timer, "sta lavorando") and
 //               A chats wait on a question, like the owner's real mosaic (18 live chats: 5 working, 3 waiting)
+//   memMb       private memory per process type at the end of the window (main, renderers, GPU, other)
 //   commits     React commits (devtools hook) per second and per streamed delta; long tasks; frames per second
 import { _electron as electron } from 'playwright';
 import fs from 'node:fs';
@@ -82,7 +83,7 @@ const view = await page.evaluate(() => ({
   streaming: document.querySelectorAll('.md.streaming').length,
 }));
 
-const cum = () => app.evaluate(({ app: a }) => a.getAppMetrics().map(p => ({ pid: p.pid, type: p.type, s: p.cpu.cumulativeCPUUsage ?? 0 })));
+const cum = () => app.evaluate(({ app: a }) => a.getAppMetrics().map(p => ({ pid: p.pid, type: p.type, s: p.cpu.cumulativeCPUUsage ?? 0, mem: p.memory.privateBytes ?? p.memory.workingSetSize })));
 // --still: prefers-reduced-motion (no alive marks stepping): what the rest of the app costs without them
 if (process.argv.includes('--still')) await page.emulateMedia({ reducedMotion: 'reduce' });
 const m0 = await cum();
@@ -167,20 +168,24 @@ if (prof) {
 }
 // at rest the typing comes after the measured window (and after the trace/profile): it is the lag, not the load
 if (IDLE) [lagRegia, lagChat] = await typeBoth();
-const m = m1.map(p => ({ type: p.type, cpu: 100 * (p.s - (m0.find(x => x.pid === p.pid)?.s ?? 0)) / ((tEnd - t0) / 1000) }));
+const m = m1.map(p => ({ type: p.type, mem: p.mem, cpu: 100 * (p.s - (m0.find(x => x.pid === p.pid)?.s ?? 0)) / ((tEnd - t0) / 1000) }));
 const b = await page.evaluate(() => { const x = globalThis.__bench; return { commits: x.commits, items: x.items, frames: x.frames, long: x.long, lat: x.lat }; });
 await app.close();
 for (const b of burners) b.kill();
 
 const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))]); };
-const cpu = t => Math.round(m.filter(p => p.type === t).reduce((s, p) => s + p.cpu, 0));
+const UI = ['Browser', 'Tab', 'GPU'];
+const cpu = t => Math.round(m.filter(p => t ? p.type === t : !UI.includes(p.type)).reduce((s, p) => s + p.cpu, 0));
+const mb = t => Math.round(m.filter(p => t ? p.type === t : !UI.includes(p.type)).reduce((s, p) => s + p.mem, 0) / 1024); // KB -> MB
 const deltas = IDLE ? 1 : Math.round(CHATS * secs * 1000 / DELAY);
 const r = {
   mode: IDLE ? 'idle' : 'streaming', machineCpuPct: machinePct, chats: CHATS, secs: Math.round(secs), view,
   inputLagRegiaMs: { p50: q(lagRegia, 0.5), p95: q(lagRegia, 0.95), n: lagRegia.length },
   inputLagChatMs: { p50: q(lagChat, 0.5), p95: q(lagChat, 0.95), n: lagChat.length },
   cliToScreenMs: { p50: q(b.lat, 0.5), p95: q(b.lat, 0.95), n: b.lat.length },
-  cpuPct: { main: cpu('Browser'), renderers: cpu('Tab'), gpu: cpu('GPU') },
+  cpuPct: { main: cpu('Browser'), renderers: cpu('Tab'), gpu: cpu('GPU'), other: cpu() },
+  // private memory at the end of the window, per Chromium process type (other: utility, network, audio...)
+  memMb: { main: mb('Browser'), renderers: mb('Tab'), gpu: mb('GPU'), other: mb(), total: Math.round(m.reduce((s, p) => s + p.mem, 0) / 1024) },
   fps: IDLE ? null : Math.round(b.frames / secs), longTaskMsPerSec: Math.round(b.long / secs),
   commitsPerSec: Math.round(b.commits / secs), ipcItemsPerSec: Math.round(b.items / secs),
   commitsPerDelta: +(b.commits / deltas).toFixed(2),

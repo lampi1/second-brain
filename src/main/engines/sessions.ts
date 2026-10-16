@@ -1,13 +1,17 @@
 // The one place that turns an engine into a running session (ADR 0046): its kind picks the adapter (claude.ts for
-// Claude Code's stream-json, acp.ts for any ACP CLI, api.ts for an HTTP model), its registry entry says how it starts.
-// The user's API key (engines/secrets.ts) goes only here, into its own engine: an ACP CLI's environment variable
-// (keyEnv) or an API session's request header. The chat manager calls sessionFor and never names an engine; tests pass
+// Claude Code's stream-json, acp.ts for any ACP CLI, codex.ts for `codex app-server`, api.ts for an HTTP model), its
+// registry entry says how it starts, brain/adapters/ what the brain's rules add to this launch (ADR 0060).
+// The user's API key (engines/secrets.ts) goes only here, into its own engine: a CLI's environment variable
+// (keyEnv: ACP, Codex's CODEX_API_KEY) or an API session's request header. The chat manager calls sessionFor and never names an engine; tests pass
 // their own factory to the manager instead.
 import path from 'node:path';
 import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
 import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
+import { claudeLaunch } from '../brain/adapters/claude-plugin';
+import { codexLaunch } from '../brain/adapters/codex';
 import { ClaudeSession } from '../chats/claude';
+import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
 import { engines, priceEnginesOf, type EngineDef } from './registry';
@@ -31,8 +35,23 @@ export interface EngineContext {
 
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
   switch (engine.kind) {
-    case 'claude':
-      return new ClaudeSession({ ...opts, ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
+    case 'claude': {
+      // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act
+      const brain = opts.readOnly ? [] : claudeLaunch(ctx.userData).args;
+      return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
+    }
+    case 'codex': {
+      const command = engine.command ?? engine.id;
+      const key = engine.keyEnv ? ctx.key() : null;
+      const launch = codexLaunch({ mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId });
+      return new CodexSession({
+        ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
+        configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: launch.skillRoots,
+        showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
+        ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
+        ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
+      }, sink);
+    }
     case 'acp': {
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? ctx.key() : null;

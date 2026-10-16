@@ -119,6 +119,7 @@ test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; pe
   await expect(p.getByTestId('bx-advice')).toContainText('Chat lunghe');
   for (const c of ['spesa-giorni-7', 'spesa-tipo-7', 'spesa-modello-7', 'spesa-area-7']) await expect(p.getByTestId(`bx-chart-${c}`).locator('svg[role=img]')).toBeVisible();
   await expect(p.getByTestId('bx-cost-chats')).toContainText('Regia');
+  await expect(p.getByTestId('bx-cost-live')).toContainText('Adesso'); // today's chats by cost, live, above the history
   await shot(page, 'brain-costi');
   await p.getByTestId('bx-chart-spesa-chat-7').scrollIntoViewIfNeeded();
   await shot(page, 'brain-costi-chat');

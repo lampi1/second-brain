@@ -63,3 +63,17 @@ The user: "mi piacerebbe che le immagini si potessero vedere direttamente nella 
 - The image viewer is the app's open dialog (`ui.modal = 'visual'`, like GenUi's full view) and stops React events at
   its portal: a digit or Enter pressed in it never answers the question behind. A refused image keeps an "Apri"
   button; only shown images drop their link chip; a missing, refused or busy file is asked again next time.
+
+## Context first, the question short (2026-10-15)
+The user: "le domande devono essere realmente comprensibili al volo, spiegate brevemente bene con il contesto, e poi
+la domanda vera breve". The card now reads: kind (small caps) → a muted lead → the question large → the choices.
+- **The lead** is the agent's own context sentence when its question is one text "statements. question?"
+  (`lib/askSplit.ts`): split only when certain (the last sentence alone ends with "?", the part before it has no other
+  question, no cut abbreviation, number, code span or link); otherwise the text stays whole. Never rewritten. The tile
+  panel shows the same split.
+- Without that, the lead is the two lines of the turn's why (as before, now above the question), but only when the
+  chat's items were loaded as the card opened. What is above the question is fixed when the card opens (the agent's own lead changes only with the step of a multi-question request, together with the question); whatever
+  loads or unfolds later ("Contesto completo", "Te la richiede", images) goes under it, so the question never moves.
+- Options: descriptions quieter than labels (the recommended and the current one keep the stronger tone); the next
+  request fades in (opacity only, nothing moves; off with reduced motion). Dialogs (`.modal`) get a little more air
+  and a 17px title.

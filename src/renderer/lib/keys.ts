@@ -3,6 +3,7 @@
 // an answer, and the digit after the last option into "Altro…" (RequestPanel uses it in every size). Both are pinned by
 // test/unit/keys.test.ts.
 import type { Answer, PendingRequest } from '@shared/contract';
+import { t } from '../i18n';
 
 export interface KeyLike { key: string; code: string; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }
 
@@ -30,31 +31,31 @@ export type Command =
   | { type: 'settings' };
 
 /** The keyboard map shown in the shortcuts dialog (Ctrl+/), in the same order as resolveShortcut. */
-export const KEYMAP: readonly { keys: string; what: string }[] = [
-  { keys: 'Ctrl K', what: 'Vai ovunque, cerca, comandi (incolla un link sb://)' },
-  { keys: 'Ctrl J', what: 'Prossima cosa che ti aspetta' },
-  { keys: '1-9 · Invio · Esc', what: 'Rispondi alla richiesta selezionata (Esc nel riquadro: dopo)' },
-  { keys: 'Ctrl 1', what: 'Torna alle chat' },
-  { keys: 'Alt ← · Alt →', what: 'Indietro / avanti' },
-  { keys: 'G poi lettera', what: 'Vai a una sezione (fuori dai campi di testo)' },
-  { keys: 'Ctrl R', what: 'Regia (da qualsiasi pagina)' },
-  { keys: 'Ctrl Shift R', what: 'Nuova Regia: ricomincia da capo o cambia motore' },
-  { keys: 'Ctrl Shift N', what: 'Notifiche' },
-  { keys: 'Ctrl Shift S', what: 'Stato: chat e PR in un colpo d’occhio' },
-  { keys: 'Ctrl Shift M', what: 'Mappa 3D' },
-  { keys: 'Ctrl N', what: 'Nuova chat' },
-  { keys: 'Ctrl ,', what: 'Impostazioni' },
-  { keys: 'Ctrl .', what: 'Ferma la chat selezionata' },
-  { keys: 'Ctrl W', what: 'Chiudi la chat o la scheda del browser selezionata (Annulla per 6 secondi; non la Regia)' },
-  { keys: 'Ctrl Shift .', what: 'Ferma tutto' },
-  { keys: 'Ctrl Shift V', what: 'Cambia vista (Mosaico / Corsie)' },
-  { keys: 'Ctrl Shift B', what: 'Nascondi / mostra i browser (continuano a lavorare)' },
-  { keys: 'Ctrl Shift X', what: 'Correggi la frase selezionata nel ragionamento di una chat (poi Invio: ferma e riparte; Maiusc+Invio: al prossimo passo)' },
-  { keys: 'F11', what: 'Ingrandisci la tessera selezionata' },
-  { keys: 'Ctrl Shift F', what: 'Modalità focus' },
-  { keys: 'Ctrl 0', what: 'Vai alla Regia' },
-  { keys: 'Esc', what: 'Chiudi / torna indietro di un livello' },
-  { keys: 'Ctrl /', what: 'Questa guida' },
+export const getKeymap = (): readonly { keys: string; what: string }[] => [
+  { keys: t('tools.keys.paletteKey'), what: t('tools.keys.paletteWhat') },
+  { keys: t('tools.keys.nextKey'), what: t('tools.keys.nextWhat') },
+  { keys: t('tools.keys.answerKey'), what: t('tools.keys.answerWhat') },
+  { keys: t('tools.keys.backToChatsKey'), what: t('tools.keys.backToChatsWhat') },
+  { keys: t('tools.keys.backForwardKey'), what: t('tools.keys.backForwardWhat') },
+  { keys: t('tools.keys.goToKey'), what: t('tools.keys.goToWhat') },
+  { keys: t('tools.keys.regiaKey'), what: t('tools.keys.regiaWhat') },
+  { keys: t('tools.keys.newRegiaKey'), what: t('tools.keys.newRegiaWhat') },
+  { keys: t('tools.keys.notificationsKey'), what: t('tools.keys.notificationsWhat') },
+  { keys: t('tools.keys.statusKey'), what: t('tools.keys.statusWhat') },
+  { keys: t('tools.keys.map3dKey'), what: t('tools.keys.map3dWhat') },
+  { keys: t('tools.keys.newChatKey'), what: t('tools.keys.newChatWhat') },
+  { keys: t('tools.keys.settingsKey'), what: t('tools.keys.settingsWhat') },
+  { keys: t('tools.keys.stopChatKey'), what: t('tools.keys.stopChatWhat') },
+  { keys: t('tools.keys.closeChatKey'), what: t('tools.keys.closeChatWhat') },
+  { keys: t('tools.keys.stopAllKey'), what: t('tools.keys.stopAllWhat') },
+  { keys: t('tools.keys.toggleViewKey'), what: t('tools.keys.toggleViewWhat') },
+  { keys: t('tools.keys.toggleBrowsersKey'), what: t('tools.keys.toggleBrowsersWhat') },
+  { keys: t('tools.keys.correctThoughtKey'), what: t('tools.keys.correctThoughtWhat') },
+  { keys: t('tools.keys.maximizeKey'), what: t('tools.keys.maximizeWhat') },
+  { keys: t('tools.keys.focusModeKey'), what: t('tools.keys.focusModeWhat') },
+  { keys: t('tools.keys.centerKey'), what: t('tools.keys.centerWhat') },
+  { keys: t('tools.keys.escapeKey'), what: t('tools.keys.escapeWhat') },
+  { keys: t('tools.keys.helpKey'), what: t('tools.keys.helpWhat') },
 ];
 
 /** Global shortcuts. They work inside text fields too (they all use Ctrl, Alt+arrows, F11 or Esc). */
@@ -116,10 +117,10 @@ export const emptyDraft: Draft = { step: 0, picks: [], cursor: 0, answers: {} };
 export interface KeyResult { handled: boolean; draft: Draft; answer?: Answer; blur?: boolean; other?: boolean }
 
 /** Options of a permission card, in key order (1, 2, 3). */
-export const PERMISSION_OPTIONS = [
-  { label: 'Consenti', hint: 'Invio' },
-  { label: 'Consenti sempre', hint: '2' },
-  { label: 'Rifiuta', hint: 'Esc' },
+export const getPermissionOptions = () => [
+  { label: t('tools.keys.allowLabel'), hint: t('tools.keys.allowHint') },
+  { label: t('tools.keys.allowAlwaysLabel'), hint: t('tools.keys.allowAlwaysHint') },
+  { label: t('tools.keys.denyLabel'), hint: t('tools.keys.denyHint') },
 ] as const;
 
 export function permissionAnswer(i: number): Answer {

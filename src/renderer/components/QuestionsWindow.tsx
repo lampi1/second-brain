@@ -1,7 +1,7 @@
 // The questions window ("Domande in finestra", settings questionsModal; the user, 2026-10-12): with the switch on,
 // every open question, permission and command shows here, in front of everything (the Regia overlay too, under the
 // dialogs), one at a time as a page read top to bottom (ADR 0049, the user 2026-10-14: "non lo trovo molto leggibile"):
-// who asks, the question large, two lines of why, a text to approve as a document, the options as large cards
+// who asks, a muted lead (context), the question large, a text to approve as a document, the options as large cards
 // (RequestPanel.tsx size `window`), a question with the shell blocks its chat gave in the same turn (each with "Esegui",
 // run as that chat's block: lib/regia-route.ts commandsOfTurn), and the keys in the footer. With more than one request a
 // rail on the left lists them all in the order they came; a click answers that one now and the rest stay (any order,
@@ -11,13 +11,15 @@
 // on (lib/later.ts): the window closes and stays closed, new requests wait silently in "Da rispondere". The same window
 // is that queue's view: Ctrl+J or the top bar's counter call it with every open request, switch on or off (off: it
 // closes once the queue is empty). One modal, anchored near the top like a command palette: what loads late grows
-// downward and nothing on screen moves. Answered with the keyboard, the next one takes the keyboard; when it closes,
+// downward and nothing on screen moves. It has no off switch of its own: a "Spegni" in its head, under the pointer when
+// the window popped up, turned the setting off by mistake again and again (the user, 2026-10-16: "è come se a volte si
+// togliesse da sola"); the switch is in Settings, "…" and Ctrl+K only. Answered with the keyboard, the next one takes the keyboard; when it closes,
 // the keyboard goes back to the field it came from. It renders only on its own requests' changes (selectors return
 // primitives or stable lists; counted in lib/questions.ts qwinStats). Mounted by App.tsx; pinned by
 // test/e2e/questions.spec.ts, answer-later.spec.ts, questions-perf.spec.ts and questions-gallery.spec.ts.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
-import { focusChat, reqKey, toggleQuestionsModal } from '../actions';
+import { focusChat, reqKey } from '../actions';
 import { isEditable, qwinStats, questionsModalOn, typingLeft, writingElsewhere } from '../lib/questions';
 import { commandsOfTurn } from '../lib/regia-route';
 import { sameList } from '../store/state';
@@ -30,6 +32,7 @@ import { useNow } from '../lib/clock';
 import { CodeBlock } from './CodeBlock';
 import { RequestPanel } from './RequestPanel';
 import { Kbd, Keys } from './ui';
+import { t } from '../i18n';
 
 const EMPTY: readonly PendingRequest[] = [];
 
@@ -104,9 +107,9 @@ export function QuestionsWindow() {
   if (dialog && !up) return null;
   if (!up || !cur) {
     return (
-      <button type="button" className="qwin-pill" onClick={() => callQuestions(null)} data-testid="qwin-pill" data-tip="Apri le domande|Ctrl+J">
+      <button type="button" className="qwin-pill" onClick={() => callQuestions(null)} data-testid="qwin-pill" data-tip={`${t('chat.questions.open')}|Ctrl+J`}>
         <IconQuestion size={13} />
-        <span>{`${queue.length === 1 ? 'Una domanda' : `${queue.length} domande`}: compare quando smetti di scrivere`}</span>
+        <span>{`${queue.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: queue.length })}: ${t('chat.questions.typingHint')}`}</span>
         <Keys combo="Ctrl+J" />
       </button>
     );
@@ -176,19 +179,19 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
   const rail = all.length > 1;
   return (
     <div className="qwin-backdrop" data-testid="qwin-backdrop" hidden={hidden} onMouseDown={onMouseDown}>
-      <div ref={boxRef} className={`qwin ${rail ? 'with-rail' : ''}`} role="dialog" aria-modal="true" aria-label={`Richiesta da ${name}`} data-testid="qwin" onKeyDown={onKeyDown}>
+      <div ref={boxRef} className={`qwin ${rail ? 'with-rail' : ''}`} role="dialog" aria-modal="true" aria-label={t('chat.questions.request', { chatTitle: name })} data-testid="qwin" onKeyDown={onKeyDown}>
         {rail && (
-          <nav className="qwin-rail" aria-label="Richieste in attesa" data-testid="qwin-queue">
-            <div className="qwin-rail-k">In attesa <b data-testid="qwin-count">{all.length}</b></div>
+          <nav className="qwin-rail" aria-label={t('chat.questions.pendingAriaLabel')} data-testid="qwin-queue">
+            <div className="qwin-rail-k">{t('chat.questions.waiting')} <b data-testid="qwin-count">{all.length}</b></div>
             <div className="qwin-rail-list">
               {all.map((p, i) => {
                 const k = reqKey(p);
                 const [h, r] = harnesses[i]!.split(':');
-                const body = <><HarnessMark harness={h ?? 'claude'} regia={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'permission' ? `Permesso: ${p.title}` : p.title}</span></span></>;
+                const body = <><HarnessMark harness={h ?? 'claude'} regia={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
                 return k === curKey
                   ? <div key={k} className="qwin-rail-item cur" aria-current="true" data-testid="qwin-current">{body}</div>
                   : <button key={k} type="button" className="qwin-rail-item" onClick={() => callQuestions(k)} data-testid="qwin-pick" data-key={k}
-                    data-tip={`Rispondi adesso a questa: ${titles[i]}. Le altre restano in attesa`}>{body}</button>;
+                    data-tip={t('chat.questions.answerNowTip', { title: titles[i] ?? '' })}>{body}</button>;
               })}
             </div>
           </nav>
@@ -200,13 +203,12 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
             <span className="qwin-age">{ago(cur.at, now)}</span>
             <span className="sp" />
             {!isRegia && (
-              <button type="button" className="btn btn-subtle btn-s" onClick={() => { if (setting) later(); else parkQuestions(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">Apri la chat <IconArrowRight size={12} /></button>
+              <button type="button" className="btn btn-subtle btn-s" onClick={() => { if (setting) later(); else parkQuestions(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>
             )}
-            {setting && <button type="button" className="btn btn-subtle btn-s" onClick={() => { parkQuestions(); toggleQuestionsModal(); }} data-testid="qwin-off" data-tip="Spegni la finestra: le domande tornano nelle chat">Spegni</button>}
           </div>
-          {noteSlot && !elsewhere && <div className="qwin-note gone" aria-hidden="true" data-testid="qwin-elsewhere-slot">Il cursore è rimasto nel campo dove scrivevi: un clic qui o <Keys combo="Ctrl+J" /> per rispondere.</div>}
+          {noteSlot && !elsewhere && <div className="qwin-note gone" aria-hidden="true" data-testid="qwin-elsewhere-slot">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>}
           {elsewhere && (
-            <div className="qwin-note" role="status" data-testid="qwin-elsewhere">Il cursore è rimasto nel campo dove scrivevi: un clic qui o <Keys combo="Ctrl+J" /> per rispondere.</div>
+            <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
           <div className="qwin-body">
             <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />
@@ -215,7 +217,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
             {/* a question's keys, written by the card for the step it shows (a permission's and a command's are on their buttons) */}
             <span className="qwin-keys" ref={setKeysEl} />
             <span className="sp" />
-            <button type="button" className="btn btn-ghost btn-m" onClick={later} data-testid="qwin-later" data-tip="Non rispondi adesso: tutto aspetta in «Da rispondere»">Rispondi dopo <Kbd>Esc</Kbd></button>
+            <button type="button" className="btn btn-ghost btn-m" onClick={later} data-testid="qwin-later" data-tip={t('chat.questions.laterTip')}>{t('chat.questions.later')} <Kbd>Esc</Kbd></button>
           </div>
         </div>
       </div>
@@ -226,14 +228,14 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
 /** What a tile (or the Regia) keeps of its requests while the window answers them, or while they wait in "Da
  *  rispondere" (`queued`, the chat stays blocked): one line, its button opens the window on the first of them. */
 export function InWindowLine({ reqs, testid, queued }: { reqs: readonly PendingRequest[]; testid: string; queued?: boolean }) {
-  const n = reqs.length === 1 ? 'Una domanda' : `${reqs.length} domande`;
-  const r = reqs.length === 1 ? 'una richiesta' : `${reqs.length} richieste`;
+  const n = reqs.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: reqs.length });
+  const r = t('chat.questions.requestsCount', { n: reqs.length });
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   return (
     <div className={`sent-to-regia in-window ${queued ? 'in-queue' : ''}`} role="status" data-testid={testid} data-queued={queued ? '' : undefined}>
       <IconQuestion size={13} />
-      <span>{queued ? `Da rispondere: ${r}, la chat aspetta.` : `${n} nella finestra delle domande.`}</span>
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => (queued ? openQueue(first) : callQuestions(first))} data-testid={`${testid}-open`}>{queued ? 'Rispondi' : 'Apri'}</button>
+      <span>{queued ? t('chat.questions.inQueue', { noun: r }) : t('chat.questions.inWindow', { noun: n })}</span>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => (queued ? openQueue(first) : callQuestions(first))} data-testid={`${testid}-open`}>{queued ? t('chat.questions.openQueue') : t('chat.questions.openWindow')}</button>
     </div>
   );
 }

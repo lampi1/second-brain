@@ -14,8 +14,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { modelKey, priceOf } from '../chats/cursor-prices';
+import { modelKey, priceOf, warnUnpriced } from '../chats/cursor-prices';
 import { romeDay } from './live';
+import { sharedDir } from '../platform';
 
 /** One turn: tokens as billing counts them (input = only the uncached part). */
 export interface LedgerRow {
@@ -46,6 +47,10 @@ export interface CursorDay {
   turns: number; unpriced: number;
   /** $ per Cursor conversation id (= the ACP session id of an app chat), estimated over the whole ledger read */
   chats: Record<string, number>;
+  /** the same, today's turns only */
+  todayChats: Record<string, number>;
+  /** today's turns without a price: their conversations and models (shown «prezzo sconosciuto», never a silent 0) */
+  unpricedChats: string[]; unpricedModels: string[];
   note: string;
 }
 
@@ -56,9 +61,9 @@ const MIN_SEEN = 0.9; // share of a day's CSV tokens the ledger must hold for th
 const TOKEN_RATE = 0.25;
 const OWN_MODEL = /grok|composer/i;
 
-/** The app's shared folder (stable and dev read the same ledger): %LOCALAPPDATA%/second-brain. */
+/** The app's shared folder (stable and dev read the same ledger): %LOCALAPPDATA%/second-brain on Windows, platform.ts. */
 export function ledgerDir(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'second-brain');
+  return sharedDir(env);
 }
 export const LEDGER_FILE = 'cursor-ledger.jsonl';
 export const HOOK_FILE = path.join('hooks', 'cursor-usage.mjs');
@@ -192,14 +197,21 @@ export function cursorDay(ledger: LedgerRow[], cal: Calibration | null, csv: Csv
     for (const r of csv) if (r.at <= exportedAt && romeDay(r.at) === today) { csvUsd += r.usd; covered = exportedAt; }
   }
   let est = 0, turns = 0, unpriced = 0, unfactored = false;
-  const chats: Record<string, number> = {};
+  const chats: Record<string, number> = {}, todayChats: Record<string, number> = {};
+  const unpricedChats = new Set<string>(), unpricedModels = new Set<string>();
   for (const r of ledger) {
     const list = listUsd(r);
     const f = factorOf(cal, r.model);
     const v = list === null ? null : list * (f ?? 1);
     if (v !== null && r.conversationId) chats[r.conversationId] = Math.round(((chats[r.conversationId] ?? 0) + v) * 1e6) / 1e6;
     if (romeDay(r.at) !== today) continue;
+    if (v !== null && r.conversationId) todayChats[r.conversationId] = Math.round(((todayChats[r.conversationId] ?? 0) + v) * 1e6) / 1e6;
     turns++;
+    if (list === null) {
+      if (r.conversationId) unpricedChats.add(r.conversationId);
+      unpricedModels.add(r.model ?? '(nessun modello)');
+      warnUnpriced(r.model);
+    }
     if (r.at <= covered) continue;
     if (v === null) { unpriced++; continue; }
     est += v;
@@ -215,7 +227,7 @@ export function cursorDay(ledger: LedgerRow[], cal: Calibration | null, csv: Csv
     : !turns && !covered ? 'Cursor: nessun turno registrato oggi (hook stop di Cursor)'
     : unknown ? `Cursor: oggi sconosciuto, ${unpriced} turni senza prezzo (modello "auto" o nuovo)${covered ? `; esatto fino alle ${hhmm(covered)}` : ''}`
     : `Cursor: stima ±${pct}% (${basis})${covered ? `, esatto fino alle ${hhmm(covered)}` : ''}${unpriced ? `, ${unpriced} turni senza prezzo esclusi` : ''}`;
-  return { usd: unknown ? null : Math.round((csvUsd + est) * 1e6) / 1e6, exact, margin, turns, unpriced, chats, note };
+  return { usd: unknown ? null : Math.round((csvUsd + est) * 1e6) / 1e6, exact, margin, turns, unpriced, chats, todayChats, unpricedChats: [...unpricedChats], unpricedModels: [...unpricedModels], note };
 }
 
 const hhmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));

@@ -5,6 +5,7 @@
 import type { DevopsState, Settings } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';
+import { t } from '../i18n';
 
 export const devops = createStore<DevopsState | null>(null);
 /** The intervals offered by the page and the gear menu (any 5..720 is valid in the settings). */
@@ -32,18 +33,18 @@ const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error 
 export function refreshDevops(): void {
   void window.sb.invoke('devops:refresh', undefined).then(s => {
     devops.set(s);
-    if (s.error) toast(s.error.kind === 'login' ? 'DevOps non letto: accesso scaduto, lancia «az login» in un terminale' : `DevOps non letto: ${s.error.message}`, 'err');
-    else toast(s.unread ? `DevOps aggiornato: ${s.unread} novità da leggere` : 'DevOps aggiornato: nessuna novità', 'ok');
-  }, e => toast(`DevOps non letto: ${errText(e)}`, 'err'));
+    if (s.error) toast(s.error.kind === 'login' ? t('tools.devops.notReadTimeout') : `${t('tools.devops.notRead')} ${s.error.message}`, 'err');
+    else toast(s.unread ? t('tools.devops.updatedWithNews', { unread: s.unread }) : t('tools.devops.updatedNoNews'), 'ok');
+  }, e => toast(`${t('tools.devops.notRead')} ${errText(e)}`, 'err'));
 }
 
 /** The automatic read's settings from the page (window.sb at call time: the brain pages load without a bridge in tests). */
 export function setDevops(patch: Partial<Settings['devops']>): void {
-  void window.sb.invoke('settings:set', { devops: patch }).then(() => toast('Impostazione salvata', 'ok'), e => toast(`Impostazione non salvata: ${errText(e)}`, 'err'));
+  void window.sb.invoke('settings:set', { devops: patch }).then(() => toast(t('tools.devops.settingsSaved'), 'ok'), e => toast(`${t('tools.devops.settingsNotSaved')} ${errText(e)}`, 'err'));
 }
 
 /** Marks some news as read (all of them without keys). */
 export function markDevopsRead(keys?: string[]): void {
   devops.set(s => (s ? { ...s, news: s.news.map(n => (!keys || keys.includes(n.key) ? { ...n, unread: false } : n)), unread: keys ? s.news.filter(n => n.unread && !keys.includes(n.key)).length : 0 } : s));
-  void window.sb.invoke('devops:markRead', keys ? { keys } : {}).then(s => devops.set(s), e => toast(`Non segnate come lette: ${errText(e)}`, 'err'));
+  void window.sb.invoke('devops:markRead', keys ? { keys } : {}).then(s => devops.set(s), e => toast(`${t('tools.devops.notMarkedRead')} ${errText(e)}`, 'err'));
 }

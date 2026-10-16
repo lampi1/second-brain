@@ -8,8 +8,9 @@
 // and test/unit/demo.test.ts. The data is fictional: no real people, customers or paths.
 import type {
   AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
-  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, Usage,
+  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
 } from '../shared/contract';
+import { sysEn } from '../shared/sys';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
@@ -127,7 +128,7 @@ export function seed(E: number): Seed {
     ],
     qa: [
       { kind: 'user', id: 'qa-u1', at: E - 26 * MIN, text: 'Esegui i test case dei rimborsi in ambiente di test e fammi il report.' },
-      { kind: 'system', id: 'qa-s1', at: E - 6 * MIN, level: 'info', text: 'Dove eravamo: 6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' },
+      { kind: 'system', id: 'qa-s1', at: E - 6 * MIN, level: 'info', text: sysEn('recap', { summary: '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' }), code: 'recap', params: { summary: '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' } },
       // DevOps references (the tile's link chips, lib/devlinks.ts): a work item read by the DevOps MCP, a PR, a test plan, a pipeline
       { kind: 'tool', id: 'qa-dv1', at: E - 25 * MIN, name: 'mcp__my-devops__testplan_list_test_cases', summary: 'test plan 5100', input: { project: 'Shop', planid: 5100, suiteid: 5104 }, status: 'ok', output: '9 test case' },
       { kind: 'tool', id: 'qa-dv2', at: E - 24 * MIN, name: 'mcp__my-devops__wit_get_work_item', summary: 'work item 4720', input: { id: 4720, project: 'Shop' }, status: 'ok',
@@ -169,7 +170,7 @@ export function seed(E: number): Seed {
       { kind: 'user', id: 'review-p-u1', at: E - 300 * MIN, text: 'Confronta le due versioni del listino e dimmi cosa cambia.' },
       { kind: 'assistant', id: 'review-p-a1', at: E - 290 * MIN, text: 'Prima passata fatta: 5 differenze candidate, ne verifico 2 sui dati di prova.' },
       { kind: 'result', id: 'review-p-r1', at: E - 290 * MIN, costUsd: 1.9, durationMs: 11 * MIN, turns: 9, isError: false },
-      { kind: 'system', id: 'cont-review', at: E - 130 * MIN, level: 'info', continued: { notePath: 'C:\\demo\\handoffs\\review.md' }, text: 'Continua da qui: sessione nuova dal passaggio di consegne (la cache della precedente era scaduta).' },
+      { kind: 'system', id: 'cont-review', at: E - 130 * MIN, level: 'info', continued: { notePath: 'C:\\demo\\handoffs\\review.md' }, text: sysEn('coldContinued'), code: 'coldContinued' },
       { kind: 'user', id: 'review-u1', at: E - 130 * MIN, text: 'Allora, cosa resta?' },
       { kind: 'assistant', id: 'review-a1', at: E - 120 * MIN, text: 'Confronto pronto: 3 differenze, nessuna bloccante.' },
       { kind: 'result', id: 'review-r1', at: E - 120 * MIN, costUsd: 2.4, durationMs: 9 * MIN, turns: 6, isError: false },
@@ -477,7 +478,7 @@ export class DemoChats implements ChatService {
       if (it.kind === 'assistant' && it.streaming) this.upsert(chatId, { ...it, streaming: false });
     }
     for (const p of this.pend.filter(x => x.chatId === chatId)) { this.resolvePending(p); this.waiters.delete(`${chatId}/${p.id}`); this.continuations.delete(p.id); }
-    this.push(chatId, { kind: 'system', id: this.nextId(), at: this.now(), level: 'warn', text: 'Interrotto da te.' });
+    this.push(chatId, { kind: 'system', id: this.nextId(), at: this.now(), level: 'warn', text: sysEn('stoppedByYou'), code: 'stoppedByYou' });
     this.patch(chatId, { state: 'idle' });
     log.info('demo', 'chat stopped', { chat: chatId });
   }
@@ -557,7 +558,7 @@ export class DemoChats implements ChatService {
       ...(c.contextTokens ? { contextTokens: c.contextTokens } : {}), text: demoHandoff(c),
     };
     this.handoffsOf.set(chatId, h);
-    this.push(chatId, { kind: 'system', id: this.nextId(), at: h.at, level: 'info', text: 'Passaggio di consegne salvato: «Riprendi» apre una chat nuova che parte da qui.' });
+    this.push(chatId, { kind: 'system', id: this.nextId(), at: h.at, level: 'info', text: sysEn('handoffSavedChat'), code: 'handoffSavedChat' });
     this.patch(chatId, { handoffAt: h.at, handoffSource: 'chat' });
     return h;
   }
@@ -573,7 +574,7 @@ export class DemoChats implements ChatService {
     const h = await this.ensureHandoff(chatId);
     const n = await this.create({ harness: c.harness, cwd: c.cwd, title: `${c.title} (2)`, ...(c.model ? { model: c.model } : {}), prompt: `Riprendi il lavoro della chat «${c.title}» dal passaggio di consegne.\n\n${h.text}` });
     const next = this.patch(n.id, { continuedFrom: { id: c.id, title: c.title }, contextTokens: 9_000 }) ?? n;
-    this.push(chatId, { kind: 'system', id: this.nextId(), at: this.now(), level: 'info', text: `Il lavoro continua nella chat «${next.title}». Questa resta consultabile.` });
+    this.push(chatId, { kind: 'system', id: this.nextId(), at: this.now(), level: 'info', text: sysEn('continuedIn', { title: next.title }), code: 'continuedIn', params: { title: next.title } });
     this.patch(chatId, { continuedBy: { id: next.id, title: next.title }, state: 'closed' });
     return next;
   }
@@ -902,6 +903,11 @@ export class DemoBrain implements BrainService {
     }
   }
   ingestRateLimits(): void { /* the demo has its own plan meter */ }
+  // ---- brain domains: the demo brain is one folder of this PC, nothing syncs (ADR 0059)
+  syncState(): SyncState { return { domains: [{ name: 'brain', root: this.info().brainRoot, scope: 'this-pc', state: 'off', remote: null, lastSync: null, ahead: null, behind: null, blocked: null, problem: null }], at: this.chats.now() }; }
+  async syncNow(): Promise<SyncState> { return this.syncState(); }
+  async syncResolve(): Promise<SyncState> { throw new Error('demo: nessun conflitto da risolvere'); }
+  async syncBeforeRead(): Promise<void> { /* nothing syncs in the demo */ }
   onBudgetAlert(fn: (a: BudgetAlert) => void): () => void { this.budgetFns.add(fn); return () => { this.budgetFns.delete(fn); }; }
 
   async shutdown(): Promise<void> {

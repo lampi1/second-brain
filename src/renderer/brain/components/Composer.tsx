@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { chatName } from '@shared/regia';
 import { toast } from './ui';
+import { t } from '../../i18n';
 
 /** The app's chats, live (chat:list once, then chat:updated / chat:removed). */
 /** The engines' short names by id ("kimi" → "Kimi"), from app:info; an id it does not know shows as itself. */
@@ -37,9 +38,10 @@ export interface Target { kind: 'app'; chatId: string; name: string }
 export interface ViaRegia { kind: 'mailbox'; box: string; name: string }
 export type ComposerTarget = Target | ViaRegia;
 
-const PHRASES = ['A che punto sei? Rispondimi in 3 righe.', 'Riprendi da dove eri rimasta.', 'Spiegami in parole semplici cosa stai facendo.', 'Cosa ti serve da me per andare avanti?'];
+// Injected prompts (sent as a chat message): always English (ADR 0057).
+const PHRASES = ['Where are you? Answer me in 3 lines.', 'Pick up where you left off.', 'Explain in plain words what you are doing.', 'What do you need from me to move forward?'];
 export const forwardText = (t: ViaRegia, text: string): string =>
-  `Gira questo messaggio alla chat «${t.name}» con la posta tra chat (casella ${t.box}), senza cambiarlo, e dimmi quando è consegnato:\n\n${text}`;
+  `Forward this message to the chat "${t.name}" via the inter-chat mail (mailbox ${t.box}), unchanged, and tell me when it is delivered:\n\n${text}`;
 
 export function Composer({ mailboxes, target, onTarget, focusKey }: {
   /** chats the app only reads, that have a mailbox (from /api/now) */
@@ -72,7 +74,7 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
     try {
       if (cur.kind === 'app') await window.sb.invoke('chat:send', { chatId: cur.chatId, text: text.trim() });
       else if (regia) await window.sb.invoke('chat:send', { chatId: regia.id, text: forwardText(cur, text.trim()) });
-      toast(cur.kind === 'app' ? `Inviato a ${cur.name}` : `Inviato alla Regia, che lo gira a ${cur.name}`);
+      toast(cur.kind === 'app' ? t('brainPages.composer.sentApp', { name: cur.name }) : t('brainPages.composer.sentRegia', { name: cur.name }));
       setText(''); setConfirm(false);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -81,35 +83,35 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
   if (chats && !options.length) {
     return (
       <div className="bx-empty" data-testid="bx-composer-off">
-        <b>Per scrivere da qui serve la Regia aperta nell'app</b>
-        <span>Apri la Regia nel workspace: da questa pagina potrai mandarle messaggi, e lei li girerà alle chat che l'app legge soltanto.</span>
+        <b>{t('brainPages.composer.empty')}</b>
+        <span>{t('brainPages.composer.emptyDesc')}</span>
       </div>
     );
   }
   return (
     <div className="bx-composer" data-testid="bx-composer">
       <div className="bx-row">
-        <label className="small muted" htmlFor="bx-to">A</label>
-        <select id="bx-to" className="bx-select" value={cur ? keyOf(cur) : ''} onChange={e => onTarget(e.target.value)} aria-label="Chat a cui scrivere">
-          {!cur && <option value="" disabled>Scegli la chat…</option>}
-          {app.length > 0 && <optgroup label="Chat dell'app">{app.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
-          {regia && mailboxes.length > 0 && <optgroup label="Tramite la Regia (posta tra chat)">{mailboxes.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
+        <label className="small muted" htmlFor="bx-to">{t('brainPages.composer.label')}</label>
+        <select id="bx-to" className="bx-select" value={cur ? keyOf(cur) : ''} onChange={e => onTarget(e.target.value)} aria-label={t('brainPages.composer.selectLabel')}>
+          {!cur && <option value="" disabled>{t('brainPages.composer.selectEmpty')}</option>}
+          {app.length > 0 && <optgroup label={t('brainPages.composer.selectGroup1')}>{app.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
+          {regia && mailboxes.length > 0 && <optgroup label={t('brainPages.composer.selectGroup2')}>{mailboxes.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
         </select>
-        {cur?.kind === 'mailbox' && <span className="small muted">la Regia lo gira con la posta tra chat</span>}
-        {target && !chosen && <span className="small" style={{ color: 'var(--bx-amber)' }}>la chat scelta non è più tra quelle aperte: scegline un'altra</span>}
+        {cur?.kind === 'mailbox' && <span className="small muted">{t('brainPages.composer.viaRegia')}</span>}
+        {target && !chosen && <span className="small" style={{ color: 'var(--bx-amber)' }}>{t('brainPages.composer.chatGone')}</span>}
       </div>
       <div className="chips">{PHRASES.map(p => <button key={p} type="button" className="bx-chip" onClick={() => { setText(p); ta.current?.focus(); }}>{p}</button>)}</div>
-      <textarea ref={ta} className="bx-textarea" placeholder="Scrivi cosa vuoi chiedere…" aria-label="Testo del messaggio" maxLength={2000} value={text} onChange={e => setText(e.target.value)}
+      <textarea ref={ta} className="bx-textarea" placeholder={t('brainPages.composer.placeholder')} aria-label={t('brainPages.composer.ariaLabel')} maxLength={2000} value={text} onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) { e.preventDefault(); setConfirm(true); } }} />
       {!confirm ? (
-        <div className="bx-row"><button type="button" className="bx-btn primary" disabled={!text.trim() || !cur} onClick={() => setConfirm(true)}>Invia…</button><span className="small muted">Ctrl+Invio</span></div>
+        <div className="bx-row"><button type="button" className="bx-btn primary" disabled={!text.trim() || !cur} onClick={() => setConfirm(true)}>{t('brainPages.composer.sendBtn')}</button><span className="small muted">{t('brainPages.composer.shortcut')}</span></div>
       ) : (
-        <div className="bx-confirm" role="alertdialog" aria-label="Conferma invio">
-          <p><b>Invio a {cur?.name}?</b> {cur?.kind === 'mailbox' ? 'Lo mando alla Regia, che lo gira con la posta tra chat.' : 'Arriva nella chat come tuo messaggio e la fa lavorare.'}</p>
+        <div className="bx-confirm" role="alertdialog" aria-label={t('brainPages.composer.confirmDialog')}>
+          <p><b>{t('brainPages.composer.confirmText', { name: cur?.name ?? '' })}</b> {cur?.kind === 'mailbox' ? t('brainPages.composer.confirmViaRegia') : t('brainPages.composer.confirmApp')}</p>
           {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
           <div className="bx-row">
-            <button type="button" className="bx-btn primary" disabled={busy} onClick={() => void send()}>Sì, invia</button>
-            <button type="button" className="bx-btn" onClick={() => setConfirm(false)}>Annulla</button>
+            <button type="button" className="bx-btn primary" disabled={busy} onClick={() => void send()}>{t('brainPages.composer.confirmBtn')}</button>
+            <button type="button" className="bx-btn" onClick={() => setConfirm(false)}>{t('brainPages.composer.cancelBtn')}</button>
           </div>
         </div>
       )}
@@ -122,16 +124,16 @@ export function DiscussButton({ title, text, regia }: { title: string; text: str
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  if (!regia) return <span className="small muted" title="Apri la Regia nel workspace per discuterne da qui">Discutiamone: apri la Regia</span>;
+  if (!regia) return <span className="small muted" title={t('brainPages.composer.discussButtonTitle')}>{t('brainPages.composer.discussButtonClosed')}</span>;
   return (
     <div style={{ display: 'grid', gap: 6 }}>
-      {!open ? <button type="button" className="bx-btn s" onClick={() => setOpen(true)} style={{ justifySelf: 'start' }}>Discutiamone</button> : (
+      {!open ? <button type="button" className="bx-btn s" onClick={() => setOpen(true)} style={{ justifySelf: 'start' }}>{t('brainPages.composer.discussOpenBtn')}</button> : (
         <div className="bx-confirm">
-          <p className="small"><b>Mando alla Regia?</b> «Discutiamone: {title}»</p>
+          <p className="small"><b>{t('brainPages.composer.discussConfirmBold')}</b> {t('brainPages.composer.discussConfirmQuote', { title })}</p>
           {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
           <div className="bx-row">
-            <button type="button" className="bx-btn primary s" disabled={busy} onClick={() => { setBusy(true); setErr(null); window.sb.invoke('chat:send', { chatId: regia.id, text }).then(() => { toast('Mandato alla Regia'); setOpen(false); }, e => setErr(String(e?.message ?? e))).finally(() => setBusy(false)); }}>Sì, manda</button>
-            <button type="button" className="bx-btn s" onClick={() => setOpen(false)}>Annulla</button>
+            <button type="button" className="bx-btn primary s" disabled={busy} onClick={() => { setBusy(true); setErr(null); window.sb.invoke('chat:send', { chatId: regia.id, text }).then(() => { toast(t('brainPages.composer.discussSent')); setOpen(false); }, e => setErr(String(e?.message ?? e))).finally(() => setBusy(false)); }}>{t('brainPages.composer.discussConfirmBtn')}</button>
+            <button type="button" className="bx-btn s" onClick={() => setOpen(false)}>{t('brainPages.composer.discussCancelBtn')}</button>
           </div>
         </div>
       )}

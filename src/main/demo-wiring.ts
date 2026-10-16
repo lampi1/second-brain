@@ -122,6 +122,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a tool call of a chat, running or finished (e2e: the live brain map); the same id again updates it */
     tool: (chatId: string, t: { id: string; name: string; input: unknown; summary?: string; status?: 'running' | 'ok' | 'error' }) =>
       chats.upsert(chatId, { kind: 'tool', id: t.id, at: now(), name: t.name, summary: t.summary ?? t.name, input: t.input, status: t.status ?? 'running' }),
+    /** "Eventi alla Regia": the chats whose news waits (`chat:kind`), and how much of it a busy Regia holds (e2e: regia-wake) */
+    wake: () => ({ queued: wake.queued().map(e => `${e.chatId}:${e.kind}`), held: wake.held() }),
+    asks: () => ({ reads: asks.reads, pending: asks.pending().map(r => r.chatId) }),
   };
   log.info('demo', 'demo services started', { data: { freeze, chats: s.chats.length, tabs: s.tabs.length, mcpPort: mcp.port } });
 

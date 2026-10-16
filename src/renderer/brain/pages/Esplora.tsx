@@ -12,9 +12,10 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Markdown } from '../components/Markdown';
 import { copyText, IconCopy, IconDownload, IconSearch, toast, type Navigate } from '../components/ui';
 import { saveBrainFile } from './Confronto';
+import { t } from '../../i18n';
 
-const ROOT_GROUP = '(cartella principale)';
-const groupOf = (f: string) => (f.includes('/') ? f.split('/')[0]! : ROOT_GROUP);
+const rootGroup = () => t('brainPages.esplora.rootFolder');
+const groupOf = (f: string) => (f.includes('/') ? f.split('/')[0]! : rootGroup());
 
 function Mark({ text, q }: { text: string; q: string }) {
   const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
@@ -38,7 +39,7 @@ function Code({ text, line }: { text: string; line?: number }) {
 
 function Jsonl({ text, name }: { text: string; name: string }) {
   const rows = useMemo(() => text.split(/\r?\n/).filter(Boolean).map(l => {
-    try { const o = JSON.parse(l) as Record<string, unknown>; return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'object' && v !== null ? JSON.stringify(v) : v])); } catch { return { riga: l }; }
+    try { const o = JSON.parse(l) as Record<string, unknown>; return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'object' && v !== null ? JSON.stringify(v) : v])); } catch { return { [t('brainPages.esplora.jsonlLine')]: l }; }
   }), [text]);
   const keys = [...new Set(rows.flatMap(r => Object.keys(r)))];
   const cols: Col<Record<string, unknown>>[] = keys.map((k, i) => ({ key: k, label: k, clip: true, hidden: i >= 8 }));
@@ -53,13 +54,13 @@ function Viewer({ path, files, root, line, nav }: { path: string; files: Set<str
       <div className="bx-viewer-head">
         <h2>{path}</h2>
         <span className="sp" style={{ flex: 1 }} />
-        <button type="button" className="bx-btn s" onClick={() => void saveBrainFile(path)}><IconDownload /> Scarica</button>
-        <button type="button" className="bx-btn s" onClick={() => void copyText(full).then(ok => toast(ok ? 'Percorso copiato' : 'Copia non riuscita'))}><IconCopy /> Copia il percorso</button>
+        <button type="button" className="bx-btn s" onClick={() => void saveBrainFile(path)}><IconDownload /> {t('brainPages.esplora.downloadBtn')}</button>
+        <button type="button" className="bx-btn s" onClick={() => void copyText(full).then(ok => toast(ok ? t('brainPages.esplora.pathCopied') : t('brainPages.esplora.copyFailed')))}><IconCopy /> {t('brainPages.esplora.copyPath')}</button>
       </div>
       <Async loading={f.loading && !f.data} error={f.data ? null : f.error} onRetry={() => f.reload()} lines={10}>
         {() => f.data && (
           <>
-            <p className="small muted">{fmt.int(f.data.size)} byte · ultima modifica {fmt.when(f.data.modified)} ({fmt.ago(f.data.modified)})</p>
+            <p className="small muted">{fmt.int(f.data.size)} byte · {t('brainPages.esplora.lastModified')} {fmt.when(f.data.modified)} ({fmt.ago(f.data.modified)})</p>
             {/\.md$/i.test(path) ? <div className="bx-card"><Markdown text={f.data.text} files={files} root={root} onOpenFile={p => nav(`esplora/${p}`)} name={baseName(path)} testId="bx-file-md" /></div>
               : /\.jsonl$/i.test(path) ? <Jsonl text={f.data.text} name={baseName(path)} />
                 : /\.json$/i.test(path) ? <Code text={(() => { try { return JSON.stringify(JSON.parse(f.data.text), null, 2); } catch { return f.data.text; } })()} line={line} />
@@ -88,7 +89,7 @@ export function Esplora({ arg, nav }: { arg?: string; nav: Navigate }) {
   const groups = useMemo(() => {
     const m = new Map<string, string[]>();
     for (const f of all) m.set(groupOf(f), [...(m.get(groupOf(f)) ?? []), f]);
-    return [...m].sort(([a], [b]) => (a === ROOT_GROUP ? -1 : b === ROOT_GROUP ? 1 : a.localeCompare(b)));
+    return [...m].sort(([a], [b]) => (a === rootGroup() ? -1 : b === rootGroup() ? 1 : a.localeCompare(b)));
   }, [all]);
   const fq = filter.trim().toLowerCase();
   const search = (e: FormEvent) => { e.preventDefault(); setQuery(q.trim()); };
@@ -97,20 +98,20 @@ export function Esplora({ arg, nav }: { arg?: string; nav: Navigate }) {
 
   return (
     <>
-      <PageHead title="Esplora" at={files.at} onRefresh={() => files.reload()}
-        lead={files.data ? <><b>{all.length} file</b> del cervello: regole, memoria, diario, runbook, report, tool. Solo lettura.</> : undefined}
-        what="Solo i file tracciati del cervello: i segreti non compaiono mai. Cerca una parola in tutti i file o sfoglia le cartelle." />
+      <PageHead title={t('brainPages.esplora.pageTitle')} at={files.at} onRefresh={() => files.reload()}
+        lead={files.data ? <><b>{all.length} file</b> {t('brainPages.esplora.lead')}</> : undefined}
+        what={t('brainPages.esplora.what')} />
       <form className="bx-row" onSubmit={search} role="search" data-testid="bx-search">
-        <label className="bx-search" style={{ flex: 1, minWidth: 240 }}><IconSearch /><input className="bx-input" type="search" placeholder="Cerca una parola in tutti i file…" aria-label="Cerca nei file" value={q} onChange={e => setQ(e.target.value)} /></label>
-        <button type="submit" className="bx-btn primary" disabled={q.trim().length < 2}>Cerca</button>
-        {query && <button type="button" className="bx-btn ghost" onClick={() => { setQuery(''); setQ(''); }}>Chiudi i risultati</button>}
+        <label className="bx-search" style={{ flex: 1, minWidth: 240 }}><IconSearch /><input className="bx-input" type="search" placeholder={t('brainPages.esplora.searchPlaceholder')} aria-label={t('brainPages.esplora.searchLabel')} value={q} onChange={e => setQ(e.target.value)} /></label>
+        <button type="submit" className="bx-btn primary" disabled={q.trim().length < 2}>{t('brainPages.esplora.searchBtn')}</button>
+        {query && <button type="button" className="bx-btn ghost" onClick={() => { setQuery(''); setQ(''); }}>{t('brainPages.esplora.closeResults')}</button>}
       </form>
       {query && (
-        <section className="bx-card tight" aria-label="Risultati della ricerca" data-testid="bx-hits">
-          <Async loading={hits.loading && !hits.data} error={hits.data ? null : hits.error} onRetry={() => hits.reload()} lines={3} label="Cerco…">
+        <section className="bx-card tight" aria-label={t('brainPages.esplora.resultsLabel')} data-testid="bx-hits">
+          <Async loading={hits.loading && !hits.data} error={hits.data ? null : hits.error} onRetry={() => hits.reload()} lines={3} label={t('brainPages.esplora.searching')}>
             {() => hits.data && (
               <>
-                <p className="small muted" style={{ padding: '2px 10px 6px' }}>{hits.data.length}{hits.data.length >= 300 ? '+' : ''} risultati per «{query}»</p>
+                <p className="small muted" style={{ padding: '2px 10px 6px' }}>{t('brainPages.esplora.resultCount', { n: hits.data.length, q: query, overflow: hits.data.length >= 300 })}</p>
                 <div className="bx-hits">{hits.data.map((h, i) => <button key={i} type="button" onClick={() => open(h)}><span className="f">{h.file}{h.line ? `:${h.line}` : ''}</span><span className="l"><Mark text={h.text} q={query} /></span></button>)}</div>
               </>
             )}
@@ -120,8 +121,8 @@ export function Esplora({ arg, nav }: { arg?: string; nav: Navigate }) {
       <Async loading={files.loading && !files.data} error={files.data ? null : files.error} onRetry={() => files.reload()} lines={8} block>
         {() => (
           <div className="bx-explore">
-            <nav className="bx-card bx-tree bx-scroll" aria-label="File del cervello" data-testid="bx-tree">
-              <input className="bx-input" type="search" placeholder="Filtra i nomi dei file…" aria-label="Filtra i file" value={filter} onChange={e => setFilter(e.target.value)} />
+            <nav className="bx-card bx-tree bx-scroll" aria-label={t('brainPages.esplora.treeLabel')} data-testid="bx-tree">
+              <input className="bx-input" type="search" placeholder={t('brainPages.esplora.filterPlaceholder')} aria-label={t('brainPages.esplora.filterLabel')} value={filter} onChange={e => setFilter(e.target.value)} />
               {groups.map(([g, list]) => {
                 const shown = list.filter(f => !fq || f.toLowerCase().includes(fq));
                 if (!shown.length) return null;
@@ -129,14 +130,14 @@ export function Esplora({ arg, nav }: { arg?: string; nav: Navigate }) {
                 return (
                   <div key={g} className={`grp ${isOpen ? 'open' : ''}`}>
                     <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; })}><span className="chev" />{g}<span className="n">{shown.length}</span></button>
-                    {isOpen && <div className="files">{shown.map(f => <button key={f} type="button" data-file={f} aria-current={f === cur} title={f} onClick={() => { setLine(undefined); nav(`esplora/${f}`); }}>{g === ROOT_GROUP ? f : f.slice(g.length + 1)}</button>)}</div>}
+                    {isOpen && <div className="files">{shown.map(f => <button key={f} type="button" data-file={f} aria-current={f === cur} title={f} onClick={() => { setLine(undefined); nav(`esplora/${f}`); }}>{g === rootGroup() ? f : f.slice(g.length + 1)}</button>)}</div>}
                   </div>
                 );
               })}
             </nav>
             {cur ? <Viewer path={cur} files={set} root={ver.data?.root ?? ''} line={line} nav={nav} /> : (
               <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
-                {arg && !cur ? <Empty title="File non trovato">«{arg}» non è tra i file che il cervello mostra.</Empty> : <Empty title="Scegli un file a sinistra">Oppure cerca una parola in tutti i file. I principali:</Empty>}
+                {arg && !cur ? <Empty title={t('brainPages.esplora.notFound')}>{t('brainPages.esplora.notFoundDesc', { arg })}</Empty> : <Empty title={t('brainPages.esplora.chooseFile')}>{t('brainPages.esplora.chooseFileOr')}</Empty>}
                 <div className="bx-row">{main.map(f => <button key={f} type="button" className="bx-chip" onClick={() => nav(`esplora/${f}`)}>{f}</button>)}</div>
               </div>
             )}

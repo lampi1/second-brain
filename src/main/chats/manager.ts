@@ -21,6 +21,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Answer, ChatCommand, ChatItem, ChatSpace, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
 import { errText, log } from '../log';
@@ -210,8 +211,13 @@ interface ColdStep {
 /** The divider of a cold continuation (ADR 0031): the same id live and when the history is read again. */
 const coldDivider = (fromSession: string, at: number, notePath: string): ChatItem => ({
   kind: 'system', id: `cont-${fromSession}`, at, level: 'info', continued: { notePath, ...(isUuid(fromSession) ? { session: fromSession } : {}) },
-  text: 'Continua da qui: sessione nuova dal passaggio di consegne (la cache della precedente era scaduta).',
+  text: sysEn('coldContinued'), code: 'coldContinued',
 });
+
+/** A system ChatItem from a code + params (sys.ts): text is the English rendering, for agents, logs and old items. */
+function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, level: 'info' | 'warn' | 'error'): ChatItem {
+  return { kind: 'system', id: nextId('s'), at: Date.now(), text: sysEn(code, params), level, code, params };
+}
 
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
@@ -638,7 +644,7 @@ export class ChatManager implements ChatService {
       const t = patch.title.trim();
       if (!t) throw new Error('Titolo vuoto.');
       r.s.title = t;
-      await apply('titolo', sess ? () => sess.rename(t) : undefined);
+      await apply('title', sess ? () => sess.rename(t) : undefined);
     }
     if (patch.model !== undefined) {
       const m = patch.model.trim() || null;
@@ -649,8 +655,8 @@ export class ChatManager implements ChatService {
         // never live (Cursor's session/set_model writes the user's config): reopen the session with --model, same history
         if (sess && !sess.busy) await this.closeKeeping(r, sess);
         else if (sess) r.reopen = true; // after this turn
-        if (sess) this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), text: `Modello ${m ?? 'predefinito'}: ${engine.label} riparte con questo modello dal prossimo messaggio${r.reopen ? ', finito questo turno' : ''}.`, level: 'info' }, false);
-      } else await apply('modello', sess ? () => sess.setModel(m) : undefined);
+        if (sess) this.addItem(r, sysItem('modelChangeQueued', { model: m ?? '', label: engine.label, reopen: r.reopen ? 1 : 0 }, 'info'), false);
+      } else await apply('model', sess ? () => sess.setModel(m) : undefined);
     }
     if (patch.effort !== undefined) {
       if (!EFFORTS.includes(patch.effort)) throw new Error(`Effort non valido: ${patch.effort}`);
@@ -664,9 +670,9 @@ export class ChatManager implements ChatService {
       if (!MODES.includes(patch.permissionMode)) throw new Error(`Modalità permessi non valida: ${patch.permissionMode}`);
       const pm = patch.permissionMode;
       r.choice.permissionMode = pm; r.s.permissionMode = pm;
-      await apply('permessi', sess ? () => sess.setPermissionMode(pm) : undefined);
+      await apply('permissionMode', sess ? () => sess.setPermissionMode(pm) : undefined);
     }
-    if (later.length) this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), text: `Applicato dal prossimo avvio: ${later.join(', ')}.`, level: 'warn' }, false);
+    if (later.length) this.addItem(r, sysItem('appliedLater', { items: later.join(',') }, 'warn'), false);
     this.persist();
     log.info('chats', 'chat settings', { chat: chatId, data: { ...patch, title: patch.title ? '(changed)' : undefined } });
     this.updated(r);
@@ -706,7 +712,10 @@ export class ChatManager implements ChatService {
       ...(r.s.contextTokens ? { contextTokens: r.s.contextTokens } : {}),
     });
     r.s.handoffAt = info.at; r.s.handoffSource = info.source;
-    this.addItem(r, { kind: 'system', id: nextId('s'), at: info.at, level: 'info', text: info.source === 'chat' ? 'Passaggio di consegne salvato: «Riprendi» apre una chat nuova che parte da qui.' : 'Passaggio di consegne automatico salvato (la chat non lo ha scritto): «Riprendi» apre una chat nuova che parte da qui.' }, false);
+    {
+      const code = info.source === 'chat' ? 'handoffSavedChat' : 'handoffSavedAuto';
+      this.addItem(r, { kind: 'system', id: nextId('s'), at: info.at, level: 'info', text: sysEn(code), code }, false);
+    }
     this.persist();
     this.updated(r);
     log.info('chats', 'hand-off saved', { chat: chatId, data: { source: info.source, reason: opts.reason ?? 'manual', chars: info.text.length, contextTokens: r.s.contextTokens ?? null } });
@@ -750,7 +759,7 @@ export class ChatManager implements ChatService {
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     r.s.continuedBy = { id: c.id, title: c.title };
-    this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: `Il lavoro continua nella chat «${c.title}». Questa resta consultabile.` }, false);
+    this.addItem(r, sysItem('continuedIn', { title: c.title }, 'info'), false);
     this.persist();
     this.updated(r);
     // its context is not re-read any more: the process ends now, or when the turn that just wrote the hand-off settles
@@ -833,14 +842,14 @@ export class ChatManager implements ChatService {
     const sess = r.session;
     if (!sess) return;
     log.info('chats', 'Regia: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
-    this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: 'Giorno nuovo: compatto il contesto della Regia in un riassunto (le chat che segue e la coda restano).' }, false);
+    this.addItem(r, sysItem('dayCompactStart', undefined, 'info'), false);
     const out = await this.quietTurn(r, sess, REGIA_COMPACT, true).catch((e: unknown) => {
       log.warn('chats', 'Regia day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
       return null;
     });
     if (out !== null) return;
     log.info('chats', 'Regia day compaction did not finish', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null } });
-    this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'warn', text: 'Non sono riuscito a riassumere il contesto della Regia: ci riprovo domani; intanto si compatta da sola al limite impostato.' }, false);
+    this.addItem(r, sysItem('dayCompactFailed', undefined, 'warn'), false);
   }
 
   /** The engine an auto-close kept for the cold note ends now (the chat stays archived). */
@@ -1067,7 +1076,7 @@ export class ChatManager implements ChatService {
     const out = await this.quietTurn(r, sess, text, quiet, () => {
       if (quiet) return;
       r.s.handoffBusy = true;
-      this.addItem(r, { kind: 'system', id: nextId('s'), at: Date.now(), level: 'info', text: 'Chiedo alla chat il passaggio di consegne (un turno breve).' }, false);
+      this.addItem(r, sysItem('handoffAsking', undefined, 'info'), false);
       this.updated(r);
     });
     return out === null ? null : extractHandoff(out);

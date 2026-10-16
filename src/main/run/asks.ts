@@ -45,6 +45,8 @@ export class CommandAsks {
   private appTurn = new Set<string>();
   /** chats in a hand-off turn (manager askHandoff): its items are the note, not a message for the user */
   private handoff = new Set<string>();
+  /** How many turn ends were read, with or without a command in them (tests, diagnostics) */
+  reads = 0;
 
   constructor(private readonly d: CommandAsksDeps) {}
 
@@ -131,6 +133,7 @@ export class CommandAsks {
   private read(chatId: string, force = false): void {
     const c = this.chats.get(chatId);
     const last = this.turns.get(chatId)?.last;
+    this.reads++;
     this.appTurn.delete(chatId);
     if (!c || c.closedAt || !last || (!force && (c.state !== 'idle' || c.handoffBusy))) return;
     const m = this.asks.get(chatId) ?? new Map<string, PendingRequest>();

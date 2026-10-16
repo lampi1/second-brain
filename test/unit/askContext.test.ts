@@ -39,6 +39,10 @@ describe('linksIn', () => {
     const l = linksIn(['vedi file:///C:/rep/tc16.md e C:\\rep\\tc16.md, poi C:/rep/shot.png.'], ['C:\\rep\\out.html']);
     expect(l.map(x => [x.kind, x.label])).toEqual([['file', 'tc16.md'], ['file', 'shot.png'], ['file', 'out.html']]);
   });
+  it('macOS and Linux files: /Users, /home, file:///; never a URL path or an API route', () => {
+    const l = linksIn(['vedi /Users/u/rep/tc16.md, file:///home/u/rep/shot.png e https://x.example.com/home/a.md; la rotta /api/v1/x.json'], ['/home/u/rep/out.html']);
+    expect(l.map(x => [x.kind, x.label])).toEqual([['file', 'shot.png'], ['web', 'x.example.com · a.md'], ['file', 'tc16.md'], ['file', 'out.html']]);
+  });
   it('never a relative path or a word with a colon', () => {
     expect(linksIn(['docs/adr/0001.md, nota: ok, ./x.md'])).toEqual([]);
   });

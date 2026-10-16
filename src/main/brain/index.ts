@@ -2,17 +2,17 @@
 // the live feed of the brain folder and chats (live.ts), calm Windows toasts (notify.ts), the top-bar usage
 // (usage.ts), the spending limits (budget.ts), the job ledger (estimates.ts: real cost and time, feeding the brain's
 // routing table, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the brain's procedures
-// (procedures.ts, /api/procedures). Why one module: they share the
+// (procedures.ts, /api/procedures) and the domains' multi-PC sync (domains.ts, sync.ts, guard.ts: ADR 0059). Why one module: they share the
 // brain folder, the Electron-node runner and the feed, and they restart together when the brain folder changes. Only
 // this file touches Electron (Notification, the window); the parts are plain Node and unit-tested apart. App state
 // lives in userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json). It writes into the
 // brain only the model routing (routing.ts, ADR 0032): a new table version when the user saves it from the settings
 // page, and the routed chats' lines in the improvement loop's ledger (ops/state/improve/, the brain's own state, never
 // its tracked files).
-import { Notification, type BrowserWindow } from 'electron';
+import { Notification, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { BudgetAlert, FeedEvent, Harness, SettingChange, Settings, Usage } from '../../shared/contract';
+import type { BudgetAlert, DomainSyncStatus, FeedEvent, Harness, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
@@ -34,6 +34,9 @@ import { Procedures, touchesProcedures } from './procedures';
 import { Learn } from './learn';
 import { ModelsSeenStore } from './models-seen';
 import { electronNode } from './node';
+import { discoverDomains } from './domains';
+import { findGuard } from './guard';
+import { DomainSync } from './sync';
 
 export interface BrainCtx {
   emitter: Emitter; window: () => BrowserWindow | null; userData: string; env?: NodeJS.ProcessEnv;
@@ -151,6 +154,25 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     if (procTimer) clearTimeout(procTimer);
     procTimer = setTimeout(() => { procTimer = null; ctx.emitter.emit('procedures:changed', undefined); }, 500);
   };
+  // ── domains and their sync (ADR 0059): only "everywhere" domains with a remote; a brain of today has none ──
+  const domains = () => {
+    const r = discoverDomains(cfg.get().brainRoot, cfg.domains());
+    for (const k of r.skipped) log.warn('sync', 'domain left out', { cause: k.why, hint: 'fix config.json "domains" or the domain.json of that folder', data: { dir: k.dir } });
+    return r.domains;
+  };
+  const syncBlocked = (d: DomainSyncStatus) => {
+    const b = d.blocked!;
+    const why = b.kind === 'conflict' ? `conflitto in ${b.files.slice(0, 3).join(', ')}: scegli quale versione tenere`
+      : b.kind === 'guard' ? `il controllo ha bloccato l'invio: ${b.findings.slice(0, 3).map(f => `${f.file}${f.line ? `:${f.line}` : ''} (${f.rule})`).join(', ')}`
+      : b.kind === 'no-guard' ? 'manca il controllo di pubblicazione su questo PC: invio bloccato' : b.message;
+    publishRaw([{ kind: 'brain-sync', title: `Dominio «${d.name}» non sincronizzato`, detail: cut(why, 400) }]);
+  };
+  const sync = new DomainSync({
+    domains, guard: d => findGuard(d.denyList, env, d.name), node,
+    stateFile: file('sync-state.json'), conflictsDir: file('sync-conflicts'),
+    onState: st => ctx.emitter.emit('sync:state', st), onBlocked: syncBlocked,
+    settleMs: Number(env.SB_SYNC_SETTLE_MS) > 0 ? Number(env.SB_SYNC_SETTLE_MS) : 30_000,
+  });
   let lastUsage: Usage | null = null;
   let backfillTimer: NodeJS.Timeout | null = null;
   let warmTimer: NodeJS.Timeout | null = null;
@@ -172,6 +194,9 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     usage.start();
     api = new BrainApi(root, node, undefined, localApi);
     if (!root) { log.warn('brain', 'no brain folder configured', { data: { hint: 'settings:set { brainRoot } or SB_BRAIN' } }); return; }
+    // the domains' first sync runs beside the start (a slow remote never holds the app back); its status says the rest
+    sync.refresh();
+    void sync.start().catch(e => log.warn('sync', 'first sync failed', { cause: errText(e), hint: 'the sync status says which domain and why' }));
     // the brain's file (brain-settings.ts) is in a folder agents write to: at start it may only close the switch (edited
     // by hand), never open it; a file that would open it is put back to the app's value
     const cross = readCrossHarness(root);
@@ -192,7 +217,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     if (!testing) { const a = api; warmTimer = setTimeout(() => { warmTimer = null; a.warm(); }, 10e3); }
   };
   const stopParts = () => {
-    live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); procedures.invalidate();
+    live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); procedures.invalidate(); sync.stop();
     if (procTimer) { clearTimeout(procTimer); procTimer = null; }
     if (backfillTimer) clearTimeout(backfillTimer);
     if (warmTimer) { clearTimeout(warmTimer); warmTimer = null; }
@@ -277,8 +302,25 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       })));
     },
     ingestRateLimits: msg => { usage?.ingest(msg); },
+    syncState: () => sync.state(),
+    syncNow: async domain => {
+      if (domain !== undefined && typeof domain !== 'string') throw new Error('sync:now: domain deve essere un nome');
+      if (domain) await sync.sync(domain); else await sync.syncAll();
+      return sync.state();
+    },
+    syncResolve: async (domain, choice) => {
+      if (typeof domain !== 'string' || !(['mine', 'theirs', 'both'] as unknown[]).includes(choice)) throw new Error('sync:resolve: dominio e scelta (mine, theirs, both)');
+      const st = await sync.resolve(domain, choice as SyncChoice);
+      log.info('sync', 'conflict choice', { data: { domain, choice } });
+      if (choice === 'both' && !quiet) {
+        const b = st.domains.find(d => d.name === domain)?.blocked;
+        for (const f of b?.kind === 'conflict' ? b.copies ?? [] : []) void shell.openPath(f).then(err => { if (err) log.warn('sync', 'conflict copy not opened', { cause: err, hint: `open it by hand: ${f}` }); });
+      }
+      return st;
+    },
+    syncBeforeRead: () => sync.beforeRead(),
     onBudgetAlert: fn => { budgetListeners.add(fn); return () => { budgetListeners.delete(fn); }; },
-    shutdown: async () => { stopParts(); notifier.stop(); lastToast?.close(); },
+    shutdown: async () => { stopParts(); await Promise.race([sync.idle(), new Promise(r => setTimeout(r, 5000))]); notifier.stop(); lastToast?.close(); },
   };
 }
 

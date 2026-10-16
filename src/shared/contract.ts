@@ -2,12 +2,14 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
+import type { SysCode, SysParams } from './sys';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
 /** The protocol an engine speaks; each kind has one adapter (claude: Claude Code stream-json · acp: Agent Client
- *  Protocol over stdio · api: an HTTP model endpoint, OpenAI- or Anthropic-compatible, text only). */
-export type EngineKind = 'claude' | 'acp' | 'api';
+ *  Protocol over stdio · codex: `codex app-server` JSON-RPC over stdio, ADR 0060 · api: an HTTP model endpoint, OpenAI-
+ *  or Anthropic-compatible, text only). */
+export type EngineKind = 'claude' | 'acp' | 'codex' | 'api';
 /** What an engine can do. The app asks these, never the engine's name. */
 export interface EngineCaps {
   /** an effort level per chat (Claude's --effort) */
@@ -102,7 +104,7 @@ export interface ChatSummary {
   continuedBy?: ChatLink;
   /** false = the engine reports no usage (Cursor over ACP today): costUsd is 0 for lack of data, show the estimate */
   costKnown?: false;
-  /** renderer only: today's $ of this Cursor chat from the Cursor ledger (Usage.cursorChats by sessionId), an estimate */
+  /** renderer only: this Cursor chat's $, all its turns in the Cursor ledger (Usage.cursorChats by sessionId), an estimate */
   costLedgerUsd?: number;
   /** real work time since the app opened the chat: time spent starting or running, never waiting for the user's
    *  answers nor idle; workSince = the running span now in progress (add now − workSince) */
@@ -203,7 +205,9 @@ export type ChatItem =
   | { kind: 'tool'; id: string; at: number; name: string; summary: string; input: unknown; status: 'running' | 'ok' | 'error'; output?: string; diff?: FileDiff[] }
   /** continued = the divider of an invisible continuation (ADR 0031): the items above it are the previous session
    *  (shown folded), its note is the hand-off it starts from */
-  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; continued?: { notePath: string; session?: string } }
+  // text: the English rendering, for agents, logs and items saved before this field existed. When code is set, the
+  // UI shows t('sys.' + code, params) instead (src/shared/sys.ts, src/renderer/i18n/index.ts's sysText()).
+  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; continued?: { notePath: string; session?: string } }
   /** interrupted = the user stopped the turn (Stop, "Invia subito"): isError stays false, the UI says "interrotto da te" */
   | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
   /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =
@@ -559,6 +563,8 @@ export interface ImproveState {
   repo: string | null;
   repoProblem: string | null; // Italian: why the code folder is missing or unusable
   running: string;            // the release id in use, 'dev' for a build run from the repo
+  /** when the version in use was made (its commit, ms): shown instead of the release id; absent = dev or unknown */
+  runningAt?: number | null;
   stable: boolean;
   current: string | null;     // current.json
   previous: string | null;
@@ -585,6 +591,8 @@ export interface AppInfo {
   cli: Record<Harness, CliStatus> | null;
   /** the engines the app knows, in display order */
   engines: EngineInfo[];
+  /** Windows' language as the UI uses it (ADR 0057): 'it' when it is Italian, else 'en'; SB_LANG forces it (tests) */
+  systemLang: Lang;
 }
 /** Since the app started: the MCP port (fallback = the configured one was taken, external clients lose the browser),
  *  main-window renderer crashes/hangs (each reloads it; chats keep running), engines killed by force, Job Object guard. */
@@ -614,13 +622,23 @@ export interface Usage {
   /** true = the whole figure comes from Cursor's usage export (exact); false = an estimate within ±cursorMarginPct */
   cursorExact?: boolean;
   cursorMarginPct?: number;
-  /** estimated $ today per Cursor conversation id (= an app Cursor chat's sessionId) */
+  /** estimated $ per Cursor conversation id (= an app Cursor chat's sessionId), all its turns in the ledger read (60 days) */
   cursorChats?: Record<string, number>;
+  /** the same, today's turns only (the day's chats by cost) */
+  cursorChatsToday?: Record<string, number>;
+  /** today's Cursor turns with no list price (model "auto" or missing from main/chats/cursor-prices.ts): the
+   *  conversations they belong to and their models, shown as «prezzo sconosciuto» instead of a silent 0 */
+  cursorUnpriced?: { chats: string[]; models: string[] };
   /** Italian: why Cursor's plan usage (included quota, on-demand spend) cannot be shown, and what does give its cost */
   cursorPlanNote?: string;
   /** Kimi today from its own session files (brain/kimi-usage.ts); absent/null = no Kimi data folder on this machine */
   kimi?: KimiUsage | null;
   at?: number;                // when this snapshot was computed
+  /** when cost.mjs started reading the transcripts behind todayUsd (ms): the live total adds what the app's Claude
+   *  chats spent after it (renderer lib/live-costs.ts); absent = no cost run yet */
+  costAt?: number;
+  /** today's Claude $ per session from cost.mjs (the app's chats and the ones outside it), most first */
+  claudeChats?: { sessionId: string; title: string; usd: number }[];
 }
 /** Kimi's tokens today (every model call of every session, Rome day); no $ (subscription, no published price) */
 export interface KimiUsage {
@@ -640,6 +658,9 @@ export type ViewMode = 'mosaico' | 'corsie';
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
 export type ThemeMode = 'dark' | 'light' | 'system';
+/** The UI language (ADR 0057): system = Windows' language (Italian when it is Italian, English otherwise) */
+export type LanguageMode = 'system' | 'it' | 'en';
+export type Lang = 'it' | 'en';
 /** warn = feed + toast · ask = also a 'budget:alert' the chat manager turns into a "stop or continue?" question · off */
 export type BudgetMode = 'warn' | 'ask' | 'off';
 export interface BudgetLimits { mode: BudgetMode; dailyUsd: number | null; perChatUsd: number | null }
@@ -651,6 +672,7 @@ export interface Settings {
   mute: Record<string, boolean>;   // feed kind → no toast (still in the feed)
   osToasts: ToastLevel;
   theme: ThemeMode;
+  language: LanguageMode;
   dnd: boolean;                    // do not disturb: no toasts at all
   dndUntil: number | null;         // timed do not disturb (epoch ms): no toasts until then
   /** engines anything may start on (ADR 0046; absent = off): the user's own chats too */
@@ -673,6 +695,11 @@ export interface Settings {
   /** «Regie corte» (ADR 0051): a Regia whose context began on an earlier day compacts it once, the first time it is idle
    *  on a new day (same chat: its queue and the chats it follows stay); its window is compactWindowTokens as for every chat */
   regiaDayCompact?: boolean;
+  /** ADR 0060: the brain's rules given to each Claude chat at launch (a plugin folder: skills, agents, output styles,
+   *  hooks, plus the rules file); off by default */
+  launchRulesClaude?: boolean;
+  /** ADR 0060: the brain's rules given to each Codex chat at launch (developer instructions + skill folders); on by default */
+  launchRulesCodex?: boolean;
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
@@ -728,7 +755,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("view", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam';
 export interface SettingDef {
@@ -934,6 +961,8 @@ export interface OverlayModel {
   cards: OverlayCard[];       // the queue: oldest first; the first is shown in full
   waiting: number;            // all open requests (badge)
   theme: ThemeMode;
+  /** the app page's resolved UI language (ADR 0057) */
+  lang?: Lang;
   density: 'comfortable' | 'compact';
   focusKey?: string;          // set with a new nonce when the keyboard moves to the layer (Ctrl+J)
   nonce?: number;
@@ -1012,6 +1041,36 @@ export interface SearchHit {
   line?: number;              // brain: 1-based line of the match
   count?: number;             // how many messages / places matched
 }
+// ---------------------------------------------------------------- brain domains and multi-PC sync (ADR 0059)
+
+export type DomainScope = 'everywhere' | 'this-pc';
+/** Why a domain's sync stopped. conflict: stays stopped until the user chooses (sync:resolve); guard: the publish guard
+ *  found something (file:line + rule, never the value); no-guard: the guard is missing on this PC (fail closed); error:
+ *  git failed (offline, a git operation in progress), retried at the next sync. */
+export type SyncBlock =
+  | { kind: 'conflict'; files: string[]; copies?: string[] }
+  | { kind: 'guard'; findings: { file: string; line: number | null; rule: string; commit?: string }[] }
+  | { kind: 'no-guard'; hint: string }
+  | { kind: 'error'; message: string; hint: string };
+export interface DomainSyncStatus {
+  name: string;
+  root: string;
+  scope: DomainScope;
+  /** off = no remote (a this-pc domain, or no domain.json): the app never syncs it */
+  state: 'off' | 'idle' | 'syncing' | 'blocked';
+  remote: string | null;
+  lastSync: number | null;
+  /** commits to send / to receive at the last check; null = not known yet */
+  ahead: number | null;
+  behind: number | null;
+  blocked: SyncBlock | null;
+  /** domain.json wrong or refused (Italian) */
+  problem: string | null;
+}
+export interface SyncState { domains: DomainSyncStatus[]; at: number }
+/** keep mine / keep theirs on the conflicting lines; both = a copy of each version opened for the user, sync stays stopped */
+export type SyncChoice = 'mine' | 'theirs' | 'both';
+
 export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexed: { chats: number; files: number } }
 
 /** renderer → main. Each entry: [argument, result]. */
@@ -1159,6 +1218,10 @@ export interface InvokeMap {
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:get': [void, AnswerLater];
   'later:set': [{ on: boolean }, AnswerLater];
+  /** brain domains and their sync (ADR 0059): the status, a sync now (one domain or all), the user's choice on a conflict */
+  'sync:get': [void, SyncState];
+  'sync:now': [{ domain?: string }, SyncState];
+  'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
 }
 
 /** An image read from the system clipboard by main (bytes as they were; the renderer checks and scales them). */
@@ -1200,6 +1263,8 @@ export interface EventMap {
   'later:changed': AnswerLater;
   /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
   'procedures:changed': void;
+  /** a domain's sync status changed (ADR 0059) */
+  'sync:state': SyncState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1219,10 +1284,11 @@ export const INVOKE_CHANNELS = [
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
   'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
+  'sync:get', 'sync:now', 'sync:resolve',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

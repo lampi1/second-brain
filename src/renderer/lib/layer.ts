@@ -20,6 +20,7 @@ import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
 import { engineOf } from './engines';
+import { lang } from '../i18n';
 
 const TOAST_MS = 8000;
 /** requests arriving within this window ring once */
@@ -100,7 +101,7 @@ export function computeModel(ignorePopup = false): OverlayModel {
   }));
   const v = viewport();
   const avoid = reserveOf(u.prefs.regiaOpen, sizeIn(u.prefs.regiaSize, v.W, v.H, v.top, v.left));
-  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts };
+  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts };
 }
 
 function push(): void {

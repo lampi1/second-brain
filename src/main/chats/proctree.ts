@@ -12,6 +12,7 @@
 // Used by claude.ts, acp.ts and manager.ts when an engine exits or its chat really closes.
 import { execFile, spawn } from 'node:child_process';
 import { errText, log } from '../log';
+import { etimeSeconds } from '../platform';
 import { killTrees } from './cli';
 import { jobGuard, type JobMember } from './jobguard';
 
@@ -65,6 +66,18 @@ export function descendants(procs: readonly Proc[], root: Root, opts: { live?: b
   return out;
 }
 
+/** `ps -o pid=,ppid=,etime=,comm=` output → `pid ppid createdMs name` lines (parseProcList's shape); the name is the
+ *  last part of comm (macOS prints the full path). */
+export function psToList(stdout: string, now: number): string {
+  const out: string[] = [];
+  for (const l of stdout.split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(l);
+    const secs = m ? etimeSeconds(m[3]!) : Number.NaN;
+    if (m && !Number.isNaN(secs)) out.push(`${m[1]} ${m[2]} ${now - secs * 1000} ${(m[4] ?? '').trim().split('/').pop()}`);
+  }
+  return out.join('\n');
+}
+
 // CreationDate as Unix ms; -EncodedCommand so no quoting reaches the shell
 const PS_LIST = "Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds(),$_.Name }";
 
@@ -80,10 +93,9 @@ export function listProcesses(timeoutMs = 90000): Promise<Proc[] | null> {
         execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(PS_LIST, 'utf16le').toString('base64')],
           { encoding: 'utf8', windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, done);
       } else {
-        execFile('ps', ['-A', '-o', 'pid=,ppid=,etimes=,comm='], { encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
-          const now = Date.now();
-          done(err, String(stdout ?? '').split('\n').map(l => /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(m => !!m)
-            .map(m => `${m[1]} ${m[2]} ${now - Number(m[3]) * 1000} ${(m[4] ?? '').split('/').pop()}`).join('\n'));
+        // etime, not etimes: macOS's BSD ps has no etimes (platform.ts etimeSeconds, ADR 0054)
+        execFile('ps', ['-A', '-o', 'pid=,ppid=,etime=,comm='], { encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+          done(err, psToList(String(stdout ?? ''), Date.now()));
         });
       }
     } catch { resolve(null); }

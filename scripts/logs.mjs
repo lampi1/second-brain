@@ -1,4 +1,4 @@
-// Read the app's structured logs (for agents and humans). Default folder: %APPDATA%/second-brain/logs.
+// Read the app's structured logs (for agents and humans). Default folder: <appData>/second-brain/logs (%APPDATA% on Windows).
 // Usage: node scripts/logs.mjs [--dir <logs dir>] [--level warn] [--scope chats] [--chat <id>] [--grep <text>]
 //                              [--since 10m|2h|2026-10-11T09:00] [--tail 100] [--json]
 import fs from 'node:fs';
@@ -7,7 +7,10 @@ import path from 'node:path';
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
-const dir = opt('--dir', process.env.SB_LOG_DIR ?? path.join(process.env.APPDATA ?? path.join(os.homedir(), '.config'), process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain', 'logs'));
+// Electron's appData per OS (same rule as scripts/release.mjs)
+const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+  : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+const dir = opt('--dir', process.env.SB_LOG_DIR ?? path.join(appData, process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain', 'logs'));
 const order = { debug: 0, info: 1, warn: 2, error: 3 };
 const min = order[opt('--level', 'debug')] ?? 0;
 const scope = opt('--scope'), chat = opt('--chat'), grep = opt('--grep')?.toLowerCase(), tail = Number(opt('--tail', '200'));

@@ -6,7 +6,7 @@
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
-type Demo = { turn(c: string, t: string): void };
+type Demo = { turn(c: string, t: string): void; wake(): { queued: string[]; held: number } };
 
 test('a work chat that finishes wakes the Regia with an app message, never while the Regia waits for the user', async () => {
   const { app, page } = await launchDemo({ regia: true, env: { SB_REGIA_EVENTS: '1', SB_REGIA_EVENTS_MS: '500' } });
@@ -15,8 +15,10 @@ test('a work chat that finishes wakes the Regia with an app message, never while
 
   const text = ['Fatto: la mappa carica in 2 secondi. Ora lancia:', '', '```powershell', "Write-Output 'ok'", '```'].join('\n');
   await app.evaluate((_e, t) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.turn('mappa', t); }, text);
-  // the Regia waits for the user (its open question): the news waits too
-  await page.waitForTimeout(1500);
+  // the Regia waits for the user (its open question): the news waits too (held by its gate),
+  // once the command (asks.ts settles it after the turn end) has replaced the bare 'done'
+  const wake = () => app.evaluate(() => (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.wake());
+  await expect.poll(async () => { const w = await wake(); return w.held > 0 && w.queued.includes('mappa:command'); }).toBe(true);
   expect(await appNews()).toHaveLength(0);
 
   const pending = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));

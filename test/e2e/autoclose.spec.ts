@@ -3,13 +3,24 @@
 // "Chiusa: <titolo> · Riapri" notice; no "Finite oggi" dock or column (the user, 2026-10-13): closed chats are found
 // with Ctrl+K and reopened with their history; the Regia never closes; the delay is set in Impostazioni (0 = never).
 // Screenshots in test-results/shots/autoclose-*.
-import { expect, test, type ElectronApplication } from '@playwright/test';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
 type Demo = { finish(chatId: string, agoMs: number, isError?: boolean): void };
 const finish = (app: ElectronApplication, chatId: string, agoMs: number, isError = false) =>
   app.evaluate((_e, [id, ago, err]) => (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.finish(id, ago, err), [chatId, agoMs, isError] as const);
 const MIN = 60_000;
+// what the renderer's auto-close check saw last per chat (components/AutoCloser.tsx): a test waits for the check on a
+// new result instead of a fixed pause
+const seen = (page: Page, chatId: string) => page.evaluate(id =>
+  (globalThis as unknown as { __sbAutoClose: { seen: Record<string, { at: number; due: boolean }> } }).__sbAutoClose.seen[id] ?? null, chatId);
+/** Finishes the chat and waits for the auto-close check on that result; returns whether that check closed it. */
+async function finishChecked(app: ElectronApplication, page: Page, chatId: string, agoMs: number, isError = false): Promise<boolean> {
+  const before = (await seen(page, chatId))?.at;
+  await finish(app, chatId, agoMs, isError);
+  await expect.poll(async () => (await seen(page, chatId))?.at).not.toBe(before);
+  return (await seen(page, chatId))!.due;
+}
 
 test('finished chats close by themselves after the grace period, Ctrl+K finds and reopens them', async () => {
   const { app, page } = await launchDemo();
@@ -21,9 +32,8 @@ test('finished chats close by themselves after the grace period, Ctrl+K finds an
   await shot(page, 'autoclose-1-before');
 
   // a turn that ended 1 minute ago stays (delay 2 min); one ended with an error never closes
-  await finish(app, 'fix', MIN);
-  await finish(app, 'mappa', 10 * MIN, true);
-  await page.waitForTimeout(6000); // one auto-close check
+  expect(await finishChecked(app, page, 'fix', MIN)).toBe(false);
+  expect(await finishChecked(app, page, 'mappa', 10 * MIN, true)).toBe(false);
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
   await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
 
@@ -38,8 +48,7 @@ test('finished chats close by themselves after the grace period, Ctrl+K finds an
   // so only the touch holds it)
   await page.getByTestId('tile-chat-review').click();
   await page.getByTestId('tile-chat-sms').click();
-  await finish(app, 'review', 10 * MIN);
-  await page.waitForTimeout(6000);
+  expect(await finishChecked(app, page, 'review', 10 * MIN)).toBe(false);
   await expect(page.getByTestId('tile-chat-review')).toBeVisible();
 
   // the search bar lists the closed one with its title and reopens it with its history
@@ -71,8 +80,7 @@ test('finished chats close by themselves after the grace period, Ctrl+K finds an
   await page.getByTestId('st-autoclose').scrollIntoViewIfNeeded();
   await shot(page, 'autoclose-5-settings');
   expect((await page.evaluate(() => window.sb.invoke('settings:get', undefined))).autoCloseMin).toBe(0);
-  await finish(app, 'report', 30 * MIN);
-  await page.waitForTimeout(6000);
+  expect(await finishChecked(app, page, 'report', 30 * MIN)).toBe(false);
   expect((await page.evaluate(() => window.sb.invoke('chat:list', undefined))).find(c => c.id === 'report')?.closedAt).toBeFalsy();
   await app.close();
 });

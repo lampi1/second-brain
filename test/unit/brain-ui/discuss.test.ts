@@ -38,36 +38,36 @@ describe('lineOf', () => {
 describe('discussText', () => {
   it('quotes the idea with file, line, date and state, then asks and keeps the state rule', () => {
     const t = discussText(I(), 10);
-    expect(t.split('\n')[0]).toBe('Discutiamo la mia idea «Diario vocale» (ideas.md, riga 10, del 05/10, stato aperta).');
-    expect(t).toContain('- In breve: Dettare tre righe a fine giornata.');
-    expect(t).toContain('- Perché: scrivere stanca');
-    expect(t).not.toContain('- Come:'); // empty fields are left out
+    expect(t.split('\n')[0]).toBe('Let\'s discuss my idea «Diario vocale» (ideas.md, line 10, from 05/10, state open).');
+    expect(t).toContain('- In short: Dettare tre righe a fine giornata.');
+    expect(t).toContain('- Why: scrivere stanca');
+    expect(t).not.toContain('- How:'); // empty fields are left out
     expect(t).not.toMatch(/\n{3}/);
-    expect(t.endsWith('Non cambiare lo stato in ideas.md: lo decido io dopo averne parlato.')).toBe(true);
+    expect(t.endsWith('Do not change the state in ideas.md: I will decide after we talk about it.')).toBe(true);
   });
-  it('without a line names only the file', () => expect(discussText(I(), null)).toContain('(ideas.md, del 05/10'));
+  it('without a line names only the file', () => expect(discussText(I(), null)).toContain('(ideas.md, from 05/10'));
   it("an AI idea is called a suggestion, with its reasoning and source", () => {
     const t = discussText(I({ chi: 'IA', notato: 'tre chat', penso: 'chiudere', fonte: 'IA · Regia · revisione' }), 3);
-    expect(t).toContain("lo spunto dell'IA «Diario vocale»");
-    expect(t).toContain('- Ha notato: tre chat');
-    expect(t).toContain('- Nata in: Regia · revisione');
+    expect(t).toContain("the AI's suggestion «Diario vocale»");
+    expect(t).toContain('- Noticed: tre chat');
+    expect(t).toContain('- Born in: Regia · revisione');
   });
   it('a reflection quotes ai-reflections.md and its chat', () => {
     const t = discussText(R, 4);
-    expect(t).toContain('«Troppo centralino» (ai-reflections.md, riga 4, del 09/10, chat Regia)');
-    expect(t).toContain('- Hai notato: giro troppi messaggi');
+    expect(t).toContain('«Troppo centralino» (ai-reflections.md, line 4, from 09/10, chat Regia)');
+    expect(t).toContain('- You noticed: giro troppi messaggi');
   });
   it('long fields are shortened', () => expect(discussText(I({ idea: 'x'.repeat(1000) }), 1).length).toBeLessThan(800));
 });
 
 describe('openingQuestion', () => {
   it('depends on state and author', () => {
-    expect(openingQuestion(I())).toMatch(/^Ha ancora senso/);
-    expect(openingQuestion(I({ chi: 'IA' }))).toMatch(/^Sei ancora convinta/);
-    expect(openingQuestion(I({ stato: 'fatta' }))).toMatch(/funzionato/);
-    expect(openingQuestion(I({ stato: 'scartata' }))).toMatch(/scartata/);
-    expect(openingQuestion(I({ stato: 'in corso' }))).toMatch(/prossimo passo/);
-    expect(openingQuestion(R)).toMatch(/d'accordo/);
+    expect(openingQuestion(I())).toMatch(/^Does it still/);
+    expect(openingQuestion(I({ chi: 'IA' }))).toMatch(/^Are you still/);
+    expect(openingQuestion(I({ stato: 'fatta' }))).toMatch(/work/);
+    expect(openingQuestion(I({ stato: 'scartata' }))).toMatch(/ruled/);
+    expect(openingQuestion(I({ stato: 'in corso' }))).toMatch(/next/);
+    expect(openingQuestion(R)).toMatch(/agree/);
   });
 });
 
@@ -79,10 +79,10 @@ describe('work chat', () => {
   });
   it('first message points at the file and line and asks for a plan first', () => {
     const p = chatPrompt(I(), 10);
-    expect(p).toContain("Lavoriamo sull'idea «Diario vocale» (ideas.md, riga 10");
-    expect(p).toContain('dalla riga 10');
-    expect(p).toContain('solo la Regia');
-    expect(chatPrompt(I(), null)).not.toContain('riga');
+    expect(p).toContain("Let's work on the idea «Diario vocale» (ideas.md, line 10");
+    expect(p).toContain('from line 10');
+    expect(p).toContain('Only the Regia');
+    expect(chatPrompt(I(), null)).not.toContain('from line');
   });
 });
 
@@ -128,15 +128,15 @@ describe('procedure topic', () => {
   const P: Topic = { kind: 'procedure', procedure: { title: 'Cercare un cliente con lookup', file: 'runbook/database.md', line: 3, area: 'Runbook', changedAt: '2026-10-07T09:00:00.000Z' } };
   it('the Regia draft quotes file, line and area and keeps the file unchanged', () => {
     const t = discussText(P, lineOf('', P));
-    expect(t.split('\n')[0]).toBe('Parliamo della procedura «Cercare un cliente con lookup» (runbook/database.md, riga 3, area Runbook).');
+    expect(t.split('\n')[0]).toBe('Let\'s talk about the procedure «Cercare un cliente con lookup» (runbook/database.md, line 3, area Runbook).');
     expect(t).toContain(openingQuestion(P));
-    expect(t).toContain('Non cambiare il file');
+    expect(t).toContain('Do not change the file');
   });
   it('the work chat follows it and leaves production commands to the user', () => {
     expect(chatTitle(P)).toBe('Procedura · Cercare un cliente con lookup');
     const m = chatPrompt(P, 3);
-    expect(m).toContain('dalla riga 3');
-    expect(m).toContain('lo eseguo io');
+    expect(m).toContain('from line 3');
+    expect(m).toContain('I will run it');
   });
   it('its key is the file and the title', () => expect(topicKey(P)).not.toBe(topicKey({ ...P, procedure: { ...P.procedure, file: 'runbook/altro.md' } } as Topic)));
 });

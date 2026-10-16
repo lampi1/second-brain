@@ -23,6 +23,7 @@ import { copyText } from '../brain/components/ui';
 import { renderMarkdown } from '../lib/markdown';
 import { clipboardHtml, copyRich, isRich } from '../lib/richtext';
 import { IconAlert, IconCheck, IconCopy, IconPlay, IconSend, IconSpinner, IconStop, IconTerminal, IconX } from './Icons';
+import { t } from '../i18n';
 
 /** Did the automatic outcome of this run reach the chat (main/run/results.ts labels it "[esito di Esegui")? */
 const RUN_TOLD = /^\[esito di Esegui/;
@@ -50,32 +51,32 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
   useEffect(() => { const el = out.current; if (el) el.scrollTop = el.scrollHeight; }, [run.output]);
   const running = run.state === 'running';
   const took = duration((run.endedAt ?? now) - run.startedAt);
-  const status = running ? <><IconSpinner size={12} /> in corso · {took}</>
-    : run.state === 'ok' ? <><IconCheck size={12} /> fatto · exit 0 · {took}</>
-      : run.state === 'stopped' ? <><IconX size={12} /> fermato · {took}</>
-        : <><IconX size={12} /> errore · exit {run.exitCode ?? '?'} · {took}</>;
+  const status = running ? <><IconSpinner size={12} /> {t('chat.codeblock.runStatus.running', { time: took })}</>
+    : run.state === 'ok' ? <><IconCheck size={12} /> {t('chat.codeblock.runStatus.ok', { time: took })}</>
+      : run.state === 'stopped' ? <><IconX size={12} /> {t('chat.codeblock.runStatus.stopped', { time: took })}</>
+        : <><IconX size={12} /> {t('chat.codeblock.runStatus.error', { code: run.exitCode, time: took })}</>;
   return (
     <div className={`cb-run cb-run-${run.state}`} data-testid="cb-run" data-state={run.state} data-exit={run.exitCode ?? ''}>
       <div className="cb-run-head">
-        <IconTerminal size={13} /><span className="cb-run-name">PowerShell 5.1</span>
+        <IconTerminal size={13} /><span className="cb-run-name">{t('chat.codeblock.powerShell')}</span>
         <span className="cb-run-cwd" title={run.cwd}>{folderName(run.cwd)}</span>
         <span className="sp" />
         <span className="cb-run-status" data-testid="cb-run-status">{status}</span>
-        {running && <button type="button" className="cb-btn cb-stop" onClick={() => { void sb.invoke('run:stop', { runId: run.id }); }} data-testid="cb-stop"><IconStop size={11} /> Ferma</button>}
+        {running && <button type="button" className="cb-btn cb-stop" onClick={() => { void sb.invoke('run:stop', { runId: run.id }); }} data-testid="cb-stop"><IconStop size={11} /> {t('chat.codeblock.stopButton')}</button>}
       </div>
-      <pre className="cb-out" ref={out} data-testid="cb-out" tabIndex={0} aria-label="Output del comando">{run.output || (running ? ' ' : '(nessun output)')}</pre>
+      <pre className="cb-out" ref={out} data-testid="cb-out" tabIndex={0} aria-label={t('chat.codeblock.outputLabel')}>{run.output || (running ? ' ' : t('chat.codeblock.noOutput'))}</pre>
       {!running && (
         <div className="cb-run-foot">
           {auto && reported?.id !== run.id && (
             <span className={`cb-told ${told ? 'ok' : ''}`} data-testid="cb-told" data-told={told ? '1' : '0'}>
-              {told ? <><IconCheck size={12} /> Esito mandato alla chat da solo</> : 'L’esito va alla chat da solo, appena è libera'}
+              {told ? <><IconCheck size={12} /> {t('chat.codeblock.runResultAuto')}</> : t('chat.codeblock.runResultWaiting')}
             </span>
           )}
           {/* with the automatic outcome still on its way, a manual one would reach the chat twice: resend only after */}
           {(!auto || told || reported?.id === run.id) && <button type="button" className="cb-btn" disabled={reported?.id === run.id} data-testid="cb-report"
             onClick={() => { const how = send(chatId, runReport(run)); if (how !== 'empty') setReported({ id: run.id, how }); }}>
-            {reported?.id !== run.id ? (auto ? 'Rimanda l’esito' : 'Manda l’esito alla chat')
-              : reported.how === 'sent' ? <><IconCheck size={12} /> Esito mandato alla chat</> : <><IconCheck size={12} /> Esito in coda: parte quando la chat è libera</>}
+            {reported?.id !== run.id ? (auto ? t('chat.codeblock.runResend') : t('chat.codeblock.runSendFull'))
+              : reported.how === 'sent' ? <><IconCheck size={12} /> {t('chat.codeblock.runSent')}</> : <><IconCheck size={12} /> {t('chat.codeblock.runQueued')}</>}
           </button>}
         </div>
       )}
@@ -132,29 +133,29 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
   return (
     <div className={`codeblock ${risk ? 'prod' : ''}`} data-testid="codeblock" data-lang={lang}>
       <div className="cb-head" ref={head}>
-        <span className="cb-lang">{label ?? (rich ? 'testo formattato' : Object.hasOwn(LANG, lang.toLowerCase()) ? LANG[lang.toLowerCase()] : (lang || 'testo'))}</span>
-        {risk && <span className="cb-prod" data-testid="cb-prod" title={`Sembra un comando di produzione: ${risk}`}><IconAlert size={11} /> produzione</span>}
+        <span className="cb-lang">{label ?? (rich ? t('chat.codeblock.formattedText') : Object.hasOwn(LANG, lang.toLowerCase()) ? LANG[lang.toLowerCase()] : (lang || t('chat.codeblock.genericText')))}</span>
+        {risk && <span className="cb-prod" data-testid="cb-prod" title={t('chat.codeblock.productionWarning', { warning: risk })}><IconAlert size={11} /> {t('chat.codeblock.productionBadge')}</span>}
         <span className="sp" />
         <button type="button" className="cb-btn" onClick={() => { void doCopy().then(ok => { setCopied(ok); if (ok && key && chatId) markCopied(chatId, key, code); }); }} data-testid="cb-copy"
-          aria-label={key ? 'Copia il testo' : 'Copia il codice'} data-mark={mark?.kind === 'copied' ? 'copied' : undefined}>
-          {copied ? <><IconCheck size={12} /> Copiato</>
-            : mark?.kind === 'copied' ? <><IconCheck size={12} /> Copiato {hhmm(mark.at)}</> : <><IconCopy size={12} /> Copia</>}
+          aria-label={key ? t('chat.codeblock.copyLabel') : t('chat.codeblock.copyCodeLabel')} data-mark={mark?.kind === 'copied' ? 'copied' : undefined}>
+          {copied ? <><IconCheck size={12} /> {t('chat.codeblock.copied')}</>
+            : mark?.kind === 'copied' ? <><IconCheck size={12} /> {t('chat.codeblock.copiedTime', { time: hhmm(mark.at) })}</> : <><IconCopy size={12} /> {t('chat.codeblock.copyButton')}</>}
         </button>
         {key && chatId && (mark?.kind === 'sent' ? (
           <span className="cb-sent" data-testid="cb-sent" role="status">
-            Mandato ✓ {hhmm(mark.at)}
-            {undoable && <button type="button" className="cb-btn cb-undo" data-testid="cb-undo" onClick={() => { if (undoSent(key)) { refocus.current = 'cb-mandato'; setUndoable(false); } }}>Annulla</button>}
+            {t('chat.codeblock.sentMark', { time: hhmm(mark.at) })}
+            {undoable && <button type="button" className="cb-btn cb-undo" data-testid="cb-undo" onClick={() => { if (undoSent(key)) { refocus.current = 'cb-mandato'; setUndoable(false); } }}>{t('chat.codeblock.sentUndo')}</button>}
           </span>
         ) : (
           <button type="button" className="cb-btn cb-send-btn" data-testid="cb-mandato" onClick={e => { if (e.currentTarget === document.activeElement) refocus.current = 'cb-undo'; markSent(chatId, key, code); setUndoable(true); }}
-            data-tip="L’hai mandato tu: la chat se lo segna (riceve solo la prima riga)">
-            <IconSend size={11} /> Mandato
+            data-tip={t('chat.codeblock.sendTip')}>
+            <IconSend size={11} /> {t('chat.codeblock.send')}
           </button>
         ))}
         {runnable && (running ? null : (
           <button type="button" className={`cb-btn cb-run-btn ${armed ? 'armed' : ''}`} onClick={() => { void doRun(); }} disabled={busy || tooLong} data-testid="cb-exec"
-            data-tip={tooLong ? `Troppo lungo per Esegui (massimo ${MAX_RUN_CODE} caratteri): copialo` : armed ? undefined : 'Lo esegue PowerShell 5.1 qui nell’app, nella cartella della chat'}>
-            {armed ? <><IconAlert size={12} /> Confermi? {risk}</> : <><IconPlay size={11} /> {run ? 'Esegui di nuovo' : 'Esegui'}</>}
+            data-tip={tooLong ? t('chat.codeblock.execTipLong', { max: MAX_RUN_CODE }) : armed ? undefined : t('chat.codeblock.execTip')}>
+            {armed ? <><IconAlert size={12} /> {t('chat.codeblock.execConfirm', { warning: risk ?? '' })}</> : <><IconPlay size={11} /> {run ? t('chat.codeblock.execAgain') : t('chat.codeblock.execLabel')}</>}
           </button>
         ))}
       </div>

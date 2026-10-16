@@ -3,12 +3,13 @@
 // line with its n: the typical error (× between estimate and truth, median of the last ones), how often the 80% range
 // held, what a proposal gains on the shared items (paired bootstrap, 90% interval), the after-check of the last change.
 // DOM-free, unit-tested (test/unit/brain-ui/learn.test.ts); used by pages/Miglioramento.tsx.
+import { t, locale } from '../../i18n';
 
 export interface Diff { mean: number; lo: number; hi: number }
 export interface LearnProposal { id: string; kind: 'cambio' | 'ripristino'; name: string; at: string; shared: number | null; diff: Diff | null }
 export interface LearnCheck { state: string; n: number | null; need: number | null; at: string | null }
 /** No after-check yet for a version that replaced another: the brain writes one only once it has its 20 cases. */
-export const WAITING = `in attesa dei primi ${20} casi dopo il cambio`;
+export const WAITING = () => t('brainLib.learn.waiting', { n: 20 });
 export interface LearnPolicy {
   domain: string; version: number | null; appliedAt: string | null; by: string | null; name: string | null;
   /** the version [Ripristina] goes back to (null: nothing before) */
@@ -24,19 +25,17 @@ export const MIN_N = 20;
 
 /** The page's "?" explanations, in plain words (the user, 2026-10-13: "spiega l'auto miglioramento nell'app, mi piacciono
  *  i punti di domanda con spiegazioni"). */
-export const HELP = {
-  intro: 'Qui il cervello controlla quanto sbagliano le sue stime di tempo e costo (e, quando avrà dati, la scelta del modello). '
-    + 'Ogni tanto rifà le stime sulle chat passate con metodi diversi: se uno sbaglia chiaramente meno, nasce una proposta. '
-    + 'Niente cambia finché non premi Applica; ogni cambio si annulla con Ripristina e dopo 20 chat viene controllato da solo.',
-  typical: 'Di quanto la stima si allontana dal vero, a metà delle chat: ×1,7 vuol dire che una volta su due il vero sta tra la stima divisa 1,7 e la stima per 1,7. Più vicino a ×1, meglio è.',
-  cover: 'La forbice «da … a …» della stima è fatta per contenere il valore vero 8 volte su 10. Qui vedi quante volte ci è riuscita davvero sulle ultime chat.',
-  out: 'Chat di cui non si sa come sono finite, o troppo vecchie per avere una stima fatta prima: non entrano nei numeri, ma restano contate qui.',
-  noData: `Prima di dire qualcosa servono almeno ${MIN_N} chat con il risultato noto: con meno, i numeri sarebbero rumore.`,
-  proposal: 'Il cervello ha rifatto le stime sulle stesse chat passate (almeno 30) con il metodo in uso e con quello nuovo. Propone il nuovo solo se sbaglia meno in modo chiaro, non per caso: anche nel caso peggiore del margine («tra … e …») resta meglio, e non peggiora nient\'altro.',
-  check: 'Dopo un cambio, sulle 20 chat successive confronta il metodo nuovo con quello di prima. Se il nuovo è peggio, propone di tornare indietro: non lo fa mai da solo.',
-  rollback: 'Torna alla versione precedente con un clic. Nessun dato si perde e puoi riapplicare la proposta quando vuoi.',
-  drift: 'Le ultime 20 chat sbagliano più di 1,5 volte le 60 prima: il tipo di lavoro è cambiato e le stime vanno ricalibrate.',
-} as const;
+export const HELP = () => ({
+  intro: t('brainLib.learn.helpIntro'),
+  typical: t('brainLib.learn.helpTypical'),
+  cover: t('brainLib.learn.helpCover'),
+  out: t('brainLib.learn.helpOut'),
+  noData: t('brainLib.learn.helpNoData', { min: MIN_N }),
+  proposal: t('brainLib.learn.helpProposal'),
+  check: t('brainLib.learn.helpCheck'),
+  rollback: t('brainLib.learn.helpRollback'),
+  drift: t('brainLib.learn.helpDrift'),
+}) as const;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -69,10 +68,10 @@ export function normLearn(v: unknown): LearnPolicy[] {
 }
 
 /** What each policy decides, in the owner's words. */
-export const POLICY_LABEL: Record<string, string> = { estimates: 'Stime di tempo e costo', routing: 'Scelta del modello', notifications: 'Soglie delle notifiche' };
-export const policyLabel = (d: string): string => POLICY_LABEL[d] ?? d;
+export const POLICY_LABEL = () => ({ estimates: t('brainLib.learn.policyEstimates'), routing: t('brainLib.learn.policyRouting'), notifications: t('brainLib.learn.policyNotifications') });
+export const policyLabel = (d: string): string => POLICY_LABEL()[d as keyof ReturnType<typeof POLICY_LABEL>] ?? d;
 
-const n1 = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1, minimumFractionDigits: v < 10 ? 1 : 0 });
+const n1 = (v: number) => v.toLocaleString(locale(), { maximumFractionDigits: 1, minimumFractionDigits: v < 10 ? 1 : 0 });
 const pc = (v: number) => `${Math.round(v * 100)}%`;
 
 /** "×1,9": the estimate is typically off by this factor, either way. */
@@ -80,31 +79,31 @@ export const factor = (x: number): string => `×${n1(x)}`;
 
 /** "senza dati: 12 misurati, ne servono 20" or the typical error with its n. */
 export function errorLine(p: LearnPolicy): string {
-  if (p.noData) return `senza dati: ${p.n} ${p.n === 1 ? 'misurato' : 'misurati'}, ne servono ${MIN_N}`;
-  return p.typical == null ? 'errore non misurato' : `errore tipico ${factor(p.typical)} sulle ultime ${p.spark.length}`;
+  if (p.noData) return t('brainLib.learn.errorLineNoData', { n: p.n, min: MIN_N });
+  return p.typical == null ? t('brainLib.learn.errorLineUnmeasured') : t('brainLib.learn.errorLineMeasured', { factor: factor(p.typical), count: p.spark.length });
 }
 
 /** "l'intervallo dell'80% ha contenuto il reale 84 volte su 100 (su 50)" */
 export function coverageLine(c: LearnPolicy['coverage']): string | null {
-  return c ? `l'intervallo dell'80% ha contenuto il reale ${pc(c.rate)} delle volte (su ${c.n})` : null;
+  return c ? t('brainLib.learn.coverageLine', { rate: pc(c.rate), n: c.n }) : null;
 }
 
 /** What a proposal gains, from the 90% interval of the per-item log-error difference (in force − proposed: > 0 =
  *  better): "errore più piccolo del 12% (tra 4% e 19%), su 42 casi in comune". A revert proposal carries the
  *  after-check's diff (old − in force: < 0 = the old one was better, so going back gains), hence the sign flip. */
 export function gainLine(p: LearnProposal): string {
-  if (!p.diff) return p.shared ? `su ${p.shared} casi in comune` : 'misura non disponibile';
+  if (!p.diff) return p.shared ? t('brainLib.learn.gainLineWithShared', { shared: p.shared }) : t('brainLib.learn.gainLineNoShared');
   const g = (x: number) => Math.round((1 - Math.exp(-x)) * 100);
   const sign = p.kind === 'ripristino' ? -1 : 1, mean = g(sign * p.diff.mean);
   const [a, b] = [g(sign * p.diff.lo), g(sign * p.diff.hi)].sort((x, y) => x - y);
-  const word = mean >= 0 ? `errore più piccolo del ${mean}%` : `errore più grande del ${-mean}%`;
-  return `${word} (tra ${a}% e ${b}%)${p.shared ? `, su ${p.shared} casi in comune` : ''}`;
+  const better = mean >= 0;
+  return better ? t('brainLib.learn.gainLineBetter', { pct: Math.abs(mean), lo: a ?? 0, hi: b ?? 0, shared: p.shared ?? undefined }) : t('brainLib.learn.gainLineWorse', { pct: Math.abs(mean), lo: a ?? 0, hi: b ?? 0, shared: p.shared ?? undefined });
 }
 
 /** The after-check of the last change in words. */
 export function checkLine(c: LearnCheck | null): string | null {
   if (!c?.state) return null;
-  if (c.state === 'in attesa') return `in attesa: ${c.n ?? 0} casi dopo il cambio su ${c.need ?? MIN_N} che servono`;
-  if (c.state === 'peggiorata') return `peggiorata${c.n ? ` (su ${c.n} casi)` : ''}: c'è una proposta di ripristino`;
-  return `${c.state}${c.n ? ` (su ${c.n} casi)` : ''}`;
+  if (c.state === 'in attesa') return t('brainLib.learn.checkLineWaiting', { n: c.n ?? 0, need: c.need ?? MIN_N });
+  if (c.state === 'peggiorata') return t('brainLib.learn.checkLineFailed', { n: c.n ?? undefined });
+  return t('brainLib.learn.checkLineOther', { state: c.state, n: c.n ?? undefined });
 }

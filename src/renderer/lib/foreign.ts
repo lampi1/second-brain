@@ -9,6 +9,7 @@
 // Pure: no React, no store. Used by ChatItems.tsx.
 import type { ChatItem } from '@shared/contract';
 import { splitNotes } from './sendable';
+import { t } from '../i18n';
 
 export type ForeignKind = 'mail' | 'agent' | 'event' | 'run' | 'resume' | 'hook' | 'done';
 
@@ -41,11 +42,11 @@ export function foreignOf(item: UserItem): Foreign | null {
     // each message: "(da "X" · 12:03 · id … · chiave …)" then its text; the last line says how to answer
     const body = after(text, MAIL);
     const words = body.split('\n').filter(l => l.trim() && !/^\(da "/.test(l) && !/^Rispondi solo se/.test(l));
-    return { kind: 'mail', sender: item.from ?? m[1] ?? 'un\'altra chat', summary: oneLine(words[0] ?? ''), body };
+    return { kind: 'mail', sender: item.from ?? m[1] ?? t('tools.foreign.otherChat'), summary: oneLine(words[0] ?? ''), body };
   }
   if (AGENT.test(text)) {
     const body = after(text, AGENT).replace(/^La tua Regia è «[^»]*»[^\n]*\n*/, '').trim();
-    return { kind: 'agent', sender: item.from ?? 'un agente', summary: oneLine(firstLine(body)), body };
+    return { kind: 'agent', sender: item.from ?? t('tools.foreign.anAgent'), summary: oneLine(firstLine(body)), body };
   }
   if (EVENT.test(text)) {
     const body = after(text, EVENT);
@@ -56,13 +57,13 @@ export function foreignOf(item: UserItem): Foreign | null {
     const body = after(text, RUN);
     const code = body.match(/```powershell\n([^\n]*)/)?.[1] ?? '';
     const how = body.match(/^Esito: ([^\n]*)/m)?.[1] ?? '';
-    return { kind: 'run', sender: 'Esegui', summary: oneLine([code, how].filter(Boolean).join(' · ')), body };
+    return { kind: 'run', sender: t('chat.command.exec'), summary: oneLine([code, how].filter(Boolean).join(' · ')), body };
   }
   if (RESUME.test(text)) return { kind: 'resume', sender: 'App', summary: oneLine(after(text, /^\[second-brain\]\s*/)), body: text };
   if (HOOK.test(text)) return { kind: 'hook', sender: 'Hook', summary: oneLine(firstLine(after(text, HOOK))), body: text };
   if (!item.from) {
     const n = splitNotes(text);
-    if (n.notes.length && !n.text) return { kind: 'done', sender: 'Tu', summary: oneLine(n.notes.join(' · ')), body: n.notes.join('\n') };
+    if (n.notes.length && !n.text) return { kind: 'done', sender: t('tools.foreign.you'), summary: oneLine(n.notes.join(' · ')), body: n.notes.join('\n') };
   }
   if (item.from) {
     const body = text.replace(/^\[Messaggio [^\n]*\]\s*\n+/, '');
@@ -72,8 +73,8 @@ export function foreignOf(item: UserItem): Foreign | null {
 }
 
 /** the folded line's tag; mail and agent also name their sender */
-export const FOREIGN_LABEL: Record<ForeignKind, string> = {
-  mail: 'Messaggio', agent: 'Scritto da un agente', event: 'Evento app', run: 'Esito di Esegui', resume: 'Ripresa automatica', hook: 'Nota di un hook',
-  done: 'Fatto da te',
-};
+export const getForeignLabel = (): Record<ForeignKind, string> => ({
+  mail: t('tools.foreign.labelMail'), agent: t('tools.foreign.labelAgent'), event: t('tools.foreign.labelEvent'), run: t('tools.foreign.labelRun'), resume: t('tools.foreign.labelResume'), hook: t('tools.foreign.labelHook'),
+  done: t('tools.foreign.labelDone'),
+});
 export const showsSender = (f: Foreign): boolean => f.kind === 'mail' || f.kind === 'agent';

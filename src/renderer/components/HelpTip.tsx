@@ -78,9 +78,10 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
     current = self.current;
     setOpen(true);
   };
+  // data-hover on the mark: its last pointer enter/leave was handled (a test waits for it, not for time)
   const later = (fn: () => void, ms: number) => { clear(); timer.current = setTimeout(fn, ms); };
-  const leave = () => { hover.current = false; if (!pinned) later(() => { if (!hover.current && !byKeyboard.current) close(); }, CLOSE_DELAY); };
-  const enter = () => { hover.current = true; if (open) clear(); else later(show, OPEN_DELAY); };
+  const leave = () => { hover.current = false; btn.current?.removeAttribute('data-hover'); if (!pinned) later(() => { if (!hover.current && !byKeyboard.current) close(); }, CLOSE_DELAY); };
+  const enter = () => { hover.current = true; btn.current?.setAttribute('data-hover', ''); if (open) clear(); else later(show, OPEN_DELAY); };
 
   // placed after it renders (its size depends on the text), before it paints
   useLayoutEffect(() => {

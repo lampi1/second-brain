@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CACHE_TTL_MS, UsageMonitor, composeUsage, mergeLimits, parseCost, parseRateLimits, readClaudeCache } from '../../../src/main/brain/usage';
+import { log } from '../../../src/main/log';
 import type { Usage } from '../../../src/shared/contract';
 import { FIXTURES, plainNode, tmpDir, until } from './helpers';
 
@@ -66,6 +67,19 @@ describe('usage', () => {
     expect(u.limitsNote).toBe('Da una chat Claude, 5 min fa');
   });
 
+  it('composeUsage: when cost.mjs read and its sessions by cost (for the live total); Cursor\'s unpriced chats', () => {
+    const cost = { ...parseCost(fixture, day), at: 1234 };
+    const u = composeUsage(cost, null, 0);
+    expect(u.costAt).toBe(1234);
+    const usd = (u.claudeChats ?? []).map(c => c.usd);
+    expect(usd.length).toBe(cost.chats.length);
+    expect(usd).toEqual([...usd].sort((a, b) => b - a));
+    expect(composeUsage({ ...cost, costKnown: false }, null, 0).costAt).toBeUndefined();
+    const cursor = { usd: 1, exact: false, margin: 0.2, turns: 2, unpriced: 1, chats: { a: 1 }, todayChats: { a: 1 }, unpricedChats: ['b'], unpricedModels: ['auto'], note: 'x' };
+    expect(composeUsage(cost, null, 0, cursor).cursorUnpriced).toEqual({ chats: ['b'], models: ['auto'] });
+    expect(composeUsage(cost, null, 0, { ...cursor, unpricedChats: [], unpricedModels: [] }).cursorUnpriced).toBeUndefined();
+  });
+
   it('the monitor runs the brain\'s cost.mjs, emits usage and spend, and ingests rate limits', async () => {
     const root = tmpDir();
     fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });
@@ -78,7 +92,10 @@ describe('usage', () => {
     m.start();
     expect(await until(() => got.length > 0, 10000)).toBe(true);
     m.stop();
-    expect(got[0]).toMatchObject({ todayUsd: 3.25, costKnown: true });
+    // on a failure, why cost.mjs gave no JSON (exit code, error, stderr): tests keep no log file, only log.recent (main
+    // red at 100% CPU, 2026-10-16: the script ended in under 2 s without output, cause unknown)
+    const why = JSON.stringify(log.recent.filter(e => e.scope === 'brain' && e.lvl === 'warn'));
+    expect(got[0], why).toMatchObject({ todayUsd: 3.25, costKnown: true });
     expect(m.spend().claude.dayUsd).toBe(3.25);
     expect(m.ingest({ type: 'rate_limit_event', rate_limit_info: { rateLimitType: 'five_hour', utilization: 0.5, resetsAt: Math.floor(Date.now() / 1000) + 3600 } })).toBe(true);
     expect(got.at(-1)!.fiveHourPct).toBe(50);

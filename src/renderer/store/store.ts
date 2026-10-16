@@ -12,6 +12,7 @@ import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
 import { setMark, type Mark } from '../lib/marks';
 import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } from '../lib/correction';
 import { now as clockNow } from '../lib/clock';
+import { costHistory } from '../lib/live-costs';
 
 export const app = createStore<AppState>(initialState, { batch: true });
 /** How often streamed text reaches the screen (startStore). */
@@ -61,8 +62,9 @@ export function startStore(): void {
     for (const a of all) now(a);
   };
   const put = (a: Action) => { if (held.size) release(); now(a); };
-  sb.on('chat:updated', chat => put({ type: 'chat:updated', chat }));
-  sb.on('chat:removed', ({ chatId }) => put({ type: 'chat:removed', chatId }));
+  // each chat's cost over time: the live total needs what it was when cost.mjs last read (lib/live-costs.ts)
+  sb.on('chat:updated', chat => { costHistory.note(chat.id, chat.costUsd, Date.now()); put({ type: 'chat:updated', chat }); });
+  sb.on('chat:removed', ({ chatId }) => { costHistory.forget(chatId); put({ type: 'chat:removed', chatId }); });
   sb.on('chat:item', ({ chatId, item, replace }) => {
     if (!replace) { put({ type: 'chat:item', chatId, item, replace }); return; }
     held.set(`${chatId}/${item.id}`, { type: 'chat:item', chatId, item, replace });
@@ -85,6 +87,7 @@ export function startStore(): void {
     safe(sb.invoke('app:usage', undefined), null),
     safe(sb.invoke('app:info', undefined), null),
   ]).then(([chats, pending, tabs, feed, usage, info]) => {
+    for (const c of chats) costHistory.note(c.id, c.costUsd, Date.now());
     dispatch({ type: 'init', chats, pending, tabs, feed, usage, info });
     loaded = true;
     for (const a of buffer.splice(0)) dispatch(a);

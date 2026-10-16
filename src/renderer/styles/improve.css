@@ -5,7 +5,8 @@
 .imp-ver { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; font-size: var(--fs-m); color: var(--text-2); }
 .imp-k { color: var(--text-3); font-size: var(--fs-s); text-transform: uppercase; letter-spacing: .04em; }
 .imp-ver b { color: var(--text); font-size: var(--fs-l); }
-.imp-cand { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
+.imp-cand { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80ch; }
+.imp-line { display: inline-flex; align-items: baseline; gap: 8px; }
 .imp-ok { color: var(--green); }
 .imp-dim { color: var(--text-3); }
 .imp-promote { font-size: var(--fs-l); padding-inline: 16px; }
@@ -43,10 +44,10 @@
 .imp-pill.st-approved, .imp-branch.st-approved .imp-dot { color: var(--violet); background: var(--violet-bg); }
 .imp-pill.st-promoted, .imp-branch.st-promoted .imp-dot { color: var(--green); background: var(--green-bg); }
 .imp-branches, .imp-chats { list-style: none; margin: 0; padding: 0; }
-.imp-branch { display: grid; grid-template-columns: 10px minmax(90px, auto) 1fr auto auto; align-items: center; gap: 8px; padding: 4px 2px; font-size: var(--fs-m); border-top: 1px solid var(--border); }
+.imp-branch { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 8px; padding: 4px 2px; font-size: var(--fs-m); border-top: 1px solid var(--border); }
 .imp-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor !important; }
 .imp-bname { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26ch; }
-.imp-bsub { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.imp-bsub { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .imp-bchat { font-size: var(--fs-s); white-space: nowrap; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
 .imp-age { color: var(--text-3); font-size: var(--fs-s); white-space: nowrap; }
 .imp-chat { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid transparent; border-radius: var(--r-s); background: none; color: var(--text); font: inherit; font-size: var(--fs-m); text-align: left; cursor: pointer; }

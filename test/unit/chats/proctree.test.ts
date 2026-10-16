@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { descendants, parseProcList, quitReapScript, reapAfterQuit, reapTree, snapshotTrees, type Proc } from '../../../src/main/chats/proctree';
+import { descendants, parseProcList, psToList, quitReapScript, reapAfterQuit, reapTree, snapshotTrees, type Proc } from '../../../src/main/chats/proctree';
 import { alive, killStray, tmp, waitFor } from './helpers';
 
 const T = 1_760_000_000_000;
@@ -114,5 +114,16 @@ describe('proctree', () => {
     const encoded = Buffer.from(quitReapScript(roots, 'C:\\done'), 'utf16le').toString('base64');
     expect(encoded.length).toBeLessThan(16000);
     expect(quitReapScript(roots.slice(0, 1))).toContain(`,@(1000, ${T}, ${T + 60000})`); // one engine stays a triple
+  });
+});
+
+describe('psToList (macOS/Linux process list, ADR 0054)', () => {
+  it('etime and full comm paths become parseProcList lines; bad lines skipped', () => {
+    const out = psToList('    1     0 3-00:00:00 /sbin/launchd\n  812     1    01:05 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome\n  900   812 00:02 node\ngarbage\n', 1_000_000_000);
+    expect(parseProcList(out)).toEqual([
+      { pid: 1, ppid: 0, created: 1_000_000_000 - 259_200_000, name: 'launchd' },
+      { pid: 812, ppid: 1, created: 1_000_000_000 - 65_000, name: 'Google Chrome' },
+      { pid: 900, ppid: 812, created: 1_000_000_000 - 2_000, name: 'node' },
+    ]);
   });
 });

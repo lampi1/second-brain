@@ -27,7 +27,11 @@ import type { CursorDay } from './cursor-ledger';
 export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
 
 export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number }
-export interface CostSnapshot { todayUsd: number; chats: ChatSpend[]; cursorTodayUsd: number | null; cursorNote: string; costKnown: boolean; costNote: string }
+/** at = when cost.mjs started reading (set by UsageMonitor.refresh): what the app's chats spend after it is not in todayUsd */
+export interface CostSnapshot { todayUsd: number; chats: ChatSpend[]; cursorTodayUsd: number | null; cursorNote: string; costKnown: boolean; costNote: string; at?: number }
+
+/** cost.mjs's sessions shipped to the renderer, at most this many (the list of the day's chats by cost) */
+const MAX_CHATS = 200;
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -119,9 +123,14 @@ export function readClaudeCache(file: string, now = Date.now()): Limits | null {
 export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null, kimi: KimiUsage | null = null): Usage {
   const u: Usage = { todayUsd: cost?.todayUsd ?? 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, weekResetsAt: null, limitsSource: null, limitsAt: null, at: now,
     costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '', cursorPlanNote: CURSOR_PLAN_NOTE };
+  if (cost?.costKnown && cost.at !== undefined) {
+    u.costAt = cost.at;
+    u.claudeChats = [...cost.chats].sort((a, b) => b.usd - a.usd).slice(0, MAX_CHATS).map(c => ({ sessionId: c.id, title: c.title, usd: c.usd }));
+  }
   // the app's own Cursor figure (ledger + CSV) replaces cost.mjs's, which knows only the CSV
   if (cursor && (cursor.turns > 0 || cursor.exact)) {
-    u.cursorTodayUsd = cursor.usd; u.cursorNote = cursor.note; u.cursorExact = cursor.exact; u.cursorMarginPct = Math.round(cursor.margin * 100); u.cursorChats = cursor.chats;
+    u.cursorTodayUsd = cursor.usd; u.cursorNote = cursor.note; u.cursorExact = cursor.exact; u.cursorMarginPct = Math.round(cursor.margin * 100); u.cursorChats = cursor.chats; u.cursorChatsToday = cursor.todayChats;
+    if (cursor.unpricedChats?.length || cursor.unpricedModels?.length) u.cursorUnpriced = { chats: cursor.unpricedChats ?? [], models: cursor.unpricedModels ?? [] };
   } else if (cursor && u.cursorTodayUsd == null) u.cursorNote = cursor.note;
   if (kimi) u.kimi = kimi;
   if (!limits) {
@@ -234,10 +243,11 @@ export class UsageMonitor {
         this.warned = true;
         this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il cervello non ha ops/tools/cost.mjs' };
       } else {
+        const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
         const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, 120e3);
         let j: unknown = null;
         try { j = JSON.parse(r.stdout); } catch { /* below */ }
-        if (j) this.cost = parseCost(j, romeDay());
+        if (j) this.cost = { ...parseCost(j, romeDay()), at };
         else {
           log.warn('brain', 'cost.mjs gave no JSON', { data: { code: r.code, error: r.error, stderr: r.stderr.slice(0, 300) } });
           if (!this.cost) this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: '', costKnown: false, costNote: 'cost.mjs non ha risposto: riprovo tra 3 minuti' };

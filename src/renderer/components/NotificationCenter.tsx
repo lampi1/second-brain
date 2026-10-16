@@ -10,6 +10,7 @@ import { bellCount, isActionable, isUnread, linkOfEvent, markAllRead, markRead, 
 import { registerOverlay } from '../lib/viewports';
 import { dndUntil, muteKind, setDnd, useApp } from '../store/store';
 import { setCenter, setRead, ui } from '../store/ui';
+import { t, locale } from '../i18n';
 import { copyLink, openLink } from '../actions';
 import { IconBell, IconCheck, IconLink, IconMoon, IconX } from './Icons';
 import { Keys } from './ui';
@@ -27,12 +28,12 @@ function Row({ e, unread, now }: { e: FeedEvent; unread: boolean; now: number })
       <button type="button" className="nc-main" onClick={open} data-testid={`nc-open-${e.id}`}>
         <span className={`nc-kind tone-${TONE[e.kind] ?? 'dim'}`}>{e.label}</span>
         <span className="nc-text"><b>{e.title}</b>{e.detail && <span>{e.detail}</span>}</span>
-        <span className="nc-age">{e.away ? 'mentre eri via' : ago(e.at, now)}</span>
+        <span className="nc-age">{e.away ? t('dialogs.notifications.away') : ago(e.at, now)}</span>
       </button>
       <span className="nc-tools">
-        <button type="button" className="icon-btn" onClick={() => void copyLink(linkOfEvent(e))} aria-label="Copia link" data-tip="Copia link" data-testid={`nc-link-${e.id}`}><IconLink size={13} /></button>
-        <button type="button" className="icon-btn" onClick={() => void muteKind(e.kind, e.label, !muted)} aria-label={muted ? `Riattiva «${e.label}»` : `Silenzia «${e.label}»`}
-          data-tip={muted ? 'Riattiva gli avvisi di questo tipo' : tierOf(e) === 'toast' ? 'Silenzia gli avvisi di questo tipo' : 'Silenzia questo tipo'} data-testid={`nc-mute-${e.id}`}>
+        <button type="button" className="icon-btn" onClick={() => void copyLink(linkOfEvent(e))} aria-label={t('dialogs.notifications.copyLinkAriaLabel')} data-tip={t('dialogs.notifications.copyLinkTip')} data-testid={`nc-link-${e.id}`}><IconLink size={13} /></button>
+        <button type="button" className="icon-btn" onClick={() => void muteKind(e.kind, e.label, !muted)} aria-label={muted ? t('dialogs.notifications.unmuteTooltip', { label: e.label }) : t('dialogs.notifications.muteTooltip', { label: e.label })}
+          data-tip={muted ? t('dialogs.notifications.unmuteTip') : tierOf(e) === 'toast' ? t('dialogs.notifications.muteToast') : t('dialogs.notifications.muteOther')} data-testid={`nc-mute-${e.id}`}>
           <IconBell size={13} style={{ opacity: muted ? 0.4 : 1 }} />
         </button>
       </span>
@@ -64,40 +65,40 @@ export function NotificationCenter() {
   const until = dndUntil();
   const tomorrow = () => { const d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.getTime(); };
   return (
-    <aside ref={ref} className="center" role="dialog" aria-label="Notifiche" data-testid="center">
+    <aside ref={ref} className="center" role="dialog" aria-label={t('dialogs.notifications.title')} data-testid="center">
       <header className="nc-head">
-        <h2>Notifiche</h2>
+        <h2>{t('dialogs.notifications.title')}</h2>
         {unread > 0 && <span className="count" data-testid="nc-unread">{unread}</span>}
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => setRead(r => markAllRead(r, now))} disabled={!anyUnread} data-testid="nc-read-all"><IconCheck size={13} /> Segna tutto letto</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={() => setRead(r => markAllRead(r, now))} disabled={!anyUnread} data-testid="nc-read-all"><IconCheck size={13} /> {t('dialogs.notifications.markAllRead')}</button>
         <span className="nc-dnd">
           <button type="button" className={`btn btn-s ${dnd ? 'btn-amber' : 'btn-ghost'}`} onClick={() => setDndMenu(m => !m)} aria-expanded={dndMenu} data-testid="nc-dnd"
-            data-tip={dnd && until ? `Fino alle ${new Date(until).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Nessun avviso a comparsa (restano qui)'}>
-            <IconMoon size={13} /> {dnd ? 'Non disturbare' : 'Disturba'}
+            data-tip={t('dialogs.notifications.doNotDisturbTip', { until: until ? new Date(until).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : undefined })}>
+            <IconMoon size={13} /> {dnd ? t('dialogs.notifications.doNotDisturb') : t('dialogs.notifications.disturb')}
           </button>
           {dndMenu && (
             <span className="nc-dnd-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => { void setDnd(now + 3600_000); setDndMenu(false); }} data-testid="nc-dnd-1h">Per 1 ora</button>
-              <button type="button" role="menuitem" onClick={() => { void setDnd(tomorrow()); setDndMenu(false); }} data-testid="nc-dnd-tomorrow">Fino a domani</button>
-              {dnd && <button type="button" role="menuitem" onClick={() => { void setDnd(null); setDndMenu(false); }} data-testid="nc-dnd-off">Disattiva</button>}
+              <button type="button" role="menuitem" onClick={() => { void setDnd(now + 3600_000); setDndMenu(false); }} data-testid="nc-dnd-1h">{t('dialogs.notifications.dnd1h')}</button>
+              <button type="button" role="menuitem" onClick={() => { void setDnd(tomorrow()); setDndMenu(false); }} data-testid="nc-dnd-tomorrow">{t('dialogs.notifications.dndTomorrow')}</button>
+              {dnd && <button type="button" role="menuitem" onClick={() => { void setDnd(null); setDndMenu(false); }} data-testid="nc-dnd-off">{t('dialogs.notifications.dndOff')}</button>}
             </span>
           )}
         </span>
-        <button type="button" className="icon-btn" onClick={() => setCenter(false)} aria-label="Chiudi (Esc)" data-tip="Chiudi|Esc" data-testid="nc-close"><IconX size={14} /></button>
+        <button type="button" className="icon-btn" onClick={() => setCenter(false)} aria-label={t('dialogs.notifications.closeLabel')} data-tip={t('dialogs.notifications.closeTip')} data-testid="nc-close"><IconX size={14} /></button>
       </header>
-      <div className="nc-filters" role="tablist" aria-label="Filtra">
-        <button type="button" role="tab" aria-selected={kind === 'all'} className={kind === 'all' ? 'on' : ''} onClick={() => setKind('all')} data-testid="nc-filter-all">Tutte</button>
-        <button type="button" role="tab" aria-selected={kind === 'unread'} className={kind === 'unread' ? 'on' : ''} onClick={() => setKind('unread')} data-testid="nc-filter-unread">Da fare</button>
+      <div className="nc-filters" role="tablist" aria-label={t('dialogs.notifications.filterLabel')}>
+        <button type="button" role="tab" aria-selected={kind === 'all'} className={kind === 'all' ? 'on' : ''} onClick={() => setKind('all')} data-testid="nc-filter-all">{t('dialogs.notifications.all')}</button>
+        <button type="button" role="tab" aria-selected={kind === 'unread'} className={kind === 'unread' ? 'on' : ''} onClick={() => setKind('unread')} data-testid="nc-filter-unread">{t('dialogs.notifications.unread')}</button>
         {kinds.map(([k, v]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)} data-testid={`nc-filter-${k}`}>{v.label} <span className="nc-n">{v.n}</span></button>
         ))}
       </div>
       {list.length === 0 ? (
-        <p className="nc-empty" data-testid="nc-empty">{kind === 'unread' ? 'Niente da fare.' : 'Qui arrivano le novità: chat finite, errori, idee, avvisi.'}</p>
+        <p className="nc-empty" data-testid="nc-empty">{kind === 'unread' ? t('dialogs.notifications.nothingToDo') : t('dialogs.notifications.emptyState')}</p>
       ) : (
         <ul className="nc-list" data-testid="nc-list">{list.slice(0, 200).map(e => <Row key={e.id} e={e} unread={todo(e)} now={now} />)}</ul>
       )}
-      <footer className="nc-foot"><Keys combo="Ctrl+Shift+N" /> apre e chiude · i link si incollano in <Keys combo="Ctrl+K" /></footer>
+      <footer className="nc-foot"><Keys combo="Ctrl+Shift+N" /> {t('dialogs.notifications.footer')} <Keys combo="Ctrl+K" /></footer>
     </aside>
   );
 }

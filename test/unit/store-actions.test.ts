@@ -212,7 +212,7 @@ describe('answer', () => {
 
 describe('cliFetch (Nuova chat while the check at start has not reported)', () => {
   const st = (version: string): CliStatus => ({ found: true, path: 'x', version, loggedIn: true });
-  const info: AppInfo = { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: engineInfos().filter(e => e.id === 'claude' || e.id === 'cursor') }; // the two this test asks; every listed one must answer
+  const info: AppInfo = { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: engineInfos().filter(e => e.id === 'claude' || e.id === 'cursor'), systemLang: 'it' }; // the two this test asks; every listed one must answer
 
   it('a failed check, or one with no answer in time, is null ("non verificato") and leaves app:info alone', async () => {
     dispatch({ type: 'info', info });

@@ -17,6 +17,7 @@ import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { stop, useApp } from '../store/store';
 import { openModal, setFocused, setPrefs, ui } from '../store/ui';
+import { t } from '../i18n';
 import { answerLater } from '../lib/later';
 import { linkOfEvent } from '../lib/notify';
 import { pairHover, usePair } from '../lib/pairs';
@@ -99,14 +100,14 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
 
   if (!chat) {
     return (
-      <section className="tile regia-tile empty" role="region" aria-label="Regia" data-testid="tile-regia">
-        <header className="tile-head"><div className="th-row"><HarnessMark harness="claude" regia /><h3 className="th-title regia-name">Regia</h3></div></header>
+      <section className="tile regia-tile empty" role="region" aria-label={t('dialogs.regia.name')} data-testid="tile-regia">
+        <header className="tile-head"><div className="th-row"><HarnessMark harness="claude" regia /><h3 className="th-title regia-name">{t('dialogs.regia.name')}</h3></div></header>
         <div className="empty-state">
           {ready ? (
             <>
-              <p className="empty-title">Nessuna Regia ancora</p>
-              <p className="empty-text">La Regia è la chat che coordina le altre: le chiedi «che si fa adesso?» e ti propone una cosa alla volta.</p>
-              <button type="button" className="btn btn-regia btn-m" onClick={() => openModal('newChat')} data-testid="regia-create"><IconPlus size={14} /> Crea la Regia</button>
+              <p className="empty-title">{t('dialogs.regia.empty')}</p>
+              <p className="empty-text">{t('dialogs.regia.emptyDescription')}</p>
+              <button type="button" className="btn btn-regia btn-m" onClick={() => openModal('newChat')} data-testid="regia-create"><IconPlus size={14} /> {t('dialogs.regia.createButton')}</button>
             </>
           ) : (
             <div className="skeleton"><i /><i /><i className="short" /></div>
@@ -118,48 +119,48 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
 
   const busy = isBusy(chat);
   return (
-    <section className={`tile regia-tile ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${pair.cls}`} style={pair.style} role="region" aria-label={`Regia: ${chat.title}`} data-testid="tile-regia" data-chat-id={chat.id} data-sb-id="regia"
+    <section className={`tile regia-tile ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${pair.cls}`} style={pair.style} role="region" aria-label={t('dialogs.regia.tileLabel', { title: chat.title })} data-testid="tile-regia" data-chat-id={chat.id} data-sb-id="regia"
       onFocus={() => setFocused('regia')} onPointerDown={() => setFocused('regia')} {...pairHover(chat.id)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
           <HarnessMark harness={chat.harness} regia />
-          {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title regia-name" onDoubleClick={() => setRenaming(true)}>{chat.appRegia ? 'Regia dell’app' : 'Regia'}</h3>}
+          {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title regia-name" onDoubleClick={() => setRenaming(true)}>{chat.appRegia ? t('dialogs.regia.appName') : t('dialogs.regia.name')}</h3>}
           <StatePill chat={chat} testid="regia-state" />
           <span className="sp" />
-          <IconButton label="Stato: chat e PR in un colpo d’occhio" shortcut="Ctrl+Shift+S" onClick={() => openModal('stato')} testid="regia-stato"><IconList size={14} /></IconButton>
-          {busy && <IconButton label="Ferma" shortcut="Ctrl+." tone="danger" onClick={() => void stop(chat.id)} testid="regia-stop"><IconStop size={14} /></IconButton>}
-          <IconButton ref={menuBtn} label="Motore, modello, Pulisci e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="regia-menu"><IconMore /></IconButton>
+          <IconButton label={t('dialogs.regia.statusLabel')} shortcut={t('dialogs.regia.statusShortcut')} onClick={() => openModal('stato')} testid="regia-stato"><IconList size={14} /></IconButton>
+          {busy && <IconButton label={t('dialogs.regia.stopLabel')} shortcut={t('dialogs.regia.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="regia-stop"><IconStop size={14} /></IconButton>}
+          <IconButton ref={menuBtn} label={t('dialogs.regia.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="regia-menu"><IconMore /></IconButton>
         </div>
         <div className="th-sub" data-testid="regia-sub">
-          <span className="th-engine" data-tip={`Motore: ${engineName(chat.harness)}`} aria-label={`Motore: ${engineName(chat.harness)}`} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
+          <span className="th-engine" data-tip={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[chat.title.trim() !== 'Regia' ? chat.title : '', prettyModel(chat.model, chat.harness), effortLabel(chat.effort), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>
-      <ItemList chatId={chat.id} items={items ?? []} empty="Chiedi alla Regia «che si fa adesso?»" footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-regia" /> : null} />
+      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.regia.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-regia" /> : null} />
       {queued && reqs.length > 0 && <InWindowLine reqs={open} queued testid="regia-queued" />}
       {!queued && inWindow && reqs.length > 0 && <InWindowLine reqs={reqs} testid="regia-in-window" />}
       {!queued && !inWindow && open.length > 0 && (
         <div className="tile-requests regia-requests">
-          {first && <RequestPanel key={reqKey(first)} req={first} variant="regia" chatTitle="Regia" harness={chat.harness} onEscape={later} onLater={later} />}
+          {first && <RequestPanel key={reqKey(first)} req={first} variant="regia" chatTitle={t('dialogs.regia.name')} harness={chat.harness} onEscape={later} onLater={later} />}
           {open.length > (first ? 1 : 0) && (
             <div className="qwin-queue regia-next" data-testid="regia-next">
-              <span className="qwin-queue-k">Poi:</span>
+              <span className="qwin-queue-k">{t('dialogs.regia.nextQueue')}</span>
               {open.slice(first ? 1 : 0, 4).map(r => <span key={reqKey(r)} className="qwin-queue-item">{r.title}</span>)}
-              {open.length > 4 && <span className="qwin-queue-item">+{open.length - 4}</span>}
+              {open.length > 4 && <span className="qwin-queue-item">{t('dialogs.regia.moreNext', { count: open.length - 4 })}</span>}
             </div>
           )}
         </div>
       )}
       <div className={`feed ${feedOpen ? 'open' : ''}`} data-testid="regia-feed">
         <button type="button" className="feed-head" onClick={() => setPrefs({ feedOpen: !feedOpen })} aria-expanded={feedOpen} data-testid="regia-feed-toggle">
-          <span>Novità</span><span className="count">{feed.length}</span><span className="sp" /><IconChevronDown size={13} className="feed-chev" />
+          <span>{t('dialogs.regia.feedTitle')}</span><span className="count">{feed.length}</span><span className="sp" /><IconChevronDown size={13} className="feed-chev" />
         </button>
         {feedOpen && (
-          feed.length === 0 ? <p className="feed-empty">Qui arrivano idee, errori registrati e chat finite, man mano.</p> : (
+          feed.length === 0 ? <p className="feed-empty">{t('dialogs.regia.feedEmpty')}</p> : (
             <div className="feed-body">
-              {away.length > 0 && <div className="feed-group">Mentre eri via</div>}
+              {away.length > 0 && <div className="feed-group">{t('dialogs.regia.feedAway')}</div>}
               {away.length > 0 && <ul className="feed-list">{away.slice(0, 4).map(e => <FeedRow key={e.id} e={e} now={now} />)}</ul>}
-              {away.length > 0 && fresh.length > 0 && <div className="feed-group">Adesso</div>}
+              {away.length > 0 && fresh.length > 0 && <div className="feed-group">{t('dialogs.regia.feedNow')}</div>}
               <ul className="feed-list">{fresh.map(e => <FeedRow key={e.id} e={e} now={now} />)}</ul>
             </div>
           )

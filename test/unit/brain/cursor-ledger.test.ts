@@ -111,6 +111,8 @@ describe('CSV correction', () => {
     expect(d.turns).toBe(3);
     expect(d.unpriced).toBe(1);
     expect(d.chats).toEqual({ a: 3.5 });
+    expect(d.unpricedChats).toEqual(['b']);
+    expect(d.unpricedModels).toEqual(['auto']);
     expect(d.note).toContain('stima ±5%');
     expect(d.note).toContain('1 turni senza prezzo');
   });
@@ -152,6 +154,7 @@ describe('CSV correction', () => {
   it('a chat costs all its turns in the ledger read, not only today', () => {
     const d = cursorDay([row(T('2026-10-09T20:00:00Z'), { conversationId: 'a' }), row(T('2026-10-10T14:00:00Z'), { conversationId: 'a' })], null, [], T('2026-10-10T16:00:00Z'));
     expect(d.chats).toEqual({ a: 4 });
+    expect(d.todayChats).toEqual({ a: 2 }); // the day's list: today's turns only
     expect(d.usd).toBe(2);
   });
 

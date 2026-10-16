@@ -12,6 +12,11 @@ import { ui } from '../store/ui';
 
 const CHECK_MS = 5000;
 
+/** Read by the e2e (autoclose.spec.ts): per chat, the result the last check saw and whether it closed the chat, so a
+ *  test waits for the check on that result instead of a fixed pause (a pause is too short when the machine is busy). */
+export const closeChecks = { seen: {} as Record<string, { at: number; due: boolean }> };
+(globalThis as unknown as { __sbAutoClose?: typeof closeChecks }).__sbAutoClose = closeChecks;
+
 function check(): void {
   const s = app.get();
   if (!s.ready) return;
@@ -30,7 +35,9 @@ function check(): void {
       running: hasRunningRun(c.id),
     };
   };
-  for (const c of dueChats(Object.values(s.chats), hold, min * 60_000, now())) void archiveChat(c.id, true);
+  const due = dueChats(Object.values(s.chats), hold, min * 60_000, now());
+  for (const c of Object.values(s.chats)) closeChecks.seen[c.id] = { at: c.lastResult?.at ?? 0, due: due.includes(c) };
+  for (const c of due) void archiveChat(c.id, true);
 }
 
 export function AutoCloser(): null {

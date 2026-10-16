@@ -1,0 +1,49 @@
+# CI on the three desktop systems (ADR 0054 stage 5): nobody on the team has a Mac, so macOS and Linux are proved
+# here. Runs on every push and pull request once the repo is on GitHub: setup (pinned, scripts off), typecheck, lint,
+# unit tests, then the e2e suite (Electron under xvfb on Linux; the suite hides its windows itself, SB_HIDDEN).
+# Live tests (real CLIs, real tokens) never run here. Until the macOS job is green, the README says macOS is "not yet
+# tried".
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Electron's system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libnss3 libgbm1 libasound2t64 libgtk-3-0t64
+      - run: npm run setup
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: e2e (Linux, under xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" npm run test:e2e
+      - name: e2e
+        if: runner.os != 'Linux'
+        run: npm run test:e2e
+      - name: screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

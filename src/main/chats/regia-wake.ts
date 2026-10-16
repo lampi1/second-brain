@@ -95,6 +95,8 @@ export class RegiaWake {
 
   /** What waits to be told (tests, diagnostics). */
   queued(): WakeEvent[] { return [...this.buffer.values()]; }
+  /** How much queued news the Regia's gate holds now (it works or waits for the user; tests, diagnostics). */
+  held(): number { const r = this.regia(); return r ? this.queued().filter(e => !passes(gateOf(r), classOf(e))).length : 0; }
 
   stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null; }
 

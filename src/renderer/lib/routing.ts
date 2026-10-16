@@ -4,14 +4,15 @@
 // components/NewChatDialog.tsx). Unit-tested in test/unit/brain/routing.test.ts.
 import type { Effort, Harness, ModelRegistry, RegistryModel, RoutePreview, RoutingRow, TaskKind } from '@shared/contract';
 import { effortLabel, prettyModel } from './format';
+import { t } from '../i18n';
 
 /** does an engine take an effort? (lib/engines.ts engineCan(h, 'effort'); passed in so these helpers stay pure) */
 export type TakesEffort = (h: Harness) => boolean;
 
-export const KIND_IT: Record<TaskKind | '*', string> = {
-  '*': 'Qualsiasi', 'qa-run': 'QA e test', review: 'Review', 'bug-fix': 'Fix di bug', 'ops-read': 'Log e ops', writing: 'Scrittura',
-  triage: 'Smistamento', 'research-web': 'Ricerca web', investigation: 'Indagine', 'app-feature': 'Funzione nuova', regia: 'Regia', altro: 'Altro',
-};
+export const getKindIt = (): Record<TaskKind | '*', string> => ({
+  '*': t('tools.routing.kindAny'), 'qa-run': t('tools.routing.kindQaRun'), review: t('tools.routing.kindReview'), 'bug-fix': t('tools.routing.kindBugFix'), 'ops-read': t('tools.routing.kindOpsRead'), writing: t('tools.routing.kindWriting'),
+  triage: t('tools.routing.kindTriage'), 'research-web': t('tools.routing.kindResearchWeb'), investigation: t('tools.routing.kindInvestigation'), 'app-feature': t('tools.routing.kindAppFeature'), regia: t('tools.routing.kindRegia'), altro: t('tools.routing.kindOther'),
+});
 
 /** What the table may pick: the 'auto' models of 'auto' harnesses, never Fable (main refuses it: too costly); a model a
  *  row already names stays listed. */
@@ -61,12 +62,13 @@ export function blankRow(reg: ModelRegistry | null, today: string, takes: TakesE
  *  routing:preview. `what` = engine, model and effort; `why` = where it comes from. */
 export function routeLine(p: RoutePreview | null, engine: (h: Harness) => string): { what: string; why: string; error: boolean } | null {
   if (!p) return null;
-  if ('error' in p) return { what: 'Non parte', why: p.error, error: true };
-  const what = `${engine(p.harness)} · ${prettyModel(p.model, p.harness)}${p.effort ? ` · ragionamento ${effortLabel(p.effort)}` : ''}`;
+  if ('error' in p) return { what: t('tools.routing.errorNoStart'), why: p.error, error: true };
+  const KIND_IT = getKindIt();
+  const what = `${engine(p.harness)} · ${prettyModel(p.model, p.harness)}${p.effort ? ` · ${t('tools.routing.reasoning')} ${effortLabel(p.effort)}` : ''}`;
   const r = p.route, on = `${KIND_IT[r.kind]}${r.area && r.area !== 'altro' ? ` · ${r.area}` : ''}`;
-  const why = r.source === 'override' ? 'scelto da te: vince sulla tabella'
-    : r.source === 'table' ? `dalla tabella (${on})${r.reason ? `: ${r.reason}` : ''}`
-      : r.source === 'explore' ? `prova un modello poco usato (${on})`
-        : `nessuna riga per ${on}: i tuoi predefiniti`;
+  const why = r.source === 'override' ? t('tools.routing.overrideSource')
+    : r.source === 'table' ? `${t('tools.routing.tableSource')} (${on})${r.reason ? `: ${r.reason}` : ''}`
+      : r.source === 'explore' ? `${t('tools.routing.exploreSource')} (${on})`
+        : `${t('tools.routing.defaultSource')} ${on}: ${t('tools.routing.defaultSourceEnd')}`;
   return { what, why, error: false };
 }

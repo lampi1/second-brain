@@ -1,4 +1,5 @@
-// The CLI contracts (ADR 0055): what the app reads from Claude Code's stream-json and from every ACP engine, checked
+// The CLI contracts (ADR 0055): what the app reads from Claude Code's stream-json, from every ACP engine and from Codex
+// app-server (ADR 0060: its fixture is synthesized from the protocol schema until a real run is recorded), checked
 // without spending a token. The sanitizer keeps only protocol words; drift() reports each unknown shape once; the
 // recorder keeps a few samples per shape; the parsers report what they do not know; and every recorded real stream
 // in test/fixtures/cli/<cli>/<version>.jsonl (scripts/cli-fixtures.mjs) replays through the real parsers with no
@@ -8,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ClaudeSession, claudeKey } from '../../../src/main/chats/claude';
 import { AcpSession, acpKey } from '../../../src/main/chats/acp';
+import { CodexSession } from '../../../src/main/chats/codex';
 import { RECORD_PER_KEY, drift, drifts, record, resetDrift, sanitize, setRecorder } from '../../../src/main/chats/drift';
 import { log } from '../../../src/main/log';
 import { recSink, tmp } from './helpers';
@@ -15,6 +17,7 @@ import { recSink, tmp } from './helpers';
 const FIXTURES = path.resolve(import.meta.dirname, '..', '..', 'fixtures', 'cli');
 const line = (s: { line(raw: string): void }, m: unknown): void => s.line(JSON.stringify(m));
 const claude = (): ClaudeSession => new ClaudeSession({ chatId: 'c_contract', cwd: '.', sessionId: '11111111-2222-4333-8444-555555555555' }, recSink());
+const codex = (): CodexSession => new CodexSession({ engineId: 'codex', label: 'Codex', args: ['app-server'], chatId: 'c_contract', cwd: '.' }, recSink());
 const acp = (engineId = 'cursor'): AcpSession => new AcpSession({ engineId, label: engineId, args: ['acp'], chatId: 'c_contract', cwd: '.' }, recSink());
 
 afterEach(() => { resetDrift(); setRecorder(null); });
@@ -161,6 +164,30 @@ describe('ACP parser: what it does not know is reported', () => {
   });
 });
 
+describe('Codex parser: what it does not know is reported', () => {
+  it('unknown notifications, item types, turn statuses and server requests: one drift each', () => {
+    const s = codex();
+    line(s, { method: 'thread/brandNew', params: {} });
+    line(s, { method: 'item/completed', params: { item: { type: 'teleport', id: 'x' } } });
+    line(s, { method: 'turn/completed', params: { turn: { id: 't', status: 'paused' } } });
+    line(s, { id: 9, method: 'item/brandNew/requestApproval', params: {} });
+    expect(drifts().map(d => `${d.cli} ${d.kind} ${d.what}`)).toEqual([
+      'codex notification thread/brandNew',
+      'codex item type teleport',
+      'codex turn status paused',
+      'codex server request item/brandNew/requestApproval',
+    ]);
+  });
+
+  it('known and knowingly ignored shapes are no drift, with or without the jsonrpc field', () => {
+    const s = codex();
+    line(s, { method: 'thread/status/changed', params: {} });
+    line(s, { jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { itemId: 'a', delta: 'x' } });
+    line(s, { method: 'skills/changed', params: {} });
+    expect(drifts()).toEqual([]);
+  });
+});
+
 /** Every recorded real stream: test/fixtures/cli/<cli>/<version>.jsonl, one {key, msg} per line. */
 function recordings(): { cli: string; version: string; file: string }[] {
   if (!fs.existsSync(FIXTURES)) return [];
@@ -174,7 +201,7 @@ describe('recorded real streams replay with no drift', () => {
     expect(list).toEqual([]);
   });
   it.each(list)('$cli $version', ({ cli, file }) => {
-    const s = cli === 'claude' ? claude() : acp(cli);
+    const s = cli === 'claude' ? claude() : cli === 'codex' ? codex() : acp(cli);
     const msgs = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => (JSON.parse(l) as { msg: unknown }).msg);
     expect(msgs.length).toBeGreaterThan(0);
     const before = log.recent.length;

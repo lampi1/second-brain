@@ -81,11 +81,11 @@ test.describe.serial('internal browser over MCP', () => {
       tab.focus();
       for (const type of ['keyDown', 'keyUp'] as const) tab.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
     });
-    await page.waitForTimeout(800);
-    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
-    // the user's Ctrl+W in a page closes its tile like a chat (ADR 0048): Annulla keeps the tab for the next tests
+    // the user's Ctrl+W in a page closes its tile like a chat (ADR 0048): Annulla keeps the tab for the next tests. Its
+    // toast means the key was handled (and swallowed) in main: the window is still there
     const undo = page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' });
     await expect(undo).toBeVisible();
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
     await undo.getByTestId('toast-action').click();
     expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
     await page.evaluate(() => window.sb.invoke('views:layout', []));

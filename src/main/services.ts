@@ -2,7 +2,7 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
-  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { Emitter } from './ipc';
 import type { RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
@@ -129,6 +129,13 @@ export interface BrainService {
   publish(events: FeedInput[]): void;
   /** Plan windows from a running Claude chat: a stream-json `rate_limit_event` or a `get_usage` control response. */
   ingestRateLimits(msg: unknown): void;
+  /** The brain's domains and their multi-PC sync (brain/sync.ts, ADR 0059): status, a sync now (one domain or all), the
+   *  user's choice on a conflict ('both' also opens the two versions). */
+  syncState(): SyncState;
+  syncNow(domain?: string): Promise<SyncState>;
+  syncResolve(domain: string, choice: SyncChoice): Promise<SyncState>;
+  /** Before a chat that reads the brain starts: the remote's changes first (bounded, throttled, never throws). */
+  syncBeforeRead(): Promise<void>;
   /** The chat manager listens here to turn mode 'ask' alerts into a "stop or continue?" question (never a hard stop). */
   onBudgetAlert(fn: (a: BudgetAlert) => void): () => void;
   shutdown(): Promise<void>;

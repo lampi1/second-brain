@@ -146,8 +146,8 @@ describe('ClaudeSession', () => {
     // the user's own stop is no error (12/10: "quando faccio Invia subito vedo sempre un errore"), told once
     expect(r).toMatchObject({ isError: false, interrupted: true });
     expect(sink.last('assistant')?.streaming).toBe(false);
-    const notes = [...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { text: string; level: string }));
-    expect(notes.map(n => n.text).filter(t => /Interrott/.test(t))).toEqual(['Interrotto da te.']);
+    const notes = [...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { code?: string; level: string }));
+    expect(notes.map(n => n.code).filter(c => c === 'stoppedByYou' || c === 'stoppedByYouResend')).toEqual(['stoppedByYou']);
     expect(notes.some(n => n.level === 'error')).toBe(false);
     expect(s.state).toBe('idle');
   });
@@ -163,7 +163,7 @@ describe('ClaudeSession', () => {
     const results = () => [...sink.items.values()].filter(i => i.kind === 'result');
     await waitFor(() => (results().length === 2 && s.state === 'idle') || undefined, 'the second turn');
     expect(results().map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
-    expect([...sink.items.values()].some(i => i.kind === 'system' && i.text === 'Interrotto da te: riparto col tuo messaggio.')).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'stoppedByYouResend')).toBe(true);
     expect(sink.last('assistant')?.text).toBe('Ciao dal motore');
     expect(sink.trace.filter(t => t === 'result')).toHaveLength(2); // one turn per message, nothing replayed
   });
@@ -176,7 +176,7 @@ describe('ClaudeSession', () => {
     const r = [...sink.items.values()].filter(i => i.kind === 'result').at(-1);
     expect(r).toMatchObject({ isError: true });
     expect(r).not.toHaveProperty('interrupted');
-    expect([...sink.items.values()].some(i => i.kind === 'system' && i.level === 'error' && i.text === 'Turno finito con errore: raggiunto il limite di passi del turno.')).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.level === 'error' && i.code === 'turnFailed.error_max_turns')).toBe(true);
   });
 
   it("the app's own interrupt (a hand-off that timed out) is never told as the user's", async () => {

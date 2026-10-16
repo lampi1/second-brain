@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import type { RoutingInfo, TaskKind } from '@shared/contract';
 import { effortLabel } from '../lib/format';
 import { engineCan } from '../lib/engines';
-import { apiCapable, blankRow, fromEdit, KIND_IT, pickable, startEffort, tableEfforts, toEdit, type EditRow } from '../lib/routing';
+import { apiCapable, blankRow, fromEdit, getKindIt, pickable, startEffort, tableEfforts, toEdit, type EditRow } from '../lib/routing';
 import { toast } from '../store/ui';
 import { HelpTip } from './HelpTip';
 
@@ -98,7 +98,7 @@ export function RoutingGroup() {
                       <tr key={i} data-testid={`st-routing-row-${i}`}>
                         <td>
                           <select className="st-select st-rt-s" value={r.kind} aria-label={`Riga ${i + 1}: tipo di lavoro`} onChange={e => put(i, { kind: e.target.value as TaskKind | '*' })}>
-                            {(['*', ...info.kinds] as const).map(k => <option key={k} value={k}>{KIND_IT[k] ?? k}</option>)}
+                            {(['*', ...info.kinds] as const).map(k => <option key={k} value={k}>{getKindIt()[k] ?? k}</option>)}
                           </select>
                         </td>
                         <td>

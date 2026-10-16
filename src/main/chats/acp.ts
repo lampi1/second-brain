@@ -41,10 +41,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
+import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
 import { lineDiff, resultText, shortPath } from './claude-map';
 import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
 import { drift, record } from './drift';
+import { ownProcessGroup } from '../platform';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { runSubagentHooks, userHooksFile } from './cursor-hooks';
 import { reapEnabled, reapEngine, type Root } from './proctree';
@@ -374,7 +376,7 @@ export class AcpSession implements HarnessSession {
     const startedAt = Date.now();
     this.spawnedAt = startedAt;
     try {
-      this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
+      this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
     } catch (e) {
       return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check the ${label} CLI install`);
     }
@@ -451,7 +453,7 @@ export class AcpSession implements HarnessSession {
           return;
         } catch (e) {
           if (e instanceof RpcError && (e.code === -32000 || /auth/i.test(e.message))) throw e;
-          this.sys(`${this.label} non ha ripreso la sessione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');
+          this.sysCode('resumeFailed', { label: this.label, error: cut(errText(e), 120) }, 'warn');
         } finally {
           this.loading = false;
           this.reportEstimate();
@@ -459,7 +461,7 @@ export class AcpSession implements HarnessSession {
           this.replayUser = null;
           this.tools.clear(); // replayed tool rows keep the status they were replayed with
         }
-      } else this.sys(`Questa versione di ${this.label} non riprende le sessioni: ne apro una nuova.`, 'warn');
+      } else this.sysCode('noResume', { label: this.label }, 'warn');
     }
     const r = await this.request('session/new', base, 120000);
     const id = s(r.sessionId);
@@ -514,7 +516,7 @@ export class AcpSession implements HarnessSession {
     const misses: string[] = [];
     // the model asked at spawn (no model flag: the engine was not told, so a different model is no surprise)
     const asked = this.opts.modelFlag ? this.opts.model?.replace(/\[.*\]$/, '') : undefined;
-    if (asked && asked !== current) misses.push(`modello chiesto ${asked}`);
+    if (asked && asked !== current) misses.push(missFragment.askedModel(asked));
     const mc = this.opts.modelConfig, pinned = pinnedParams(this.opts.model);
     const want: [ModelParam, string][] = [];
     const thought = this.params.find(p => p.category === 'thought_level'), fast = this.params.find(p => p.id === 'fast');
@@ -522,14 +524,14 @@ export class AcpSession implements HarnessSession {
     if (mc && fast && !pinned.has('fast')) want.push([fast, String(mc.fast)]);
     for (const [p, value] of want) {
       if (p.value === value) continue;
-      if (!p.values.includes(value)) { misses.push(`${p.name} ${value} non offerto`); continue; }
+      if (!p.values.includes(value)) { misses.push(missFragment.notOffered(p.name, value)); continue; }
       try {
         const r = await this.request('session/set_config_option', { sessionId: this.sessionId, configId: p.id, value });
         const next = modelParams(r.configOptions);
         if (next.length) this.params = next; else p.value = value;
-        if (this.params.find(x => x.id === p.id)?.value !== value) misses.push(`${p.name} ${value} non applicato`);
+        if (this.params.find(x => x.id === p.id)?.value !== value) misses.push(missFragment.notApplied(p.name, value));
       } catch (e) {
-        misses.push(`${p.name} ${value} rifiutato`);
+        misses.push(missFragment.refused(p.name, value));
         log.warn('chats', 'acp model option refused', { chat, data: { engine: this.engine, option: p.id, value, error: errText(e) } });
       }
     }
@@ -538,7 +540,7 @@ export class AcpSession implements HarnessSession {
     log.info('chats', 'acp model variant', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant } });
     if (misses.length) {
       log.warn('chats', 'acp runs another model than asked', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant, misses } });
-      this.sys(`${this.label} gira ${variant} (${misses.join('; ')}).`, 'warn');
+      this.sysCode('runningOther', { label: this.label, variant, misses: misses.join(';;') }, 'warn');
     }
   }
 
@@ -558,7 +560,7 @@ export class AcpSession implements HarnessSession {
     this.lastAnswer = '';
     let prompt: Obj[];
     try { prompt = this.promptOf(next.text, next.images); } catch (e) {
-      this.sys(`Immagini non inviate a ${this.label}: ${cut(errText(e), 200)}`, 'error');
+      this.sysCode('imagesNotSent', { label: this.label, error: cut(errText(e), 200) }, 'error');
       prompt = [{ type: 'text', text: next.text || '(immagini non inviate)' }];
     }
     this.prompting = true;
@@ -600,11 +602,11 @@ export class AcpSession implements HarnessSession {
     const stopped = this.stopping;
     this.stopping = null;
     const interrupted = !err && stop === 'cancelled' && !!stopped;
-    if (err) this.sys(`Errore di ${this.label}: ${cut(stripAnsi(errText(err)), 400)}`, 'error');
-    else if (stop === 'refusal') this.sys('Il modello ha rifiutato la richiesta.', 'warn');
-    else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sys(`Turno interrotto da ${this.label} (${stop}).`, 'warn');
-    else if (interrupted) this.sys(stopped.sendNow ? 'Interrotto da te: riparto col tuo messaggio.' : 'Interrotto da te.', 'info');
-    else if (stop === 'cancelled') this.sys('Interrotto.', 'info');
+    if (err) this.sysCode('engineError', { label: this.label, error: cut(stripAnsi(errText(err)), 400) }, 'error');
+    else if (stop === 'refusal') this.sysCode('modelRefusal', undefined, 'warn');
+    else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sysCode('turnCut', { label: this.label, stop }, 'warn');
+    else if (interrupted) this.sysCode(stopped.sendNow ? 'stoppedByYouResend' : 'stoppedByYou', undefined, 'info');
+    else if (stop === 'cancelled') this.sysCode('interrupted', undefined, 'info');
     const usage = Object.keys(o(r.usage)).length ? (o(r.usage) as AcpUsage) : null;
     // tokens in the prompt response (priced at Cursor's list price, priceFallback); else the session cost ACP's
     // usage_update reported, if any
@@ -631,21 +633,21 @@ export class AcpSession implements HarnessSession {
     const error = cut(stripAnsi(lastLine(errorText)), 200);
     if (n >= delays.length) {
       log.warn('chats', 'acp network error: retries used up', { chat, data: { engine, retries: n, error } });
-      this.sys(`${label} si è fermata di nuovo per un errore di rete (${error}) dopo ${n} ripartenze automatiche: scrivi «continua» quando la rete è tornata.`, 'error');
+      this.sysCode('netRetriesExhausted', { label, error, n }, 'error');
       return false;
     }
     this.netRetries = n + 1;
-    const wait = delays[n]!, attempt = `tentativo ${n + 1} di ${delays.length}`;
+    const wait = delays[n]!, attempt = `${n + 1}/${delays.length}`;
     log.warn('chats', 'acp network error: retrying', { chat, data: { engine, attempt: n + 1, waitMs: wait, error } });
     const id = nextId('s');
     this.retryItemId = id;
-    this.sink.item({ kind: 'system', id, at: Date.now(), text: `Errore di rete di ${label}: riparto da sola tra ${Math.round(wait / 1000)} s (${attempt}).`, level: 'warn' }, false);
+    this.sink.item({ kind: 'system', id, at: Date.now(), ...sysPayload('netRetryScheduled', { label, seconds: Math.round(wait / 1000), attempt }), level: 'warn' }, false);
     this.setState(this.asks.size ? 'waiting' : 'running');
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.retryItemId = null;
       if (this.exited) return;
-      this.sink.item({ kind: 'system', id, at: Date.now(), text: `Ripartita da sola dopo un errore di rete di ${label} (${attempt}).`, level: 'info' }, true);
+      this.sink.item({ kind: 'system', id, at: Date.now(), ...sysPayload('netRetried', { label, attempt }), level: 'info' }, true);
       this.queue.unshift({ text: netRetryPrompt(label), images: [], retry: true });
       this.drain();
     }, wait);
@@ -656,15 +658,15 @@ export class AcpSession implements HarnessSession {
   /** The running turn (and a retry already planned) is not retried after a network error. */
   noRetry(): void {
     this.retryOff = true;
-    if (this.retryTimer) { this.cancelRetry('passaggio di consegne interrotto'); if (!this.prompting) this.setState(this.queue.length ? 'running' : this.asks.size ? 'waiting' : 'idle'); this.drain(); }
+    if (this.retryTimer) { this.cancelRetry('netRetryCancelledHandoff'); if (!this.prompting) this.setState(this.queue.length ? 'running' : this.asks.size ? 'waiting' : 'idle'); this.drain(); }
   }
 
   /** Drops a planned automatic retry (stop, exit); its line says so. */
-  private cancelRetry(why: string): void {
+  private cancelRetry(why: 'netRetryCancelledStopped' | 'netRetryCancelledHandoff' | 'netRetryCancelledClosed'): void {
     if (!this.retryTimer) return;
     clearTimeout(this.retryTimer);
     this.retryTimer = null;
-    if (this.retryItemId) this.sink.item({ kind: 'system', id: this.retryItemId, at: Date.now(), text: `Ripartenza automatica annullata (${why}).`, level: 'info' }, true);
+    if (this.retryItemId) this.sink.item({ kind: 'system', id: this.retryItemId, at: Date.now(), ...sysPayload(why, undefined), level: 'info' }, true);
     this.retryItemId = null;
   }
 
@@ -715,8 +717,8 @@ export class AcpSession implements HarnessSession {
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (this.exited || !this.proc) return;
     log.info('chats', 'acp cancel', { chat: this.opts.chatId, data: { engine: this.engine, queued: this.queue.length, open: this.asks.size, keepQueued: !!opts?.keepQueued } });
-    this.cancelRetry('interrotta');
-    if (this.queue.length && !opts?.keepQueued) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
+    this.cancelRetry('netRetryCancelledStopped');
+    if (this.queue.length && !opts?.keepQueued) { this.sysCode('queueCancelled', { n: this.queue.length }, 'info'); this.queue = []; }
     if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued }; // only a prompt in flight ends with a result
     // cancel first, so the agent knows its turn is over when its waits resolve
     if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
@@ -947,14 +949,14 @@ export class AcpSession implements HarnessSession {
     if (method === 'cursor/update_todos') {
       const todos = arr(p.todos).map(x => o(x));
       const mark = (st: string): string => (st === 'completed' ? '✓' : st === 'in_progress' ? '▸' : st === 'cancelled' ? '✗' : '○');
-      const text = `Attività:\n${todos.map(t => `${mark(s(t.status))} ${s(t.content)}`).join('\n')}`;
+      const list = todos.map(t => `${mark(s(t.status))} ${s(t.content)}`).join('\n');
       const id = this.todosItemId ?? nextId('todo');
-      this.sink.item({ kind: 'system', id, at: Date.now(), text, level: 'info' }, !!this.todosItemId);
+      this.sink.item({ kind: 'system', id, at: Date.now(), ...sysPayload('todos', { list }), level: 'info' }, !!this.todosItemId);
       this.todosItemId = id;
     } else if (method === 'cursor/task') {
       const sub = this.subagents.get(s(p.toolCallId));
       if (sub && s(p.model)) sub.model = s(p.model);
-      this.sys(`Subagente: ${cut(s(p.description) || s(p.prompt), 200)}`, 'info');
+      this.sysCode('subagent', { description: cut(s(p.description) || s(p.prompt), 200) }, 'info');
     }
   }
 
@@ -1014,9 +1016,9 @@ export class AcpSession implements HarnessSession {
       case 'tool_call_update': return this.toolCall(u, false);
       case 'plan': {
         const mark = (st: string): string => (st === 'completed' ? '✓' : st === 'in_progress' ? '▸' : '○');
-        const text = `Piano:\n${arr(u.entries).map(x => o(x)).map(e => `${mark(s(e.status))} ${s(e.content)}`).join('\n')}`;
+        const list = arr(u.entries).map(x => o(x)).map(e => `${mark(s(e.status))} ${s(e.content)}`).join('\n');
         const id = this.planItemId ?? nextId('plan');
-        this.sink.item({ kind: 'system', id, at: Date.now(), text, level: 'info' }, !!this.planItemId);
+        this.sink.item({ kind: 'system', id, at: Date.now(), ...sysPayload('plan', { list }), level: 'info' }, !!this.planItemId);
         this.planItemId = id;
         return;
       }
@@ -1181,7 +1183,7 @@ export class AcpSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
-    this.cancelRetry('sessione chiusa');
+    this.cancelRetry('netRetryCancelledClosed');
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();
   }
@@ -1195,4 +1197,13 @@ export class AcpSession implements HarnessSession {
   private sys(text: string, level: 'info' | 'warn' | 'error'): void {
     this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text, level }, false);
   }
+
+  private sysCode<C extends SysCode>(code: C, params: SysParams | undefined, level: 'info' | 'warn' | 'error'): void {
+    this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), ...sysPayload(code, params), level }, false);
+  }
+}
+
+/** text + code + params for a system item built with a stable id (sink.item called directly, not through sysCode). */
+function sysPayload<C extends SysCode>(code: C, params: SysParams | undefined): { text: string; code: C; params: SysParams | undefined } {
+  return { text: sysEn(code, params), code, params };
 }

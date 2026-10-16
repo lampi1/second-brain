@@ -21,6 +21,8 @@ export const cursorPath = (): string | null => {
   const c = resolveCursor();
   if (!c) return null;
   if (c.kind !== 'node') return c.display;
+  // the agent.cmd shim exists only on Windows; macOS/Linux install agent and cursor-agent in ~/.local/bin (ADR 0054)
+  if (process.platform !== 'win32') return findCli('agent') ?? findCli('cursor-agent');
   const shim = path.join(process.env.LOCALAPPDATA ?? '', 'cursor-agent', 'agent.cmd');
   return findCli('agent') ?? (fs.existsSync(shim) ? shim : null);
 };
@@ -90,7 +92,7 @@ export async function engineStatuses(): Promise<Record<Harness, CliStatus>> {
 export function openLogin(harness: Harness): void {
   const e = engineOrThrow(harness);
   if (e.kind === 'api' || !e.login.length) throw new Error(`${e.label} non ha un comando di accesso: usa una chiave API (Impostazioni → Motori) o accedi dentro la sua CLI.`);
-  if (e.kind === 'acp' && !acpRunnable(e)) throw new Error(e.trusted ? `Nei test il login di ${e.label} non si apre mai.` : `Accendi prima ${e.label} in Impostazioni → Motori.`);
+  if (e.kind !== 'claude' && !acpRunnable(e)) throw new Error(e.trusted ? `Nei test il login di ${e.label} non si apre mai.` : `Accendi prima ${e.label} in Impostazioni → Motori.`);
   const p = e.kind === 'claude' ? claudePath() : acpPath(e);
   if (!p) { log.error('cli', 'login requested but the CLI is missing', { cause: `${e.label} CLI not found on PATH`, hint: `install the ${e.label} CLI` }); throw new Error(`${e.label} CLI not found`); }
   const args = e.login.join(' ');

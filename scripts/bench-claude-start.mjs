@@ -19,7 +19,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const reps = Number(val('--reps', '2'));
 const followups = Number(val('--followups', '1'));
 const cwd = val('--cwd', root);
-const engine = val('--engine', flag('--plain') ? 'claude' : path.join(root, 'node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe'));
+const engine = val('--engine', flag('--plain') ? 'claude' : path.join(root, `node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude${process.platform === 'win32' ? '.exe' : ''}`));
 const extra = (val('--args', '') || '').split(' ').filter(Boolean);
 const settings = flag('--hooks') ? [] : ['--settings', JSON.stringify({ disableAllHooks: true })];
 const env = { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: '1' };

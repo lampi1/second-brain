@@ -5,6 +5,7 @@
 // a <title> and a <desc> with the key fact). Sizes follow the container (ResizeObserver). Used by Costi and
 // Miglioramento; a chart given `discuss` ends with the discussion bar (Costi).
 import { useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { t, locale } from '../../i18n';
 import { catColor, labelStep, niceMax, niceScale, ticks, tickLabel } from '../lib/chart';
 import { fmt } from '../lib/format';
 import { fileSafe, stamp, toCsv } from '../lib/table';
@@ -43,12 +44,12 @@ function Tip({ tip }: { tip: TipState | null }) {
   );
 }
 
-const val = (v: number, money?: boolean) => (money ? fmt.usd(v) : v.toLocaleString('it-IT', { maximumFractionDigits: 1 }));
+const val = (v: number, money?: boolean) => (money ? fmt.usd(v) : v.toLocaleString(locale(), { maximumFractionDigits: 1 }));
 
 function ChartCard({ title, note, explain, name, labels, series, money, legend, children, testId, discuss }: Common & { labels: string[]; series: Series[]; legend?: boolean; children: ReactNode }) {
   const [table, setTable] = useState(false);
   const csv = () => {
-    const cols = [{ key: 'label', label: 'voce' }, ...series.map((s, i) => ({ key: `s${i}`, label: s.label || title }))];
+    const cols = [{ key: 'label', label: t('brainLib.charts.csvVoiceHeader') }, ...series.map((s, i) => ({ key: `s${i}`, label: s.label || title }))];
     const rows = labels.map((l, j) => Object.fromEntries([['label', l], ...series.map((s, i) => [`s${i}`, Math.round((s.values[j] ?? 0) * 100) / 100])]));
     download(`${fileSafe(name)}-${stamp()}.csv`, toCsv(cols, rows), 'text/csv');
   };
@@ -56,8 +57,8 @@ function ChartCard({ title, note, explain, name, labels, series, money, legend, 
     <figure className="bx-chart bx-card" style={{ margin: 0 }} data-testid={testId ?? `bx-chart-${fileSafe(name)}`}>
       <div className="bx-chart-head">
         <div className="t"><h3>{title}</h3>{note && <span className="note">{note}</span>}</div>
-        <button type="button" className="bx-btn ghost s" aria-pressed={table} onClick={() => setTable(t => !t)} title="Mostra i numeri come tabella">Dati</button>
-        <button type="button" className="bx-btn ghost s" onClick={csv} title="Scarica i numeri del grafico in CSV"><IconDownload /> CSV</button>
+        <button type="button" className="bx-btn ghost s" aria-pressed={table} onClick={() => setTable(t => !t)} title={t('brainLib.charts.dataToggleTitle')}>{t('brainLib.charts.dataToggle')}</button>
+        <button type="button" className="bx-btn ghost s" onClick={csv} title={t('brainLib.charts.csvDownloadTitle')}><IconDownload /> CSV</button>
       </div>
       {explain && <Explain {...explain} />}
       {legend && series.length > 1 && (
@@ -66,7 +67,7 @@ function ChartCard({ title, note, explain, name, labels, series, money, legend, 
       {table ? (
         <div className="bx-scroll" style={{ maxHeight: 320, overflow: 'auto' }}>
           <table className="bx-datatable">
-            <thead><tr><th>Voce</th>{series.map((s, i) => <th key={i} className="num">{s.label || 'valore'}</th>)}</tr></thead>
+            <thead><tr><th>{t('brainLib.charts.voiceLabel')}</th>{series.map((s, i) => <th key={i} className="num">{s.label || t('brainLib.charts.valueLabel')}</th>)}</tr></thead>
             <tbody>{labels.map((l, j) => <tr key={j}><td>{l}</td>{series.map((s, i) => <td key={i} className="num">{val(s.values[j] ?? 0, money)}</td>)}</tr>)}</tbody>
           </table>
         </div>
@@ -103,7 +104,7 @@ export function BarChart({ labels, values, highlight, height = 190, ...c }: Comm
   const band = (right - left) / Math.max(1, values.length), bw = Math.max(3, Math.min(40, band * 0.66));
   const step = labelStep(values.length, right - left, 62);
   const maxI = values.indexOf(max);
-  const desc = values.length ? `${values.length} valori; il più alto ${labels[maxI]}: ${val(max, c.money)}${highlight != null ? `; ${labels[highlight]}: ${val(values[highlight] ?? 0, c.money)}` : ''}.` : 'Nessun dato.';
+  const desc = values.length ? `${t('brainLib.charts.nValuesMax', { n: values.length, max: labels[maxI] ?? '', values: val(max, c.money) })}${highlight != null ? `; ${labels[highlight]}: ${val(values[highlight] ?? 0, c.money)}` : ''}.` : t('brainLib.charts.noData');
   return (
     <ChartCard {...c} labels={labels} series={[{ label: c.title, values }]}>
       <div ref={ref} className="bx-plot">
@@ -141,7 +142,7 @@ export function HBarChart({ labels, series, categorical = true, ...c }: Common &
   const chars = Math.max(8, Math.floor(labelW / 6.6));
   const color = (si: number, li: number) => series[si]?.color ?? (n === 1 && categorical ? catColor(li) : catColor(si));
   const total = series[0]?.values.reduce((a, x) => a + x, 0) ?? 0;
-  const desc = labels.length ? `${labels.length} voci; la prima: ${labels[0]}, ${val(series[0]?.values[0] ?? 0, c.money)}.` : 'Nessun dato.';
+  const desc = labels.length ? t('brainLib.charts.firstLabel', { n: labels.length, first: labels[0] ?? '', value: val(series[0]?.values[0] ?? 0, c.money) }) : t('brainLib.charts.noData');
   return (
     <ChartCard {...c} labels={labels} series={series} legend>
       <div ref={ref} className="bx-plot">
@@ -183,7 +184,7 @@ export function StackedBars({ labels, series, height = 220, ...c }: Common & { l
   const left = c.money ? 50 : 34, right = W - 6, top = 14, bottom = 24, plotH = height - top - bottom;
   const band = (right - left) / Math.max(1, labels.length), bw = Math.max(4, Math.min(44, band * 0.6));
   const step = labelStep(labels.length, right - left, 62);
-  const desc = labels.length ? `${labels.length} barre; da ${val(totals[0] ?? 0)} a ${val(totals[totals.length - 1] ?? 0)}.` : 'Nessun dato.';
+  const desc = labels.length ? t('brainLib.charts.nBarsRange', { n: labels.length, from: val(totals[0] ?? 0), to: val(totals[totals.length - 1] ?? 0) }) : t('brainLib.charts.noData');
   return (
     <ChartCard {...c} labels={labels} series={series} legend>
       <div ref={ref} className="bx-plot">
@@ -225,7 +226,7 @@ export function LineChart({ labels, series, height = 190, ...c }: Common & { lab
   const n = labels.length, dx = n > 1 ? (right - left - 12) / (n - 1) : 0;
   const X = (i: number) => left + 6 + i * dx, Y = (v: number) => top + plotH - (v / m) * plotH;
   const step = labelStep(n, right - left, 62);
-  const desc = n ? `${n} punti; massimo ${val(max, c.money)}.` : 'Nessun dato.';
+  const desc = n ? t('brainLib.charts.nPointsMax', { n, max: val(max, c.money) }) : t('brainLib.charts.noData');
   return (
     <ChartCard {...c} labels={labels} series={series} legend>
       <div ref={ref} className="bx-plot">

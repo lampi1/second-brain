@@ -80,6 +80,16 @@ describe('Cursor engine resolution', () => {
     expect(cliArgv(c!, ['--model', 'gpt-5', 'acp']).args).toEqual([path.join(v, '2026.07.23-10-11-12-abc123', 'index.js'), '--model', 'gpt-5', 'acp']);
   });
 
+  it('macOS and Linux: the newest version under ~/.local/share/cursor-agent with its own node (ADR 0054)', () => {
+    const home = tmp('home');
+    const v = path.join(home, '.local', 'share', 'cursor-agent', 'versions', '2026.07.23-e383d2b');
+    fs.mkdirSync(v, { recursive: true });
+    for (const f of ['node', 'index.js']) fs.writeFileSync(path.join(v, f), '');
+    const c = resolveCursor(null, {}, 'linux', home);
+    expect(c).toMatchObject({ kind: 'node', command: path.join(v, 'node'), prefix: [path.join(v, 'index.js')] });
+    expect(c?.env).toMatchObject({ CURSOR_INVOKED_AS: 'cursor-agent' });
+  });
+
   it('falls back to agent.cmd through cmd.exe with safe arguments only', () => {
     const c = resolveCursor('C:\\Tools\\agent.cmd', {});
     expect(c?.kind).toBe('cmd');
@@ -247,10 +257,10 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => results(sink).length === 1 && s.state === 'idle', 'cancelled turn');
     // the user's own stop is no error (12/10: "quando faccio Invia subito vedo sempre un errore")
     expect(results(sink)[0]).toMatchObject({ isError: false, interrupted: true });
-    expect([...sink.items.values()].some(i => i.kind === 'system' && i.text === 'Interrotto da te.')).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'stoppedByYou')).toBe(true);
     expect(answerOf(logFile)).toEqual({ outcome: 'cancelled' });
     expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(true);
-    expect([...sink.items.values()].some(i => i.kind === 'system' && /coda annullati: 1/.test(i.text))).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'queueCancelled' && i.params?.n === 1)).toBe(true);
     await new Promise(r => setTimeout(r, 200));
     expect(results(sink)).toHaveLength(1); // the queued message never ran
 
@@ -306,11 +316,11 @@ describe('AcpSession as Cursor', () => {
     await s.interrupt({ keepQueued: true, byUser: true });
     await waitFor(() => results(sink).length === 2 && s.state === 'idle', 'the queued turn');
     expect(results(sink).map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
-    expect([...sink.items.values()].some(i => i.kind === 'system' && i.text === 'Interrotto da te: riparto col tuo messaggio.')).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'stoppedByYouResend')).toBe(true);
     const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => JSON.stringify(l.params?.prompt));
     expect(prompts).toHaveLength(2);
     expect(prompts[1]).toContain('dopo');
-    expect([...sink.items.values()].some(i => i.kind === 'system' && /annullati/.test(i.text))).toBe(false);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'queueCancelled')).toBe(false);
   });
 
   it('runs queued messages one after the other and stays running in between', async () => {
@@ -350,8 +360,8 @@ describe('AcpSession as Cursor', () => {
     expect(prompts).toEqual(['neterr please', netRetryPrompt('Cursor')]);
     expect(results(sink).map(r => r.isError)).toEqual([true, false]);
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo la rete');
-    const sys = [...sink.items.values()].filter(i => i.kind === 'system').map(i => i.text);
-    expect(sys).toEqual(['Ripartita da sola dopo un errore di rete di Cursor (tentativo 1 di 2).']);
+    const sys = [...sink.items.values()].filter(i => i.kind === 'system').map(i => i.code);
+    expect(sys).toEqual(['netRetried']);
     // no idle between the cut turn and its retry: the Regia does not see the chat as done
     const first = sink.trace.indexOf('result'), second = sink.trace.lastIndexOf('result');
     expect(sink.trace.slice(first, second)).not.toContain('state:idle');
@@ -363,7 +373,7 @@ describe('AcpSession as Cursor', () => {
     s.send('neterr');
     await waitFor(() => results(sink).length === 3 && s.state === 'idle', 'turn + two retries');
     const sys = () => [...sink.items.values()].filter(i => i.kind === 'system');
-    expect(sys().at(-1)).toMatchObject({ level: 'error', text: expect.stringMatching(/fermata di nuovo per un errore di rete \(Error: RetriableError: \[unavailable\] PING timed out\) dopo 2 ripartenze automatiche/) });
+    expect(sys().at(-1)).toMatchObject({ level: 'error', code: 'netRetriesExhausted', params: { n: 2 } });
     expect(results(sink).every(r => r.isError)).toBe(true);
     s.send('neterr again');
     await waitFor(() => results(sink).length === 5 && s.state === 'idle', 'new message, one retry');
@@ -381,7 +391,7 @@ describe('AcpSession as Cursor', () => {
     await s.interrupt();
     expect(s.state).toBe('idle');
     expect(s.busy).toBe(false);
-    expect([...sink.items.values()].filter(i => i.kind === 'system').at(-1)?.text).toBe('Ripartenza automatica annullata (interrotta).');
+    expect([...sink.items.values()].filter(i => i.kind === 'system').at(-1)).toMatchObject({ code: 'netRetryCancelledStopped' });
     await new Promise(r => setTimeout(r, 600));
     expect(cursorLog(logFile).filter(l => l.method === 'session/prompt')).toHaveLength(1);
 
@@ -401,7 +411,7 @@ describe('AcpSession as Cursor', () => {
     expect(s.busy).toBe(false);
     await new Promise(r => setTimeout(r, 500));
     expect(cursorLog(logFile).filter(l => l.method === 'session/prompt')).toHaveLength(1);
-    expect([...sink.items.values()].filter(i => i.kind === 'system').at(-1)?.text).toBe('Ripartenza automatica annullata (passaggio di consegne interrotto).');
+    expect([...sink.items.values()].filter(i => i.kind === 'system').at(-1)).toMatchObject({ code: 'netRetryCancelledHandoff' });
   });
 
   it('a message sent while the retry waits goes after it', async () => {
@@ -451,7 +461,7 @@ describe('AcpSession as Cursor', () => {
     const two = start({ sessionId: sid, resume: true, env: { FAKE_CURSOR_NO_LOAD: '1' } });
     await waitFor(() => two.s.state === 'idle', 'new instead');
     expect(two.s.sessionId).not.toBe(sid);
-    expect([...two.sink.items.values()].some(i => i.kind === 'system' && /non riprende/.test(i.text))).toBe(true);
+    expect([...two.sink.items.values()].some(i => i.kind === 'system' && i.code === 'noResume')).toBe(true);
   });
 
   it('model only with --model at spawn (never session/set_model); plan mode via session/set_mode; the chat\'s MCP endpoint', async () => {
@@ -486,7 +496,7 @@ describe('AcpSession as Cursor', () => {
     expect(cursorLog(logFile).filter(l => l.method === 'session/set_config_option').map(l => l.params?.configId)).toEqual(['fast']);
     expect(sink.patch.model).toBe('gpt-5.6-sol[context=256k,reasoning_effort=high,fast=false]');
     const warn = [...sink.items.values()].find(i => i.kind === 'system' && i.level === 'warn');
-    expect(warn && 'text' in warn ? warn.text : '').toBe('Cursor gira gpt-5.6-sol[context=256k,reasoning_effort=high,fast=false] (Effort medium non offerto).');
+    expect(warn).toMatchObject({ code: 'runningOther', params: { variant: 'gpt-5.6-sol[context=256k,reasoning_effort=high,fast=false]' } });
   });
 
   it('a parameter pinned in the chat\'s model id wins over the settings', async () => {
@@ -518,7 +528,7 @@ describe('AcpSession as Cursor', () => {
     const edit = [...sink.items.values()].find(i => i.kind === 'tool' && i.name === 'Edit');
     expect(edit).toMatchObject({ status: 'ok', summary: 'Edit a.txt' });
     expect(edit?.kind === 'tool' && edit.diff?.[0]).toMatchObject({ path: 'a.txt', added: 2, removed: 1 });
-    expect([...sink.items.values()].some(i => i.kind === 'system' && i.text === 'Piano:\n✓ Leggi\n▸ Scrivi')).toBe(true);
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.code === 'plan' && i.params?.list === '✓ Leggi\n▸ Scrivi')).toBe(true);
     // 1000 in × 2 + 2000 cache read × 0.1 + 500 out × 10, per 1M
     expect(results(sink)[0]).toMatchObject({ costUsd: 0.0072 });
     expect(sink.patch.costKnown).toBe(true);
@@ -530,9 +540,9 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => results(sink).length === 1, 'turn');
     const acks = cursorLog(logFile).filter(l => l.answer?.outcome && 'method' in (l.answer.outcome as object)).map(l => l.answer?.outcome);
     expect(acks).toEqual([{ method: 'cursor/update_todos', result: {} }, { method: 'cursor/task', result: {} }]);
-    const texts = [...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { text: string }).text);
-    expect(texts).toContain('Attività:\n✓ Leggi\n▸ Scrivi');
-    expect(texts).toContain('Subagente: Esplora il repo');
+    const items = [...sink.items.values()].filter(i => i.kind === 'system');
+    expect(items.some(i => i.code === 'todos' && i.params?.list === '✓ Leggi\n▸ Scrivi')).toBe(true);
+    expect(items.some(i => i.code === 'subagent' && i.params?.description === 'Esplora il repo')).toBe(true);
   });
 
   it('runs the subagentStart/subagentStop hooks of hooks.json for a Task (ACP never fires them)', async () => {
@@ -681,7 +691,7 @@ describe('AcpSession as another ACP engine (Kimi)', () => {
     await waitFor(() => results(sink).length === 2 && s.state === 'idle', 'turn + automatic retry');
     const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
     expect(prompts).toEqual(['neterr please', netRetryPrompt('Kimi')]);
-    expect([...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { text: string }).text)).toEqual(['Ripartita da sola dopo un errore di rete di Kimi (tentativo 1 di 2).']);
+    expect([...sink.items.values()].filter(i => i.kind === 'system').map(i => (i as { code?: string }).code)).toEqual(['netRetried']);
   });
 
   it('not logged in: "Accedi a Kimi" with its own login command', async () => {

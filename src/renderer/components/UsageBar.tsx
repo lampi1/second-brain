@@ -2,10 +2,14 @@
 // Cursor and Kimi's tokens today (when Kimi is on this machine), always visible, with a detail panel on click. Why: the user wants their subscriptions' usage in sight at
 // all times (2026-10-11), and an honest "n/d" with the reason where a number does not exist (Cursor's plan usage has no
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
-// own costs (live estimate included). Used by TopBar.tsx.
+// own costs (live estimate included): today's total moves at each message and the popup lists every chat of the day by
+// cost (lib/live-costs.ts, LiveCosts.tsx). Used by TopBar.tsx.
 import { useRef, useState } from 'react';
 import type { ChatSummary, Usage } from '@shared/contract';
-import { chatCost, formatCost, tokensShort, until } from '../lib/format';
+import { formatCost, tokensShort, until } from '../lib/format';
+import { costRows, liveTotal } from '../lib/live-costs';
+import { go, focusChat } from '../actions';
+import { LiveCostList } from './LiveCosts';
 import { useNow } from '../lib/clock';
 import { useApp } from '../store/store';
 import { HarnessMark } from './Icons';
@@ -32,13 +36,6 @@ const inTime = (t: number, now: number) => {
   return r ? `tra ${d} g ${r} h` : `tra ${d} g`;
 };
 const ago = (t: number, now: number) => { const m = Math.round((now - t) / 6e4); return m <= 1 ? 'adesso' : m < 60 ? `${m} min fa` : `${Math.round(m / 60)} h fa`; };
-
-/** Today's total: Claude (cost.mjs) + Cursor (ledger estimate or export). null = not known; estimated = Cursor's part
- *  is an estimate. */
-export function todayTotal(u: Usage | null): { usd: number; partial: boolean; estimated: boolean } | null {
-  if (!u || u.costKnown === false) return null;
-  return { usd: u.todayUsd + (u.cursorTodayUsd ?? 0), partial: u.cursorTodayUsd == null, estimated: u.cursorTodayUsd != null && u.cursorExact === false };
-}
 
 /** Kimi's model id as a name: "k3-256k" → "K3-256k"; others as they are ("kimi-for-coding"). */
 const kimiModel = (m: string) => m.replace(/^k(\d)/, 'K$1');
@@ -83,13 +80,16 @@ function PlanRow({ title, pct, resets, now, testid }: { title: string; pct: numb
   );
 }
 
-function Details({ usage, chats, now }: { usage: Usage | null; chats: ChatSummary[]; now: number }) {
-  const total = todayTotal(usage);
-  const top = chats.filter(c => c.costUsd > 0 || c.costLiveUsd).sort((a, b) => b.costUsd - a.costUsd).slice(0, 4);
+/** chats shown in the popup before "Tutte" */
+const POP_ROWS = 8;
+
+function Details({ usage, chats, now, close }: { usage: Usage | null; chats: ChatSummary[]; now: number; close: () => void }) {
+  const total = liveTotal(usage, chats);
+  const rows = costRows(usage, chats);
   return (
     <div className="ub-pop">
       <section className="ub-sec">
-        <div className="ub-sec-head"><span>Spesa di oggi</span>{usage?.at ? <small>aggiornata {ago(usage.at, now)}</small> : null}</div>
+        <div className="ub-sec-head"><span>Spesa di oggi</span>{usage?.costAt ? <small data-tip={`Il conteggio completo dalle chat è delle ${hhmm(usage.costAt)}; poi si aggiunge a ogni messaggio`}>dal vivo</small> : usage?.at ? <small>aggiornata {ago(usage.at, now)}</small> : null}</div>
         <div className="ub-total" data-testid="usage-pop-total">{total ? `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` : 'n/d'}</div>
         <div className="ub-rows">
           <div className="ub-row"><HarnessMark harness="claude" size={16} /><span className="ub-label">Claude</span><b>{usage?.costKnown === false ? 'n/d' : formatCost(usage?.todayUsd ?? 0)}</b></div>
@@ -121,17 +121,11 @@ function Details({ usage, chats, now }: { usage: Usage | null; chats: ChatSummar
           <div className="ub-na"><b>Quota del piano non disponibile</b><span>{usage.kimi.planNote}</span></div>
         </section>
       ) : null}
-      {top.length > 0 && (
-        <section className="ub-sec">
-          <div className="ub-sec-head"><span>Chat aperte</span><small>da quando l’app è aperta</small></div>
-          <div className="ub-rows">
-            {top.map(c => (
-              <div key={c.id} className="ub-row"><HarnessMark harness={c.harness} regia={c.isRegia} size={16} /><span className="ub-label ub-chat">{c.title}</span><b>{chatCost(c)}</b></div>
-            ))}
-          </div>
-          {top.some(c => c.costLiveUsd) ? <p className="ub-note">≈ turno in corso: stima dai token, corretta col costo reale ogni pochi minuti e alla fine del turno.</p> : null}
-        </section>
-      )}
+      <section className="ub-sec" data-testid="usage-pop-chats">
+        <div className="ub-sec-head"><span>Chat di oggi, dalla più cara</span><small>dal vivo</small></div>
+        <LiveCostList rows={rows} limit={POP_ROWS} testid="usage-pop-list" unpricedModels={usage?.cursorUnpriced?.models}
+          onOpen={id => { close(); focusChat(id); }} onMore={() => { close(); go({ page: 'costi', arg: '1' }); }} />
+      </section>
     </div>
   );
 }
@@ -142,8 +136,8 @@ export function UsageBar() {
   const now = useNow(30_000);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const total = todayTotal(usage);
   const list = Object.values(chats);
+  const total = liveTotal(usage, list);
   const tip = [
     total ? `Oggi ${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}${total.partial ? ' (Cursor escluso: sconosciuto)' : ''}` : 'Spesa di oggi non disponibile',
     usage?.cursorTodayUsd != null ? `Cursor ${cursorText(usage, true)}${usage.cursorExact === false ? ' (stima)' : ''}` : null,
@@ -178,7 +172,7 @@ export function UsageBar() {
         ) : null}
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="usage-pop" width={360}>
-        <Details usage={usage} chats={list} now={now} />
+        <Details usage={usage} chats={list} now={now} close={() => setOpen(false)} />
       </Popover>
     </>
   );

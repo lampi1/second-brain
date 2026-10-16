@@ -5,6 +5,7 @@
 // store. Used by store.ts (correctThought) and ChatItems.tsx (the Ragionamento block, the correction bubble).
 import type { ChatItem, ChatSummary } from '@shared/contract';
 import { splitNotes } from './sendable';
+import { t } from '../i18n';
 
 // in English, like every prompt the app injects into a chat (i18n rule); the user's fix stays in their own words
 export const CORRECTION_TAG = '[Reasoning correction]';
@@ -79,8 +80,8 @@ export function correctedThoughts(items: readonly ChatItem[]): Map<string, strin
 
 /** Why a correction cannot go now (null: it can). An open question or permission would be cancelled by the stop. */
 export function correctionBlocked(chat: ChatSummary | undefined, asking: boolean): string | null {
-  if (!chat) return 'La chat non c’è più.';
-  if (asking || chat.state === 'waiting' || chat.pending > 0) return 'La chat aspetta una tua risposta: rispondi prima al pannello, poi correggi.';
+  if (!chat) return t('chat.correct.gone');
+  if (asking || chat.state === 'waiting' || chat.pending > 0) return t('chat.correct.waiting');
   return null;
 }
 

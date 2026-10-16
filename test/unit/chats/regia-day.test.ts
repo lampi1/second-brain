@@ -65,12 +65,12 @@ describe('ChatManager Regia day compaction', () => {
     const before = m.items(regia.id).length, sid = summary(m, regia.id)!.sessionId;
     const tomorrow = Date.now() + DAY;
     expect(m.coldTick(tomorrow)).toBe(1);
-    await waitFor(() => m.items(regia.id).some(i => i.kind === 'system' && /Contesto compattato/.test(i.text)), 'compacted');
+    await waitFor(() => m.items(regia.id).some(i => i.kind === 'system' && (i.code === 'compacted' || /Context compacted/.test(i.text))), 'compacted');
     await waitFor(() => summary(m, regia.id)?.contextTokens === 30_000 && idle(m, regia.id), 'smaller context reported');
     const added = m.items(regia.id).slice(before);
     // only the app's line and the engine's: no user message, no answer
     expect(added.every(i => i.kind === 'system')).toBe(true);
-    expect(added.some(i => i.kind === 'system' && /Giorno nuovo/.test(i.text))).toBe(true);
+    expect(added.some(i => i.kind === 'system' && i.code === 'dayCompactStart')).toBe(true);
     expect(summary(m, regia.id)).toMatchObject({ sessionId: sid, isRegia: true });
     expect(summary(m, work.id)?.regiaOf).toBe(regia.id); // the chats it follows still answer to it
     expect(m.coldTick(tomorrow + 10 * 60_000)).toBe(0); // once a day

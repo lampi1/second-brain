@@ -1,7 +1,7 @@
 // The small preview of a file the user clicked in a chat message (a path in `inline code` or a visual's diffList): the
 // first lines of a text file, or a thumbnail of an image, shown in a popover before it is opened (the user, 2026-10-13:
 // "anteprime" on click, not inline floods). The path comes from a model's text, so it is untrusted: the rules of
-// open-path.ts (an absolute local path with a drive letter, or one relative to the chat's own folder without `..`;
+// open-path.ts (an absolute local path, with a drive letter on Windows, or one relative to the chat's own folder without `..`;
 // never a UNC share, real path checked again), only known text and image types (never .env, keys or binaries), at most
 // PEEK_BYTES read and MAX_IMAGE bytes for an image. Nothing is written, run or sent anywhere. Used by index.ts
 // (app:peekFile); pinned by test/unit/peek-file.test.ts.
@@ -22,19 +22,19 @@ export const PEEK_LINES = 14;
 export const MAX_IMAGE = 3_000_000;
 
 /** A path from a message → an absolute local path: absolute as open-path.ts allows, or relative inside `cwd`. */
-export function resolvePeek(raw: string, cwd?: string): string | null {
-  const abs = localPath(raw);
+export function resolvePeek(raw: string, cwd?: string, platform: NodeJS.Platform = process.platform): string | null {
+  const abs = localPath(raw, platform);
   if (abs) return abs;
   const p = raw.trim().replace(/^<|>$/g, '');
-  const base = cwd ? localPath(cwd) : null;
+  const base = cwd ? localPath(cwd, platform) : null;
   if (!base || !p || /^[\\/]/.test(p) || /^[a-z][a-z0-9+.-]*:/i.test(p) || p.includes(':')) return null;
   if (p.split(/[\\/]/).includes('..')) return null;
-  return path.win32.join(base, p);
+  return (platform === 'win32' ? path.win32 : path.posix).join(base, p);
 }
 
 export function peekFile(raw: string, cwd?: string): PeekResult {
   const p = resolvePeek(raw, cwd);
-  if (!p) return { kind: 'refused', reason: 'Solo file di questo PC (un percorso con la lettera del disco o dentro la cartella della chat).' };
+  if (!p) return { kind: 'refused', reason: `Solo file di questo PC (un percorso ${process.platform === 'win32' ? 'con la lettera del disco' : 'completo, da /,'} o dentro la cartella della chat).` };
   let real: string;
   let st: fs.Stats;
   if (linksToShare(p)) return { kind: 'refused', reason: 'Il percorso porta a una cartella di rete.' };
