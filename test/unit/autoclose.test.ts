@@ -18,6 +18,12 @@ describe('auto-close rule', () => {
     expect(dueChats([chat()], () => free, 5 * MIN, 1000 + 5 * MIN).map(c => c.id)).toEqual(['c1']);
   });
 
+  it('a background task that ended after the result restarts the clock (the CLI reads its report in a turn of its own)', () => {
+    expect(closeAt(chat({ backgroundEndedAt: 50_000 }), free, 2 * MIN)).toBe(50_000 + 2 * MIN);
+    expect(dueChats([chat({ backgroundEndedAt: 50_000 })], () => free, 2 * MIN, 1000 + 2 * MIN)).toEqual([]);
+    expect(closeAt(chat({ backgroundEndedAt: 500 }), free, 2 * MIN)).toBe(1000 + 2 * MIN);
+  });
+
   it('the user touching the tile restarts the clock', () => {
     expect(closeAt(chat(), { ...free, touchedAt: 9000 }, MIN)).toBe(9000 + MIN);
   });

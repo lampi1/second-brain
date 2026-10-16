@@ -66,7 +66,9 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
     await shot(page, 'skills-new-dark');
     await pg.getByTestId('sk-save').click();
     const file = path.join(home, '.claude', 'skills', 'riassunto-giornata', 'SKILL.md');
-    await expect.poll(() => fs.existsSync(file)).toBe(true);
+    // each save runs the fixture's Write hook first (a shell, then node): about 2 s on a quiet box, past 5 s at 100% CPU
+    // (main red, 2026-10-16); the product waits up to the hook's own timeout, 20 s here
+    await expect.poll(() => fs.existsSync(file), { timeout: 30_000 }).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe('---\nname: riassunto-giornata\ndescription: "Riassume la giornata in cinque righe: fatto, aperto, bloccato."\n---\n\nLeggi le chat di oggi e scrivi cinque righe.');
     await expect(pg.getByTestId('sk-item-claude-skill-riassunto-giornata')).toBeVisible();
     await expect(pg.getByTestId('sk-path')).toContainText('riassunto-giornata');
@@ -81,7 +83,7 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
     // the user's hook refuses: its own message is shown, the file stays as it was
     await raw.fill(md('riassunto-giornata', 'Riassume la giornata. VIETATO dal test.'));
     await pg.getByTestId('sk-save').click();
-    await expect(pg.getByTestId('sk-refused')).toContainText('Rifiutato dall’hook');
+    await expect(pg.getByTestId('sk-refused')).toContainText('Rifiutato dall’hook', { timeout: 30_000 }); // the hook runs first
     await expect(pg.getByTestId('sk-refused')).toContainText('Contesto fisso oltre il budget');
     expect(fs.readFileSync(file, 'utf8')).not.toContain('VIETATO');
     await shot(page, 'skills-hook-refused-dark');

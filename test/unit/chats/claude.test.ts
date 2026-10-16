@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ClaudeSession, rulePath } from '../../../src/main/chats/claude';
-import { FAKE, PNG_1PX, fakeLog, recSink, tmp, waitFor, type RecSink } from './helpers';
+import { FAKE, PNG_1PX, fakeLog, killStray, recSink, tmp, waitFor, type RecSink } from './helpers';
 
 const open: ClaudeSession[] = [];
 function start(extra: Partial<ConstructorParameters<typeof ClaudeSession>[0]> = {}): { s: ClaudeSession; sink: RecSink; cwd: string } {
@@ -26,6 +26,7 @@ describe('ClaudeSession', () => {
     expect(a.join(' ')).toContain('--input-format stream-json');
     expect(a.join(' ')).toContain('--include-partial-messages');
     expect(a.join(' ')).toContain('--permission-prompt-tool stdio');
+    expect(a.join(' ')).toContain('--thinking-display summarized'); // else no thinking text streams (ADR 0058)
     expect(a).not.toContain('--permission-mode'); // no choice: the user's settings.json decides (ADR 0002)
     expect(a).toContain('--session-id=abc12345');
     const b = new ClaudeSession({ ...base, resume: true, fork: true, model: 'sonnet', effort: 'high', title: 'T', permissionMode: 'plan', mcpConfig: '{"mcpServers":{}}', worktree: true }, recSink()).args();
@@ -405,7 +406,7 @@ describe('ClaudeSession', () => {
     expect(Date.now() - t0).toBeLessThan(10000);
     expect(s.alive).toBe(false);
     expect(fakeLog(log).some(l => (l as { exit?: string }).exit === 'stdin closed')).toBe(true);
-    try { process.kill(holder); } catch { /* gone */ }
+    killStray(holder);
     const b = start();
     await waitFor(() => b.s.state === 'idle', 'idle b');
     b.s.killNow();

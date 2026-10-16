@@ -33,7 +33,8 @@ Measured on this machine (14 logical cores, CPU already at ~100% from the other 
   synchronously after the shutdown and the storage flush); the process ends in the background and a relaunch on the
   same profile waits for it (single-instance lock, files). chats.spec still waits for the process itself.
 - **The full check in parallel** (`scripts/check.mjs`, `npm run check`): build, then typecheck, lint and unit beside
-  the parallel e2e project (one worker less), then the exclusive specs alone.   `check:branch` runs its specs through `scripts/e2e.mjs` too. The unit tests that start real processes run alone after
+  the parallel e2e project (one worker less), then the exclusive specs alone (`check:branch` runs no e2e since
+  2026-10-15, ADR 0027). The unit tests that start real processes run alone after
   the parallel e2e: beside three Electron instances their deadlines missed (chats/manager, resume and proctree on
   7cb1a39; brain/cursor-ledger, chats/handoff and warm on e87f321, 2026-10-14); no deadline was loosened. A rule finds
   them (`scripts/process-units.mjs`), so a new one is never chased by hand: the file imports `node:child_process`, uses

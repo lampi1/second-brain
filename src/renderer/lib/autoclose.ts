@@ -2,7 +2,8 @@
 // nella dashboard quando non lavorano e hanno finito. poi le riapri te in caso"). Pure rule: a chat closes when it is a
 // work chat (never the Regia), idle after a clean result (not one the user interrupted) or with its session ended (a
 // chat restored at start-up carries no result: it counts from its last update), with no open question/permission/command, nothing queued (nor waiting in the CPU queue), no
-// background task or "Esegui" run still running, no unsent draft, not maximized/in focus mode/selected, none of its browser tabs in use or waiting
+// background task or "Esegui" run still running (and the delay counts from the end of its last background task: the CLI
+// then reads the task's report in a turn of its own that shows only seconds later; the QA chats of 2026-10-15), no unsent draft, not maximized/in focus mode/selected, none of its browser tabs in use or waiting
 // on a hand-off, and neither its result nor the user's last
 // touch on its tile is younger than the delay (setting autoCloseMin, default 2: time to read the final answer; the
 // user, 2026-10-13, dropped the "Finite oggi" dock and column). Closed = archived in main (chat:archive), found and
@@ -27,8 +28,10 @@ export function closeAt(c: ChatSummary, h: Hold, delayMs: number): number | null
   const r = c.lastResult;
   if (r && (r.isError || r.interrupted)) return null; // stopped by the user: he is on it
   // idle: only after a result; closed (session ended, or restored at start-up without its result): from its last update
-  const since = c.state === 'idle' ? r?.at : c.state === 'closed' ? r?.at ?? c.updatedAt : undefined;
+  let since = c.state === 'idle' ? r?.at : c.state === 'closed' ? r?.at ?? c.updatedAt : undefined;
   if (since === undefined) return null;
+  // a background task that just ended: the CLI reads its report in a turn of its own that has not shown yet
+  since = Math.max(since, c.backgroundEndedAt ?? 0);
   if (h.queued > 0 || h.asks > 0 || h.running || h.draft || h.shown || h.browser) return null;
   return Math.max(since, h.touchedAt) + delayMs;
 }

@@ -781,7 +781,7 @@ export class ChatManager implements ChatService {
       harness: r.s.harness, isRegia: r.s.isRegia, ...(r.s.appRegia ? { appRegia: true } : {}), continuedBy: r.s.continuedBy,
       // an archived chat kept alive for its note counts as idle (archive: closeAfterCold)
       state: r.closeAfterCold && r.s.closedAt && r.s.state === 'closed' ? 'idle' : r.s.state,
-      pending: r.pending.size, busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
+      pending: r.pending.size, background: r.s.background ?? 0, busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
       contextTokens: r.s.contextTokens ?? 0, lastTurnAt: r.lastTurnAt, noteAt: r.coldNoteAt ?? 0,
       lastCallAt: Math.max(r.lastTurnAt, r.coldNoteAt ?? 0), askedFor: r.coldAskedFor,
     };
@@ -956,7 +956,7 @@ export class ChatManager implements ChatService {
   }
 
   /** Ends the engines of chats idle for `idleMs` (setting engineIdleMin): no turn, question, queue, background task or
-   *  hand-off, never a Regia. The chat stays on the grid as idle; its next message resumes it (ensureSession). Each
+   *  hand-off, never a Regia; idle counts from the last send, turn or end of a background task (activeAt). The chat stays on the grid as idle; its next message resumes it (ensureSession). Each
    *  engine ends like a ✕ (its tools reaped, its job released). Returns how many were released. */
   releaseIdle(idleMs: number, now = Date.now()): number {
     if (idleMs <= 0 || this.quitting) return 0;
@@ -1583,7 +1583,10 @@ export class ChatManager implements ChatService {
     else if (p.costKnown === false && !r.s.costUsd) r.s.costKnown = false;
     if (p.totalCostUsd !== undefined) { r.costTotalUsd = p.totalCostUsd; save = true; }
     if (p.lastText !== undefined) r.s.lastText = p.lastText;
-    if (p.background !== undefined) { if (p.background > 0) r.s.background = p.background; else delete r.s.background; }
+    if (p.background !== undefined) {
+      if (p.background > 0) r.s.background = p.background;
+      else if (r.s.background) { delete r.s.background; r.s.backgroundEndedAt = r.activeAt = Date.now(); }
+    }
     if (p.version) this.version = p.version;
     if (p.call) {
       const a = r.after;

@@ -10,6 +10,7 @@ import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type
 import { announce, hideChat, hideTab, setPrefs, toast, ui } from './ui';
 import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
 import { setMark, type Mark } from '../lib/marks';
+import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } from '../lib/correction';
 import { now as clockNow } from '../lib/clock';
 
 export const app = createStore<AppState>(initialState, { batch: true });
@@ -281,6 +282,30 @@ export async function sendQueuedNow(chatId: string, id: string): Promise<'sent' 
   dispatch({ type: 'promote', chatId, id });
   try { await sb.invoke('chat:stop', { chatId, keepQueued: true }); return 'interrupting'; }
   catch (e) { fail('Non riesco a interromperla: il messaggio resta primo in coda')(e); return 'failed'; }
+}
+
+/** "Correggi il pensiero" (ADR 0058, lib/correction.ts): a sentence of the chat's reasoning and the user's fix.
+ *  stop = the turn is interrupted and the correction runs next (the "Invia subito" path: first in the queue, sent once by
+ *  the flush when the chat reports idle); step = Claude only: sent into the running turn, the CLI reads it after its next
+ *  tool step (no work lost, but a turn with no more tools reads it only at its end). A chat no longer busy gets it as a
+ *  normal message. Refused (nothing sent) while the chat waits on a question or permission: the stop would cancel it.
+ *  Resolves what happened, or the reason it was refused. */
+export async function correctThought(chatId: string, quote: string, fix: string, mode: 'stop' | 'step'): Promise<{ done: 'sent' | 'stopping' | 'step' | 'failed' } | { blocked: string }> {
+  const text = correctionText(quote, fix);
+  if (!cleanQuote(quote) || !fix.trim()) return { blocked: 'Scrivi la correzione.' };
+  const s = app.get();
+  const c = s.chats[chatId];
+  const why = correctionBlocked(c, s.pending.some(p => p.chatId === chatId));
+  if (why) return { blocked: why };
+  if (!busyNow(chatId, c)) { send(chatId, text); return { done: 'sent' }; }
+  if (mode === 'step' && canCorrectAtNextStep(c)) {
+    // main delivers a message into a running turn at once (manager.send: midTurn); a failure puts it first in the queue
+    void sendNow(chatId, { id: `q:${++localN}`, text });
+    return { done: 'step' };
+  }
+  dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text }, front: true });
+  try { await sb.invoke('chat:stop', { chatId, keepQueued: true }); return { done: 'stopping' }; }
+  catch (e) { fail('Non riesco a fermarla: la correzione parte a fine turno')(e); return { done: 'failed' }; }
 }
 
 const attempts = new Map<string, number>();

@@ -246,7 +246,10 @@ export class ClaudeSession implements HarnessSession {
   args(): string[] {
     const op = this.opts;
     const a = ['-p', '--output-format', 'stream-json', '--verbose', '--input-format', 'stream-json', '--include-partial-messages',
-      '--permission-prompt-tool', 'stdio'];
+      '--permission-prompt-tool', 'stdio',
+      // without it, -p stream-json leaves the display to the server, which streams no thinking text: the Ragionamento
+      // block stays empty and "Correggi il pensiero" has nothing to select (ADR 0058, probe 16/10)
+      '--thinking-display', 'summarized'];
     // no choice = the user's settings.json decides (defaultMode, e.g. auto); the CLI reports the mode at init (ADR 0002);
     // a read-only run is always in plan mode
     const mode = op.readOnly ? 'plan' : op.permissionMode;
@@ -578,8 +581,12 @@ export class ClaudeSession implements HarnessSession {
     this.setState(this.calls.size ? 'waiting' : 'running');
   }
 
-  private task(id: string, live: boolean): void {
-    if (!id || (live && this.ended.has(id))) return; // a late update never revives an ended task
+  private task(id: string, live: boolean, started = false): void {
+    if (!id) return;
+    // a late update never revives an ended task; a new task_started does (live 2026-10-15, CLI 2.1.283: SendMessage to a
+    // finished agent resumes it under the same task id)
+    if (started) this.ended.delete(id);
+    else if (live && this.ended.has(id)) return;
     const n = this.tasks.size;
     if (live) this.tasks.add(id); else { this.tasks.delete(id); this.ended.add(id); }
     if (this.tasks.size !== n) this.sink.changed({ background: this.tasks.size });
@@ -911,7 +918,7 @@ export class ClaudeSession implements HarnessSession {
       }
       // background agents and shell commands (CLI 2.1.28x: task_started, task_updated with a status, task_notification
       // at the end): counted so the app never auto-closes a chat whose work still runs behind an idle prompt
-      case 'task_started': return this.task(s(m.task_id), true);
+      case 'task_started': return this.task(s(m.task_id), true, true);
       case 'task_updated': { const st = s(o(m.patch).status); this.taskStatus(st, m); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
       case 'task_notification': { const st = s(m.status); this.taskStatus(st, m); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
       case 'compact_boundary': {

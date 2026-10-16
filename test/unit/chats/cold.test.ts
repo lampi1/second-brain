@@ -16,7 +16,7 @@ import { FAKE, fakeLog, recEmitter, recSink, tmp, waitFor } from './helpers';
 
 const MIN = 60_000;
 const base: ColdView = {
-  harness: 'claude', isRegia: false, state: 'idle', pending: 0, busy: false, alive: true, handoffTurn: false,
+  harness: 'claude', isRegia: false, state: 'idle', pending: 0, background: 0, busy: false, alive: true, handoffTurn: false,
   contextTokens: 250_000, lastTurnAt: 1_000, noteAt: 0, lastCallAt: 1_000,
 };
 
@@ -28,7 +28,7 @@ describe('cold rules', () => {
     expect(coldAsk(base, at(56), 50 * MIN)).toBe(false); // the cache is gone: a note would cost a full re-read
     for (const v of [
       { harness: 'cursor' }, { isRegia: true }, { appRegia: true }, { continuedBy: { id: 'x' } }, { state: 'running' },
-      { pending: 1 }, { busy: true }, { alive: false }, { handoffTurn: true }, { contextTokens: COLD_MIN_TOKENS - 1 },
+      { pending: 1 }, { background: 1 }, { busy: true }, { alive: false }, { handoffTurn: true }, { contextTokens: COLD_MIN_TOKENS - 1 },
       { noteAt: 2_000 }, { askedFor: 1_000 }, { lastTurnAt: 0 },
     ] satisfies Partial<ColdView>[]) expect(coldAsk({ ...base, ...v }, at(50), 50 * MIN), JSON.stringify(v)).toBe(false);
     // a turn after the note: a new stretch, asked again
@@ -44,6 +44,7 @@ describe('cold rules', () => {
     expect(coldRoute(noted, 3_000 + CACHE_TTL_MS + 1)).toBe(true);
     expect(coldRoute({ ...noted, lastTurnAt: 4_000 }, 4_000 + CACHE_TTL_MS + 1)).toBe(false); // the note is stale
     expect(coldRoute({ ...noted, busy: true }, 3_000 + CACHE_TTL_MS + 1)).toBe(false);
+    expect(coldRoute({ ...noted, background: 1 }, 3_000 + CACHE_TTL_MS + 1)).toBe(false); // a new session would end its agents
     expect(coldRoute({ ...noted, harness: 'cursor' }, 3_000 + CACHE_TTL_MS + 1)).toBe(false);
   });
 

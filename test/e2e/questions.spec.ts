@@ -139,7 +139,7 @@ test('the questions window: the first click on an option answers, even when the 
   // the user, 2026-10-15: "a volte nella modale della domanda devo premere 2 volte". The note left on the mousedown (the
   // option took the keyboard) and the options moved up under the pointer: the mouseup fell elsewhere, no click.
   const { app, page } = await launchDemo();
-  await page.getByTestId('topbar-qwin').click();
+  await moreAction(page, 'more-qwin');
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await page.getByTestId('chat-input-fix').click();

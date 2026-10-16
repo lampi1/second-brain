@@ -127,6 +127,9 @@ export interface ChatSummary {
   lastResult?: { at: number; isError: boolean; interrupted?: boolean };
   /** background tasks (agents, shell commands) the CLI still runs after its turn (Claude task_started/notification) */
   background?: number;
+  /** when its last background task ended: the CLI then reads the task's report in a turn of its own, started without a
+   *  message from us, so the auto-close and the engine release count their delay from here too (never persisted) */
+  backgroundEndedAt?: number;
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
   closedAt?: number;
   /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */

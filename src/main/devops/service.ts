@@ -235,12 +235,23 @@ export class DevopsService {
     }
   }
 
+  /** Temp file + rename. On Windows the rename can fail for a moment (EPERM/EBUSY while an antivirus or the indexer
+   *  holds the file, seen under the full test run: a mark read was lost): retry briefly, then write the file directly
+   *  (as config.ts). */
   private save(): void {
     try {
       fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
+      const text = JSON.stringify(this.saved);
       const tmp = `${this.d.file}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(this.saved));
-      fs.renameSync(tmp, this.d.file);
+      fs.writeFileSync(tmp, text);
+      for (let i = 0; i < 5; i++) {
+        try { fs.renameSync(tmp, this.d.file); return; } catch (e) {
+          if (!['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * (i + 1));
+        }
+      }
+      fs.writeFileSync(this.d.file, text);
+      try { fs.unlinkSync(tmp); } catch { /* left behind: harmless */ }
     } catch (e) {
       log.warn('devops', 'devops.json not saved', { cause: errText(e), hint: 'check userData is writable; the page keeps working from memory' });
     }

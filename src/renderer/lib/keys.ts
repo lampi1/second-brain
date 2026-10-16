@@ -49,6 +49,7 @@ export const KEYMAP: readonly { keys: string; what: string }[] = [
   { keys: 'Ctrl Shift .', what: 'Ferma tutto' },
   { keys: 'Ctrl Shift V', what: 'Cambia vista (Mosaico / Corsie)' },
   { keys: 'Ctrl Shift B', what: 'Nascondi / mostra i browser (continuano a lavorare)' },
+  { keys: 'Ctrl Shift X', what: 'Correggi la frase selezionata nel ragionamento di una chat (poi Invio: ferma e riparte; Maiusc+Invio: al prossimo passo)' },
   { keys: 'F11', what: 'Ingrandisci la tessera selezionata' },
   { keys: 'Ctrl Shift F', what: 'Modalità focus' },
   { keys: 'Ctrl 0', what: 'Vai alla Regia' },

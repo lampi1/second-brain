@@ -10,7 +10,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { JobGuard, parseMembers, type JobMember } from '../../../src/main/chats/jobguard';
 import { jobTools } from '../../../src/main/chats/proctree';
-import { alive, tmp, waitFor } from './helpers';
+import { alive, killStray, tmp, waitFor } from './helpers';
 
 const win = process.platform === 'win32';
 
@@ -37,7 +37,7 @@ describe('jobguard', () => {
   const strays: number[] = [];
   afterEach(() => {
     for (const g of guards.splice(0)) g.stop();
-    for (const pid of strays.splice(0)) { try { process.kill(pid); } catch { /* gone */ } }
+    for (const pid of strays.splice(0)) killStray(pid);
     delete process.env.SB_JOBGUARD;
   });
 
@@ -128,6 +128,10 @@ describe('jobguard', () => {
     await waitFor(() => g.state === 'failed' || null, 'helper gone after the quit', 10000);
     // a target that never exits (a hung app) gets its threads back at the booster's 30 s cap: none stays time-critical
     await waitFor(() => Math.max(...bases(target.pid!), ...bases(kid)) < 8 || null, 'threads lowered at the cap', 45000);
+    // back to normal priority first: a process dies only once each of its threads runs its exit, and idle-class threads
+    // on a box at 100% CPU wait for the scheduler's starvation boost (main red, 2026-10-16: not gone within 10 s)
+    for (const pid of [target.pid!, kid, other]) { try { os.setPriority(pid, os.constants.priority.PRIORITY_NORMAL); } catch { /* gone */ } }
     target.kill(); // its children go with it (libuv's kill-on-close job)
-  }, 100000);
+    await waitFor(() => ![target.pid!, kid, other].some(alive) || null, 'the target and its children gone', 30000);
+  }, 130000);
 });

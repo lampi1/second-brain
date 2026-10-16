@@ -28,7 +28,7 @@ export const REGIA_COMPACT = '/compact Giorno nuovo: tieni solo quello che serve
 /** What the continuity rules look at in a chat. noteAt = its cold note (0 = none); lastCallAt = its last API call. */
 export interface ColdView {
   harness: string; isRegia: boolean; appRegia?: boolean; continuedBy?: unknown;
-  state: string; pending: number; busy: boolean; alive: boolean; handoffTurn: boolean;
+  state: string; pending: number; background: number; busy: boolean; alive: boolean; handoffTurn: boolean;
   contextTokens: number; lastTurnAt: number; noteAt: number; lastCallAt: number;
   /** the lastTurnAt the note was already asked for (once per idle stretch, even if it failed) */
   askedFor?: number | undefined;
@@ -56,7 +56,7 @@ const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'appRegia' | 'contin
 /** Ask for the note now: quiet, a long context, no fresh note, and the cache still warm but about to expire (idleMs
  *  after the last call, before CACHE_TTL_MS). */
 export function coldAsk(v: ColdView, now: number, idleMs: number, ttlMs = CACHE_TTL_MS): boolean {
-  if (!coldChat(v) || !quietChat(v)) return false;
+  if (!coldChat(v) || !quietChat(v) || v.background > 0) return false;
   if (v.contextTokens < COLD_MIN_TOKENS || !v.lastTurnAt || v.noteAt >= v.lastTurnAt || v.askedFor === v.lastTurnAt) return false;
   const idle = now - v.lastCallAt;
   return idle >= idleMs && idle < ttlMs;
@@ -70,7 +70,8 @@ export function coldArmed(v: ColdView, now: number, ttlMs = CACHE_TTL_MS): boole
 
 /** A message now goes to a fresh session: a note newer than the last turn, the cache expired, nothing in flight. */
 export function coldRoute(v: Omit<ColdView, 'alive' | 'state'>, now: number, ttlMs = CACHE_TTL_MS): boolean {
-  if (!coldChat(v) || v.busy || v.pending > 0 || v.handoffTurn) return false;
+  // a fresh session would end the old engine and the background agents and commands it still runs
+  if (!coldChat(v) || v.busy || v.pending > 0 || v.background > 0 || v.handoffTurn) return false;
   return v.noteAt > 0 && v.noteAt >= v.lastTurnAt && now - v.lastCallAt > ttlMs;
 }
 

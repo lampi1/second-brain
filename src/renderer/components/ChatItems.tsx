@@ -1,5 +1,6 @@
 // The transcript of a chat tile: user bubbles (what the user did not type, mail, agents' prompts, app news, Esegui
-// results, folds to one muted line: lib/foreign.ts), markdown assistant text (streaming caret), collapsed thinking (open when it is the prose right before a question), tool
+// results, folds to one muted line: lib/foreign.ts), markdown assistant text (streaming caret), collapsed thinking (open when it is the prose right before a question; a sentence of it can be corrected:
+// CorrectThought.tsx, ADR 0058, the correction shown as its own bubble), tool
 // rows (a plain Italian line of what the tool does, shared/explain.ts; status icon, +/− counts; the raw command, diff
 // or output folded under it), system notices (the "Dove eravamo" recap styled apart; the "continua da qui" divider of a
 // cold continuation, with the previous session folded above it: ADR 0031), turn results and the visuals a chat showed
@@ -29,6 +30,8 @@ import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { ArtifactCard } from './GenUi';
 import { useLinkPeek } from './LinkPeek';
+import { ThoughtText } from './CorrectThought';
+import { correctedThoughts, parseCorrection } from '../lib/correction';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -151,7 +154,8 @@ const ToolRow = memo(function ToolRow({ item }: { item: Tool }) {
 
 /** A reasoning block, folded; open (and marked) when it is the only prose right before a question: the model wrote there
  *  what the question is about (lib/askContext.ts thinkingBeforeAsk). */
-const Thinking = memo(function Thinking({ text, beforeAsk }: { text: string; beforeAsk?: boolean }) {
+const Thinking = memo(function Thinking({ text, beforeAsk, marks }: { text: string; beforeAsk?: boolean; marks?: readonly string[] }) {
+  const chatId = useContext(ChatIdCtx);
   const [open, setOpen] = useState(!!beforeAsk);
   useEffect(() => { if (beforeAsk) setOpen(true); }, [beforeAsk]);
   return (
@@ -159,7 +163,7 @@ const Thinking = memo(function Thinking({ text, beforeAsk }: { text: string; bef
       <button type="button" className="thinking-row" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="thinking-toggle">
         <IconSparkle size={13} /><span>{beforeAsk ? 'Ragionamento · prima della domanda' : 'Ragionamento'}</span><IconChevronRight size={12} className="tool-chev" />
       </button>
-      {open && <div className="thinking-text">{text}</div>}
+      {open && <ThoughtText chatId={chatId} text={text} marks={marks} />}
     </div>
   );
 });
@@ -200,7 +204,18 @@ function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> 
   return <ArtifactCard item={item} cwd={item.cwd ?? cwd} />;
 }
 
-export const Item = memo(function Item({ item, beforeAsk, refs }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[] }) {
+/** A correction of the reasoning the user sent (lib/correction.ts): the sentence struck through, then the fix. */
+function CorrectionBubble({ quote, fix }: { quote: string; fix: string }) {
+  return (
+    <div className="bubble correction" data-testid="correction-bubble">
+      <div className="correction-label">Correzione del ragionamento</div>
+      <div className="correction-quote">«{quote}»</div>
+      <div>{fix}</div>
+    </div>
+  );
+}
+
+export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[]; marks?: readonly string[] }) {
   switch (item.kind) {
     case 'user': {
       const f = foreignOf(item);
@@ -210,18 +225,19 @@ export const Item = memo(function Item({ item, beforeAsk, refs }: { item: ChatIt
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
       const text = own.text;
+      const fix = item.from ? null : parseCorrection(text);
       return (
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-new-chat={nc?.newChat ? '' : undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{item.images === 1 ? '1 immagine' : `${item.images} immagini`}</span> : null}
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>Da «{item.from}» · non scritto da te</div>}
         {nc?.newChat && <div className="msg-newchat" data-testid={`item-${item.id}-newchat`} data-tip="La Regia apre una chat nuova per questa richiesta"><IconPlus size={11} />Nuova chat</div>}
-        {text && <div className="bubble">{text}</div>}
+        {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
       </div>
       );
     }
     case 'assistant': return <div className="msg-assistant" data-testid={`item-${item.id}`}><Message id={item.id} text={item.text} streaming={item.streaming} />{refs?.length ? <NamedChatRefs ids={refs} /> : null}</div>;
-    case 'thinking': return <Thinking text={item.text} beforeAsk={beforeAsk} />;
+    case 'thinking': return <Thinking text={item.text} beforeAsk={beforeAsk} marks={marks} />;
     case 'tool': return <ToolItem item={item} />;
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
@@ -312,6 +328,7 @@ export function ItemList({ items, empty, footer, chatId = null }: { items: reado
   // a Regia's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
   const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia || c?.appRegia ? titlesKey(s.chats) : ''; });
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
+  const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];
   const lastSig = last ? `${last.id}:${'text' in last ? last.text.length : 0}:${last.kind === 'tool' ? last.status : ''}` : '';
   const mounted = useRef(false);
@@ -346,7 +363,7 @@ export function ItemList({ items, empty, footer, chatId = null }: { items: reado
     <div className="items-wrap">
       <div className="items" ref={ref} onScroll={onScroll} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
-        {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : shown.map(i => <Item key={i.id} item={i} beforeAsk={open.has(i.id)} refs={refs.get(i.id)} />)}
+        {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : shown.map(i => <Item key={i.id} item={i} beforeAsk={open.has(i.id)} refs={refs.get(i.id)} marks={fixed.get(i.id)} />)}
         {footer}
       </div>
       {peek.popover}

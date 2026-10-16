@@ -9,6 +9,8 @@
 //     (readgate=<path> reads that path, relative to the cwd, instead of a.txt)
 //   planexit → an ExitPlanMode permission (the plan to approve): "Piano approvato" or "Piano rifiutato: <message>"
 //   edit → an auto-allowed Edit with a structuredPatch result · slow → streams until interrupted
+//   think → streams a reasoning block ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CLAUDE_SLOW_TICKS steps) until
+//   interrupted, then the answer
 //   (FAKE_CLAUDE_SLOW_TICKS deltas, default 200; FAKE_CLAUDE_STAMP=1 ends each word with @<Date.now()> so
 //   scripts/bench-perf.mjs can measure CLI → screen)
 //   stream → 24 text deltas (FAKE_CLAUDE_DELAY apart) before the final answer
@@ -119,6 +121,23 @@ async function streamText(text, parts) {
   out({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 }, parent_tool_use_id: null, session_id: sessionId });
   if (turn?.aborted) return;
   assistant([{ type: 'text', text: said || text }], id);
+}
+/** A reasoning block streamed piece by piece (thinking_delta), cut by an interrupt like the real CLI; then the whole
+ *  block in its assistant message (no signature here: the app never sends it back). */
+async function streamThinking(parts) {
+  const id = `msg_${++n}`;
+  out({ type: 'stream_event', event: { type: 'message_start', message: { id, role: 'assistant', content: [] } }, parent_tool_use_id: null, session_id: sessionId });
+  out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }, parent_tool_use_id: null, session_id: sessionId });
+  let said = '';
+  for (const p of parts) {
+    if (turn?.aborted) break;
+    said += p;
+    out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: p } }, parent_tool_use_id: null, session_id: sessionId });
+    await sleep(Number(process.env.FAKE_CLAUDE_DELAY ?? 5));
+  }
+  out({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 }, parent_tool_use_id: null, session_id: sessionId });
+  if (turn?.aborted) return;
+  assistant([{ type: 'thinking', thinking: said }], id);
 }
 function ask(toolName, input, toolUseId, extra = {}) {
   const request_id = `req_${++n}`;
@@ -257,6 +276,11 @@ async function runTurn(text) {
     o.unref();
     logLine({ orphan: o.pid });
   }
+  if (/think/.test(text) && !turn.aborted) {
+    // reasoning streamed until interrupted (FAKE_CLAUDE_SLOW_TICKS sentences): "Correggi il pensiero" selects one of them
+    const ticks = Number(process.env.FAKE_CLAUDE_SLOW_TICKS ?? 200);
+    await streamThinking(['Penso di usare la libreria vecchia. ', ...Array.from({ length: ticks }, (_, i) => `Passo ${i + 1}. `)]);
+  }
   if (/slow/.test(text)) {
     // a child of the CLI (a Bash tool, an MCP server): outside our parent's job, like claude.exe's own children;
     // it ends by itself after FAKE_CLAUDE_CHILD_MS (40 s) and with a normal exit of this process, never later
@@ -278,7 +302,11 @@ async function runTurn(text) {
     // "paused": the task pauses and resumes before it ends (a workflow), and a late update follows its end
     const upd = (status, ms) => setTimeout(() => out({ type: 'system', subtype: 'task_updated', task_id: 'task_bg', patch: { status }, session_id: sessionId }), ms);
     if (/paused/.test(text)) { upd('paused', 50); upd('running', 150); upd('running', Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400) + 100); }
-    setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'task_bg', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400));
+    const ms = Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400);
+    const note = at => setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'task_bg', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), at);
+    note(ms);
+    // "resumed": SendMessage to the finished agent starts it again under the same task id (CLI 2.1.283), then it ends
+    if (/resumed/.test(text)) { setTimeout(() => out({ type: 'system', subtype: 'task_started', task_id: 'task_bg', tool_use_id: 'toolu_send', description: 'npm test', task_type: 'local_agent', session_id: sessionId }), ms + 200); note(ms * 3); }
   }
   if (/later/.test(text)) {
     // the CLI picks up a task notification by itself: no user message, a whole new turn

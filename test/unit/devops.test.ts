@@ -132,6 +132,24 @@ describe('DevopsService', () => {
     t.svc.shutdown(); again.svc.shutdown();
   });
 
+  it('a mark read survives a rename refused for a moment (Windows: antivirus or indexer holding devops.json)', async () => {
+    const t = make();
+    await t.svc.refresh();
+    const real = fs.renameSync;
+    let refused = 0;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      if (refused < 2) { refused++; throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' }); }
+      return real(a, b);
+    });
+    t.svc.markRead(['a']);
+    spy.mockImplementation(() => { throw Object.assign(new Error('EBUSY: resource busy, rename'), { code: 'EBUSY' }); });
+    t.svc.markRead(['b']);                                 // refused every time: the file is written directly
+    spy.mockRestore();
+    expect(refused).toBe(2);
+    expect(make({ dir: t.dir }).svc.get()).toMatchObject({ unread: 0 });
+    t.svc.shutdown();
+  });
+
   it('second read: only the news never seen go to the feed (a mention as an alert, ADR 0029)', async () => {
     let n = 0;
     const t = make({ run: async (_s, a) => (a.includes('--prs') ? ok({ prs: [] }) : ok({ news: n++ ? [news('a'), news('c', 1)] : [news('a')], assigned: [] })) });

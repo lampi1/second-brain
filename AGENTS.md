@@ -18,7 +18,7 @@ the user's frozen release vs. anything run from this repo; **Aggiorna** (the but
 | Build | `npm run build` (esbuild main + preload, Vite renderer → `out/`) |
 | Run | `npm start` (after a build) · `npm run dev` (dev build + run) |
 | Run as an agent (always) | `SB_HIDDEN=1 npm start` / `SB_HIDDEN=1 npm run dev`: the window renders off screen, out of the taskbar, never takes focus, no Windows toasts; see it with `app_screenshot` (MCP) or `capturePage`. The e2e suite and `test:stable` set it themselves: no test may show a window or take focus (owner, 2026-10-11). The stable copy never sets it. |
-| Light check (branches) | `npm run check:branch` = typecheck + lint of the changed files + the unit tests related to them + only the e2e specs of the changed area (smoke set when nothing maps; never the whole e2e). Green on a clean tree it records the tip as "tested (light)". What a branch needs before it is merged (ADR 0027). |
+| Light check (branches) | `npm run check:branch` = typecheck + lint of the changed files + the unit tests related to them + the publish guard on them; **no e2e** (owner, 2026-10-15: the e2e runs only on main, in `npm run check`). Green on a clean tree it records the tip as "tested (light)". What a branch needs before it is merged (ADR 0027). |
 | All checks (main) | `npm run check` = typecheck + lint + unit beside the e2e (in parallel, ADR 0042). Runs only on main, after a merge, one at a time (never two heavy suites at once on one machine); `npm run promote` runs it too and "Aggiorna" needs it green on main's tip (ADR 0027). |
 | Unit / e2e only | `npm test` · `npm run test:e2e` (Playwright drives the real Electron app; screenshots in `test-results/shots/`). The e2e runs spec files in parallel, as many workers as the machine takes now (`SB_E2E_WORKERS=n` to force), then the specs listed in `EXCLUSIVE` (`playwright.config.ts`: timings, the system clipboard) one at a time; `node scripts/e2e.mjs <specs>` for a few (ADR 0042). A new spec that times things or reads the system clipboard goes in `EXCLUSIVE`. |
 | Live tests (spend real tokens) | `SB_LIVE=1 npx vitest run test/live` (Claude only; never Cursor from a Claude agent) |
@@ -36,9 +36,11 @@ Chats may start, test and kill the dev instance; never the stable one. Promotion
 tree and a green `npm run check`) is triggered by the user from the app ("Aggiorna" in "Migliora l'app", ADR 0020);
 `npm run rollback` by the user from a terminal; neither by agents.
 
-How an agent verifies a change by itself: on its branch `npm run check:branch` (the full `npm run check` is the
-Regia's, on main after the merge) → read the screenshots in `test-results/shots/` → if
-something fails at runtime, `npm run logs -- --level warn --since 15m` → `npm run doctor`.
+How an agent verifies a change by itself: on its branch `npm run check:branch` (no e2e there; the e2e runs only in the
+full `npm run check`, the Regia's, on main after the merge) → a visible change: see it in the dev app
+(`SB_HIDDEN=1 npm run dev`, `app_screenshot`) → if something fails at runtime,
+`npm run logs -- --level warn --since 15m` → `npm run doctor`. A new or changed e2e spec is written on the branch but
+first runs on main: say so in the hand-off, so the Regia knows which branch to look at if it goes red.
 
 ## Layout
 
@@ -70,7 +72,11 @@ something fails at runtime, `npm run logs -- --level warn --since 15m` → `npm 
 6. **Coexistence**: the app never changes Claude desktop / Cursor config, hooks or settings files; it reads their
    transcripts and state read-only; an external session is resumed only as a fork (never two writers).
 7. **Tests:** every module has unit tests; every user-visible feature has an e2e test with a screenshot; "done" =
-   `npm run check:branch` green on the branch's commit + the screenshot looked at (`npm run check` on main, ADR 0027).
+   `npm run check:branch` green on the branch's commit (no e2e) + the change looked at in the dev app; the e2e specs
+   and their screenshots run only on main, in `npm run check` after the merge (owner, 2026-10-15; ADR 0027).
+   Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load
+   the machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
+   2026-10-15).
 8. **Commits: local only for agents**: agents commit on their branch/worktree; pushing, adding remotes and opening
    pull requests are the human's steps. Conventional messages (`feat(chats): …`), English.
 9. **Review:** before merging a branch, a fresh-context reviewer per touched dimension (security, correctness,

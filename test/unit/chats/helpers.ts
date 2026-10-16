@@ -31,9 +31,21 @@ export async function waitFor<T>(fn: () => T | undefined | null | false, what: s
   }
 }
 
-/** Whether a process id is still alive. */
+/** Pids this test file saw dead. Windows hands a freed pid to a new process within moments: a cleanup that killed a
+ *  pid its test had just seen die terminated a fresh vitest worker that took it (admission.test's, exit code 1, on the
+ *  full check of 2026-10-16). */
+const gone = new Set<number>();
+
+/** Whether a process id is still alive (a dead one is remembered: see killStray). */
 export function alive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try { process.kill(pid, 0); return true; } catch { gone.add(pid); return false; }
+}
+
+/** A test's cleanup kill of a process it knows only by pid: never one already seen dead (its pid may be someone else's
+ *  now), never this worker or the vitest that runs it. A ChildProcess is killed with its own .kill() (its handle). */
+export function killStray(pid: number | null | undefined): void {
+  if (!pid || gone.has(pid) || pid === process.pid || pid === process.ppid || !alive(pid)) return;
+  try { process.kill(pid); } catch { /* gone */ }
 }
 
 /** Lines the fake CLI wrote to $FAKE_CLAUDE_LOG: starts ({argv}), control requests ({control, request}), user lines ({user, blocks}). */

@@ -76,6 +76,22 @@ describe('ChatManager archive (auto-close)', () => {
     expect(summary(m, c.id).background).toBeUndefined();
   });
 
+  it('a background task resumed under its old id counts again; its end restarts the idle clocks', async () => {
+    // the 15/10 QA chats: SendMessage to a finished air-qa agent resumed it, the app kept counting 0 and closed the chat
+    const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '400' });
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'background resumed agent' });
+    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === undefined && summary(m, c.id).backgroundEndedAt, 'first run ended');
+    await waitFor(() => summary(m, c.id).background === 1, 'resumed under the same id');
+    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
+    expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
+    const ended = await waitFor(() => summary(m, c.id).background === undefined ? summary(m, c.id).backgroundEndedAt : null, 'second run ended');
+    // the CLI now reads the agent's report in a turn of its own: the engine is not idle since the turn, but since the end
+    const turn = summary(m, c.id).lastResult!.at;
+    expect(ended).toBeGreaterThan(turn + 500);
+    expect(m.releaseIdle(1_000, ended + 500)).toBe(0);
+    expect(m.releaseIdle(1_000, ended + 1_000)).toBe(1);
+  });
+
   it('a message sent while the archive closes the session waits for it and reopens the chat on a new one', async () => {
     const { m, cwd } = setup();
     const c = await m.create({ harness: 'claude', cwd, prompt: 'hello' });

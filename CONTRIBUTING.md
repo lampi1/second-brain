@@ -23,10 +23,10 @@ Useful environment variables: `SB_DEMO=1` (fake services), `SB_DEMO_FREEZE=1` (f
 1. Branch from `main` (`feat/<topic>`, `fix/<topic>`). Several people or agents at once: one git worktree each
    (`git worktree add ../second-brain-wt/<topic> -b feat/<topic>`).
 2. Make the change with its tests (below).
-3. `npm run check:branch`: typecheck, lint of the changed files, the unit tests related to them and the e2e specs of the
-   area you touched (a smoke set when nothing maps). This is what a branch needs.
-4. Look at the screenshots your e2e specs wrote to `test-results/shots/`: a green test on a broken-looking screen is
-   not done.
+3. `npm run check:branch`: typecheck, lint of the changed files, the unit tests related to them and the publish guard.
+   No e2e: the e2e suite runs only on `main` (ADR 0027). This is what a branch needs.
+4. Look at the change in the running app (`SB_HIDDEN=1 npm run dev`, a screenshot): a green check on a broken-looking
+   screen is not done.
 5. Open a pull request with the template filled in. After a merge, `npm run check` (everything, including the whole e2e
    suite) runs on `main`. Run heavy suites one at a time: two e2e runs on one machine make each other flaky.
 

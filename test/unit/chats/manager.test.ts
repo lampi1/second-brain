@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions, type TurnEndInfo } from '../../../src/main/chats/manager';
-import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
+import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, killStray, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
 import { regieOf } from '../../../src/shared/regia';
 
 interface Env { userData: string; home: string; cwd: string; argLog: string }
@@ -274,7 +274,7 @@ describe('ChatManager', () => {
       await waitFor(() => !alive(gc), 'the CLI\'s child killed with it (tree kill or quit reaper)', 5000);
     } finally {
       if (was === undefined) delete process.env.SB_QUIT_REAP_DONE; else process.env.SB_QUIT_REAP_DONE = was;
-      if (alive(gc)) process.kill(gc);
+      killStray(gc);
     }
 
     const e2 = env();
@@ -310,7 +310,7 @@ describe('ChatManager', () => {
       await waitFor(() => orphans().every(p => !alive(p)), 'no process left from the closed chat', 180000); // minutes at 100% CPU
     } finally {
       if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
-      for (const p of orphans()) if (alive(p)) process.kill(p);
+      for (const p of orphans()) killStray(p);
     }
   }, 240000);
 
@@ -334,7 +334,7 @@ describe('ChatManager', () => {
       await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the real close', 180000); // WMI + taskkill: past 90 s at 100% CPU (2026-10-14)
     } finally {
       if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
-      for (const p of orphans()) if (alive(p)) process.kill(p);
+      for (const p of orphans()) killStray(p);
     }
   }, 260000);
 

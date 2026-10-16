@@ -5,7 +5,7 @@
 // Playwright as they are (spec paths, --repeat-each, --grep); `--json <dir>` writes one JSON report per project there
 // (the timings ADR 0042 measured); `--only parallel|exclusive` runs one project, `--keep-shots` leaves the shots (the
 // full check runs the two projects as two calls). A filter that matches no test at all fails, as plain Playwright
-// does ("No tests found"), though each project alone may be empty. Used by package.json "test:e2e", scripts/check.mjs and scripts/check-branch.mjs;
+// does ("No tests found"), though each project alone may be empty. Used by package.json "test:e2e" and scripts/check.mjs;
 // autoWorkers() is unit-tested in test/unit/e2e-workers.test.ts.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';

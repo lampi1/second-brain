@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { descendants, parseProcList, quitReapScript, reapAfterQuit, reapTree, snapshotTrees, type Proc } from '../../../src/main/chats/proctree';
-import { alive, tmp, waitFor } from './helpers';
+import { alive, killStray, tmp, waitFor } from './helpers';
 
 const T = 1_760_000_000_000;
 const p = (pid: number, ppid: number, at: number, name = 'node.exe'): Proc => ({ pid, ppid, created: T + at, name });
@@ -78,7 +78,7 @@ describe('proctree', () => {
       expect(alive(child)).toBe(true);
       expect(await reapTree({ pid: parent.pid ?? 0, created, exited: Date.now() }, { chatId: 'c', what: 'test' })).toBe(1);
       await waitFor(() => !alive(child), 'the orphan killed', 60000);
-    } finally { if (alive(child)) process.kill(child); }
+    } finally { killStray(child); }
   }, 150000); // WMI list 3-40 s + taskkill on a loaded box
 
   it('the quit reaper: an engine terminated directly, its child found and killed once it is gone (real PowerShell)', async () => {
@@ -105,7 +105,7 @@ describe('proctree', () => {
       await waitFor(() => !alive(child), 'the orphan killed', 5000);
     } finally {
       if (was === undefined) delete process.env.SB_QUIT_REAP_DONE; else process.env.SB_QUIT_REAP_DONE = was;
-      if (alive(child)) process.kill(child);
+      killStray(child);
     }
   }, 200000); // PowerShell start + WMI list, 3-40 s on a loaded box, more at 100% CPU
 

@@ -9,6 +9,7 @@
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
 //   ask → cursor/ask_question (one single-choice and one multi-choice question) · plan → cursor/create_plan
 //   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled
+//   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
 //   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
 //   asks permission: "Scritto a.txt" when allowed; either says "<kind> rifiutato" otherwise
@@ -214,6 +215,8 @@ async function prompt(id, p) {
     update(sid, { sessionUpdate: 'usage_update', used: 6000, size: 200000, cost: { amount: 0.2, currency: 'USD' } });
     await delay();
   }
+  // reasoning streamed until cancelled ("Correggi il pensiero" selects its first sentence)
+  if (/think/.test(text) && !turn.cancelled) await say(sid, 'agent_thought_chunk', ['Penso di usare la libreria vecchia. ', ...Array.from({ length: Number(process.env.FAKE_CURSOR_THINK_TICKS ?? 200) }, (_, i) => `Passo ${i + 1}. `)]);
   if (/slow/.test(text)) await say(sid, 'agent_message_chunk', Array.from({ length: 300 }, () => 'tick '));
   else if (!turn.cancelled && final) {
     await say(sid, 'agent_thought_chunk', ['Penso ', 'un attimo']);
