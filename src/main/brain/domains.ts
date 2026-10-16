@@ -5,7 +5,7 @@
 // compatible: a folder without domain.json is one "this-pc" domain with no remote, so nothing syncs and nothing changes
 // for a brain of today. Only an "everywhere" domain may sync: a "this-pc" domain (the employer's data) never gets a
 // remote from the app, even if its file names one. `denyList` names the deny file the publish guard uses before that
-// domain's push, a bare file name in the guard's folder (default deny-work.txt: the work-only list, so the owner's own name
+// domain's push, a bare file name in the private publish folder (default deny-work.txt: the work-only list, so the owner's own name
 // may live in a private domain; the public product sync keeps deny.txt). Plain Node, no Electron. Used by brain/sync.ts and brain/index.ts;
 // scripts/setup-pc.mjs writes the same config.json shape.
 import fs from 'node:fs';

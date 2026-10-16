@@ -1,8 +1,8 @@
 # CI on the three desktop systems (ADR 0054 stage 5): nobody on the team has a Mac, so macOS and Linux are proved
-# here. Runs on every push and pull request once the repo is on GitHub: setup (pinned, scripts off), typecheck, lint,
-# unit tests, then the e2e suite (Electron under xvfb on Linux; the suite hides its windows itself, SB_HIDDEN).
-# Live tests (real CLIs, real tokens) never run here. Until the macOS job is green, the README says macOS is "not yet
-# tried".
+# here. Runs on every push and pull request: setup (pinned, scripts off), typecheck, lint, unit tests, then the e2e
+# suite (Electron under xvfb on Linux; the suite hides its windows itself, SB_HIDDEN). Live tests (real CLIs, real
+# tokens) never run here. Until the macOS job is green, the README says macOS is "not yet tried". The guard job
+# (ADR 0061, at the end) scans the tree and the whole history for secrets and personal data.
 name: ci
 
 on:
@@ -47,3 +47,18 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # The guard (ADR 0061), the last net for a PC without the hooks: tools/guard/scan.mjs on the checkout and on every
+  # commit of the history (blobs, messages, authors), built-in rules only: a private deny list is never uploaded. No
+  # npm install: the scanner has no dependencies. Exit 2 = findings (file:line + rule, never the value).
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/guard/scan.mjs . --history

@@ -15,6 +15,10 @@
 //   scripts/bench-perf.mjs can measure CLI → screen)
 //   stream → 24 text deltas (FAKE_CLAUDE_DELAY apart) before the final answer
 //   later → after the result, the CLI starts another turn on its own (like a task notification)
+//   background → a task (task_bg) starts in the turn, ends after it (FAKE_CLAUDE_TASK_MS); + paused / resumed (task_started
+//     again) / revived (task_updated to running again) · sendmessage → an ended agent resumed by SendMessage, only its
+//     result says so (+ structured: also tool_use_result; + stopped: success false) · waitqa → the answer ends with
+//     "Aspetto la QA sui controlli A, B e C…"
 //   meter → assistant messages with API usage (one repeated per block, one from a subagent), the session's running cost
 //     goes up by 0.05 mid-turn (get_usage shows it), then a 1.5 s pause before the answer; meter die → exits after the pause
 //   garbage → prints non-JSON lines first · crash → stderr + exit 3 · expired → error result with total cost 0
@@ -209,6 +213,7 @@ async function runTurn(text) {
   }
   if (/garbage/.test(text)) { process.stdout.write('this is not json\n{"broken": \n[1,2]\n"str"\n'); }
   let final = 'Ciao dal motore';
+  if (/waitqa/.test(text)) final = 'Fatto il fix.\nAspetto la QA sui controlli A, B e C…';
   if (/ask/.test(text) && !turn.aborted) {
     const input = { questions: [{ question: 'Che colore?', header: 'Colore', options: [{ label: 'Blu', description: 'il mare' }, { label: 'Rosso' }], multiSelect: false }] };
     assistant([{ type: 'tool_use', id: 'toolu_ask', name: 'AskUserQuestion', input }]);
@@ -295,18 +300,31 @@ async function runTurn(text) {
   const aborted = turn.aborted;
   if (aborted) out({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] }, parent_tool_use_id: null, session_id: sessionId });
   // like run_in_background: a task starts in this turn and ends after the turn (FAKE_CLAUDE_TASK_MS), with a notification
+  // "sendmessage": an agent that ended is resumed by SendMessage in this turn; only the tool's result says it runs again
+  // (CLI 2.1.283's text and structured result), its notification ends it after the turn
+  if (/sendmessage/.test(text) && !turn.aborted) {
+    out({ type: 'system', subtype: 'task_started', task_id: 'a26420c62ff6f065f', tool_use_id: 'toolu_agent', description: 'QA', task_type: 'local_agent', session_id: sessionId });
+    out({ type: 'system', subtype: 'task_notification', task_id: 'a26420c62ff6f065f', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId });
+    assistant([{ type: 'tool_use', id: 'toolu_send', name: 'SendMessage', input: { to: 'a26420c62ff6f065f', message: 'riprova' } }]);
+    const stopped = /stopped/.test(text);
+    const res = stopped ? { success: false, message: 'Agent a26420c62ff6f065f was stopped by the user and will not be resumed.' } : { success: true, message: 'Resuming agent a26420c', resumedAgentId: 'a26420c62ff6f065f' };
+    toolResult('toolu_send', [{ type: 'text', text: JSON.stringify(res) }], false, /structured/.test(text) ? res : undefined);
+    if (!stopped) setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'a26420c62ff6f065f', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400));
+  }
   if (/background/.test(text)) out({ type: 'system', subtype: 'task_started', task_id: 'task_bg', tool_use_id: 'toolu_bg', description: 'npm test', task_type: 'local_bash', session_id: sessionId });
   result(final, aborted, t0);
   turn = null;
   if (/background/.test(text)) {
-    // "paused": the task pauses and resumes before it ends (a workflow), and a late update follows its end
-    const upd = (status, ms) => setTimeout(() => out({ type: 'system', subtype: 'task_updated', task_id: 'task_bg', patch: { status }, session_id: sessionId }), ms);
-    if (/paused/.test(text)) { upd('paused', 50); upd('running', 150); upd('running', Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400) + 100); }
+    // "paused": the task pauses and resumes before it ends (a workflow), and an update without a status follows its end
+    const upd = (patch, ms) => setTimeout(() => out({ type: 'system', subtype: 'task_updated', task_id: 'task_bg', patch, session_id: sessionId }), ms);
+    if (/paused/.test(text)) { upd({ status: 'paused' }, 50); upd({ status: 'running' }, 150); upd({ description: 'npm test (done)' }, Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400) + 100); }
     const ms = Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400);
     const note = at => setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'task_bg', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), at);
     note(ms);
     // "resumed": SendMessage to the finished agent starts it again under the same task id (CLI 2.1.283), then it ends
     if (/resumed/.test(text)) { setTimeout(() => out({ type: 'system', subtype: 'task_started', task_id: 'task_bg', tool_use_id: 'toolu_send', description: 'npm test', task_type: 'local_agent', session_id: sessionId }), ms + 200); note(ms * 3); }
+    // "revived": the resumed agent comes back as a task_updated to running, no task_started (the chats of 2026-10-16)
+    if (/revived/.test(text)) { upd({ status: 'running' }, ms + 200); note(ms * 3); }
   }
   if (/later/.test(text)) {
     // the CLI picks up a task notification by itself: no user message, a whole new turn

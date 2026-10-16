@@ -113,6 +113,12 @@ export class Credentials {
     return { user: e.user, found: true, ...(e.url ? { url: e.url } : {}), ...(e.note ? { note: e.note } : {}) };
   }
 
+  /** User names of the entries whose URL host (with port) is the page's: the accounts meant for this site (rules.ts). */
+  accountsFor(pageUrl: string): string[] {
+    const host = hostOf(pageUrl);
+    return host ? [...new Set(this.entries().filter(e => hostOf(e.url) === host).map(e => e.user))] : [];
+  }
+
   /** Every entry for the "Credenziali" panel: group, user, URL, note and an id (never the password). */
   list(): CredentialEntry[] { return publicEntries(this.entries()); }
 

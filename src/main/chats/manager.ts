@@ -38,12 +38,13 @@ export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavor
 import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type SessionPatch, type SessionSink } from './session';
 import { ChatStore, type PastSession, type StoredChat } from './store';
 import { BufferedSink, WarmPool, type WarmEngine } from './warm';
-import { AdmissionQueue, MAIL_WAITS, type AdmissionLimits, type LoadSampler } from './admission';
+import { AdmissionQueue, type AdmissionLimits, type LoadSampler } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { cleanRegiaName, regieOf } from '../../shared/regia';
+import { waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 
 export interface ChatManagerOptions {
@@ -137,6 +138,33 @@ export interface TurnEndInfo {
   durationMs: number;
   turns: number;
   isError: boolean;
+  /** the assistant's texts of this turn, joined (reply rules: chats/reply-rules.ts) */
+  reply?: string;
+}
+
+/** The assistant's texts since the last user message (the turn that just ended), joined. */
+export function turnReply(items: readonly ChatItem[]): string {
+  const out: string[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === 'user') break;
+    if (it.kind === 'assistant') out.unshift(it.text);
+  }
+  return out.join('\n\n');
+}
+
+/** Work still runs behind an idle prompt: background tasks the engine counts, or a final answer that says it waits
+ *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
+export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork;
+
+/** The final answer of the turn that just ended ('' when it wrote none). */
+export function lastAnswer(items: readonly ChatItem[]): string {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === 'user') break;
+    if (it.kind === 'assistant' && it.text.trim()) return it.text;
+  }
+  return '';
 }
 
 interface Rec {
@@ -391,11 +419,17 @@ export class ChatManager implements ChatService {
       this.admission.admitNow(chatId);
       return this.deliver(chatId, text, images, resumed, from, liveOnly);
     }
-    // an agent's message (another chat, the Regia, the app's own resume): checked now, then it may wait for the load
+    // an agent's message (another chat, the Regia, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');
-    // mail (liveOnly) is taken from the inbox only if delivered now: when it would wait it stays unread (mail.ts undo)
-    if (liveOnly && !this.midTurn(r) && this.admission.wouldWait(chatId)) throw new Error(MAIL_WAITS);
+    // a message between chats (mail, app_send_to_chat) to a chat still open never waits for the load either (the owner,
+    // 16/10 "Tutte subito", ADR 0064: mail kept unread while the CPU was over lost the race to every new sample, for
+    // hours, and reached the chat only when the user wrote): what waited for this chat goes first, then this one
+    if (!resumed && !r.s.closedAt) {
+      this.admission.admitNow(chatId);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly);
+    }
+    // the app's own resume, or an agent reopening a closed chat (a new engine): it may wait for the load
     if (r.s.closedAt && !r.archiving) this.unarchive(r); // back on the grid now: its tile shows that it waits
     return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly));
   }
@@ -573,7 +607,7 @@ export class ChatManager implements ChatService {
     }
     if (r.archiving) await r.archiving;
     if (r.s.closedAt) return { ...r.s };
-    if (opts.auto && (r.session?.busy || r.pending.size > 0 || (r.s.background ?? 0) > 0 || r.s.queued)) throw new Error('La chat è tornata al lavoro: resta aperta.');
+    if (opts.auto && (r.session?.busy || r.pending.size > 0 || workBehind(r.s) || r.s.queued)) throw new Error('La chat è tornata al lavoro: resta aperta.');
     // closed by hand while an agent's message waited in the CPU queue: that message is dropped with the chat's work
     if (this.admission?.drop(chatId)) log.info('chats', 'queued work dropped: the chat was archived', { chat: chatId });
     const sess = r.session;
@@ -601,7 +635,7 @@ export class ChatManager implements ChatService {
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';
-    delete r.s.background;
+    delete r.s.background; delete r.s.waitsOnWork;
     this.pruneArchived();
     this.persist();
     log.info('chats', 'chat archived', { chat: chatId, data: { auto: !!opts.auto, ...(keep ? { engineKeptForColdNote: true } : {}) } });
@@ -790,7 +824,8 @@ export class ChatManager implements ChatService {
       harness: r.s.harness, isRegia: r.s.isRegia, ...(r.s.appRegia ? { appRegia: true } : {}), continuedBy: r.s.continuedBy,
       // an archived chat kept alive for its note counts as idle (archive: closeAfterCold)
       state: r.closeAfterCold && r.s.closedAt && r.s.state === 'closed' ? 'idle' : r.s.state,
-      pending: r.pending.size, background: r.s.background ?? 0, busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
+      // a final answer that waits for its work counts as one more background task: no note, no fresh session
+      pending: r.pending.size, background: (r.s.background ?? 0) + (r.s.waitsOnWork ? 1 : 0), busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
       contextTokens: r.s.contextTokens ?? 0, lastTurnAt: r.lastTurnAt, noteAt: r.coldNoteAt ?? 0,
       lastCallAt: Math.max(r.lastTurnAt, r.coldNoteAt ?? 0), askedFor: r.coldAskedFor,
     };
@@ -973,7 +1008,7 @@ export class ChatManager implements ChatService {
     for (const r of this.chats.values()) {
       const sess = r.session;
       if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.handoffTurn || r.s.closedAt || r.s.isRegia || r.s.appRegia) continue;
-      if (r.s.state !== 'idle' || r.pending.size > 0 || (r.s.background ?? 0) > 0) continue;
+      if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
       if (this.coldOn() && coldArmed(this.coldView(r), now, this.ttl())) continue;
@@ -1128,6 +1163,8 @@ export class ChatManager implements ChatService {
     r.turnSinceDone = true; r.lastTurnAt = item.at;
     r.ctxSince ??= item.at;
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
+    // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
+    if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;
@@ -1136,6 +1173,7 @@ export class ChatManager implements ChatService {
         chatId: r.s.id, sessionId: r.s.sessionId, harness: r.s.harness, model: r.s.model, effort: r.s.effort,
         ...(first ? { firstPrompt: first } : {}),
         costUsd: item.costUsd, durationMs: item.durationMs, turns: item.turns, isError: item.isError,
+        reply: turnReply(r.items),
       };
       this.hook('onTurnEnd', () => on(info));
     }

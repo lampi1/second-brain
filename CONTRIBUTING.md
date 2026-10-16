@@ -6,7 +6,8 @@ follow [AGENTS.md](AGENTS.md), which has the same rules in a denser form.
 ## Set up
 
 ```powershell
-npm run setup          # npm ci with install scripts off (.npmrc) + Electron's checksummed binary
+git clone <repo url>; cd second-brain
+npm run setup          # npm ci with install scripts off (.npmrc) + Electron's checksummed binary + the guard hooks
 npm run demo           # build + the app on fictional data: no CLI, no login, no tokens
 npm run doctor         # what is missing on this machine (Electron, build, CLIs, logins, brain, MCP port)
 ```
@@ -18,16 +19,37 @@ Useful environment variables: `SB_DEMO=1` (fake services), `SB_DEMO_FREEZE=1` (f
 `SB_HIDDEN=1` (window off screen and never focused: agents and tests), `SB_USER_DATA=<dir>` (an isolated profile),
 `SB_BRAIN=<dir>` (a brain folder), `SB_MCP_PORT=0` (a random MCP port).
 
+Your own brain starts from the template in this repo: `node brain-template/install.mjs` (see the README).
+
+### The guard (optional config, per PC)
+
+The repository is public, so `npm run setup` turns on two git hooks (`core.hooksPath .githooks`):
+`pre-commit` scans what you stage and `pre-push` scans every commit you are about to push (files and their names, message,
+author and committer, and the branch and tag names) for secrets and personal or company data, with `tools/guard/scan.mjs`. Two settings are optional, per
+clone, and yours to set (setup only prints them):
+
+```powershell
+git config guard.denyList "<path to your deny list>"   # words that must never be published, one per line, kept outside the repo
+git config guard.email "<you>@users.noreply.github.com" # the only e-mail allowed on your commits
+git config user.email "<you>@users.noreply.github.com"
+```
+
+A deny list that is set but missing blocks every commit and push (it is never skipped). A block prints the file, the
+line and the rule, never the matched text, and how to fix it: edit the line, or, only for a proven false positive, add
+the printed line (`path rule sha256:…`) to `.guardallow`, which is reviewed like code. Commit messages and identities
+are never silenced. Do not bypass the hooks with `--no-verify`: CI scans the whole history again. `npm run doctor`
+shows whether the hooks are on and the config is readable.
+
 ## Workflow
 
 1. Branch from `main` (`feat/<topic>`, `fix/<topic>`). Several people or agents at once: one git worktree each
    (`git worktree add ../second-brain-wt/<topic> -b feat/<topic>`).
 2. Make the change with its tests (below).
-3. `npm run check:branch`: typecheck, lint of the changed files, the unit tests related to them and the publish guard.
+3. `npm run check:branch`: typecheck, lint of the changed files, the unit tests related to them and the guard on them.
    No e2e: the e2e suite runs only on `main` (ADR 0027). This is what a branch needs.
 4. Look at the change in the running app (`SB_HIDDEN=1 npm run dev`, a screenshot): a green check on a broken-looking
    screen is not done.
-5. Open a pull request with the template filled in. After a merge, `npm run check` (everything, including the whole e2e
+5. Push your branch (the pre-push guard scans every new commit) and open a pull request with the template filled in. After a merge, `npm run check` (everything, including the whole e2e
    suite) runs on `main`. Run heavy suites one at a time: two e2e runs on one machine make each other flaky.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `feat(chats): …`, `fix(browser): …`,

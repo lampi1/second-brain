@@ -24,7 +24,7 @@ import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from '.
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
-import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, toolSummary } from './claude-map';
+import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, toolSummary } from './claude-map';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
 import { drift, record } from './drift';
@@ -201,7 +201,6 @@ export class ClaudeSession implements HarnessSession {
   private cliVersion: string | null = null; // what the CLI says it is (initialize, system/init): drift reports name it
   private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
-  private ended = new Set<string>();  // tasks seen ending
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
@@ -571,14 +570,14 @@ export class ClaudeSession implements HarnessSession {
     this.setState(this.calls.size ? 'waiting' : 'running');
   }
 
-  private task(id: string, live: boolean, started = false): void {
+  private task(id: string, live: boolean): void {
     if (!id) return;
-    // a late update never revives an ended task; a new task_started does (live 2026-10-15, CLI 2.1.283: SendMessage to a
-    // finished agent resumes it under the same task id)
-    if (started) this.ended.delete(id);
-    else if (live && this.ended.has(id)) return;
+    // SendMessage to a finished agent resumes it under the same task id (CLI 2.1.283): whatever says it runs again
+    // (task_started, a task_updated to running, the SendMessage result) revives it. The CLI sends a task's update before
+    // its notification, so a live status after the end is a real restart, never a late update (the chats of 2026-10-16
+    // closed while a resumed agent worked: its revival came as an update the app ignored)
     const n = this.tasks.size;
-    if (live) this.tasks.add(id); else { this.tasks.delete(id); this.ended.add(id); }
+    if (live) this.tasks.add(id); else this.tasks.delete(id);
     if (this.tasks.size !== n) this.sink.changed({ background: this.tasks.size });
   }
 
@@ -791,6 +790,9 @@ export class ClaudeSession implements HarnessSession {
         const diff = diffFromResult(t.item.name, t.input, m.tool_use_result, this.opts.cwd);
         const item: ToolItem = { ...t.item, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content), ...(diff ? { diff } : {}) };
         this.sink.item(item, true);
+        // a finished background agent resumed by SendMessage works again: counted from its result too, so the chat is
+        // never closed while it runs even if the CLI's task events say nothing (its task_notification ends it)
+        if (t.item.name === 'SendMessage' && b.is_error !== true) { const id = resumedAgent(m.tool_use_result, item.output ?? ''); if (id) this.task(id, true); }
       } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sysCode('interrupted', undefined, 'info');
     }
   }
@@ -920,7 +922,7 @@ export class ClaudeSession implements HarnessSession {
       }
       // background agents and shell commands (CLI 2.1.28x: task_started, task_updated with a status, task_notification
       // at the end): counted so the app never auto-closes a chat whose work still runs behind an idle prompt
-      case 'task_started': return this.task(s(m.task_id), true, true);
+      case 'task_started': return this.task(s(m.task_id), true);
       case 'task_updated': { const st = s(o(m.patch).status); this.taskStatus(st, m); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
       case 'task_notification': { const st = s(m.status); this.taskStatus(st, m); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
       case 'compact_boundary': {

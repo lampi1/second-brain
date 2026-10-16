@@ -214,7 +214,7 @@ export const dialogsIt = {
 
   // LaunchBanner
   'dialogs.launch.failedPrefix': 'La versione nuova non è partita.',
-  'dialogs.launch.failedReason': (p: { reason: string }) => `${p.reason}: l'app è tornata a`,
+  'dialogs.launch.failedReason': (p: { reason: string }) => `${p.reason}: l’app è tornata a`,
   'dialogs.launch.startedPrefix': 'Partita la versione nuova',
   'dialogs.launch.improveButton': 'Migliora l’app',
   'dialogs.launch.dismissLabel': 'Chiudi l\'avviso',

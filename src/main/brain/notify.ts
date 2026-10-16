@@ -1,5 +1,5 @@
-// Calm notifications (calm UI: few, useful notifications; a toast must be rare, named and useful; research in docs/research/
-// research-browser-memory.md D). Rules: a Windows toast only for urgent kinds by default (settings.osToasts), only
+// Calm notifications (calm UI: few, useful notifications; a toast must be rare, named and useful; research in the
+// browser-memory research note D, kept outside the repo). Rules: a Windows toast only for urgent kinds by default (settings.osToasts), only
 // when the app window is not focused (when the user is looking, the in-app feed is enough), never for events that happened
 // while the app was closed, never for muted kinds or in do-not-disturb. Events that arrive together become ONE toast
 // ("3 novità per te"); at most one toast every 20 s, except urgent ones (an agent blocked on the user), which go out after a

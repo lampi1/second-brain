@@ -7,7 +7,8 @@ import type { CallCtx, McpTool, ToolOutput } from '../mcp/server';
 import { log, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
 import { normalizeUrl, type BrowserActions, type Shot } from './actions';
-import { envForUrl } from './envs';
+import { envForUrl, envSlug } from './envs';
+import { envRefusal, loginRefusal } from './rules';
 import { fmtFactor } from './preview';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
@@ -71,7 +72,7 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
     if (closed) throw new Error(closed);              // the user closed its active tab: never reopen a page silently
     return tabs.activeOf(scope.group) ?? tabs.create(scope.group, scope.owner, undefined, a.env ? { env: String(a.env) } : {});
   };
-  const envProp = { env: { type: 'string', description: 'Environment = its own session (cookies, storage). Default from the host (test-3.example.com → example-test-3, localhost → local); name one to share a session on purpose or to keep two users apart.' } };
+  const envProp = { env: { type: 'string', description: 'Environment = its own session (cookies, storage). Default from the host (test-3.example.com → example-test-3, localhost → local); name one to share a session on purpose or to keep two users apart. Local stacks (localhost, 127.0.0.1, *.localhost) load only in "local", and "local" holds only them (refused otherwise).' } };
 
   const tools: McpTool[] = [
     {
@@ -87,6 +88,7 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       run: (a, ctx) => serial(scopeOf(ctx).group, async () => {
         const s = scopeOf(ctx);
         const url = a.url ? normalizeUrl(String(a.url)) : undefined;
+        if (url && a.env) { const no = envRefusal(url, envSlug(a.env)); if (no) throw new Error(no); }
         const tab = tabs.create(s.group, s.owner, url ? undefined : 'about:blank', a.env ? { env: String(a.env) } : url ? { env: envForUrl(url) } : {});
         tab.envExplicit = !!a.env;                       // a derived env can still follow the host on first navigate
         if (!url) return `Opened ${tab.id} (empty) in environment ${tab.env}\n${listTabs(s)}`;
@@ -126,10 +128,16 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       description: 'Load a url in your active tab (opens a tab if you have none), or "back", "forward", "reload". Waits for the page to load and settle. env: the environment (session) to load it in; a different env than the tab\'s opens a new tab there. force: true leaves a page that blocks unloading (unsaved changes) and dismisses an open dialog.',
       inputSchema: schema({ url: { type: 'string', description: 'http(s) URL (scheme optional), or back | forward | reload' }, force: { type: 'boolean' }, ...envProp }, ['url']),
       run: (a, ctx) => serial(scopeOf(ctx).group, async () => {
-        let tab = ensureTab(scopeOf(ctx), a);
         const url = str(a.url, 'url');
+        const history = /^(?:back|forward|reload)$/i.test(url.trim());
+        if (!history && a.env) { const no = envRefusal(normalizeUrl(url), envSlug(a.env)); if (no) throw new Error(no); }
+        let tab = ensureTab(scopeOf(ctx), a);
         let note = '';
-        if (!/^(?:back|forward|reload)$/i.test(url.trim())) ({ tab, note } = tabs.prepareFor(tab, normalizeUrl(url), a.env));
+        if (!history) {
+          // without env the url loads in the tab's environment (a fresh tab with a derived one follows the host)
+          if (!a.env && !(tab.fresh && !tab.envExplicit)) { const no = envRefusal(normalizeUrl(url), tab.env); if (no) throw new Error(no); }
+          ({ tab, note } = tabs.prepareFor(tab, normalizeUrl(url), a.env));
+        }
         const t = tab;
         const out = await actions.act(t, `navigate ${url.slice(0, 80)}`, () => actions.navigate(t, url, bool(a.force)), { allowDialog: bool(a.force), settle: 6000 });
         return note ? `${note}\n${out}` : out;
@@ -265,7 +273,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'handoff_to_user', annotations: WRITE,
-      description: 'Ask the user to act in your tab themselves (login, MFA, CAPTCHA, a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file: the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
+      description: 'Ask the user to act in your tab themselves (login, MFA, CAPTCHA, a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Open the sign-in page in your tab first. On a local stack whose test accounts are in the user\'s credentials file a login hand-off is refused: sign in yourself. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file (required, refused otherwise, when the file has entries for the page\'s host): the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
       inputSchema: schema({
         reason: { type: 'string', description: 'One short line, e.g. "Login richiesto su example-test-3"' }, instructions: { type: 'string' },
         kind: { type: 'string', enum: ['login', 'other'] },
@@ -284,6 +292,10 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
           const kind = a.kind === 'login' ? 'login' as const : 'other' as const;
           const reason = String(a.reason ?? (kind === 'login' ? `Rifai l'accesso a ${tab.env}` : 'Serve il tuo intervento')).slice(0, 200);
           const url = tab.wc.getURL();
+          if (kind === 'login') {
+            const no = loginRefusal({ url, account: typeof a.account === 'string' ? a.account : '', accounts: tabs.credentials.accountsFor(url), file: tabs.credentials.describe() });
+            if (no) { log.info('browser', 'login hand-off refused', { chat: s.chatId ?? undefined, data: { tab: tab.id, env: tab.env } }); throw new Error(no); }
+          }
           const account = typeof a.account === 'string' && a.account.trim() ? tabs.credentials.lookup(a.account, url) : undefined;
           h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason, instructions: String(a.instructions ?? '').slice(0, 2000), url: redact(url), env: tab.env, kind, ...(account ? { account } : {}) });
           handoffGroup.set(h.id, s.group);

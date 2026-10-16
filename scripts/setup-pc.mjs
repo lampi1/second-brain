@@ -4,7 +4,8 @@
 // create a private remote for a domain folder that has none. It never creates a GitHub repo, never adds a remote, never
 // pushes: on the first run nothing leaves this PC (the first push of a new remote is the app's, which runs the publish guard
 // on the whole history). A config.json that is not valid JSON stops the setup. A folder that exists is left as it is.
-// Used by the user by hand on a new PC; the pure parts are unit-tested (test/unit/setup-pc.test.ts).
+// At the end it reports the app repo's guard (ADR 0061: hooks active, deny list and e-mail config) and prints the
+// optional guard config commands. Used by the user by hand on a new PC; the pure parts are unit-tested (test/unit/setup-pc.test.ts).
 //   node scripts/setup-pc.mjs --app <url> --app-dir <dir> --domain <url>=<dir> [--domain ...] [--brain <dir>]
 //                             [--user-data <dir>] [--dry-run] [--no-setup]
 //   --user-data defaults to %APPDATA%/second-brain (the stable instance's userData); --dry-run prints the plan only.
@@ -13,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { OPTIONAL_CONFIG, guardStatus, statusLines } from './guard-lib.mjs';
 
 /** A clone URL git cannot turn into a command or an option (same rule as src/main/brain/domains.ts remoteOk). */
 export function urlOk(u) {
@@ -137,6 +139,16 @@ function main() {
   if (noRemote.length) {
     console.log('\nQueste cartelle non hanno un remote. Se vuoi sincronizzarne una su tutti i tuoi PC, i comandi (da lanciare tu, nessuno è stato eseguito):');
     for (const d of noRemote) { console.log(`\n# ${domainName(d)}`); for (const c of remoteCommands(d, domainName(d))) console.log(c); }
+  }
+  // the app repo's guard (ADR 0061): npm run setup turned the hooks on; the deny list and the e-mail are the user's
+  if (!plan.dryRun && fs.existsSync(appDir)) {
+    const gs = guardStatus(appDir);
+    console.log('');
+    for (const l of statusLines(gs)) console.log(l);
+    if (gs.repo && (gs.deny === 'unset' || gs.email === 'unset')) {
+      console.log('Facoltativi, da lanciare tu nella cartella dell\'app:');
+      for (const l of OPTIONAL_CONFIG) console.log(`  ${l}`);
+    }
   }
   console.log('\n✓ Fatto. Nessun repository creato, nessun push.');
 }

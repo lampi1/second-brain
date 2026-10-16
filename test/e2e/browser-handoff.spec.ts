@@ -1,4 +1,4 @@
-// Login hand-off, end to end in the real app (fake Claude CLI, fixture brain, fixture site):
+// Login hand-off, end to end in the real app (fake Claude CLI, fixture brain, fixture site on 127.0.0.2: a remote host)
 // - handoff_to_user called with a progressToken streams progress notifications at once and the result when the user
 //   answers (Claude Code aborts a call silent for 300 s: the bug of 2026-10-11 in "Prova · Browser su test 3");
 // - the banner on the chat's browser tile shows who waits, the instructions and the account from the brain's
@@ -30,11 +30,13 @@ const clip = () => app.evaluate(() => (globalThis as unknown as { __sbClipboard:
 test.describe.serial('login hand-off', () => {
   test.beforeAll(async () => {
     sites = await startSites();
+    // the site stands for a remote test host: on a local stack with test accounts the agent signs in itself (ADR 0063)
+    test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
     const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-'));
     fs.mkdirSync(path.join(brain, 'ops'));
     fs.writeFileSync(path.join(brain, 'ops', 'credentials.md'), [
       '# Test accounts', '', '```json', JSON.stringify({ site: { test: [
-        { note: 'holding di prova con modulo X attivo', url: `${sites.a}/login`, email: 'mario@example.com', password: SECRET },
+        { note: 'holding di prova con modulo X attivo', url: `${sites.remote}/login`, email: 'mario@example.com', password: SECRET },
         { email: 'other@example.com', password: 'unused' },
       ] } }, null, 2), '```', '',
     ].join('\n'));
@@ -50,7 +52,7 @@ test.describe.serial('login hand-off', () => {
     const cfg = JSON.parse(start.argv![start.argv!.indexOf('--mcp-config') + 1]!) as { mcpServers: Record<string, { url: string }> };
     agent = new McpClient(cfg.mcpServers['second-brain']!.url);
     await agent.init();
-    await agent.ok('tabs_create', { url: `${sites.a}/login` });
+    await agent.ok('tabs_create', { url: `${sites.remote}/login` });
   });
 
   test.afterAll(async () => {
@@ -156,7 +158,7 @@ test.describe.serial('login hand-off', () => {
     await expect(tile).not.toHaveClass(/\bpair-hot\b/);
     const send = (type: 'mouseMove' | 'mouseLeave') => app.evaluate(({ webContents }, [t, u]) => {
       webContents.getAllWebContents().find(w => w.getURL().startsWith(u))!.sendInputEvent({ type: t, x: 40, y: 40 });
-    }, [type, sites.a] as const);
+    }, [type, sites.remote!] as const);
     await send('mouseMove');
     await expect(tile).toHaveClass(/\bpair-hot\b/);
     await send('mouseLeave');
@@ -164,6 +166,8 @@ test.describe.serial('login hand-off', () => {
   });
 
   test('an account missing from the file is shown as such, without a password', async () => {
+    // a host with no entries in the file (on one with entries the agent must name one of them, ADR 0063)
+    await agent.ok('navigate', { url: `${sites.b}/login`, env: 'local' });
     const waiting = agent.call('handoff_to_user', { kind: 'login', account: 'nobody@example.com', wait_seconds: 30 });
     const banner = page.getByTestId(/^handoff-t[0-9]+$/);
     await expect(banner.getByTestId(/^handoff-missing-/)).toContainText('Non è nel file delle credenziali');

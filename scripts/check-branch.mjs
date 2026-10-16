@@ -39,8 +39,8 @@ function main() {
   if (lintAll) run('lint', 'npx', ['eslint', '.']);
   else if (lintable.length) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...lintable]);
   run('unit', 'npx', ['vitest', 'run', '--changed', base, '--passWithNoTests']);
-  // the product sync publishes the changed files too: the publish guard on them (seconds), so a private name blocks
-  // the branch, not main after the merge (2026-10-14); the full scan stays in `npm run check`
+  // the repo is public product (ADR 0061): the guard on the changed files (seconds, same scanner and deny list as the
+  // hooks), so a private name blocks the branch, not main after the merge (2026-10-14); the full scan is in `npm run check`
   const present = changed.filter(f => fs.existsSync(f));
   if (present.length) {
     process.env.SB_GUARD_FILES = present.join('\n');

@@ -20,7 +20,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChatSummary, Harness } from '../../shared/contract';
 import { log, errText } from '../log';
-import { MAIL_WAITS } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
 import { regiaOfChat } from '../../shared/regia';
 import { engineOf } from '../engines/registry';
@@ -310,8 +309,6 @@ export class ChatMail {
           log.info('mail', 'mail delivered to a chat', { chat: chat.id, data: { messages: msgs.length, from: msgs.map(m => m.from) } });
         } catch (e) {
           undo();
-          // the machine is busy (CPU queue, ADR 0036): retried on the next check, no warning each time
-          if (errText(e) === MAIL_WAITS) { log.debug('mail', 'mail held: the machine is busy', { chat: chat.id }); continue; }
           // a stopped chat on an engine the Regie may not use: an agent's mail never wakes it, it waits for the user
           if (e instanceof AgentMayNotWake) { log.debug('mail', 'mail held: the chat is stopped and the Regie may not use its engine', { chat: chat.id }); continue; }
           log.warn('mail', 'mail not delivered: left unread', { chat: chat.id, cause: errText(e), hint: 'the chat closed or failed to start; the hook or a wait delivers it later' });

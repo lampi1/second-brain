@@ -1,9 +1,9 @@
 // End-to-end: "Discutine" and "Apri una chat" on the ideas, yours and the AI's (Idee, filter "Dall'IA"), in the
 // frozen demo (chats, the Regia) pointed at the synthetic brain of test/fixtures/brain-ui (SB_BRAIN: the demo then
 // answers the brain pages from it). Discutine docks the Regia next to the page with a ready draft (file and line of
-// ideas.md) that is NOT sent until Enter; once sent the idea says "Discussa"; Apri una chat creates "Idea · <titolo>"
-// from an editable first message (Ctrl+Invio) and the page stays; the Idee table marks the discussed idea; the peek
-// has the same bar. Screenshots: test-results/shots/discuss-*.png (dark, plus one light).
+// ideas.md; in English, ADR 0057) that is NOT sent until Enter; sent, the idea says "Discussa"; Apri una chat creates
+// "Idea · <titolo>" from an editable first message (Ctrl+Invio) and the page stays; the Idee table marks the discussed
+// idea; the peek has the same bar. Screenshots: test-results/shots/discuss-*.png (dark, plus one light).
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -49,8 +49,8 @@ test("Idee · Dall'IA: Discutine docks the Regia with an editable draft that quo
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   const input = page.getByTestId('regia-input');
   await expect(input).toBeFocused();
-  await expect(input).toHaveValue(/^Discutiamo lo spunto dell'IA «Una chat finita si chiude da sola» \(ideas\.md, riga \d+, del /);
-  await expect(input).toHaveValue(/Non cambiare lo stato in ideas\.md/);
+  await expect(input).toHaveValue(/^Let's discuss the AI's suggestion «Una chat finita si chiude da sola» \(ideas\.md, line \d+, from /);
+  await expect(input).toHaveValue(/Do not change the state in ideas\.md/);
   await expect(page.getByTestId('page-idee')).toBeVisible(); // the page stays
   const row = page.getByRole('row').filter({ hasText: 'Una chat finita si chiude da sola' });
   await expect(row.getByTestId('bx-idea-discussed')).toHaveCount(0); // not sent yet: not discussed
@@ -80,7 +80,7 @@ test('Idee · Dall\'IA: Apri una chat shows the editable first message; Ctrl+Inv
   await expect(box).toContainText('Nuova chat «Idea · Le domande in fila, una alla volta»');
   const ta = box.getByRole('textbox');
   await expect(ta).toBeFocused();
-  await expect(ta).toHaveValue(/Lavoriamo sull'idea «Le domande in fila, una alla volta» \(ideas\.md, riga \d+/);
+  await expect(ta).toHaveValue(/Let's work on the idea «Le domande in fila, una alla volta» \(ideas\.md, line \d+/);
   await shot(page, 'discuss-new-chat-box');
   await page.keyboard.press('Escape');
   await expect(box).toHaveCount(0);
@@ -114,8 +114,8 @@ test('Idee: the table marks the discussed idea; the side peek has Discutine and 
   await page.keyboard.press('Enter');
   await expect(peek).toHaveCount(0); // the peek steps aside so the Regia overlay shows
   await expect(page.getByTestId('regia-input')).toBeFocused();
-  await expect(page.getByTestId('regia-input')).toHaveValue(/^Discutiamo la mia idea «Diario vocale a fine giornata» .*stato in corso/);
-  await expect(page.getByTestId('regia-input')).toHaveValue(/A che punto è\?/);
+  await expect(page.getByTestId('regia-input')).toHaveValue(/^Let's discuss my idea «Diario vocale a fine giornata» .*state in progress/);
+  await expect(page.getByTestId('regia-input')).toHaveValue(/Where are we\?/);
   await shot(page, 'discuss-idee-regia');
   // light theme: the peek again, with its bar
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
@@ -145,7 +145,7 @@ test('a draft already in the Regia stays; another row resets the box; a differen
   await expect(peek.getByTestId('bx-discuss-box')).toHaveCount(0); // never the old idea's text under the new title
   await expect(peek).toContainText('Spesa per tipo di lavoro nel brief');
   await peek.getByTestId('bx-discuss-regia').click();
-  await expect(input).toHaveValue(/^Nota mia: prima questo\.\n\nDiscutiamo lo spunto dell'IA «Spesa per tipo di lavoro nel brief»/);
+  await expect(input).toHaveValue(/^Nota mia: prima questo\.\n\nLet's discuss the AI's suggestion «Spesa per tipo di lavoro nel brief»/);
   await input.fill('Un altro messaggio, non la bozza.');
   await input.press('Enter');
   await expect(input).toHaveValue('');

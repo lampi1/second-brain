@@ -1,0 +1,5 @@
+#!/bin/sh
+# pre-push (ADR 0061): scans every commit being pushed (trees, messages, authors, committers) with
+# tools/guard/scan.mjs; scripts/guard-push.mjs does the work and reads git's ref lines from stdin. Installed by
+# `npm run setup` (core.hooksPath .githooks). POSIX sh, so it runs under Git for Windows too. Any error blocks the push.
+exec node "$(dirname "$0")/../scripts/guard-push.mjs" "$@"

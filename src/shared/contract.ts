@@ -132,6 +132,9 @@ export interface ChatSummary {
   /** when its last background task ended: the CLI then reads the task's report in a turn of its own, started without a
    *  message from us, so the auto-close and the engine release count their delay from here too (never persisted) */
   backgroundEndedAt?: number;
+  /** its last turn's final answer says it waits for work still running (an agent, a QA run, a build: shared/waiting.ts):
+   *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
+  waitsOnWork?: boolean;
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
   closedAt?: number;
   /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */

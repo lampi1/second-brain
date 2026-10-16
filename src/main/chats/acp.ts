@@ -302,7 +302,7 @@ export class AcpSession implements HarnessSession {
   private todosItemId: string | null = null;
   private context: ContextUsage | null = null;
   /** characters of the conversation seen on the wire (prompts, answers, thoughts, tool input/output, a load's replay):
-   *  the context estimate while the engine sends no usage_update (research-cursor-cost.md: Cursor's CLI 2026.07 never does) */
+   *  the context estimate while the engine sends no usage_update (cursor-cost research note: Cursor's CLI 2026.07 never does) */
   private chars = 0;
   private turnStart = 0;
   private sessionCost: number | null = null;   // ACP usage_update.cost (cumulative USD), when the engine sends it
@@ -1034,7 +1034,7 @@ export class AcpSession implements HarnessSession {
           this.context = { totalTokens: used, maxTokens: size, percentage: (100 * used) / size };
           this.sink.changed({ contextTokens: used, contextMaxTokens: size, contextEstimated: false });
         }
-        // ACP: cost = the session's cumulative {amount, currency}; Cursor's CLI does not send it yet (research-cursor-cost.md)
+        // ACP: cost = the session's cumulative {amount, currency}; Cursor's CLI does not send it yet (cursor-cost research note)
         const c = o(u.cost), amount = num(c.amount);
         if (amount !== undefined && (!c.currency || s(c.currency) === 'USD')) {
           // a loaded session's first figure includes its past turns: it becomes the base (undercount, never a jump)

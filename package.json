@@ -42,7 +42,7 @@
     "check:branch": "node scripts/check-branch.mjs",
     "doctor": "node scripts/doctor.mjs",
     "logs": "node scripts/logs.mjs",
-    "setup": "npm ci && node node_modules/electron/install.js",
+    "setup": "npm ci && node node_modules/electron/install.js && node scripts/setup-hooks.mjs",
     "promote": "node scripts/release.mjs promote",
     "rollback": "node scripts/release.mjs rollback",
     "release": "node scripts/release.mjs status",

@@ -28,7 +28,8 @@ const INSTRUCTIONS = [
   'To know what is on the page, try read_page, find or get_page_text first: text costs far fewer tokens than an image. Take a screenshot only when you must really see the page (layout, colours, a chart, something the text does not show).',
   'screenshot: the image you get is scaled (long side ~1000 px); its text says the factor: click coordinate = image px × factor. save_to stores a full-size PNG as QA evidence and returns only its path and size, no image (add view: true to see it too).',
   'A JavaScript alert/confirm blocks the page until you call handle_dialog. Popups and target=_blank links open as new tabs of yours.',
-  'Each tab lives in an environment (its own cookies and storage; default from the host, e.g. example-test-3, local); environments shows them with their sign-in status.',
+  'You open and drive the pages yourself (tabs_create, navigate): never ask the user to open a browser, a URL or a page, and never give them sign-in steps.',
+  'Each tab lives in an environment (its own cookies and storage; default from the host, e.g. example-test-3, local); environments shows them with their sign-in status. Local stacks (localhost, 127.0.0.1, *.localhost) always load in environment "local" (the tools refuse another).',
   'HARD LIMIT: you never type a password on a remote host (the tools refuse it). On a sign-in page call handoff_to_user with kind "login": the user signs in once and the environment keeps the session. On local stacks (localhost, 127.0.0.1, *.localhost, *.test) you may sign in with the project\'s test accounts.',
   'For MFA, CAPTCHA or anything only the user can do, call handoff_to_user and wait: never ask them for passwords.',
 ].join('\n');

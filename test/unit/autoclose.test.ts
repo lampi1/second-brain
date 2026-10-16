@@ -28,11 +28,12 @@ describe('auto-close rule', () => {
     expect(closeAt(chat(), { ...free, touchedAt: 9000 }, MIN)).toBe(9000 + MIN);
   });
 
-  it('never: the Regia, delay 0, already closed, not idle, a request open, background tasks, an error, no result yet, a turn the user interrupted', () => {
+  it('never: the Regia, delay 0, already closed, not idle, a request open, background tasks, a last answer that waits for its work, an error, no result yet, a turn the user interrupted', () => {
     const no: Partial<ChatSummary>[] = [
       { isRegia: true }, { closedAt: 5 }, { state: 'running' }, { state: 'waiting' }, { state: 'error' }, { pending: 1 },
       { background: 2 }, { lastError: 'x' }, { lastResult: { at: 1, isError: true } }, { lastResult: undefined },
       { lastResult: { at: 1, isError: false, interrupted: true } }, // the user stopped it: he is on it
+      { waitsOnWork: true }, // its last answer waits for its agents ("Aspetto la QA…", 2026-10-16)
     ];
     for (const p of no) expect(closeAt(chat(p), free, MIN)).toBeNull();
     expect(closeAt(chat(), free, 0)).toBeNull();

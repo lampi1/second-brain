@@ -1,7 +1,7 @@
 // Pure mapping of Claude tool calls to tile rows (src/main/chats/claude-map.ts): summaries, diffs, questions.
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, lineDiff, permissionText, questionsFrom, resultText, toolSummary } from '../../../src/main/chats/claude-map';
+import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, lineDiff, permissionText, questionsFrom, resultText, resumedAgent, toolSummary } from '../../../src/main/chats/claude-map';
 
 const cwd = path.resolve('/repo');
 
@@ -78,5 +78,15 @@ describe('claude-map', () => {
     expect(p.detail).toBe('rm -rf out\nDelete build\nMotivo: not allowed');
     expect(permissionText('ExitPlanMode', { plan: '1. do it' }, {}).detail).toBe('1. do it');
     expect(permissionText('Write', { file_path: 'x' }, { title: 'Claude wants to write x' }).title).toBe('Claude wants to write x');
+  });
+
+  it('resumedAgent: the agent a SendMessage result resumed, from its structured result or its text; none when stopped', () => {
+    const ok = { success: true, message: 'Resuming agent a918e97', resumedAgentId: 'a918e971e27664141' };
+    expect(resumedAgent(ok, '')).toBe('a918e971e27664141');
+    expect(resumedAgent(undefined, JSON.stringify(ok))).toBe('a918e971e27664141');
+    const stopped = { success: false, message: 'Agent ab0d9b142492e4357 was stopped by the user and will not be resumed.' };
+    expect(resumedAgent(stopped, JSON.stringify(stopped))).toBe('');
+    expect(resumedAgent(undefined, JSON.stringify({ ...stopped, resumedAgentId: 'x' }))).toBe('');
+    expect(resumedAgent(undefined, 'Message sent to the team.')).toBe('');
   });
 });

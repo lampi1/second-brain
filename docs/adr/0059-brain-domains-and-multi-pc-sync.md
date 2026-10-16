@@ -5,6 +5,9 @@ same rules, updated from either side, "sync automatico", "sarà così per tutti 
 panels on 16/10: personal PC, a different Windows user name there, two repos with one setup (no monorepo), domains and
 the Codex engine (ADR 0060) in parallel · Builds on: ADR 0007 (stable vs dev), ADR 0057 (brain template in the app repo)
 
+Note (2026-10-16, ADR 0061): for now the owner's brain is not synced to the second PC; that PC gets the app
+from the one app repo and starts from an empty brain (`brain-template/`).
+
 ## Context
 Today a brain is one folder on one PC: a local git repo with no remote, read by the app (`config.json` `brainRoot`)
 and by the CLIs (user-level skills, agents, output styles and hooks that point into it with absolute paths). The
@@ -36,8 +39,10 @@ content; userData per PC (chats, engines, environments, leases, logs, keys encry
   product sync. The deny list is per domain (owner, 2026-10-16): domain.json `denyList`, a bare file name in
   `%LOCALAPPDATA%/second-brain/publish`, default `deny-work.txt` (work facts only, so the owner's own name may live in
   the private personal domain); the public product sync keeps `deny.txt`. A missing list blocks the push.
+  Note (2026-10-16, ADR 0061): the scanner is the app's own `tools/guard/scan.mjs` (built into `out/guard/`, so every
+  release has it); the publish folder holds only the private lists, and the hint for a missing one says how to create it.
   The allow list never comes from the domain (what is checked cannot exempt itself; review, 2026-10-16): only a private
-  `allow-<domain name>.txt` beside the scanner, optional; a `.guardallow` inside a domain is ignored. Scanned: every
+  `allow-<domain name>.txt` beside the deny list, optional; a `.guardallow` inside a domain is ignored. Scanned: every
   commit not yet on the remote (a merge against its first parent), its message, author and committer; exactly the
   scanned commit is pushed, never a HEAD that moved meanwhile.
 - **The app's own commits** carry a neutral identity (`second-brain <sync@example.com>`) and a message with

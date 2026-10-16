@@ -38,6 +38,7 @@ import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { RegiaWake } from './chats/regia-wake';
+import { ReplyRules } from './chats/reply-rules';
 import { DevopsService } from './devops/service';
 import { Quality } from './brain/quality';
 import { cleanEnv, findNode, ImproveService, type ImproveDeps } from './improve/service';
@@ -262,6 +263,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // decides the Claude <-> Cursor rule, so a local process may not pick another Regia's identity
   const regiaTokens = new EndpointTokens();
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
+  // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
+  const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const manager = new ChatManager({
     emitter: ctx.emitter,
     userData: ctx.userData,
@@ -289,6 +292,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onModels: (h, list) => brain.recordModels(h, list),
     acpModelConfig: () => { const r = brain.settings().regiaChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     onTurnEnd: info => {
+      replyRules.turnEnded(info.chatId, info.reply, info.isError);
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
       const api = engineOf(info.harness);
       if (api?.kind === 'api') engines.addSpend(info.harness, info.model && listPrice(priceEnginesOf(api), info.model) ? info.costUsd : null);

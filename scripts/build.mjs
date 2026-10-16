@@ -1,4 +1,5 @@
-// Build: main (ESM) and preload (CJS, sandboxed) with esbuild, renderer with Vite. Output in out/.
+// Build: main (ESM) and preload (CJS, sandboxed) with esbuild, renderer with Vite, plus the icons and the publish guard's
+// scanner (out/guard/scan.mjs). Output in out/.
 // Usage: node scripts/build.mjs [--dev]   (--dev: sourcemaps, no minify)
 import { build as esbuild } from 'esbuild';
 import { build as vite } from 'vite';
@@ -18,4 +19,8 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/preload/index.ts')
 await vite({ configFile: path.join(root, 'vite.config.ts'), mode: dev ? 'development' : 'production', logLevel: 'warn' });
 // the app icon (window, taskbar, shortcuts): build/icon.ico from scripts/make-icon.cjs
 for (const f of ['icon.ico', 'icon.png']) fs.copyFileSync(path.join(root, 'build', f), path.join(root, 'out', f));
+// the publish guard's scanner (tools/guard/scan.mjs, ADR 0061): brain/guard.ts runs it before each domain push; here it
+// travels with out/, so the dev build and every release (a copy of out/, scripts/release.mjs) find it at out/guard/
+fs.mkdirSync(path.join(root, 'out', 'guard'), { recursive: true });
+fs.copyFileSync(path.join(root, 'tools', 'guard', 'scan.mjs'), path.join(root, 'out', 'guard', 'scan.mjs'));
 console.log(`built ${dev ? '(dev) ' : ''}→ out/`);

@@ -1,4 +1,4 @@
-// Cursor's cost without downloading the CSV each time (docs/research/research-cursor-cost.md §5.1-5.2, the user's choice
+// Cursor's cost without downloading the CSV each time (cursor-cost research note §5.1-5.2, outside the repo, the user's choice
 // "Stima + correzione CSV", 2026-10-11). Why: Cursor's ACP sends no tokens and no API is open to a personal account, but
 // the exact token counts of every turn reach the machine: the `stop` hook (IDE and ACP chats: input_tokens,
 // output_tokens, cache_read_tokens, cache_write_tokens) and the `result.usage` of `agent -p --output-format json|

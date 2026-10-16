@@ -1,6 +1,7 @@
 // doctor: is this machine ready to run second-brain? Checks the build, Electron, the Claude and Cursor CLIs (found,
 // version, Claude login), the Codex CLI (found, its npm version; never run), whether their versions are covered by the CLI contract fixtures and whether a CLI format
-// changed today (ADR 0055), the brain folder, the MCP port and recent errors in the logs. No model calls, no Cursor calls
+// changed today (ADR 0055), the brain folder, the MCP port, recent errors in the logs and the repo's guard (ADR 0061: hooks
+// active, deny list and e-mail config; the values are never printed). No model calls, no Cursor calls
 // beyond `--version` (each harness spends only its own tokens; a Claude agent may run this). Readable by agents:
 //   node scripts/doctor.mjs           human lines: ✓/✗/! name · detail · → next step
 //   node scripts/doctor.mjs --json    [{ id, ok, level, detail, hint }]; exit 1 if any check failed
@@ -12,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { testedVersions } from './cli-fixtures.mjs';
+import { guardStatus, statusLines } from './guard-lib.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Electron's appData per OS (same rule as scripts/release.mjs)
@@ -132,6 +134,15 @@ if (fs.existsSync(logs)) {
   add('cli-drift', drift.length === 0, drift.length ? `${drift.length} CLI format changes today: ${drift.slice(0, 3).join(' · ')}` : 'no CLI format change today',
     'npm run logs -- --scope drift --since 24h; update chats/claude.ts, chats/acp.ts or chats/codex.ts (or their known lists), then the contract test', drift.length ? 'warn' : 'ok');
 }
+
+// 8. the repo's guard (ADR 0061): hooks on, the deny list readable when set, user.email = guard.email when set
+const gs = guardStatus(root);
+if (gs.repo && !gs.error) {
+  const [hooksLine, denyLine, emailLine] = statusLines(gs);
+  add('guard-hooks', gs.hooks, hooksLine.replace(/^guard hooks: /, ''), 'run: npm run setup (sets core.hooksPath .githooks for this repo)', gs.hooks ? 'ok' : 'warn');
+  add('guard-deny', gs.deny !== 'missing', denyLine.replace(/^guard deny list: /, ''), gs.deny === 'missing' ? 'restore the file, or point git config guard.denyList to it' : 'optional: git config guard.denyList "<path>"', gs.deny === 'missing' ? 'fail' : gs.deny === 'ok' ? 'ok' : 'info');
+  add('guard-email', gs.email !== 'set' || gs.userEmailMatches, emailLine.replace(/^guard e-mail: /, ''), gs.email === 'set' ? 'git config user.email <the guard.email address>' : 'optional: git config guard.email "<you>@users.noreply.github.com"', gs.email === 'set' ? (gs.userEmailMatches ? 'ok' : 'fail') : 'info');
+} else if (gs.error) add('guard', false, gs.error, 'check the repo git config', 'warn');
 
 if (process.argv.includes('--json')) console.log(JSON.stringify(checks, null, 1));
 else for (const c of checks) console.log(`${{ ok: '✓', fail: '✗', warn: '!', info: '·' }[c.level]} ${c.id.padEnd(13)} ${c.detail}${c.hint && c.level !== 'ok' ? `  → ${c.hint}` : ''}`);

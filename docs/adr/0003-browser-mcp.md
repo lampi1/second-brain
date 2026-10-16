@@ -4,7 +4,7 @@ Date: 2026-10-11 · Status: accepted
 
 ## Context
 Claude in Chrome is blocked by corporate policy; agents need a browser for QA (Angular SPA with iframes and logins).
-Research (docs/research/research-browser-memory.md): accessibility-style trees with short refs beat raw HTML
+Research (the browser-memory note, kept outside the repo since ADR 0061): accessibility-style trees with short refs beat raw HTML
 (EconWebArena: 46.9% → 36.7% with HTML); dialogs, iframes, network capture and human hand-off are the gaps.
 
 ## Decision

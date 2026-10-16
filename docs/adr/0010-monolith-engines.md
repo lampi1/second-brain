@@ -29,7 +29,7 @@ utilizzabile anche con la cli di cursor però, anzi sarà proprio con quella che
   today (a bug confirmed by Cursor): usage when present in the prompt response, or ACP `usage_update.cost` if Cursor
   starts sending it, otherwise "stima senza dati". Cursor's plan usage has no legitimate
   source (no personal usage API, internal endpoints barred by its ToS): the top bar says "n/d" with that reason.
-- **Cursor cost ledger** (the user's choice "Stima + correzione CSV", 2026-10-11; research-cursor-cost.md §5.1-5.2):
+- **Cursor cost ledger** (the user's choice "Stima + correzione CSV", 2026-10-11; the cursor-cost research note §5.1-5.2, outside the repo since ADR 0061):
   a Cursor `stop` hook script the app installs in `%LOCALAPPDATA%/second-brain/hooks/cursor-usage.mjs` appends each
   turn's tokens to `cursor-ledger.jsonl` beside it (shared by the stable and the dev app; an `agent -p` runner can pipe
   its result line into the same script). Priced at list price (+ Cursor Token Rate on third-party models) × a factor

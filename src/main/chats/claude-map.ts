@@ -1,5 +1,5 @@
 // Pure mapping from Claude Code tool calls to what a tile shows: a one-line summary ("Bash: npm test"), line diff
-// counts for Edit/Write/MultiEdit, tool_result text, AskUserQuestion questions and permission titles.
+// counts for Edit/Write/MultiEdit, tool_result text, AskUserQuestion questions and permission titles, the agent a SendMessage resumed.
 // Why pure: the live session (claude.ts) and the transcript reader (transcript.ts) render the same rows, and the
 // rules are unit-tested without a process. Shapes follow the CLI tool inputs (sdk-tools.d.ts of the Agent SDK).
 import path from 'node:path';
@@ -201,4 +201,16 @@ export function describeSuggestions(suggestions: unknown[]): string[] {
 /** Flattens the user's answers to what the CLI expects: { question text: "label" | "a, b" }. */
 export function flattenAnswers(answers: Record<string, string | string[]>): Record<string, string> {
   return Object.fromEntries(Object.entries(answers).map(([q, a]) => [q, Array.isArray(a) ? a.join(', ') : String(a)]));
+}
+
+/** The agent a SendMessage result resumed ('' when none): the structured result's resumedAgentId, else the same field
+ *  in its text (CLI 2.1.283: {"success":true,"message":"Resuming agent …","resumedAgentId":"a26420c62ff6f065f"}). A
+ *  stopped agent that "won't be resumed" (success false) is none. */
+export function resumedAgent(structured: unknown, text: string): string {
+  const r = obj(structured);
+  if (r.success === false) return '';
+  const id = str(r.resumedAgentId);
+  if (id) return id;
+  if (/"success"\s*:\s*false/.test(text)) return '';
+  return /"resumedAgentId"\s*:\s*"([\w-]+)"/.exec(text)?.[1] ?? '';
 }

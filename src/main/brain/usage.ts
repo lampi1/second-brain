@@ -21,7 +21,7 @@ import { runNode, type NodeRunner } from './node';
 import type { ChatSpend, Spend } from './budget';
 import type { CursorDay } from './cursor-ledger';
 
-// Checked 2026-10-11 (docs/research/research-cursor-cost.md §1, §3): no documented usage API for a personal account (the
+// Checked 2026-10-11 (cursor-cost research note §1, §3, outside the repo): no documented usage API for a personal account (the
 // Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
 // endpoints would need the user's session token and fall under the ToS ban on extracting data. So: said, never guessed.
 export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";

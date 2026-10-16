@@ -1,7 +1,7 @@
 # ADR 0053 · One rule for what reaches a Regia, one "continuity" concept
 
 Date: 2026-10-15 · Status: accepted · Amends: ADR 0031 (cold continuation: rules moved), ADR 0051 (Regie corte: rule
-moved) · Source: audit 2026-10-15 #6 (`docs/research/audit-2026-10-15.md`)
+moved) · Source: audit 2026-10-15 #6 (the audit note, kept outside the repo since ADR 0061)
 
 ## Context
 Two systems held things back from an idle Regia, each with its own constants and its own idea of "free":

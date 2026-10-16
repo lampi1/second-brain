@@ -2,7 +2,7 @@
 
 The user (2026-10-11): "Vorrei che la UX fosse incredibile, usa tutti i migliori standard del momento". Calm UI
 (few, useful notifications): what is not on screen does not exist, starting is the hard part, noise makes people stop trusting alerts.
-References: Linear, Raycast, Arc, Claude desktop, Cursor, VS Code (and docs/research/research-harness-apps.md).
+References: Linear, Raycast, Arc, Claude desktop, Cursor, VS Code (and the harness-apps research note, kept outside the repo since ADR 0061).
 
 1. **Few things, clear.** One primary action per surface; secondary actions in the palette or a menu. Empty space is
    fine; clutter is not.

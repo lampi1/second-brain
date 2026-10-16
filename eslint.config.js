@@ -1,7 +1,9 @@
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['out/**', 'node_modules/**', 'test-results/**', 'docs/**', 'scripts/shot.cjs', 'scripts/make-icon.cjs'] },
+  // brain-template/: the files a new user's brain starts from (plain Node scripts and page code run in the brain, not in
+  // the app), checked by test/unit/brain-template.test.ts (every script parses, nothing personal), not by these rules
+  { ignores: ['out/**', 'node_modules/**', 'test-results/**', 'docs/**', 'brain-template/**', 'scripts/shot.cjs', 'scripts/make-icon.cjs'] },
   ...tseslint.configs.recommended,
   {
     rules: {

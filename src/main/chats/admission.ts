@@ -1,6 +1,7 @@
 // CPU-aware admission of chats and turns (ADR 0036; the user, 2026-10-13: CPU at 100% with many chats, "la Regia decide
-// in base alla CPU, a costo zero, con una coda"). Before an agent (the Regia, another chat's mail, the app's own resume
-// after a restart) starts a chat's engine or wakes an idle chat with a new turn, ChatManager asks this queue: with the
+// in base alla CPU, a costo zero, con una coda"). Before an agent (the Regia's new chat, a closed chat reopened by an
+// agent, the app's own resume after a restart) starts a chat's engine or wakes a chat with a new turn, ChatManager asks
+// this queue (a message between chats to an open chat never does, ADR 0064): with the
 // machine under the thresholds (CPU averaged over a few seconds, free RAM) and nobody waiting, it goes at once; else it
 // waits here, FIFO within its priority, and is admitted when the load drops (two samples in a row under, one admission per sample, so the
 // queue never starts all together). The user's own messages never wait (manager.ts bypasses), nothing running is ever
@@ -69,9 +70,6 @@ export function forcedSampler(value: string | undefined): LoadSampler | null {
   return { sample: () => ({ ...s }) };
 }
 
-/** Chat mail is never held in the queue (a queue lost at quit would lose it): it stays unread, retried later. */
-export const MAIL_WAITS = 'Il PC è sotto sforzo: la posta resta da leggere e arriva quando il carico scende.';
-
 export interface QueuedEntry {
   key: string;
   /** start = a new chat's engine; turn = a message that wakes an idle chat */
@@ -121,12 +119,6 @@ export class AdmissionQueue {
   busy(): boolean {
     if (!this.o.limits().enabled) return false;
     return this.q.length > 0 || this.over(this.refresh());
-  }
-
-  /** request() for this key would wait now (someone waits, this key already, or the load is over) */
-  wouldWait(key: string): boolean {
-    if (!this.o.limits().enabled) return false;
-    return this.q.length > 0 || this.q.some(e => e.key === key) || this.over(this.refresh());
   }
 
   /** run now (returns null) or queue it (returns its place). A key already waiting queues behind its own entry,

@@ -1,7 +1,8 @@
 // Stable releases of the app (ADR 0007): the cockpit the user works in runs from a frozen copy outside the repo, so chats
 // can develop, break and restart the dev build without touching it.
 //   node scripts/release.mjs promote [--skip-check]   npm run check must be green (skip only for tests of this script),
-//                                                      then build → copy out/ + package.json to releases/<ver>-<sha>/,
+//                                                      then build → copy out/ (the guard's scanner included,
+//                                                      out/guard/scan.mjs) + package.json to releases/<ver>-<sha>/,
 //                                                      share the Electron runtime, switch current.json, write launch.cmd (launch.sh on macOS/Linux)
 //   node scripts/release.mjs rollback                 current ⇄ previous
 //   node scripts/release.mjs status [--json]           what is current/previous, where the launcher is

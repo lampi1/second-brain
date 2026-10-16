@@ -76,10 +76,10 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   const input = page.getByTestId('regia-input');
   await expect(input).toBeFocused();
-  await expect(input).toHaveValue(/^Discutiamo l'errore che si ripete «fatto non verificato» \(fonte: ai-errors\.md\)\./);
+  await expect(input).toHaveValue(/^Let's discuss the recurring error «fatto non verificato» \(source: ai-errors\.md\)\./);
   await expect(input).toHaveValue(/- \d+ volte dal .* al .*; ultimi 7 giorni \d+, i 7 prima \d+/);
   await expect(input).toHaveValue(/regola nata: rules\/qa\.md "verifica sempre lo screenshot" \(la regola non è bastata\)/);
-  await expect(input).toHaveValue(/Perché succede e come lo evitiamo\?/);
+  await expect(input).toHaveValue(/Why does it happen and how do we prevent it\?/);
   await expect(page.getByTestId('page-qualita')).toBeVisible(); // the page stays
   await shot(page, 'stats-qualita-discutine');
   await page.keyboard.press('Enter');

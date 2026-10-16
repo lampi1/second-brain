@@ -488,7 +488,7 @@ describe('ChatManager', () => {
     await waitFor(() => calls.done.length === 1, 'done after the turn');
     expect(calls.done).toEqual([c.id]);
     expect(calls.turns).toHaveLength(1);
-    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, firstPrompt: 'ask me', costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false });
+    expect(calls.turns[0]).toEqual({ chatId: c.id, sessionId: c.sessionId, harness: 'claude', model: 'sonnet', effort: null, firstPrompt: 'ask me', costUsd: 0.01, durationMs: expect.any(Number), turns: 1, isError: false, reply: 'Hai scelto Blu' });
     // the stream's rate_limit_event and the get_usage answer both reach the brain
     await waitFor(() => calls.rate.some(x => (x as { type?: string }).type === 'rate_limit_event') && calls.rate.some(x => !!(x as { rate_limits?: unknown }).rate_limits), 'rate limits');
     await m.send(c.id, 'hello');

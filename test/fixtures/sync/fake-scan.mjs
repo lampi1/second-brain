@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// A stand-in for the publish guard's scan.mjs (the real one is private, in %LOCALAPPDATA%/second-brain/publish), with
+// A stand-in for the publish guard's scanner (the real one is tools/guard/scan.mjs, shipped in out/guard/), with
 // the same command line and output: `node fake-scan.mjs <dir> --deny <file> [--allow <file>] --json`; every line of every
 // file is checked against the deny file's words (one per line, case-insensitive); a line holding a word of the allow
 // file is not a finding (a stand-in for the real allow list's format); exit 0 clean, 2 findings, 1 error; only

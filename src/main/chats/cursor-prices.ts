@@ -1,7 +1,7 @@
 // Cursor list prices, to turn token usage into USD when the Cursor engine reports it. Why a table: Cursor's ACP
 // `session/prompt` response defines `usage` but Cursor does not fill it today (a bug Cursor staff confirmed); when it
 // does, a chat gets a real cost, otherwise ChatSummary.costKnown = false and the UI shows the estimate only (ADR 0010).
-// Source: https://cursor.com/docs/models, read 2026-10-11 (docs/research/research-cursor-cost.md §5.5; the page shows
+// Source: https://cursor.com/docs/models, read 2026-10-11 (cursor-cost research note §5.5, outside the repo; the page shows
 // no date). USD per 1M tokens. "Auto" bills at the routed model's price, which the CLI does not say: unknown → null.
 // Used by acp.ts (the Cursor entry's priceFallback) and brain/cursor-ledger.ts. A model with no price is never a silent
 // 0: warned once per model in the log (here) and shown as «prezzo sconosciuto» (Usage.cursorUnpriced, the live costs).

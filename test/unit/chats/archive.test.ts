@@ -1,6 +1,6 @@
 // Auto-close in the chat manager against the fake CLI: the last result and the background tasks on the summary, archive
 // (process ends, record kept, persisted), reopen, a message reopens it by itself, the Regia never closes, the auto
-// archive is refused while the chat works.
+// archive is refused while the chat works, runs background tasks (a resumed agent too) or its last answer waits for them.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +64,7 @@ describe('ChatManager archive (auto-close)', () => {
     await expect(m.archive(c.id, { auto: true })).resolves.toMatchObject({ closedBy: 'auto' });
   });
 
-  it('a paused background task still counts; a late update never revives an ended one', async () => {
+  it('a paused background task still counts; an update without a status after its end does not revive it', async () => {
     const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '700' });
     const c = await m.create({ harness: 'claude', cwd, prompt: 'background paused workflow' });
     await waitFor(() => summary(m, c.id).state === 'idle', 'idle');
@@ -72,7 +72,7 @@ describe('ChatManager archive (auto-close)', () => {
     expect(summary(m, c.id).background).toBe(1);
     await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
     await waitFor(() => summary(m, c.id).background === undefined, 'task ended');
-    await new Promise(r => setTimeout(r, 300)); // the late "running" update at 800 ms
+    await new Promise(r => setTimeout(r, 300)); // the update of its description at 800 ms
     expect(summary(m, c.id).background).toBeUndefined();
   });
 
@@ -90,6 +90,48 @@ describe('ChatManager archive (auto-close)', () => {
     expect(ended).toBeGreaterThan(turn + 500);
     expect(m.releaseIdle(1_000, ended + 500)).toBe(0);
     expect(m.releaseIdle(1_000, ended + 1_000)).toBe(1);
+  });
+
+  it('an ended task that comes back as an update to running counts again (the AT chat of 2026-10-16)', async () => {
+    const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '400' });
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'background revived agent' });
+    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === undefined && summary(m, c.id).backgroundEndedAt, 'first run ended');
+    await waitFor(() => summary(m, c.id).background === 1, 'revived by its update');
+    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
+    expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
+    await waitFor(() => summary(m, c.id).background === undefined, 'second run ended');
+  });
+
+  for (const mode of ['', ' structured']) {
+    it(`an agent resumed by SendMessage counts from the tool's result alone${mode ? ' (structured result)' : ''} (the QA chat of 2026-10-16)`, async () => {
+      const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '600' });
+      const c = await m.create({ harness: 'claude', cwd, prompt: `sendmessage${mode}` });
+      await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === 1, 'idle, the resumed agent counted');
+      await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
+      expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
+      await waitFor(() => summary(m, c.id).background === undefined, 'its notification ends it');
+    });
+  }
+
+  it('a SendMessage to a stopped agent that will not resume counts nothing', async () => {
+    const { m, cwd } = setup();
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'sendmessage stopped' });
+    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).lastResult, 'idle');
+    expect(summary(m, c.id).background).toBeUndefined();
+  });
+
+  it('a last answer that waits for its work holds the auto archive and the engine release until a later turn', async () => {
+    const { m, cwd } = setup();
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'waitqa' });
+    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).lastResult, 'idle');
+    expect(summary(m, c.id)).toMatchObject({ waitsOnWork: true });
+    expect(summary(m, c.id).background).toBeUndefined(); // the engine counts nothing: only its words hold it
+    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
+    expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
+    await m.send(c.id, 'ok, fatto');
+    await waitFor(() => m.items(c.id).filter(i => i.kind === 'result').length === 2 && summary(m, c.id).state === 'idle', 'second turn');
+    expect(summary(m, c.id).waitsOnWork).toBeUndefined();
+    await expect(m.archive(c.id, { auto: true })).resolves.toMatchObject({ closedBy: 'auto' });
   });
 
   it('a message sent while the archive closes the session waits for it and reopens the chat on a new one', async () => {

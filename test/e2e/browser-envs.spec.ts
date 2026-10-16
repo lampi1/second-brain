@@ -1,6 +1,7 @@
 // Browser environments, sign-in status and the password guard, end to end on the fixture site:
-// - two environments open together on the same host keep their sessions apart (a login cookie set in one is absent in
-//   the other); session status valid / expiring / expired; last sign-in time;
+// - two environments open together on the same remote host keep their sessions apart (a login cookie set in one is
+//   absent in the other); a local stack loads only in "local" (ADR 0063); session status valid / expiring / expired;
+//   last sign-in time;
 // - HARD LIMIT: on a remote host (127.0.0.2 is not a local stack) nothing puts a password into a field or reads one:
 //   type / fill_form / key (also after Tab), a "show password" toggle, a field that becomes a password on focus,
 //   javascript (reading, during a hand-off, shadow roots, hidden fields, type changes), credentials in URLs; on
@@ -39,9 +40,9 @@ test.describe.serial('browser environments and the password guard', () => {
     await sites?.close();
   });
 
-  test('two environments on the same host keep their sessions apart; the agent signs in by itself on a local stack', async () => {
-    const opened = await agent.ok('tabs_create', { url: `${sites.a}/login`, env: 'local-a' });
-    expect(opened).toContain('env local-a');
+  test('the agent signs in by itself on a local stack, in environment "local" (the only one for local stacks, ADR 0063)', async () => {
+    const opened = await agent.ok('tabs_create', { url: `${sites.a}/login` });
+    expect(opened).toContain('env local');
     expect(opened).toContain('Sign-in page on a local stack (127.0.0.1): you may sign in');
     const form = await agent.ok('read_page', { filter: 'interactive' });
     // 127.0.0.1 is a local stack: a password may be filled (test accounts)
@@ -49,50 +50,71 @@ test.describe.serial('browser environments and the password guard', () => {
     expect(filled).not.toContain('FAILED');
     await agent.ok('click', { ref: refOf(form, /button "Entra"/) });
     expect(await agent.ok('wait_for', { text: 'Benvenuto mario' })).toContain('Done');
-    expect(await cookiesIn('local-a')).toBe(1);
+    expect(await cookiesIn('local')).toBe(1);
+    // a local stack never loads in another environment (a chat once opened localhost where it had no session)
+    await refused('tabs_create', { url: `${sites.a}/app`, env: 'local-b' }, 'local stacks always load in environment "local"');
+
+    const envs = await page.evaluate(() => window.sb.invoke('browser:envList', undefined));
+    const local = envs.find(e => e.id === 'local')!;
+    expect(local.lastLoginAt).toBeGreaterThan(0);
+    expect(local.hosts[0]).toMatch(/^127\.0\.0\.1:\d+$/);
+    expect(local.lastUrl).toMatch(/\/app$/);
+    expect(typeof local.encryptedAtRest === 'boolean' || local.encryptedAtRest === null).toBe(true);
+    expect(envs.find(e => e.id === 'local-b')).toBeUndefined();
+  });
+
+  test('two environments on the same remote host keep their sessions apart', async () => {
+    test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
+    const opened = await agent.ok('tabs_create', { url: `${sites.remote}/login`, env: 'remote-a' });
+    expect(opened).toContain('env remote-a');
+    // the user signs in on the page (on a remote host an agent never types a password)
+    await app.evaluate(({ webContents }, u) => webContents.getAllWebContents().find(w => w.getURL().startsWith(`${u}/login`))!.executeJavaScript(
+      'user.value = "mario"; pass.value = "test-only"; document.getElementById("f").requestSubmit();'), sites.remote!);
+    expect(await agent.ok('wait_for', { text: 'Benvenuto mario' })).toContain('Done');
+    expect(await cookiesIn('remote-a')).toBe(1);
 
     // the second environment, same host, opened together: no cookie, the app sends it to the login page
-    const other = await agent.ok('tabs_create', { url: `${sites.a}/app`, env: 'local-b' });
+    const other = await agent.ok('tabs_create', { url: `${sites.remote}/app`, env: 'remote-b' });
     expect(other).toContain('/login?next=/app');
-    expect(other).toContain('env local-b');
-    expect(await cookiesIn('local-b')).toBe(0);
-    await expect.poll(() => agent.ok('tabs_list')).toMatch(/env=local-a \(session valid/);
-    await expect.poll(() => agent.ok('tabs_list')).toMatch(/env=local-b \(session expired/);
+    expect(other).toContain('env remote-b');
+    expect(await cookiesIn('remote-b')).toBe(0);
+    await expect.poll(() => agent.ok('tabs_list')).toMatch(/env=remote-a \(session valid/);
+    await expect.poll(() => agent.ok('tabs_list')).toMatch(/env=remote-b \(session expired/);
 
     const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
-    const a = tabs.find(t => t.env === 'local-a')!, b = tabs.find(t => t.env === 'local-b')!;
+    const a = tabs.find(t => t.env === 'remote-a')!, b = tabs.find(t => t.env === 'remote-b')!;
     expect(a.envColor).toMatch(/^#[0-9a-f]{6}$/);
     expect(a.envColor).not.toBe(b.envColor);
     expect(a.session).toBe('valid');
     expect(b.session).toBe('expired');
 
     const envs = await page.evaluate(() => window.sb.invoke('browser:envList', undefined));
-    const ea = envs.find(e => e.id === 'local-a')!;
+    const ea = envs.find(e => e.id === 'remote-a')!;
     expect(ea.lastLoginAt).toBeGreaterThan(0);
-    expect(ea.hosts[0]).toMatch(/^127\.0\.0\.1:\d+$/);
+    expect(ea.hosts[0]).toMatch(/^127\.0\.0\.2:\d+$/);
     expect(ea.lastUrl).toMatch(/\/app$/);
-    expect(typeof ea.encryptedAtRest === 'boolean' || ea.encryptedAtRest === null).toBe(true);
-    expect(envs.find(e => e.id === 'local-b')?.lastLoginAt).toBeNull();
+    expect(envs.find(e => e.id === 'remote-b')?.lastLoginAt).toBeNull();
   });
 
   test('session status: expiring within 24 h, expired once the auth cookie is gone', async () => {
-    await agent.ok('tabs_create', { url: `${sites.a}/login?short=1`, env: 'local-c' });
+    await agent.ok('tabs_create', { url: `${sites.a}/login?short=1` });
     const form = await agent.ok('read_page', { filter: 'interactive' });
     await agent.ok('fill_form', { fields: [{ ref: refOf(form, /textbox "Utente"/), value: 'anna' }, { ref: refOf(form, /type=password/), value: 'test-only' }] });
     await agent.ok('click', { ref: refOf(form, /button "Entra"/) });
     await agent.ok('wait_for', { text: 'Benvenuto anna' });
-    await expect.poll(() => envLine('local-c')).toContain('session expiring');
+    await expect.poll(() => envLine('local')).toContain('session expiring');
     const app2 = await agent.ok('read_page', { filter: 'interactive' });
     await agent.ok('click', { ref: refOf(app2, /link "Esci"/) });
-    expect(await cookiesIn('local-c')).toBe(0);
-    await expect.poll(() => envLine('local-c')).toContain('session expired');
+    expect(await cookiesIn('local')).toBe(0);
+    await expect.poll(() => envLine('local')).toContain('session expired');
   });
 
   test('the default environment comes from the host, and a used tab tells when another host would default elsewhere', async () => {
+    test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
     const t = await agent.ok('tabs_create', { url: `${sites.b}/popup.html` });
     expect(t).toContain('env local');                           // localhost → local
-    const moved = await agent.ok('navigate', { url: `${sites.a}/index.html`, env: 'local-a' });
-    expect(moved).toMatch(/Opened tab t\d+ in environment local-a \(tab t\d+ stays in local\)/);
+    const moved = await agent.ok('navigate', { url: `${sites.remote}/index.html`, env: 'remote-a' });
+    expect(moved).toMatch(/Opened tab t\d+ in environment remote-a \(tab t\d+ stays in local\)/);
   });
 
   test('environments shows an agent only its own tabs, and no hosts of environments only the user used', async () => {
@@ -101,9 +123,9 @@ test.describe.serial('browser environments and the password guard', () => {
     expect(await envLine('own-only')).toContain('your tabs -');
     const other = new McpClient(agent.url);
     await other.init();
-    await other.ok('tabs_create', { url: `${sites.a}/popup.html`, env: 'local-a' });
-    const mine = (await agent.ok('environments')).split('\n').find(l => l.startsWith('local-a:'))!;
-    const theirs = (await other.ok('environments')).split('\n').find(l => l.startsWith('local-a:'))!;
+    await other.ok('tabs_create', { url: `${sites.a}/popup.html` });
+    const mine = (await agent.ok('environments')).split('\n').find(l => l.startsWith('local:'))!;
+    const theirs = (await other.ok('environments')).split('\n').find(l => l.startsWith('local:'))!;
     const ids = (l: string) => /your tabs ([^\n]*)$/.exec(l)![1]!.split(', ');
     expect(ids(mine).some(id => ids(theirs).includes(id))).toBe(false);
   });
@@ -168,13 +190,13 @@ test.describe.serial('browser environments and the password guard', () => {
     const host = sites.remote!.replace('http://', '');
     const cred = ['mario', 'segreto'].join(':');   // user:password, built here so the source holds no credential URL
     await refused('navigate', { url: `http://${cred}@${host}/index.html` }, 'carries credentials');
-    const local = await agent.ok('navigate', { url: `http://${cred}@${sites.a.replace('http://', '')}/index.html` });
+    const local = await agent.ok('navigate', { url: `http://${cred}@${sites.a.replace('http://', '')}/index.html`, env: 'local' });
     expect(local).not.toContain('segreto');
   });
 
   test('a login hand-off blocks javascript while the user signs in, is announced in the feed and records the sign-in', async () => {
     test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
-    await agent.ok('navigate', { url: `${sites.remote}/index.html` });
+    await agent.ok('navigate', { url: `${sites.remote}/index.html`, env: 'ip-127-0-0-2' });   // the last tab is in "local"
     const waiting = agent.ok('handoff_to_user', { kind: 'login', wait_seconds: 30 });
     await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('browser:handoffs', undefined))).length).toBe(1);
     const [h] = await page.evaluate(() => window.sb.invoke('browser:handoffs', undefined));

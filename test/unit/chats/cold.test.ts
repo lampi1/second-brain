@@ -170,6 +170,18 @@ describe('ChatManager cold chats', () => {
     expect(summary(m, regia.id)?.handoffAt).toBeUndefined();
   }, 20_000);
 
+  it('a long chat whose last answer waits for its work is asked no note (2026-10-16); the next turn lifts it', async () => {
+    const { make, cwd } = setup({ cacheTtlMs: 60_000 });
+    const m = make();
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'big waitqa' });
+    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000 && summary(m, c.id)?.waitsOnWork, 'long, idle, waiting');
+    expect(m.coldTick()).toBe(0);
+    await m.send(c.id, 'ok');
+    await waitFor(() => idle(m, c.id) && m.items(c.id).filter(i => i.kind === 'result').length === 2, 'second turn');
+    expect(summary(m, c.id)?.waitsOnWork).toBeUndefined();
+    expect(m.coldTick()).toBe(1);
+  }, 20_000);
+
   it('the idle release and the auto-close keep the engine of a chat that still owes its note', async () => {
     const { make, cwd } = setup({ coldIdleMs: () => 60_000, cacheTtlMs: 120_000 });
     const m = make();

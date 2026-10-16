@@ -175,7 +175,7 @@ describe('domain sync (real git, temp bare remote)', () => {
     const before = git(bare, 'rev-parse', 'main');
     fs.writeFileSync(path.join(a!, 'idea.md'), 'x\n');
     await A.s.sync('Personale');
-    expect(A.one().blocked).toMatchObject({ kind: 'no-guard', hint: expect.stringContaining('scan.mjs') });
+    expect(A.one().blocked).toMatchObject({ kind: 'no-guard', hint: expect.stringContaining('deny-work.txt') });
     expect(git(bare, 'rev-parse', 'main')).toBe(before);
   }, SLOW);
 

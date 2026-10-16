@@ -1,16 +1,17 @@
 // The CPU-aware queue (admission.ts, ADR 0036) with a fake load sampler: FIFO, the app's chats behind the work chats,
 // hysteresis (two samples under), one
 // admission per sample, "Avvia ora", the switch; then ChatManager against the fake CLI: an agent's new chat and an
-// agent's message to an idle chat wait while the load is high, the user's own message never waits (and takes the
-// queued one with it), a queued chat closed by hand drops its work, no warm engine starts while busy; a queued chat
+// agent reopening a closed chat wait while the load is high, the user's own message and a message between chats never
+// wait (and take the chat's queued work with them, in order; ADR 0064: mail to an idle chat starved for hours), a queued chat closed by hand drops its work, no warm engine starts while busy; a queued chat
 // never looks busy, so the Regia is never told it "finished" a turn it did not run (2026-10-14).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { AdmissionQueue, MAIL_WAITS, forcedSampler, type AdmissionLimits, type LoadSample } from '../../../src/main/chats/admission';
+import { AdmissionQueue, forcedSampler, type AdmissionLimits, type LoadSample } from '../../../src/main/chats/admission';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import { RegiaWake } from '../../../src/main/chats/regia-wake';
+import { ChatMail, inboxDir, sendMail, slug, unread } from '../../../src/main/chats/mail';
 import type { ChatSummary } from '../../../src/shared/contract';
 import { FAKE, fakeLog, recEmitter, tmp, waitFor } from './helpers';
 
@@ -182,14 +183,31 @@ describe('ChatManager with the CPU queue', () => {
     const mine = await m.create({ harness: 'claude', cwd, prompt: 'mine' });
     expect(mine.queued).toBeUndefined();
     await waitFor(() => m.list().find(x => x.id === mine.id)?.state === 'idle', 'my turn done');
-    // an agent's message to the idle chat waits for the load
+    // an agent reopening it once closed (archived) waits for the load (a new engine)
+    await m.archive(mine.id);
     await m.send(mine.id, 'from the regia', undefined, false, 'Regia');
-    expect(m.list().find(x => x.id === mine.id)?.queued?.kind).toBe('turn');
+    expect(m.list().find(x => x.id === mine.id)?.queued?.kind).toBe('start');
     expect(users(mine.id)).toEqual(['mine']);
     await m.send(mine.id, 'me again');
     await waitFor(() => users(mine.id).length === 3, 'both delivered');
     expect(users(mine.id)).toEqual(['mine', 'from the regia', 'me again']);
     expect(m.list().find(x => x.id === mine.id)?.queued).toBeUndefined();
+  });
+
+  it("a message between chats to an open chat never waits for the load (app_send_to_chat), after the chat's own queued work", async () => {
+    const { m, cwd, users } = setup();
+    const mine = await m.create({ harness: 'claude', cwd, prompt: 'mine' });
+    await waitFor(() => m.list().find(x => x.id === mine.id)?.state === 'idle', 'my turn done');
+    await m.send(mine.id, 'from the regia', undefined, false, 'Regia');
+    expect(m.list().find(x => x.id === mine.id)?.queued).toBeUndefined();
+    await waitFor(() => users(mine.id).includes('from the regia'), 'a new turn at once, CPU 90%');
+    // a chat whose first turn still waits in the queue: that work goes first, then the message
+    const queued = await m.create({ harness: 'claude', cwd, prompt: 'do it' }, 'agent');
+    expect(queued.queued?.kind).toBe('start');
+    await m.send(queued.id, 'and this', undefined, false, 'Regia');
+    await waitFor(() => users(queued.id).length === 2, 'both delivered');
+    expect(users(queued.id)).toEqual(['do it', 'and this']);
+    expect(m.queueState()?.waiting).toEqual([]);
   });
 
   it('the load dropping admits the chat by itself; a queued chat closed by hand drops its work', async () => {
@@ -242,14 +260,25 @@ describe('ChatManager with the CPU queue', () => {
     expect(users(app.id)).toEqual([]);
   });
 
-  it('chat mail is never held in the queue: it fails, so the mail stays unread', async () => {
+  it('chat mail reaches an idle chat at once under load, as a new turn: taken once, never put back (ADR 0064)', async () => {
     const { m, f, cwd, users } = setup();
     f.load.cpu = 10;
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'go' });
+    const c = await m.create({ harness: 'claude', cwd, prompt: 'go', title: 'Shop · sprint' });
     await waitFor(() => m.list().find(x => x.id === c.id)?.state === 'idle', 'turn done');
     f.load.cpu = 95;
-    await expect(m.send(c.id, 'mail', undefined, false, 'Altra chat', true)).rejects.toThrow(MAIL_WAITS);
-    expect(m.queueState()?.waiting).toEqual([]);
-    expect(users(c.id)).toEqual(['go']);
+    // someone else's work waits in the queue too: the mail does not wait behind it
+    const other = await m.create({ harness: 'claude', cwd, prompt: 'other' }, 'agent');
+    expect(other.queued?.position).toBe(1);
+    const root = tmp('brain');
+    const dir = inboxDir(root);
+    sendMail(dir, { from: 'Regia', fromHarness: 'claude', to: 'Shop · sprint', toHarness: 'claude', text: 'riprendi il lavoro', refusal: () => null });
+    const mail = new ChatMail({ root: () => root, chats: m, instance: 'second-brain-dev' });
+    expect(await mail.tick()).toBe(1);
+    mail.stop();
+    await waitFor(() => users(c.id).some(t => t.includes('riprendi il lavoro')), 'the mail as a new turn');
+    expect(unread(dir, slug('Shop · sprint'))).toEqual([]);
+    const actions = fs.readFileSync(path.join(dir, 'inbox.log'), 'utf8').trim().split('\n').map(l => (JSON.parse(l) as { action: string }).action);
+    expect(actions).toEqual(['sent', 'delivered']);
+    expect(m.queueState()?.waiting.map(w => w.chatId)).toEqual([other.id]);
   });
 });
