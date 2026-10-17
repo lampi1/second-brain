@@ -10,11 +10,12 @@ import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
 import { claudeLaunch } from '../brain/adapters/claude-plugin';
 import { codexLaunch } from '../brain/adapters/codex';
+import { codexPolicyFor } from '../brain/adapters/codex-policy';
 import { ClaudeSession } from '../chats/claude';
 import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
-import { engines, priceEnginesOf, type EngineDef } from './registry';
+import { engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
 
 /** What the app gives a session beyond the chat's own options. */
 export interface EngineContext {
@@ -34,6 +35,12 @@ export interface EngineContext {
 }
 
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
+  // A running session retains its endpoint/command. A key for a replacement definition must never reach it.
+  const binding = fingerprint(engine);
+  const boundKey = (): string | null => {
+    const current = engineOf(engine.id);
+    return current && fingerprint(current) === binding ? ctx.key() : null;
+  };
   switch (engine.kind) {
     case 'claude': {
       // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act
@@ -42,11 +49,13 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     }
     case 'codex': {
       const command = engine.command ?? engine.id;
-      const key = engine.keyEnv ? ctx.key() : null;
-      const launch = codexLaunch({ mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId });
+      const key = engine.keyEnv ? boundKey() : null;
+      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId });
       return new CodexSession({
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: launch.skillRoots,
+        approvalPolicy: launch.approvalPolicy, sandbox: launch.sandbox,
+        executionPolicy: () => codexPolicyFor(opts.cwd, opts.readOnly),
         showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
@@ -54,7 +63,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     }
     case 'acp': {
       const command = engine.command ?? engine.id;
-      const key = engine.keyEnv ? ctx.key() : null;
+      const key = engine.keyEnv ? boundKey() : null;
       return new AcpSession({
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
@@ -67,7 +76,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     }
     case 'api':
       return new ApiSession({
-        ...opts, engineId: engine.id, protocol: engine.protocol ?? 'openai', baseUrl: engine.baseUrl ?? '', apiKey: ctx.key,
+        ...opts, engineId: engine.id, protocol: engine.protocol ?? 'openai', baseUrl: engine.baseUrl ?? '', apiKey: boundKey,
         historyFile: path.join(ctx.userData, 'api-chats', `${opts.chatId}.json`), showReplay: ctx.showReplay,
         pricesOf: model => listPrice(priceEnginesOf(engine), model),
       }, sink);

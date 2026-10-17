@@ -54,6 +54,8 @@ import { costOf, type AcpUsage } from './cursor-prices';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { AgentChildrenReporter } from './agent-children';
+import type { ChildObservation } from '../../shared/agents';
 
 export interface AcpOptions extends SessionOptions {
   /** the engine's id (registry): the session's harness, SB_<ID>_PATH, the logs' `engine` */
@@ -296,6 +298,8 @@ export class AcpSession implements HarnessSession {
   private tools = new Map<string, ToolItem>();
   /** running subagents (Task tool calls) by toolCallId, for the subagent hooks */
   private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
+  private readonly childTelemetry: AgentChildrenReporter;
+  private childTasks = new Map<string, { task: string | null; state: ChildObservation['state']; source: ChildObservation['source'] }>();
   /** pending subagent hook runs (tests wait on them) */
   readonly hookRuns: Promise<void>[] = [];
   private planItemId: string | null = null;
@@ -327,6 +331,7 @@ export class AcpSession implements HarnessSession {
   readonly ready = new Promise<void>(r => { this.readyDone = r; });
 
   constructor(private readonly opts: AcpOptions, private readonly sink: SessionSink, private readonly command?: CliCommand | null) {
+    this.childTelemetry = new AgentChildrenReporter(sink);
     this.harness = opts.engineId;
     this.sessionId = opts.resume ? opts.sessionId ?? null : null;
   }
@@ -356,6 +361,7 @@ export class AcpSession implements HarnessSession {
   }
 
   start(): void {
+    this.childTelemetry.coverage('partial');
     const chat = this.opts.chatId, label = this.label, engine = this.engine;
     const envName = `SB_${engine.toUpperCase().replace(/-/g, '_')}_PATH`;
     const cmd = this.command ?? resolveAcp(engine, this.cliName, this.opts.pathOverride ?? null);
@@ -954,6 +960,7 @@ export class AcpSession implements HarnessSession {
       this.sink.item({ kind: 'system', id, at: Date.now(), ...sysPayload('todos', { list }), level: 'info' }, !!this.todosItemId);
       this.todosItemId = id;
     } else if (method === 'cursor/task') {
+      this.childTask(p, true);
       const sub = this.subagents.get(s(p.toolCallId));
       if (sub && s(p.model)) sub.model = s(p.model);
       this.sysCode('subagent', { description: cut(s(p.description) || s(p.prompt), 200) }, 'info');
@@ -995,6 +1002,8 @@ export class AcpSession implements HarnessSession {
 
   private onUpdate(u: Obj): void {
     this.count(u);
+    // Child observations must survive a hidden replay and must never depend on external subagent hooks.
+    if (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') this.childTask(u);
     // the input's "/" list, also while a resumed session loads
     if (u.sessionUpdate === 'available_commands_update') { this.sink.commands?.(toCommands(u.availableCommands)); return; }
     if (this.loading && !this.opts.showReplay) return; // replay of a session whose past is already on screen
@@ -1116,6 +1125,24 @@ export class AcpSession implements HarnessSession {
     this.subagentHooks(id, u, item.status);
   }
 
+  private childTask(u: Obj, extension = false): void {
+    const id = s(u.toolCallId), raw = o(u.rawInput), prev = this.childTasks.get(id);
+    if (!id || (!extension && raw._toolName !== 'task' && !prev)) return;
+    const st = s(u.status);
+    let state: ChildObservation['state'] = !st ? prev?.state ?? 'unknown'
+      : st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : st === 'cancelled' ? 'stopped'
+        : st === 'in_progress' ? 'running' : st === 'pending' ? 'waiting' : 'unknown';
+    const task = s(raw.description) || s(raw.prompt) || (extension ? s(u.description) || s(u.prompt) : '') || prev?.task || null;
+    // Descriptive metadata alone does not make a replayed running state current again after a resume.
+    const source = this.loading ? 'replay' : !st && prev ? prev.source : 'live';
+    if (source === 'replay' && prev && (prev.source === 'live' || ['completed', 'failed', 'stopped'].includes(prev.state))) state = prev.state;
+    this.childTasks.set(id, { task, state, source: prev?.source === 'live' ? 'live' : source });
+    this.childTelemetry.observe({
+      key: `acp:tool:${id}`, nativeId: null, toolCallId: id, parentNativeId: null, kind: 'agent', state, task,
+      observedAt: Date.now(), source,
+    });
+  }
+
   /** subagentStart when a Task tool call shows up, subagentStop when it ends (ACP never fires these hooks). Cursor only
    *  (subagentHooks). */
   private subagentHooks(id: string, u: Obj, status: ToolItem['status']): void {
@@ -1183,6 +1210,7 @@ export class AcpSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    this.childTelemetry.end();
     this.cancelRetry('netRetryCancelledClosed');
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();

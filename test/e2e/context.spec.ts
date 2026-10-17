@@ -1,8 +1,6 @@
-// End to end, long chats (fakes only, ADR 0014 + 0031): a long Claude chat turns its meter amber near its compaction
-// window (200k by default, passed per process) with no "Riprendi" notice, a long Cursor chat keeps the amber notice; on both the
-// hand-off dialog writes the note and "Riprendi in chat nuova" opens a new linked chat. A cold Claude chat writes its
-// note invisibly and a message after the (shortened) cache expiry goes on in a fresh session of the SAME tile: old
-// session folded above "Continua da qui", the note one click away. Plus the demo for the look.
+// Passive context meters and deliberate manual continuation, using fake engines only. No length-only notice on
+// Claude or Cursor. Legacy cold continuation is exercised only after explicit opt-in; the fresh default is off.
+// Main-only execution: writing this spec on a branch does not authorize running the e2e suite there.
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,8 +36,9 @@ for (const engine of ['claude', 'cursor'] as const) {
       await page.getByTestId(`chat-handoff-${chat.id}`).click();
     } else {
       await expect(meter).toContainText('~');
-      await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toContainText('Contesto lungo');
-      await page.getByTestId(`ctx-handoff-${chat.id}`).click();
+      await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toHaveCount(0);
+      await page.getByTestId(`chat-menu-${chat.id}`).click();
+      await page.getByTestId(`chat-handoff-${chat.id}`).click();
     }
     // no automatic note any more: the dialog writes it on request
     await expect(page.getByTestId('handoff-none')).toBeVisible();
@@ -65,12 +64,13 @@ for (const engine of ['claude', 'cursor'] as const) {
   });
 }
 
-test('claude: a cold chat writes its note invisibly and the next message goes on in a fresh session of the same tile', async () => {
+test('claude: explicit legacy opt-in preserves cold continuation behavior', async () => {
   const cwd = tmp('sb-e2e-cwd-');
   // cold timers shortened for the test: note right after the turn, cache "expires" after 3 s, checked every 300 ms
   const { app, page } = await launch({ SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_COLD_MS: '0,3000,300' });
   await setSize(app, 1400, 900);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.evaluate(()=>window.sb.invoke('settings:set',{contextHandoff:true}));
   const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'analizza il log big', title: 'Ordini · Totale' }), cwd);
   const tile = page.getByTestId(`tile-chat-${chat.id}`);
   const list = () => page.evaluate(() => window.sb.invoke('chat:list', undefined));

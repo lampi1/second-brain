@@ -7,6 +7,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { descendants, parseProcList, psToList, quitReapScript, reapAfterQuit, reapTree, snapshotTrees, type Proc } from '../../../src/main/chats/proctree';
 import { alive, killStray, tmp, waitFor } from './helpers';
+import { killTrees } from '../../../src/main/chats/cli';
 
 const T = 1_760_000_000_000;
 const p = (pid: number, ppid: number, at: number, name = 'node.exe'): Proc => ({ pid, ppid, created: T + at, name });
@@ -68,10 +69,10 @@ describe('proctree', () => {
     const out = path.join(tmp('reap'), 'child.txt');
     const keep = 'setTimeout(() => {}, 300000)';
     // detached: a Node parent's own job would kill the child with it; claude.exe and the shells have no such job
-    const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { detached: true, stdio: 'ignore', windowsHide: true });`
+    const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { detached: ${process.platform === 'win32'}, stdio: 'ignore', windowsHide: true });`
       + ` require('node:fs').writeFileSync(${JSON.stringify(out)}, String(c.pid)); setTimeout(() => process.exit(0), 300);`;
     const created = Date.now();
-    const parent = spawn(process.execPath, ['-e', script], { stdio: 'ignore', windowsHide: true });
+    const parent = spawn(process.execPath, ['-e', script], { stdio: 'ignore', windowsHide: true, detached: process.platform !== 'win32' });
     await new Promise(r => parent.once('exit', r));
     const child = Number(fs.readFileSync(out, 'utf8'));
     try {
@@ -81,20 +82,26 @@ describe('proctree', () => {
     } finally { killStray(child); }
   }, 150000); // WMI list 3-40 s + taskkill on a loaded box
 
-  it('the quit reaper: an engine terminated directly, its child found and killed once it is gone (real PowerShell)', async () => {
+  it('the host quit cleanup kills a terminated engine and its child (Windows reaper or POSIX process group)', async () => {
     const dir = tmp('quit-reap');
     const out = path.join(dir, 'child.txt');
     const keep = 'setTimeout(() => {}, 300000)';
-    const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { detached: true, stdio: 'ignore', windowsHide: true });`
+    const script = `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { detached: ${process.platform === 'win32'}, stdio: 'ignore', windowsHide: true });`
       + ` require('node:fs').writeFileSync(${JSON.stringify(out)}, String(c.pid)); ${keep};`;
     const created = Date.now();
-    const parent = spawn(process.execPath, ['-e', script], { stdio: 'ignore', windowsHide: true });
+    const parent = spawn(process.execPath, ['-e', script], { stdio: 'ignore', windowsHide: true, detached: process.platform !== 'win32' });
     const child = Number(await waitFor(() => fs.existsSync(out) && fs.readFileSync(out, 'utf8'), 'the child started'));
     const was = process.env.SB_QUIT_REAP_DONE;
     process.env.SB_QUIT_REAP_DONE = dir;
     try {
       expect(alive(child)).toBe(true);
       parent.kill();
+      if (process.platform !== 'win32') {
+        // POSIX quit uses the engine's process group; the group remains owned after its leader exits.
+        killTrees([parent.pid]);
+        await waitFor(() => !alive(child), 'the process-group orphan killed', 5000);
+        return;
+      }
       reapAfterQuit([{ pid: parent.pid ?? 0, created, exited: Date.now() }]); // what killTreesWithin does at the cap: the kill, then the reaper
       // a reaper that never ends says how far it got (its PowerShell never ran, the WMI list never came back, or the
       // kills hung): 11-22 s at 85% CPU plus 8 WMI loops (2026-10-14), one full check still waited 183 s for nothing
@@ -118,6 +125,17 @@ describe('proctree', () => {
 });
 
 describe('psToList (macOS/Linux process list, ADR 0054)', () => {
+  it('retains group ownership after reparenting and preserves user programs and their tool children', () => {
+    const list = parseProcList(psToList('200 1 100 00:10 node\n201 200 100 00:09 sh\n202 200 100 00:08 Google Chrome\n203 202 100 00:07 node\n300 1 300 00:05 node\n', T + 20000, true));
+    expect(ids(descendants(list, root))).toEqual([200, 201]);
+    expect(list.find(p => p.pid === 203)?.ppid).toBe(202);
+    expect(list.find(p => p.pid === 300)?.ppid).toBe(1);
+  });
+  it('never bypasses a live user program that changed its process group after starting a tool', () => {
+    const list = parseProcList(psToList('200 100 200 00:10 Google Chrome\n201 200 100 00:09 node\n', T + 20000, true));
+    expect(list.find(p => p.pid === 201)?.ppid).toBe(200);
+    expect(descendants(list, root)).toEqual([]);
+  });
   it('etime and full comm paths become parseProcList lines; bad lines skipped', () => {
     const out = psToList('    1     0 3-00:00:00 /sbin/launchd\n  812     1    01:05 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome\n  900   812 00:02 node\ngarbage\n', 1_000_000_000);
     expect(parseProcList(out)).toEqual([

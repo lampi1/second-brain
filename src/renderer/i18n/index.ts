@@ -9,6 +9,7 @@ import { en } from './en';
 
 export type Dict = typeof it;
 export type Key = keyof Dict;
+export type TextKey = {[K in Key]:Dict[K] extends string?K:never}[Key];
 type Args<K extends Key> = Dict[K] extends (p: infer P) => string ? [P] : [];
 
 const dicts: Record<Lang, Dict> = { it, en };

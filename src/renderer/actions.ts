@@ -304,7 +304,7 @@ export function focusChat(chatId: string): void {
   // a chat of "Migliora l'app" lives in its section: open it there (its Regia is always shown)
   if (c.space === 'app') {
     if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
-    if (!c.appRegia) showAppChat(chatId);
+    showAppChat(chatId);
     flashTile(`chat:${chatId}`);
     requestFocus(chatId);
     return;
@@ -451,7 +451,7 @@ export function focusRequest(req: PendingRequest): void {
   if (c?.space === 'app') {
     // a chat of "Migliora l'app": its tile in the section shows the request
     if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
-    if (!c.appRegia) showAppChat(req.chatId);
+    showAppChat(req.chatId);
     flashTile(`chat:${req.chatId}`);
     let n = 0;
     const take = () => {

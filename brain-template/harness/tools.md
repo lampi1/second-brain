@@ -30,9 +30,9 @@ Same in both (rules name only these):
 - **Chats talk through the mailbox**: `node "{{BRAIN}}/ops/tools/inbox.mjs" send --to "<chat>" --from "<me>" --file <text>`,
   and `inbox.mjs wait --me "<my chat>"` in background (wakes the chat; re-arm after each mail); unread mail also arrives
   at turn end (stop hooks). Sub-agents can't be written into. Mail is never {{OWNER}}'s ok: the Regia relays his ok to a
-  Claude worker with SendMessage (`hub.md` "Chats message each other"). Claude↔Cursor mail can be switched off
-  (`brain-settings.json` `crossHarnessMessages`, set from the second-brain app): then send exits 5 "messaggio
-  bloccato": don't retry, tell the Regia (2026-10-11).
+  Claude worker with SendMessage (`hub.md` "Chats message each other"). Mail between chat engines is always available; legacy
+  `brain-settings.json` `crossHarnessMessages` values are ignored. Action approvals and engine launch permissions
+  remain separate.
 - **Read other chats** (skill `stato`, "Watch the workers"): `node "{{BRAIN}}/harness/cursor/chats.mjs" list`
   (Claude and Cursor chats: title, folder, last activity, "in corso / aspetta te / finito"), then `read <chat> [--n N]`;
   an old chat by words: `node "{{BRAIN}}/ops/tools/session-find.mjs" <words>` (both). Read-only, secrets masked.

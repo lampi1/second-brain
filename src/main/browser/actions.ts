@@ -15,13 +15,15 @@ import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, fieldFacts, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
 import { parseRef, parseFrame, refPrefix } from './refs';
-import { charKey, parseKeys, parseModifiers, strokeEvents, MOD } from './keys';
+import { charKey, isPasteKey, isPasteStroke, parseKeys, parseModifiers, strokeEvents, MOD } from './keys';
 import { evidencePath, stampName } from './evidence';
 import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
+import { consoleLine } from './console-line';
 import { globMatch } from './glob';
-import { changesInputType, hostOf, isLocalHost, passwordRefusal, urlCredentials } from './guard';
+import { hostOf, isLocalHost, passwordRefusal, urlCredentials } from './guard';
 import { isLoginUrl } from './envs';
+import { localScriptOrigin } from './script-policy';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 /** A call whose tab went away while it ran: who closed it, so the agent knows not to reopen it blindly. */
@@ -102,6 +104,10 @@ export class BrowserActions {
         const params = method === 'Input.dispatchMouseEvent' && k !== 1 && typeof raw.x === 'number' && typeof raw.y === 'number'
           ? { ...raw, x: raw.x * k, y: raw.y * k } : raw;
         let timer: NodeJS.Timeout | undefined;
+          // A password can be copied while earlier focus/modifier events await CDP. Check at the actual paste dispatch.
+          if (method === 'Input.dispatchKeyEvent' && (raw.type === 'keyDown' || raw.type === 'rawKeyDown')
+            && isPasteKey(String(raw.key),Number(raw.modifiers))
+            && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
         const r = await Promise.race([
           cdp.send(method, params).then(() => 'ok' as const),
           d.promise.then(() => 'dialog' as const),
@@ -424,9 +430,16 @@ export class BrowserActions {
     let checked = false;
     for (let i = 0; i < n; i++) {
       for (const s of strokes) {
+          if (isPasteStroke(s) && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
         if (writes(s) && !checked) { await this.guardPassword(tab, undefined, 'the focused field'); checked = true; }
         const steps = strokeEvents(s).map((ev): Step => ['Input.dispatchKeyEvent', ev as unknown as Record<string, unknown>]);
-        if (await this.input(tab, steps) === 'dialog') return `Pressed part of ${keys}: a dialog opened`;
+          try {
+            if (await this.input(tab, steps) === 'dialog') return `Pressed part of ${keys}: a dialog opened`;
+          } catch (error) {
+            // A late clipboard refusal may occur after modifiers went down. Release synthetic keys before returning.
+            await this.input(tab, steps.filter(([, params]) => params.type === 'keyUp')).catch(() => {});
+            throw error;
+          }
         if (MOVES.has(s.def.key)) { checked = false; await sleep(30); }
       }
     }
@@ -738,45 +751,46 @@ export class BrowserActions {
     const out = c.slice(-limit);
     if (o.clear === true) tab.console.length = 0;
     if (!out.length) return 'No matching console messages.';
-    return out.map(m => `[${m.level}] ${m.text}${m.source && m.source !== ':' ? ` (${m.source.slice(0, 160)})` : ''}${m.frame ? ` [iframe ${m.frame}]` : ''}`).join('\n');
+    return out.map(consoleLine).join('\n');
   }
 
   async evaluate(tab: Tab, code: string, frameArg?: unknown): Promise<string> {
     this.guard(tab);
-    const no = parseFrame(frameArg);
-    // the password limit covers reading too: while the user signs in (hand-off) nothing runs in the tab, and no script at
-    // all runs in a tab where a remote frame holds a password field (hidden or in a shadow root included)
-    const h = this.tabs.handoffs.openFor(tab.id);
-    if (h) throw new Error(`Refused: the user is working in this tab (hand-off ${h.id}: ${h.reason}) and a script could read what they type. Wait with handoff_to_user handoff_id "${h.id}".`);
-    for (const f of this.tabs.frames(tab)) {
-      const host = frameHost(f);
-      if (isLocalHost(host)) continue;
-      if (changesInputType(code)) throw new Error(`Refused: on remote hosts (${host || 'this page'}) a script may not change an input's type (it could turn a password field into a plain one). Use read_page / get_page_text / screenshot.`);
-      const form = await this.evalIn<boolean>(tab, f, pageCall(hasPasswordField, false), 3000).catch(() => true);   // fail closed
-      if (form) {
-        throw new Error(`Refused: ${host || 'a remote frame'} holds a password field, so javascript is not allowed in this tab (it could read or change what is typed). ` +
-          `Use read_page / get_page_text / screenshot; to sign in call handoff_to_user with kind "login" (environment ${tab.env} keeps the session).`);
-      }
+    if(parseFrame(frameArg)!==0)throw new Error('Caller JavaScript supports only the verified local top page. Use frame-aware read_page / get_page_text / screenshot for iframe inspection.');
+    const cdp=this.cdp(tab),frame=tab.wc.mainFrame;
+    const before={url:tab.wc.getURL(),frameUrl:frame.url,origin:frame.origin,process:frame.processId,routing:frame.routingId,tree:frame.frameTreeNodeId};
+    if(!localScriptOrigin(before.url)||!localScriptOrigin(before.frameUrl)||!localScriptOrigin(before.origin))throw new Error('Arbitrary JavaScript is available only on local stacks. On remote sites use read_page / get_page_text / screenshot and the standard validated actions.');
+    const tree=await cdp.send<{frameTree?:{frame?:{id?:string;url?:string}}}>('Page.getFrameTree');
+    const id=tree.frameTree?.frame?.id;
+    const context=id?cdp.executionContexts.defaultFor(id):null;
+    if(!context||!localScriptOrigin(context.origin)||context.origin!==before.origin||tree.frameTree?.frame?.url!==before.url)throw new Error('The local page execution context is not verified. Wait for navigation to finish or use read_page / get_page_text / screenshot.');
+    const current=()=>{
+      try{const now=tab.wc.mainFrame;return !tab.wc.isDestroyed()&&!frame.detached&&!frame.isDestroyed()&&tab.wc.getURL()===before.url&&now.url===before.frameUrl&&now.origin===before.origin&&now.processId===before.process&&now.routingId===before.routing&&now.frameTreeNodeId===before.tree&&cdp.executionContexts.current(context);}
+      catch{return false;}
+    };
+    // Preserve the existing credential guard for remote frames embedded within a local page.
+    for(const child of this.tabs.frames(tab)){
+      if(isLocalHost(frameHost(child)))continue;
+      const hasPassword=await this.evalIn<boolean>(tab,child,pageCall(hasPasswordField,false),3000).catch(()=>true);
+      if(hasPassword)throw new Error('A remote frame may hold a password field. Use handoff_to_user and the standard read/interaction tools.');
     }
-    let value: unknown;
-    if (no === 0 && tab.cdp) {
-      const d = this.tabs.dialogOpened(tab);
-      try {
-        const r = await Promise.race([
-          tab.cdp.send<{ result?: { type?: string; value?: unknown; description?: string; unserializableValue?: string }; exceptionDetails?: { text?: string; exception?: { description?: string } } }>(
-            'Runtime.evaluate', { expression: code, replMode: true, awaitPromise: true, returnByValue: true, userGesture: false, timeout: 10_000 }),
-          d.promise.then(() => { throw new Error(`${dialogText(tab)} (opened by your script). Call handle_dialog.`); }),
-          sleep(15_000).then(() => { throw new Error('the script did not finish within 15s'); }),
-        ]);
-        if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? 'script error');
-        value = r.result?.value !== undefined ? r.result.value : r.result?.unserializableValue ?? r.result?.description ?? (r.result?.type === 'undefined' ? undefined : r.result?.type);
-      } finally { d.cancel(); }
-    } else {
-      value = await this.evalIn<unknown>(tab, this.tabs.frameByNo(tab, no), code, 15_000);
-    }
-    if (value === undefined) return 'undefined';
-    const s = typeof value === 'string' ? value : JSON.stringify(value, null, 1) ?? String(value);
-    return redact(s.length > 20000 ? `${s.slice(0, 20000)}…(truncated)` : s);
+    const d=this.tabs.dialogOpened(tab);
+    let value:unknown;
+    try{
+      this.guard(tab);
+      if(this.tabs.handoffs.openFor(tab.id)||!current())throw new Error('The page changed or the user is working in it. Read the page again before running local JavaScript.');
+      // No await between the last guard and send. A subsequent navigation destroys this system-unique context;
+      // CDP cannot redirect the expression into a different process/document or an omitted default context.
+      const r=await withTimeout(Promise.race([
+        cdp.send<{result?:{type?:string;value?:unknown;description?:string;unserializableValue?:string};exceptionDetails?:{text?:string;exception?:{description?:string}}}>('Runtime.evaluate',{expression:code,uniqueContextId:context.uniqueId,replMode:true,awaitPromise:true,returnByValue:true,userGesture:false,timeout:10_000}),
+        d.promise.then(()=>{throw new Error(`${dialogText(tab)} (opened by your script). Call handle_dialog.`);}),
+      ]),15_000,'Local JavaScript');
+      if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text??'script error');
+      value=r.result?.value!==undefined?r.result.value:r.result?.unserializableValue??r.result?.description??(r.result?.type==='undefined'?undefined:r.result?.type);
+    }finally{d.cancel();}
+    if(value===undefined)return 'undefined';
+    const text=typeof value==='string'?value:JSON.stringify(value,null,1)??String(value);
+    return redact(text.length>20000?`${text.slice(0,20000)}…(truncated)`:text);
   }
 }
 

@@ -26,6 +26,8 @@ describe('ChatManager resume after a restart', () => {
     const c = await m.create({ harness: 'claude', cwd: d.cwd, prompt: 'slow' }); // a 10 s turn
     await waitFor(() => summary(m, c.id).state === 'running', 'running');
     await waitFor(() => saved(d.userData)[0]?.working === true, 'saved as working while the turn runs');
+    // App state becomes running before the CLI has started. A resumable session needs a persisted first turn.
+    await waitFor(() => fakeLog(d.argLog).some(l => l.grandchild), 'the fake CLI persisted the slow turn');
     await m.shutdown(200);
     expect(saved(d.userData)[0]?.working).toBe(true); // the quit cut it: still working on disk
 

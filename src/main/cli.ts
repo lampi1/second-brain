@@ -46,7 +46,7 @@ async function claudeStatus(): Promise<CliStatus> {
   let loggedIn: boolean | null = null, account: string | null = null;
   if (!process.env.SB_DEMO) {
     const a = await runFixed(p, ['auth', 'status']);
-    try { const s = JSON.parse(a.stdout) as { loggedIn?: boolean; email?: string; authMethod?: string }; loggedIn = !!s.loggedIn; account = s.email ? `${s.authMethod ?? ''} ${s.email}`.trim() : null; } catch { /* old or fake CLI: unknown */ }
+    try { const s = JSON.parse(a.stdout) as { loggedIn?: boolean; email?: string; authMethod?: string } | null; loggedIn = typeof s?.loggedIn === 'boolean' ? s.loggedIn : null; account = s?.email ? `${s.authMethod ?? ''} ${s.email}`.trim() : null; } catch { /* old or fake CLI: unknown */ }
   }
   return { found: true, path: p, version: version(v.stdout), loggedIn, account };
 }

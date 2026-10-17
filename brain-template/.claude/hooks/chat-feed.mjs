@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseHookJson } from '../../harness/cursor/hook-input.mjs';
+import { mask } from '../../ops/tools/feedback-log.mjs';
 
 const argv = process.argv.slice(2);
 const ROOT = argv.includes('--root') ? argv[argv.indexOf('--root') + 1] : '{{BRAIN}}';
@@ -21,9 +22,9 @@ const FOCUS = path.join(DIR, 'focus.json');
 const MAIN = path.resolve(ROOT).toLowerCase();
 const MAX_INJECT = 1800;
 
-// Never store secrets typed or pasted into a chat: the value after a password/token/key-like word is masked.
-const SECRET = /\b(password|passwort|pwd|token|secret|apikey|api[-_ ]?key|connectionstring|sharedaccesskey)\b(\s*[:=]?\s*)\S+/gi;
-const oneLine = (s, n) => (s || '').replace(SECRET, '$1$2***').replace(/\s+/g, ' ').trim().slice(0, n);
+// Conservatively omit everything after a credential label before persistence or cross-chat forwarding. This catches
+// prose and Markdown labels as well as assignments; arbitrary unlabeled secrets still must never be pasted in chats.
+const oneLine = (s, n) => mask(s).replace(/\s+/g, ' ').trim().slice(0, n);
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const tail = (file, bytes) => {
   try {

@@ -14,7 +14,7 @@ export const NOTE_EVERY_MS = 10 * 60_000;
 const LOCAL_URL = String.raw`(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\]|[a-z0-9-]+\.localhost)(?::\d+)?`;
 // the user is asked: Italian second person or "puoi aprire" (never "posso aprire", the agent itself); English only
 // after please / you can / at a sentence start ("I'll open the browser" is the agent's own step)
-const ASK_IT = String.raw`(?<!\b(?:posso|devo|provo a|vado ad?|per|ora|adesso|lo|la|li) )\b(?:apri|aprire|aprite|riapri|vai su|vai a|visita|incolla)\b`;
+const ASK_IT = String.raw`(?<!\b(?:non|posso|devo|provo a|vado ad?|per|come|quando|mentre|se|lo|la|li) )\b(?:(?:puoi|potresti)\s+aprire|apri|aprite|riapri|vai su|vai a|visita|incolla)\b`;
 const askEn = (verbs: string): string => String.raw`(?:\b(?:please|you can|you could|can you|could you|you need to|you should)\s+|(?:^|[.!?:]\s+))(?:${verbs})\b`;
 const ASK_EN = askEn('open|launch|go to|visit|navigate to|paste');
 const RULES: RegExp[] = [
@@ -24,9 +24,9 @@ const RULES: RegExp[] = [
   // "apri https://localhost:44319", "vai su localhost:4200", "Open http://127.0.0.1:5000"
   new RegExp(String.raw`(?:${ASK_IT}|${ASK_EN})[^\n]{0,40}${LOCAL_URL}`, 'im'),
   // "fai l'accesso nel pannello", "accedi dal browser", "log in in your browser" (not "... non nel browser")
-  new RegExp(String.raw`(?:\b(?:accedi|entra|fai (?:il |l')?(?:login|accesso)|loggati)|${askEn('sign in|log in')})[^.\n]{0,40}(?<!\b(?:non|not) )\b(?:nel|sul|dal|in|on) (?:tuo |your |the )?(?:browser|pannello)\b`, 'im'),
+  new RegExp(String.raw`(?:(?<!\b(?:non|se|quando|come) )\b(?:accedi|entra|fai (?:il |l')?(?:login|accesso)|loggati)|${askEn('sign in|log in')})[^.\n]{0,40}(?<!\b(?:non|not) )\b(?:nel|sul|dal|in|on) (?:tuo |your |the )?(?:browser|pannello)\b`, 'im'),
   // "aprilo nel tuo browser", "open it in your browser": in this app the user's browser for agent work is the app's
-  /(?<!\b(?:non|not) )\b(?:nel tuo browser|in your browser)\b/i,
+  new RegExp(String.raw`(?:${ASK_IT}|${ASK_EN}|(?<!\bnon )\b(?:aprilo|aprila|aprili|aprile|riaprilo))[^.\n]{0,80}(?<!\b(?:non|not) )\b(?:nel tuo browser|in your browser)\b`, 'im'),
 ];
 
 /** The phrase of the reply that asks the user to browse, or null. */

@@ -170,13 +170,13 @@ function repoWithHistory(): { dir: string; base: string; m1: string; m2: string;
   return { dir, base, m1, m2, b1 };
 }
 
-function service(o: { dir: string; base: string; running: string; stable?: boolean; env?: Record<string, string>; restartFails?: boolean; routing?: ImproveDeps['routing'] }) {
+function service(o: { dir: string; base: string; running: string; stable?: boolean; env?: Record<string, string>; restartFails?: boolean; routing?: ImproveDeps['routing']; allowLegacyPromotion?: boolean }) {
   const states: ImproveState[] = [];
   const created: NewChat[] = [];
   let restarts = 0;
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ud-'));
   const s = new ImproveService({
-    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: null,
+    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: null, ...(o.allowLegacyPromotion !== undefined ? { allowLegacyPromotion: o.allowLegacyPromotion } : {}),
     chats: { list: () => [] as ChatSummary[], create: async (r: NewChat) => { created.push(r); return { id: 'x', harness: r.harness } as ChatSummary; } },
     emit: st => states.push(st), restart: failed => { restarts++; if (o.restartFails) failed(); }, node: process.execPath,
     ...(o.routing ? { routing: o.routing } : {}),
@@ -191,6 +191,14 @@ const fresh = () => ({ ...repo, base: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-
 
 describe('ImproveService', { timeout: 30_000 }, () => {
   beforeAll(() => { repo = repoWithHistory(); }, 120_000);
+  it('refuses legacy promotion when the single staged updater owns updates', async () => {
+    const r = fresh();
+    const { s, restarts } = service({ dir: r.dir, base: r.base, running: `0.1.0-${r.m1.slice(0, 7)}`, allowLegacyPromotion: false });
+    const state = await s.refresh();
+    expect(state.canPromote).toBe(false); expect(state.promoteWhy).toMatch(/pacchetto preparato/);
+    await expect(s.promote()).rejects.toThrow(/pacchetto preparato/);
+    expect(s.state().promote).toBe(null); expect(restarts()).toBe(0);
+  });
   it('reads the stages, the candidate and the gate from git', async () => {
     const r = fresh();
     const { s } = service({ dir: r.dir, base: r.base, running: `0.1.0-${r.m1.slice(0, 7)}` });

@@ -38,7 +38,7 @@ export function redactBody(text: string, mime = ''): string {
         if (Array.isArray(v)) return v.map(mask);
         if (v && typeof v === 'object') {
           return Object.fromEntries(Object.entries(v as P).map(([k, x]) => {
-            if (SECRET_FIELD.test(k) && x !== null && typeof x !== 'object') { hit = true; return [k, '[redacted]']; }
+              if (SECRET_FIELD.test(k) && x !== null) { hit = true; return [k, '[redacted]']; }
             return [k, mask(x)];
           }));
         }

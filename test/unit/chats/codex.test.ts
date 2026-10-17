@@ -48,6 +48,55 @@ describe('helpers', () => {
 });
 
 describe('CodexSession', () => {
+  it('keeps the reported session default separate from the explicitly submitted turn effort', async () => {
+    const { s, sink, logFile } = start({ effort: 'medium', env: { FAKE_CODEX_DEFAULT_EFFORT: 'high' } });
+    await s.ready;
+    expect(sink.patch.effortSessionDefault).toBe('high');
+    expect(sink.patch.effortSubmitted).toBeUndefined();
+    s.send('First'); await idleAfter(sink, 1);
+    expect(sink.patch.effortSessionDefault).toBe('high');
+    expect(sink.patch.effortSubmitted).toBe('medium');
+    expect(sent(logFile, 'turn/start')[0]?.params?.effort).toBe('medium');
+  });
+  it('applies and revokes repository autonomy on later turns without restarting or answering pending approvals', async () => {
+    let autonomous = true;
+    const { s, sink, logFile, cwd } = start({ executionPolicy: () => ({ approvalPolicy: autonomous ? 'never' : 'on-request', sandbox: 'workspace-write', writableRoots: autonomous ? [cwd] : [] }) });
+    await s.ready;
+    const pid = s.pid;
+    expect(sent(logFile, 'thread/start')[0]?.params).toMatchObject({ approvalPolicy: 'never', sandbox: 'workspace-write' });
+    s.send('uno');
+    await idleAfter(sink, 1);
+    expect(sent(logFile, 'turn/start')[0]?.params).toMatchObject({ approvalPolicy: 'never', sandboxPolicy: { type: 'workspaceWrite', writableRoots: [cwd], networkAccess: false, excludeTmpdirEnvVar: true, excludeSlashTmp: true } });
+    autonomous = false;
+    s.send('due');
+    await idleAfter(sink, 2);
+    expect(sent(logFile, 'turn/start')[1]?.params).toMatchObject({ approvalPolicy: 'on-request', sandboxPolicy: { type: 'workspaceWrite', writableRoots: [cwd], networkAccess: false } });
+    expect(s.pid).toBe(pid);
+    expect(sink.pendings).toHaveLength(0);
+  });
+
+  it('read-only overrides an autonomy callback and never grants writable roots', async () => {
+    const { s, sink, logFile } = start({ readOnly: true, executionPolicy: () => ({ approvalPolicy: 'never', sandbox: 'workspace-write', writableRoots: ['C:/unselected'] }) });
+    await s.ready;
+    s.send('uno');
+    await idleAfter(sink, 1);
+    expect(sent(logFile, 'thread/start')[0]?.params).toMatchObject({ approvalPolicy: 'on-request', sandbox: 'read-only' });
+    expect(sent(logFile, 'turn/start')[0]?.params).toMatchObject({ approvalPolicy: 'on-request', sandboxPolicy: { type: 'readOnly' } });
+  });
+
+  it('an approval emitted by the server still waits for the user in scoped autonomy', async () => {
+    const { s, sink, logFile } = start({ executionPolicy: () => ({ approvalPolicy: 'never', sandbox: 'workspace-write', writableRoots: [] }) });
+    await s.ready;
+    s.send('perm');
+    const pending = await waitFor(() => sink.pendings[0], 'server approval in scoped mode');
+    expect(sink.patch.state).toBe('waiting');
+    expect(sink.resolvedIds).toHaveLength(0);
+    expect(readLog(logFile).filter(l => l.answer)).toHaveLength(0);
+    s.answer(pending.id, { kind: 'permission', allow: false });
+    await idleAfter(sink, 1);
+    expect(readLog(logFile).find(l => l.answer)?.answer).toEqual({ decision: 'decline' });
+  });
+
   it('starts a thread, streams reasoning and answer, reports tokens and context', async () => {
     const { s, sink, logFile } = start({ model: 'gpt-x', effort: 'max', configArgs: ['-c', 'approval_policy=on-request'], developerInstructions: 'Regole del cervello', skillRoots: ['C:/b/skills'] });
     await s.ready;
@@ -148,6 +197,105 @@ describe('CodexSession', () => {
     await idleAfter(sink, 1);
     expect(readLog(logFile).find(l => l.answer)?.answer).toEqual({ answers: { colore: { answers: ['Blu'] } } });
     expect(texts(sink, 'assistant')).toContain('Hai scelto Blu');
+  });
+
+  it.each([true, false])('MCP empty form: explicit allow=%s, no automatic or persistent consent', async allow => {
+    const { s, sink, logFile } = start();
+    s.send('elicitation');
+    await waitFor(() => sink.pendings.length || results(sink).length, 'MCP panel or result');
+    const req = sink.pendings[0]!;
+    expect(req).toBeDefined();
+    expect(req).toMatchObject({ type: 'permission', tool: 'mcp__second_brain_app__app_chats', noAlways: true });
+    expect(req.title).toContain('Consenti');
+    expect(req.detail).toContain('Intervallo: 2h');
+    expect(req.detail).toContain('Elenca le chat visibili');
+    expect(req.input).toMatchObject({ server: 'second_brain_app', arguments: { since: '2h' } });
+    expect(readLog(logFile).filter(l => l.msg?.id === 1000)).toHaveLength(0);
+    expect(() => s.answer(req.id, { kind: 'question', answers: {} })).toThrow();
+    expect(() => s.answer(req.id, { kind: 'permission', allow: true, always: true })).toThrow();
+    expect(s.answer(req.id, { kind: 'permission', allow })).toBe(true);
+    expect(s.answer(req.id, { kind: 'permission', allow })).toBe(false);
+    await idleAfter(sink, 1);
+    expect(readLog(logFile).find(l => l.answer)?.answer).toEqual({ action: allow ? 'accept' : 'decline', content: allow ? {} : null });
+    expect(readLog(logFile).filter(l => l.msg?.id === 1000)).toHaveLength(1);
+    expect(sink.resolvedIds.filter(id => id === req.id)).toHaveLength(1);
+  });
+
+  it('MCP Stop cancels with null content exactly once', async () => {
+    const { s, sink, logFile } = start();
+    s.send('elicitation');
+    const req = await waitFor(() => sink.pendings[0], 'MCP approval');
+    await s.interrupt({ byUser: true });
+    await idleAfter(sink, 1);
+    expect(readLog(logFile).find(l => l.answer)?.answer).toEqual({ action: 'cancel', content: null });
+    expect(s.answer(req.id, { kind: 'permission', allow: true })).toBe(false);
+    expect(readLog(logFile).filter(l => l.msg?.id === 1000)).toHaveLength(1);
+    expect(sink.resolvedIds.filter(id => id === req.id)).toHaveLength(1);
+  });
+
+  it.each(['resolved', 'completed'])('MCP %s withdraws a turn-scoped panel without a late response', async ending => {
+    const { s, sink, logFile } = start();
+    s.send(`elicitation ${ending}`);
+    const req = await waitFor(() => sink.pendings[0], 'MCP approval');
+    await idleAfter(sink, 1);
+    expect(sink.resolvedIds.filter(id => id === req.id)).toHaveLength(1);
+    expect(s.answer(req.id, { kind: 'permission', allow: true })).toBe(false);
+    expect(readLog(logFile).filter(l => l.msg?.id === 1000)).toHaveLength(0);
+  });
+
+  it('MCP standalone request survives turn end; only its thread may resolve it', async () => {
+    const { s, sink, logFile } = start({ env: { FAKE_CODEX_ELICITATION: JSON.stringify({ turnId: null }) } });
+    s.send('elicitation completed');
+    const req = await waitFor(() => sink.pendings[0], 'MCP approval');
+    await waitFor(() => results(sink).length === 1, 'turn end');
+    expect(sink.patch.state).toBe('waiting');
+    s.line(JSON.stringify({ method: 'serverRequest/resolved', params: { threadId: 'another-thread', requestId: 1000 } }));
+    expect(sink.resolvedIds).not.toContain(req.id);
+    s.line(JSON.stringify({ method: 'serverRequest/resolved', params: { threadId: s.sessionId, requestId: 1000 } }));
+    expect(sink.resolvedIds.filter(id => id === req.id)).toHaveLength(1);
+    expect(s.answer(req.id, { kind: 'permission', allow: true })).toBe(false);
+    expect(readLog(logFile).filter(l => l.msg?.id === 1000)).toHaveLength(0);
+    expect(sink.patch.state).toBe('idle');
+  });
+
+  it('MCP session close removes the panel and rejects a later click', async () => {
+    const { s, sink } = start();
+    s.send('elicitation');
+    const req = await waitFor(() => sink.pendings[0], 'MCP approval');
+    await s.close(500);
+    expect(sink.resolvedIds.filter(id => id === req.id)).toHaveLength(1);
+    expect(s.answer(req.id, { kind: 'permission', allow: true })).toBe(false);
+  });
+
+  it.each([
+    { mode: 'url', url: 'https://example.com/confirm', elicitationId: 'e1' },
+    { mode: 'openai/form' }, { mode: 'openaiForm' }, { mode: null },
+    { requestedSchema: null }, { requestedSchema: [] },
+    { requestedSchema: { type: 'object', properties: { answer: { type: 'string' } } } },
+    { requestedSchema: { type: 'object', properties: {}, required: ['answer'] } },
+    { requestedSchema: { type: 'object', properties: {}, minProperties: 1 } },
+    { requestedSchema: { type: 'object', properties: {}, additionalProperties: { type: 'string' } } },
+    { message: '' }, { threadId: 'another-thread' }, { turnId: 'another-turn' },
+    { _meta: { tool_params: [] } }, { _meta: { tool_params_display: [{ name: 'x' }] } },
+  ])('MCP unsupported or malformed input yields an RPC error, never user decline: %j', async params => {
+    const { s, sink, logFile } = start({ env: { FAKE_CODEX_ELICITATION: JSON.stringify(params) } });
+    s.send('elicitation');
+    await idleAfter(sink, 1);
+    expect(sink.pendings).toHaveLength(0);
+    const replies = readLog(logFile).filter(l => l.msg?.id === 1000);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.msg).toMatchObject({ error: { code: -32602 } });
+    expect(replies[0]?.msg).not.toHaveProperty('result');
+    expect(texts(sink, 'system').some(t => /MCP.*non supportata|MCP.*non valida/.test(t))).toBe(true);
+  });
+
+  it('tool/requestUserInput is not guessed as the item/tool/requestUserInput protocol', async () => {
+    const { s, sink, logFile } = start();
+    await s.ready;
+    s.line(JSON.stringify({ id: 8888, method: 'tool/requestUserInput', params: { threadId: s.sessionId, questions: [] } }));
+    await waitFor(() => readLog(logFile).some(l => l.msg?.id === 8888), 'unsupported protocol response');
+    expect(sink.pendings).toHaveLength(0);
+    expect(readLog(logFile).find(l => l.msg?.id === 8888)?.msg).toMatchObject({ error: { code: -32601 } });
   });
 
   it('a message while a turn runs steers it', async () => {

@@ -15,6 +15,7 @@ import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, Setting
 import { COMPACT_WINDOW, OLD_COMPACT_WINDOW, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
 import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import { domainsOfConfig } from './domains';
+import { samePolicyPath } from './adapters/codex-policy';
 import { log } from '../log';
 
 export { validate, schema };
@@ -32,7 +33,13 @@ export function fromSaved(raw: unknown): Settings {
     if (d.key === 'mute.*' || /^(engineOn|engines)\./.test(d.key)) continue;
     const v = d.key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), raw);
     if (v === undefined) continue;
-    const c = validate(d.key, v);
+    // Corsie was retired: keep older files readable while every effective view uses Mosaico.
+    const c = validate(d.key, d.key === 'view' && v === 'corsie' ? 'mosaico' : v);
+    // Saved roots were canonical when the user selected them. Replacing one with a junction must not retarget consent.
+    if (c.ok && d.key === 'codexAutonomyRoots') {
+      const saved = v as string[], canonical = c.value as string[];
+      if (saved.length !== canonical.length || saved.some((p, i) => !samePolicyPath(path.normalize(p), canonical[i]!))) continue;
+    }
     if (c.ok) s = setAt(s, c.key, c.value);
   }
   const mute = (raw as { mute?: unknown }).mute;
@@ -98,7 +105,32 @@ export class ConfigStore {
     this.saved = fromSaved(raw);
     this.domainList = domainsOfConfig(raw);
     this.loadChanges();
+    this.migrateView(raw);
+    this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
+  }
+
+  /** Persist the retired Corsie choice explicitly, retaining the settings and history already loaded above. */
+  private migrateView(raw: unknown): void {
+    if ((raw as { view?: unknown } | null)?.view !== 'corsie') return;
+    try {
+      this.save(this.saved);
+      log.info('settings', 'retired Corsie view migrated to Mosaico');
+    } catch (e) {
+      log.warn('settings', 'view migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'Mosaico applies for this run; the next start retries the migration' });
+    }
+  }
+
+  /** Retire the old false in config.json. fromSaved already normalizes it through the schema's defaults;
+   *  persist that compatibility value for older releases without changing engine or action permissions. */
+  private migrateMessaging(raw: unknown): void {
+    if ((raw as { messaging?: { crossHarness?: unknown } } | null)?.messaging?.crossHarness !== false) return;
+    try {
+      this.save(this.saved);
+      log.info('settings', 'retired cross-engine messaging switch migrated to always available');
+    } catch (e) {
+      log.warn('settings', 'messaging migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'messaging is available for this run; the next start retries the migration' });
+    }
   }
 
   /** The compaction window's default went from 300000 to 200000 (ADR 0051): a saved 300000 nobody set (no change in the
@@ -190,6 +222,7 @@ export class ConfigStore {
     if (accept) {
       const c = validate(p.key, p.after);
       if (!c.ok) throw new Error(c.error);
+      if (p.key === 'codexAutonomyRoots' && !same(c.value, p.after)) throw new Error('Cartella repository cambiata dalla proposta: crea una nuova proposta con il percorso attuale.');
       this.assertUnlocked(c.key);
       // applied first: if saving fails the proposal stays pending and can be confirmed again
       ch = this.apply(c.key, c.value, { by: 'user', ...(p.chatId ? { chatId: p.chatId } : {}) }, { proposalId: p.id, force: true });
@@ -207,6 +240,7 @@ export class ConfigStore {
     if (origin.by === 'agent' && defOf(orig.key)?.protected) throw new Error("impostazione protetta: solo l'utente può annullarla");
     const c = validate(orig.key, orig.before);
     if (!c.ok) throw new Error(c.error);
+    if (orig.key === 'codexAutonomyRoots' && !same(c.value, orig.before)) throw new Error('Cartella repository cambiata dalla modifica: scegli di nuovo il percorso attuale.');
     this.assertUnlocked(c.key);
     const ch = this.apply(c.key, c.value, origin, { undoOf: orig.id, force: true })!;
     orig.undone = true;

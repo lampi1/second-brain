@@ -8,6 +8,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+// @ts-expect-error plain .mjs script without types
+import { demoBrain } from '../../scripts/demo-brain.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
 const SECTIONS = ['fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'esplora'];
@@ -15,14 +17,25 @@ const SECTIONS = ['fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto',
 test('the packaged stable copy finds the brain by itself and every section shows data', async () => {
   test.setTimeout(600000);
   const releases = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-stable-'));
-  execFileSync(process.execPath, [path.join(repo, 'scripts', 'release.mjs'), 'promote', '--skip-check', '--allow-dirty'], { cwd: repo, env: { ...process.env, SB_RELEASES_ROOT: releases, SB_NO_SYNC: '1' }, stdio: 'pipe' });
+  execFileSync(process.execPath, [path.join(repo, 'scripts', 'release.mjs'), 'stage-test'], { cwd: repo, env: { ...process.env, SB_RELEASES_ROOT: releases, SB_NO_SYNC: '1' }, stdio: 'pipe' });
   const state = JSON.parse(fs.readFileSync(path.join(releases, 'current.json'), 'utf8')) as { current: string };
   const rel = JSON.parse(fs.readFileSync(path.join(releases, 'releases', state.current, 'release.json'), 'utf8')) as { electron: string; claudeEngine: string | null };
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-stable-ud-'));
-  const env: Record<string, string> = { ...(process.env as Record<string, string>), SB_RELEASE: state.current, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1', SB_HIDDEN: '1' };
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), SB_RELEASE: state.current, SB_RELEASES_ROOT: releases, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1', SB_HIDDEN: '1' };
   delete env.SB_TEST; delete env.SB_BRAIN; delete env.ELECTRON_RUN_AS_NODE;
-  if (rel.claudeEngine) env.SB_ENGINE_CLAUDE = rel.claudeEngine;
-  const app = await electron.launch({ executablePath: path.join(releases, 'electron', rel.electron, 'electron.exe'), args: [path.join(releases, 'releases', state.current)], env });
+  // CI has no personal brain. Keep the same real auto-discovery path with a synthetic home, without SB_BRAIN/SB_TEST.
+  let fixtureHome: string | null = null;
+  if (process.env.CI) {
+    fixtureHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-stable-home-'));
+    const brain = path.join(fixtureHome, 'brain');
+    const fixture = demoBrain();
+    fs.renameSync(fixture, brain);
+    fs.writeFileSync(path.join(brain, 'AGENTS.md'), '# Synthetic CI brain\n');
+    Object.assign(env, { HOME: fixtureHome, USERPROFILE: fixtureHome, CLAUDE_CONFIG_DIR: path.join(fixtureHome, '.claude'), APPDATA: path.join(fixtureHome, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(fixtureHome, 'AppData', 'Local') });
+  }
+  if (rel.claudeEngine) env.SB_ENGINE_CLAUDE = path.resolve(releases, rel.claudeEngine);
+  const binary = process.platform === 'win32' ? ['electron.exe'] : process.platform === 'darwin' ? ['Electron.app', 'Contents', 'MacOS', 'Electron'] : ['electron'];
+  const app = await electron.launch({ executablePath: path.join(releases, 'electron', rel.electron, ...binary), args: [path.join(releases, 'releases', state.current)], env });
   // the first page Playwright sees may be the overlay layer (#overlay): wait for the app page itself
   await app.firstWindow();
   let page = app.windows().find(p => !p.url().includes('#overlay'));
@@ -53,5 +66,6 @@ test('the packaged stable copy finds the brain by itself and every section shows
     await page.screenshot({ path: path.join(shots, 'stable-workspace.png') });
   } finally {
     await app.close();
+    if (fixtureHome) fs.rmSync(fixtureHome, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 // Mail between chats delivered by the app (src/main/chats/mail.ts): the same files as the brain's inbox.mjs, delivery
 // to live app chats only (never starting an engine), exactly once, put back when the chat cannot take it, and the
 // send_to_chat / list_chats tools every chat gets (sender from its own endpoint, hop limit, the switch for chats across engines).
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatSummary } from '../../../src/shared/contract';
@@ -33,6 +33,27 @@ function setup(list: ChatSummary[], send?: (id: string, text: string, from?: str
 }
 
 describe('chat mail', () => {
+  it.each([false, true])('holds before taking mail and retains a delivery reservation until send settles (failure=%s)', async fail => {
+    const root = tmp('mail-hold'), list = [chat('worker', 'Worker')], dir = inboxDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    sendMail(dir, { from: 'Sender', fromHarness: 'claude', to: 'Worker', toHarness: 'claude', text: 'Assignment', refusal: () => null });
+    let held = false, finish!: () => void;
+    const release = vi.fn(() => { held = false; });
+    const mail = new ChatMail({ root: () => root, instance: 'isolated-test',
+      chats: { list: () => list, send: async () => { expect(held).toBe(true); expect(unread(dir, 'worker')).toHaveLength(0); expect(mail.hasWork('worker')).toBe(true); await new Promise<void>(resolve => { finish = resolve; }); if (fail) throw new Error('Fixture rejection'); } },
+      holdActivity: id => { expect(id).toBe('worker'); expect(unread(dir, 'worker')).toHaveLength(1); held = true; return release; },
+    }); mails.push(mail);
+    const delivery = mail.tick(); await vi.waitFor(() => expect(held).toBe(true));
+    expect(mail.hasWork('worker')).toBe(true); finish(); await delivery;
+    expect(release).toHaveBeenCalledTimes(1); expect(held).toBe(false);
+    expect(unread(dir, 'worker')).toHaveLength(fail ? 1 : 0); expect(mail.hasWork('worker')).toBe(fail);
+  });
+  it('keeps mail on disk while a provider without a durable mid-turn queue is busy', async () => {
+    const worker = chat('codex-worker', 'Codex worker', { harness: 'codex', state: 'running' }), f = setup([worker]);
+    sendMail(f.dir, { from: 'Sender', fromHarness: 'claude', to: worker.title, toHarness: 'codex', text: 'Next assignment', refusal: () => null });
+    expect(await f.mail.tick()).toBe(0); expect(f.sent).toHaveLength(0); expect(unread(f.dir, slug(worker.title))).toHaveLength(1);
+    worker.state = 'idle'; expect(await f.mail.tick()).toBe(1); expect(f.sent).toHaveLength(1); expect(unread(f.dir, slug(worker.title))).toHaveLength(0);
+  });
   it('writes inbox.mjs messages: one JSON per message, the log, the thread and the hop limit', () => {
     const dir = inboxDir(tmp('brain'));
     const a = sendMail(dir, { from: 'OS · Architettura', fromHarness: 'claude', to: 'Pers · App', toHarness: null, text: 'ciao', refusal: () => null })!;

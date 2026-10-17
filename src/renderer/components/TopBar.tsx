@@ -7,22 +7,23 @@
 // the way to Settings). Used by App.tsx. On a bar too full for its width (useFit) the labels go first; the end group never
 // shrinks, so it stays on screen at any width (2026-10-13).
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import{t}from'../i18n';
 import type { CliStatus, EngineInfo } from '@shared/contract';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
-import { openModal, setPrefs, setView, toggleBrowsers, ui, type Density, type Theme } from '../store/ui';
+import { openModal, setPrefs, toggleBrowsers, ui, type Density, type Theme } from '../store/ui';
 import { back, focusChat, forward, go, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
-import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconColumns, IconGrid, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
+import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './RegiaOverlay';
-import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover, Segmented } from './ui';
+import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
   const ok = !!st?.found && st.loggedIn !== false;
@@ -142,27 +143,19 @@ function Bell() {
 /** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width): the
  *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, the questions window, Migliora l'app; the
  *  view switch too, only at the last fit step (it is a primary action). */
-function MoreButton({ head }: { head: RefObject<HTMLElement | null> }) {
-  const view = ui.use(s => s.prefs.view);
+function MoreButton() {
   const hide = ui.use(s => s.prefs.browsersHidden);
   const tabs = useApp(s => s.tabs.length);
   const qwin = useApp(questionsModalOn);
   const [open, setOpen] = useState(false);
-  const [withView, setWithView] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const run = (f: () => void) => () => { setOpen(false); f(); };
-  const toggle = () => { setWithView(head.current?.dataset.fit?.split(' ').includes(String(FIT_VIEW)) ?? false); setOpen(o => !o); };
+  const toggle = () => setOpen(o => !o);
   return (
     <span className="topbar-more">
       <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? `Altre azioni: ${tabs} browser nascosti` : 'Altre azioni: browser nascosti') : 'Altre azioni'} data-tip={hide ? 'Altre azioni|browser nascosti: continuano a lavorare (Ctrl+Shift+B li mostra)' : "Altre azioni|browser, credenziali, domande in finestra, Migliora l'app"} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
       {hide && tabs > 0 && <span className="count-badge more-badge" aria-hidden="true" data-testid="topbar-browsers-count">{tabs}</span>}
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
-        {withView && <>
-          <MenuLabel>Vista</MenuLabel>
-          <MenuItem checked={view === 'mosaico'} onSelect={run(() => setView('mosaico'))} shortcut="Ctrl+Shift+V" testid="more-view-mosaico">Mosaico</MenuItem>
-          <MenuItem checked={view === 'corsie'} onSelect={run(() => setView('corsie'))} testid="more-view-corsie">Corsie</MenuItem>
-          <MenuSep />
-        </>}
         <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? `Browser nascosti (${tabs}): continuano a lavorare` : 'Nascondi i browser'}</MenuItem>
         <MenuItem checked={qwin} onSelect={run(toggleQuestionsModal)} testid="more-qwin">Domande in finestra, una alla volta</MenuItem>
         <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">Credenziali degli ambienti…</MenuItem>
@@ -176,8 +169,7 @@ function MoreButton({ head }: { head: RefObject<HTMLElement | null> }) {
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
  *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only "Nuova chat", 6 the
  *  view switch into "…" too (kept on the bar down to 1280 px). Read by app.css (data-fit). */
-const FIT_STEPS = 6;
-const FIT_VIEW = 6;
+const FIT_STEPS = 5;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const h = head.current, m = main.current;
@@ -201,7 +193,6 @@ function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement
 }
 
 export function TopBar() {
-  const view = ui.use(s => s.prefs.view);
   const waiting = useApp(s => s.pending.length);
   const later = ui.use(s => s.later);
   const inQueue = later && waiting > 0; // "Da rispondere" (not the CPU queue below)
@@ -225,10 +216,6 @@ export function TopBar() {
       <button type="button" className="search" onClick={() => openModal('palette')} data-testid="topbar-search" aria-label="Cerca chat, pagine e comandi (Ctrl+K)">
         <IconSearch size={14} /><span className="search-text">Cerca chat, idee o un comando</span><Keys combo="Ctrl+K" />
       </button>
-      <Segmented value={view} onChange={setView} label="Vista" testid="view-toggle" options={[
-        { value: 'mosaico', label: 'Mosaico', icon: <IconGrid size={14} />, tip: 'Mosaico|Ctrl+Shift+V' },
-        { value: 'corsie', label: 'Corsie', icon: <IconColumns size={14} />, tip: 'Corsie|Ctrl+Shift+V' },
-      ]} />
       <span className="sp" />
       <UsageBar />
       {queued > 0 && (
@@ -246,14 +233,14 @@ export function TopBar() {
         <IconBolt size={14} /><span className="next-label">{inQueue ? 'Da rispondere' : paused ? 'Popup in pausa' : waiting ? 'Prossima cosa per te' : 'Niente ti aspetta'}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
-      <button type="button" className="btn btn-primary btn-m" onClick={() => openModal('newChat')} data-testid="topbar-new" data-tip="Nuova chat|Ctrl+N"><IconPlus size={14} /><span>Nuova chat</span></button>
+      <button type="button" className="btn btn-primary btn-m" onClick={() => openModal('newChat')} data-testid="topbar-new" data-tip={`${t('chat.input.newChatButton')}|Ctrl+N`}><IconPlus size={14} /><span>{t('chat.input.newChatButton')}</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."
         aria-label={`Ferma tutto: ${running} al lavoro (Ctrl+Shift+.)`}>
         <IconStop size={13} /><span>Ferma tutto</span>{running > 0 && <span className="count-badge red">{running}</span>}
       </button>
       </div>
       <div className="topbar-end">
-        <MoreButton head={head} />
+        <MoreButton />
         <Bell />
         <SettingsButton />
       </div>

@@ -1,22 +1,25 @@
 // End-to-end: the Settings page (components/SettingsPage.tsx) on the demo. Reached from the gear menu and with Ctrl+,;
-// the theme applies at once (light and dark screenshots); the Claude <-> Cursor mail switch is saved in the settings;
+// the theme applies at once (light and dark screenshots); cross-engine messaging is always available;
 // the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
 // 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
 // test/unit/brain/compare.test.ts); "Chat aperte dalla Regia" saves engine, models and effort and "Nuova chat" starts
 // from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
 // (ADR 0046). Screenshots: test-results/shots/settings-*.png.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
-test('Impostazioni: groups, theme live, mail switch, model comparison switches with their cost', async () => {
+test('Impostazioni: groups, theme live, messaging always available, model comparison switches with their cost', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
   const s = page.getByTestId('settings-page');
   await expect(s).toBeVisible();
   for (const g of ['st-group-look', 'st-group-chat', 'st-group-compare']) await expect(s.getByTestId(g)).toBeVisible();
+  await expect(s.getByTestId('st-view')).toHaveCount(0);
+  await expect(s.getByTestId('st-group-routing')).toHaveCount(0);
 
   // the model comparison: what it compares, the cost so far, one switch per experiment and per agent
   const exp = s.getByTestId('st-exp-cursor-vs-claude');
@@ -44,12 +47,9 @@ test('Impostazioni: groups, theme live, mail switch, model comparison switches w
   await expect(s.getByTestId('st-agent-cursor-vs-claude-reviewer')).toHaveClass(/dim/);
   await expect(exp).toContainText("valgono solo con l'interruttore sopra acceso");
 
-  // the one switch for chats across engines is a real setting (ADR 0046)
-  const cross = s.getByTestId('st-cross-switch');
-  await expect(cross).toHaveAttribute('aria-checked', 'true');
-  await cross.click();
-  await expect(cross).toHaveAttribute('aria-checked', 'false');
-  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(false);
+  // Chat-to-chat transport has no switch; engine launch controls stay separate.
+  await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
 
   // theme: applied at once
   await s.getByTestId('st-theme-choice-light').click();
@@ -174,6 +174,7 @@ test('Chat aperte dalla Regia: engine, models (Cursor\'s own list), effort; save
   await page.getByTestId('page-back').click();
   await page.getByTestId('topbar-new').click();
   const d = page.getByTestId('newchat');
+  await d.getByTestId('newchat-engine-options').locator('summary').click();
   await expect(d.getByTestId('newchat-harness-cursor')).toHaveAttribute('aria-checked', 'true');
   await d.getByTestId('newchat-advanced').locator('summary').click();
   await expect(d.getByTestId('newchat-model')).toHaveValue('grok-4.7');
@@ -251,4 +252,67 @@ test('Motori: a new engine turns on by the user\'s click, its API key is saved e
   await app.close();
   const logs = path.join(userData, 'logs');
   for (const f of fs.readdirSync(logs)) expect(fs.readFileSync(path.join(logs, f), 'utf8')).not.toContain(KEY);
+});
+
+test('settings search finds labels, descriptions and sections, preserves drafts and explains no matches', async () => {
+  const { app, page } = await launchDemo({ config: { messaging: { crossHarness: false } } });
+  try {
+    await page.keyboard.press('Control+Comma');
+    const s = page.getByTestId('settings-page');
+    const search = s.getByRole('searchbox', { name: 'Cerca nelle impostazioni' });
+    await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
+    expect(await page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
+    await search.fill('DENSITA');
+    await expect(s.getByTestId('st-group-look')).toBeVisible();
+    await expect(s.locator('.st-group:visible')).toHaveCount(1);
+    await search.fill('solo 127.0.0.1');
+    await expect(s.getByTestId('st-group-app')).toBeVisible();
+    await expect(s.getByTestId('st-group-look')).toBeHidden();
+    await search.fill('Cartella del codice');
+    const improve = s.getByTestId('st-group-improve');
+    await expect(improve).toBeVisible();
+    const repo = improve.getByTestId('st-app-repo-input');
+    await repo.fill('Bozza non salvata');
+    await search.fill('densita');
+    await expect(improve).toBeHidden();
+    await search.fill('Cartella del codice');
+    await expect(repo).toHaveValue('Bozza non salvata');
+    expect(await page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).appRepo)).not.toBe('Bozza non salvata');
+    await search.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(search).toBeFocused();
+    const key = s.getByTestId('st-key-anthropic-input');
+    await key.fill('unsavedKeyDraftXYZ');
+    await search.fill('unsavedKeyDraftXYZ');
+    await expect(s.getByTestId('st-search-empty')).toContainText('Prova con altre parole');
+    await expect(s.locator('.st-group:visible')).toHaveCount(0);
+    await shot(page, 'settings-search-empty');
+    await s.getByTestId('st-search-clear').click();
+    await expect(search).toBeFocused();
+    await expect(key).toHaveValue('unsavedKeyDraftXYZ');
+    await search.fill('notifiche');
+    await shot(page, 'settings-search');
+  } finally { await app.close(); }
+});
+
+test('Codex autonomy is an explicit empty-by-default repository selection and can be revoked', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-autonomy-e2e-'));
+  fs.mkdirSync(path.join(root, '.git'));
+  const { app, page } = await launchDemo();
+  try {
+    await page.keyboard.press('Control+Comma');
+    const s = page.getByTestId('settings-page');
+    await s.getByTestId('st-search').fill('Autonomia Codex');
+    const row = s.getByTestId('st-codex-autonomy');
+    const input = row.getByTestId('st-codex-autonomy-roots');
+    await expect(input).toHaveValue('');
+    await expect(row).toContainText('i permessi in attesa richiedono ancora la tua risposta');
+    await input.fill(root);
+    await row.getByTestId('st-codex-autonomy-save').click();
+    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).codexAutonomyRoots)).toEqual([fs.realpathSync.native(root)]);
+    await shot(page, 'settings-codex-autonomy');
+    await input.fill('');
+    await row.getByTestId('st-codex-autonomy-save').click();
+    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).codexAutonomyRoots)).toEqual([]);
+  } finally { await app.close(); }
 });

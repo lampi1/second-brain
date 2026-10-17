@@ -20,6 +20,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChatSummary, Harness } from '../../shared/contract';
 import { log, errText } from '../log';
+import { updateActivity } from '../update/activity';
 import { AgentMayNotWake } from '../engines/policy';
 import { regiaOfChat } from '../../shared/regia';
 import { engineOf } from '../engines/registry';
@@ -183,6 +184,7 @@ export function render(msgs: MailMsg[], key = crypto.randomBytes(4).toString('he
 }
 
 export interface ChatMailDeps {
+  holdActivity?: (chatId: string) => () => void;
   root: () => string | null;
   chats: { list(): ChatSummary[]; send(chatId: string, text: string, images?: undefined, resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void> };
   /** the instance's name (userData folder): stable and dev keep separate heartbeats */
@@ -198,6 +200,7 @@ export interface ChatMailDeps {
 
 /** Delivers inbox mail to the app's live chats, every everyMs (default 2 s) and right after a send_to_chat. */
 export class ChatMail {
+  private readonly delivering = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private again = false;
@@ -274,8 +277,19 @@ export class ChatMail {
     return out;
   }
 
+  /** The scheduler reads unread disk state too; unreadable mailboxes fail closed. */
+  hasWork(chatId: string): boolean {
+    if (this.delivering.has(chatId)) return true;
+    const root = this.d.root(), chat = this.d.chats.list().find(c => c.id === chatId);
+    if (!root || !chat) return false;
+    const box = slug(chat.title);
+    if (!box) return true;
+    try { return fs.readdirSync(path.join(inboxDir(root), box)).some(name => name.endsWith('.json') && !name.startsWith('.')); }
+    catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
+  }
+
   async tick(): Promise<number> {
-    if (this.stopped) return 0;
+    if (this.stopped || updateActivity.frozen) return 0;
     if (this.running) { this.again = true; return 0; }
     this.running = true;
     let n = 0;
@@ -294,25 +308,29 @@ export class ChatMail {
         noteHarness(dir, box, chat.harness);
         // Cursor queues a message sent during a turn in memory, and Stop or the process's end drops that queue: it gets
         // mail only between turns (Claude's CLI keeps it in its own input)
-        if (engineOf(chat.harness)?.kind === 'acp' && chat.state !== 'idle') continue;
+        // Only Claude's stream input durably accepts mid-turn mail. Other adapters have volatile input queues.
+        if (engineOf(chat.harness)?.kind !== 'claude' && chat.state !== 'idle') continue;
         const waiting = unread(dir, box);
         if (!waiting.length) continue;
         if (this.regiaHolds(chat, waiting.map(u => u.msg), now)) continue;
-        const { msgs, undo } = take(dir, box);
-        if (!msgs.length) continue;
-        for (const m of msgs) this.seen.delete(m.id);
+        const release = this.d.holdActivity?.(chat.id);
+        this.delivering.add(chat.id);
         try {
-          await this.d.chats.send(chat.id, render(msgs), undefined, false, [...new Set(msgs.map(senderOf))].join(', '), true);
-          n += msgs.length;
-          const top = msgs.reduce((a, m) => ((m.hop || 1) >= (a.hop || 1) ? m : a));
-          this.received.set(box, { thread: top.thread || top.id, hop: Math.max(1, Number(top.hop) || 1), at: Date.now() });
-          log.info('mail', 'mail delivered to a chat', { chat: chat.id, data: { messages: msgs.length, from: msgs.map(m => m.from) } });
-        } catch (e) {
-          undo();
-          // a stopped chat on an engine the Regie may not use: an agent's mail never wakes it, it waits for the user
-          if (e instanceof AgentMayNotWake) { log.debug('mail', 'mail held: the chat is stopped and the Regie may not use its engine', { chat: chat.id }); continue; }
-          log.warn('mail', 'mail not delivered: left unread', { chat: chat.id, cause: errText(e), hint: 'the chat closed or failed to start; the hook or a wait delivers it later' });
-        }
+          const { msgs, undo } = take(dir, box);
+          if (!msgs.length) continue;
+          for (const m of msgs) this.seen.delete(m.id);
+          try {
+            await this.d.chats.send(chat.id, render(msgs), undefined, false, [...new Set(msgs.map(senderOf))].join(', '), true);
+            n += msgs.length;
+            const top = msgs.reduce((a, m) => ((m.hop || 1) >= (a.hop || 1) ? m : a));
+            this.received.set(box, { thread: top.thread || top.id, hop: Math.max(1, Number(top.hop) || 1), at: Date.now() });
+            log.info('mail', 'mail delivered to a chat', { chat: chat.id, data: { messages: msgs.length, from: msgs.map(m => m.from) } });
+          } catch (e) {
+            undo();
+            if (e instanceof AgentMayNotWake) { log.debug('mail', 'mail held: the chat is stopped and the Regie may not use its engine', { chat: chat.id }); continue; }
+            log.warn('mail', 'mail not delivered: left unread', { chat: chat.id, cause: errText(e), hint: 'the chat closed or failed to start; the hook or a wait delivers it later' });
+          }
+        } finally { this.delivering.delete(chat.id); release?.(); }
       }
     } catch (e) {
       log.warn('mail', 'mail check failed', { cause: errText(e), hint: 'ops/state/inbox unreadable? the hook and wait still deliver' });

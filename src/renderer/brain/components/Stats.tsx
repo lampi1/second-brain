@@ -7,6 +7,7 @@
 // 30 days are one line each: nothing to act on there. Used by pages/Qualita.tsx and pages/Costi.tsx.
 import { useContext, type ReactNode } from 'react';
 import type { ChatSummary } from '@shared/contract';
+import{ModelOrigin}from'../../components/ModelOrigin';
 import { chatName } from '@shared/regia';
 import { fmt } from '../lib/format';
 import { short } from '../lib/text';
@@ -86,6 +87,7 @@ function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
         ? <p className="bx-pattern-last"><span className="muted">Ultimo:</span> detto «{short(g.latest.detto, 120)}» <span className="muted">→ vero:</span> {short(g.latest.vero, 140)}</p>
         : <p className="bx-pattern-last"><span className="muted">Ultimo:</span> <span className="bx-raw">{short(g.latest.riga ?? '', 220)}</span></p>}
       <dl className="bx-pattern-facts">
+        <dt><ModelOrigin/></dt><dd/>
         {g.areas.length > 0 && <><dt>Aree</dt><dd>{g.areas.slice(0, 3).map(([a, n]) => `${short(a, 40)}${n > 1 ? ` (${n})` : ''}`).join(' · ')}{g.areas.length > 3 ? ` · altre ${g.areas.length - 3}` : ''}</dd></>}
         {g.chats.length > 0 && <><dt>Chat</dt>
           <dd className="bx-pattern-chats">

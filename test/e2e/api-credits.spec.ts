@@ -1,8 +1,8 @@
 // End-to-end: the Max plan's API credits (ADR 0052) on the demo. Impostazioni → «Motori» lists Anthropic API (off until
 // the user turns it on), takes its key like the other API engines, and under it shows this month's spend as the app
-// computed it (seeded <userData>/api-spend.json) with where the credits come from; «Instradamento modelli» offers
-// «sui crediti API» only on a writing row with an Anthropic model, off by default, and saves it as the row's onApi.
-// Screenshots: test-results/shots/api-credits-engines.png, api-credits-routing.png.
+// computed it (seeded <userData>/api-spend.json) with where the credits come from. The retired routing matrix has no
+// API-row controls in Settings; a legacy writing row's onApi choice survives engine settings changes.
+// Screenshots: test-results/shots/api-credits-engines.png, api-credits-routing-retired.png.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,34 +52,34 @@ test('Motori: Anthropic API turns on by the user\'s click, takes a key and shows
   for (const f of fs.readdirSync(logs)) expect(fs.readFileSync(path.join(logs, f), 'utf8')).not.toContain(KEY);
 });
 
-test('Instradamento modelli: «sui crediti API» only on a writing row with an Anthropic model, off by default, saved as onApi', async () => {
+test('Settings retires routing API controls while preserving a legacy writing row on API credits', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('settings').click();
-  await page.getByTestId('settings-all').click();
-  const g = page.getByTestId('st-group-routing');
-  await g.scrollIntoViewIfNeeded();
-  // the demo's rows are not writing: no switch
-  await expect(g.locator('[data-testid^="st-routing-api-"]')).toHaveCount(0);
-
-  await g.getByTestId('st-routing-add').click();
-  await g.getByLabel('Riga 5: tipo di lavoro').selectOption('writing');
-  const check = g.getByTestId('st-routing-api-4-check');
-  await expect(check).not.toBeChecked();
-  // another kind hides it again
-  await g.getByLabel('Riga 5: tipo di lavoro').selectOption('review');
-  await expect(check).toHaveCount(0);
-  await g.getByLabel('Riga 5: tipo di lavoro').selectOption('writing');
-  await expect(check).not.toBeChecked();
-  await g.getByTestId('st-routing-api-4').scrollIntoViewIfNeeded();
-  await page.mouse.move(2, 2);
-  await shot(page, 'api-credits-routing');
-
-  await check.check();
-  await g.getByTestId('st-routing-reason').fill('prova e2e');
-  await g.getByTestId('st-routing-save').click();
-  await expect(g.getByTestId('st-routing-version')).toContainText('Versione 4');
-  const saved = await page.evaluate(async () => (await window.sb.invoke('routing:get', undefined)).table);
-  expect(saved?.routes.at(-1)).toMatchObject({ kind: 'writing', model: 'claude-opus-5-5', onApi: true });
-  await expect(g.getByTestId('st-routing-api-4-check')).toBeChecked();
-  await app.close();
+  try {
+    // Seed an existing user's choice through the retained backend, without assuming a replacement editor.
+    const legacy = await page.evaluate(async () => {
+      const table = (await window.sb.invoke('routing:get', undefined)).table;
+      if (!table) throw new Error('demo routing table missing');
+      return window.sb.invoke('routing:save', {
+        routes: [...table.routes, { kind: 'writing', harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'legacy API choice', since: '2026-10-16', evidence: 'fixture', onApi: true }],
+        baseVersion: table.version, reason: 'legacy API fixture',
+      });
+    });
+    expect(legacy.table?.routes.at(-1)).toMatchObject({ kind: 'writing', model: 'claude-opus-5-5', onApi: true });
+    await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
+    const settings = page.getByTestId('settings-page');
+    await expect(settings.getByTestId('st-group-routing')).toHaveCount(0);
+    await expect(settings.locator('[data-testid^="st-routing-api-"]')).toHaveCount(0);
+    const engines = settings.getByTestId('st-group-engines');
+    await engines.getByTestId('st-engine-on-anthropic-switch').click();
+    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).engineOn.anthropic)).toBe(true);
+    const after = await page.evaluate(() => window.sb.invoke('routing:get', undefined));
+    expect(after.table).toEqual(legacy.table);
+    expect(after.history).toEqual(legacy.history);
+    await engines.scrollIntoViewIfNeeded();
+    await page.mouse.move(2, 2);
+    await shot(page, 'api-credits-routing-retired');
+  } finally {
+    await app.close();
+  }
 });

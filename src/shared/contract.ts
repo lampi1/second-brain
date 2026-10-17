@@ -3,6 +3,13 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
+import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
+import type { ChatEffortStatus } from './effort';
+import type { ProgressState } from './progress';
+import type { AppProposal, ProposalAvailability, ProposalPublication } from './improve-proposals';
+import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
+import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
@@ -78,6 +85,8 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 
 export interface ChatSummary {
   id: string;                 // app id (stable across resumes)
+  agent?: AgentOwnerSnapshot;
+  agentChildren?: AgentChildren;
   harness: Harness;
   origin: ChatOrigin;
   title: string;
@@ -85,6 +94,7 @@ export interface ChatSummary {
   sessionId: string | null;   // the CLI session id (claude: transcript uuid; cursor: chat id)
   model: string | null;       // e.g. "claude-opus-5-5"; null = the CLI default
   effort: Effort | null;
+  effortStatus?: ChatEffortStatus;
   permissionMode: PermissionMode | null;
   state: ChatState;
   costUsd: number;            // cumulative for this app run (API-equivalent on a subscription), live estimate included
@@ -135,6 +145,8 @@ export interface ChatSummary {
   /** its last turn's final answer says it waits for work still running (an agent, a QA run, a build: shared/waiting.ts):
    *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
   waitsOnWork?: boolean;
+  /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
+  work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
   closedAt?: number;
   /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */
@@ -306,6 +318,8 @@ export interface RunInfo {
 }
 
 export interface NewChat {
+  /** Catalog owner. Main resolves its frozen configuration; never changes an existing session. */
+  agentId?: string;
   harness: Harness;
   cwd: string;
   prompt?: string;
@@ -682,8 +696,7 @@ export interface Settings {
   engineOn: Partial<Record<Harness, boolean>>;
   /** engines the Regie may open or resume chats on (absent = off); the user's own chats are free */
   engines: Partial<Record<Harness, boolean>>;
-  /** crossHarness = «Chat tra motori diversi» (ADR 0046): agents may open, resume and write to chats on another engine
-   *  than their own; mirrored in the brain's brain-settings.json for inbox.mjs. Key kept for older releases. */
+  /** Retired transport switch: always true after loading. Kept as compatibility data for older clients. */
   messaging: { crossHarness: boolean };
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
@@ -703,6 +716,9 @@ export interface Settings {
   launchRulesClaude?: boolean;
   /** ADR 0060: the brain's rules given to each Codex chat at launch (developer instructions + skill folders); on by default */
   launchRulesCodex?: boolean;
+  /** Explicit repository/worktree roots where Codex uses never + workspace-write. Empty = on-request everywhere.
+   *  Each chat gets only its matching root; sibling repositories and worktrees require their own entry. */
+  codexAutonomyRoots?: string[];
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
@@ -760,10 +776,10 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam';
+  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
-  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model'; // model: a CLI model id, '' = the CLI default
+  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths'; // repo-paths: explicit existing repository roots
   default: unknown;
   nullable?: boolean;
   values?: readonly string[]; // enum
@@ -973,7 +989,8 @@ export interface OverlayModel {
   /** important events (chat waiting/done, errors, sync, budget, login…) as short toasts above everything, max 2 */
   toasts?: OverlayToast[];
   /** the Regia widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
-  avoid?: { right: number; bottom: number };
+  /** top is the absolute occupied bottom in content coordinates; right/bottom are edge reservations. */
+  avoid?: { right: number; bottom: number; top?:number };
 }
 export interface OverlayToast {
   id: string;                 // group key (kind|chat)
@@ -1081,12 +1098,37 @@ export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexe
 export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
 
 export interface InvokeMap {
+  'update:get': [void, AppUpdateState];
+  'update:apply': [{ id: string }, AppUpdateState];
+  'update:checkpointAnswer': [UpdateCheckpointAnswer, void];
+  'update:recovery': [void, UpdateRecovery | null];
+  'update:recoveryAck': [{ id: string }, void];
+  'improve:proposals': [void, AppProposal[]];
+  'improve:proposalAvailability': [void, ProposalAvailability];
+  'improve:proposalCreate': [void, AppProposal];
+  'improve:proposalRefresh': [{ id: string }, AppProposal];
+  'improve:proposalResume': [{ id: string }, AppProposal];
+  'improve:proposalPublish': [ProposalPublication, AppProposal];
+  'progress:get': [void, ProgressState];
+  'progress:setHidden': [{ hidden: boolean }, ProgressState];
+  'progress:confirmResult': [{ chatId: string; resultAt: number }, ProgressState];
+  'chat:autoCloseGet': [void, AutoCloseStatus[]];
+  'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
+  'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
+  'agents:list': [void, AgentCatalog];
+  'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
+  'agents:duplicate': [{ id: string }, AgentProfile];
+  'agents:draft': [AgentDraftRequest, AgentDraftResult];
+  'setup:get': [void, SetupState];
+  'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
   'cli:status': [{ harness: Harness; checkLogin?: boolean }, CliStatus];
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
+  'app:brainCreation': [void, BrainCreationCapability];
+  'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
    *  images with their app, anything else only shown in its folder (main/open-path.ts) */
   'app:openPath': [{ path: string }, OpenPathResult];
@@ -1111,7 +1153,7 @@ export interface InvokeMap {
   'chat:reopen': [{ chatId: string }, ChatSummary];
   /** "Avvia ora": a chat waiting in the CPU queue starts now (ADR 0036); false = it was not waiting */
   'chat:admitNow': [{ chatId: string }, boolean];
-  'chat:set': [{ chatId: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string }, ChatSummary];
+  'chat:set': [{ chatId: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }, ChatSummary];
   /** the chat writes its hand-off now (one turn; a token-free one when it cannot answer) */
   'chat:handoff': [{ chatId: string }, HandoffInfo];
   /** the saved hand-off, null if none */
@@ -1232,6 +1274,13 @@ export interface ClipboardImage { mimeType: string; bytes: Uint8Array }
 
 /** main → renderer. */
 export interface EventMap {
+  'update:state': AppUpdateState;
+  'update:checkpointRequest': UpdateCheckpointRequest;
+  'update:checkpointRelease': { requestId: string };
+  'improve:proposals': AppProposal[];
+  'progress:changed': ProgressState;
+  'chat:autoCloseStatus': AutoCloseStatus[];
+  'agents:changed': AgentCatalog;
   'chat:updated': ChatSummary;
   'chat:removed': { chatId: string };
   'chat:item': { chatId: string; item: ChatItem; replace?: boolean };
@@ -1277,6 +1326,12 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
+  'app:brainCreation', 'app:createBrain',
+  'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
+  'progress:get', 'progress:setHidden', 'progress:confirmResult',
+  'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
+  'agents:list', 'agents:save', 'agents:duplicate', 'agents:draft', 'setup:get', 'setup:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
@@ -1290,6 +1345,11 @@ export const INVOKE_CHANNELS = [
   'sync:get', 'sync:now', 'sync:resolve',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
+  'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
+  'improve:proposals',
+  'progress:changed',
+  'chat:autoCloseStatus',
+  'agents:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state',
 ] as const satisfies readonly EventChannel[];

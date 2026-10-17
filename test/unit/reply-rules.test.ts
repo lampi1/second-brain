@@ -36,6 +36,13 @@ describe('asksUserToBrowse', () => {
       'Ti consiglio di aprire il file nel tuo editor, non nel browser.',
       'Per vedere l\'anteprima, apri l\'app in Chrome.',
       'Ora apro il browser nell\'ambiente local.',
+      'si aprono nel tuo browser esterno',
+      'I collegamenti si aprono nel tuo browser esterno.',
+      'The links open in your browser.',
+      'Il pulsante permette di aprire il browser.',
+      'Non aprire il browser.',
+      'Quando accedi dal browser, il servizio mostra il tuo account.',
+      'Non accedi dal browser quando il servizio è offline.',
     ]) expect(asksUserToBrowse(t), t).toBeNull();
   });
 });

@@ -162,7 +162,7 @@ describe('prefs', () => {
     expect(loadPrefs(null, 0)).toEqual(defaultPrefs);
     expect(loadPrefs('not json', 0)).toEqual(defaultPrefs);
     const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] } }));
-    expect(p.view).toBe('corsie');
+    expect(p.view).toBe('mosaico'); // Legacy Corsie migrates while other customization survives.
     expect(p.density).toBe('compact');
     expect(p.theme).toBe('system');
     expect(p.cols['3']).toEqual([1, 2, 1]);

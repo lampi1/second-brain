@@ -244,7 +244,7 @@ export class ApiSession implements HarnessSession {
       const buf = { text: '' };
       for (;;) {
         const { done, value } = await Promise.race([reader.read(), aborted]);
-        if (done) break;
+        if (done) throw new ApiError('apiProviderError', { host: this.host, detail: 'Response stream ended before completion.' });
         firstByte();
         buf.text += value;
         for (const data of sseEvents(buf)) {

@@ -277,7 +277,7 @@ async function runTurn(text) {
     const keep = 'setTimeout(() => {}, 300000)';
     const script = `const g = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(keep)}], { stdio: 'ignore', windowsHide: true });`
       + ` if (process.env.FAKE_CLAUDE_LOG) require('node:fs').appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ pid: process.pid, orphan: g.pid }) + '\\n'); ${keep};`;
-    const o = spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore', windowsHide: true });
+    const o = spawn(process.execPath, ['-e', script], { detached: process.platform === 'win32', stdio: 'ignore', windowsHide: true });
     o.unref();
     logLine({ orphan: o.pid });
   }
@@ -290,7 +290,7 @@ async function runTurn(text) {
     // a child of the CLI (a Bash tool, an MCP server): outside our parent's job, like claude.exe's own children;
     // it ends by itself after FAKE_CLAUDE_CHILD_MS (40 s) and with a normal exit of this process, never later
     const life = Number(process.env.FAKE_CLAUDE_CHILD_MS ?? 40000);
-    const gc = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${life})`], { detached: true, stdio: 'ignore', windowsHide: true });
+    const gc = spawn(process.execPath, ['-e', `setTimeout(() => {}, ${life})`], { detached: process.platform === 'win32', stdio: 'ignore', windowsHide: true });
     gc.unref();
     process.on('exit', () => { try { gc.kill(); } catch { /* gone */ } });
     logLine({ grandchild: gc.pid });

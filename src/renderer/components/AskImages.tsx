@@ -7,6 +7,8 @@ import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, typ
 import type { AskImageResult } from '@shared/contract';
 import type { AskImage } from '../lib/askImages';
 import { sb } from '../sb';
+import {safePreviewRaster} from '../lib/preview-raster';
+import {currentImageResults,imageResultsKey,type ImageResults} from '../lib/image-results';
 import { closeModal, openModal, ui } from '../store/ui';
 import { openFile } from './GenUi';
 import { IconArrowLeft, IconArrowRight, IconX } from './Icons';
@@ -19,7 +21,7 @@ const cache = new Map<string, Promise<AskImageResult>>();
 const load = (p: string): Promise<AskImageResult> => {
   let hit = cache.get(p);
   if (!hit) {
-    hit = sb.invoke('app:askImage', { path: p }).catch((e: unknown): AskImageResult => ({ kind: 'refused', reason: String((e as Error)?.message ?? e) }));
+    hit = sb.invoke('app:askImage', { path: p }).then(safePreviewRaster).catch((e: unknown): AskImageResult => ({ kind: 'refused', reason: String((e as Error)?.message ?? e) }));
     cache.set(p, hit);
     void hit.then(r => { if (r.kind !== 'image' && cache.get(p) === hit) cache.delete(p); });
     if (cache.size > 64) cache.delete(cache.keys().next().value as string);
@@ -28,19 +30,21 @@ const load = (p: string): Promise<AskImageResult> => {
 };
 
 function useImages(list: readonly AskImage[]): (AskImageResult | null)[] {
-  const key = list.map(i => i.path).join('\n');
-  const [res, setRes] = useState<(AskImageResult | null)[]>(() => list.map(() => null));
+  const key = imageResultsKey(list.map(i=>i.path));
+  const [res, setRes] = useState<ImageResults>(() => ({key,values:list.map(() => null)}));
   useEffect(() => {
     let live = true;
-    setRes(list.map(() => null));
-    list.forEach((im, i) => { void load(im.path).then(r => { if (live) setRes(prev => { const n = [...prev]; n[i] = r; return n; }); }); });
+    setRes({key,values:list.map(() => null)});
+    list.forEach((im, i) => { void load(im.path).then(r => { if (live) setRes(prev => { if(prev.key!==key)return prev;const values = [...prev.values]; values[i] = r; return {key,values}; }); }); });
     return () => { live = false; };
   }, [key]); // the paths are the key
-  return res;
+  return currentImageResults(list.map(i=>i.path),res);
 }
 
 export const AskImages = memo(function AskImages({ images, testBase, size = 'm' }: { images: readonly AskImage[]; testBase: string; size?: 'm' | 'l' }) {
-  const res = useImages(images);
+  const loaded=useImages(images);
+  const [decodeFailed,setDecodeFailed]=useState<Set<string>>(()=>new Set());
+  const res=images.map((image,i):AskImageResult|null=>decodeFailed.has(image.path)?{kind:'refused',reason:'Il file non si decodifica come immagine. Rigenera o scegli un altro file.'}:loaded[i]??null);
   const [open, setOpen] = useState<number | null>(null);
   const shown = images.map((im, i) => ({ im, r: res[i] })).filter((x): x is { im: AskImage; r: Extract<AskImageResult, { kind: 'image' }> } => x.r?.kind === 'image');
   const bad = images.map((im, i) => ({ im, r: res[i] })).filter(x => x.r && x.r.kind !== 'image');
@@ -65,7 +69,7 @@ export const AskImages = memo(function AskImages({ images, testBase, size = 'm' 
           return (
             <figure key={im.path} className="ask-img" data-testid={`${testBase}-img-${i}`}>
               <button type="button" className="ask-img-open" onClick={() => idx >= 0 && setOpen(idx)} disabled={!r} aria-label={t('chat.images.openButtonLabel', { caption: im.caption })} data-tip={t('chat.images.openTip')}>
-                {r ? <img src={r.dataUrl} alt={im.caption} draggable={false} /> : <span className="ask-img-wait" aria-hidden="true" />}
+                {r ? <img src={r.dataUrl} alt={im.caption} draggable={false} onError={()=>setDecodeFailed(previous=>new Set([...previous,im.path]))}/> : <span className="ask-img-wait" aria-hidden="true" />}
               </button>
               <figcaption title={im.caption}>{im.caption}</figcaption>
             </figure>

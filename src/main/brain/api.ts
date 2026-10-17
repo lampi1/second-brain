@@ -95,6 +95,8 @@ export class BrainApi {
     return new Promise<BrainApiResult>(resolve => {
       const req = http.get({ host: '127.0.0.1', port, path: c.path, headers: { host: 'localhost', accept: 'application/json' }, timeout: this.timeoutMs }, res => {
         const chunks: Buffer[] = [];
+        res.on('error', e => resolve({ ok: false, error: errText(e) }));
+        res.on('aborted', () => resolve({ ok: false, error: 'Il server dati ha interrotto la risposta.' }));
         let size = 0;
         res.on('data', (d: Buffer) => { size += d.length; if (size > 50e6) { req.destroy(); resolve({ ok: false, error: 'risposta troppo grande' }); } else chunks.push(d); });
         res.on('end', () => {

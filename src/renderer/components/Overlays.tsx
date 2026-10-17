@@ -1,8 +1,9 @@
 // Small overlays: the confirm dialog (only for what cannot be undone, e.g. Ferma tutto with several chats running),
-// the keyboard shortcuts sheet (Ctrl+/), and calm toasts (at most two, bottom-left over the Regia column so they
-// never sit on a browser view; an "Annulla" action for undoable things). Used by App.tsx.
+// the keyboard shortcuts sheet (Ctrl+/), and calm toasts (at most two in a reserved row below the top bar, with
+// an undo action for undoable things). The row never overlays the work area. Used by App.tsx.
 import { getKeymap } from '../lib/keys';
-import { closeModal, dismissToast, ui } from '../store/ui';
+import { closeModal, dismissToast, expireToasts, ui } from '../store/ui';
+import{useEffect}from'react';
 import { t } from '../i18n';
 import { IconAlert, IconCheck, IconInfo, IconUndo, IconX } from './Icons';
 import { Keys, Modal } from './ui';
@@ -41,13 +42,14 @@ export function ShortcutsDialog() {
 
 export function Toasts() {
   const toasts = ui.use(s => s.toasts);
+  useEffect(()=>{expireToasts();window.addEventListener('focus',expireToasts);document.addEventListener('visibilitychange',expireToasts);return()=>{window.removeEventListener('focus',expireToasts);document.removeEventListener('visibilitychange',expireToasts);};},[]);
   const closeLabel = t('dialogs.toast.closeLabel');
   return (
     <div className="toasts" aria-live="polite" data-testid="toasts">
       {toasts.map(toast => (
         <div key={toast.id} className={`toast toast-${toast.tone}`} role={toast.tone === 'err' ? 'alert' : 'status'} data-testid="toast">
           {toast.tone === 'ok' ? <IconCheck size={14} /> : toast.tone === 'err' || toast.tone === 'warn' ? <IconAlert size={14} /> : <IconInfo size={14} />}
-          <span className="toast-text">{toast.text}</span>
+          <span className="toast-text">{toast.labelKey?t(toast.labelKey):toast.text}</span>
           {toast.action && (
             <button type="button" className="toast-action" onClick={() => { toast.action?.run(); dismissToast(toast.id); }} data-testid="toast-action">
               <IconUndo size={13} />{toast.action.label}

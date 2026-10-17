@@ -61,7 +61,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
     ...(kind ? { kind } : {}), ...(text(req.area, 40) ? { area: text(req.area, 40) } : {}), ...(own.space === 'app' ? { appSpace: true } : {}),
     canRun: h => !refusal(h),
     ask: named ? { ...(said.harness ? { harness: said.harness } : {}), ...(said.model ? { model: said.model } : {}), ...(said.effort ? { effort: said.effort } : {}), reason: text(req.ask?.reason, 300) || 'scelta dell’utente' } : {},
-    defaults: { harness, models: { claude: harness === 'claude' ? text(def.model, 200) || null : null, cursor: harness === 'cursor' ? text(def.model, 200) || null : null }, effort },
+    defaults: { harness, models: { [harness]: text(def.model, 200) || null }, effort },
     // the preview shows the table's choice and "Nuova chat" starts what it showed: no dice roll for either
     ...(preview || own.byUser ? { counts: undefined } : {}),
   });

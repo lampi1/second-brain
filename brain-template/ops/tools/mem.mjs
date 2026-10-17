@@ -31,7 +31,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { workKeys, chainOf } from '../improve/work-keys.mjs';
+// Automatic work attribution belongs to the optional improve analytics package; ordinary memory never requires it.
+const analyticsFile = new URL('../improve/work-keys.mjs', import.meta.url);
+const analytics = fs.existsSync(analyticsFile) ? await import(analyticsFile.href) : null;
 
 const argv = process.argv.slice(2);
 const arg = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
@@ -168,13 +170,14 @@ export const WORK_KEY = /^(wi:\d{4,7}|branch:[\w.-]+\/[\w./-]+|chat:[\w:.-]+)$/;
 /** The work key of the app chat a line names (the stable app's chats.json, or `appDir`), or null. `rest` = the line
  *  after its time: titles contain " · " themselves, so the chat is the longest title the line starts with. */
 export function workOfLine(rest, { appDir = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'second-brain'), state = path.join(ROOT, 'ops', 'state', 'improve') } = {}) {
+  if (!analytics) return null;
   let chats = [];
   try { chats = JSON.parse(fs.readFileSync(path.join(appDir, 'chats.json'), 'utf8')).chats ?? []; } catch { return null; }
   // the longest title, then the newest chat with it (a title is reused after a chat is closed)
   const c = chats.filter(x => x.title && rest.startsWith(`${x.title} · `))
     .sort((a, b) => b.title.length - a.title.length || (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))[0];
   // its hand-off chain too: the chain is one work, keyed by the first key found along it
-  return c ? workKeys(chainOf(c, chats), { state }).get(c.id) ?? null : null;
+  return c ? analytics.workKeys(analytics.chainOf(c, chats), { state }).get(c.id) ?? null : null;
 }
 
 const errorCmd = (text, agent, work) => {

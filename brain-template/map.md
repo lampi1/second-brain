@@ -44,7 +44,7 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 ## Layout
 
 `AGENTS.md START-HERE.md map.md hub.md code.md me.md now.md ideas.md routines.md` · `journal/` · `ops/` (AGENTS.md, runbook/,
-tools/: `mem.mjs` memory lines, `inbox.mjs` mail between chats, `chat-prompt.mjs` new-chat prompts, `day.mjs`
+tools/: `mem.mjs` memory lines, `inbox.mjs` mail between chats, `chat-prompt.mjs` new-chat prompts, `ctx.mjs` bounded thread context, `day.mjs`
 brief/report, `cost.mjs` costs, `wt-land.mjs` worktree → main, `brain-lint.mjs` checks, `brain-site.mjs` local site,
 `playbook.mjs` notebooks, `session-find.mjs` old chats; offline tests `node ops/tools/test.mjs`) · `rules/` ·
 `.claude/` (agents/, hooks/) · `harness/` · `playbooks/` · `tests/`.

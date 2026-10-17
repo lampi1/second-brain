@@ -1,4 +1,13 @@
 # Known false positives of tools/guard/scan.mjs: `<path glob> <rule> [sha256:<hex>]`. A hash pins the exact content.
+# Installer's public application identifier and Windows API DLL import (not an address), reviewed in this exact file.
+build/windows.iss guid sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
+build/windows.iss email sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
+# Same public AppId and Windows DLL import; only literal shortcut filename placement changed for ISCC syntax.
+build/windows.iss guid sha256:be2f6db1732a34ceede3e44b5b9530539b242740a4ffb4939faf382d73b86b86
+build/windows.iss email sha256:be2f6db1732a34ceede3e44b5b9530539b242740a4ffb4939faf382d73b86b86
+# Public AppId and fixed kernel32 API imports in the common release-writer protocol installer/uninstaller.
+build/windows.iss guid sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
+build/windows.iss email sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
 # App icon, generated from build/icon.svg by scripts/make-icon.cjs: 10 PNG images (16-256 px), chunks IHDR/IDAT/IEND
 # only, no text or metadata (checked 2026-10-11). A new icon blocks the sync until someone checks it and ADDS a line
 # with its hash; never remove an old line: the public history keeps the old icon and the history scan checks it.
@@ -7,6 +16,8 @@ build/icon.ico unscanned-binary sha256:72db3b5f51cc876de4c697ec6cdaeeb67dc76f494
 # second click; no real host (checked 2026-10-13). A changed file blocks again. Comments here never spell a host: this
 # file is published and the history scan reads it too (2026-10-14).
 test/unit/runner.test.ts internal-host sha256:ce2a98829d67f4655b51dde1c9c6847a5d302a4f7a9d1644aadeddbd0d1cfc0a
+# Same public Azure-host fixtures; assertion uses PowerShell's language-independent structured error identifier.
+test/unit/runner.test.ts internal-host sha256:9b7a97db1e8bc04e3910dfd3363f2cca94d8434584e0937de42b9d71dc5b85c3
 # devlinks tests: the legacy DevOps host shape on a made-up org ("acme", "o") and the new host with org "o"; no real
 # org (checked 2026-10-13; second hash 2026-10-14, the linkKey test added, same made-up orgs, owner ok). A changed
 # file blocks again.
@@ -27,3 +38,5 @@ docs/screenshots/mosaic.webp binary-media sha256:2a6c7ab702f263fb64556cc1f706bfb
 docs/screenshots/quality.webp binary-media sha256:30a801b0dcc8b617854a6623bd165b580567f07b4baae1ef772df54055cd61a7
 docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42eb3e06e72439883bc4b6af75c872421c
 test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4adbcde2e77beea32d931cdb55459e803194f1c0476b8248da327f
+# Public GitHub SSH clone syntax in the publication-boundary fixture, not an email address or private identity.
+test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8a73384493e1663bd8f8b1fafc

@@ -26,7 +26,7 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(k('.', 'Period', ctrl))).toEqual({ type: 'stopFocused' });
     expect(resolveShortcut(k('w', 'KeyW', ctrl))).toEqual({ type: 'closeFocused' });
     expect(resolveShortcut(k(':', 'Period', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'stopAll' }); // Italian layout: Shift+. = ":"
-    expect(resolveShortcut(k('V', 'KeyV', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'toggleView' });
+    expect(resolveShortcut(k('V', 'KeyV', { ctrlKey: true, shiftKey: true }))).toBeNull(); // One workspace: retired view toggle must not consume this shortcut.
     expect(resolveShortcut(k('B', 'KeyB', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'toggleBrowsers' });
     expect(resolveShortcut(k('F', 'KeyF', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'focusMode' });
     expect(resolveShortcut(k('n', 'KeyN', ctrl))).toEqual({ type: 'newChat' });

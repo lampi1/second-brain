@@ -145,7 +145,8 @@ export class OverlayLayer {
     // the Regia widget's corner (ADR 0028): left of the expanded panel, above the collapsed bar
     const right = clampAvoid(this.model?.avoid?.right, cw, 200 + 2 * MARGIN), bottom = clampAvoid(this.model?.avoid?.bottom, ch, MIN_TOP + MARGIN + 120);
     const width = Math.min(this.size.width, Math.max(200, cw - 2 * MARGIN - right));
-    const height = Math.min(this.size.height || 260, Math.max(0, ch - MIN_TOP - MARGIN - bottom));
+    const top=Math.max(MIN_TOP,clampAvoid(this.model?.avoid?.top,ch,0));
+    const height = Math.min(this.size.height || 260, Math.max(0, ch - top - MARGIN - bottom));
     this.view.setBounds({ x: Math.max(0, cw - width - MARGIN - right), y: ch - height - MARGIN - bottom, width, height });
   }
 

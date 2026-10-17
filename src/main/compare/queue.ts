@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ENGINE_ID } from '../engines/registry';
+import { updateActivity } from '../update/activity';
 import { errText, log } from '../log';
 import { errLine } from '../brain/compare';
 import { runNode, type NodeRunner } from '../brain/node';
@@ -113,6 +114,7 @@ export class CompareQueue {
 
   /** runs going on now */
   get running(): number { return this.active.size; }
+  get working(): boolean { return this.ticking || this.active.size > 0; }
 
   start(): void {
     if (this.timer || this.stopped) return;
@@ -122,7 +124,7 @@ export class CompareQueue {
 
   /** One look at the queue: takes what fits under the limit. Resolves once the runs taken are started (not finished). */
   async tick(): Promise<void> {
-    if (this.ticking || this.stopped) return;
+    if (this.ticking || this.stopped || updateActivity.frozen) return;
     this.ticking = true;
     try {
       const max = this.d.maxRunning ?? 2;

@@ -74,7 +74,7 @@ describe('Cursor engine resolution', () => {
     mk('not-a-version');
     fs.writeFileSync(path.join(v, `${crypto.randomUUID()}.zip`), ''); // a stray download next to the versions
     expect(newestCursorVersion(v)).toBe(path.join(v, '2026.07.23-10-11-12-abc123'));
-    const c = resolveCursor(null, { LOCALAPPDATA: local });
+    const c = resolveCursor(null, { LOCALAPPDATA: local }, 'win32');
     expect(c).toMatchObject({ kind: 'node', command: path.join(v, '2026.07.23-10-11-12-abc123', 'node.exe'), prefix: [path.join(v, '2026.07.23-10-11-12-abc123', 'index.js')] });
     expect(c?.env).toMatchObject({ CURSOR_INVOKED_AS: 'agent.cmd', NODE_COMPILE_CACHE: path.join(local, 'cursor-compile-cache') });
     expect(cliArgv(c!, ['--model', 'gpt-5', 'acp']).args).toEqual([path.join(v, '2026.07.23-10-11-12-abc123', 'index.js'), '--model', 'gpt-5', 'acp']);

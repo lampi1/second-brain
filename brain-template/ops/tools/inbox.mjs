@@ -23,7 +23,7 @@
 //   node .../inbox.mjs log [--since YYYY-MM-DD]  (sent/delivered per pair of chats: the collaboration measure)
 //   node .../inbox.mjs hook claude|cursor         (Stop hook; reads the hook JSON on stdin)
 // State in the MAIN checkout (ops/state/inbox/, gitignored) from worktrees too; --root <dir> only for tests.
-// Exit: 0 ok, 2 wait gave up, 3 usage error, 4 refused (hop limit, unknown reply id), 5 blocked (Claude<->Cursor off).
+// Exit: 0 ok, 2 wait gave up, 3 usage error, 4 refused (hop limit, unknown reply id).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -46,27 +46,7 @@ export function paths(root) {
   return { root, dir, log: path.join(dir, 'inbox.log'), box: who => path.join(dir, slug(who)) };
 }
 
-// ---------- Claude <-> Cursor switch ({{OWNER}} 2026-10-11: "vorrei che le chat di claude potessero parlare con quelle di
-// cursor e viceversa però disattivabile con un'opzione per sicurezza"). The setting lives in the brain's
-// brain-settings.json ({"crossHarnessMessages": true|false}, default true), written by the second-brain app and read here,
-// so it holds inside and outside the app. Each box remembers its chat's harness (.harness.json, from the shell env of
-// `wait`/`send` or from the Stop hook); with the switch off a message between a Claude and a Cursor chat is refused
-// (exit 5) and logged as "blocked" (the app shows "messaggio bloccato"). Same harness always passes; an unknown harness
-// passes (nothing to compare); the app/site itself ("second-brain") is harness "app" and always passes.
-// Read with PowerShell 5.1 in mind ({{OWNER}} may edit it by hand): UTF-8 with BOM and UTF-16 are accepted. A file that
-// exists but cannot be read fails CLOSED (switch off): it is a safety switch (review 11/10).
-export function brainSettings(root) {
-  const f = path.join(root, 'brain-settings.json');
-  if (!fs.existsSync(f)) return { crossHarnessMessages: true };
-  try {
-    const buf = fs.readFileSync(f);
-    const text = buf[0] === 0xff && buf[1] === 0xfe ? buf.toString('utf16le') : buf.toString('utf8');
-    const s = JSON.parse(text.replace(/^﻿/, ''));
-    return { crossHarnessMessages: s?.crossHarnessMessages !== false };
-  } catch {
-    return { crossHarnessMessages: false, unreadable: true };
-  }
-}
+// Cross-engine transport is always available; legacy brain-settings.json switches are ignored.
 // Shells started by Cursor's agent carry CURSOR_AGENT=1 (verified in the Cursor CLI bundle, 2026-10-11); Claude Code's
 // carry CLAUDECODE=1.
 export const detectHarness = (env = process.env) => (env.CURSOR_AGENT === '1' ? 'cursor' : env.CLAUDECODE === '1' ? 'claude' : null);
@@ -126,14 +106,6 @@ export function send(P, { to, from, text, replyTo, harness = null, now = new Dat
   }
   const known = HARNESSES.has(harness) ? harness : null;
   if (known) noteHarness(P, from, known);
-  const fromH = known ?? harnessOf(P, from), toH = harnessOf(P, to);
-  if (fromH && toH && fromH !== toH && fromH !== 'app' && toH !== 'app' && P.root && !brainSettings(P.root).crossHarnessMessages) {
-    appendLog(P, { action: 'blocked', from: String(from), to: String(to), fromHarness: fromH, toHarness: toH });
-    const e = new Error(`messaggio bloccato: i messaggi tra chat ${fromH === 'claude' ? 'Claude' : 'Cursor'} e chat ${toH === 'claude' ? 'Claude' : 'Cursor'} sono spenti ` +
-      '(impostazione "Messaggi tra Claude e Cursor" di second-brain, brain-settings.json). Non riprovare: dillo alla Regia o a {{OWNER}}.');
-    e.code = 5;
-    throw e;
-  }
   let thread, hop = 1;
   if (replyTo) {
     const orig = findMessage(P, replyTo);

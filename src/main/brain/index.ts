@@ -11,13 +11,13 @@
 // its tracked files).
 import { Notification, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
+import { migrateCrossHarness } from './brain-settings';
 import path from 'node:path';
 import type { BudgetAlert, DomainSyncStatus, FeedEvent, Harness, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
 import { ConfigStore } from './config';
-import { readCrossHarness, writeCrossHarness } from './brain-settings';
 import { findBrainCandidates } from './detect';
 import { Live, KINDS, stamp, cut, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
@@ -197,14 +197,12 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     // the domains' first sync runs beside the start (a slow remote never holds the app back); its status says the rest
     sync.refresh();
     void sync.start().catch(e => log.warn('sync', 'first sync failed', { cause: errText(e), hint: 'the sync status says which domain and why' }));
-    // the brain's file (brain-settings.ts) is in a folder agents write to: at start it may only close the switch (edited
-    // by hand), never open it; a file that would open it is put back to the app's value
-    const cross = readCrossHarness(root);
-    if (cross === false && cfg.get().messaging.crossHarness) cfg.set({ messaging: { crossHarness: false } });
-    else if (cross === true && !cfg.get().messaging.crossHarness) {
-      log.warn('settings', 'brain-settings.json opens chats across engines: ignored', { data: { hint: 'only the user opens it, in Impostazioni → Motori' } });
-      try { writeCrossHarness(root, false); } catch (e) { log.error('settings', 'brain-settings.json not written', { cause: errText(e), hint: 'check the brain folder is writable; inbox.mjs keeps the old value' }); }
-    }
+    // Retire only a valid legacy false, visibly, so an older installed inbox also stops refusing cross-engine mail.
+    try {
+      const migration = migrateCrossHarness(root);
+      if (migration === 'migrated') log.info('settings', 'retired brain messaging switch migrated to always available', { data: { key: 'crossHarnessMessages', from: false, to: true } });
+      else if (migration === 'unreadable') log.warn('settings', 'legacy brain settings unreadable: left unchanged', { hint: 'the app still exchanges messages; update the installed inbox tool to ignore the retired switch outside the app' });
+    } catch (e) { log.warn('settings', 'legacy brain messaging migration not saved', { cause: errText(e), hint: 'the app still exchanges messages; the next start retries, or update the installed inbox tool' }); }
     live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile, ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
     // estimates from day one: past chats from cost.mjs, a little after boot (it reads 30 days of transcripts)
@@ -228,9 +226,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const settingListeners = new Set<(c: SettingChange, now: Settings) => void>();
   let restarting: Promise<void> = Promise.resolve();
   cfg.onChange((c, now, before) => {
-    if (c.key === 'messaging.crossHarness' && now.brainRoot) {
-      try { writeCrossHarness(now.brainRoot, now.messaging.crossHarness); } catch (e) { log.error('settings', 'brain-settings.json not written', { cause: errText(e), hint: 'check the brain folder is writable; inbox.mjs keeps the old value' }); }
-    }
     ctx.emitter.emit('settings:changed', { ...c, settings: now });
     log.info('settings', 'changed', { ...(c.chatId ? { chat: c.chatId } : {}), data: { key: c.key, by: c.by, undoOf: c.undoOf, proposalId: c.proposalId } });
     if (now.brainRoot !== before.brainRoot) {

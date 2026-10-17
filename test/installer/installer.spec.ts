@@ -1,0 +1,92 @@
+// Real main-only proof: install the exact checksummed artifact with no Node/npm on PATH, exercise the VBS launcher,
+// inspect isolated Windows links, then inspect the installed product visually in hidden mode. Never touch stable/dev.
+import { test, expect, _electron as electron } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+test.skip(process.platform !== 'win32', 'Windows installer');
+const repo = path.resolve(import.meta.dirname, '../..');
+let testRoot: string | null = null;
+// Armed before Setup starts: cleanup also covers timeouts/failures before ready.json exists.
+test.afterEach(async (_fixtures, info) => {
+  if (!testRoot) return;
+  const system = process.env.SystemRoot ?? 'C:/Windows';
+  const cleanup = spawnSync(path.join(system, 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(repo, 'scripts/installer-test-links.ps1'), '-InstallRoot', path.join(testRoot, 'installed'), '-Cleanup'], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  expect(cleanup.status, cleanup.stderr).toBe(0);
+  if (info.status === info.expectedStatus) fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  else await info.attach('retained-isolated-installation', { body: testRoot, contentType: 'text/plain' });
+  testRoot = null;
+});
+test('offline per-user installer starts and reopens its stable copy without system Node', async () => {
+  const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; sha256: string } };
+  expect(createHash('sha256').update(fs.readFileSync(latest.installer)).digest('hex')).toBe(latest.manifest.sha256);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-installer space & percent%-'));
+  testRoot = root;
+  const install = path.join(root, 'installed');
+  const userData = path.join(install, 'test-user-data');
+  const system = process.env.SystemRoot ?? 'C:/Windows';
+  const powershell = path.join(system, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  const helper = path.join(repo, 'scripts/installer-test-links.ps1');
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${system};${path.join(system, 'System32')}`, HOME: path.join(root, 'home'), USERPROFILE: path.join(root, 'home'), APPDATA: path.join(root, 'roaming'), LOCALAPPDATA: path.join(root, 'local'), TEMP: root, TMP: root, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1', SB_HIDDEN: '1' };
+  for (const key of ['ELECTRON_RUN_AS_NODE', 'SB_RELEASE', 'SB_RELEASE_ID', 'SB_TEST', 'SB_BRAIN', 'SB_RELEASES_ROOT', 'SB_ENGINE_CLAUDE']) delete env[key];
+  fs.mkdirSync(env.HOME!, { recursive: true });
+  const diagnostics = path.join(repo, 'test-results/installer-smoke');
+  fs.mkdirSync(diagnostics, { recursive: true });
+  const outside = path.join(root, 'existing-profile');
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'config.json'), 'preserve this profile');
+  const rejected = spawnSync(latest.installer, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SBTEST=1', `/DIR=${install}`], { env: { ...env, SB_USER_DATA: outside }, windowsHide: true, timeout: 30000 });
+  expect(rejected.status).not.toBe(0);
+  expect(fs.readFileSync(path.join(outside, 'config.json'), 'utf8')).toBe('preserve this profile');
+  expect(fs.existsSync(path.join(install, 'current.json'))).toBe(false);
+  const setup = spawnSync(latest.installer, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SBTEST=1', `/DIR=${install}`, `/LOG=${path.join(diagnostics, 'setup.log')}`], { env, windowsHide: true, encoding: 'utf8', timeout: 120000 });
+  expect(setup.error, `${setup.stdout}\n${setup.stderr}`).toBeUndefined();
+  expect(setup.status).toBe(0);
+  const readyFile = path.join(userData, 'ready.json');
+  let pid = 0;
+  let executable = '';
+  const stop = () => {
+    if (!pid) return;
+    const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-InstallRoot', install, '-ProcessId', String(pid), '-Executable', executable], { windowsHide: true, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    pid = 0;
+  };
+  try {
+    await expect.poll(() => { try { return JSON.parse(fs.readFileSync(readyFile, 'utf8')).release; } catch { return null; } }, { timeout: 60000 }).toBe(latest.manifest.id);
+    const ready = JSON.parse(fs.readFileSync(readyFile, 'utf8')) as { pid: number };
+    expect(Number.isSafeInteger(ready.pid) && ready.pid > 0).toBe(true);
+    pid = ready.pid;
+    const rel = JSON.parse(fs.readFileSync(path.join(install, 'releases', latest.manifest.id, 'release.json'), 'utf8')) as { electron: string; claudeEngine: string };
+    executable = path.join(install, 'electron', rel.electron, 'electron.exe');
+    const links = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-InstallRoot', install], { encoding: 'utf8', windowsHide: true });
+    expect(links.status, links.stderr).toBe(0);
+    for (const link of JSON.parse(links.stdout) as { target: string; args: string; cwd: string; icon: string }[]) {
+      expect(path.basename(link.target).toLowerCase()).toBe('wscript.exe');
+      expect(link.args).toBe(`"${path.join(install, 'launch.vbs')}"`);
+      expect(link.cwd).toBe(install);
+      expect(link.icon).toContain(path.join(install, 'icon.ico'));
+    }
+    expect(fs.existsSync(path.join(install, 'unins000.exe'))).toBe(false); // no real uninstall registry entry in test mode
+    stop();
+    fs.unlinkSync(readyFile);
+    const reopened = spawnSync(path.join(system, 'System32/cscript.exe'), ['//B', '//Nologo', path.join(install, 'launch.vbs')], { env, windowsHide: true, encoding: 'utf8' });
+    expect(reopened.status).toBe(0);
+    await expect.poll(() => { try { return JSON.parse(fs.readFileSync(readyFile, 'utf8')).release; } catch { return null; } }, { timeout: 60000 }).toBe(latest.manifest.id);
+    pid = JSON.parse(fs.readFileSync(readyFile, 'utf8')).pid;
+    stop();
+    const app = await electron.launch({ executablePath: executable, args: [path.join(install, 'releases', latest.manifest.id)], env: { ...env, SB_RELEASE: latest.manifest.id, SB_RELEASES_ROOT: install, SB_ENGINE_CLAUDE: path.resolve(install, rel.claudeEngine) } as Record<string, string> });
+    try {
+      await app.firstWindow();
+      await expect.poll(() => app.windows().some(p => !p.url().includes('#overlay'))).toBe(true);
+      const page = app.windows().find(p => !p.url().includes('#overlay'))!;
+      await expect(page.getByTestId('app')).toBeVisible();
+      await expect(page.getByTestId('brain-setup')).toBeVisible();
+      const shots = path.join(repo, 'test-results/shots');
+      fs.mkdirSync(shots, { recursive: true });
+      await page.screenshot({ path: path.join(shots, 'installer-first-run.png') });
+    } finally { await app.close(); }
+  } finally { stop(); }
+});

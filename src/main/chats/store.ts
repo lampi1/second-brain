@@ -5,14 +5,22 @@
 // file is set aside as chats.json.bad-<time> instead of being lost. Used by manager.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ChatLink, ChatSpace, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
+import { randomUUID } from 'node:crypto';
+import type { ChatLink, ChatSpace, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
+import type { AgentOwnerSnapshot, AgentChildren } from '../../shared/agents';
+import { readOwner } from '../agents/catalog';
+import { sanitizeAgentChildren } from './agent-children';
 
 export interface StoredChat {
   id: string;
+  agent?: AgentOwnerSnapshot;
+  work?: NonNullable<ChatSummary['work']>;
+  agentInstructions?: string;
+  agentChildren?: AgentChildren;
   harness: Harness;
   cwd: string;
   sessionId: string | null;
@@ -70,11 +78,21 @@ const link = (v: unknown): ChatLink | null => {
   const l = v as Record<string, unknown> | null;
   return l && typeof l === 'object' && typeof l.id === 'string' && l.id && typeof l.title === 'string' ? { id: l.id, title: l.title } : null;
 };
+function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
+  const work=value as Partial<NonNullable<StoredChat['work']>>|null;
+  if(work&&['assigned','waiting-mail','completed'].includes(String(work.status))&&typeof work.updatedAt==='number'&&Number.isFinite(work.updatedAt)&&work.updatedAt>=0)return {status:work.status!,updatedAt:work.updatedAt};
+  // Invalid persisted holds fail closed until an explicit lifecycle update; they never turn into completed work.
+  return {status:'assigned',updatedAt:0};
+}
 function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route);
   return {
+    ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
+    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= 8000 ? { agentInstructions: c.agentInstructions } : {}),
+    ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(route ? { route } : {}),
+    ...(c.work !== undefined ? {work:readChatWork(c.work)} : {}),
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),
     ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
@@ -148,5 +166,20 @@ export class ChatStore {
         log.error('chats', 'chats.json not saved', { cause: `${errText(e)} / ${errText(e2)}`, hint: 'check disk space and that userData is writable; chats will not survive a restart' });
       }
     }
+  }
+
+  /** Update boundary: throw on any failure, never fall back to a direct overwrite or claim a logged error is saved. */
+  checkpoint(chats: StoredChat[]): void {
+    const body = `${JSON.stringify({ version: 2, chats }, null, 2)}\n`;
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    try { const stat = fs.lstatSync(this.file); if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink()) throw new Error('Archivio chat collegato: aggiornamento fermato.'); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const tmp = `${this.file}.${randomUUID()}.tmp`;
+    let fd: number | undefined;
+    try {
+      fd = fs.openSync(tmp, 'wx', 0o600); fs.writeFileSync(fd, body, 'utf8'); fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
+      fs.renameSync(tmp, this.file);
+      if (fs.readFileSync(this.file, 'utf8') !== body) throw new Error('Salvataggio chat non verificato.');
+    } finally { if (fd !== undefined) fs.closeSync(fd); try { fs.unlinkSync(tmp); } catch { /* renamed or not created */ } }
   }
 }

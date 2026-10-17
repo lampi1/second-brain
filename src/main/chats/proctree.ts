@@ -68,12 +68,22 @@ export function descendants(procs: readonly Proc[], root: Root, opts: { live?: b
 
 /** `ps -o pid=,ppid=,etime=,comm=` output → `pid ppid createdMs name` lines (parseProcList's shape); the name is the
  *  last part of comm (macOS prints the full path). */
-export function psToList(stdout: string, now: number): string {
+export function psToList(stdout: string, now: number, withGroups = false): string {
   const out: string[] = [];
+  const rows: { pid: number; ppid: number; pgid?: number; created: number; name: string }[] = [];
   for (const l of stdout.split('\n')) {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(l);
-    const secs = m ? etimeSeconds(m[3]!) : Number.NaN;
-    if (m && !Number.isNaN(secs)) out.push(`${m[1]} ${m[2]} ${now - secs * 1000} ${(m[4] ?? '').trim().split('/').pop()}`);
+    const m = (withGroups ? /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/ : /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/).exec(l);
+    const secs = m ? etimeSeconds(m[withGroups ? 4 : 3]!) : Number.NaN;
+    if (m && !Number.isNaN(secs)) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), ...(withGroups ? { pgid: Number(m[3]) } : {}), created: now - secs * 1000, name: (m[withGroups ? 5 : 4] ?? '').trim().split('/').pop() ?? '' });
+  }
+  const byPid = new Map(rows.map(p => [p.pid, p]));
+  for (const p of rows) {
+    // Unix reparents orphans to init/subreapers. Engines own a process group: retain that ownership after the
+    // leader exits, but keep every live in-group parent so the tools-only walk still protects user programs.
+    const parent = byPid.get(p.ppid);
+    const adopted = !parent || p.ppid === 1;
+    const ppid = p.pgid && p.pgid !== p.pid && adopted && parent?.pgid !== p.pgid ? p.pgid : p.ppid;
+    out.push(`${p.pid} ${ppid} ${p.created} ${p.name}`);
   }
   return out.join('\n');
 }
@@ -94,8 +104,8 @@ export function listProcesses(timeoutMs = 90000): Promise<Proc[] | null> {
           { encoding: 'utf8', windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, done);
       } else {
         // etime, not etimes: macOS's BSD ps has no etimes (platform.ts etimeSeconds, ADR 0054)
-        execFile('ps', ['-A', '-o', 'pid=,ppid=,etime=,comm='], { encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
-          done(err, psToList(String(stdout ?? ''), Date.now()));
+        execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,etime=,comm='], { encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+          done(err, psToList(String(stdout ?? ''), Date.now(), true));
         });
       }
     } catch { resolve(null); }

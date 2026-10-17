@@ -49,6 +49,21 @@ test('Codex: turned on by the user, a chat answers a turn and asks a command app
     await page.evaluate(([id, rid]) => window.sb.invoke('chat:answer', { chatId: id, requestId: rid, answer: { kind: 'permission', allow: true } }), [chat.id, p.id] as const);
     await expect.poll(async () => (await items()).some(i => i.kind === 'assistant' && /Comando eseguito/.test(i.text)), { timeout: 30_000 }).toBe(true);
     await shot(page, 'codex-chat');
+
+    // MCP confirmations use the same visible panel, with arguments and no persistent consent option.
+    await page.evaluate(id => window.sb.invoke('chat:send', { chatId: id, text: 'elicitation' }), chat.id);
+    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:pending', undefined))).find(p => p.chatId === chat.id)?.noAlways, { timeout: 30_000 }).toBe(true);
+    const mcp = (await page.evaluate(() => window.sb.invoke('chat:pending', undefined))).find(p => p.chatId === chat.id)!;
+    expect(mcp.tool).toBe('mcp__second_brain_app__app_chats');
+    expect(mcp.detail).toContain('Intervallo: 2h');
+    const panel = page.getByTestId(`request-${chat.id}-${mcp.id}`);
+    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-explain`)).toHaveText('second brain app: app chats');
+    await panel.getByTestId(`request-${chat.id}-${mcp.id}-raw-toggle`).click();
+    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-raw`)).toContainText(mcp.title);
+    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-raw`)).toContainText('Intervallo: 2h');
+    await shot(page, 'codex-mcp-confirmation');
+    await page.evaluate(([id, rid]) => window.sb.invoke('chat:answer', { chatId: id, requestId: rid, answer: { kind: 'permission', allow: false } }), [chat.id, mcp.id] as const);
+    await expect.poll(async () => (await items()).some(i => i.kind === 'assistant' && i.text === 'MCP: decline'), { timeout: 30_000 }).toBe(true);
   } finally {
     await app.close();
   }

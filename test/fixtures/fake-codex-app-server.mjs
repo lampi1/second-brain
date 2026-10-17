@@ -93,6 +93,32 @@ async function runTurn(text) {
     addUsage(100, 10);
     return complete('completed');
   }
+  if (/\belicitation\b/.test(text)) {
+    const params = { threadId, turnId: t.id, serverName: 'second_brain_app', mode: 'form',
+      message: 'Consenti a Second Brain di leggere le chat?',
+      requestedSchema: { type: 'object', properties: {} },
+      _meta: { codex_approval_kind: 'tool_approval', persist: ['session', 'always'], tool_description: 'Elenca le chat visibili.',
+        tool_params: { since: '2h' }, tool_params_display: [{ name: 'since', value: '2h', display_name: 'Intervallo' }] },
+      ...JSON.parse(process.env.FAKE_CODEX_ELICITATION ?? '{}') };
+    notify('item/started', { threadId, turnId: t.id, item: { type: 'mcpToolCall', id: 'elicitation-tool', server: 'second_brain_app', tool: 'app_chats', arguments: { since: '2h' }, status: 'inProgress' } });
+    const reply = ask('mcpServer/elicitation/request', params);
+    const requestId = seq - 1;
+    if (/\b(resolved|completed)\b/.test(text)) {
+      await sleep(80);
+      if (/\bresolved\b/.test(text)) {
+        notify('serverRequest/resolved', { threadId, requestId });
+        notify('serverRequest/resolved', { threadId, requestId });
+      }
+      waiting.delete(requestId);
+      return complete('completed');
+    }
+    const r = await reply;
+    log({ answer: r });
+    notify('serverRequest/resolved', { threadId, requestId });
+    if (t.interrupted || r.action === 'cancel') return;
+    await message(r.error ? 'Elicitation non supportata dal client' : `MCP: ${r.action}`);
+    return complete('completed');
+  }
   if (/\bperm\b/.test(text)) {
     const item = { type: 'commandExecution', id: 'cmd1', command: 'npm test', cwd: process.cwd(), processId: null, status: 'inProgress', commandActions: [], aggregatedOutput: null, exitCode: null, durationMs: null };
     notify('item/started', { item, threadId, turnId: t.id });
@@ -152,6 +178,9 @@ async function runTurn(text) {
 function onRequest(id, method, p) {
   const ok = result => out({ id, result });
   const err = (code, message) => out({ id, error: { code, message } });
+  // Official JSON v2 ThreadStartParams/TurnStartParams read 2026-10-17. These are wire enums, not SandboxPolicy tags.
+  if (['thread/start', 'thread/resume', 'turn/start'].includes(method) && p.approvalPolicy != null && !['untrusted', 'on-request', 'never'].includes(p.approvalPolicy)) return err(-32602, 'invalid approvalPolicy wire enum');
+  if (['thread/start', 'thread/resume'].includes(method) && p.sandbox != null && !['read-only', 'workspace-write', 'danger-full-access'].includes(p.sandbox)) return err(-32602, 'invalid sandbox wire enum');
   switch (method) {
     case 'initialize': return ok({ userAgent: 'codex_cli_rs/0.0.0-fake (Windows 10.0.26100; x86_64) fake', codexHome: 'C:/fake/.codex', platformFamily: 'windows', platformOs: 'windows' });
     case 'account/read': return ok(!loggedIn ? { account: null, requiresOpenaiAuth: true } : { account: { type: 'chatgpt', email: 'x@example.com', planType: 'plus' }, requiresOpenaiAuth: true });
@@ -162,7 +191,7 @@ function onRequest(id, method, p) {
       threadId = method === 'thread/resume' ? p.threadId : uuid();
       if (p.model) model = p.model;
       const turns = method === 'thread/resume' ? [{ id: 't0', status: 'completed', error: null, items: [{ type: 'userMessage', id: 'u0', content: [{ type: 'text', text: 'domanda di prima', text_elements: [] }] }, { type: 'agentMessage', id: 'a0', text: 'risposta di prima' }] }] : [];
-      return ok({ thread: { id: threadId, preview: '', modelProvider: 'openai', createdAt: 0, updatedAt: 0, cliVersion: '0.0.0-fake', turns }, model, modelProvider: 'openai', cwd: p.cwd ?? process.cwd(), approvalPolicy: p.approvalPolicy ?? 'on-request', sandbox: { type: 'workspaceWrite' }, reasoningEffort: null });
+      return ok({ thread: { id: threadId, preview: '', modelProvider: 'openai', createdAt: 0, updatedAt: 0, cliVersion: '0.0.0-fake', turns }, model, modelProvider: 'openai', cwd: p.cwd ?? process.cwd(), approvalPolicy: p.approvalPolicy ?? 'on-request', sandbox: { type: 'workspaceWrite' }, reasoningEffort: process.env.FAKE_CODEX_DEFAULT_EFFORT ?? null });
     }
     case 'turn/start': {
       if (turn) return err(-32600, 'a turn is already running');
@@ -203,6 +232,6 @@ rl.on('line', raw => {
   if (m.method && m.id !== undefined) return onRequest(m.id, m.method, m.params ?? {});
   if (m.method) return; // notifications (initialized)
   const w = waiting.get(m.id);
-  if (w) { waiting.delete(m.id); w(m.result ?? {}); }
+  if (w) { waiting.delete(m.id); w(m.error ? { error: m.error } : m.result ?? {}); }
 });
 rl.on('close', () => process.exit(0));

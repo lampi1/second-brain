@@ -78,7 +78,8 @@ describe.skipIf(!win)('CommandRunner', () => {
     expect(await done(r.start({ chatId: 'c1', itemId: 'a1', code: 'cmd /c exit 3' }).id)).toMatchObject({ state: 'error', exitCode: 3 });
     const e = await done(r.start({ chatId: 'c1', itemId: 'a1', code: 'Get-Item C:/nope-sb-xyz' }).id);
     expect(e).toMatchObject({ state: 'error', exitCode: 1 });
-    expect(e.output).toContain('Cannot find path');
+    // PowerShell localizes prose; its structured error identifier and exit code are stable across UI languages.
+    expect(e.output).toContain('PathNotFound');
     expect(e.output).not.toContain('CLIXML');
     expect(e.output).toMatch(/nope-sb-xyz/);
   }, 60000);

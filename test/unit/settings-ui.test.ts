@@ -6,7 +6,7 @@ import type { CompareExperiment } from '@shared/contract';
 import { autoLine, costLine, sideName, sidesLine } from '../../src/renderer/lib/compare';
 import { resolveShortcut } from '../../src/renderer/lib/keys';
 import { MODELS, modelOptions } from '../../src/renderer/lib/models';
-import { parseUsd, portOf } from '../../src/renderer/lib/settings-page';
+import { matchesSettingsSearch, parseUsd, portOf } from '../../src/renderer/lib/settings-page';
 
 const exp = (o: Partial<CompareExperiment> = {}): CompareExperiment => ({
   name: 'x', title: 'X', description: '', on: true, changedAt: null,
@@ -73,5 +73,20 @@ describe('Ctrl+, opens the settings', () => {
   it('maps Ctrl+Comma, not a plain comma', () => {
     expect(resolveShortcut(key({ key: ',', code: 'Comma', ctrlKey: true }))).toEqual({ type: 'settings' });
     expect(resolveShortcut(key({ key: ',', code: 'Comma' }))).toBeNull();
+  });
+});
+
+describe('settings search', () => {
+  const section = 'Aspetto Densità Compatta mostra più righe nello stesso spazio.';
+  it('finds labels, descriptions and section names without accents or case', () => {
+    for (const query of ['DENSITA', 'piu righe', 'aspetto', '  ASPETTO   densita  '])
+      expect(matchesSettingsSearch(query, section), query).toBe(true);
+    expect(matchesSettingsSearch('densità notifiche', section)).toBe(false);
+    expect(matchesSettingsSearch('assente', section)).toBe(false);
+  });
+  it('restores every section for an empty or whitespace-only query and treats punctuation literally', () => {
+    expect(matchesSettingsSearch('', section)).toBe(true);
+    expect(matchesSettingsSearch('  ', section)).toBe(true);
+    expect(matchesSettingsSearch('[.*', section)).toBe(false);
   });
 });

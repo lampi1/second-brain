@@ -1,99 +1,62 @@
 // Finding and starting the engines (ADR 0010, ADR 0046) without a shell, so arguments are never re-parsed and nothing
 // is injected: Claude = the official binary embedded in the app (the dependency for this OS and CPU, platform.ts; a
 // release passes its copy in SB_ENGINE_CLAUDE), Cursor = the user's installed CLI started as its own `node.exe
-// index.js` (no PowerShell launcher), any other ACP CLI = its command on PATH (resolveAcp). A .mjs/.js path runs with
-// Electron as Node: that is how tests swap in the fake engines, and under tests a real engine is refused (never spend
-// the user's credits). Also: kill whole process trees on app exit (Windows keeps the engines' children alive). Used by
-// claude.ts, acp.ts, manager.ts, ../cli.ts.
-import { execFile, spawn, spawnSync } from 'node:child_process';
-import fs from 'node:fs';
+// index.js` (no PowerShell launcher), other CLIs = their command on PATH, with Codex's Windows app install as a
+// fallback (resolveAcp). A .mjs/.js path runs with Electron as Node: that is how tests swap in the fake engines, and
+// under tests a real engine is refused (never spend the user's credits). Also: kill whole process trees on app exit
+// (Windows keeps the engines' children alive). Used by claude.ts, acp.ts, manager.ts, ../cli.ts.
+import { execFile, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseEngine } from '../release';
-import { claudeEnginePackage } from '../platform';
+import { cursorInstall, discoverClaude, findCli } from './discovery.mjs';
+export { findCli, newestCursorVersion } from './discovery.mjs';
+export type { ClaudeSource } from './discovery.mjs';
 
-const found = new Map<string, string | null>();
 const isScript = (p: string): boolean => /\.(m?js|cjs)$/i.test(p);
-
-const ENGINE_PKG = claudeEnginePackage();
-const EMBEDDED_CLAUDE = ENGINE_PKG ? path.join('node_modules', ...ENGINE_PKG.pkg.split('/'), ENGINE_PKG.bin) : null;
-
-/** First existing `rel` in `start` or one of its parents. */
-function findUp(start: string, rel: string): string | null {
-  let dir = path.resolve(start);
-  for (;;) {
-    const p = path.join(dir, rel);
-    if (fs.existsSync(p)) return p;
-    const up = path.dirname(dir);
-    if (up === dir) return null;
-    dir = up;
-  }
-}
-
-export type ClaudeSource = 'override' | 'release' | 'embedded' | 'path';
 
 /** The Claude engine: SB_CLAUDE_PATH (tests) → SB_ENGINE_CLAUDE (a release's copy) → the embedded dependency next to
  *  the app (dev) → `claude` on PATH (last fallback). null = none. */
-export function resolveClaude(override?: string | null): { path: string; source: ClaudeSource } | null {
-  const o = override ?? process.env.SB_CLAUDE_PATH;
-  if (o) return { path: o, source: 'override' };
-  const rel = releaseEngine();
-  if (rel && fs.existsSync(rel)) return { path: rel, source: 'release' };
+export function resolveClaude(override?: string | null): ReturnType<typeof discoverClaude> {
   let here = process.cwd();
   try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* not a file URL */ }
-  const emb = EMBEDDED_CLAUDE ? findUp(here, EMBEDDED_CLAUDE) ?? findUp(process.cwd(), EMBEDDED_CLAUDE) : null;
-  if (emb) return { path: emb, source: 'embedded' };
-  const p = findCli('claude');
-  return p ? { path: p, source: 'path' } : null;
+  return discoverClaude({ override, release: releaseEngine(), starts: [here, process.cwd()] });
 }
 
 /** How to start a CLI engine. kind fake = a .mjs test double (Electron as Node), node = the CLI's own node.exe
  *  + index.js of the newest version (Cursor), cmd = a .cmd/.bat shim through cmd.exe, exe = a given executable. */
 export interface CliCommand { kind: 'fake' | 'node' | 'cmd' | 'exe'; command: string; prefix: string[]; env: NodeJS.ProcessEnv; verbatim: boolean; display: string }
 
-const VERSION_DIR = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-(\d{2})-(\d{2})-(\d{2}))?-[a-f0-9]+$/;
-
-/** Newest version folder of the Cursor CLI (same rule as its own launcher: YYYY.MM.DD[-HH-MM-SS]-commit). */
-export function newestCursorVersion(versionsDir: string, node = 'node.exe'): string | null {
-  let names: string[] = [];
-  try { names = fs.readdirSync(versionsDir); } catch { return null; }
-  const key = (m: RegExpMatchArray): number => Number(`${m[1]}${(m[2] ?? '').padStart(2, '0')}${(m[3] ?? '').padStart(2, '0')}${m[4] ?? '00'}${m[5] ?? '00'}${m[6] ?? '00'}`);
-  const ok = names.map(n => ({ n, m: n.match(VERSION_DIR) }))
-    .filter((x): x is { n: string; m: RegExpMatchArray } => !!x.m && fs.existsSync(path.join(versionsDir, x.n, node)) && fs.existsSync(path.join(versionsDir, x.n, 'index.js')))
-    .sort((a, b) => key(b.m) - key(a.m));
-  return ok[0] ? path.join(versionsDir, ok[0].n) : null;
-}
-
 /** The Cursor CLI: SB_CURSOR_PATH (tests) → the newest version under its install folder (Windows
  *  %LOCALAPPDATA%/cursor-agent, macOS/Linux ~/.local/share/cursor-agent, ADR 0054) → its launcher on PATH. */
-export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home = os.homedir()): CliCommand | null {
+export function resolveCursor(override?: string | null, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home = (platform === 'win32' ? env.USERPROFILE : env.HOME) || os.homedir()): CliCommand | null {
   const win = platform === 'win32';
   const o = override ?? env.SB_CURSOR_PATH;
   const base: NodeJS.ProcessEnv = { ...env, CURSOR_INVOKED_AS: env.CURSOR_INVOKED_AS ?? (win ? 'agent.cmd' : 'cursor-agent') };
   delete base.ELECTRON_RUN_AS_NODE;
   if (o) return commandAt(o, env, base);
-  const local = win ? env.LOCALAPPDATA : path.posix.join(home, '.local', 'share');
+  const local = win ? env.LOCALAPPDATA || path.join(home, 'AppData', 'Local') : path.posix.join(home, '.local', 'share');
   const node = win ? 'node.exe' : 'node';
-  const dir = local ? newestCursorVersion(path.join(local, 'cursor-agent', 'versions'), node) : null;
+  const dir = cursorInstall(env, platform, home);
   if (dir) {
     const cache = env.NODE_COMPILE_CACHE ?? path.join(local ?? '', 'cursor-compile-cache');
     return { kind: 'node', command: path.join(dir, node), prefix: [path.join(dir, 'index.js')], env: { ...base, NODE_COMPILE_CACHE: cache }, verbatim: false, display: dir };
   }
-  const shim = findCli('agent') ?? (win ? null : findCli('cursor-agent'));
+  const shim = findCli('agent', env, platform, home) ?? (win ? null : findCli('cursor-agent', env, platform, home));
   return shim ? installed(shim, base) : null;
 }
 
-/** An ACP engine's command: Cursor keeps its own install rule (resolveCursor); any other engine = the override (its
- *  SB_<ID>_PATH: the tests' fake), else `command` on PATH. null = not installed. */
+/** Resolve an installed CLI: Cursor keeps its own install rule; other engines use their SB_<ID>_PATH override or the
+ *  command on PATH. Codex on Windows also searches its desktop app's versioned install folder. null = not installed. */
 export function resolveAcp(engineId: string, command: string, override?: string | null, env: NodeJS.ProcessEnv = process.env): CliCommand | null {
   if (engineId === 'cursor') return resolveCursor(override, env);
   const base: NodeJS.ProcessEnv = { ...env };
   delete base.ELECTRON_RUN_AS_NODE; // never leak the Node switch into the real CLI's own children
   const o = override ?? env[`SB_${engineId.toUpperCase().replace(/-/g, '_')}_PATH`];
   if (o) return commandAt(o, env, base);
-  const onPath = findCli(command);
-  return onPath ? installed(onPath, base) : null;
+  const cli = findCli(command, env);
+  return cli ? installed(cli, base) : null;
 }
 
 /** An override as a command: a script = a fake run by Electron as Node, else like an installed CLI. */
@@ -108,7 +71,7 @@ function installed(p: string, base: NodeJS.ProcessEnv): CliCommand {
 }
 
 function cmdShim(p: string, env: NodeJS.ProcessEnv): CliCommand {
-  return { kind: 'cmd', command: env.ComSpec ?? process.env.ComSpec ?? 'cmd.exe', prefix: [], env, verbatim: true, display: p };
+  return { kind: 'cmd', command: env.ComSpec ?? 'cmd.exe', prefix: [], env, verbatim: true, display: p };
 }
 
 /** Full argv for a CLI command. cmd.exe gets one verbatim line: only plain flag-safe arguments may pass. */
@@ -123,19 +86,6 @@ export function cliArgv(c: CliCommand, args: string[]): { command: string; args:
 export function engineAllowed(c: CliCommand, env: NodeJS.ProcessEnv = process.env): boolean {
   if (!(env.SB_TEST || env.VITEST)) return true;
   return c.kind === 'fake' && /\.mjs$/i.test(c.display) && !/[\\/]cursor-agent[\\/]/i.test(c.display);
-}
-
-/** Absolute path of a CLI on PATH (cached), or the given path when it already is one. null = not installed. */
-export function findCli(name: string): string | null {
-  if (/[\\/]/.test(name)) return name;
-  if (!found.has(name)) {
-    const r = process.platform === 'win32'
-      ? spawnSync('where.exe', [name], { encoding: 'utf8', windowsHide: true })
-      : spawnSync('which', ['-a', name], { encoding: 'utf8' });
-    const all = (r.stdout ?? '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    found.set(name, all.find(p => /\.exe$/i.test(p)) ?? all[0] ?? null);
-  }
-  return found.get(name) ?? null;
 }
 
 /** Command + args to start a CLI. Scripts (.mjs/.cjs/.js) run with this process's runtime as Node. */

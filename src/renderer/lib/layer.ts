@@ -15,7 +15,7 @@ import { app, answer, attemptOf, dismissCommand, dndActive, runCommand } from '.
 import { dismissEventToasts, setLayerHeld, setRead, ui } from '../store/ui';
 import { answerLater } from './later';
 import { now } from './clock';
-import { reserveOf, sizeIn, viewport } from './regia-dock';
+import { reserveOf, sizeIn, topSize, viewport } from './regia-dock';
 import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
@@ -100,7 +100,10 @@ export function computeModel(ignorePopup = false): OverlayModel {
     action: g.kind === 'chat-waiting' ? 'Rispondi' : 'Apri',
   }));
   const v = viewport();
-  const avoid = reserveOf(u.prefs.regiaOpen, sizeIn(u.prefs.regiaSize, v.W, v.H, v.top, v.left));
+  const size=u.prefs.regiaPlacement==='top'?topSize(u.prefs.regiaTopHeight,v.W,v.H,v.top,v.left):sizeIn(u.prefs.regiaSize,v.W,v.H,v.top,v.left);
+  const reserve = reserveOf(u.prefs.regiaOpen,size,u.prefs.regiaPlacement,!!u.map);
+  // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
+  const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};
   return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts };
 }
 

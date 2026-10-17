@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { slug, paths, send, take, unread, listening, stats, hookOutput, brainSettings, detectHarness, noteHarness, harnessOf, appServes } from './inbox.mjs';
+import { slug, paths, send, take, unread, listening, stats, hookOutput, detectHarness, noteHarness, harnessOf, appServes } from './inbox.mjs';
 
 process.removeAllListeners('warning');
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -188,52 +188,26 @@ await T('hookOutput shapes', () => {
   ok(hookOutput('cursor', 'x').followup_message === 'x', 'cursor shape');
 });
 
-await T('Claude <-> Cursor switch', () => {
-  const settings = v => fs.writeFileSync(path.join(tmp, 'brain-settings.json'), JSON.stringify({ crossHarnessMessages: v }));
-  ok(detectHarness({ CURSOR_AGENT: '1' }) === 'cursor' && detectHarness({ CLAUDECODE: '1' }) === 'claude' && detectHarness({}) === null, 'detectHarness');
-  ok(brainSettings(tmp).crossHarnessMessages === true, 'default on without a settings file');
+await T('cross-engine transport ignores retired settings, both directions and CLI', () => {
+  const file = path.join(tmp, 'brain-settings.json');
+  ok(detectHarness({ CURSOR_AGENT: '1' }) === 'cursor' && detectHarness({ CLAUDECODE: '1' }) === 'claude', 'detectHarness');
   noteHarness(P, 'Cur · A', 'cursor');
   noteHarness(P, 'Cla · B', 'claude');
-  ok(harnessOf(P, 'cur-a') === 'cursor', 'box remembers its harness');
-  // on: cross-harness passes
-  ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'on' }).msg, 'cross passes when on');
-  settings(false);
-  ok(brainSettings(tmp).crossHarnessMessages === false, 'off read from brain-settings.json');
-  let err = null;
-  try { send(P, { to: 'Cla · B', from: 'Cur · A', text: 'off' }); } catch (e) { err = e; }
-  ok(err?.code === 5 && /bloccato/.test(err.message), `cross refused when off: ${err?.message}`);
-  try { err = null; send(P, { to: 'Cur · A', from: 'Cla · B', text: 'off', harness: 'claude' }); } catch (e) { err = e; }
-  ok(err?.code === 5, 'refused in the other direction too');
-  noteHarness(P, 'Cur · C', 'cursor');
-  ok(send(P, { to: 'Cur · C', from: 'Cur · A', text: 'same' }).msg, 'same harness always passes');
-  ok(send(P, { to: 'Cla · B', from: 'second-brain', harness: 'app', text: 'app' }).msg, 'the app always passes');
-  ok(send(P, { to: 'Sconosciuta', from: 'Cur · A', text: 'unknown' }).msg, 'unknown receiver harness passes');
-  const log = fs.readFileSync(P.log, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(r => r.action === 'blocked');
-  ok(log.length === 2 && log[0].fromHarness === 'cursor' && log[0].toHarness === 'claude', 'blocked rows logged');
-  // the CLI as a Cursor chat would run it (env CURSOR_AGENT=1, no CLAUDECODE)
   const cursorEnv = { ...process.env, CURSOR_AGENT: '1' };
   delete cursorEnv.CLAUDECODE;
-  const runAs = (env, args) => spawnSync(process.execPath, [TOOL, ...args, '--root', tmp], { encoding: 'utf8', env, timeout: 120000 });
-  const r = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'cli']);
-  ok(r.status === 5 && /bloccato/.test(r.stderr), `CLI exit 5: ${r.status} ${r.stderr}`);
-  // review 11/10: a chat can't pass for the app, env wins over --harness, NO_REPLY is never "blocked"
-  const r2 = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'x', '--harness', 'app']);
-  ok(r2.status === 5 && harnessOf(P, 'cur-a') === 'cursor', `--harness app from the CLI is ignored: ${r2.status} ${harnessOf(P, 'cur-a')}`);
-  const r3 = runAs(cursorEnv, ['send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'NO_REPLY']);
-  ok(r3.status === 0, `NO_REPLY with the switch off: exit 0, got ${r3.status}`);
-  noteHarness(P, 'Cla · D', 'claude');
-  ok(send(P, { to: 'Cla · D', from: 'Cla · B', text: 'same', harness: 'Claude' }).msg, 'invalid --harness value is ignored, same harness passes');
-  // hand-edited files (PowerShell 5.1): BOM and UTF-16 read; unreadable fails closed
-  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), '﻿{"crossHarnessMessages":false}');
-  ok(brainSettings(tmp).crossHarnessMessages === false, 'UTF-8 BOM read');
-  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"crossHarnessMessages":true}', 'utf16le')]));
-  ok(brainSettings(tmp).crossHarnessMessages === true, 'UTF-16 read');
-  fs.writeFileSync(path.join(tmp, 'brain-settings.json'), '{not json');
-  ok(brainSettings(tmp).crossHarnessMessages === false, 'unreadable file fails closed');
-  settings(true);
-  ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'back on' }).msg, 'passes again when switched back on');
-  fs.rmSync(path.join(tmp, 'brain-settings.json'));
-  for (const b of ['cur-a', 'cla-b', 'cla-d', 'cur-c', 'sconosciuta', 'second-brain']) take(P, b, 'test');
+  for (const raw of ['{"crossHarnessMessages":false}', '\ufeff{"crossHarnessMessages":false}',
+    Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"crossHarnessMessages":false}', 'utf16le')]), '{not json']) {
+    fs.writeFileSync(file, raw);
+    const before = fs.readFileSync(file);
+    ok(send(P, { to: 'Cla · B', from: 'Cur · A', text: 'cross' }).msg, 'Cursor to Claude');
+    ok(send(P, { to: 'Cur · A', from: 'Cla · B', text: 'cross', harness: 'claude' }).msg, 'Claude to Cursor');
+    const r = spawnSync(process.execPath, [TOOL, 'send', '--to', 'Cla · B', '--from', 'Cur · A', '--text', 'cli', '--harness', 'app', '--root', tmp], { encoding: 'utf8', env: cursorEnv, timeout: 120000 });
+    ok(r.status === 0, `CLI cross-engine delivery: ${r.status} ${r.stderr}`);
+    ok(harnessOf(P, 'cur-a') === 'cursor', 'environment still determines sender harness');
+    ok(fs.readFileSync(file).equals(before), 'legacy settings never rewritten');
+  }
+  fs.rmSync(file);
+  for (const b of ['cur-a', 'cla-b']) take(P, b, 'test');
 });
 
 await T('the second-brain app serves a box: send says it delivers at once; a stale heartbeat does not count', () => {

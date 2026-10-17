@@ -20,7 +20,7 @@ describe('settings schema and validate()', () => {
 
   it('protects engines, spending limits, notifications off and security keys; view and theme are free', () => {
     const prot = schema().filter(d => d.protected).map(d => d.key);
-    for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'messaging.crossHarness', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
+    for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
     expect(defOf('view')!.protected).toBe(false);
     expect(defOf('devops.enabled')!.protected).toBe(true);
@@ -33,9 +33,10 @@ describe('settings schema and validate()', () => {
   it('accepts and normalizes good values, refuses bad ones with an Italian message', () => {
     expect(validate('budget.claude.dailyUsd', 199.999)).toMatchObject({ ok: true, value: 200 });
     expect(validate('budget.claude.dailyUsd', null)).toMatchObject({ ok: true, value: null });
-    expect(validate('view', 'corsie')).toMatchObject({ ok: true });
+    expect(validate('view', 'mosaico')).toMatchObject({ ok: true });
+    expect(defOf('view')!.values).toEqual(['mosaico']);
     const bad: [string, unknown][] = [
-      ['brainRoot', 'relative/path'], ['mcpPort', 70000], ['mcpPort', 1.5], ['view', 'grid'], ['osToasts', 'always'], ['dnd', 'yes'],
+      ['brainRoot', 'relative/path'], ['mcpPort', 70000], ['mcpPort', 1.5], ['view', 'grid'], ['view', 'corsie'], ['osToasts', 'always'], ['dnd', 'yes'],
       ['mute.idea', 'yes'], ['mute.Bad Kind', true], ['budget.claude.mode', 'stop'], ['budget.claude.dailyUsd', -1], ['budget.enabled', 1],
       ['theme', null], ['nope', 1], ['engines.claude', 'on'],
     ];
@@ -55,8 +56,8 @@ describe('settings schema and validate()', () => {
 
 describe('flattenPatch', () => {
   it('turns the nested UI patch of every group into dot keys (the engines and chats across engines too)', () => {
-    expect(flattenPatch({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, view: 'corsie' }))
-      .toEqual([['messaging.crossHarness', false], ['engineOn.cursor', false], ['engines.cursor', false], ['view', 'corsie']]);
+    expect(flattenPatch({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, language: 'it' }))
+      .toEqual([['messaging.crossHarness', false], ['engineOn.cursor', false], ['engines.cursor', false], ['language', 'it']]);
     expect(flattenPatch({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
       .toEqual([['regiaChats.harness', 'cursor'], ['regiaChats.cursorModel', 'grok-4.7']]);
   });
@@ -73,7 +74,7 @@ describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
     expect('regiaDriven' in DEFAULTS).toBe(false);
     expect(defOf('regiaDriven' as never)).toBeNull();
     expect('regiaDriven' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
-    expect(fromSaved({ view: 'corsie', regiaDriven: false }).view).toBe('corsie');
+    expect(fromSaved({ view: 'corsie', regiaDriven: false }).view).toBe('mosaico');
   });
 });
 
@@ -147,12 +148,12 @@ describe('settings store', () => {
     const dir = tmpDir();
     const a = new ConfigStore(dir, {});
     const brain = path.join(dir, 'brain');
-    a.set({ brainRoot: brain, view: 'corsie', mute: { idea: true }, budget: { claude: { dailyUsd: 200 } } });
+    a.set({ brainRoot: brain, language: 'it', mute: { idea: true }, budget: { claude: { dailyUsd: 200 } } });
     a.set({ mute: { error: true }, budget: { cursor: { mode: 'ask', perChatUsd: 5 } } });
     expect(() => a.set({ theme: 'light', view: 'grid' as never })).toThrow();
     const b = new ConfigStore(dir, {}).get();
     expect(b.brainRoot).toBe(path.normalize(brain));
-    expect(b.view).toBe('corsie');
+    expect(b.language).toBe('it');
     expect(b.theme).toBe('dark'); // the bad patch changed nothing
     expect(b.mute).toEqual({ idea: true, error: true });
     expect(b.budget.claude).toEqual({ mode: 'warn', dailyUsd: 200, perChatUsd: null });
@@ -187,11 +188,11 @@ describe('settings store', () => {
   it('logs every change with who made it; history is newest first and survives a restart', () => {
     const dir = tmpDir();
     const c = new ConfigStore(dir, {});
-    c.set({ view: 'corsie' });
+    c.set({ language: 'it' });
     c.request('theme', 'light', { by: 'agent', chatId: 'chat-7' });
     c.set({ theme: 'light' }); // same value: not a change
     const h = new ConfigStore(dir, {}).history();
-    expect(h.map(x => [x.key, x.by, x.before, x.after])).toEqual([['theme', 'agent', 'dark', 'light'], ['view', 'user', 'mosaico', 'corsie']]);
+    expect(h.map(x => [x.key, x.by, x.before, x.after])).toEqual([['theme', 'agent', 'dark', 'light'], ['language', 'user', 'system', 'it']]);
     expect(h[0]!.chatId).toBe('chat-7');
   });
 
@@ -200,16 +201,16 @@ describe('settings store', () => {
     const c = new ConfigStore(dir, {});
     const seen: SettingChange[] = [];
     c.onChange(ch => seen.push(ch));
-    const r = c.request('view', 'corsie', { by: 'agent', chatId: 'c1' });
+    const r = c.request('theme', 'light', { by: 'agent', chatId: 'c1' });
     expect('applied' in r).toBe(true);
     const id = (r as { applied: SettingChange }).applied.id;
     const u = c.undo(id);
-    expect(u).toMatchObject({ key: 'view', before: 'corsie', after: 'mosaico', by: 'user', undoOf: id });
-    expect(c.get().view).toBe('mosaico');
-    expect(seen.map(x => x.after)).toEqual(['corsie', 'mosaico']);
+    expect(u).toMatchObject({ key: 'theme', before: 'light', after: 'dark', by: 'user', undoOf: id });
+    expect(c.get().theme).toBe('dark');
+    expect(seen.map(x => x.after)).toEqual(['light', 'dark']);
     expect(() => c.undo(id)).toThrow(/già annullata/);
     const again = new ConfigStore(dir, {});
-    expect(again.get().view).toBe('mosaico');
+    expect(again.get().theme).toBe('dark');
     expect(again.history().find(x => x.id === id)?.undone).toBe(true);
   });
 
@@ -219,8 +220,8 @@ describe('settings store', () => {
     const c = new ConfigStore(dir, {});
     let events = 0;
     c.onChange(() => events++);
-    expect(() => c.set({ view: 'corsie' })).toThrow();
-    expect(c.get().view).toBe('mosaico');
+    expect(() => c.set({ theme: 'light' })).toThrow();
+    expect(c.get().theme).toBe('dark');
     const r = c.request('dnd', true, { by: 'agent' }) as { proposal: { id: string } };
     expect(() => c.confirm(r.proposal.id, true)).toThrow();
     expect(c.get().dnd).toBe(false);
@@ -262,18 +263,44 @@ describe('settings store', () => {
   it('reads change logs written before the rename to "user": the old value of the user\'s changes becomes "user"', () => {
     const dir = tmpDir();
     const legacy = ['dav', 'ide'].join(''); // the value logged for the user's own changes before the rename
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ theme: 'light', language: 'it' }));
     fs.writeFileSync(path.join(dir, 'changes.jsonl'), [
-      JSON.stringify({ id: 'chg_old1', at: 1, by: legacy, key: 'view', before: 'mosaico', after: 'corsie' }),
-      JSON.stringify({ id: 'chg_old2', at: 2, by: 'agent', key: 'theme', before: 'dark', after: 'light', chatId: 'c1' }),
+      JSON.stringify({ id: 'chg_old1', at: 1, by: legacy, key: 'theme', before: 'dark', after: 'light' }),
+      JSON.stringify({ id: 'chg_old2', at: 2, by: 'agent', key: 'language', before: 'system', after: 'it', chatId: 'c1' }),
     ].join('\n') + '\n');
     const c = new ConfigStore(dir, {});
     expect(c.history().map(x => [x.id, x.by])).toEqual([['chg_old2', 'agent'], ['chg_old1', 'user']]);
     // an old change can still be undone; the undo and the re-saved original are logged with the new value
-    expect(c.undo('chg_old1')).toMatchObject({ by: 'user', undoOf: 'chg_old1', after: 'mosaico' });
+    expect(c.undo('chg_old1')).toMatchObject({ by: 'user', undoOf: 'chg_old1', before: 'light', after: 'dark' });
+    expect(c.get().theme).toBe('dark');
     const again = new ConfigStore(dir, {}).history();
     expect(again.find(x => x.id === 'chg_old1')).toMatchObject({ by: 'user', undone: true });
     expect(again.every(x => x.by === 'user' || x.by === 'agent')).toBe(true);
     expect(fs.readFileSync(path.join(dir, 'changes.jsonl'), 'utf8').split('\n').filter(Boolean).slice(2).some(l => l.includes(legacy))).toBe(false);
+  });
+});
+
+describe('retired Corsie view', () => {
+  it('normalizes and persists the legacy view while preserving choices, domains and historical changes', () => {
+    const dir = tmpDir();
+    const file = path.join(dir, 'config.json');
+    const domains = [path.join(dir, 'other-domain')];
+    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, regiaChats: { claudeModel: 'claude-opus-5-5' } };
+    const oldChange = { id: 'chg_old_view', at: 1, by: 'user', key: 'view', before: 'mosaico', after: 'corsie' };
+    fs.writeFileSync(file, JSON.stringify({ view: 'corsie', ...choices, domains }));
+    fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}\n`);
+    const store = new ConfigStore(dir, {});
+    expect(store.get()).toMatchObject({ view: 'mosaico', ...choices });
+    expect(store.domains()).toEqual(domains);
+    expect(store.history()).toEqual([oldChange]);
+    const migrated = fs.readFileSync(file, 'utf8');
+    expect(JSON.parse(migrated)).toMatchObject({ view: 'mosaico', ...choices, domains });
+    const restarted = new ConfigStore(dir, {});
+    expect(restarted.get()).toMatchObject({ view: 'mosaico', ...choices });
+    expect(restarted.history()).toEqual([oldChange]);
+    expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
+    expect(() => restarted.set({ view: 'corsie' as never })).toThrow(/Vista/);
+    expect(restarted.request('view', 'corsie', { by: 'agent' })).toHaveProperty('error');
   });
 });
 

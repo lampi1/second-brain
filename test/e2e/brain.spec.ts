@@ -48,12 +48,12 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect(s.brainRoot).toBe(path.normalize(brain));
   expect(s.locked).toContain('brainRoot');
   const schema = await page.evaluate(() => window.sb.invoke('settings:schema', undefined));
-  expect(schema.find(d => d.key === 'view')).toMatchObject({ protected: false, label: 'Vista' });
-  await page.evaluate(() => window.sb.invoke('settings:set', { view: 'corsie' }));
-  await expect.poll(() => page.evaluate(() => (window as unknown as W).__changes.map(c => `${c.key}:${String(c.after)}:${c.by}`))).toContain('view:corsie:user');
+  expect(schema.find(d => d.key === 'view')).toMatchObject({ protected: false, label: 'Vista', values: ['mosaico'] });
+  await page.evaluate(() => window.sb.invoke('settings:set', { language: 'it' }));
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).__changes.map(c => `${c.key}:${String(c.after)}:${c.by}`))).toContain('language:it:user');
   const [last] = await page.evaluate(() => window.sb.invoke('settings:history', { limit: 1 }));
   const undo = await page.evaluate(id => window.sb.invoke('settings:undo', { changeId: id }), last!.id);
-  expect(undo).toMatchObject({ key: 'view', after: 'mosaico', undoOf: last!.id });
+  expect(undo).toMatchObject({ key: 'language', before: 'it', after: 'system', undoOf: last!.id });
   // an agent's request: a free key applies at once, a protected key becomes a proposal until the user clicks
   const free = await page.evaluate(() => window.sb.invoke('settings:propose', { key: 'theme', value: 'light', chatId: 'e2e' }));
   expect(free).toMatchObject({ applied: { key: 'theme', by: 'agent', chatId: 'e2e' } });

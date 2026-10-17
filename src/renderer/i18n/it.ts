@@ -2,14 +2,20 @@
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
 // string or, when it needs numbers or names, a function of one params object. Each area has its own pair of files in
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
+import {studioIt}from'./areas/studio.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
 import { brainPagesIt } from './areas/brainPages.it';
 import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
+import {productIt}from'./areas/product.it';
+import {settingsIt}from'./areas/settings.it';
 
 export const it = {
+  ...studioIt,
+  ...productIt,
+  ...settingsIt,
   ...chatIt,
   ...dialogsIt,
   ...toolsIt,

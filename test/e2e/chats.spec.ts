@@ -17,6 +17,7 @@ test('the Nuova chat dialog shows the status of each CLI, never "controllo…" f
   const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
   expect(await page.evaluate(() => window.sb.invoke('app:info', undefined).then(i => i.cli))).toBeNull();
   await page.keyboard.press('Control+N');
+  await page.getByTestId('newchat-engine-options').locator('summary').click();
   await expect(page.getByTestId('newchat-harness-claude')).toContainText('0.0.0-fake', { timeout: 30_000 }); // two CLI runs, slow under load
   await expect(page.getByTestId('newchat-harness-cursor')).not.toContainText('controllo…', { timeout: 30_000 });
   await shot(page, 'newchat-cli-status');

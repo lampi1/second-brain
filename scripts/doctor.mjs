@@ -1,76 +1,81 @@
-// doctor: is this machine ready to run second-brain? Checks the build, Electron, the Claude and Cursor CLIs (found,
-// version, Claude login), the Codex CLI (found, its npm version; never run), whether their versions are covered by the CLI contract fixtures and whether a CLI format
+// doctor: is the selected stable/dev instance ready? Uses the app's filesystem discovery, without running candidates.
+// --probe-claude explicitly checks Claude's version/login; other engines are never started. Reads version metadata,
+// whether versions are covered by the CLI contract fixtures and whether a CLI format
 // changed today (ADR 0055), the brain folder, the MCP port, recent errors in the logs and the repo's guard (ADR 0061: hooks
-// active, deny list and e-mail config; the values are never printed). No model calls, no Cursor calls
-// beyond `--version` (each harness spends only its own tokens; a Claude agent may run this). Readable by agents:
+// active, deny list and e-mail config; the values are never printed). No model calls. Readable by agents:
 //   node scripts/doctor.mjs           human lines: ✓/✗/! name · detail · → next step
 //   node scripts/doctor.mjs --json    [{ id, ok, level, detail, hint }]; exit 1 if any check failed
 //   --dev                             check the dev instance (userData second-brain-dev, MCP 4329) instead of the stable one
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { testedVersions } from './cli-fixtures.mjs';
 import { guardStatus, statusLines } from './guard-lib.mjs';
+import { cursorInstall, discoverClaude, findCli } from '../src/main/chats/discovery.mjs';
+import { claudeLogin, doctorContext, packageVersion } from './doctor-lib.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// Electron's appData per OS (same rule as scripts/release.mjs)
-const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
-  : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-const userData = process.env.SB_USER_DATA ?? path.join(appData, process.argv.includes('--dev') ? 'second-brain-dev' : 'second-brain');
+const context = doctorContext({ root, dev: process.argv.includes('--dev') });
+const { userData, brain, port } = context;
+const probeClaude = process.argv.includes('--probe-claude');
 const checks = [];
 const add = (id, ok, detail, hint = '', level = ok ? 'ok' : 'fail') => checks.push({ id, ok, level, detail, hint });
 // .cmd/.bat shims (the Cursor CLI on Windows) need cmd.exe; our arguments are fixed flags, never user text
 const run = (cmd, args, timeout = 20000) => /\.(cmd|bat)$/i.test(cmd)
   ? spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${cmd}" ${args.join(' ')}"`], { encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: true })
   : spawnSync(cmd, args, { encoding: 'utf8', timeout, windowsHide: true });
-const which = name => {
-  const r = process.platform === 'win32' ? run('where.exe', [name]) : run('which', [name]);
-  const all = (r.stdout ?? '').split(/\r?\n/).filter(Boolean);
-  return all.find(p => /\.exe$/i.test(p)) ?? all[0] ?? null;
-};
+add('context', true, `${context.mode} · userData=${userData} (${context.userDataSource}) · config=${context.configPath} (${context.configState}) · brain=${context.brainSource} · MCP=${port} (${context.portSource})${context.savedPort !== null ? ` · saved MCP setting=${context.savedPort}` : ''} · app=${context.appRoot}${context.release ? ` · release=${context.release}` : context.mode === 'stable' ? ' (release metadata unavailable; checking repo build/engine)' : ''}`, '', 'info');
 
 // 1. build and Electron
-const electronExe = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+const electronExe = context.electron;
 add('electron', fs.existsSync(electronExe), fs.existsSync(electronExe) ? electronExe : 'Electron binary missing', 'run: node node_modules/electron/install.js');
-const built = ['out/main/index.js', 'out/preload/index.cjs', 'out/renderer/index.html'].every(f => fs.existsSync(path.join(root, f)));
-add('build', built, built ? 'out/ complete' : 'out/ missing or partial', 'run: npm run build');
+const built = ['out/main/index.js', 'out/preload/index.cjs', 'out/renderer/index.html'].every(f => fs.existsSync(path.join(context.appRoot, f)));
+add('build', built, `${context.appRoot} · out/ ${built ? 'complete' : 'missing or partial'}`, 'run: npm run build');
 
 // 2. Claude CLI
-const claude = process.env.SB_CLAUDE_PATH ?? which('claude');
-if (!claude) add('claude-cli', false, 'claude not found on PATH', 'install Claude Code (https://code.claude.com) and open a new terminal');
+const selectedClaude = discoverClaude({ release: context.releaseEngine, starts: [context.appRoot] });
+const claude = selectedClaude?.path;
+let claudeVersion = null;
+if (!claude || !fs.existsSync(claude)) add('claude-cli', false, claude ? `${claude} (override missing)` : 'Claude CLI not found in the selected app or user installs', 'check the selected instance and install Claude Code (https://code.claude.com)');
 else {
-  const v = run(claude, ['--version']);
-  add('claude-cli', v.status === 0, `${claude} · ${(v.stdout ?? '').trim() || v.stderr?.trim()}`, 'reinstall Claude Code');
-  const a = run(claude, ['auth', 'status']);
-  let s = null; try { s = JSON.parse(a.stdout); } catch { /* not JSON */ }
-  const email = s?.email ? s.email.replace(/^(.{2}).*(@.*)$/, '$1…$2') : '';
-  add('claude-login', !!s?.loggedIn, s ? `${s.loggedIn ? 'logged in' : 'not logged in'} · ${s.authMethod ?? '?'} ${email}` : 'auth status unreadable', 'the user runs in their terminal: claude auth login');
+  // The embedded SDK package (and the release folder named after it) has a different version from the CLI binary.
+  // Only a CLI package's metadata or an explicit version probe can establish the CLI contract version.
+  claudeVersion = packageVersion(claude, '@anthropic-ai/claude-code');
+  add('claude-cli', true, `${claude} (${selectedClaude.source})${claudeVersion ? ` · ${claudeVersion}` : ' · version not verified'}`);
+  if (probeClaude) {
+    const v = run(claude, ['--version']);
+    claudeVersion = v.status === 0 ? (v.stdout ?? '').match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? null : null;
+    add('claude-version', v.status === 0, claudeVersion ?? 'version not verified', 'check the selected Claude CLI', v.status === 0 ? 'ok' : 'warn');
+    const a = run(claude, ['auth', 'status']);
+    const login = claudeLogin(a.stdout ?? '');
+    add('claude-login', login.ok, `${login.detail} · ${claude}`, login.hint, login.level);
+  } else add('claude-login', true, `not verified (CLI not started) · ${claude}`, 'the user may run doctor --probe-claude to check this CLI without a model call', 'info');
 }
 
 // 3. Cursor CLI (only presence and version: never a call that could reach Cursor's service from here)
-const cursor = which('agent') ?? which('cursor-agent');
+const cursorDir = process.env.SB_CURSOR_PATH ? null : cursorInstall();
+const cursor = process.env.SB_CURSOR_PATH || cursorDir || findCli('agent') || (process.platform === 'win32' ? null : findCli('cursor-agent'));
 if (!cursor) add('cursor-cli', false, 'Cursor CLI (agent) not found', 'install it: https://cursor.com/docs/cli (then: agent login, run by the user)', 'warn');
 else {
-  const v = run(cursor, ['--version']);
-  add('cursor-cli', v.status === 0, `${cursor} · ${(v.stdout ?? '').trim()}`, 'reinstall the Cursor CLI');
-  add('cursor-login', true, 'not checked here (only the app or the user check it: Cursor tokens are spent only by Cursor)', '', 'info');
+  add('cursor-cli', true, `${cursor} (${process.env.SB_CURSOR_PATH ? 'override' : cursorDir ? 'installed version' : 'command'})`);
+  add('cursor-login', true, 'not verified (CLI not started); an app report of Authentication required is a separate login result', '', 'info');
 }
 
 // 3c. Codex CLI (ADR 0060): only presence, and the version read from its npm package next to the shim. Never run here,
 // not even `--version`: an agent may run doctor, and no agent ever starts the Codex CLI (repo rule 4)
-const codex = process.env.SB_CODEX_PATH ?? which('codex');
+const codex = process.env.SB_CODEX_PATH || findCli('codex');
 if (!codex) add('codex-cli', true, 'Codex CLI (codex) not found: optional engine', 'to use it: npm i -g @openai/codex, then the user runs: codex login (or a key in Settings → Motori), and turns Codex on in Settings → Motori', 'info');
 else {
-  let version = null;
-  for (const pkg of [path.join(path.dirname(codex), 'node_modules', '@openai', 'codex', 'package.json'), path.join(path.dirname(codex), '..', 'lib', 'node_modules', '@openai', 'codex', 'package.json')]) {
-    try { version = JSON.parse(fs.readFileSync(pkg, 'utf8')).version ?? null; break; } catch { /* not this layout */ }
-  }
+  const version = packageVersion(codex, '@openai/codex');
   add('codex-cli', true, `${codex}${version ? ` · ${version}` : ' · version not read (not an npm install)'}`, '', 'ok');
   add('codex-login', true, 'not checked here (only the app or the user check it: Codex tokens are spent only by Codex)', '', 'info');
 }
+
+const kimi = process.env.SB_KIMI_PATH || findCli('kimi');
+add('kimi-cli', true, kimi ?? 'Kimi CLI not found: optional engine', '', kimi ? 'ok' : 'info');
+if (kimi) add('kimi-login', true, 'not verified (CLI not started)', '', 'info');
 
 // 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the embedded engine; Cursor: its newest
 // version folder, no process started) against the versions recorded in test/fixtures/cli; format drift seen today
@@ -81,32 +86,19 @@ const contract = (id, cli, version) => {
   add(id, ok, ok ? `${cli} ${version}: covered by the contract fixtures` : `${cli} ${version}: not tested (fixtures: ${(tested[cli] ?? []).join(', ') || 'none'})`,
     `use ${cli} chats in the dev instance (npm run dev), then node scripts/cli-fixtures.mjs and npx vitest run test/unit/chats/cli-contract.test.ts${cli === 'claude' ? '; or, only after the owner approves the real tokens: SB_LIVE=1 npx vitest run test/live/claude.live.test.ts' : ''}`, ok ? 'ok' : 'warn');
 };
-const embedded = path.join(root, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude');
-const engine = process.env.SB_CLAUDE_PATH ?? (fs.existsSync(embedded) ? embedded : claude);
-contract('claude-tested', 'claude', engine ? (run(engine, ['--version']).stdout ?? '').match(/\d+\.\d+\.\d+/)?.[0] : null);
-const cursorVersions = path.join(process.env.LOCALAPPDATA ?? '', 'cursor-agent', 'versions');
-// the same rule as src/main/chats/cli.ts newestCursorVersion: numeric date (month and day not zero-padded), complete folder
-const VERSION_DIR = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-(\d{2})-(\d{2})-(\d{2}))?-[a-f0-9]+$/;
-const versionKey = m => Number(`${m[1]}${m[2].padStart(2, '0')}${m[3].padStart(2, '0')}${m[4] ?? '00'}${m[5] ?? '00'}${m[6] ?? '00'}`);
-const cursorNewest = fs.existsSync(cursorVersions) ? fs.readdirSync(cursorVersions).map(n => ({ n, m: n.match(VERSION_DIR) }))
-  .filter(x => x.m && fs.existsSync(path.join(cursorVersions, x.n, 'node.exe')) && fs.existsSync(path.join(cursorVersions, x.n, 'index.js')))
-  .sort((a, b) => versionKey(b.m) - versionKey(a.m))[0]?.n ?? null : null;
-if (cursorNewest) contract('cursor-tested', 'cursor', cursorNewest);
+contract('claude-tested', 'claude', claudeVersion);
+if (cursorDir) contract('cursor-tested', 'cursor', path.basename(cursorDir));
 
 // 4. brain folder
-let cfg = {};
-try { cfg = JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')); } catch { /* no config yet */ }
-const brain = process.env.SB_BRAIN ?? cfg.brainRoot ?? null;
-if (!brain) add('brain', false, 'no brain folder configured', 'start the app and pick one, or set SB_BRAIN', 'warn');
+if (!brain) add('brain', false, `no brain folder configured for ${context.mode} · ${context.configPath} (${context.configState})`, `select the intended instance (${context.mode === 'dev' ? 'omit --dev for stable' : '--dev for dev'}), or set SB_USER_DATA / SB_BRAIN`, 'warn');
 else {
   const has = f => fs.existsSync(path.join(brain, f));
   const parts = { 'AGENTS.md': has('AGENTS.md'), 'parse.mjs': has('ops/tools/brain-site/parse.mjs'), 'chats.mjs': has('harness/cursor/chats.mjs'), 'cost.mjs': has('ops/tools/cost.mjs') };
   const missing = Object.entries(parts).filter(([, v]) => !v).map(([k]) => k);
-  add('brain', missing.length === 0, `${brain}${missing.length ? ` · missing: ${missing.join(', ')}` : ''}`, 'point the app to a brain folder with the standard structure', missing.length === Object.keys(parts).length ? 'fail' : missing.length ? 'warn' : 'ok');
+  add('brain', missing.length === 0, `${brain} (${context.brainSource})${missing.length ? ` · missing: ${missing.join(', ')}` : ''}`, 'point the selected instance to a brain folder with the standard structure', missing.length === Object.keys(parts).length ? 'fail' : missing.length ? 'warn' : 'ok');
 }
 
 // 5. MCP port and a running app
-const port = Number(process.env.SB_MCP_PORT ?? cfg.mcpPort ?? (process.argv.includes('--dev') ? 4329 : 4319));
 const ping = await new Promise(res => {
   const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'doctor', version: '0' } } });
   const req = http.request({ host: '127.0.0.1', port, path: '/mcp', method: 'POST', headers: { 'content-type': 'application/json', host: `127.0.0.1:${port}` }, timeout: 2000 }, r => {

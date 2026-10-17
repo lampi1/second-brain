@@ -46,9 +46,12 @@ describe('quit kill', () => {
   // (the tree kill of a child that escapes the job is covered by manager.test's shutdown test)
   it('a bounded quit kill whose taskkill is too slow terminates the processes directly, their job children with them', async () => {
     const f = path.join(tmp('kill'), 'child.pid');
-    const p = spawn(process.execPath, ['-e', `const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{stdio:'ignore'});require('fs').writeFileSync(${JSON.stringify(f)},String(c.pid));setInterval(()=>{},1e3)`], { stdio: 'ignore' });
+    const p = spawn(process.execPath, ['-e', `const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{stdio:'ignore'});require('fs').writeFileSync(${JSON.stringify(f)},String(c.pid));setInterval(()=>{},1e3)`], { stdio: 'ignore', detached: process.platform !== 'win32' });
     const child = Number(await waitFor(() => fs.existsSync(f) && fs.readFileSync(f, 'utf8'), 'the child pid'));
     await killTreesWithin([p.pid], 1);
+    // On POSIX a killed child remains a zombie until this worker handles SIGCHLD. Confirm the actual kill signal
+    // and allow Node to reap it before probing PID existence; Windows process handles disappear at termination.
+    if (process.platform !== 'win32') await waitFor(() => p.signalCode === 'SIGKILL', 'the process-group SIGKILL delivered', 3000);
     expect(alive(p.pid!)).toBe(false); // dead when the bounded kill resolves
     await waitFor(() => !alive(child), 'the child killed with it', 3000);
   });

@@ -21,8 +21,22 @@ import os from 'node:os';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
-const opt = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const has = n => argv.includes(n);
+// Flags are flags only in their own positions: a field value must never enable user-level configuration.
+const values = new Set(['--name', '--dir', '--repos', '--harness', '--role', '--lang', '--devops-org', '--devops-project', '--home', '--output-dir']);
+const flags = new Set(['--yes', '--user-config']);
+const options = new Map();
+for (let i = 0; i < argv.length; i++) {
+  const key = argv[i];
+  if (options.has(key) || (!values.has(key) && !flags.has(key))) { console.error('install: opzione sconosciuta o ripetuta'); process.exit(1); }
+  if (flags.has(key)) options.set(key, true);
+  else {
+    const value = argv[++i];
+    if (value === undefined || value.startsWith('--')) { console.error('install: valore mancante per una opzione'); process.exit(1); }
+    options.set(key, value);
+  }
+}
+const opt = n => options.get(n);
+const has = n => options.get(n) === true;
 const HOME = resolve(opt('--home') ?? os.homedir());
 const win = process.platform === 'win32';
 const fwd = p => p.split(sep).join('/').replace(/\\/g, '/');
@@ -40,27 +54,32 @@ const name = (opt('--name') ?? await ask('Il tuo nome (come vuoi che gli agenti 
 if (!name) { console.error('install: serve un nome (--name)'); process.exit(1); }
 if (/["\\`${}<>]/.test(name)) { console.error('install: il nome non può contenere " \\ ` $ { } < >'); process.exit(1); }
 const dir = resolve(opt('--dir') ?? await ask('Cartella del cervello', join(HOME, 'brain')));
+// Internal app staging: render paths for the final destination while writing only into a private temporary folder.
+// Publication is owned by main. This mode never permits global integrations or interactive consent.
+const output = opt('--output-dir') ? resolve(opt('--output-dir')) : dir;
+if (opt('--output-dir') && (!has('--yes') || has('--user-config') || output === dir)) { console.error('install: staging non valido'); process.exit(1); }
 const repos = resolve(opt('--repos') ?? await ask('Cartella dei tuoi repository', join(HOME, 'source', 'repos')));
 const harness = (opt('--harness') ?? await ask('Harness: claude, cursor o claude,cursor', 'claude')).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 const role = opt('--role') ?? await ask('Il tuo ruolo in una riga (facoltativo)', 'developer');
 const lang = opt('--lang') ?? await ask('Lingua in chat', 'italiano');
 const org = opt('--devops-org') ?? await ask('Organizzazione Azure DevOps (facoltativo, vuoto se non la usi)', '');
 const project = opt('--devops-project') ?? (org ? await ask('Progetto Azure DevOps dei test (facoltativo)', '') : '');
-if (harness.some(h => !['claude', 'cursor'].includes(h))) { console.error('install: --harness accetta claude e/o cursor'); process.exit(1); }
+if (harness.some(h => !/^[a-z][a-z0-9_-]{0,63}$/.test(h))) { console.error('install: --harness richiede identificatori di motori validi'); process.exit(1); }
 // the folder name is also used inside the tools' regexes: letters, digits, spaces, dot, dash and underscore only
 if (!/^[\p{L}\p{N} ._-]+$/u.test(basename(dir))) { console.error(`install: il nome della cartella "${basename(dir)}" può avere solo lettere, numeri, spazi, . _ -`); process.exit(1); }
-if (existsSync(dir) && readdirSync(dir).length) { console.error(`install: ${dir} esiste e non è vuota: scegli un'altra cartella`); process.exit(1); }
+if (existsSync(dir) && (output !== dir || readdirSync(dir).length)) { console.error(`install: ${dir} esiste: scegli un'altra cartella`); process.exit(1); }
+if (existsSync(output) && readdirSync(output).length) { console.error('install: staging non vuoto'); process.exit(1); }
 
 const B = fwd(dir), R = fwd(repos), H = fwd(HOME);
 const toWin = p => p.replace(/\//g, '\\');
 const V = {
   OWNER: name.trim(), BRAIN_NAME: basename(dir), TODAY: new Date().toISOString().slice(0, 10),
-  BRAIN: B, BRAIN_WIN: toWin(B), BRAIN_JS: toWin(B).replace(/\\/g, '\\\\'), BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
-  REPOS: R, REPOS_WIN: toWin(R), REPOS_JS: toWin(R).replace(/\\/g, '\\\\'),
-  HOME: H, HOME_WIN: toWin(H), HOME_JS: toWin(H).replace(/\\/g, '\\\\'),
+  BRAIN: B, BRAIN_WIN: toWin(B), BRAIN_JS: B, BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
+  REPOS: R, REPOS_WIN: toWin(R), REPOS_JS: R,
+  HOME: H, HOME_WIN: toWin(H), HOME_JS: H,
   DEVOPS_ORG: org?.trim() || 'your-org', DEVOPS_PROJECT: project?.trim() || 'your-project', ROLE: role?.trim() || 'developer', LANG: lang,
   OS: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: win ? 'PowerShell' : 'bash',
-  HARNESSES: harness.map(h => h === 'claude' ? 'Claude Code' : 'Cursor').join(' + '),
+  HARNESSES: harness.map(h => ({ claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex', kimi: 'Kimi' })[h] ?? h).join(' + '),
 };
 // In JavaScript the values land inside '...', "..." and `...` strings and regex literals: quotes, backticks and $ are
 // escaped there (a folder like "D'Amico" must not break the tools); BRAIN_RE is already a regex source.
@@ -83,15 +102,19 @@ function copy(from, to) {
     files++;
   }
 }
-copy(HERE, dir);
-writeFileSync(join(dir, 'me.md'), render(readFileSync(join(HERE, 'me.template.md'), 'utf8')));
-for (const d of ['journal/brief', 'playbooks', 'reviews']) mkdirSync(join(dir, d), { recursive: true });
+copy(HERE, output);
+writeFileSync(join(output, 'me.md'), render(readFileSync(join(HERE, 'me.template.md'), 'utf8')));
+for (const d of ['journal/brief', 'playbooks', 'reviews']) mkdirSync(join(output, d), { recursive: true });
 
 try {
-  execFileSync('git', ['-C', dir, 'init', '-q']);
-  execFileSync('git', ['-C', dir, 'config', 'core.autocrlf', 'false']);
-  execFileSync('git', ['-C', dir, 'add', '-A']);
-  execFileSync('git', ['-C', dir, '-c', 'user.name=' + V.OWNER, '-c', 'user.email=brain@localhost', 'commit', '-q', '-m', 'brain: day one (second-brain template)']);
+  // A parent shell's GIT_DIR/WORK_TREE/config must not redirect initialization or run user/global hooks/signers.
+  // Git remains optional; these settings apply only to this child and never change the user's configuration.
+  const gitEnv = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: join(output, '.git', 'no-global-config'), GIT_CONFIG_NOSYSTEM: '1' };
+  const git = args => execFileSync('git', ['-C', output, '-c', `core.hooksPath=${join(output, '.git', 'no-hooks')}`, '-c', 'commit.gpgSign=false', ...args], { env: gitEnv, windowsHide: true });
+  git(['init', '-q', '--initial-branch=main', '--template=']);
+  git(['config', 'core.autocrlf', 'false']);
+  git(['add', '-A']);
+  git(['-c', 'user.name=' + V.OWNER, '-c', 'user.email=brain@localhost', 'commit', '-q', '-m', 'brain: day one (second-brain template)']);
 } catch (e) { console.log(`git non inizializzato (${e.message.split('\n')[0]}): il cervello funziona lo stesso, ma senza storia`); }
 
 // ---- user-level wiring (only with an explicit yes) ---------------------------------------------------------------

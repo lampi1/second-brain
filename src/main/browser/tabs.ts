@@ -421,7 +421,7 @@ export class BrowserTabs {
     });
     wc.on('console-message', e => {
       const d = e as unknown as { level: string; message: string; lineNumber: number; sourceId: string; frame?: WebFrameMain | null };
-      tab.console.push({ seq: ++tab.consoleSeq, at: Date.now(), level: d.level, text: redact(String(d.message)).slice(0, 2000), source: `${d.sourceId ?? ''}:${d.lineNumber ?? ''}`, frame: safeFrameUrl(d.frame) });
+      tab.console.push({ seq: ++tab.consoleSeq, at: Date.now(), level: d.level, text: redact(String(d.message)).slice(0, 2000), source: `${redact(String(d.sourceId ?? ''))}:${d.lineNumber ?? ''}`, frame: safeFrameUrl(d.frame) });
       if (tab.console.length > 500) tab.console.shift();
     });
     wc.on('will-prevent-unload', e => {

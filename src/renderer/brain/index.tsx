@@ -29,11 +29,12 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'esplora' | 'skill' | 'impostazioni' | 'migliora';
+export type BrainPageId = 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'esplora' | 'skill' | 'impostazioni' | 'migliora' | 'agenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return t(`brainPages.nav.${id}`); } });
 export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
+  page('agenti', 'G A'),
   page('devops', 'G O'),
   page('fatto', 'G F'),
   page('idee', 'G I'),
@@ -56,7 +57,7 @@ export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
  *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"). */
 export const PAGE_ALIAS: Record<string, BrainPageId> = { home: 'devops', oggi: 'devops', adesso: 'devops', dafare: 'devops' };
 /** Their old go-to keys still work (G H, G A → DevOps). */
-export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'devops', key: 'G H' }, { id: 'devops', key: 'G A' }];
+export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'devops', key: 'G H' }];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
 export function parseTarget(t: string): { map: true; full: boolean; focus?: string } | { map: false; id: BrainPageId; arg?: string } | null {

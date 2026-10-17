@@ -10,6 +10,7 @@
 import path from 'node:path';
 import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shared/contract';
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
+import { canonicalRepoRoot } from './adapters/codex-policy';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
@@ -35,8 +36,8 @@ const BASE: readonly SettingDef[] = [
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
     description: 'Porta locale (solo 127.0.0.1) dove gli agenti guidano il browser interno. 0 = una porta libera a caso.' },
-  { key: 'view', type: 'enum', values: ['mosaico', 'corsie'], default: 'mosaico', protected: false, label: 'Vista',
-    description: 'Mosaico: le chat come riquadri. Corsie: le chat in colonne per stato.' },
+  { key: 'view', type: 'enum', values: ['mosaico'], default: 'mosaico', protected: false, label: 'Vista',
+    description: 'Mosaico: le chat come riquadri.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come il sistema.' },
   { key: 'language', type: 'enum', values: ['system', 'it', 'en'], default: 'system', protected: false, label: 'Lingua',
@@ -49,9 +50,11 @@ const BASE: readonly SettingDef[] = [
     description: 'A ogni avvio di una chat Claude l’app le passa le regole del cervello (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
   { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del cervello alle chat Codex',
     description: 'A ogni avvio di una chat Codex l’app le passa le regole del cervello (AGENTS.md come istruzioni e le cartelle delle skill). Spento: Codex legge solo le sue impostazioni.' },
+  { key: 'codexAutonomyRoots', type: 'repo-paths', default: [], protected: true, label: 'Autonomia Codex nei repository',
+    description: 'Solo in queste cartelle repository o worktree: Codex lavora senza richieste di escalation, dentro la sandbox di scrittura. Fuori scope le azioni restano bloccate. Vale dal prossimo turno; vuoto = chiedi quando serve.' },
   { key: 'contextWarnTokens', type: 'int', min: 10_000, max: 2_000_000, default: 200_000, protected: false, label: 'Soglia del contesto lungo per Cursor (token)',
     description: 'Il misuratore del contesto diventa ambra sopra questa dimensione nelle chat che non dicono la loro finestra (Cursor); le chat Claude diventano ambra vicino alla loro compattazione.' },
-  { key: 'contextHandoff', type: 'boolean', default: true, protected: false, label: 'Continua le chat fredde in una sessione nuova',
+  { key: 'contextHandoff', type: 'boolean', default: false, protected: false, label: 'Continua le chat fredde in una sessione nuova',
     description: 'Una chat Claude ferma con un contesto lungo (100k o più) scrive il passaggio di consegne finché la cache è calda (pochi centesimi); se poi le scrivi dopo che la cache è scaduta, il messaggio va in una sessione nuova che parte dal passaggio. Stessa chat e stesso titolo, la sessione vecchia resta sopra, piegata.' },
   { key: 'coldHandoffMin', type: 'int', min: 5, max: 50, default: 50, protected: false, label: 'Passaggio delle chat ferme dopo (minuti)',
     description: 'Quanti minuti dopo l’ultima chiamata una chat Claude ferma e lunga scrive il suo passaggio di consegne. La cache dura circa un’ora: oltre 50 minuti il passaggio rischierebbe di costare come rileggere tutto.' },
@@ -75,8 +78,6 @@ const BASE: readonly SettingDef[] = [
   { key: 'mute.*', type: 'boolean', default: false, protected: true, label: 'Silenzia un tipo di novità',
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
   // the engines' own keys (engineOn.<id>, engines.<id>, regiaChats.harness) come from engineDefs below
-  { key: 'messaging.crossHarness', type: 'boolean', default: true, protected: true, label: 'Chat tra motori diversi',
-    description: 'Una chat o una Regia può aprire, riprendere o scrivere a chat su un altro motore, che spendono i crediti di quel motore. Spento: solo sul proprio motore; le tue chat da Nuova chat restano libere. Vale anche per la posta tra chat fuori dall’app.' },
   { key: 'devops.enabled', type: 'boolean', default: false, protected: true, label: 'Aggiornamento DevOps automatico',
     description: 'Rilegge da sola i tuoi work item, le PR e le novità sui ticket che segui, con gli script del cervello (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
   { key: 'devops.everyMin', type: 'int', min: 5, max: 720, default: 30, protected: false, label: 'DevOps: ogni quanti minuti',
@@ -163,6 +164,11 @@ export function validate(key: unknown, value: unknown): Checked {
   const k = key as SettingKey;
   if (value === null && d.nullable) return { ok: true, key: k, value: null };
   switch (d.type) {
+    case 'repo-paths': {
+      if (!Array.isArray(value) || value.length > 32) return { ok: false, error: `${d.label}: al massimo 32 cartelle repository o worktree` };
+      try { return { ok: true, key: k, value: [...new Set(value.map(canonicalRepoRoot))] }; }
+      catch (e) { return { ok: false, error: `${d.label}: ${e instanceof Error ? e.message : String(e)}` }; }
+    }
     case 'path':
       if (typeof value !== 'string' || value.length > 1000 || !path.isAbsolute(value)) return { ok: false, error: `${d.label}: percorso assoluto di una cartella${d.nullable ? ', oppure vuoto' : ''}` };
       return { ok: true, key: k, value: path.normalize(value) };
@@ -190,7 +196,7 @@ export function validate(key: unknown, value: unknown): Checked {
 export function defaults(): Settings {
   return {
     brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
-    contextWarnTokens: 200_000, contextHandoff: true, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, coldHandoffMin: 50,
+    contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     messaging: { crossHarness: true },

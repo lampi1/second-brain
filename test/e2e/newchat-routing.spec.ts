@@ -11,6 +11,7 @@ test('Nuova chat: the table picks the model, the line says why, a hand pick wins
   try {
     await page.keyboard.press('Control+N');
     await expect(page.getByTestId('newchat')).toBeVisible();
+    await page.getByTestId('newchat-engine-options').locator('summary').click();
     const line = page.getByTestId('newchat-route');
 
     // a fix: the bug-fix row (Opus, high)

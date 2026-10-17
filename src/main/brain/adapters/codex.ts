@@ -10,14 +10,18 @@
 import { log } from '../../log';
 import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './domains';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
+import { codexPolicyFor } from './codex-policy';
 
 export interface CodexLaunch {
   configArgs: string[];
   developerInstructions: string | null;
   skillRoots: string[];
+  approvalPolicy: CodexApproval;
+  sandbox: CodexSandbox;
 }
 
 export interface CodexLaunchInput {
+  cwd?: string;
   mcpUrl: string | null;
   appMcpUrl: string | null;
   readOnly?: boolean;
@@ -31,21 +35,41 @@ export interface CodexLaunchInput {
 /** A value safe on a cmd.exe command line and in a -c override (chats/cli.ts cliArgv's plain-argument rule). */
 const PLAIN = /^[\w.:@/=[\],-]+$/;
 
+// Native Codex per-tool policy, limited to the app's own attached loopback MCP servers. Claude already
+// pre-allows chat mail/list and app-control; Codex gets only these explicit read/mail tools, never a server wildcard.
+const APP_TOOL_APPROVALS = {
+  'second-brain': ['send_to_chat', 'list_chats'],
+  'second-brain-app': ['app_digest', 'app_send_to_chat', 'app_chats', 'app_chat_items', 'app_pending', 'app_feed', 'app_logs', 'app_state'],
+} as const;
+
+function attachMcp(config: string[], server: keyof typeof APP_TOOL_APPROVALS, raw: string | null): void {
+  if (!raw || !PLAIN.test(raw)) return;
+  config.push(`mcp_servers.${server}.url=${raw}`);
+  let url: URL;
+  try { url = new URL(raw); } catch { return; }
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || !url.pathname.startsWith('/mcp/') || url.username || url.password || url.search || url.hash) return;
+  config.push(`mcp_servers.${server}.default_tools_approval_mode=prompt`);
+  for (const tool of APP_TOOL_APPROVALS[server]) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
+}
+
 export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   const rules = i.domains && i.brain !== undefined ? null : launchRules();
   const domains = i.domains ?? rules?.domains ?? [];
   const brain = i.brain ?? rules?.codex ?? true;
-  const approval: CodexApproval = 'on-request';
-  const sandbox: CodexSandbox = i.readOnly ? 'read-only' : 'workspace-write';
+  const policy = codexPolicyFor(i.cwd ?? '', i.readOnly);
+  const approval: CodexApproval = policy.approvalPolicy;
+  const sandbox: CodexSandbox = policy.sandbox;
   const c = [`approval_policy=${approval}`, `sandbox_mode=${sandbox}`];
+  if (approval === 'never') c.push('sandbox_workspace_write.exclude_tmpdir_env_var=true', 'sandbox_workspace_write.exclude_slash_tmp=true', 'sandbox_workspace_write.network_access=false');
   // a read-only run (the comparison's side b) gets no MCP: it must change nothing, as Claude's read-only run
   if (!i.readOnly) {
-    if (i.mcpUrl && PLAIN.test(i.mcpUrl)) c.push(`mcp_servers.second-brain.url=${i.mcpUrl}`);
-    if (i.appMcpUrl && PLAIN.test(i.appMcpUrl)) c.push(`mcp_servers.second-brain-app.url=${i.appMcpUrl}`);
+    attachMcp(c, 'second-brain', i.mcpUrl);
+    attachMcp(c, 'second-brain-app', i.appMcpUrl);
   }
   if (brain && !domains.length) log.info('brain', 'codex chat starts without the brain\'s rules: no brain domain', { ...(i.chatId ? { chat: i.chatId } : {}), hint: 'choose the brain folder in Settings (or switch off «Regole del cervello alle chat Codex»)' });
   return {
     configArgs: c.flatMap(v => ['-c', v]),
+    approvalPolicy: approval, sandbox,
     developerInstructions: brain ? instructionsOf(domains) : null,
     skillRoots: brain && !i.readOnly ? skillDirs(domains, ['.agents/skills', '.claude/skills']) : [],
   };

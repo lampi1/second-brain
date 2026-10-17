@@ -3,11 +3,8 @@
 // checks in every tool. Three switches, all protected (only the user changes them):
 // - `engineOn.<id>` «X acceso»: off = nothing starts on that engine, whoever asks (the user's own chats too);
 // - `engines.<id>` «Le Regie possono usare X»: off = no agent opens or resumes a chat there (the user still can);
-// - `messaging.crossHarness` «Chat tra motori diversi»: off = an agent opens, resumes and writes only to chats on its
-//   own engine (mirrored in the brain's brain-settings.json for inbox.mjs).
-// The saved keys of the last two are the ones older releases read, with the same meaning, so a rollback never opens
-// what the user had closed. Absent = off: an engine the saved file does not name never starts by itself; nor does one
-// whose start definition changed since the user turned it on (registry.ts trusted).
+// Cross-engine messaging is always available. The retired messaging.crossHarness value is compatibility data only.
+// Engine availability, trust and agent launch permissions still apply; an unknown engine never starts by itself.
 // Used by the app-control tools (appctl/tools.ts), the chats' mail (chats/mail.ts), the routed chats (chats/routed.ts)
 // and the chat manager's gates (chats/manager.ts, wired in wiring.ts).
 import type { Harness, Settings } from '../../shared/contract';
@@ -30,16 +27,15 @@ export class AgentMayNotWake extends Error {
   }
 }
 
-/** Why a chat on `from` may not reach a chat on `to` (open, resume or write) across engines; null = it may. */
-export function crossRefusal(s: Pick<Settings, 'messaging'>, from: Harness, to: Harness): string | null {
-  if (from === to || s.messaging.crossHarness) return null;
-  return 'le chat tra motori diversi sono spente (impostazione «Chat tra motori diversi»)';
+/** Compatibility for existing callers: legacy false values never block chat-to-chat transport. */
+export function crossRefusal(_s: Pick<Settings, 'messaging'>, _from: Harness, _to: Harness): string | null {
+  return null;
 }
 
 /** Why an agent on `from` may not open or resume a chat on `to`; null = it may. */
-export function openRefusal(s: EngineSwitches, from: Harness, to: Harness): string | null {
+export function openRefusal(s: EngineSwitches, _from: Harness, to: Harness): string | null {
   const name = engineLabel(to);
   if (!engineOn(s, to)) return `${name} è spento nelle impostazioni`;
   if (s.engines[to] !== true) return `le Regie non possono usare ${name} (impostazione «Le Regie possono usare ${name}»)`;
-  return crossRefusal(s, from, to);
+  return null;
 }

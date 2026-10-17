@@ -5,7 +5,7 @@
 import type { ChatItem } from '@shared/contract';
 
 export interface DockSize { w: number; h: number }
-export interface Reserve { right: number; bottom: number }
+export interface Reserve { right: number; bottom: number;top?:number }
 
 /** the collapsed bar's height; EDGE = the workspace's --gap; MIN_WORK = what the chats always keep in width */
 export const BAR_H = 34, EDGE = 8, MIN_W = 340, MIN_H = 260, MIN_WORK = 420;
@@ -31,16 +31,24 @@ export function sizeIn(saved: DockSize | null, W: number, H: number, top: number
   return clampSize(saved ?? defaultSize(W, H, top), W, H, top, left);
 }
 
+/** One geometry for the workspace, native overlay avoidance and the full-width coordinator. */
+export function topSize(savedHeight:number|null,W:number,H:number,top:number,left:number):DockSize{
+  const room=Math.max(120,H-top-2*EDGE);
+  return{w:Math.max(200,W-left-2*EDGE),h:Math.round(Math.min(room,Math.max(120,Math.min(savedHeight??room*.42,560,room*.7))))};
+}
+
 /** The page's measures the size depends on (the only DOM read here): window, top bar height, sidebar's right edge. */
 export function viewport(): { W: number; H: number; top: number; left: number } {
-  const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 52;
+  const bar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 52;
+  const top = Math.max(bar,document.querySelector('.shell')?.getBoundingClientRect().top??bar);
   return { W: window.innerWidth, H: window.innerHeight, top, left: document.querySelector('.sidebar')?.getBoundingClientRect().right || 56 };
 }
 
 /** The room the widget takes from the bottom-right corner, so nothing lands under it (the user, 2026-10-13: never over
  *  a chat's input or its Esegui/Copia): expanded = a right column as wide as the panel; collapsed = a bottom strip
  *  as tall as the bar. The workspace pads by it; the global layer and the questions window move by it. */
-export function reserveOf(open: boolean, size: DockSize): Reserve {
+export function reserveOf(open: boolean, size: DockSize, placement:'top'|'corner'='corner',map=false): Reserve {
+  if(placement==='top')return{right:0,bottom:0,top:map?0:open?size.h+2*EDGE:BAR_H+2*EDGE};
   return open ? { right: size.w + EDGE, bottom: 0 } : { right: 0, bottom: BAR_H + EDGE };
 }
 

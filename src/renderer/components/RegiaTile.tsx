@@ -11,7 +11,7 @@
 // one. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by RegiaOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { FeedEvent } from '@shared/contract';
-import { ago, chatCost, effortLabel, prettyModel } from '../lib/format';
+import { ago, chatCost, prettyModel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
@@ -25,6 +25,9 @@ import { awaitingCard, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
+import { EffortControl } from './EffortControl';
+import { AgentIdentity } from './AgentIdentity';
+import {AgentAvatar}from'./AgentAvatar';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -123,17 +126,19 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
       onFocus={() => setFocused('regia')} onPointerDown={() => setFocused('regia')} {...pairHover(chat.id)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
-          <HarnessMark harness={chat.harness} regia />
-          {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title regia-name" onDoubleClick={() => setRenaming(true)}>{chat.appRegia ? t('dialogs.regia.appName') : t('dialogs.regia.name')}</h3>}
+          <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
+          {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title regia-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
           <StatePill chat={chat} testid="regia-state" />
+          <EffortControl chat={chat} />
           <span className="sp" />
           <IconButton label={t('dialogs.regia.statusLabel')} shortcut={t('dialogs.regia.statusShortcut')} onClick={() => openModal('stato')} testid="regia-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.regia.stopLabel')} shortcut={t('dialogs.regia.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="regia-stop"><IconStop size={14} /></IconButton>}
           <IconButton ref={menuBtn} label={t('dialogs.regia.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="regia-menu"><IconMore /></IconButton>
         </div>
-        <div className="th-sub" data-testid="regia-sub">
+        <div className="chat-topic-row"><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
+        <div className="th-sub sr-only" data-testid="regia-sub">
           <span className="th-engine" data-tip={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
-          <span className="th-sub-text">{[chat.title.trim() !== 'Regia' ? chat.title : '', prettyModel(chat.model, chat.harness), effortLabel(chat.effort), chatCost(chat)].filter(Boolean).join(' · ')}</span>
+          <span className="th-sub-text">{[chat.title.trim() !== 'Regia' ? chat.title : '', prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.regia.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-regia" /> : null} />

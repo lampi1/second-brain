@@ -37,6 +37,8 @@ function hook(): void {
     }
     const src = (el.getAttribute('src') ?? '').trim();
     if (src && !/^(?:https?:|data:image\/)/i.test(src)) el.removeAttribute('src');
+    // The dedicated preview loads local images through main. Keep a caption here instead of a broken img icon.
+    if(el.tagName==='IMG'&&!el.getAttribute('src'))el.replaceWith(el.ownerDocument.createTextNode(el.getAttribute('alt')||'Immagine locale'));
   });
 }
 

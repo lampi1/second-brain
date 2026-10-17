@@ -53,13 +53,12 @@ describe('a Regia on Cursor', () => {
     expect(news).toEqual([['second-brain-app'], []]);
   }, 40000);
 
-  it('with Claude <-> Cursor off it still creates Cursor chats, never Claude ones', async () => {
+  it('a legacy false still permits work chats on both enabled engines', async () => {
     const { m, cwd } = await setup(false);
     const regia = await m.create({ harness: 'cursor', cwd, title: 'Regia', regia: true, prompt: [call('claude', 'No · Claude'), call('cursor', 'Si · Cursor')].join('\n') });
     await waitFor(() => m.items(regia.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'both calls answered', 20000);
-    expect(m.list().filter(c => c.id !== regia.id).map(c => [c.title, c.harness])).toEqual([['Si · Cursor', 'cursor']]);
+    expect(m.list().filter(c => c.id !== regia.id).map(c => [c.title, c.harness])).toEqual([['No · Claude', 'claude'], ['Si · Cursor', 'cursor']]);
     const tools = m.items(regia.id).filter(i => i.kind === 'tool');
-    expect(tools.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['error', 'ok']);
-    expect(tools[0]?.kind === 'tool' ? tools[0].output : '').toMatch(/bloccato/);
+    expect(tools.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
   }, 40000);
 });

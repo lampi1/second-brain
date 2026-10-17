@@ -42,11 +42,12 @@ export function filterProcedures(list: ProcedureSummary[], q: string, tags: Read
 
 function Row({ p, open, nav }: { p: ProcedureSummary; open: boolean; nav: Navigate }) {
   return (
-    <button type="button" className="bx-proc-row" aria-current={open} onClick={() => nav(`procedure/${encodeURIComponent(p.id)}`)} data-testid="bx-proc-row" data-id={p.id}>
+    <button type="button" className="bx-proc-row" aria-current={open} onClick={() => nav(`procedure/${encodeURIComponent(p.id)}`)} data-testid="bx-proc-row" data-id={p.id} data-procedure-kind={p.tags.includes('passi') ? 'steps' : 'reference'}>
       <b className="t">{p.title}</b>
       {p.purpose && <span className="p">{p.purpose}</span>}
       <span className="m">
-        {p.tags.map(tg => <Pill key={tg} tone={tg === 'produzione' ? 'warn' : 'outline'}>{tg}</Pill>)}
+        {!p.tags.includes('passi') && <Pill tone="outline">{t('brainPages.procedure.reference')}</Pill>}
+        {p.tags.map(tg => <Pill key={tg} tone={tg === 'produzione' ? 'warn' : 'outline'}>{tagDefs().find(tag => tag.id === tg)?.label ?? tg}</Pill>)}
         <span className="d" title={t('brainPages.procedure.rowTitle', { file: p.file, line: p.line })}>{p.source}{p.changedAt ? t('brainPages.procedure.modifiedSuffix', { day: dayOf(p.changedAt) }) : ''}</span>
       </span>
     </button>

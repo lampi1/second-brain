@@ -8,16 +8,22 @@
 // focus view.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatItem, PendingRequest } from '@shared/contract';
-import { chatCost, queueReason, effortLabel, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
+import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
-import { hideCtxNotice, setFocused, ui } from '../store/ui';
+import { setFocused, setChatExpanded,ui } from '../store/ui';
+import {t}from'../i18n';
+import {schedule,suspendViews}from'../lib/viewports';
 import { answerLater } from '../lib/later';
 import { admitNow, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
 import { ChatLinkChips } from './ChatLinkChips';
+import { EffortControl } from './EffortControl';
+import { AgentIdentity } from './AgentIdentity';
+import { AgentAvatar } from './AgentAvatar';
+import { AutoCloseNotice } from './AutoCloseNotice';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -25,7 +31,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { HarnessMark, IconAlert, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
+import { IconAlert, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
 const EMPTY_ITEMS: readonly ChatItem[] = [];
@@ -71,8 +77,12 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const expandedChoice=ui.use(s=>s.prefs.chatPanelsV===0||s.prefs.chatExpanded[chatId]===true);
+  const expanded=!!maximized||!!focus||expandedChoice;
+  const expansionButton=useRef<HTMLButtonElement>(null);
+  const reveal=(compose=false)=>{setChatExpanded(chatId,true);if(compose)requestAnimationFrame(()=>input.current?.focus());};
+  useEffect(()=>{const release=suspendViews();schedule();const timer=setTimeout(()=>{release();schedule();},window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:220);return()=>{clearTimeout(timer);release();};},[expanded]);
   // the long-chat notice, hidden by the user until the context grows by another quarter of the threshold
-  const ctxHiddenAt = ui.use(s => s.ctxHidden[chatId] ?? 0);
   const warn = useWarnTokens();
   const lqCpu = useApp(s => s.settings?.loadQueueCpu ?? 75);
   const lqRam = useApp(s => s.settings?.loadQueueRam ?? 15);
@@ -81,37 +91,35 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const now = useNow(15_000); // the running work span grows on screen
   useEffect(() => {
     if (!focusReq) return;
-    input.current?.focus();
+    reveal(true);
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
   if (!chat) return null;
-  const compact = !maximized && !focus && size.height > 0 && size.height < COMPACT_TILE_H;
+  const compact = !expanded || !maximized && !focus && size.height > 0 && size.height < COMPACT_TILE_H;
   const smallPanel = !maximized && !focus && size.height > 0 && size.height < 440;
   const busy = isBusy(chat);
   const st = stateInfo(chat);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
-  const sub = [prettyModel(chat.model, chat.harness), effortLabel(chat.effort), chatCost(chat)].filter(Boolean).join(' · ');
+  const sub = [prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ');
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);
   return (
-    <section ref={ref} className={`tile chat-tile tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
+    <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
       aria-label={`Chat ${chat.title}, ${st.label}`} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
-          <HarnessMark harness={chat.harness} />
-          {renaming ? (
-            <TitleInput chat={chat} onDone={() => setRenaming(false)} />
-          ) : (
-            <h3 className="th-title" title={chat.title} onDoubleClick={() => setRenaming(true)}>{chat.title}</h3>
-          )}
+          <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
+          <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
           <StatePill chat={chat} testid={`chat-state-${chatId}`} />
+          <EffortControl chat={chat} />
           {chat.resumedAt && (
             <span className="th-resumed" data-tip="Il suo turno si era interrotto con il riavvio dell'app: l'app l'ha fatta ripartire da sola. Sparisce al tuo prossimo messaggio."
               data-testid={`chat-resumed-${chatId}`}>ripresa dopo il riavvio</span>
           )}
-          <span className="sp" />
+          <div className="chat-header-actions">
+          {!focus&&!maximized&&<button ref={expansionButton} type="button" className="btn btn-ghost btn-s chat-expand" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} onClick={()=>{setChatExpanded(chatId,!expanded);if(expanded)expansionButton.current?.focus();}} data-testid={`chat-expand-${chatId}`}>{t(expanded?'product.collapse':'product.expand')}</button>}
           {(busy || chat.state === 'waiting') && (
             <IconButton label="Ferma" shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
           )}
@@ -123,28 +131,30 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
             </IconButton>
           )}
           {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          </div>
         </div>
-        <div className="th-sub" data-testid={`chat-sub-${chatId}`}>
+        <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>
+        <details className="chat-session-detail" data-testid={`chat-sub-${chatId}`}><summary>{t('product.model')}</summary><div className="th-sub">
           <span className={`pill pill-${st.tone} pill-sub`} aria-hidden="true">{st.label}</span>
           <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip="Tempo di lavoro effettivo: senza le attese delle tue risposte">lavoro {minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
-        </div>
+        </div></details>
         {!compact && <ChatLinkChips chatId={chatId} items={items} />}
       </header>
+      <AutoCloseNotice chatId={chatId} />
+      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={turnActivity(items)} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}<button type="button" className="link-btn" onClick={()=>reveal(true)}>{t('product.write')}</button></div>}
+      <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
-      {!compact && (chat.handoffBusy || !ctxHiddenAt || (chat.contextTokens ?? 0) >= ctxHiddenAt + warn / 4) && (
-        <ContextNotice chat={chat} warn={warn} onDismiss={() => hideCtxNotice(chatId, chat.contextTokens ?? 1)} />
-      )}
-      {compact ? (<>
-        <div className="compact-body" data-testid={`chat-last-${chatId}`}>{chat.lastText || 'Nessun messaggio ancora.'}</div>
-        {busy && <div className="compact-typing"><Typing what={turnActivity(items)} testid={`typing-${chatId}`} /></div>}
-      </>) : items === undefined ? (
+      {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
+      {items === undefined ? (
         <div className="items-wrap"><div className="items skeleton" aria-label="Caricamento"><i /><i /><i className="short" /></div></div>
       ) : (
         <ItemList chatId={chatId} items={items ?? EMPTY_ITEMS} empty="Nessun messaggio ancora: scrivi qui sotto da dove partire."
           footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} /> : null} />
       )}
+      <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
+      </div></div>
       {reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
           {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
@@ -164,7 +174,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, 'Riprova da dove eri rimasto.')} data-testid={`chat-retry-${chatId}`}>Riprova</button>
         </div>
       )}
-      <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} />
     </section>
   );

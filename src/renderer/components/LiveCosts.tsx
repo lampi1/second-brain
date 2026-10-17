@@ -7,6 +7,7 @@
 import { formatCost } from '../lib/format';
 import type { CostRow } from '../lib/live-costs';
 import { HarnessMark } from './Icons';
+import{ModelOrigin}from'./ModelOrigin';
 
 function Row({ r, onOpen }: { r: CostRow; onOpen?: (chatId: string) => void }) {
   const tag = r.chatId ? (r.running ? 'al lavoro' : r.closed ? 'chiusa' : null) : 'fuori dall’app';
@@ -15,6 +16,7 @@ function Row({ r, onOpen }: { r: CostRow; onOpen?: (chatId: string) => void }) {
     <>
       <HarnessMark harness={r.harness} regia={r.isRegia} size={16} />
       <span className="ub-label ub-chat" title={r.title}>{r.title || '(senza titolo)'}</span>
+      <ModelOrigin/>
       {tag ? <span className={`lc-tag ${r.running ? 'run' : ''}`}>{tag}</span> : null}
       {r.unpriced ? <span className="ub-tag" data-tip="Un modello usato oggi da questa chat non ha un prezzo noto (Cursor «auto» o un modello nuovo): quei turni non sono contati">prezzo sconosciuto</span> : null}
       <b>{cost}</b>

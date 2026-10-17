@@ -29,6 +29,10 @@ import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { systemLang } from './lang';
+import { BrainCreator } from './brain/create';
+import { BrainCreationController } from './brain/create-controller';
+import { electronNode } from './brain/node';
+import { createAppUpdates } from './update/wiring';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -52,7 +56,9 @@ app.whenReady().then(async () => {
   // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(outDir, 'icon.png'));
   log.info('app', 'start', { data: { version: app.getVersion(), electron: process.versions.electron, userData: app.getPath('userData') } });
-  win = createWindow(outDir);
+  win = createWindow(outDir, false);
+  // Attach before starting services: ready-to-show may fire while their asynchronous initialization is pending.
+  const windowReady = new Promise<void>(resolve => win!.once('ready-to-show', resolve));
   const emitter = new Emitter(() => win?.webContents ?? null);
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
@@ -75,12 +81,55 @@ app.whenReady().then(async () => {
     branchOf: demo ? demoBranchOf : gitBranch,
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
-  const handlers: Handlers = {
+  let brainChoiceRevision = 0;
+  const emitBeforeBrainChoice = emitter.emit.bind(emitter);
+  emitter.emit = (channel, payload) => {
+    if (channel === 'settings:changed' && payload && typeof payload === 'object' && 'key' in payload && payload.key === 'brainRoot') brainChoiceRevision++;
+    emitBeforeBrainChoice(channel, payload);
+  };
+  const brainCreation = new BrainCreationController({
+    creator: new BrainCreator({ appPath: app.getAppPath(), node: electronNode() }), disabled: demo,
+    chooseParent: async folderName => {
+      const result = win ? await dialog.showOpenDialog(win, { title: `Dove creare la nuova cartella «${folderName}»`, buttonLabel: 'Crea qui', properties: ['openDirectory'] }) : null;
+      return result && !result.canceled ? result.filePaths[0] ?? null : null;
+    }, currentRoot: () => s.brain.settings().brainRoot, selectionRevision: () => brainChoiceRevision, engineKnown: id => !!engineOf(id),
+    connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
+  });
+    const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
+      emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
+      flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
+    });
+    const handlers: Handlers = {
+      'update:get': () => updates.state(),
+      'update:apply': a => updates.apply(a?.id),
+      'update:checkpointAnswer': a => updates.answer(a),
+      'update:recovery': () => updates.recovery(),
+      'update:recoveryAck': a => updates.acknowledge(a?.id),
+    'app:brainCreation': () => brainCreation.capability(),
+    'app:createBrain': a => brainCreation.create(a),
+    'improve:proposals': () => s.proposals.list(),
+    'improve:proposalAvailability': () => s.proposals.availability(),
+    'improve:proposalCreate': () => s.proposals.create(),
+    'improve:proposalRefresh': a => s.proposals.refresh(a?.id),
+    'improve:proposalResume': a => s.proposals.resume(a?.id),
+    'improve:proposalPublish': a => s.proposals.publish(a),
+    'progress:get': () => s.progress.get(),
+    'progress:setHidden': a => s.progress.setHidden(a?.hidden),
+    'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),
+    'chat:autoCloseGet': () => { s.autoClose.refresh(); return s.autoClose.state(); },
+    'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
+    'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
+    'agents:list': () => s.agents.list(),
+    'agents:save': a => s.agents.save(a.profile, a.id),
+    'agents:duplicate': a => s.agents.duplicate(a.id),
+    'agents:draft': a => s.agents.draft(a),
+    'setup:get': () => s.setup.get(),
+    'setup:save': a => s.setup.save(a.preferences, a.status),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
       const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
-      if (dir) await s.brain.setSettings({ brainRoot: dir });
+      if (dir) { brainChoiceRevision++; await s.brain.setSettings({ brainRoot: dir }); }
       return dir;
     },
     // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
@@ -195,12 +244,15 @@ app.whenReady().then(async () => {
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
+  // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
+  void win.loadFile(path.join(outDir, 'renderer', 'index.html'));
+  const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
   if (resumed) log.info('app', 'chats resumed after the restart', { data: { resumed } });
   // the stable launcher (scripts/release.mjs launch) waits for this file to know the release started (ADR 0007)
-  win.once('ready-to-show', () => {
+  void windowReady.then(() => {
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'ready.json'), JSON.stringify({ release: stable.release ?? 'dev', pid: process.pid, at: new Date().toISOString() })); } catch (e) { log.warn('app', 'ready file not written', { data: String(e) }); }
   });
   win.on('closed', () => { win = null; app.quit(); });

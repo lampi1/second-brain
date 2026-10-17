@@ -19,6 +19,7 @@ import {
 import { t } from '../i18n';
 
 const ICON: Record<BrainPageId, ReactNode> = {
+  agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, esplora: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
 };
@@ -67,6 +68,7 @@ export function Sidebar() {
           key: t('dialogs.sidebar.chatShortcut'), testid: 'nav-workspace',
           badge: waiting ? <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span> : <span data-testid="nav-badge-workspace"><Badge n={b.workspace ?? 0} /></span>,
         })}
+        {page1('agenti')}
         {devopsOn && page1('devops')}
         {page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}

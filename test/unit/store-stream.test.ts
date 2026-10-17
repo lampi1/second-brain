@@ -7,7 +7,7 @@ import type { ChatItem, ChatSummary } from '@shared/contract';
 const handlers = new Map<string, (p: unknown) => void>();
 vi.mock('../../src/renderer/sb', () => ({
   sb: {
-    invoke: (ch: string) => Promise.resolve(ch === 'chat:list' ? [chat('a')] : ch === 'chat:items' ? [] : ch.endsWith(':list') || ch === 'chat:pending' ? [] : null),
+    invoke: (ch: string) => Promise.resolve(ch === 'chat:list' ? [chat('a')] : ch === 'chat:items' ? [] : ch.endsWith(':list') || ch === 'chat:pending' || ch === 'chat:autoCloseGet' ? [] : null),
     on: (ch: string, fn: (p: unknown) => void) => { handlers.set(ch, fn); return () => {}; },
   },
 }));

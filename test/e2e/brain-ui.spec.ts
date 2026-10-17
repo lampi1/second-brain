@@ -180,35 +180,32 @@ test('Esplora: tree, file preview with links to other files, word search', async
   await expect(p.getByRole('link', { name: 'esterno' })).toHaveAttribute('target', '_blank');
 });
 
-test('Mappa 3D: full screen, essential view, menu, weak points, a flow played; 2D list without WebGL', async () => {
-  await open('mappa');
-  const m = page.getByTestId('brain-map');
-  await expect(m).toBeVisible();
-  await expect(m.getByTestId('bx-map-menu')).toContainText('Parli con la Regia');
-  await expect(m).toContainText(/\d+ pezzi \(dei \d+ veri\)/);
-  const canvas = m.getByTestId('bx-map-canvas').locator('canvas');
-  const has3d = await canvas.count().then(n => n > 0, () => false) || await canvas.first().waitFor({ timeout: 8000 }).then(() => true, () => false);
-  if (has3d) await page.waitForTimeout(3500); // the layout settles and the camera fits
-  await shot(page, 'brain-map');
-  await m.getByRole('button', { name: /Parli con la Regia/ }).click();
-  await expect(m.getByTestId('bx-map-player')).toContainText('1/3');
-  await page.waitForTimeout(1500);
-  await shot(page, 'brain-map-flow');
-  await m.getByRole('tab', { name: /Punti deboli/ }).click();
-  await expect(m.getByTestId('bx-map-menu')).toContainText('contesto fisso');
-  await page.keyboard.press('Escape'); // the flow
-  await m.getByTestId('bx-map-view').click(); // every file and arrow
-  await expect(m).toContainText(/^Mappa del cervello \d+ pezzi · \d+ percorsi/);
-  await expect(m.getByTestId('bx-map-view')).toHaveText('Vista essenziale');
-  await page.keyboard.press('Escape'); // the map
-  await expect(m).toHaveCount(0);
-
-  await open('mappa?flat');
-  await expect(page.getByTestId('bx-map-flat')).toContainText('mem.mjs');
-  await page.getByTestId('bx-map-flat').getByRole('button', { name: /reviewer/ }).click();
-  await expect(page.getByTestId('bx-map-piece')).toContainText('Verso');
-  await shot(page, 'brain-map-flat');
-  await page.getByTestId('bx-map-close').click();
+test('Mappa: direct exploration, optional filters, keyboard and accessible fallback without a player', async () => {
+  await open('mappa');const m=page.getByTestId('brain-map');await expect(m).toBeVisible();
+  await expect(m.locator('.bx-map-msg')).toHaveCount(0,{timeout:30000});
+  await expect(m.getByTestId('bx-map-menu')).toHaveCount(0);await expect(m.getByTestId('bx-map-player')).toHaveCount(0);
+  const canvas=m.getByTestId('bx-map-canvas');
+  if(await canvas.count()){
+    await expect.poll(async()=>Number(await canvas.getAttribute('data-map-visible-names'))).toBeGreaterThan(0);
+    const gl=canvas.locator('canvas');await expect(gl).toHaveCount(1);await page.emulateMedia({reducedMotion:'reduce'});await canvas.focus();
+    let previous:Buffer=Buffer.alloc(0),stable=0;
+    await expect.poll(async()=>{const current=await gl.screenshot();stable=current.equals(previous)?stable+1:0;previous=current;return stable;},{timeout:20000,intervals:[150]}).toBeGreaterThanOrEqual(3);
+    const original=await gl.screenshot();await page.keyboard.press('ArrowRight');
+    await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(false);
+    await page.keyboard.press('Home');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(true);
+    await page.keyboard.press('+');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(false);
+    await page.keyboard.press('Home');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(true);
+  }else await expect(m.getByTestId('bx-map-flat')).toBeVisible();
+  await shot(page,'brain-map-direct');
+  await expect(m.getByRole('button',{name:'Filtri',exact:true})).toHaveCount(0);
+  await expect(m.locator('.bx-map-panel')).toHaveCount(0);
+  await m.getByTestId('bx-map-view').click();await expect(m.getByTestId('bx-map-view')).toHaveText('Vista essenziale');
+  await m.getByTestId('bx-map-close').click();await expect(m).toHaveCount(0);
+  await open('mappa?flat');const flat=page.getByTestId('bx-map-flat');await expect(flat).toContainText('mem.mjs');
+  const chosen=flat.getByRole('button',{name:/reviewer/});await chosen.focus();await page.keyboard.press('Enter');await expect(page.getByTestId('bx-map-piece')).toContainText('Verso');
+  await expect(page.getByRole('button',{name:'Chiudi la scheda'})).toBeFocused();await page.getByRole('button',{name:'Chiudi la scheda'}).click();await expect(chosen).toBeFocused();
+  await chosen.click();await expect(page.getByTestId('bx-map-piece')).toHaveClass('bx-map-context');await expect(page.locator('.bx-map-panel')).toHaveCount(0);
+  await shot(page,'brain-map-flat');await page.getByTestId('bx-map-close').click();
 });
 
 test('States: a failing data source shows its cause and Riprova; light theme follows the app', async () => {

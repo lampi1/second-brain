@@ -14,16 +14,31 @@
 //            --json           machine output
 // Exit: 0 clean · 2 findings (publish must stop) · 1 error. The matched value is never printed, only file:line + rule.
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, sep, extname, basename } from 'node:path';
+import { readFileSync, readdirSync, lstatSync, existsSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 const argv = process.argv.slice(2);
 const flag = n => argv.includes(n);
 const opt = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const root = argv.find((a, i) => !a.startsWith('--') && !['--deny', '--allow'].includes(argv[i - 1]));
+const values = new Set(['--deny', '--allow', '--commits', '--meta']);
+const switches = new Set(['--history', '--json', '--no-skip']);
+const positional = [];
+for (let i = 0; i < argv.length; i++) {
+  if (values.has(argv[i])) { if (!argv[++i] || argv[i].startsWith('--')) { console.error('guard: missing option argument'); process.exit(1); } }
+  else if (argv[i].startsWith('--')) { if (!switches.has(argv[i])) { console.error('guard: unknown option'); process.exit(1); } }
+  else positional.push(argv[i]);
+}
+const root = positional.length === 1 ? positional[0] : null;
 if (!root || !existsSync(root)) { console.error('usage: node scan.mjs <dir> [--history] [--deny <file>] [--allow <file>] [--json]'); process.exit(1); }
+if (flag('--history') && opt('--commits')) { console.error('guard: use either --history or --commits'); process.exit(1); }
+
+function decodeText(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf[0] === 0xfe && buf[1] === 0xff) return Buffer.from(buf.subarray(2)).swap16().toString('utf16le');
+  return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, '');
+}
 
 // ---- rules -------------------------------------------------------------------------------------------------------
 // Secrets: shapes of real credentials. Placeholders like <token>, {{X}}, xxx, example are not secrets.
@@ -74,7 +89,7 @@ const TEMPLATE_ENTRY = /^(?:- \*\*[^*\n]+\*\* · |- \*\*P-\d+|- \d{4}-\d{2}-\d{2
 // ---- inputs ------------------------------------------------------------------------------------------------------
 const denyRules = [];
 if (opt('--deny')) {
-  for (const raw of readFileSync(opt('--deny'), 'utf8').split(/\r?\n/)) {
+  for (const raw of decodeText(readFileSync(opt('--deny'))).split(/\r?\n/)) {
     // `re:` regex (any case) · `cs:` regex (exact case) · `w:` whole word · a plain word of 5+ chars matches anywhere,
     // even inside identifiers (fromMario) and after escapes (\nMario); shorter plain words match whole words only.
     const l = raw.trim(); if (!l || l.startsWith('#')) continue;
@@ -82,14 +97,15 @@ if (opt('--deny')) {
     const word = s => `(?<![A-Za-z0-9])${esc(s)}(?![A-Za-z0-9])`;
     const [src, flags] = l.startsWith('re:') ? [l.slice(3), 'i'] : l.startsWith('cs:') ? [l.slice(3), ''] :
       l.startsWith('w:') ? [word(l.slice(2)), 'i'] : [l.length >= 5 ? esc(l) : word(l), 'i'];
-    try { denyRules.push(['deny-list', new RegExp(src, flags)]); } catch { console.error(`bad deny regex: ${l}`); process.exit(1); }
+    try { denyRules.push(['deny-list', new RegExp(src, flags)]); } catch { console.error('guard: bad deny regular expression'); process.exit(1); }
   }
+  if (!denyRules.length) { console.error('guard: the configured deny list has no entries'); process.exit(1); }
 }
 const allowFile = opt('--allow') ?? join(root, '.guardallow');
-const allows = existsSync(allowFile) ? readFileSync(allowFile, 'utf8').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+const allows = existsSync(allowFile) ? decodeText(readFileSync(allowFile)).split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'))
   .map(l => { const [glob, rule, pin, extra] = l.split(/\s+/);
     // a malformed pin must never fall back to "any content": refuse the whole allow file
-    if (!rule || extra || (pin !== undefined && !/^sha256:[0-9a-fA-F]{64}$/.test(pin))) { console.error(`guard: bad allow line in ${allowFile}: "${l}"`); process.exit(1); }
+    if (!rule || extra || (pin !== undefined && !/^sha256:[0-9a-fA-F]{64}$/.test(pin))) { console.error('guard: bad allow line'); process.exit(1); }
     return { re: new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$'), rule, sha: pin?.startsWith('sha256:') ? pin.slice(7).toLowerCase() : null }; }) : [];
 // An entry with `sha256:<hex>` (e.g. a binary icon a human looked at) holds only for that exact content: a changed
 // file blocks again until someone checks it and ADDS a line with the new hash (old lines stay: the public history
@@ -103,20 +119,26 @@ const isBinary = buf => buf.subarray(0, 8000).includes(0);
 
 // ---- scanning ----------------------------------------------------------------------------------------------------
 const findings = [];
-const add = (path, label, line, rule, buf) => { if (!allowed(path, rule, buf)) findings.push({ where: label, line, rule }); };
+const allRules = [...SECRET_RULES, ...DATA_RULES, ...denyRules];
+const masked = text => allRules.reduce((value, [, re]) => value.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'), '***'), text);
+const add = (path, label, line, rule, buf, canAllow = true) => { if (!canAllow || !allowed(path, rule, buf)) findings.push({ where: masked(label), line, rule }); };
+
+function scanName(path, label) {
+  for (const [name, re] of allRules) if (re.test(path) && (name !== 'guid' || realGuid(path))) add(path, `${label} (path)`, 0, name, undefined, false);
+}
 
 // buf: the file's bytes, so a hash-pinned allow line can hold for a line finding too (only for that exact content);
 // commit messages pass none, so no pinned line ever silences them
-function scanText(path, text, label = path, buf) {
+function scanText(path, text, label = path, buf, canAllow = true) {
   const lines = text.split(/\r?\n/);
-  const rules = [...SECRET_RULES, ...DATA_RULES, ...denyRules];
   for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]; if (l.length > 5000) { add(path, label, i + 1, 'long-line-unscanned', buf); continue; }
-    for (const [name, re] of rules) if (re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name, buf);
+    const l = lines[i]; if (l.length > 5000) { add(path, label, i + 1, 'long-line-unscanned', buf, canAllow); continue; }
+    for (const [name, re] of allRules) if (re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name, buf, canAllow);
   }
 }
 
 function scanFile(path, buf, label = path) {
+  scanName(path, label);
   for (const [re, rule] of FORBIDDEN_FILES) {
     if (!re.test(path)) continue;
     if (rule === 'personal-memory-file' || rule === 'journal-entry') {
@@ -137,49 +159,62 @@ function scanFile(path, buf, label = path) {
 function walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
-    const st = statSync(p);
-    if (st.isDirectory()) { if (!SKIP_DIRS.has(name)) walk(p); continue; }
+    const st = lstatSync(p);
+    if (st.isDirectory()) { if (name !== '.git' && (flag('--no-skip') || !SKIP_DIRS.has(name))) walk(p); continue; }
     const rel = relative(root, p).split(sep).join('/');
     if (rel === '.guardallow') continue;
+    if (st.isSymbolicLink()) { scanName(rel, rel); add(rel, rel, 0, 'unscanned-link'); continue; }
     scanFile(rel, readFileSync(p));
   }
 }
 
 // One git process per commit tree and ONE for all blobs (`cat-file --batch`): a process per blob took minutes and a
 // single failed spawn among thousands crashed the release sync with no message (2026-10-14). Same blobs, same labels.
-function scanHistory() {
+function scanHistory(selected) {
   const git = (args, input) => execFileSync('git', ['-C', root, ...args], { maxBuffer: 1 << 30, ...(input ? { input } : {}), stdio: ['pipe', 'pipe', 'pipe'] });
-  let commits;
-  try { commits = git(['rev-list', '--all']).toString().split('\n').filter(Boolean); } catch { return; }
-  const seen = new Map(); // blob sha → { path, label } of its first commit
+  const commits = selected ?? git(['rev-list', '--all']).toString().split('\n').filter(Boolean);
+  if (!commits.every(c => /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(c))) throw new Error('invalid commit list');
+  const seen = new Map(); // one blob read, every distinct path scanned (path rules apply to every alias)
   for (const c of commits) {
     const meta = git(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce%x00%B', c]).toString();
-    scanText(`commit:${c.slice(0, 8)}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`);
-    for (const row of git(['ls-tree', '-r', c]).toString().split('\n').filter(Boolean)) {
-      const [, type, sha, ...rest] = row.split(/\s+/); const path = rest.join(' ');
-      if (type !== 'blob' || seen.has(sha)) continue;
-      seen.set(sha, { path, label: `${path}@${c.slice(0, 8)}` });
+    scanText(`commit:${c.slice(0, 8)}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`, undefined, false);
+    for (const row of git(['ls-tree', '-r', '-z', c]).toString('utf8').split('\0').filter(Boolean)) {
+      const tab = row.indexOf('\t');
+      const [, type, sha] = row.slice(0, tab).split(' '); const path = row.slice(tab + 1);
+      if (type !== 'blob') continue;
+      const aliases = seen.get(sha) ?? new Map();
+      if (!aliases.has(path)) aliases.set(path, `${path}@${c.slice(0, 8)}`);
+      seen.set(sha, aliases);
     }
   }
   if (!seen.size) return;
   // output: "<sha> blob <size>\n<bytes>\n" per input line, in input order
   const out = git(['cat-file', '--batch'], [...seen.keys()].join('\n') + '\n');
   let at = 0;
-  for (const [sha, { path, label }] of seen) {
+  for (const [sha, aliases] of seen) {
     const nl = out.indexOf(0x0a, at);
     const [got, type, size] = out.subarray(at, nl).toString().split(' ');
     if (got !== sha || type !== 'blob') throw new Error(`cat-file --batch: expected blob ${sha}, got "${out.subarray(at, nl)}"`);
     const start = nl + 1, end = start + Number(size);
-    scanFile(path, out.subarray(start, end), label);
+    for (const [path, label] of aliases) scanFile(path, out.subarray(start, end), label);
     at = end + 1;
   }
 }
 
-walk(root);
 // a failure is an error (exit 1, fail-closed) that says what failed, never a bare Node stack
-if (flag('--history')) {
-  try { scanHistory(); } catch (e) { console.error(`guard: history scan failed: ${String(e?.message ?? e).split('\n')[0]}${e?.stderr?.length ? ` (${String(e.stderr).trim().split('\n').pop()})` : ''}`); process.exit(1); }
-}
+try {
+  if (!opt('--commits')) walk(root);
+  if (flag('--history') || opt('--commits')) scanHistory(opt('--commits') ? decodeText(readFileSync(opt('--commits'))).split(/\r?\n/).filter(Boolean) : undefined);
+  if (opt('--meta')) {
+    const meta = JSON.parse(decodeText(readFileSync(opt('--meta'))));
+    if (!Array.isArray(meta)) throw new Error('invalid metadata');
+    for (const [i, item] of meta.entries()) {
+      if (!item || typeof item.label !== 'string' || typeof item.text !== 'string') throw new Error('invalid metadata item');
+      const label = /^(?:pushed ref \d+ of \d+, (?:local|remote) name|tag object [0-9a-f]{8} \(tagger\/message\))$/.test(item.label) ? item.label : `metadata ${i + 1}`;
+      scanText('', item.text, label, undefined, false);
+    }
+  }
+} catch { console.error('guard: scan failed; check the inputs and Git object availability'); process.exit(1); }
 
 const uniq = [...new Map(findings.map(f => [`${f.where}:${f.line}:${f.rule}`, f])).values()];
 if (flag('--json')) console.log(JSON.stringify({ ok: uniq.length === 0, findings: uniq }, null, 1));

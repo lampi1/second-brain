@@ -15,8 +15,10 @@ export const APP_ID = 'second-brain';
 
 export function ensureShortcuts(): void {
   if (!releaseId()) return;
-  if (process.platform !== 'win32') { posixShortcuts(); return; }
   const base = sharedDir();
+  // A staged/installer smoke copy must never rewrite the real user's shell integration.
+  if (process.env.SB_RELEASES_ROOT && path.resolve(process.env.SB_RELEASES_ROOT) !== path.resolve(base)) return;
+  if (process.platform !== 'win32') { posixShortcuts(); return; }
   const vbs = path.join(base, 'launch.vbs');
   if (!fs.existsSync(vbs)) { log.warn('shortcuts', 'launch.vbs missing: shortcuts not written', { data: { vbs } }); return; }
   const opts: Electron.ShortcutDetails = {
@@ -25,7 +27,7 @@ export function ensureShortcuts(): void {
     cwd: base,
     description: 'second-brain: la cabina di comando di Claude e Cursor',
     // the app's own icon (scripts/make-icon.cjs → out/icon.ico), not Electron's
-    icon: fs.existsSync(path.join(app.getAppPath(), 'out', 'icon.ico')) ? path.join(app.getAppPath(), 'out', 'icon.ico') : process.execPath, iconIndex: 0,
+    icon: fs.existsSync(path.join(base, 'icon.ico')) ? path.join(base, 'icon.ico') : process.execPath, iconIndex: 0,
     appUserModelId: APP_ID,
   };
   for (const dir of [path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'), app.getPath('desktop')]) {

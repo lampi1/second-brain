@@ -1,0 +1,9 @@
+/* The proposal workflow scrolls as a page; each existing agent tile retains a usable composer and transcript. */
+.proposal-page{overflow:auto}
+.proposal-page>.imp-card{flex:none;padding:12px;overflow-wrap:anywhere}
+.proposal-page>.imp-open{flex:none;height:60vh;min-height:320px}
+.proposal-page .imp-open>.tile{height:100%}
+.proposal-page [data-testid^=proposal-]{min-width:0}
+.proposal-page article{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}
+.proposal-page article>.btn{margin:6px 6px 6px 0}
+.proposal-page .imp-log{white-space:pre;max-width:100%;overflow:auto}

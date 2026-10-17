@@ -1,0 +1,9 @@
+.effort-line{min-width:0;display:flex;flex-wrap:wrap;padding:2px 0}
+.effort-control{display:block;max-width:100%;min-width:0}
+.effort-badge{font-size:11px;line-height:1.4;white-space:normal;text-align:left;max-width:100%;overflow-wrap:anywhere;padding:3px 5px;border:1px solid var(--border);border-radius:5px}
+.effort-details{padding:12px;white-space:normal}
+.effort-details dl{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}
+.effort-details dd{margin:0;overflow-wrap:anywhere}
+.effort-details p{font-size:12px;line-height:1.5}
+.effort-badge:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.regia-effort{font-size:10px;white-space:normal;overflow-wrap:anywhere;max-width:160px;text-align:left;line-height:1.2}
