@@ -68,7 +68,10 @@ describe('app connector state', () => {
     const { service, adapters } = fixture();
     adapters.jiraLogin = vi.fn((_save, signal) => new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })));
     const login = service.login('jira'); const rejected = expect(login).rejects.toThrow('cancelled');
+    // a screen opened meanwhile sees the sign-in in progress (and offers the cancel)
+    expect((await service.list()).map(s => !!s.signingIn)).toEqual([false, true]);
     await service.cancelLogin(); await rejected;
+    expect((await service.list()).some(s => s.signingIn)).toBe(false);
     expect((await service.probe('github')).status).toBe('verified');
   });
 });

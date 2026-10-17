@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { OwnerProfile } from '../../src/shared/profile';
 import { changedFields, profileError, profileForm, rebaseForm, tooManyAreas, workAreas } from '../../src/renderer/lib/profile';
 
-const base: OwnerProfile = { name: 'Tu', role: 'dev', language: 'italiano', mainWork: ['Billing'], replyStyle: 'short', rules: [], locked: [], revision: 'r', updatedAt: 0, growth: { journalDays: 0, lastJournal: null }, path: 'me.md' };
+const base: OwnerProfile = { name: 'Tu', role: 'dev', language: 'italiano', mainWork: ['Billing'], replyStyle: 'short', replyStyleDefault: 'default', rules: [], locked: [], revision: 'r', updatedAt: 0, growth: { journalDays: 0, lastJournal: null }, path: 'me.md' };
 
 describe('profile form', () => {
   it('reads work areas one per line, bullets and blanks dropped, markdown kept, never truncated', () => {

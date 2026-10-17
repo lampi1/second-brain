@@ -9,7 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { OwnerProfile, ProfileFields, ProfileResult, ProfileRule, ProfileSave } from '../../shared/profile';
-import { PROFILE_LIMITS } from '../../shared/profile';
+import { PROFILE_FORBIDDEN, PROFILE_LIMITS } from '../../shared/profile';
 
 const MAX_BYTES = 256 * 1024;
 const BOM = String.fromCharCode(0xfeff), BOM_START = new RegExp('^' + BOM);
@@ -103,13 +103,11 @@ export function checkFields(value: unknown): Partial<ProfileFields> {
   for (const key of Object.keys(v)) if (!['name', 'role', 'language', 'mainWork', 'replyStyle'].includes(key)) throw new Error('PROFILE_FIELDS');
   if ('name' in v) {
     const name = oneLine(v.name, PROFILE_LIMITS.name);
-    // the name heads the file and sits in headings: no markdown that could change the structure
-    if (!name || /[#*`[\]<>|_\\]/.test(name)) throw new Error('PROFILE_FIELDS');
+    if (!name || PROFILE_FORBIDDEN.name.test(name)) throw new Error('PROFILE_FIELDS');
     out.name = name;
   }
-  // role and language share the "Name, role. Language: x in chat" line: neither may carry its separators
-  if ('role' in v) { out.role = oneLine(v.role, PROFILE_LIMITS.role); if (!out.role || /\. Language: /.test(out.role)) throw new Error('PROFILE_FIELDS'); }
-  if ('language' in v) { out.language = oneLine(v.language, PROFILE_LIMITS.language); if (!out.language || / in chat|\. Language: /.test(out.language)) throw new Error('PROFILE_FIELDS'); }
+  if ('role' in v) { out.role = oneLine(v.role, PROFILE_LIMITS.role); if (!out.role || PROFILE_FORBIDDEN.role.test(out.role)) throw new Error('PROFILE_FIELDS'); }
+  if ('language' in v) { out.language = oneLine(v.language, PROFILE_LIMITS.language); if (!out.language || PROFILE_FORBIDDEN.language.test(out.language)) throw new Error('PROFILE_FIELDS'); }
   if ('replyStyle' in v) { out.replyStyle = oneLine(v.replyStyle, PROFILE_LIMITS.replyStyle); if (!out.replyStyle) throw new Error('PROFILE_FIELDS'); }
   if ('mainWork' in v) {
     if (!Array.isArray(v.mainWork) || v.mainWork.length > PROFILE_LIMITS.areas) throw new Error('PROFILE_FIELDS');
@@ -205,7 +203,7 @@ export class ProfileService {
     const p = parseProfile(text.replace(BOM_START, ''));
     return {
       name: p.name, role: p.role, language: p.language, mainWork: p.mainWork, replyStyle: p.rules.find(isReply)?.text ?? '',
-      rules: p.rules.map(r => ({ title: r.title, text: r.text })), locked: lockedFields(p, this.host.template ?? ''),
+      rules: p.rules.map(r => ({ title: r.title, text: r.text })), replyStyleDefault: parseProfile(this.host.template ?? '').rules.find(isReply)?.text ?? '', locked: lockedFields(p, this.host.template ?? ''),
       revision: hash(text), updatedAt: mtime, growth: await this.growth(file), path: file,
     };
   }

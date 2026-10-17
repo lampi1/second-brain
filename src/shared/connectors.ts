@@ -9,6 +9,8 @@ export interface ConnectorState {
   projects: ConnectorProject[];
   selected: string[];
   detail: string;
+  /** a sign-in started from any screen is still running in main (a reopened screen offers to cancel it) */
+  signingIn?: boolean;
 }
 export interface ConnectorPort {
   list(): Promise<ConnectorState[]>;
