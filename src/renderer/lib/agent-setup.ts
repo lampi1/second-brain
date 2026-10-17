@@ -14,9 +14,11 @@ export const knownName = (current: OwnerProfile | null) => !!current && !placeho
 export const customReplyStyle = (current: OwnerProfile) => !!current.replyStyle && current.replyStyle !== current.replyStyleDefault && !(Object.values(REPLY_PRESETS) as string[]).includes(current.replyStyle);
 export const replyStyleOf = (current: OwnerProfile): SetupDraft['style'] => current.replyStyle === REPLY_PRESETS.concise ? 'concise' : current.replyStyle === REPLY_PRESETS.detailed ? 'detailed' : 'balanced';
 export type InterviewAnswers = Required<SetupProfile>;
-/** what the interview shows: the answers given in this run, else what me.md says now (placeholders count as empty) */
+/** what the interview shows: the answers given in this run, else what me.md says now (placeholders count as empty);
+ * a known name or a read-only field always shows me.md, since confirm would not write the answer */
 export function profileDraft(draft: SetupDraft, current: OwnerProfile | null): InterviewAnswers {
-  const p = draft.profile ?? {};
+  const all = draft.profile ?? {}, locked = wizardLocked(current);
+  const p = { ...all, name: knownName(current) || locked.has('name') ? undefined : all.name, role: locked.has('role') ? undefined : all.role, language: locked.has('language') ? undefined : all.language, areas: locked.has('mainWork') ? undefined : all.areas };
   const base: InterviewAnswers = current
     ? { name: knownName(current) ? current.name : '', role: placeholder('role', current.role) ? '' : current.role, language: current.language, areas: current.mainWork.join('\n'), style: replyStyleOf(current) }
     : { name: '', role: '', language: '', areas: '', style: 'balanced' };

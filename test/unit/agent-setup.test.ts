@@ -59,6 +59,7 @@ it('flags the answers main would refuse and leaves them out of the save', () => 
 it('shows read-only the me.md fields it could only keep by cutting them', () => {
   expect([...wizardLocked(owner({ role: 'r'.repeat(241), locked: ['name'] }))].sort()).toEqual(['name', 'role']);
   expect(wizardLocked(owner()).size).toBe(0);
+  expect(profileDraft({ ...emptySetup(), profile: { role: 'pm', language: 'en' } }, owner({ role: 'lead', locked: ['role'] }))).toMatchObject({ role: 'lead', language: 'en' });
   expect(wizardProfile({ ...emptySetup(), profile: { role: 'short' } }, owner({ role: 'r'.repeat(241) }))).toEqual({});
 });
 it('keeps the interview answers in the local setup and refuses malformed ones', () => {
