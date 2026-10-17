@@ -1,7 +1,7 @@
 /** Converts bounded legacy routing data into editable catalog profiles; main owns persistence and availability. */
 import { createHash } from 'node:crypto';
 import { TASK_KINDS, type Effort, type RoutingRow } from '../../shared/contract';
-import { AGENT_SYMBOLS, type AgentProfile } from '../../shared/agents';
+import { AGENT_SYMBOLS, type AgentProfileV1 as AgentProfile } from '../../shared/agents';
 
 // Keep the same model syntax accepted by the catalog, without resolving aliases or providers.
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;

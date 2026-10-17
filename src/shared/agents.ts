@@ -12,10 +12,29 @@ export interface AgentManifest {
   successCriteria?: string[];
 }
 
-export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark'] as const;
+export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark', 'bug', 'eye', 'globe', 'server', 'mail', 'calendar', 'book', 'shield', 'wrench', 'check'] as const;
 export type AgentSymbol = (typeof AGENT_SYMBOLS)[number];
+export const AGENT_TONES = ['blue', 'violet', 'amber', 'teal', 'red', 'slate', 'cyan', 'pink', 'indigo', 'green'] as const;
+export type AgentTone = (typeof AGENT_TONES)[number];
 /** Raster data only. Main validates bytes, decoding and dimensions before persistence. */
-export type AgentAvatar = { kind: 'symbol'; value: AgentSymbol } | { kind: 'image'; dataUrl: string };
+export type AgentAvatar = { kind: 'symbol'; value: AgentSymbol; tone?: AgentTone } | { kind: 'image'; dataUrl: string };
+
+export const AGENT_CATEGORIES = ['development', 'ops', 'personal', 'other'] as const;
+export type AgentCategory = (typeof AGENT_CATEGORIES)[number];
+/** Abstract tool classes. A definition only narrows what the engine and Brother's settings already allow. */
+export const TOOL_CLASSES = ['read', 'edit', 'shell', 'web', 'browser', 'mail-draft', 'calendar-read', 'brain-write', 'mcp'] as const;
+export type ToolClass = (typeof TOOL_CLASSES)[number];
+export interface AgentToolPolicy { allow: ToolClass[]; mcp?: string[] }
+/** Upper bound for a run's permission mode. 'auto' and 'bypassPermissions' are deliberately not representable. */
+export const PERMISSION_CEILINGS = ['plan', 'default', 'acceptEdits'] as const;
+export type PermissionCeiling = (typeof PERMISSION_CEILINGS)[number];
+export interface AgentEvidenceRef { kind: 'journal' | 'chat' | 'ai-error' | 'cost' | 'run' | 'feedback'; ref: string; at: number }
+export type AgentOrigin =
+  | { kind: 'preset'; presetId: string; presetRevision: number }
+  | { kind: 'user' }
+  | { kind: 'orchestrator'; reason: string; evidence: AgentEvidenceRef[] };
+export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration';
+
 export interface AgentDraft {
   name: string;
   purpose: string;
@@ -26,13 +45,51 @@ export interface AgentDraft {
   model: string | null;
   effort?: Effort;
   avatar: AgentAvatar;
+  /** One line, what the agent is. Omitted by older clients: the purpose stands in. */
+  role?: string;
+  category?: AgentCategory;
+  /** null/omitted = inherit the engine defaults, as before definitions could narrow tools. */
+  tools?: AgentToolPolicy | null;
+  /** null/omitted = inherit Brother's own permission settings. */
+  permissionCeiling?: PermissionCeiling | null;
 }
-export interface AgentProfile extends AgentDraft { id: string; createdAt: number; updatedAt: number }
+/** The agents.json v1 record, still produced by the legacy routing import and read by the v1 → v2 migration. */
+export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updatedAt: number };
+/** Fields that change what a run does. Saving a change to any of them creates a new version. */
+export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling'] as const;
+export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling'>;
+export interface AgentProfile extends AgentDraft {
+  id: string; createdAt: number; updatedAt: number;
+  role: string;
+  category: AgentCategory;
+  tools: AgentToolPolicy | null;
+  permissionCeiling: PermissionCeiling | null;
+  origin: AgentOrigin;
+  /** Highest version ever created. */
+  version: number;
+  /** The version new runs use; lower than `version` after a restore. The profile's behaviour fields are this version. */
+  activeVersion: number;
+  /** At most one open trial per agent; no other behavioural change while it is open. */
+  trial?: { version: number; baseline: number; startedAt: number };
+  lastEditedBy: AgentAuthor;
+  /** Brother edited it: the Orchestrator may only propose changes. */
+  userLocked: boolean;
+  status: 'active' | 'archived';
+  archivedAt?: number;
+}
+export type AgentVersionState = 'active' | 'trial' | 'kept' | 'rejected' | 'superseded';
+/** Immutable behaviour snapshot of one version (no avatar or images: history stays small). */
+export interface AgentVersion {
+  agentId: string; version: number; parentVersion: number | null;
+  behaviour: AgentBehaviour; author: AgentAuthor; reason: string; at: number; state: AgentVersionState;
+}
 /** Frozen when a chat starts; editing the catalog never relabels existing sessions. */
 export interface AgentOwnerSnapshot {
   id: string; name: string; purpose: string; avatar: AgentAvatar;
   engine: Harness; model: string | null; revision: number;
   source: 'catalog' | 'legacy' | 'routed';
+  /** Definition version the chat runs. Absent on chats started before versions existed (= v0 legacy). */
+  version?: number;
 }
 export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
@@ -46,7 +103,9 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
+  /** Active definitions only: the launchable ones. */
   profiles: AgentProfile[];
+  archived: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;
   legacyRouting: { preserved: true; imported: number; remaining: number };
