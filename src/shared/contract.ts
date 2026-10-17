@@ -11,6 +11,7 @@ import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
 import type { AppProposal, ProposalAvailability, ProposalPublication } from './improve-proposals';
 import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
+import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -1135,6 +1136,10 @@ export interface InvokeMap {
   'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
+  /** the owner's profile in the brain's me.md (src/main/brain/profile.ts) */
+  'profile:get': [void, ProfileResult];
+  /** patches only the managed fields; refused when me.md changed since `revision` */
+  'profile:save': [ProfileSave, OwnerProfile];
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
   'cli:status': [{ harness: Harness; checkLogin?: boolean }, CliStatus];
@@ -1351,7 +1356,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save',
+  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',

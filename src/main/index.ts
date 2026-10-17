@@ -34,6 +34,7 @@ import { FROZEN_EPOCH } from './demo';
 import { systemLang } from './lang';
 import { BrainCreator } from './brain/create';
 import { BrainCreationController } from './brain/create-controller';
+import { ProfileService } from './brain/profile';
 import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
@@ -99,6 +100,7 @@ app.whenReady().then(async () => {
     }, currentRoot: () => s.brain.settings().brainRoot, selectionRevision: () => brainChoiceRevision, engineKnown: id => !!engineOf(id),
     connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
   });
+  const profile = new ProfileService({ root: () => s.brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() });
   const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); } });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
@@ -146,6 +148,8 @@ app.whenReady().then(async () => {
     'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
     'setup:save': a => s.setup.save(a.preferences, a.status),
+    'profile:get': () => profile.get(),
+    'profile:save': a => profile.save(a),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;

@@ -7,7 +7,7 @@ const READS = new Set<InvokeChannel>([
   'chat:autoCloseGet', 'chat:autoClosePresence', 'browser:list', 'browser:handoffs', 'browser:envList', 'views:layout', 'feed:list',
   'settings:get', 'settings:schema', 'settings:history', 'settings:pending', 'models:seen', 'routing:get', 'routing:preview',
   'overlay:model', 'overlay:size', 'overlay:focus', 'run:list', 'secrets:status', 'engines:spend', 'devops:get', 'sync:get',
-  'later:get', 'improve:get', 'improve:proposals', 'improve:proposalAvailability', 'agents:list', 'agents:history', 'setup:get', 'progress:get',
+  'later:get', 'improve:get', 'improve:proposals', 'improve:proposalAvailability', 'agents:list', 'agents:history', 'setup:get', 'profile:get', 'progress:get',
 ]);
 export class UpdateActivity {
   private active = 0;

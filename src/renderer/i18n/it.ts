@@ -14,6 +14,7 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {settingsIt}from'./areas/settings.it';
+import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 
@@ -41,6 +42,7 @@ export const it = {
   ...studioIt,
   ...productIt,
   ...settingsIt,
+  ...profileIt,
   ...chatIt,
   ...dialogsIt,
   ...toolsIt,
