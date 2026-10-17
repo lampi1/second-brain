@@ -19,7 +19,7 @@ export function cursorLog(file: string): CursorLog[] {
 }
 
 export function tmp(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `sb-${prefix}-`));
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), `sb-${prefix}-`)));
 }
 
 /** Polls until fn() holds. Without ms it waits as long as the test may run (its own timeout): on a busy machine the

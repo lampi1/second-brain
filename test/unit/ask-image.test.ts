@@ -37,8 +37,10 @@ describe('magic bytes and folders', () => {
     expect(isInside('/home/u/evidence/../x.png', '/home/u/evidence', 'linux')).toBe(false);
   });
   it('the roots: profile, both evidence folders, brain, the code and its worktrees', () => {
-    const roots = askImageRoots({ userData: 'U', appData: 'A', brainRoot: 'B', repos: [r`C:\src\second-brain-app`, null] });
-    expect(roots).toEqual(['U', path.join('A', 'second-brain', 'evidence'), path.join('A', 'second-brain-dev', 'evidence'), 'B', r`C:\src\second-brain-app`, path.join(r`C:\src`, 'second-brain-wt')]);
+    const source = path.join(dir, 'src');
+    const repo = path.join(source, 'second-brain-app');
+    const roots = askImageRoots({ userData: 'U', appData: 'A', brainRoot: 'B', repos: [repo, null] });
+    expect(roots).toEqual(['U', path.join('A', 'second-brain', 'evidence'), path.join('A', 'second-brain-dev', 'evidence'), 'B', repo, path.join(source, 'second-brain-wt')]);
   });
 });
 

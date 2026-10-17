@@ -2,19 +2,34 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import fs from 'node:fs';
+import path from 'node:path';
 import vm from 'node:vm';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn: mock.spawn }));
 import { prepareUpdateRestart } from '../../src/main/update/restart';
+const resolveWindows = path.win32.resolve;
 
-afterEach(() => { vi.useRealTimers(); mock.spawn.mockReset(); });
+beforeEach(() => {
+  // This file exercises the Windows IPC protocol with inert children on every host.
+  vi.stubGlobal('process', { ...process, platform: 'win32' });
+  vi.stubEnv('SystemRoot', 'C:/Windows');
+  vi.spyOn(path, 'resolve').mockImplementation((...parts: string[]) => resolveWindows(...parts));
+  vi.spyOn(fs.realpathSync, 'native').mockImplementation(file => resolveWindows(String(file)));
+});
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); mock.spawn.mockReset(); });
 function child() {
   const p = Object.assign(new EventEmitter(), { pid: 34567, connected: true, channel: { unref: vi.fn() }, unref: vi.fn(), send: vi.fn() });
   mock.spawn.mockReturnValue(p);
   return p;
 }
-const input = () => ({ base: import.meta.dirname, pid: process.pid });
+const input = () => ({ base: 'C:/second-brain-fixture', pid: process.pid });
+
+it.each(['darwin', 'linux'])('refuses the unsupported %s host before spawning a supervisor', async platform => {
+  vi.stubGlobal('process', { ...process, platform });
+  await expect(prepareUpdateRestart(input())).rejects.toThrow('Windows corrente');
+  expect(mock.spawn).not.toHaveBeenCalled();
+});
 
 it('the exact supervisor recognizes real CRLF, keeps its worker on disconnect, and ACKs only after worker close', () => {
   const source = fs.readFileSync(new URL('../../src/main/update/restart.ts', import.meta.url), 'utf8');

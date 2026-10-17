@@ -74,9 +74,9 @@ const B = fwd(dir), R = fwd(repos), H = fwd(HOME);
 const toWin = p => p.replace(/\//g, '\\');
 const V = {
   OWNER: name.trim(), BRAIN_NAME: basename(dir), TODAY: new Date().toISOString().slice(0, 10),
-  BRAIN: B, BRAIN_WIN: toWin(B), BRAIN_JS: toWin(B).replace(/\\/g, '\\\\'), BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
-  REPOS: R, REPOS_WIN: toWin(R), REPOS_JS: toWin(R).replace(/\\/g, '\\\\'),
-  HOME: H, HOME_WIN: toWin(H), HOME_JS: toWin(H).replace(/\\/g, '\\\\'),
+  BRAIN: B, BRAIN_WIN: toWin(B), BRAIN_JS: B, BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
+  REPOS: R, REPOS_WIN: toWin(R), REPOS_JS: R,
+  HOME: H, HOME_WIN: toWin(H), HOME_JS: H,
   DEVOPS_ORG: org?.trim() || 'your-org', DEVOPS_PROJECT: project?.trim() || 'your-project', ROLE: role?.trim() || 'developer', LANG: lang,
   OS: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: win ? 'PowerShell' : 'bash',
   HARNESSES: harness.map(h => ({ claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex', kimi: 'Kimi' })[h] ?? h).join(' + '),

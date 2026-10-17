@@ -13,7 +13,7 @@ import { templateManifest } from '../../../scripts/template-manifest.mjs';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 function fixture() {
-  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-create-')));
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-create-')));
   roots.push(base);
   const app = path.join(base, 'release-a');
   const template = path.join(app, 'brain-template');

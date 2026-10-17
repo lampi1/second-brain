@@ -14,7 +14,7 @@ import { FIXTURES, plainNode, tmpDir } from '../brain/helpers';
 import { waitFor } from '../chats/helpers';
 
 const run = (round: string, o: Partial<QueueRun> = {}): QueueRun => ({
-  round, side: 'b', experiment: 'ab', engine: 'claude', model: 'opus', effort: 'medium', cwd: 'C:/repo', prompt: `rivedi ${round}`, denyRead: ['C:/brain/reviews/compare/a-out'], ...o,
+  round, side: 'b', experiment: 'ab', engine: 'claude', model: 'opus', effort: 'medium', cwd: path.resolve('repo'), prompt: `rivedi ${round}`, denyRead: [path.resolve('brain/reviews/compare/a-out')], ...o,
 });
 
 function brain(runs: QueueRun[]): string {
@@ -54,7 +54,7 @@ describe('comparison queue', { timeout: 120e3 }, () => {
     const runner = fakeRunner();
     const q = new CompareQueue({ brainRoot: () => root, node: plainNode, anyOn: async () => true, runner });
     await q.tick();
-    expect(runner.asked).toEqual([{ engine: 'claude', prompt: 'rivedi r1', cwd: 'C:/repo', model: 'opus', effort: 'medium', round: 'r1', denyRead: ['C:/brain/reviews/compare/a-out'] }]);
+    expect(runner.asked).toEqual([{ engine: 'claude', prompt: 'rivedi r1', cwd: path.resolve('repo'), model: 'opus', effort: 'medium', round: 'r1', denyRead: [path.resolve('brain/reviews/compare/a-out')] }]);
     expect(stateOf(root)[0]!.status).toBe('running');
     runner.pending.get('r1')!(OK);
     await waitFor(() => q.running === 0, 'the run written back');

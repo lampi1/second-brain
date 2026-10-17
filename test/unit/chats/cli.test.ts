@@ -46,7 +46,7 @@ describe('quit kill', () => {
   // (the tree kill of a child that escapes the job is covered by manager.test's shutdown test)
   it('a bounded quit kill whose taskkill is too slow terminates the processes directly, their job children with them', async () => {
     const f = path.join(tmp('kill'), 'child.pid');
-    const p = spawn(process.execPath, ['-e', `const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{stdio:'ignore'});require('fs').writeFileSync(${JSON.stringify(f)},String(c.pid));setInterval(()=>{},1e3)`], { stdio: 'ignore' });
+    const p = spawn(process.execPath, ['-e', `const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{stdio:'ignore'});require('fs').writeFileSync(${JSON.stringify(f)},String(c.pid));setInterval(()=>{},1e3)`], { stdio: 'ignore', detached: process.platform !== 'win32' });
     const child = Number(await waitFor(() => fs.existsSync(f) && fs.readFileSync(f, 'utf8'), 'the child pid'));
     await killTreesWithin([p.pid], 1);
     expect(alive(p.pid!)).toBe(false); // dead when the bounded kill resolves

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { assertReleaseId, assertStagingRoot, releaseEnginePath } from '../../scripts/release.mjs';
 
 const roots: string[] = [];
-const temp = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-gate-')); roots.push(p); return p; };
+const temp = () => { const p = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-gate-'))); roots.push(p); return p; };
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 describe('stable release gates', () => {

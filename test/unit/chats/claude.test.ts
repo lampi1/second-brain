@@ -161,6 +161,8 @@ describe('ClaudeSession', () => {
     await waitFor(() => sink.last('assistant')?.text.includes('tick'), 'some streamed text');
     await s.interrupt({ byUser: true });
     const r = await resultOf(sink);
+    // The CLI sends its authoritative idle event after the result; separate pipe chunks are valid.
+    await waitFor(() => s.state === 'idle', 'the interrupted turn became idle');
     // the user's own stop is no error (12/10: "quando faccio Invia subito vedo sempre un errore"), told once
     expect(r).toMatchObject({ isError: false, interrupted: true });
     expect(sink.last('assistant')?.streaming).toBe(false);

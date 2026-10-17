@@ -12,6 +12,7 @@ const scripts = path.resolve(import.meta.dirname, '../../scripts');
 const put = (root: string, name: string, text: string | Buffer) => { const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 const make = () => { fs.mkdirSync(home, { recursive: true }); return fs.mkdtempSync(path.join(home, 'case-')); };
 const target = '2.0.0-abcdef0';
+const runtime = process.platform === 'win32' ? 'electron.exe' : process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron';
 function state(root: string, current = 'running', previous: string | null = null, protocol = 1) {
   put(root, 'current.json', JSON.stringify({ current, previous, writerProtocol: protocol, bad: [], history: [] }));
 }
@@ -20,6 +21,8 @@ function payload(bootstrapSuffix = '') {
   const rel = { id: target, version: '2.0.0', writerProtocol: 1, electron: '2.0.0', claudeEngine: 'engines/claude/2.0.0/claude.exe' };
   for (const f of ['release.mjs', 'update.mjs']) put(root, f, fs.readFileSync(path.join(scripts, f), 'utf8') + bootstrapSuffix);
   for (const f of ['icon.ico', 'LICENSE', `releases/${target}/out/main/index.js`, `releases/${target}/out/icon.ico`, 'electron/2.0.0/electron.exe', rel.claudeEngine]) put(root, f, 'inert fixture: never executed');
+  // The Windows update manifest and the host's activation runtime are both verified, inert assets.
+  put(root, `electron/2.0.0/${runtime}`, 'inert fixture: never executed');
   put(root, `releases/${target}/release.json`, JSON.stringify(rel));
   put(root, `releases/${target}/package.json`, '{"name":"fixture"}');
   const { sha256 } = manifestPayload(root, rel, 'a'.repeat(40), true);
@@ -170,5 +173,6 @@ it('installs from a private verified payload under the common writer lock', () =
   const result = spawnSync(process.execPath, [path.join(staged, 'release.mjs'), 'install-payload', target, p.sha256], { encoding: 'utf8', windowsHide: true, env: { ...process.env, SB_RELEASES_ROOT: base } });
   expect(result.status, result.stderr).toBe(0);
   expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: target, writerProtocol: 1 });
-  expect(fs.readFileSync(path.join(base, 'launch.vbs'), 'utf8')).toContain('second-brain stable launcher');
+  const launcher = process.platform === 'win32' ? 'launch.vbs' : 'launch.sh';
+  expect(fs.readFileSync(path.join(base, launcher), 'utf8')).toContain('second-brain stable launcher');
 });

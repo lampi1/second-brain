@@ -16,7 +16,7 @@ const roots: string[] = [];
 const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 function fixture(native = false,writerProtocol=RELEASE_WRITER_PROTOCOL) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-acquire-'))); roots.push(root);
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-acquire-'))); roots.push(root);
   const cacheRoot = path.join(root, 'cache'), id = '1.2.3-aaaaaaa', version = '1.2.3', source = 'a'.repeat(40);
   const rel = { id, version,writerProtocol, electron: '1.0.0', claudeEngine: 'engines/claude/1.0.0/claude.exe' };
   const files: Record<string, string> = Object.fromEntries(['release.mjs', 'update.mjs', 'icon.ico', 'LICENSE', `releases/${id}/package.json`, `releases/${id}/out/main/index.js`, 'electron/1.0.0/electron.exe', rel.claudeEngine].map(name => [name, `fixture ${name}`]));

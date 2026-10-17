@@ -51,7 +51,7 @@ function launch(base: string, userData: string, plan: string, waitMs = 3000): { 
   return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
 }
 
-beforeAll(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-launch-')); });
+beforeAll(() => { root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-launch-'))); });
 afterAll(() => { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* a fake app may still hold a file */ } });
 
 describe('release.mjs launch', () => {

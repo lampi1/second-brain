@@ -30,11 +30,12 @@ describe('cross-engine messaging is always available', () => {
   it('persists the migration once and preserves engine choices and domains', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
-    fs.writeFileSync(file, JSON.stringify({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, domains: ['C:/work'] }));
+    const domain = path.resolve('work');
+    fs.writeFileSync(file, JSON.stringify({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, domains: [domain] }));
     const store = new ConfigStore(dir, {});
     expect(store.get().messaging.crossHarness).toBe(true);
     const saved = fs.readFileSync(file, 'utf8');
-    expect(JSON.parse(saved)).toMatchObject({ messaging: { crossHarness: true }, engineOn: { cursor: false }, engines: { cursor: false }, domains: ['C:/work'] });
+    expect(JSON.parse(saved)).toMatchObject({ messaging: { crossHarness: true }, engineOn: { cursor: false }, engines: { cursor: false }, domains: [domain] });
     expect(new ConfigStore(dir, {}).get().messaging.crossHarness).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe(saved);
   });

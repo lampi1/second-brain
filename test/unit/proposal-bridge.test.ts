@@ -12,7 +12,7 @@ import type { ChatSummary, NewChat } from '../../src/shared/contract';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
-const temp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-proposal-bridge-')); dirs.push(dir); return dir; };
+const temp = () => { const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-proposal-bridge-'))); dirs.push(dir); return dir; };
 const runGit = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'core.hooksPath=', ...args], { cwd, windowsHide: true, encoding: 'utf8' }).trim();
 
 describe('renderer proposal bridge', () => {

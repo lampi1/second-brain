@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { hashFile, manifestPayload, prepareApply as prepareApplyLocked, withReleaseLock, safePayloadPath, stageUpdate, stagedUpdates } from '../../scripts/update.mjs';
 
 const roots: string[] = [];
-const temp = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-update-')); roots.push(p); return p; };
+const temp = () => { const p = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-update-'))); roots.push(p); return p; };
 const put = (root: string, name: string, text: string) => { const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 const id = '1.0.0-abcdef0';
 const prepareApply = (root: string, target: string, expected?: string) => withReleaseLock(root, 'test-apply', (lease: unknown) => prepareApplyLocked(root, target, expected ?? JSON.parse(fs.readFileSync(path.join(root, 'staged', `${target}.json`), 'utf8')).manifestSha256, lease));
