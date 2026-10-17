@@ -120,7 +120,7 @@ describe('demo chats (frozen)', () => {
     expect(n).toMatchObject({ title: 'App · Mappa 3D (2)', continuedFrom: { id: 'mappa' } });
     expect(chats.list().find(c => c.id === 'mappa')).toMatchObject({ continuedBy: { id: n.id }, state: 'closed' });
     expect((await chats.continueChat('mappa')).id).toBe(n.id);
-    await expect(chats.continueChat('regia')).rejects.toThrow(/Regia/);
+    await expect(chats.continueChat('regia')).rejects.toThrow(/Orchestrator/);
   });
 
   it('brain: feed, mute and usage that follows the chats\' cost', () => {

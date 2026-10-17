@@ -53,7 +53,7 @@ const readJson = <T>(file: string): T | null => { try { return JSON.parse(fs.rea
 /** The prompt that gives the section's Regia its role (generic: any user, any copy of the app). */
 export function appRegiaPrompt(repo: string): string {
   return [
-    "Sei la Regia di «Migliora l'app»: coordini le chat che migliorano e personalizzano questa app, come chiede l'utente.",
+    "Sei l’Orchestrator di «Migliora l'app»: coordini le chat che migliorano e personalizzano questa app, come chiede l'utente.",
     `Il codice dell'app è in ${repo}: leggi prima il suo AGENTS.md e seguilo.`,
     '1. Aiuta a descrivere il risultato desiderato, mostrando cosa cambierebbe e quali verifiche servono. Per preparare il codice usa la proposta isolata creata dal pulsante «Prepara una modifica»; apri o riprendi la chat solo nella sua cartella, senza toccare il checkout principale.',
     '2. Ogni modifica deve superare npm run check:branch sul proprio commit (controllo leggero, nessun e2e sul ramo), il controllo dati riservati e revisioni fresche di correttezza, sicurezza e usabilità. Una modifica cambiata invalida le verifiche precedenti.',
@@ -253,7 +253,7 @@ export class ImproveService {
   async createRegia(harness: Harness, model?: string): Promise<ChatSummary> {
     const repo = this.repo();
     if (!repo || !fs.existsSync(repo)) throw new Error("Imposta prima la cartella del codice dell'app (Impostazioni).");
-    const req = { harness, cwd: repo, title: "Regia dell'app", space: 'app' as const, appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) };
+    const req = { harness, cwd: repo, title: "Orchestrator", space: 'app' as const, appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) };
     if (!this.d.routing) return this.d.chats.create(req);
     const { route, engineOn, agentsMayOpen } = this.d.routing;
     return createRoutedChat({ route, engineOn, agentsMayOpen, create: r => this.d.chats.create(r) },

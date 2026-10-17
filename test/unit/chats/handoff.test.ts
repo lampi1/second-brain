@@ -171,7 +171,7 @@ describe('ChatManager long chats', () => {
     const { make, cwd } = setup();
     const m = make();
     const r = await m.create({ harness: 'claude', cwd, regia: true });
-    await expect(m.continueChat(r.id)).rejects.toThrow(/Regia/);
+    await expect(m.continueChat(r.id)).rejects.toThrow(/Orchestrator/);
     const c = await m.create({ harness: 'claude', cwd, prompt: 'slow' });
     await waitFor(() => summary(m, c.id)?.state === 'running', 'running');
     await expect(m.handoff(c.id)).rejects.toThrow(/lavorando/);

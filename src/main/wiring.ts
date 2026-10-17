@@ -127,7 +127,7 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   }
   mcp.mount('/mcp/improve', {
     name: 'app',
-    instructions: `"Migliora l'app": the Regia of the app's own improvements. Control and inspect ${what}, only the chats of this section; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
+    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, only the chats of this section; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
     tools: appControlTools({ ...deps, space: 'app', improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
   });
 }

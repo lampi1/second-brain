@@ -219,7 +219,7 @@ describe('app control scope', () => {
     expect(t.made[0]).not.toHaveProperty('space');
     await expect(Promise.resolve(t.create.run({ title: 'C', prompt: 'p', space: 'app', cwd: 'C:/elsewhere' }))).rejects.toThrow(/cartella non ammessa/);
     await expect(Promise.resolve(t.create.run({ title: 'D', prompt: 'p', space: 'root' }))).rejects.toThrow(/Invalid chat space/);
-    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', regia: true }))).rejects.toThrow(/Regia/);
+    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', regia: true }))).rejects.toThrow(/Orchestrator/);
     expect(t.made).toHaveLength(2);
   });
 

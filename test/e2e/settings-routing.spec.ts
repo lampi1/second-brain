@@ -13,7 +13,7 @@ test('Settings retires the routing matrix without resetting legacy routing choic
     expect(before.table?.routes).toHaveLength(4);
     expect(before.table?.routes[1]).toMatchObject({ kind: 'triage', model: 'claude-sonnet-5-5' });
     expect(before.table?.routes[3]).toMatchObject({ kind: 'bug-fix', locked: true });
-    expect(before.history).toEqual(expect.arrayContaining([expect.objectContaining({ to: 2, by: 'agente: Regia dell’app', evidence: expect.stringContaining('31 chat') })]));
+    expect(before.history).toEqual(expect.arrayContaining([expect.objectContaining({ to: 2, by: 'agente: Orchestrator', evidence: expect.stringContaining('31 chat') })]));
 
     await page.getByTestId('settings').click();
     await page.getByTestId('settings-all').click();

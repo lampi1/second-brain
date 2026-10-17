@@ -35,7 +35,7 @@ test('the Regia closes a work chat\'s question with the user\'s answer, only aft
   const left = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
   expect(left.some(p => p.id === q.id)).toBe(false);
   // the work chat goes on with the marked answer
-  await expect(page.getByTestId('tile-chat-qa')).toContainText('Risposto in Regia dall\'utente', { timeout: 15_000 });
+  await expect(page.getByTestId('tile-chat-qa')).toContainText('Risposto nell’Orchestrator dall\'utente', { timeout: 15_000 });
   await page.mouse.move(2, 2);
   await shot(page, 'resolve-question');
   await app.close();

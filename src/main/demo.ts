@@ -98,7 +98,7 @@ export function seed(E: number): Seed {
     state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
   const chats: ChatSummary[] = [
-    chat({ id: 'regia', title: 'Regia', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
+    chat({ id: 'regia', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
       lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
@@ -213,7 +213,7 @@ export function seed(E: number): Seed {
   const feed: FeedEvent[] = [
     ev('f-1', 2 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'App · Feedback', 'Permesso: npm run test:e2e', { chatId: 'feedback' }),
     ev('f-2', 4 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'QA · Rimborsi', 'Il test case 7 fallisce anche su master', { chatId: 'qa' }),
-    ev('f-3', 7 * MIN, 'idea', 'Idea dell\'IA', 'normal', 'Pausa automatica dei test lenti', 'Fermare i test che superano 2 minuti e chiedere se continuare', { who: 'Regia', file: 'ideas.md' }),
+    ev('f-3', 7 * MIN, 'idea', 'Idea dell\'IA', 'normal', 'Pausa automatica dei test lenti', 'Fermare i test che superano 2 minuti e chiedere se continuare', { who: 'Orchestrator', file: 'ideas.md' }),
     ev('f-4', 12 * MIN, 'error', 'Errore registrato', 'normal', '"fatto" senza screenshot', 'Una chat ha detto fatto senza guardare lo screenshot', { file: 'ai-errors.md' }),
     ev('f-5', 25 * MIN, 'chat-done', 'Chat finita', 'quiet', 'App · Mappa 3D', 'v2 in main, 14 test verdi', { chatId: 'mappa' }),
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
@@ -415,8 +415,8 @@ export class DemoChats implements ChatService {
     const id = `c${++this.counter}`;
     // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
-    if (req.regia && req.replaces && !old?.isRegia) throw new Error('La Regia da sostituire non c’è più.');
-    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome della Regia non valido: da 1 a 30 caratteri.');
+    if (req.regia && req.replaces && !old?.isRegia) throw new Error('L’Orchestrator da sostituire non c’è più.');
+    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');
     const regiaName = req.regia ? cleanRegiaName(req.regiaName) ?? old?.regiaName : undefined;
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.isRegia ? req.regiaOf : undefined;
     if (old) {
@@ -427,7 +427,7 @@ export class DemoChats implements ChatService {
     const appRegia = req.space === 'app' && req.appRegia === true && !req.regia;
     if (appRegia) for (const c of [...this.chats.values()]) if (c.appRegia) this.patch(c.id, { appRegia: undefined });
     const c: ChatSummary = {
-      id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Regia · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
+      id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Orchestrator · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
       ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
@@ -513,8 +513,8 @@ export class DemoChats implements ChatService {
     if (!c) throw new Error('Chat non trovata.');
     if (c.isRegia) {
       const regie = regieOf([...this.chats.values()]);
-      if (opts.auto || regie.length < 2) throw new Error('La Regia non si chiude: è l’unica.');
-      if (regie[0]!.id === chatId) throw new Error('La prima Regia non si chiude: per ripartire usa Pulisci.');
+      if (opts.auto || regie.length < 2) throw new Error('L’Orchestrator non si chiude: è l’unico.');
+      if (regie[0]!.id === chatId) throw new Error('Il primo Orchestrator non si chiude: per ripartire usa Pulisci.');
       const next = regie[0]!;
       this.patch(chatId, { isRegia: false, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === chatId) this.patch(x.id, { regiaOf: next.id });
@@ -576,7 +576,7 @@ export class DemoChats implements ChatService {
   async continueChat(chatId: string): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
     if (!c) throw new Error(`demo: no chat ${chatId}`);
-    if (c.isRegia) throw new Error('La Regia non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    if (c.isRegia) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const by = c.continuedBy && this.chats.get(c.continuedBy.id);
     if (by) return by;
     const h = await this.ensureHandoff(chatId);

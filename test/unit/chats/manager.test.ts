@@ -185,7 +185,7 @@ describe('ChatManager', () => {
     await waitFor(() => results(m, c.id).length === 1, 'first result');
     await m.shutdown();
     const { m: again } = manager(e, { agentsMayOpen: () => false });
-    await expect(again.send(c.id, 'from an agent', undefined, false, 'Regia')).rejects.toThrow(/Le Regie possono usare Claude/);
+    await expect(again.send(c.id, 'from an agent', undefined, false, 'Regia')).rejects.toThrow(/Gli Orchestrator possono usare Claude/);
     expect(argvs(e)).toHaveLength(1);
     await again.send(c.id, 'from the user');
     await waitFor(() => results(again, c.id).length === 1, 'the user resumed it');
@@ -534,24 +534,24 @@ describe('ChatManager', () => {
     const e = env();
     const { m } = manager(e);
     const first = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true });
-    await expect(m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: '  ' })).rejects.toThrow(/Nome della Regia/);
+    await expect(m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: '  ' })).rejects.toThrow(/Nome dell’Orchestrator/);
     const app = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'App' });
-    expect([app.title, app.regiaName]).toEqual(['Regia · App', 'App']);
+    expect([app.title, app.regiaName]).toEqual(['Orchestrator · App', 'App']);
     expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([first.id, app.id]);
     const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: app.id });
     expect(work.regiaOf).toBe(app.id);
     // a regiaOf that is not a Regia is dropped (the first Regia answers then)
     expect((await m.create({ harness: 'claude', cwd: e.cwd, title: 'Altro', regiaOf: work.id })).regiaOf).toBeUndefined();
     // the auto-close never takes a Regia; the user's close does while another stays, and her chats move
-    await expect(m.archive(app.id, { auto: true })).rejects.toThrow(/unica|non si chiude/);
+    await expect(m.archive(app.id, { auto: true })).rejects.toThrow(/unico|non si chiude/);
     await m.archive(app.id);
     expect(m.list().find(c => c.id === app.id)).toMatchObject({ isRegia: false });
     expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(first.id);
-    await expect(m.archive(first.id)).rejects.toThrow(/unica/);
+    await expect(m.archive(first.id)).rejects.toThrow(/unico/);
     // the first Regia never closes (its "Regia" title is the mail address); replacing it keeps its place among the
     // tabs, so the chats without a regiaOf keep answering to it, not to the next tab
     const ricerca = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'Ricerca' });
-    await expect(m.archive(first.id)).rejects.toThrow(/prima Regia/);
+    await expect(m.archive(first.id)).rejects.toThrow(/primo Orchestrator/);
     const neu = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true, replaces: first.id });
     expect(regieOf(m.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
     const restarted = manager(e).m;

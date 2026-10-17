@@ -38,7 +38,7 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   await expect(page.getByTestId('regia-renew-go')).toHaveText('Passa a Cursor');
   await expect(page.getByTestId('regia-renew-go')).toBeFocused();
   await expect(page.getByTestId('regia-renew-summary')).toBeChecked();
-  await expect(page.getByTestId('regia-renew-note')).toContainText('«Regia» resta tra le chat');
+  await expect(page.getByTestId('regia-renew-note')).toContainText('«Orchestrator» resta tra le chat');
   await shot(page, 'regia-renew-engine');
   await page.keyboard.press('Escape');
   await expect(dlg).toHaveCount(0);

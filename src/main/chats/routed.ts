@@ -54,7 +54,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   // and a Regia (an agent itself) need «Le Regie possono usare X» too
   const userPick = (h: Harness) => !regia && h === said.harness;
   const refusal = (h: Harness): string | null => !d.engineOn(h) ? `${engineLabel(h)} è spento nelle impostazioni`
-    : !userPick(h) && !d.agentsMayOpen(h) ? `le Regie non possono usare ${engineLabel(h)} (impostazione «Le Regie possono usare ${engineLabel(h)}»)` : null;
+    : !userPick(h) && !d.agentsMayOpen(h) ? `gli Orchestrator non possono usare ${engineLabel(h)} (impostazione «Gli Orchestrator possono usare ${engineLabel(h)}»)` : null;
   const routed = d.route({
     // no title: the area is the prompt's would-be title's, i.e. none ('altro'); the kind comes from the prompt
     title, prompt: typeof req.routeText === 'string' ? req.routeText.slice(0, 2000) : prompt.slice(0, 2000),

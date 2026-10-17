@@ -22,7 +22,7 @@ export const regiaLabel = (c: Pick<ChatSummary, 'regiaName' | 'appRegia'>): stri
 /** How a chat is named in lists and cards: a Regia is "Regia", or "Regia · <name>" when it has a tab name; any
  *  other chat its title. */
 export const chatName = (c: Pick<ChatSummary, 'isRegia' | 'regiaName' | 'title'>): string =>
-  c.isRegia ? (c.regiaName?.trim() ? `Regia · ${c.regiaName.trim()}` : 'Regia') : c.title;
+  c.isRegia ? (c.regiaName?.trim() ? `Orchestrator · ${c.regiaName.trim()}` : 'Orchestrator') : c.title;
 
 /** A valid tab name: 1-30 characters, no line breaks. */
 export function cleanRegiaName(v: unknown): string | null {

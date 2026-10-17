@@ -22,7 +22,7 @@ describe('engine policy', () => {
   it('opening still requires an enabled engine and agent launch permission', () => {
     expect(openRefusal(s(), 'claude', 'cursor')).toBeNull();
     expect(openRefusal(s({ engineOn: { claude: true } }), 'claude', 'cursor')).toMatch(/Cursor è spento/);
-    expect(openRefusal(s({ engines: { claude: true, cursor: false } }), 'cursor', 'cursor')).toMatch(/Le Regie possono usare Cursor/);
+    expect(openRefusal(s({ engines: { claude: true, cursor: false } }), 'cursor', 'cursor')).toMatch(/Gli Orchestrator possono usare Cursor/);
     expect(openRefusal(s({ messaging: { crossHarness: false } }), 'claude', 'cursor')).toBeNull();
     expect(agentsMayOpen(s({ engines: { claude: true, cursor: false } }), 'cursor')).toBe(false);
     expect(agentsMayOpen(s(), 'claude')).toBe(true);

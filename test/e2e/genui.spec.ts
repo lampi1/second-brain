@@ -118,7 +118,7 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
 
 test('target regia: the visual shows in the Regia widget, with the chat that sent it', async () => {
   const { app, page } = await launchDemo({ regia: true, width: 1600, height: 1000 });
-  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'regia', ...VISUALS.board })).toContain('nella Regia «Regia»');
+  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'regia', ...VISUALS.board })).toContain('nell’Orchestrator «Orchestrator»');
   const card = page.getByTestId('tile-regia').getByTestId('artifact-stato-qa');
   await expect(card).toBeVisible();
   await expect(page.getByTestId('artifact-from-stato-qa')).toHaveText('da «QA · Rimborsi»');

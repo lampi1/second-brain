@@ -203,7 +203,7 @@ describe('chat mail', () => {
     fs.mkdirSync(path.join(dir, 'io'));
     const t = call('list_chats', 'me', {});
     expect(t).toContain('"Pers · App" · claude · running');
-    expect(t).toContain('"Regia" · claude · idle · Regia');
+    expect(t).toContain('"Regia" · claude · idle · Orchestrator');
     expect(t).toContain('"esegui-nella-regia"');
     expect(t).not.toContain('"Io"');
     expect(t).not.toContain('"io"');
@@ -214,7 +214,7 @@ describe('chat mail', () => {
     const t = call('list_chats', 'me', {});
     expect(t).toContain('"App · Fix" · claude · idle · risponde a "Regia · App"');
     expect(t).toContain('"Ordini" · claude · idle · risponde a "Regia"');
-    expect(t).toContain('"Regia · App" · claude · idle · Regia');
+    expect(t).toContain('"Regia · App" · claude · idle · Orchestrator');
   });
 });
 
@@ -336,7 +336,7 @@ describe('mail to an idle Regia', () => {
     const { dir, mail, call, cross } = setup([chat('me', 'Regia'), chat('cu', 'Cursor · Lavoro', { harness: 'cursor', state: 'idle' })],
       async () => { throw new AgentMayNotWake('cursor'); });
     cross.regie = false;
-    expect(call('send_to_chat', 'me', { to: 'Cursor · Lavoro', text: 'x' })).toMatch(/solo quando l’utente la riprende \(le Regie non possono usare Cursor\)/);
+    expect(call('send_to_chat', 'me', { to: 'Cursor · Lavoro', text: 'x' })).toMatch(/solo quando l’utente la riprende \(gli Orchestrator non possono usare Cursor\)/);
     expect(await mail.tick()).toBe(0);
     expect(await mail.tick()).toBe(0);
     expect(unread(dir, slug('Cursor · Lavoro'))).toHaveLength(1);

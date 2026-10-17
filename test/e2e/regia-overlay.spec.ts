@@ -176,7 +176,7 @@ test('Pulisci asks first, then a new empty Regia takes the tab; the old one is a
   const { app, page } = await launchDemo({ regia: true });
   await page.getByTestId('regia-menu').click();
   await page.getByTestId('chat-clear-regia').click();
-  await expect(page.getByTestId('confirm')).toContainText('Pulire la Regia «Regia»?');
+  await expect(page.getByTestId('confirm')).toContainText('Pulire la Regia «Orchestrator»?');
   await shot(page, 'regia-ov-clear-confirm');
   await page.getByTestId('confirm-cancel').click();
   expect(await activeId(page)).toBe('regia');
@@ -206,7 +206,7 @@ test('"+" opens Nuova Regia: a name is its tab, chats created from that tab answ
   await expect(page.getByTestId('newchat')).toHaveCount(0);
   const tab = page.getByTestId('regia-overlay').getByRole('tab', { name: /Ricerca/ });
   await expect(tab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('tile-regia')).toHaveAttribute('aria-label', /Regia · Ricerca/);
+  await expect(page.getByTestId('tile-regia')).toHaveAttribute('aria-label', /Orchestrator · Ricerca/);
   await page.mouse.move(2, 2);
   await shot(page, 'regia-ov-three-tabs');
   await app.close();

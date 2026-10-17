@@ -79,13 +79,13 @@ describe('createRoutedChat', () => {
     const cursorRow: RoutingTable = { ...table, routes: [{ kind: 'bug-fix', harness: 'cursor', model: 'composer-2.5', effort: null, why: 'bug: Cursor', since: '2026-10-14', evidence: 'n=1' }] };
     const { d, made } = deps({ claude: true, cursor: true }, { claude: true, cursor: false });
     d.route = (req: RouteRequest) => routeChat(req, cursorRow, DEMO_REGISTRY, rules, 7);
-    await expect(createRoutedChat(d, base({ kind: 'bug-fix' }))).rejects.toThrow(/Le Regie possono usare Cursor/);
+    await expect(createRoutedChat(d, base({ kind: 'bug-fix' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     await createRoutedChat(d, base({ kind: 'bug-fix', defaults: { harness: 'claude' } }));
     expect(made[0]).toMatchObject({ harness: 'claude', route: { source: 'default' } });
     await createRoutedChat(d, base({ kind: 'bug-fix', defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'scelta mia' } }));
     expect(made[1]).toMatchObject({ harness: 'cursor' }); // the user named it: the row that agrees is used
     await expect(createRoutedChat(d, { title: 'Regia · lavoro', cwd: 'C:/brain', regia: true, defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'Cambia motore' } }))
-      .rejects.toThrow(/Le Regie possono usare Cursor/);
+      .rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     expect(made).toHaveLength(2);
   });
 

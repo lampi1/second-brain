@@ -148,7 +148,7 @@ export function sendMail(dir: string, o: { from: string; fromHarness: Harness; t
   const refused = toH && toH !== 'app' && toH !== o.fromHarness ? o.refusal(o.fromHarness, toH) : null;
   if (refused) {
     appendLog(dir, { action: 'blocked', from: o.from, to: o.to, fromHarness: o.fromHarness, toHarness: toH });
-    throw new MailError(`messaggio bloccato: ${refused}. Non riprovare: dillo alla Regia o all’utente.`);
+    throw new MailError(`messaggio bloccato: ${refused}. Non riprovare: dillo all’Orchestrator o all’utente.`);
   }
   let thread: string | undefined, hop = 1;
   if (o.replyTo) {
@@ -158,7 +158,7 @@ export function sendMail(dir: string, o: { from: string; fromHarness: Harness; t
   } else if (o.chain) {
     thread = o.chain.thread; hop = o.chain.hop + 1;
   }
-  if (hop > MAX_HOPS) { throw new MailError(`il filo è a ${MAX_HOPS} risposte: basta ping-pong, dillo alla Regia o all’utente`);
+  if (hop > MAX_HOPS) { throw new MailError(`il filo è a ${MAX_HOPS} risposte: basta ping-pong, dillo all’Orchestrator o all’utente`);
   }
   const now = o.now ?? new Date();
   const id = `${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17)}-${crypto.randomBytes(3).toString('hex')}`;
@@ -393,8 +393,8 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
   return [
     {
       name: 'send_to_chat',
-      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. A Regia gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
-      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' }, kind: { type: 'string', enum: [...MAIL_KINDS], description: 'optional, for a Regia: "urgent" (production, a blocker: at once), "request" (it must act or decide), "info" (progress only: it waits for the Regia\'s next turn). Without it the words decide.' } }, required: ['to', 'text'] },
+      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An Orchestrator gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
+      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' }, kind: { type: 'string', enum: [...MAIL_KINDS], description: 'optional, for an Orchestrator: "urgent" (production, a blocker: at once), "request" (it must act or decide), "info" (progress only: it waits for the Orchestrator\'s next turn). Without it the words decide.' } }, required: ['to', 'text'] },
       run: (a, ctx) => {
         const from = me(ctx);
         const root = d.root();
@@ -403,7 +403,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         if (!text || text.length > 4000) throw new MailError('text vuoto o più lungo di 4000 caratteri');
         const now = Date.now();
         const recent = (sends.get(from.id) ?? []).filter(t => now - t < 60_000);
-        if (recent.length >= MAX_SENDS_PER_MINUTE) throw new MailError(`già ${MAX_SENDS_PER_MINUTE} messaggi nell’ultimo minuto: fermati e dillo alla Regia o all’utente`);
+        if (recent.length >= MAX_SENDS_PER_MINUTE) throw new MailError(`già ${MAX_SENDS_PER_MINUTE} messaggi nell’ultimo minuto: fermati e dillo all’Orchestrator o all’utente`);
         const to = String(a.to ?? '').trim();
         const dir = inboxDir(root);
         const all = d.chats().filter(c => !c.closedAt);
@@ -425,11 +425,11 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         const cls = (d.classify?.() ?? defaultClass)(text, kind);
         const asleep = target && live && target.state === 'idle' && d.agentsMayOpen?.(target.harness) === false;
         const when = !live ? 'la chat non è attiva nell’app: lo riceve a fine del suo prossimo turno o con il suo wait'
-          : asleep ? `se la chat è ferma lo riceve solo quando l’utente la riprende (le Regie non possono usare ${engineOf(target.harness)?.label ?? target.harness})`
-          : gate === 'busy' ? 'la Regia sta lavorando su un motore che non riceve messaggi a metà turno: lo riceve appena finisce il turno'
-          : gate === 'hold' && cls !== 'now' ? 'la Regia aspetta l’utente: lo riceve appena è libera (solo un messaggio urgente passa subito)'
-          : gate === 'queue' && cls === 'quiet' ? `la Regia è ferma e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(REGIA_HOLD_MS / 60_000)} minuti`
-            : gate === 'queue' && cls === 'group' ? `la Regia è ferma: l’app glielo consegna entro ${Math.round(REGIA_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
+          : asleep ? `se la chat è ferma lo riceve solo quando l’utente la riprende (gli Orchestrator non possono usare ${engineOf(target.harness)?.label ?? target.harness})`
+          : gate === 'busy' ? 'l’Orchestrator sta lavorando su un motore che non riceve messaggi a metà turno: lo riceve appena finisce il turno'
+          : gate === 'hold' && cls !== 'now' ? 'l’Orchestrator aspetta l’utente: lo riceve appena è libero (solo un messaggio urgente passa subito)'
+          : gate === 'queue' && cls === 'quiet' ? `l’Orchestrator è fermo e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(REGIA_HOLD_MS / 60_000)} minuti`
+            : gate === 'queue' && cls === 'group' ? `l’Orchestrator è fermo: l’app glielo consegna entro ${Math.round(REGIA_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
         return `inviato a "${msg.to}" (id ${msg.id}${msg.hop > 1 ? `, risposta ${msg.hop}/${MAX_HOPS}` : ''}): ${when}`;
       },
     },
@@ -443,7 +443,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         // several Regie (ADR 0021): each work chat says which one it answers to
         const all = d.chats();
         const regiaTitle = (c: ChatSummary) => all.find(x => x.id === regiaOfChat(c, all))?.title;
-        const lines = app.map(c => `- "${c.title}" · ${c.harness} · ${c.state}${c.isRegia ? ' · Regia' : regiaTitle(c) ? ` · risponde a "${regiaTitle(c)}"` : ''}`);
+        const lines = app.map(c => `- "${c.title}" · ${c.harness} · ${c.state}${c.isRegia ? ' · Orchestrator' : regiaTitle(c) ? ` · risponde a "${regiaTitle(c)}"` : ''}`);
         const root = d.root();
         let other: string[] = [];
         if (root) {

@@ -390,15 +390,15 @@ export class ChatManager implements ChatService {
     // several Regie (ADR 0021): a new one sits next to the others; with `replaces` it takes that one's role, name and
     // work chats, and the old one goes on as a normal chat (history kept, never deleted)
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
-    if (req.regia && req.replaces && !old?.s.isRegia) throw new Error('La Regia da sostituire non c’è più.');
+    if (req.regia && req.replaces && !old?.s.isRegia) throw new Error('L’Orchestrator da sostituire non c’è più.');
     const regiaName = req.regia ? cleanRegiaName(req.regiaName) ?? old?.s.regiaName ?? null : null;
-    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome della Regia non valido: da 1 a 30 caratteri.');
+    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.s.isRegia ? req.regiaOf : null;
     // the app's Regia ("Migliora l'app", ADR 0020) is one and never a work Regia: a new one takes the role
     const space = req.space === 'app' ? 'app' as const : undefined;
     const appRegia = !!space && req.appRegia === true && !req.regia;
     const oldApp = appRegia ? [...this.chats.values()].filter(x => x.s.appRegia) : [];
-    const title = req.title?.trim() || (req.regia && regiaName && !old ? `Regia · ${regiaName}` : '') || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
+    const title = req.title?.trim() || (req.regia && regiaName && !old ? `Orchestrator · ${regiaName}` : '') || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const prompt = req.prompt?.trim() ? req.prompt : null;
@@ -713,13 +713,13 @@ export class ChatManager implements ChatService {
    *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. */
   async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.appRegia) throw new Error('La Regia non si chiude.');
+    if (r.s.appRegia) throw new Error('L’Orchestrator non si chiude.');
     if (r.s.isRegia) {
       // a Regia closes only by the user's hand, never the first one (its title "Regia" is the mail address the brain's
       // rules and its chats write to; /mcp/app acts as it): its work chats go to the first Regia
       const regie = regieOf([...this.chats.values()].map(x => x.s));
-      if (opts.auto || regie.length < 2) throw new Error('La Regia non si chiude: è l’unica.');
-      if (regie[0]!.id === r.s.id) throw new Error('La prima Regia non si chiude: per ripartire usa Pulisci.');
+      if (opts.auto || regie.length < 2) throw new Error('L’Orchestrator non si chiude: è l’unico.');
+      if (regie[0]!.id === r.s.id) throw new Error('Il primo Orchestrator non si chiude: per ripartire usa Pulisci.');
       this.demoteRegia(r, regie[0]!.id, false); // the archive below ends its engine
     }
     if (r.archiving) await r.archiving;
@@ -897,8 +897,8 @@ export class ChatManager implements ChatService {
 
   private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.appRegia) throw new Error("La Regia dell'app non si riprende così: chiudila e creane una nuova dalla sezione «Migliora l'app».");
-    if (r.s.isRegia) throw new Error('La Regia non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    if (r.s.appRegia) throw new Error("L’Orchestrator non si riprende così: chiudilo e creane uno nuovo dalla sezione «Migliora l'app».");
+    if (r.s.isRegia) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
     if (next) return { ...next.s };
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
