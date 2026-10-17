@@ -11,7 +11,7 @@ test.skip(process.platform !== 'win32', 'Windows installer');
 const repo = path.resolve(import.meta.dirname, '../..');
 let testRoot: string | null = null;
 // Armed before Setup starts: cleanup also covers timeouts/failures before ready.json exists.
-test.afterEach(async (_fixtures, info) => {
+test.afterEach(async ({ browserName: _browserName }, info) => {
   if (!testRoot) return;
   const system = process.env.SystemRoot ?? 'C:/Windows';
   const cleanup = spawnSync(path.join(system, 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(repo, 'scripts/installer-test-links.ps1'), '-InstallRoot', path.join(testRoot, 'installed'), '-Cleanup'], { encoding: 'utf8', windowsHide: true, timeout: 30000 });

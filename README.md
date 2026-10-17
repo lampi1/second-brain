@@ -10,6 +10,12 @@
   watch the browsers they drive, and keep a second brain that makes them better every week.
 </p>
 
+## Download for Windows
+
+[Download for Windows](https://github.com/lampi1/second-brain/releases/latest): a single offline, per-user Setup; no Node.js installation needed.
+Verify the downloaded file against the SHA256 checksum published in the Release.
+This repository is private: the link works for anyone with repository access. A Release is published only after CI and installed-launch gates pass.
+
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg">
   <img alt="Platform: Windows 10/11 (Linux, macOS: not yet tried)" src="https://img.shields.io/badge/platform-Windows%2010%2F11%20(Linux%2C%20macOS%3A%20not%20yet%20tried)-0078D6.svg">
@@ -48,8 +54,7 @@ On macOS and Linux, "Esegui" runs commands in your login shell instead of PowerS
 The Windows distribution pipeline builds a single offline installer for colleagues: it includes Electron and the
 app, installs per user and creates stable Start Menu/desktop links, with no Node/npm, checkout or PATH setup on the
 target PC. See [Windows installer and updates](docs/windows-installer.md) for build/check/release steps and the
-background staging contract. A downloadable release is available only after its CI and installed-launch gates pass;
-this source change does not claim a published or verified Windows executable.
+background staging contract. A Release is published only after its CI and installed-launch gates pass.
 
 ## Features
 
