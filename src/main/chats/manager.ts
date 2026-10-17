@@ -262,6 +262,8 @@ interface Rec {
   runSeen?: Set<string>;
   /** the last time nothing waited on the user any more: a run's stale clock pauses while a request is open */
   idleSince?: number;
+  /** open "Comando da eseguire" requests (run/asks.ts keeps them, not r.pending): they pause the stale clock too */
+  commandsOpen?: Set<string>;
 }
 
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
@@ -805,7 +807,7 @@ export class ChatManager implements ChatService {
   resumedByUser(chatId: string): void {
     const r = this.chats.get(chatId);
     if (!r?.s.run || !reopenRun(r.s.run)) return;
-    r.idleSince = Date.now();
+    r.idleSince = Date.now(); // persisted below
     log.info('chats', 'agent run reopened by the user', { chat: chatId, data: { runId: r.s.run.runId, reopened: r.s.run.counters.reopened } });
     this.runSave(); this.persist(); this.updated(r);
   }
@@ -827,7 +829,15 @@ export class ChatManager implements ChatService {
   /** A "Comando da eseguire" request (run/asks.ts keeps it, not the engine): counted once on the chat's open run. */
   commandAsked(chatId: string, requestId: string): void {
     const r = this.chats.get(chatId);
-    if (r) this.countRequest(r, { id: requestId, type: 'command' });
+    if (!r) return;
+    this.countRequest(r, { id: requestId, type: 'command' });
+    (r.commandsOpen ??= new Set()).add(requestId);
+  }
+  /** That request left (run, "Non serve", the chat went on): when nothing else waits, the stale clock starts again. */
+  commandDone(chatId: string, requestId: string): void {
+    const r = this.chats.get(chatId);
+    if (!r?.commandsOpen?.delete(requestId)) return;
+    if (!r.commandsOpen.size && !r.pending.size) this.idleAgain(r);
   }
 
   /** Ends the open runs with no turn and nothing waiting on the user for STALE_MS (the timer; tests call it). */
@@ -836,7 +846,7 @@ export class ChatManager implements ChatService {
     for (const r of this.chats.values()) {
       const run = r.s.run;
       if (!run || run.endedAt !== undefined) continue;
-      const waiting = r.pending.size > 0 || !!r.working || !!r.session?.busy || !!r.s.queued;
+      const waiting = r.pending.size > 0 || !!r.commandsOpen?.size || !!r.working || !!r.session?.busy || !!r.s.queued;
       if (!staleDue(run, Math.max(run.startedAt, r.lastTurnAt, r.idleSince ?? 0, r.activeAt ?? 0), waiting, now)) continue;
       this.finishRun(run, 'stale', now); n++;
     }
@@ -1484,6 +1494,11 @@ export class ChatManager implements ChatService {
     this.finishRun(r.s.run, reason, at);
     this.runSave();
   }
+  /** Nothing waits on the user any more: an open run's stale clock starts again from now (kept in chats.json). */
+  private idleAgain(r: Rec): void {
+    r.idleSince = Date.now();
+    if (r.s.run && r.s.run.endedAt === undefined) this.persist();
+  }
   private runSave(): void {
     if (this.runs.problem) return;
     try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
@@ -1565,6 +1580,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: false, firstPrompt: null, turnSinceDone: false, // a restored chat continues a job begun in an earlier run
       lastTurnAt: c.lastTurnAt ?? 0,
+      ...(c.run && c.runIdleSince ? { idleSince: c.runIdleSince } : {}),
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
@@ -1577,7 +1593,7 @@ export class ChatManager implements ChatService {
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.policy ? { agentPolicy: r.policy } : {}),
-      ...(r.s.run ? { run: r.s.run } : {}),
+      ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
@@ -1679,7 +1695,7 @@ export class ChatManager implements ChatService {
 
   private dropPending(r: Rec, requestId: string): void {
     if (!r.pending.delete(requestId)) return;
-    if (!r.pending.size) r.idleSince = Date.now();
+    if (!r.pending.size && !r.commandsOpen?.size) this.idleAgain(r);
     this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
     r.s.pending = r.pending.size;
     this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId });

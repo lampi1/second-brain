@@ -162,6 +162,7 @@ export class AgentRunStore {
       bytes -= Buffer.byteLength(JSON.stringify(r, null, 2), 'utf8');
     }
     const next = all.filter(r => !drop.has(r));
+    this.dirty = true; // stays set when the write fails: the next flush tries again
     writeLocal(this.file, { version: 1, runs: next });
     for (const r of drop) this.runs.delete(r.runId);
     this.dirty = false;

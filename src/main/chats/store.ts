@@ -27,6 +27,8 @@ export interface StoredChat {
   agentPolicy?: AgentPolicy;
   /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. Additive: chats.json stays version 2 */
   run?: AgentRun;
+  /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
+  runIdleSince?: number;
   harness: Harness;
   cwd: string;
   sessionId: string | null;
@@ -106,7 +108,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= 8000 ? { agentInstructions: c.agentInstructions } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
-    ...(run && run.chatId === c.id ? { run } : {}),
+    ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
     ...(route ? { route } : {}),
     ...(c.work !== undefined ? {work:readChatWork(c.work)} : {}),
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),

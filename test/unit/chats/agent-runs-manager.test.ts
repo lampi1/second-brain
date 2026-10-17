@@ -1,7 +1,7 @@
 // Agent runs (A5): a chat started from a catalog agent is a run; it ends as completed, closed or stale, a parent's end
 // closes its spawned runs downward, only the user reopens one, requests count once, cost and tokens follow the turns,
 // and the record survives a restart (agent-runs.json is the source, chats.json keeps a mirror).
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,7 +12,7 @@ import { STALE_MS } from '../../../src/main/agents/runs';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
 
 const roots: string[] = [], managers: ChatManager[] = [];
-afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(async () => { vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 
 function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const dir = extra.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-runs-'));
@@ -92,6 +92,34 @@ describe('agent runs on chats', () => {
     const answered = Date.now();
     expect(f.m.staleRuns(answered + STALE_MS - 60_000)).toBe(0);
     expect(f.m.staleRuns(answered + STALE_MS + 60_000)).toBe(1);
+  });
+
+  it('an open “Comando da eseguire” pauses the stale clock until it leaves', async () => {
+    const f = fixture();
+    const c = await f.create();
+    f.m.commandAsked(c.id, 'cmd-a-0');
+    expect(f.m.staleRuns(Date.now() + 10 * STALE_MS)).toBe(0);
+    f.m.commandDone(c.id, 'cmd-a-0');
+    const done = Date.now();
+    expect(f.m.staleRuns(done + STALE_MS - 60_000)).toBe(0);
+    expect(f.m.staleRuns(done + STALE_MS + 60_000)).toBe(1);
+  });
+
+  it('a reopen’s stale clock survives a restart', async () => {
+    const f = fixture();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const c = await f.create();
+    await f.m.archive(c.id);
+    vi.setSystemTime(Date.now() + 4 * 24 * 3600_000); // reopened four days after its start: past 72 h from it
+    await f.m.reopen(c.id);
+    f.m.resumedByUser(c.id);
+    const reopened = Date.now();
+    await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
+    const g = fixture({ userData: f.dir });
+    vi.useRealTimers();
+    expect(g.run(c.id)).toMatchObject({ counters: { reopened: 1 } });
+    expect(g.m.staleRuns(reopened + STALE_MS - 60_000)).toBe(0);
+    expect(g.m.staleRuns(reopened + STALE_MS + 60_000)).toBe(1);
   });
 
   it('a parent’s end closes its spawned runs, never the other way', async () => {

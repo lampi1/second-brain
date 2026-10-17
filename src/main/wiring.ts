@@ -147,11 +147,14 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): Co
 
 /** "Comando da eseguire" requests (run/asks.ts): they watch every event main sends to the page (the emitter is tapped
  *  here, for the real app and the demo alike) and notify through the feed like a question ("Domanda per te"). */
-export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked'>): CommandAsks {
+export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
     // through the emitter as it is when called: the taps added later (the Regia's news) hear it too
-    emit: (ch, p) => ctx.emitter.emit(ch, p),
+    emit: (ch, p) => {
+      ctx.emitter.emit(ch, p);
+      if (ch === 'pending:resolved') { const x = p as { chatId: string; requestId: string }; chats?.commandDone?.(x.chatId, x.requestId); }
+    },
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
     ...(now ? { now } : {}),
     onAsk: (req, title) => {

@@ -31,6 +31,8 @@ export interface ChatService {
   resumedByUser?(chatId: string): void;
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */
   commandAsked?(chatId: string, requestId: string): void;
+  /** that request left (run, dismissed, the chat went on) */
+  commandDone?(chatId: string, requestId: string): void;
   /** after a start: chats whose turn the last quit (or crash) cut get an automatic "riprendi" message; how many */
   resumeInterrupted(): number;
   /** "Avvia ora": the chat's start or turn waiting in the CPU queue runs now (ADR 0036); false = nothing waited */

@@ -97,6 +97,18 @@ describe('agent run store', () => {
     expect(new AgentRunStore(dir).list()).toHaveLength(RUNS_MAX);
   });
 
+  it('a failed write stays pending: the next flush writes it', () => {
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json');
+    const s = new AgentRunStore(dir);
+    const run = s.start(start());
+    fs.linkSync(file, path.join(dir, 'link.json')); // a linked file: the local store refuses to write it
+    endRun(run, 'closed', 9);
+    expect(() => s.save()).toThrow(/collegato/);
+    fs.rmSync(path.join(dir, 'link.json'));
+    s.flush();
+    expect(new AgentRunStore(dir).get(run.runId)?.endReason).toBe('closed');
+  });
+
   it('adopt takes back a lost run once', () => {
     const s = new AgentRunStore(tmp());
     const run = new AgentRunStore(tmp()).start(start());
