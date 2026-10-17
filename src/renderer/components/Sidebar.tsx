@@ -25,6 +25,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  dashboard: <IconChart />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Chat is not a page, DevOps can hide). */
@@ -71,6 +72,7 @@ export function Sidebar() {
     <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
         {page1('home')}
+        {page1('dashboard')}
         {!collapsed && <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>}
         {item('workspace', t('dialogs.sidebar.chat'), <IconGrid />, !page && !map, () => go({ page: 'workspace' }), {
           key: t('dialogs.sidebar.chatShortcut'), testid: 'nav-workspace',

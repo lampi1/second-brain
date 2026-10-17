@@ -42,6 +42,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  dashboard: <IconChart />,
 };
 
 function buildCommands(): Cmd[] {

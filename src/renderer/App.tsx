@@ -45,6 +45,7 @@ import { SkillsPage } from './components/SkillsPage';
 import { QuestionsWindow } from './components/QuestionsWindow';
 import { ImprovePage } from './components/ImprovePage';
 import { LaunchBanner } from './components/LaunchBanner';
+import { Dashboard } from './dashboard/Dashboard';
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -161,7 +162,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
         <span className="page-hint"><Keys combo="Esc" /> {t('home.agents')}</span>
       </div>
       <div className="page-body">
-        {id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>

@@ -4,6 +4,7 @@ import type { brainPagesIt } from './brainPages.it';
 export const brainPagesEn: typeof brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Home',
+  'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',

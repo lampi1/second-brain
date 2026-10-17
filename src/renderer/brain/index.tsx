@@ -31,7 +31,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti';
+export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -39,6 +39,7 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('home', 'G H'),
   page('agenti', 'G A'),
   page('devops', 'G O'),
+  page('dashboard', 'G D'),
   page('fatto', 'G F'),
   page('idee', 'G I'),
   page('costi', 'G C'),

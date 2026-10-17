@@ -2,6 +2,7 @@
 export const brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Home',
+  'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Fatto e standup',
   'brainPages.nav.idee': 'Idee',
