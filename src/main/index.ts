@@ -103,7 +103,6 @@ app.whenReady().then(async () => {
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
-  const sections = s.sections;
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
     const handlers: Handlers = {
@@ -137,14 +136,6 @@ app.whenReady().then(async () => {
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
-    'sections:list': () => sections.list(),
-    'sections:register': a => sections.register(a),
-    'sections:remove': a => sections.remove(a),
-    'sections:rollback': a => sections.rollback(a),
-    'sections:context': a => sections.context(a),
-    'sections:requestedContext': a => sections.requestedContext(a),
-    'sections:memory': () => sections.archive(),
-    'sections:saveMemory': a => sections.saveContext(a),
     'setup:save': a => s.setup.save(a.preferences, a.status),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
     'app:pickBrain': async () => {

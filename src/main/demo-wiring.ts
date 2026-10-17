@@ -28,7 +28,6 @@ import { safeStorageCipher } from './engines/secrets';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
 import { SetupService } from './agents/setup';
-import { createDataSections } from './extensions/wiring';
 import { aggregateAgentUsage } from './agents/analytics';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { ProgressService } from './agents/progress';
@@ -81,10 +80,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
   // show_ui's visuals (ADR 0033): the demo has no chat endpoints, __sbDemo.show calls the same store
   const artifacts = attachArtifacts(ctx, chats, now);
-  const sections = createDataSections(ctx.userData, ctx.window, () => brain.settings().language);
   // The demo has no native collector observations. Empty evidence is explicit, never inferred from scripted chat text.
   brain.serveApi('/api/agents/analytics', () => aggregateAgentUsage([]));
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), aggregateAgentUsage([]), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(aggregateAgentUsage([]), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -147,7 +145,6 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     agents,
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => null, brain, chats, emit: () => {}, focus: () => {}, disabled: true }),
     setup: new SetupService(ctx.userData, true, now),
-    sections,
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat

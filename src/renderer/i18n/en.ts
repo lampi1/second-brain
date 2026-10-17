@@ -14,12 +14,12 @@ import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import {settingsEn}from'./areas/settings.en';
 import { homeEn } from './areas/home.en';
-import { sectionsEn } from './areas/sections.en';
+import { reviewedContextEn } from './areas/reviewed-context.en';
 
 export const en: Dict = {
   ...costsEn,
   ...connectorsEn,
-  ...sectionsEn,
+  ...reviewedContextEn,
   ...homeEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',

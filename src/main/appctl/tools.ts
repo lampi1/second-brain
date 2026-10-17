@@ -480,15 +480,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       const evidence = d.improveEvidence;
       tools.push({
         name: 'app_improve_evidence',
-        description: 'Read selected confirmed context and observed agent evidence for an explicit improvement discussion. Supply exact references; empty lists select nothing. Does not send prompts, change settings, publish, grant permissions or call a model. Missing observations remain unavailable.',
+        description: 'Read selected observed agent evidence for an explicit improvement discussion. Supply exact references; empty lists select nothing. Does not send prompts, change settings, publish, grant permissions or call a model. Missing observations remain unavailable.',
         annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-        inputSchema: { ...obj({ factRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 64 }, agentIds: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 20 }, insightRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 50 }, budgetBytes: { type: 'integer', minimum: 256, maximum: 32768 } }, ['factRefs', 'agentIds', 'budgetBytes']), additionalProperties: false },
+        inputSchema: { ...obj({ agentIds: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 20 }, insightRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 50 }, budgetBytes: { type: 'integer', minimum: 256, maximum: 32768 } }, ['agentIds', 'budgetBytes']), additionalProperties: false },
         run: args => {
-          const result = evidence(parseImproveSelection(args));
-          // These describe the whole canonical archive, not the selected packet. Do not disclose unselected keys.
-          // Missing selected references still fail explicitly in the service; omission is not a fabricated zero.
-          const { conflicts: _conflicts, pending: _pending, unavailable: _unavailable, contextStatus: _contextStatus, ...selected } = result;
-          return { ...selected, metadataScope: 'selected-evidence-only' };
+          // Missing selected references fail explicitly in the service; omission is not a fabricated zero.
+          return { ...evidence(parseImproveSelection(args)), metadataScope: 'selected-evidence-only' };
         },
       });
     }
