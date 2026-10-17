@@ -40,9 +40,12 @@ test('answers stream in place, tools flip live, the typing line follows the turn
 
 test('scrolled up to read, the list does not jump: a "nuove righe" pill appears', async () => {
   const { app, page } = await launchDemo({ freeze: false });
+  await page.getByTestId('chat-max-sms').click();
   const list = page.getByTestId('tile-chat-sms').locator('.items');
   await expect.poll(async () => list.evaluate(el => el.scrollHeight > el.clientHeight + 40), { timeout: 20_000 }).toBe(true); // the browser loop fills it
-  await list.evaluate(el => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
+  await list.hover();
+  await page.mouse.wheel(0,-10000);
+  await expect.poll(()=>list.evaluate(el=>el.scrollTop)).toBe(0);
   const rows = page.getByTestId('tile-chat-sms').locator('.tool');
   const n = await rows.count();
   await expect.poll(async () => rows.count(), { timeout: 10_000 }).toBeGreaterThan(n);
@@ -55,6 +58,7 @@ test('scrolled up to read, the list does not jump: a "nuove righe" pill appears'
 
 test('at the bottom, the list stays there while content grows frame after frame (its own scroll never detaches it)', async () => {
   const { app, page } = await launchDemo({ freeze: false });
+  await page.getByTestId('chat-max-sms').click();
   const tile = page.getByTestId('tile-chat-sms');
   const list = tile.locator('.items');
   await expect.poll(async () => list.evaluate(el => el.scrollHeight > el.clientHeight + 40), { timeout: 20_000 }).toBe(true);
@@ -66,7 +70,7 @@ test('at the bottom, the list stays there while content grows frame after frame 
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
       const p = document.createElement('div');
       p.style.flex = '0 0 30px'; // the list is a flex column: a plain height would shrink
-      el.appendChild(p);
+      el.querySelector('.items-content')!.appendChild(p);
     }
     for (let i = 0; i < 4; i++) await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
   });
@@ -78,7 +82,7 @@ test('at the bottom, the list stays there while content grows frame after frame 
 test('a small (compact) tile shows the typing line while its chat works', async () => {
   const { app, page } = await launchDemo({ width: 1000, height: 640 }); // two rows of chats
   // without the needs lane the chat zone never gets that short at the window's minimum size: shrink it to test the tile
-  await page.addStyleTag({ content: '.mosaic-zones { max-height: 420px; }' });
+  await page.addStyleTag({ content: '[data-testid="tile-chat-fix"] { height:220px !important; max-height:220px !important; }' });
   const tile = page.getByTestId('tile-chat-fix');
   await expect(tile).toHaveClass(/\bcompact\b/);
   await expect(tile.getByTestId('chat-last-fix')).toBeVisible();

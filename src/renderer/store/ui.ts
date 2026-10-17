@@ -5,16 +5,18 @@
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, PermissionMode } from '@shared/contract';
+import {readAppearance,type AppearancePreference} from '@shared/appearance';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { emptyRead, type ReadState } from '../lib/notify';
 import { now } from '../lib/clock';
 import { DEFAULT_V, type DockSize } from '../lib/regia-dock';
 import { createStore } from './createStore';
+import type{TextKey}from'../i18n';
 
 export type View = 'mosaico' | 'corsie';
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
-export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'regiaRenew' | 'handoff' | 'credentials' | 'stato' | 'visual';
+export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'regiaRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => BRAIN_PAGES.some(p => p.id === id);
 export const pageLabel = (id: string): string => (id === 'workspace' ? 'Chat' : id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
@@ -27,6 +29,11 @@ export const placeLabel = (p: Place): string => `${pageLabel(p.page)}${p.arg ? `
 export interface Place { page: 'workspace' | 'mappa' | BrainPageId; arg?: string | null; element?: string | null }
 
 export interface Prefs {
+  appearance:AppearancePreference;
+  chatPanelsV:0|1;
+  chatExpanded:Record<string,boolean>;
+  regiaPlacement:'top'|'corner';
+  regiaTopHeight:number|null;
   view: View;
   density: Density;
   theme: Theme;
@@ -54,7 +61,7 @@ export interface Prefs {
   browserZone: number;
 }
 
-export interface Toast { id: number; text: string; tone: 'info' | 'ok' | 'warn' | 'err'; action?: { label: string; run: () => void }; ttl: number }
+export interface Toast { id: number; text: string;labelKey?:TextKey; tone: 'info' | 'ok' | 'warn' | 'err'; action?: { label: string; run: () => void }; ttl: number;expiresAt:number }
 export interface ConfirmSpec { title: string; body: string; items?: string[]; confirmLabel: string; danger?: boolean; onConfirm: () => void }
 
 export interface UiState {
@@ -103,7 +110,8 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  view: 'mosaico', density: 'comfortable', theme: 'system', regiaOpen: false, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, cols: {}, rows: {}, pairSplit: 0.42, feedOpen: true,
+  appearance:readAppearance(null),chatPanelsV:1,chatExpanded:{},regiaPlacement:'top',regiaTopHeight:null,
+  view: 'mosaico', density: 'comfortable', theme: 'system', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, cols: {}, rows: {}, pairSplit: 0.42, feedOpen: false,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null, navCollapsed: null,
   browsersHidden: false, browserZone: 0.3,
 };
@@ -125,7 +133,13 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
     const { regiaRect: _old, ...p } = JSON.parse(raw) as Partial<Prefs> & { regiaRect?: unknown };
     return {
       ...defaultPrefs, ...p,
-      view: p.view === 'corsie' ? 'corsie' : 'mosaico',
+      appearance:readAppearance(p.appearance),
+      chatPanelsV:p.chatPanelsV===1?1:0,
+      chatExpanded:p.chatExpanded&&typeof p.chatExpanded==='object'&&!Array.isArray(p.chatExpanded)?Object.fromEntries(Object.entries(p.chatExpanded).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{},
+      // Existing installs keep the explicit corner/open preferences. Only a fresh profile defaults to the top.
+      regiaPlacement:p.regiaPlacement==='top'?'top':'corner',
+      regiaTopHeight:typeof p.regiaTopHeight==='number'&&Number.isFinite(p.regiaTopHeight)?Math.max(180,Math.min(700,p.regiaTopHeight)):null,
+      view: 'mosaico',
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
@@ -165,14 +179,18 @@ export function setRead(fn: (r: ReadState) => ReadState): void {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 export function setPrefs(patch: Partial<Prefs>): void {
-  ui.set(s => ({ ...s, prefs: { ...s.prefs, ...patch } }));
+  ui.set(s => ({ ...s, prefs: { ...s.prefs, ...patch, view: 'mosaico' } }));
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(savePrefs, 150);
 }
-function savePrefs(): void {
+export function savePrefs(): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(ui.get().prefs)); } catch { /* storage off: keep in memory */ }
+}
+/** Expansion is independent of transcript/draft state. Collapsing never unmounts the input or item list. */
+export function setChatExpanded(id:string,expanded:boolean):void{
+  setPrefs({chatExpanded:{...ui.get().prefs.chatExpanded,[id]:expanded}});
 }
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });
@@ -184,7 +202,7 @@ export function toggleBrowsers(): void {
   setPrefs({ browsersHidden: hide });
   ui.set(s => ({ ...s, pair: hide ? null : s.pair, maximized: hide && s.maximized?.startsWith('browser:') ? null : s.maximized, announce: hide ? 'Browser nascosti: continuano a lavorare' : 'Browser visibili' }));
 }
-export const toggleView = () => setView(ui.get().prefs.view === 'mosaico' ? 'corsie' : 'mosaico');
+export const toggleView = () => setView('mosaico'); // compatibility alias for old app-control clients
 export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal, newChatRegia: false }));
 /** "Nuova chat" as "Nuova Regia" (the overlay's +): name instead of title, no first message needed */
 export const openNewRegia = () => ui.set(s => ({ ...s, modal: 'newChat', newChatRegia: true }));
@@ -221,13 +239,28 @@ export const requestFocus = (chatId: string) => ui.set(s => ({ ...s, focusReq: {
 
 let toastN = 0;
 const MAX_TOASTS = 2; // calm notifications: a new one replaces the oldest
+const toastTimers=new Map<number,ReturnType<typeof setTimeout>>();
 export function toast(text: string, tone: Toast['tone'] = 'info', action?: Toast['action'], ttl = action ? 6000 : 4000): number {
+  return pushToast(text,tone,action,ttl);
+}
+/** Render translated notifications in the current language, including a language change's own acknowledgement. */
+export function toastKey(labelKey:TextKey,tone:Toast['tone']='info'):number{return pushToast('',tone,undefined,4000,labelKey);}
+function pushToast(text:string,tone:Toast['tone'],action:Toast['action'],ttl:number,labelKey?:TextKey):number{
+  expireToasts();
+  const same=ui.get().toasts.find(item=>item.text===text&&item.labelKey===labelKey&&item.tone===tone&&(!item.action&&!action||item.action?.run===action?.run&&item.action?.label===action?.label));
+  if(same)return same.id; // A repeat never extends its original deadline or replaces a different undo operation.
+  ttl=Number.isFinite(ttl)?Math.max(0,Math.min(30000,ttl)):4000;
   const id = ++toastN;
-  ui.set(s => ({ ...s, toasts: [...s.toasts, { id, text, tone, action, ttl }].slice(-MAX_TOASTS) }));
-  setTimeout(() => dismissToast(id), ttl);
+  const next=[...ui.get().toasts,{id,text,labelKey,tone,action,ttl,expiresAt:Date.now()+ttl}].slice(-MAX_TOASTS);
+  for(const old of ui.get().toasts)if(!next.some(item=>item.id===old.id))clearToastTimer(old.id);
+  ui.set(s=>({...s,toasts:next}));
+  toastTimers.set(id,setTimeout(()=>dismissToast(id),ttl));
   return id;
 }
-export const dismissToast = (id: number) => ui.set(s => (s.toasts.some(t => t.id === id) ? { ...s, toasts: s.toasts.filter(t => t.id !== id) } : s));
+function clearToastTimer(id:number){const timer=toastTimers.get(id);if(timer!==undefined)clearTimeout(timer);toastTimers.delete(id);}
+export function dismissToast(id:number){clearToastTimer(id);ui.set(s=>s.toasts.some(item=>item.id===id)?{...s,toasts:s.toasts.filter(item=>item.id!==id)}:s);}
+/** Real wall-clock deadlines are independent of the frozen demo clock and catch up on focus/visibility changes. */
+export function expireToasts(){for(const item of ui.get().toasts)if(item.expiresAt<=Date.now())dismissToast(item.id);}
 
 export const setRegiaFirst = (key: string | null) => ui.set(s => (s.regiaFirst === key ? s : { ...s, regiaFirst: key }));
 export const setLayerHeld = (key: string | null) => ui.set(s => (s.layerHeld === key ? s : { ...s, layerHeld: key }));
@@ -244,3 +277,12 @@ export const parkQuestions = () => ui.set(s => (s.qwin.open || s.qwin.first ? { 
 /** Show the questions window now as the queue (Ctrl+J, the counter, "Apri" on a tile), with this request first. */
 export const callQuestions = (key: string | null) => ui.set(s => ({ ...s, qwin: { ...s.qwin, open: true, first: key, call: s.qwin.call + 1 } }));
 export const setQuestionsShown = (shown: boolean) => { if (ui.get().qwin.shown !== shown) ui.set(s => ({ ...s, qwin: { ...s.qwin, shown } })); };
+
+/** Synchronous checkpoint of the actual in-memory preferences/read state; storage failures must propagate. */
+export function checkpointUi():Record<string,string>{
+  if(saveTimer)clearTimeout(saveTimer);saveTimer=null;
+  const prefs=JSON.stringify(ui.get().prefs),read=JSON.stringify(ui.get().read);
+  localStorage.setItem(PREFS_KEY,prefs);localStorage.setItem(READ_KEY,read);
+  return {[PREFS_KEY]:prefs,[READ_KEY]:read};
+}
+export function restoreCheckpointUi():void{ui.set(state=>({...state,prefs:readPrefs(),read:readRead()}));}

@@ -985,7 +985,8 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .keymap-row dd { margin: 0; color: var(--text-2); }
 
 /* ---------------------------------------------------------------- toasts, tooltips */
-.toasts { position: fixed; left: 18px; bottom: 86px; z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 340px; pointer-events: none; }
+.toasts { position: relative; flex:none; display:flex;flex-direction:column;gap:4px;width:auto;padding:0 var(--pad);pointer-events:none; }
+.toasts:empty{display:none}
 .toast {
   pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 9px 8px 9px 12px; border-radius: var(--r-m);
   background: var(--surface-3); border: 1px solid var(--border-3); box-shadow: var(--shadow-pop); font-size: 12.5px; animation: toastIn var(--dur-slow) var(--ease);

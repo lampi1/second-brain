@@ -27,7 +27,7 @@ describe('brainEngine', () => {
   });
 
   it('may change a preset, never a built-in', () => {
-    expect(brainEngine('kimi', { kind: 'acp', command: 'C:\\tools\\kimi.exe' })).toMatchObject({ label: 'Kimi', command: 'C:\\tools\\kimi.exe', args: ['acp'], login: ['login'] });
+    expect(brainEngine('kimi', { kind: 'acp', command: 'C:\\tools\\kimi.exe' })).toMatchObject({ label: 'Kimi', command: 'C:\\tools\\kimi.exe', args: ['acp'], login: ['login', '--region', 'global'] });
     expect(brainEngine('claude', { kind: 'acp', label: 'X', command: 'x' })).toMatch(/incorporato/);
     expect(brainEngine('cursor', { kind: 'acp', label: 'X', command: 'x' })).toMatch(/incorporato/);
   });
@@ -55,6 +55,15 @@ describe('brainEngine', () => {
 });
 
 describe('trust', () => {
+  it('preserves the bundled Kimi login-region migration without trusting a brain replacement', () => {
+    const kimi = engineOf('kimi')!;
+    expect(kimi).toMatchObject({ args: ['acp'], login: ['login', '--region', 'global'] });
+    setTrust({ kimi: fingerprint({ ...kimi, login: ['login'] }) });
+    expect(engineOn(on, 'kimi')).toBe(true);
+    setBrainEngines([kimi]);
+    expect(engineOf('kimi')).toMatchObject({ source: 'brain', trusted: false });
+  });
+
   it('a preset is off until the user turns it on; built-ins never need it', () => {
     expect(engineOn(on, 'claude')).toBe(true);
     expect(engineOn(on, 'kimi')).toBe(false);

@@ -1,5 +1,5 @@
 // The one rule for engines (src/main/engines/policy.ts, ADR 0046): an engine off refuses everyone; «Le Regie possono
-// usare X» off refuses every agent's open or resume there, its own engine's too; across engines only with the switch on.
+// usare X» off refuses every agent's open or resume there, its own engine's too; cross-engine messaging is always on.
 import { describe, expect, it } from 'vitest';
 import { agentsMayOpen, crossRefusal, engineOn, openRefusal, type EngineSwitches } from '../../../src/main/engines/policy';
 
@@ -13,17 +13,17 @@ describe('engine policy', () => {
     expect(engineOn(s({ engineOn: { cursor: false } }), 'cursor')).toBe(false);
   });
 
-  it('across engines: own engine always, another one only with the switch on (writing too)', () => {
+  it('across engines: legacy false never blocks writing', () => {
     expect(crossRefusal(s(), 'claude', 'cursor')).toBeNull();
     expect(crossRefusal(s({ messaging: { crossHarness: false } }), 'cursor', 'cursor')).toBeNull();
-    expect(crossRefusal(s({ messaging: { crossHarness: false } }), 'claude', 'cursor')).toMatch(/Chat tra motori diversi/);
+    expect(crossRefusal(s({ messaging: { crossHarness: false } }), 'claude', 'cursor')).toBeNull();
   });
 
-  it('opening: engine on, the Regie allowed on it (whatever their own engine), then the switch across engines', () => {
+  it('opening still requires an enabled engine and agent launch permission', () => {
     expect(openRefusal(s(), 'claude', 'cursor')).toBeNull();
     expect(openRefusal(s({ engineOn: { claude: true } }), 'claude', 'cursor')).toMatch(/Cursor è spento/);
     expect(openRefusal(s({ engines: { claude: true, cursor: false } }), 'cursor', 'cursor')).toMatch(/Le Regie possono usare Cursor/);
-    expect(openRefusal(s({ messaging: { crossHarness: false } }), 'claude', 'cursor')).toMatch(/Chat tra motori diversi/);
+    expect(openRefusal(s({ messaging: { crossHarness: false } }), 'claude', 'cursor')).toBeNull();
     expect(agentsMayOpen(s({ engines: { claude: true, cursor: false } }), 'cursor')).toBe(false);
     expect(agentsMayOpen(s(), 'claude')).toBe(true);
   });

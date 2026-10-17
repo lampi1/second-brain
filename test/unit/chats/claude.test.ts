@@ -20,6 +20,24 @@ const resultOf = (sink: RecSink) => waitFor(() => sink.last('result'), 'result')
 afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); });
 
 describe('ClaudeSession', () => {
+  it('clears the previous submitted effort when a native running event starts an autonomous turn', async () => {
+    const { s, sink } = start({ effort: 'xhigh', env: { FAKE_CLAUDE_LATER_MS: '200' } });
+    s.send('later');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2 && s.state === 'idle', 'unsolicited native turn');
+    const efforts = sink.patches.filter(p => 'effortSubmitted' in p).map(p => p.effortSubmitted);
+    expect(efforts).toEqual(['xhigh', null]);
+  });
+  it('does not reuse the previous submitted effort for a turn queued inside the CLI', async () => {
+    const { s, sink } = start({ effort: 'xhigh', env: { FAKE_CLAUDE_DELAY: '30' } });
+    s.send('slow');
+    await waitFor(() => sink.last('assistant')?.text.includes('tick'), 'current turn');
+    await s.setEffort('medium');
+    s.send('queued new assignment');
+    await waitFor(() => [...sink.items.values()].filter(i => i.kind === 'result').length === 2 && s.state === 'idle', 'both turns');
+    expect(sink.patches.some(p => p.effortSubmitted === 'xhigh')).toBe(true);
+    expect(sink.patches.some(p => 'effortSubmitted' in p && p.effortSubmitted === null)).toBe(true);
+    expect(sink.patch.effort).toBe('medium');
+  });
   it('passes the permission mode only when chosen and maps resume, fork, model, effort, name, mcp', () => {
     const base = { chatId: 'c', cwd: '.', sessionId: 'abc12345' };
     const a = new ClaudeSession(base, recSink()).args();

@@ -17,3 +17,11 @@ export function portOf(url: string | null | undefined): string | null {
   const m = url?.match(/^https?:\/\/[^/]+:(\d+)(\/|$)/);
   return m ? m[1]! : null;
 }
+
+/** All search words must appear; case, accents and whitespace do not change the result. */
+export function matchesSettingsSearch(query: string, text: string): boolean {
+  const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  const words = normalize(query).trim().split(/\s+/).filter(Boolean);
+  const haystack = normalize(text);
+  return words.every(word => haystack.includes(word));
+}

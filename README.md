@@ -40,9 +40,16 @@ npm run setup      # npm ci (scripts off) + the Electron binary
 npm run demo       # builds and opens the app with demo chats, browser tabs and a sample brain
 ```
 
-Requirements: Windows 10/11 (Linux and macOS: built for, not yet tried on a real machine, ADR 0054), [Node.js](https://nodejs.org) 22+, Git.
+These source/development commands require Windows 10/11 (Linux and macOS: built for, not yet tried on a real machine,
+ADR 0054), [Node.js](https://nodejs.org) 22+ and Git.
 On macOS and Linux, "Esegui" runs commands in your login shell instead of PowerShell, and the stable app starts from
 `launch.sh` (a `second-brain.command` on the macOS desktop, a menu entry on Linux).
+
+The Windows distribution pipeline builds a single offline installer for colleagues: it includes Electron and the
+app, installs per user and creates stable Start Menu/desktop links, with no Node/npm, checkout or PATH setup on the
+target PC. See [Windows installer and updates](docs/windows-installer.md) for build/check/release steps and the
+background staging contract. A downloadable release is available only after its CI and installed-launch gates pass;
+this source change does not claim a published or verified Windows executable.
 
 ## Features
 
@@ -144,11 +151,15 @@ Details: [docs/architecture.md](docs/architecture.md); every decision: [docs/adr
 
 - Electron baseline, never relaxed: `contextIsolation`, `sandbox`, no `nodeIntegration`, a strict CSP, every IPC call
   checked against its sender, preload exposes only an allow-listed `window.sb`.
-- The MCP server listens on 127.0.0.1 only, with Host/Origin checks and a per-chat token: each chat sees only its own
-  browser tabs.
+- The MCP server listens on 127.0.0.1 only, with Host/Origin checks. Per-chat browser endpoints scope browser tools
+  to that chat's tabs; tokenized Regia endpoints identify their caller. Generic local endpoints (`/mcp`, `/mcp/app`,
+  `/mcp/improve`) are also available to local processes without those tokens. This is not an authentication or
+  sandbox boundary between programs running on the same computer.
 - Browser tabs live in their own partition, apart from the app.
-- No credentials in the app: each CLI logs in by itself, agents never type a password on a remote host, nothing secret
-  in files or logs.
+- Each CLI owns its login. User-configured API keys use the OS-encrypted app secret store and are decrypted only in
+  main; browser password hand-offs require explicit user actions. App-owned API conversation history is stored as
+  plaintext under the local profile. Treat profile backups and conversation content as private; log redaction does
+  not guarantee that arbitrary message text is free of secrets. See the data map in [architecture](docs/architecture.md).
 - No production access is wired in: no database, deploy or write-cloud commands.
 - Dependencies: exact versions, well-known packages, published at least 14 days before they are installed; npm install
   scripts are off (`.npmrc`).
@@ -157,12 +168,13 @@ Details: [docs/architecture.md](docs/architecture.md); every decision: [docs/adr
 
 ```powershell
 npm run dev            # dev build + run (SB_HIDDEN=1 keeps the window off screen, for agents)
-npm run check:branch   # what a branch needs: typecheck, lint, related unit tests, e2e of the touched area
+npm run check:branch   # branch checks: typecheck, lint, related unit tests and guard; no build or e2e
 npm run check          # everything (typecheck, lint, all unit tests, all e2e), on main
 npm run shots          # regenerate the README screenshots from the frozen demo
 ```
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, contract-first features, tests, ADRs, a map of the modules).
+Write the affected e2e on the branch; first run it with the full check on main, as required by AGENTS.md.
 AI agents working on the repo read [AGENTS.md](AGENTS.md).
 
 ## Roadmap

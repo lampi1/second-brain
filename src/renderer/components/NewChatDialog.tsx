@@ -23,6 +23,8 @@ import { cleanRegiaName } from '@shared/regia';
 import { t } from '../i18n';
 import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
+import { WORK_PATHS, workBrief, type WorkPath } from '@shared/work-brief';
+import { workLabels } from '../lib/work-labels';
 
 export function NewChatDialog() {
   const last = ui.use(s => s.prefs.newChat);
@@ -45,6 +47,11 @@ export function NewChatDialog() {
   const [perm, setPerm] = useState<PermissionMode | ''>(last.permissionMode);
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [path, setPath] = useState<WorkPath>('general');
+  const [context, setContext] = useState('');
+  const [outcome, setOutcome] = useState('');
+  const labels = workLabels();
+  const brief = workBrief({ path, request: prompt, context, outcome });
   const [regia, setRegia] = useState(asRegia || !hasRegia);
   const [regiaName, setRegiaName] = useState('');
   const [worktree, setWorktree] = useState(false);
@@ -66,7 +73,9 @@ export function NewChatDialog() {
     const h = pick.harness ?? harness0;
     const asked = { ...(pick.harness ? { harness: pick.harness } : {}), ...(pick.model ? { model: pick.model } : {}), ...(pick.effort && engineCan(harness, 'effort') ? { effort: pick.effort } : {}) };
     return {
-      title: title.trim(), cwd: cwd.trim(), prompt: prompt.trim() || undefined,
+      title: title.trim(), cwd: cwd.trim(), prompt: brief || undefined,
+      routeText: prompt.trim(),
+      ...(path !== 'general' && path !== 'develop' ? { area: labels.paths[path] } : {}),
       ...(Object.keys(asked).length ? { ask: { ...asked, reason: askReason } } : {}),
       defaults: { harness: h, ...(modelOf(h) ? { model: modelOf(h) } : {}), ...(effort0 && engineCan(h, 'effort') ? { effort: effort0 } : {}) },
       ...(regia ? { regia: true, ...(name ? { regiaName: name } : {}) } : regiaId() ? { regiaOf: regiaId()! } : {}),
@@ -75,7 +84,7 @@ export function NewChatDialog() {
   const askReason = 'user choice (New chat)'; // sent to agent, in English
   // the table’s choice while the user types (no tokens, in main): one line and the fields follow it; `key` holds what
   // the route depends on (the tab name does not change it)
-  const key = JSON.stringify([title.trim(), prompt.trim().slice(0, 2000), pick, regia, harness0, effort0, def?.claudeModel, def?.cursorModel]);
+  const key = JSON.stringify([title.trim(), prompt.trim().slice(0, 2000), path, context, outcome, pick, regia, harness0, effort0, def?.claudeModel, def?.cursorModel]);
   useEffect(() => {
     let live = true;
     const t = setTimeout(() => { void sb.invoke('routing:preview', request()).then(p => { if (live) setPreview(p); }, () => { if (live) setPreview(null); }); }, 250);
@@ -123,15 +132,29 @@ export function NewChatDialog() {
         <div className="modal-head"><h2>{asRegia ? t('dialogs.newChat.titleNewRegia') : t('dialogs.newChat.titleNewChat')}</h2><span className="sp" /><Keys combo={t('dialogs.newChat.shortcutCombo')} /><span className="modal-head-hint">{t('dialogs.newChat.createHint')}</span></div>
         <div className="modal-body">
           <label className="field">
-            <span>{regia ? <>{t('dialogs.newChat.firstMessage')} <small>{t('dialogs.newChat.optional')}</small></> : t('dialogs.newChat.whatShouldDo')}</span>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={regia ? 2 : 4} placeholder={regia ? t('dialogs.newChat.promptRegiaBrief') : t('dialogs.newChat.promptPlaceholder')} data-testid="newchat-prompt" autoFocus={!(regia && hasRegia)} />
+            <span>{labels.path}</span>
+            <select value={path} onChange={e => setPath(e.target.value as WorkPath)} data-testid="newchat-work-path">
+              {WORK_PATHS.map(p => <option key={p} value={p}>{labels.paths[p]}</option>)}
+            </select>
+            <small>{labels.hint}</small>
           </label>
+          <label className="field">
+            <span>{regia ? <>{t('dialogs.newChat.firstMessage')} <small>{t('dialogs.newChat.optional')}</small></> : t('dialogs.newChat.whatShouldDo')}</span>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={regia ? 2 : 4} placeholder={labels.requestHint} data-testid="newchat-prompt" autoFocus={!(regia && hasRegia)} />
+          </label>
+          <details className="advanced" data-testid="newchat-work-context">
+            <summary>{labels.contextSummary}</summary>
+            <label className="field"><span>{labels.context}</span><textarea value={context} onChange={e => setContext(e.target.value)} rows={2} placeholder={labels.contextHint} data-testid="newchat-context" /></label>
+            <label className="field"><span>{labels.outcome}</span><input value={outcome} onChange={e => setOutcome(e.target.value)} placeholder={labels.outcomeHint} data-testid="newchat-outcome" /></label>
+          </details>
           {regia && hasRegia && (
             <label className="field">
               <span>{t('dialogs.newChat.regiaNameLabel')} <small>{t('dialogs.newChat.regiaNameHint')}</small></span>
               <input value={regiaName} onChange={e => { setRegiaName(e.target.value); setError(null); }} maxLength={30} placeholder={t('dialogs.newChat.regiaNamePlaceholder')} data-testid="newchat-regia-name" autoFocus aria-invalid={!!error && !cleanRegiaName(regiaName)} />
             </label>
           )}
+          <details className="advanced" data-testid="newchat-engine-options">
+          <summary>{labels.engineOptions}</summary>
           <div className="harness-pick" role="radiogroup" aria-label={t('dialogs.newChat.harnessLabel')}>
             {engines.map(({ id: h, name }) => (
               <button key={h} type="button" role="radio" aria-checked={harness === h} className={`harness-card ${harness === h ? 'on' : ''}`} data-testid={`newchat-harness-${h}`}
@@ -146,6 +169,8 @@ export function NewChatDialog() {
             {line && <span className="route-text" title={`${line.what} — ${line.why}`}><b>{line.what}</b> — {line.why}</span>}
             {line && (pick.harness || pick.model || pick.effort) && <button type="button" className="link-btn" onClick={() => setPick({})} data-testid="newchat-route-reset">{t('dialogs.newChat.returnToAutomatic')}</button>}
           </p>
+          </details>
+          {line?.error && <p className="field-error" role="alert">{line.why}</p>}
           <details className="advanced" data-testid="newchat-advanced" open={asRegia || undefined}>
           <summary>{t('dialogs.newChat.advancedLabel')} <small>{t('dialogs.newChat.advancedHint')}</small></summary>
           <label className="field">
@@ -183,10 +208,10 @@ export function NewChatDialog() {
             <span>{t('dialogs.newChat.titleLabel')} <small>{t('dialogs.newChat.titleHint')}</small></span>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder={t('dialogs.newChat.titlePlaceholder')} data-testid="newchat-title" />
           </label>
+          {can.worktree && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>{t('dialogs.newChat.separateWorktree')} <small>{t('dialogs.newChat.separateWorktreeHint')}</small></span></label>}
           </details>
           <div className="checks">
             <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>{t('dialogs.newChat.isRegia')} <small>{t('dialogs.newChat.isRegiaHint')}</small></span></label>
-            {can.worktree && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" /><span>{t('dialogs.newChat.separateWorktree')} <small>{t('dialogs.newChat.separateWorktreeHint')}</small></span></label>}
           </div>
           {regia && current && (
             <p className="regia-note" id="newchat-regia-note" data-testid="newchat-regia-note">

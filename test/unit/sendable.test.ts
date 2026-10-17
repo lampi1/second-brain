@@ -9,7 +9,7 @@ import { foreignOf } from '../../src/renderer/lib/foreign';
 
 const invoke = vi.fn();
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: (...a: unknown[]) => invoke(...a), on: () => () => {} } }));
-const { app, dismissCommand, dispatch, markCopied, markSent, send, undoSent, unqueue } = await import('../../src/renderer/store/store');
+const { app, dismissCommand, dispatch, markCopied, markSent, send, undoSent, unqueue,updateStoreProblem } = await import('../../src/renderer/store/store');
 const { markOf } = await import('../../src/renderer/lib/marks');
 
 describe('sendable', () => {
@@ -103,7 +103,8 @@ describe('notes to the chat', () => {
     expect(app.get().queued.a ?? []).toEqual([]); // not a queued message of its own
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
     expect(sent()).toEqual(['[Mandato] Ciao Marco,']);
-    await Promise.resolve(); // main's reply: the note is no longer on its way (until then the chat counts as busy)
+    // Main's acknowledgement includes tracked bridge settlement; do not assume a fixed microtask count.
+    await vi.waitFor(()=>expect(updateStoreProblem()).toBeNull());
 
     invoke.mockClear();
     const k2 = blockKey('a', 'Secondo testo');
@@ -127,9 +128,10 @@ describe('notes to the chat', () => {
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.01 }) }); // the old turn's late idle
     expect(sent()).toEqual(['primo']);
     resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,']); // main took it and the chat shows free: told now
+    await vi.waitFor(()=>expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,'])); // main took it and the chat shows free: told now
+    await vi.waitFor(()=>expect(updateStoreProblem()).toBeNull());
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.02 }) });
+    expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,']); // no duplicate after another idle update
   });
 
   it('a queued message removed loses no note; Enter on an empty field never sends notes alone', () => {

@@ -46,7 +46,9 @@
     "promote": "node scripts/release.mjs promote",
     "rollback": "node scripts/release.mjs rollback",
     "release": "node scripts/release.mjs status",
-    "test:stable": "playwright test --config playwright.stable.config.ts"
+    "test:stable": "playwright test --config playwright.stable.config.ts",
+    "package:windows": "node scripts/package-windows.mjs",
+    "test:installer": "playwright test --config playwright.installer.config.ts"
   },
   "dependencies": {
     "3d-force-graph": "1.79.1",

@@ -15,6 +15,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { log, errText } from '../log';
+import { updateActivity } from '../update/activity';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
 export const DEFAULT_MCP_PORT = 4319;
@@ -250,14 +251,17 @@ export class McpServer {
           ctx.signal.addEventListener('abort', onClose, { once: true });
           if (ctx.signal.aborted) ac.abort();
           if (id !== null) this.inflight.set(key, ac);
-          try {
-            const out = await tool.run(args, { ...ctx, signal: ac.signal });
+            let leaveActivity: (() => void) | undefined;
+            try {
+              leaveActivity = updateActivity.enter();
+              const out = await tool.run(args, { ...ctx, signal: ac.signal });
             log.debug('mcp', `call ${name}`, { chat: who, data: { mount: mount.name, ms: Date.now() - t0, args: Object.keys(args) } });
             return ok(id, { content: toContent(out) });
           } catch (e) {
             log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
             return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}` }], isError: true });
           } finally {
+              leaveActivity?.();
             ctx.signal.removeEventListener('abort', onClose);
             if (this.inflight.get(key) === ac) this.inflight.delete(key);
           }

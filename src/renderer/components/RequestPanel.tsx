@@ -21,6 +21,7 @@
 // Used by NeedsLane, ChatTile, RegiaTile, OverlayApp, QuestionsWindow.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import{t}from'../i18n';
 import { explainTool } from '@shared/explain';
 import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
 import { answerText, cleanDescription, cleanLabel, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
@@ -237,7 +238,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         })}
         {canOther && (
           <button type="button" className="chip-opt chip-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`} title="Scrivi la tua risposta">
-            {otherKey && <Kbd>{otherKey}</Kbd>}<span className="chip-l">Altro…</span>
+            {otherKey && <Kbd>{otherKey}</Kbd>}<span className="chip-l">{t('ui.other')}</span>
           </button>
         )}
         {q.multiSelect && (
@@ -412,8 +413,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
               <button type="button" className="ask-opt ask-opt-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>
                 {otherKey ? <Kbd>{otherKey}</Kbd> : <span className="ask-check" aria-hidden="true" />}
                 <span className="ask-opt-text">
-                  <span className="ask-opt-label">Altro…</span>
-                  <span className="ask-opt-desc">scrivi la tua risposta</span>
+                  <span className="ask-opt-label">{t('ui.other')}</span>
+                  <span className="ask-opt-desc">{t('ui.writeAnswer')}</span>
                 </span>
               </button>
             ) : otherBox(false))}

@@ -94,6 +94,15 @@ export function parseKeys(spec: string): KeyStroke[] {
   return strokes;
 }
 
+/** Clipboard authorization uses the same normalized strokes as input dispatch, including aliases/permutations. */
+export function isPasteStroke(stroke: KeyStroke): boolean {
+  return isPasteKey(stroke.def.key,stroke.modifiers);
+}
+export function isPasteKey(key:string,modifiers:number):boolean {
+  return /^v$/i.test(key) && (modifiers & (MOD.ctrl | MOD.meta)) !== 0 || key === 'Insert' && (modifiers & MOD.shift) !== 0;
+}
+export function containsPaste(spec: string): boolean { return parseKeys(spec).some(isPasteStroke); }
+
 /** "ctrl+shift" → CDP modifier bits (also accepts an array of names). */
 export function parseModifiers(m: unknown): number {
   const list = Array.isArray(m) ? m.map(String) : String(m ?? '').split(/[+\s,]+/);

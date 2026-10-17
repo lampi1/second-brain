@@ -30,7 +30,7 @@ describe('questionsModal: nobody but the user turns it off', () => {
       .filter(f => /\btoggleQuestionsModal\b|questionsModal\s*:/.test(fs.readFileSync(f, 'utf8')))
       .map(f => path.relative(RENDERER, f).replace(/\\/g, '/'))
       .sort();
-    expect(writers).toEqual(['actions.ts', 'components/CommandPalette.tsx', 'components/SettingsPage.tsx', 'components/TopBar.tsx']);
+    expect(writers).toEqual(['actions.ts', 'components/CommandPalette.tsx', 'components/TopBar.tsx']);
     const win = fs.readFileSync(path.join(RENDERER, 'components', 'QuestionsWindow.tsx'), 'utf8');
     expect(win).not.toMatch(/toggleQuestionsModal|setSetting|qwin-off/);
   });

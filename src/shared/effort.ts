@@ -1,0 +1,12 @@
+import type { Effort } from './contract';
+/** A UI choice, an outgoing turn parameter and a provider-resolved value are different facts. */
+export interface ChatEffortStatus {
+  supported: boolean;
+  requested: Effort | null;
+  submitted: string | null;
+  effective: string | null;
+  pending: boolean;
+  effectiveSource: 'provider' | 'unknown';
+  /** A resolved thread default is not evidence of the current turn's effective value. */
+  sessionDefault: string | null;
+}

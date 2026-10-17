@@ -12,7 +12,10 @@ permissions, security, engines or spending limits.
    Changes apply at once (event `settings:changed`), the UI highlights what changed with an "Annulla". Agents change
    them through the app-control MCP; a **protected** key (engines, budgets, notifications off, anything about
    permissions/security) becomes a proposal that the user confirms with a click.
-2. **Code changes** go dev → `npm run check` → promotion (ADR 0007), applied silently:
+2. **Historical code-update design, superseded by ADR 0020.** The silent code-update plan below was not retained:
+   the implemented promotion path restarts after the user's update click. It does not hot-swap the renderer or
+   promise to keep pending requests/browser views alive. Settings in point 1 still apply live.
+   The original design was dev → `npm run check` → promotion (ADR 0007), applied silently:
    - renderer-only release: the stable window loads the new renderer in place; main keeps running, so chats,
      browser tabs and pending questions are untouched (state lives in main);
    - release touching main/preload: applied automatically at the first moment when no chat is running a turn and
@@ -24,5 +27,6 @@ permissions, security, engines or spending limits.
    agent/chat; when; before/after; how to undo), shown as an app page with one-click undo.
 
 ## Consequences
-- Most changes are invisible except for a small highlight; the user can always see and undo them.
+- Most settings changes are invisible except for a small highlight; the user can see and undo them. Code updates
+  follow the explicit update/restart flow in ADR 0020.
 - Protected things never change without their click, whoever asks.

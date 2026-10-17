@@ -20,6 +20,7 @@ let root = '';
 const MAIN = `const fs=require('node:fs'),path=require('node:path');
 const n=path.join(process.env.SB_USER_DATA,'starts');const i=fs.existsSync(n)?Number(fs.readFileSync(n,'utf8')):0;fs.writeFileSync(n,String(i+1));
 const step=(process.env.SB_FAKE_PLAN||'ready').split(',')[i]||'ready';
+if(step==='reselect'){require('node:child_process').execFileSync(process.execPath,[process.env.SB_TEST_RELEASE_SCRIPT,'install','external'],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});process.exit(1);}
 if(step==='busy')process.exit(75);if(step==='fail')process.exit(1);
 const lr=path.join(process.env.SB_RELEASES_ROOT,'launch-result.json');if(fs.existsSync(lr))fs.copyFileSync(lr,path.join(process.env.SB_USER_DATA,'seen-launch-result.json'));
 fs.writeFileSync(path.join(process.env.SB_USER_DATA,'ready.json'),JSON.stringify({release:process.env.SB_RELEASE,pid:process.pid,at:new Date().toISOString()}));
@@ -34,9 +35,9 @@ function setup(ids: string[]): { base: string; userData: string } {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ main: 'main.cjs' }));
     fs.writeFileSync(path.join(dir, 'main.cjs'), MAIN);
-    fs.writeFileSync(path.join(dir, 'release.json'), JSON.stringify({ id, electron: '1.0.0', claudeEngine: null }));
+    fs.writeFileSync(path.join(dir, 'release.json'), JSON.stringify({ id, writerProtocol: 1, electron: '1.0.0', claudeEngine: null }));
   }
-  fs.writeFileSync(path.join(base, 'current.json'), JSON.stringify({ current: ids[0], previous: ids[1] ?? null, bad: [], history: [] }));
+  fs.writeFileSync(path.join(base, 'current.json'), JSON.stringify({ current: ids[0], previous: ids[1] ?? null, writerProtocol: 1, bad: [], history: [] }));
   const userData = path.join(base, 'ud');
   fs.mkdirSync(userData);
   return { base, userData };
@@ -45,7 +46,7 @@ function setup(ids: string[]): { base: string; userData: string } {
 function launch(base: string, userData: string, plan: string, waitMs = 3000): { out: string; state: { bad: string[] }; starts: number; result: { wanted: string; started: string | null; attempts: { id: string; outcome: string; reason: string }[] } } {
   let out = '';
   try {
-    out = execFileSync(process.execPath, [script, 'launch'], { encoding: 'utf8', env: { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_FAKE_PLAN: plan, SB_LAUNCH_WAIT_MS: String(waitMs) }, timeout: 60_000 });
+    out = execFileSync(process.execPath, [script, 'launch'], { encoding: 'utf8', env: { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_TEST_RELEASE_SCRIPT: path.join(base, 'release.mjs'), SB_FAKE_PLAN: plan, SB_LAUNCH_WAIT_MS: String(waitMs) }, timeout: 60_000 });
   } catch (e) { out = String((e as { stdout?: string }).stdout ?? '') + String((e as { stderr?: string }).stderr ?? ''); }
   return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
 }
@@ -54,6 +55,84 @@ beforeAll(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-launch-')); }
 afterAll(() => { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* a fake app may still hold a file */ } });
 
 describe('release.mjs launch', () => {
+  it('a superseded launcher cannot mark bad or overwrite a concurrent external activation', () => {
+    const { base, userData } = setup(['b', 'a', 'external']);
+    fs.copyFileSync(script, path.join(base, 'release.mjs'));
+    fs.copyFileSync(path.join(path.dirname(script), 'update.mjs'), path.join(base, 'update.mjs'));
+    const output = path.join(base, 'releases/external/out');
+    fs.mkdirSync(path.join(output, 'main'), { recursive: true });
+    fs.writeFileSync(path.join(output, 'main/index.js'), '// Inert activation fixture');
+    fs.writeFileSync(path.join(output, 'icon.ico'), 'fixture');
+    const result = launch(base, userData, 'reselect');
+    expect(result.out).toContain('stale launcher');
+    expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: 'external', previous: 'b', bad: [] });
+    expect(result.starts).toBe(1);
+  }, 15000);
+  it.skipIf(process.platform !== 'win32')('the installed VBS shortcut bootstraps a retained runtime when the current runtime is missing', async () => {
+    const { base, userData } = setup(['b', 'a']);
+    fs.copyFileSync(script, path.join(base, 'release.mjs'));
+    fs.copyFileSync(path.join(path.dirname(script), 'update.mjs'), path.join(base, 'update.mjs'));
+    fs.mkdirSync(path.join(base, 'electron', '2.0.0'), { recursive: true });
+    fs.copyFileSync(process.execPath, path.join(base, 'electron', '2.0.0', 'electron.exe'));
+    fs.writeFileSync(path.join(base, 'releases', 'b', 'release.json'), JSON.stringify({ id: 'b', writerProtocol: 1, electron: '2.0.0', claudeEngine: null }));
+    for (const id of ['a', 'b']) {
+      const output = path.join(base, 'releases', id, 'out');
+      fs.mkdirSync(path.join(output, 'main'), { recursive: true });
+      fs.writeFileSync(path.join(output, 'main', 'index.js'), '// activation fixture');
+      fs.writeFileSync(path.join(output, 'icon.ico'), 'fixture');
+    }
+    fs.writeFileSync(path.join(base, 'current.json'), JSON.stringify({ current: 'a', previous: null, writerProtocol: 1, bad: [], history: [] }));
+    // This exercises Windows script-host bootstrap, not a timeout: use the production readiness window.
+    const env = { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_FAKE_PLAN: 'ready', SB_LAUNCH_WAIT_MS: '30000' };
+    execFileSync(process.execPath, [path.join(base, 'release.mjs'), 'install', 'b'], { env, windowsHide: true });
+    fs.unlinkSync(path.join(base, 'electron', '2.0.0', 'electron.exe'));
+    const startedAt = Date.now();
+    let cscriptError: string | null = null;
+    try {
+      execFileSync(path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'cscript.exe'), ['//B', '//Nologo', path.join(base, 'launch.vbs')], { env: { ...env, PATH: '' }, windowsHide: true, timeout: 10000 });
+    } catch (error) { cscriptError = String(error); }
+    const scriptHostMs = Date.now() - startedAt;
+    const result = path.join(base, 'launch-result.json');
+    const end = Date.now() + 70000;
+    let observed: { started?: string } | null = null;
+    while (Date.now() < end) {
+      try { observed = JSON.parse(fs.readFileSync(result, 'utf8')); } catch { /* writer may be between truncate/write */ }
+      if (observed?.started || cscriptError) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const readJson = (file: string): unknown => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
+    const state = readJson(path.join(base, 'current.json')) as { bad?: string[] } | null;
+    const diagnostics = { base, elapsedMs: Date.now() - startedAt, scriptHostMs, cscriptError, result: readJson(result), state,
+      ready: readJson(path.join(userData, 'ready.json')), starts: readJson(path.join(userData, 'starts')) };
+    if (cscriptError || observed?.started !== 'a' || !state?.bad?.includes('b')) {
+      // Preserve bounded synthetic-fixture evidence before afterAll removes its files; never a real user profile.
+      const artifacts = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'unit');
+      fs.mkdirSync(artifacts, { recursive: true });
+      fs.writeFileSync(path.join(artifacts, `release-vbs-${process.pid}.json`), JSON.stringify(diagnostics, null, 2));
+    }
+    const detail = JSON.stringify(diagnostics);
+    expect(cscriptError, detail).toBeNull();
+    expect(observed, detail).toMatchObject({ wanted: 'b', started: 'a' });
+    expect(state?.bad, detail).toContain('b');
+  }, 90000);
+
+  it.each(['missing', 'malformed'])('invalid current metadata (%s) falls back to the previous release', kind => {
+    const { base, userData } = setup(['b', 'a']);
+    const metadata = path.join(base, 'releases', 'b', 'release.json');
+    if (kind === 'missing') fs.unlinkSync(metadata); else fs.writeFileSync(metadata, '{broken');
+    const r = launch(base, userData, 'ready');
+    expect(r.state.bad).toEqual(['b']);
+    expect(r.result).toMatchObject({ wanted: 'b', started: 'a', attempts: [{ id: 'b', outcome: 'bad' }, { id: 'a', outcome: 'started' }] });
+  }, 60_000);
+
+  it('an unavailable current runtime falls back without crashing on spawn error', () => {
+    const { base, userData } = setup(['b', 'a']);
+    fs.writeFileSync(path.join(base, 'releases', 'b', 'release.json'), JSON.stringify({ id: 'b', electron: '2.0.0', claudeEngine: null }));
+    const r = launch(base, userData, 'ready');
+    expect(r.state.bad).toEqual(['b']);
+    expect(r.result.started).toBe('a');
+  }, 60_000);
+
   it('starts the current release when its window reports ready', () => {
     const { base, userData } = setup(['b', 'a']);
     const r = launch(base, userData, 'ready');

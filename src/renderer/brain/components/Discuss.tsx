@@ -151,11 +151,11 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
           title={regia ? t('brainPages.discuss.discussButtonTitle') : t('brainPages.discuss.discussButtonTitleDisabled')} disabled={!!chats && !regia && !!bridge}>
           <IconChat /> {t('brainPages.discuss.discussBtn')}
         </button>
-        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
+        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={topic.kind === 'procedure' ? t('brainPages.discuss.prepareProcedureLabel', { topic: titleOf(topic) }) : t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
           title={topic.kind === 'procedure' ? t('brainPages.discuss.openChatTitleProcedure')
             : topic.kind === 'idea' ? t('brainPages.discuss.openChatTitleIdea') : topic.kind === 'reflection' ? t('brainPages.discuss.openChatTitleReflection')
               : topic.quote.what === 'errore' ? t('brainPages.discuss.openChatTitleError') : t('brainPages.discuss.openChatTitleNumber')}>
-          <IconNew /> {t('brainPages.discuss.openChatBtn')}
+          <IconNew /> {topic.kind === 'procedure' ? t('brainPages.discuss.prepareProcedure') : t('brainPages.discuss.openChatBtn')}
         </button>
         <span className="sp" />
         {last && (

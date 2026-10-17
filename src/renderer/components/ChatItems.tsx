@@ -11,7 +11,9 @@
 // and a "Nuova chat" badge on a message sent with that toggle (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and RegiaTile.
-import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {useFollowBottom} from '../lib/use-follow-bottom';
+import '../styles/follow-bottom.css';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ChatItem, FileDiff } from '@shared/contract';
 import { diffTotals, duration, formatCost, toolLabel } from '../lib/format';
 import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/markdown';
@@ -22,6 +24,7 @@ import { IconAlert, IconArrowDown, IconBell, IconCheck, IconChevronRight, IconIn
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
+import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp } from '../store/store';
 import { chatRefsOf, titlesKey, toolChatRef } from '../lib/chatrefs';
@@ -65,7 +68,7 @@ type Group = { kind: 'md'; parts: { key: string; html: string }[] } | { kind: 'c
 const Message = memo(function Message({ id, text, streaming }: { id: string; text: string; streaming?: boolean }) {
   const chatId = useContext(ChatIdCtx);
   const t = text || '…';
-  if (!FENCE.test(t)) return <Markdown text={t} streaming={streaming} />;
+  if (!FENCE.test(t)) return <><Markdown text={t} streaming={streaming} /><MessageImages chatId={chatId} text={t} id={id} streaming={streaming}/></>;
   const blocks = streaming ? splitBlocks(t) : [t];
   const groups: Group[] = [];
   blocks.forEach((b, bi) => markdownParts(b, !streaming || bi < blocks.length - 1).forEach((part, pi) => {
@@ -80,6 +83,7 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
   }));
   return (
     <div className="msg-md">
+      <MessageImages chatId={chatId} text={t} id={id} streaming={streaming}/>
       {groups.map((g, i) => {
         const tail = !!streaming && i === groups.length - 1;
         return g.kind === 'md'
@@ -292,34 +296,12 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
   return 'pensa';
 }
 
-// Lists that must follow their bottom, served together once per frame: reading scrollHeight right after each DOM
-// change forced one page layout per list per streamed piece (10 streaming chats = 10+ layouts a frame, a third of the
-// renderer's time); one pass a frame lays out once and only writes scrollTop, which does not dirty the layout.
-const following = new Map<HTMLElement, () => boolean>();
-// where we last put each list: the scroll event of our own write arrives a frame later, when more content may have
-// grown below it, so it must never read as the user leaving the bottom (only scrolling above this point does)
-const wrote = new WeakMap<HTMLElement, number>();
-function toBottom(el: HTMLElement): void {
-  el.scrollTop = el.scrollHeight;
-  wrote.set(el, el.scrollTop);
-}
-let followFrame = 0;
-function follow(el: HTMLElement, stuck: () => boolean): void {
-  following.set(el, stuck);
-  if (followFrame) return;
-  followFrame = requestAnimationFrame(() => {
-    followFrame = 0;
-    const all = [...following];
-    following.clear();
-    for (const [e, s] of all) if (s() && e.isConnected) toBottom(e);
-  });
-}
-
-export function ItemList({ items, empty, footer, chatId = null }: { items: readonly ChatItem[]; empty?: string; footer?: ReactNode; chatId?: string | null }) {
+type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null};
+export function ItemList(props:ItemListProps){return <ItemListFor key={props.chatId??'unowned'} {...props}/>;}
+function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const ref = useRef<HTMLDivElement>(null);
   const peek = useLinkPeek(chatId);
-  const stick = useRef(true);
-  const [unseen, setUnseen] = useState(false);
+  const content=useRef<HTMLDivElement>(null);
   const [pastOpen, setPastOpen] = useState(false);
   // a cold continuation (ADR 0031): what came before the last divider is the previous session, folded
   const cut = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) { const x = items[i]; if (x?.kind === 'system' && x.continued) return i; } return -1; }, [items]);
@@ -332,45 +314,21 @@ export function ItemList({ items, empty, footer, chatId = null }: { items: reado
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];
   const lastSig = last ? `${last.id}:${'text' in last ? last.text.length : 0}:${last.kind === 'tool' ? last.status : ''}` : '';
-  const mounted = useRef(false);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // first layout: at the bottom before the first paint (never a frame showing the top of the transcript)
-    if (!mounted.current) { mounted.current = true; toBottom(el); }
-    else if (stick.current) follow(el, () => stick.current);
-    else setUnseen(true);
-  }, [lastSig, items.length]);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // content grows a frame after the item changes (markdown parsed once per frame): follow it, only if at the bottom
-    const onChange = () => { if (stick.current) follow(el, () => stick.current); };
-    const ro = new ResizeObserver(onChange);
-    ro.observe(el);
-    const mo = new MutationObserver(onChange);
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => { ro.disconnect(); mo.disconnect(); following.delete(el); };
-  }, []);
-  const onScroll = () => {
-    const el = ref.current;
-    if (!el) return;
-    // back at the bottom by hand: that is the new mark, so scrolling up from here detaches the list again
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 24) { stick.current = true; wrote.set(el, el.scrollTop); setUnseen(false); }
-    else if (el.scrollTop < (wrote.get(el) ?? Infinity)) stick.current = false; // the user scrolled up
-  };
+  const follow=useFollowBottom(ref,content,chatId,`${items.length}:${lastSig}`);
   return (
     <ChatIdCtx.Provider value={chatId}>
     <div className="items-wrap">
-      <div className="items" ref={ref} onScroll={onScroll} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
+      <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label="Messaggi" onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
+        <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
         {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : shown.map(i => <Item key={i.id} item={i} beforeAsk={open.has(i.id)} refs={refs.get(i.id)} marks={fixed.get(i.id)} />)}
         {footer}
+        </div>
       </div>
       {peek.popover}
-      {unseen && (
-        <button type="button" className="unseen" data-testid="unseen" onClick={() => { const el = ref.current; if (el) { toBottom(el); stick.current = true; setUnseen(false); } }}>
-          <IconArrowDown size={13} /> {t('chat.items.unseenButton')}
+      {!follow.following && (
+        <button type="button" className="unseen" data-testid="unseen" onClick={follow.jump}>
+          <IconArrowDown size={13} /> {follow.unseen ? 'Nuovi messaggi · Torna agli ultimi' : 'Torna agli ultimi'}
         </button>
       )}
     </div>

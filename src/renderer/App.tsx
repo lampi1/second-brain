@@ -5,6 +5,7 @@
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
 import { useEffect, type CSSProperties } from 'react';
+import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
@@ -22,13 +23,16 @@ import { HealthBanner } from './components/HealthBanner';
 import { Sidebar } from './components/Sidebar';
 import { NeedsLane, LiveRegion } from './components/NeedsLane';
 import { RegiaOverlay, useDockReserve } from './components/RegiaOverlay';
-import { Mosaico } from './components/Mosaico';
-import { Corsie } from './components/Corsie';
+import {UpdateCheckpointStatus} from './components/UpdateCheckpointStatus';
+import { AgentsWorkspace } from './components/AgentsWorkspace';
+
 import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
-import { NewChatDialog } from './components/NewChatDialog';
+import { AgentStartDialog as NewChatDialog } from './components/AgentStartDialog';
+import { AgentStudio } from './components/AgentStudio';
+import { FirstInterviewGate } from './components/FirstInterview';
 import { RegiaRenewDialog } from './components/RegiaRenewDialog';
 import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
 import { HandoffDialog } from './components/HandoffDialog';
@@ -153,11 +157,11 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
         <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'workspace' })} data-testid="page-back" data-tip="Torna alle chat|Ctrl+1"><IconArrowLeft size={13} /> Chat</button>
         <h2>{pageLabel(id)}</h2>
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> Copia link</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> {t('chat.menu.copyLink')}</button>
         <span className="page-hint"><Keys combo="Esc" /> chat</span>
       </div>
       <div className="page-body">
-        {id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>
@@ -178,6 +182,7 @@ export function App() {
   const view = ui.use(s => s.prefs.view);
   const density = ui.use(s => s.prefs.density);
   const theme = ui.use(s => s.prefs.theme);
+  const appearance=ui.use(s=>s.prefs.appearance);
   const maximized = ui.use(s => s.maximized);
   const focusMode = ui.use(s => s.focusMode);
   const lanePeek = ui.use(s => s.lanePeek);
@@ -195,7 +200,8 @@ export function App() {
     const root = document.documentElement;
     if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
     root.dataset.density = density;
-  }, [theme, density]);
+    root.dataset.appearance=appearance.preset;
+  }, [theme, density,appearance]);
   const qShown = ui.use(s => s.qwin.shown);
   useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
@@ -210,8 +216,9 @@ export function App() {
   const showLane = !onPage && lanePeek;
   return (
     // the Regia widget's corner: the workspace, the map and the questions window leave it free (shell.css)
-    <div className="app" data-testid="app" data-view={view} style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px` } as CSSProperties}>
+    <div className="app" data-testid="app" data-view={view} style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
+      <Toasts />
       <BrainSetupBanner />
       <HealthBanner />
       <LaunchBanner />
@@ -221,7 +228,7 @@ export function App() {
           {showLane && <NeedsLane peek={lanePeek} />}
           <main className="workspace no-regia" data-testid="workspace">
             <div className="view-area">
-              {onPage ? <PageFrame id={page} /> : focusMode ? <FocusView chatId={focusMode} /> : view === 'mosaico' ? <Mosaico /> : <Corsie />}
+              {onPage ? <PageFrame id={page} /> : focusMode ? <FocusView chatId={focusMode} /> : <AgentsWorkspace />}
             </div>
           </main>
         </div>
@@ -236,11 +243,12 @@ export function App() {
       )}
       <RegiaOverlay />
       {center && <NotificationCenter />}
-      <Toasts />
       <QuestionsWindow />
       <LiveRegion />
       <TooltipLayer />
       <AutoCloser />
+      <FirstInterviewGate />
+      <UpdateCheckpointStatus />
       {modal === 'palette' && <CommandPalette />}
       {modal === 'newChat' && <NewChatDialog />}
       {modal === 'shortcuts' && <ShortcutsDialog />}

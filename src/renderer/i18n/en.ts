@@ -1,5 +1,6 @@
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
+import {studioEn}from'./areas/studio.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { dialogsEn } from './areas/dialogs.en';
@@ -7,8 +8,13 @@ import { toolsEn } from './areas/tools.en';
 import { brainPagesEn } from './areas/brainPages.en';
 import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
+import {productEn}from'./areas/product.en';
+import {settingsEn}from'./areas/settings.en';
 
 export const en: Dict = {
+  ...studioEn,
+  ...productEn,
+  ...settingsEn,
   ...chatEn,
   ...dialogsEn,
   ...toolsEn,

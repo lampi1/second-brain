@@ -92,3 +92,21 @@
 .st-rt-hist li { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
 .st-rt-hist li + li { border-top: 1px solid var(--border); }
 .st-rt-hist-text { flex: 1; min-width: 0; }
+
+/* Local search keeps the existing sections and their unsaved controls mounted. */
+.st-results { display: grid; gap: 22px; min-width: 0; }
+.st-results > [hidden] { display: none; }
+.st-search { display: grid; gap: 6px; }
+.st-search > label { font-weight: 600; }
+.st-search-line { display: flex; align-items: center; gap: 8px; }
+.st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 36px; text-align: left; }
+.st-search-line > button { flex: none; }
+.st-search p { margin: 0; }
+.st-autonomy { display: grid; justify-items: end; gap: 6px; max-width: 100%; }
+.st-autonomy textarea.st-input { width: 34ch; max-width: 100%; height: auto; min-height: 72px; padding: 6px 8px; text-align: left; resize: vertical; }
+.st-empty { padding: 20px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+.st-empty p { margin: 6px 0 0; color: var(--text-3); font-size: var(--fs-s); }
+@media (max-width: 480px) { .st-search-line { flex-wrap: wrap; } }
+
+/* Essential settings use four groups; connection details appear only for the selected tool. */
+.st-essential .st-results{display:grid;gap:20px}.st-essential select{max-width:100%;padding:6px 10px;background:var(--surface-2);color:var(--text);border:1px solid var(--border-2);border-radius:var(--r-s)}.st-essential .st-ctl{gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:65%}.st-tool+.st-tool{border-top:1px solid var(--border)}.st-tool-connection{display:grid;gap:10px;padding:12px 16px;background:var(--surface-2)}.st-tool-connection code{overflow-wrap:anywhere}.st-tool-connection .st-key{display:flex;gap:8px;flex-wrap:wrap}.st-tool-connection label{display:grid;gap:6px}.st-tool-connection input{background:var(--surface);color:var(--text);border:1px solid var(--border-2);padding:6px}.st-essential .st-value{overflow:hidden;text-overflow:ellipsis;max-width:280px;white-space:nowrap}@media(max-width:720px){.st-essential .st-row{align-items:flex-start;flex-direction:column;gap:8px}.st-essential .st-ctl{max-width:100%;justify-content:flex-start}}

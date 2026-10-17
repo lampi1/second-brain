@@ -17,7 +17,7 @@ export const hiddenRun = (env: NodeJS.ProcessEnv = process.env): boolean => env.
 /** What a hidden run would have opened outside the app (files, Explorer, the system browser): e2e reads it (__sbOpened). */
 export const hiddenOpened: string[] = [];
 
-export function createWindow(outDir: string): BrowserWindow {
+export function createWindow(outDir: string, loadImmediately = true): BrowserWindow {
   const hidden = hiddenRun();
   const win = new BrowserWindow({
     // right of every display, frameless (off every monitor Windows draws no frame: content size = window size)
@@ -50,7 +50,8 @@ export function createWindow(outDir: string): BrowserWindow {
   win.once('ready-to-show', () => { if (hidden) { win.showInactive(); wc.focus(); } else win.show(); });
   // SB_HANG_RELOAD_MS: e2e only, a hang reloads at once
   guardRenderer(win, () => win.loadFile(page), { hangMs: Number(process.env.SB_HANG_RELOAD_MS) || undefined });
-  void win.loadFile(page);
+  // Bootstrap defers the first page load until recovery and service IPC handlers exist.
+  if (loadImmediately) void win.loadFile(page);
   return win;
 }
 

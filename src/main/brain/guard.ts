@@ -56,7 +56,7 @@ export function findGuard(denyList: string, env: NodeJS.ProcessEnv = process.env
 }
 
 const gitOut = (cwd: string, args: string[]): Promise<Buffer> => new Promise((resolve, reject) => {
-  execFile('git', ['-C', cwd, ...args], { encoding: 'buffer', maxBuffer: 1 << 28, windowsHide: true, timeout: 60_000 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+  execFile('git', ['--no-replace-objects', '-c', 'core.fsmonitor=false', '-C', cwd, ...args], { encoding: 'buffer', maxBuffer: 1 << 28, windowsHide: true, timeout: 60_000 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
 });
 
 /** The files a commit adds or changes (renames and copies by their new path); deletions carry nothing to scan. A merge

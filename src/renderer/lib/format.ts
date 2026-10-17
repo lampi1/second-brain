@@ -1,6 +1,7 @@
 // Italian formatting helpers for the UI (costs, models, efforts, states, relative times, folders). Pure functions:
 // every tile, the top bar and the palette use them, and the unit tests pin their output (test/unit/format.test.ts).
 import type { ChatState, ChatSummary, Effort, Harness, PermissionMode } from '@shared/contract';
+import{t}from'../i18n';
 
 const money = new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -68,14 +69,14 @@ export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'regia';
 /** The state pill of a chat: Italian label + color tone. */
 export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'appRegia' | 'pending' | 'queued' | 'closedAt'>): { label: string; tone: Tone } {
   const s: ChatState = c.state;
-  if (s === 'waiting' || c.pending > 0) return { label: 'ti aspetta', tone: 'wait' };
+  if (s === 'waiting' || c.pending > 0) return { label:t('ui.state.waiting'), tone: 'wait' };
   // an agent's start or turn waiting for the machine's load (ADR 0036): not finished
-  if (c.queued && !c.closedAt && s !== 'running' && s !== 'error') return { label: 'in coda', tone: 'off' };
-  if (s === 'running') return { label: 'al lavoro', tone: 'run' };
-  if (s === 'starting') return { label: 'avvio…', tone: 'off' };
-  if (s === 'error') return { label: 'errore', tone: 'err' };
-  if (s === 'closed') return { label: 'chiusa', tone: 'off' };
-  return c.isRegia || c.appRegia ? { label: 'ti ascolta', tone: 'regia' } : { label: 'finito', tone: 'done' };
+  if (c.queued && !c.closedAt && s !== 'running' && s !== 'error') return { label:t('ui.state.queued'), tone: 'off' };
+  if (s === 'running') return { label:t('ui.state.running'), tone: 'run' };
+  if (s === 'starting') return { label:t('ui.state.starting'), tone: 'off' };
+  if (s === 'error') return { label:t('ui.state.error'), tone: 'err' };
+  if (s === 'closed') return { label:t('ui.state.closed'), tone: 'off' };
+  return c.isRegia || c.appRegia ? { label:t('ui.state.regia'), tone: 'regia' } : { label:t('ui.state.done'), tone: 'done' };
 }
 
 /** Why a chat waits in the CPU queue (ADR 0036): the figure over its limit, or the chats ahead of it. */

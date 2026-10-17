@@ -14,7 +14,7 @@ import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
 import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
-import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPair, setPrefs, setRegiaOpen, toggleView, ui, type BrainPageId } from '../store/ui';
+import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPair, setPrefs, setRegiaOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
 import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
@@ -24,7 +24,7 @@ import {
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconColumns, IconCompass, IconFocus, IconGlobe, IconGrid,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconCompass, IconFocus, IconGlobe, IconGrid,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTarget, IconTicket,
 } from './Icons';
@@ -37,6 +37,7 @@ interface Cmd {
 }
 
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
+  agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, esplora: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
 };
@@ -72,7 +73,6 @@ function buildCommands(): Cmd[] {
       run: () => { if (ui.get().prefs.view === 'corsie' && !ui.get().prefs.browsersHidden) setPair(t.id); else setMaximized(`browser:${t.id}`); },
     });
   }
-  const view = u.prefs.view;
   // the Regia of the tab shown in the overlay (ADR 0021)
   const rid = regiaId();
   const regia = rid ? s.chats[rid] : undefined;
@@ -83,7 +83,6 @@ function buildCommands(): Cmd[] {
     { id: 'new', title: 'Nuova chat', shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => openModal('newChat') },
     { id: 'stopall', title: 'Ferma tutto', shortcut: 'Ctrl+Shift+.', icon: <IconStop />, run: stopAllAsk },
     { id: 'stop', title: 'Ferma la chat selezionata', shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
-    { id: 'view', title: view === 'mosaico' ? 'Passa alla vista Corsie' : 'Passa alla vista Mosaico', shortcut: 'Ctrl+Shift+V', icon: view === 'mosaico' ? <IconColumns /> : <IconGrid />, run: toggleView },
     { id: 'focus', title: u.focusMode ? 'Esci dalla modalità focus' : 'Modalità focus sulla chat selezionata', shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
     { id: 'max', title: 'Ingrandisci / ripristina la tessera selezionata', shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
     { id: 'regia', title: 'Vai alla Regia', sub: regia ? `su ${engineName(regia.harness)}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },

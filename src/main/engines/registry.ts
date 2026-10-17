@@ -64,7 +64,8 @@ const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
   { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: false },
-  { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login'], defaultOn: false },
+  // Kimi CLI defaults to mainland-cn when the region is omitted; Second Brain's Kimi login must use the global kimi.ai account.
+  { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login', '--region', 'global'], defaultOn: false },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];
 
@@ -138,14 +139,19 @@ const listeners = new Set<() => void>();
 
 function build(): void {
   const brainIds = new Set(fromBrain.map(e => e.id));
-  list = [...APP_ENGINES.filter(e => !brainIds.has(e.id)), ...fromBrain].map(e => ({
-    ...e,
-    caps: CAPS[e.kind],
-    source: brainIds.has(e.id) ? 'brain' : 'app',
-    key: e.kind === 'api' ? 'required' : e.keyEnv ? 'optional' : 'none',
-    runs: runsOf(e),
-    trusted: BUILT_IN.has(e.id) || trust[e.id] === fingerprint(e),
-  }));
+  list = [...APP_ENGINES.filter(e => !brainIds.has(e.id)), ...fromBrain].map(e => {
+    const source = brainIds.has(e.id) ? 'brain' : 'app';
+    // Keep a previously enabled built-in Kimi CLI enabled when only its login region changes from the mainland default.
+    const oldKimiLogin = e.id === 'kimi' && source === 'app' && trust.kimi === fingerprint({ ...e, login: ['login'] });
+    return {
+      ...e,
+      caps: CAPS[e.kind],
+      source,
+      key: e.kind === 'api' ? 'required' : e.keyEnv ? 'optional' : 'none',
+      runs: runsOf(e),
+      trusted: BUILT_IN.has(e.id) || trust[e.id] === fingerprint(e) || oldKimiLogin,
+    };
+  });
   for (const fn of listeners) fn();
 }
 build();

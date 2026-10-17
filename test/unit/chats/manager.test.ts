@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions, type TurnEndInfo } from '../../../src/main/chats/manager';
+import { ClaudeSession } from '../../../src/main/chats/claude';
 import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, killStray, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
 import { regieOf } from '../../../src/shared/regia';
 
@@ -677,9 +678,11 @@ describe('ChatManager', () => {
     expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
   });
 
-  it('an idle chat releases its engine after the delay, stays idle on the grid, and resumes on the next message; never a Regia', async () => {
+  it('an idle chat with an explicitly complete census releases after the delay and resumes; never a Regia', async () => {
     const e = env();
-    const { m } = manager(e);
+    // Simulate a provider that can prove there are no unobserved children. Real Claude's partial census is covered
+    // by archive.test.ts and must not be interpreted as a complete zero by releaseIdle.
+    const { m } = manager(e, { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) });
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there' });
     const regia = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello regia', regia: true });
     await waitFor(() => results(m, c.id).length === 1 && results(m, regia.id).length === 1, 'both turns');

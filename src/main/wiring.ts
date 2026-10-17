@@ -2,12 +2,19 @@
 // the app-control tools are mounted on the same local MCP server. Used by index.ts (one call at start).
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 import type { BrowserWindow } from 'electron';
-import { app, safeStorage, shell } from 'electron';
+import { app, nativeImage, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import type { CliStatus, Harness } from '../shared/contract';
 import { NEW_CHAT_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
-import { anthropicApi, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { withApiModels } from './engines/sessions';
+import { AgentCatalogService } from './agents/catalog';
+import { SetupService } from './agents/setup';
+import { AutoCloseService, autoCloseNow } from './chats/auto-close';
+import { readLocal, writeLocal } from './agents/local-store';
+import { ProgressService } from './agents/progress';
+import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
@@ -19,6 +26,7 @@ import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } 
 import { SkillsService } from './skills/service';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
+import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
 import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
 import { predictionLine } from './brain/routing';
@@ -58,6 +66,12 @@ import { setRecorder } from './chats/drift';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  updateChats?: { problem: () => string | null; checkpoint: () => void };
+  proposals: ProposalBridge;
+  progress: ProgressService;
+  autoClose: AutoCloseService;
+  agents: AgentCatalogService;
+  setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
@@ -194,7 +208,7 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
   const recorder = { restarts: 0 };
   (globalThis as Record<string, unknown>).__sbImprove = recorder;
   return new ImproveService({
-    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(),
+    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(), allowLegacyPromotion: false,
     appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(), ...(routing ? { routing } : {}),
     emit: st => ctx.emitter.emit('improve:state', st),
     restart: failed => {
@@ -217,6 +231,33 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
         });
       } catch (e) { fail(e); }
     },
+  });
+}
+
+/** Shared by real and demo wiring; demo never calls a provider for the builder. */
+export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, demo = false, onCustomized?: () => void): AgentCatalogService {
+  const builder = () => {
+    const e = anthropicApi();
+    const models = e ? withApiModels(brain.modelsSeen())[e.id]?.ids.map(m => m.id).filter(m => /^claude-[a-z0-9.-]+$/.test(m)) ?? [] : [];
+    const available = !demo && !!e && engineOn(brain.settings(), e.id) && e.trusted && engines.hasKey(e.id) && models.length > 0;
+    return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
+  };
+  return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
+    models: () => {
+      const seen = withApiModels(brain.modelsSeen());
+      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort,
+        models: seen[e.id]?.ids ?? [], source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
+        installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
+        defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
+        modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
+    }, imageSize: bytes => { const image = nativeImage.createFromBuffer(bytes); return image.isEmpty() ? null : image.getSize(); }, builder,
+    complete: async req => {
+      const info = builder();
+      if (!info.available || req.engine !== info.engine || !info.models.includes(req.model)) return { ok: false, reason: info.reason ?? 'Modello non disponibile.' };
+      const result = await engines.text.complete({ purpose: 'agent-builder', model: req.model, system: req.system, prompt: req.prompt, maxTokens: 5000 });
+      return result.ok ? { ok: true, text: result.text } : { ok: false, reason: result.unavailable ? result.reason : result.error };
+    }, emit: catalog => ctx.emitter.emit('agents:changed', catalog),
   });
 }
 
@@ -243,6 +284,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute() });
   // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
   // brain folder counts from the next chat
+  setCodexAutonomyRoots(() => brain.settings().codexAutonomyRoots ?? []);
   setLaunchRules(() => {
     const s = brain.settings();
     const root = brain.info().brainRoot;
@@ -251,6 +293,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
+  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -265,7 +308,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
+  const autoCloseRef: { current?: AutoCloseService } = {};
   const manager = new ChatManager({
+    onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
+    resolveAgent: req => agents.resolve(req),
     emitter: ctx.emitter,
     userData: ctx.userData,
     enginePaths: enginePathsFromEnv(),
@@ -356,12 +402,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const archiveChat = manager.archive.bind(manager);
   manager.archive = async (chatId, o) => {
     const c = await archiveChat(chatId, o);
-    for (const t of browser.list()) if (t.ownerChatId === chatId) browser.close(t.id);
+    if (c.closedAt) for (const t of browser.list()) if (t.ownerChatId === chatId) browser.close(t.id);
     return c;
   };
   // brain domains (ADR 0059): a new chat reads the brain, so the remote's changes land first (bounded, throttled)
   syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
+  // Retired milestones remain readable for compatibility; no new awards or content deletion.
+  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
   if (!process.env.SB_TEST) sweeper.start();
@@ -375,7 +423,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
   // the words that time the mail to a Regia come from the brain (chats/regia-delivery.ts)
   const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readRegiaMail(root) : undefined; });
-  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify });
+  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
@@ -388,6 +436,29 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   const runner = commandRunner(ctx, chats);
   const asks = attachCommandAsks(ctx, runner, brain);
+  const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
+  let kept: string[] = [], keptProblem = false;
+  try {
+    const saved = readLocal(keptFile) as { version?: unknown; ids?: unknown } | undefined;
+    if (saved !== undefined) {
+      if (saved.version !== 1 || !Array.isArray(saved.ids) || saved.ids.length > 1000 || !saved.ids.every(id => typeof id === 'string' && id.length <= 100)) throw new Error('Invalid keep-open state');
+      kept = saved.ids as string[];
+    }
+  } catch { keptProblem = true; }
+  const autoCloseService = new AutoCloseService({ now: autoCloseNow,
+    delayMs: () => keptProblem ? 0 : (brain.settings().autoCloseMin ?? 2) * 60_000,
+    candidates: () => manager.autoCloseCandidates(id => mail.hasWork(id) || asks.pending().some(p => p.chatId === id) || runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id)),
+    archive: async (id, _reservation, valid) => {
+      const done = await manager.archiveAutomatic(id, valid);
+      if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
+      return done;
+    }, initialKeptOpen: kept,
+    saveKeptOpen: ids => { try { writeLocal(keptFile, { version: 1, ids }); } catch (e) { keptProblem = true; throw e; } },
+    emit: states => ctx.emitter.emit('chat:autoCloseStatus', states),
+  });
+  autoCloseRef.current = autoCloseService;
+  const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
+  autoCloseTimer.unref();
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
@@ -442,10 +513,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
+    updateChats: {
+      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
+      checkpoint: () => manager.checkpointForUpdate(),
+    },
+    proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
+    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
-    shutdown: async () => { engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

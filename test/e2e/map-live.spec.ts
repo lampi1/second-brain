@@ -51,6 +51,7 @@ async function rate(ms: number): Promise<number> {
 const openMap = async () => {
   await page.getByTestId('nav-map').click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
+  await page.getByTestId('bx-map-live').locator('summary').click();
 };
 
 test.beforeAll(async () => {
@@ -91,11 +92,11 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await openMap();
   const m = page.getByTestId('brain-map');
   const legend = m.getByTestId('bx-map-live');
-  await expect(legend).toContainText('Al lavoro adesso');
+  await expect(legend).toContainText('Attività osservata');
   await expect(legend).toContainText('Fix totale ordine');
   await expect(legend).toContainText('Bug notifiche SMS');
   await expect(legend).toContainText('Regia');
-  await expect(legend).toContainText(/\d+ chat · 1 file · \d+ strument/); // now.md only: the code repo's file is not a neuron
+  await expect(legend).not.toContainText('Order.cs'); // Repo files never become brain neurons.
   await expect(m.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(4000); // the layout settles, the live neurons find their place
   await shot(page, 'brain-map-live');
@@ -123,7 +124,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w?.restore(); w?.showInactive(); });
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized())).toBe(false);
   await m.getByTestId('bx-map-live-toggle').click();
-  await expect(legend).toContainText('Spenta');
+  await expect(legend).toContainText('Attività nascosta');
   await page.waitForTimeout(4500); // the live neurons leave: the map settles again (about 2.5 s), then rests
   await cpu();
   const offFps = await rate(4000);
@@ -170,5 +171,27 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   // a finished call fades: with the frozen clock it stays at full light, no longer running
   await tool('fix', { id: 'live-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md', status: 'ok' });
   await openMap();
-  await expect(page.getByTestId('bx-map-live')).toContainText('1 file');
+  await expect(page.getByTestId('bx-map-live')).toContainText('Attività osservata');
+});
+
+test('changing reduced motion restarts observed activity without rebuilding the map',async()=>{
+  if(await page.getByTestId('brain-map').count())await page.getByTestId('bx-map-close').click();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.evaluate(()=>{
+    const state=window as unknown as {__mapDraws:number};state.__mapDraws=0;
+    for(const name of ['drawElements','drawElementsInstanced'] as const){
+      const original=WebGL2RenderingContext.prototype[name];
+      Object.defineProperty(WebGL2RenderingContext.prototype,name,{configurable:true,writable:true,value:function(this:WebGL2RenderingContext,...args:unknown[]){state.__mapDraws++;return Reflect.apply(original,this,args);}});
+    }
+  });
+  await openMap();await expect(page.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1);
+  const draws=()=>page.evaluate(()=>(window as unknown as {__mapDraws:number}).__mapDraws);
+  let previous=-1,stable=0;
+  await expect.poll(async()=>{const current=await draws();stable=current===previous?stable+1:0;previous=current;return stable;},{timeout:20000,intervals:[100]}).toBeGreaterThanOrEqual(3);
+  const settled=await draws();await page.emulateMedia({reducedMotion:'no-preference'});
+  await expect.poll(draws,{timeout:5000}).toBeGreaterThan(settled);
+  await expect(page.getByTestId('bx-map-live')).toContainText('In corso');
+  await page.waitForTimeout(800); // Beyond the transient wake(600); stable running activity must sustain drawing.
+  const afterWake=await draws();await expect.poll(draws,{timeout:2000,intervals:[100]}).toBeGreaterThan(afterWake);
+  await shot(page,'brain-map-observed-motion');await page.getByTestId('bx-map-close').click();
 });

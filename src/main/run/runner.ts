@@ -19,6 +19,7 @@ import { MAX_RUN_CODE, prodRisk } from '../../shared/runnable';
 import { killTrees } from '../chats/cli';
 import { ownProcessGroup, userShell } from '../platform';
 import { errText, log } from '../log';
+import { updateActivity } from '../update/activity';
 
 const KEEP = 64_000;       // characters of output kept per run (the tail)
 const MAX_RUNS = 50;       // finished runs kept in memory (newest)
@@ -68,6 +69,7 @@ export class CommandRunner {
   }
 
   start(req: { chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean }): RunInfo {
+    updateActivity.assertOpen();
     const code = String(req.code ?? '').replace(/\r\n/g, '\n').trimEnd();
     if (!code.trim()) throw new Error('Blocco vuoto: niente da eseguire.');
     if (code.length > MAX_RUN_CODE) throw new Error(`Blocco troppo lungo per Esegui (${code.length} caratteri, massimo ${MAX_RUN_CODE}): copialo e lancialo tu.`);

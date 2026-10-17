@@ -424,13 +424,6 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-mapitem .grow { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .bx-mapitem small { color: var(--bx-text-3); font-size: var(--bx-fs-xs); }
 .bx-mapitem .n { color: var(--bx-text-4); font-size: var(--bx-fs-s); font-variant-numeric: tabular-nums; }
-.bx-steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; counter-reset: st; }
-.bx-steps li { counter-increment: st; display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: var(--bx-fs-s); color: var(--bx-text-2); }
-.bx-steps li::before { content: counter(st); display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--bx-surface-2); font-weight: 700; font-size: 10px; color: var(--bx-text-3); }
-.bx-steps li:hover { background: rgba(255, 255, 255, 0.04); }
-.bx-steps li.on { background: rgba(255, 122, 69, 0.1); color: var(--bx-text); }
-.bx-steps li.on::before { background: var(--bx-accent); color: #1a0b03; }
-.bx-steps .src { grid-column: 2; color: var(--bx-text-3); font-size: var(--bx-fs-xs); margin-top: 2px; }
 .bx-weak { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .bx-weak button { width: 100%; display: grid; gap: 3px; text-align: left; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--bx-border); background: rgba(255, 255, 255, 0.02); color: var(--bx-text-2); cursor: pointer; font-size: var(--bx-fs-s); }
 .bx-weak button:hover { border-color: var(--bx-border-2); color: var(--bx-text); }
@@ -445,13 +438,6 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-map-piece ul button { background: none; border: 0; padding: 0; color: var(--bx-blue); cursor: pointer; font: inherit; }
 .bx-map-piece ul button:hover { text-decoration: underline; }
 .bx-map-piece .bx-kv { font-size: var(--bx-fs-s); }
-.bx-map-player { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 8px; max-width: min(820px, calc(100% - 700px)); min-width: 420px; padding: 8px 10px; border-radius: 14px; border: 1px solid rgba(255, 122, 69, 0.4); background: rgba(18, 21, 30, 0.94); backdrop-filter: blur(12px); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.8); }
-.bx-map-player .txt { flex: 1; min-width: 0; display: grid; gap: 1px; padding: 0 6px; }
-.bx-map-player .txt b { font-size: var(--bx-fs-m); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bx-map-player .txt span { color: var(--bx-text-3); font-size: var(--bx-fs-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bx-map-player .bx-btn { width: 30px; padding: 0; }
-.bx-map-player .bar { position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.bx-map-player .bar i { display: block; height: 100%; background: var(--bx-accent); transition: width 300ms var(--bx-ease); }
 .bx-map-hint { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 1; color: var(--bx-text-3); font-size: var(--bx-fs-s); padding: 4px 10px; border-radius: 999px; background: rgba(9, 11, 17, 0.6); pointer-events: none; }
 .bx-map-msg { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; }
 .bx-map-msg > div { display: grid; gap: 8px; justify-items: center; text-align: center; max-width: 520px; color: var(--bx-text-2); }
@@ -734,3 +720,38 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-stat-discuss { display: grid; gap: 6px; }
 .bx-raw { font-family: var(--bx-mono); font-size: var(--bx-fs-s); white-space: pre-wrap; overflow-wrap: anywhere; }
 .bx-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Direct map exploration: the canvas owns the viewport; controls reveal detail on demand. */
+.bx-map { display:block; }
+.bx-map-body { position:absolute; inset:0; }
+.bx-map-bar { position:absolute; top:12px; left:12px; right:12px; border:1px solid var(--bx-border); border-radius:14px; padding:8px 10px; }
+.bx-map-bar h2 { white-space:nowrap; font-size:15px; }
+.bx-map-bar .bx-search { width:clamp(140px,22vw,280px); }
+.bx-map-panel { top:76px; bottom:16px; width:300px; }
+.bx-map-panel.right { width:320px; max-height:calc(100% - 100px); }
+.bx-map-hint { top:auto; bottom:18px; max-width:calc(100% - 40px); text-align:center; }
+.bx-map-canvas { cursor:grab; }
+.bx-map-canvas:active { cursor:grabbing; }
+.bx-map-canvas:focus-visible { outline:2px solid var(--bx-blue); outline-offset:-4px; }
+.bx-map-live { right:16px; bottom:16px; width:auto; max-width:280px; padding:8px 12px; display:block; }
+.bx-map-live summary { cursor:pointer; font-size:12px; color:var(--bx-text-2); }
+.bx-map-live[open] { max-height:36vh; overflow:auto; }
+.bx-map-live .bx-btn { margin-top:8px; }
+.bx-map-live.inline { margin-top:60px; }
+.bx-map:has(.bx-map-panel.right) .bx-map-live { right:348px; }
+.bx-map:has(.bx-map-panel.left) .bx-map-hint { display:none; }
+.bx-map-flat { padding:80px 18px 30px; }
+@media(max-width:900px) {
+  .bx-map-bar { flex-wrap:wrap;gap:6px; }
+  .bx-map-bar h2 { display:none; }
+  .bx-map-bar .bx-search { flex:1; }
+  .bx-map-panel { top:108px; width:min(300px,calc(100% - 24px)); }
+  .bx-map-panel.right { width:min(320px,calc(100% - 24px)); }
+  .bx-map:has(.bx-map-panel.right) .bx-map-live { display:none; }
+  .bx-map-hint { font-size:11px;bottom:58px; }
+}
+
+@media(max-width:1100px){ .bx-map:has(.bx-map-panel) .bx-map-flat { visibility:hidden; } }
+/* Map details float without changing the graph viewport or opening a sidebar. */
+.bx-map-context{position:absolute;z-index:4;right:16px;bottom:48px;width:min(320px,calc(100% - 32px));max-height:min(38vh,320px);overflow:auto;border:1px solid var(--line,#394155);border-radius:12px;background:var(--bg,#141923);box-shadow:0 8px 24px #0004}
+.bx-map-context .pbody{padding:8px 14px 14px}.bx-map-context h3{margin:4px 0;font-size:15px}.bx-map-context h4{margin:10px 0 4px}.bx-map-context ul{padding-left:18px;margin:4px 0}.bx-map-source{margin-top:8px}.bx-map-source>summary{cursor:pointer;font-size:12px;opacity:.75}

@@ -1,0 +1,15 @@
+/* Identity and team are compact and progressive; no invented progress bars or blocking overlays. */
+.agent-identity{min-width:0;font-size:11px;color:var(--text-2);padding:3px 0;overflow-wrap:anywhere}
+.agent-owner{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.agent-owner-hint{color:var(--text-3);font-size:10px}
+.agent-identity p{margin:4px 0}
+.agent-owner-purpose,.agent-last-answer{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.agent-team-details{max-height:180px;overflow:auto}
+.agent-team-details summary{cursor:pointer;padding:3px 0}
+.agent-team-details small{display:block;color:var(--text-3)}
+.agent-team-details li{margin:6px 0}
+.agent-team-details button{display:block;text-align:left}
+.agent-last-block{color:var(--red)}
+.compact .agent-last-answer{display:none}
+.compact .agent-owner-purpose{-webkit-line-clamp:1}
+.agent-identity{position:relative;overflow:visible;padding:0}.agent-team-details{max-height:none;overflow:visible}.agent-team-details>button{font-size:var(--fs-xs);white-space:nowrap}.agent-detail-content{max-height:65vh;overflow:auto;padding:var(--pad);background:var(--surface);color:var(--text)}.agent-detail-content label{display:grid;gap:6px;margin:8px 0}.agent-detail-content select{width:100%;color:var(--text);background:var(--surface-2);border:1px solid var(--border-2);padding:6px}

@@ -29,6 +29,8 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { releaseId } from '../release';
 import { drift, record } from './drift';
 import { ownProcessGroup, sharedDir } from '../platform';
+import { AgentChildrenReporter } from './agent-children';
+import type { ChildObservation } from '../../shared/agents';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -179,6 +181,7 @@ export class ClaudeSession implements HarnessSession {
   private flushTimer: NodeJS.Timeout | null = null;
   private curMessage: string | null = null;
   private turnOpen = false;           // a turn is in flight (ours, a queued one, or one the CLI started itself)
+  private selectedEffort: Effort | null;
   /** the user stopped the running turn (Stop, or "Invia subito" = sendNow): its result is an interruption, not an error */
   private stopping: { sendNow: boolean } | null = null;
   private stateEvents = false;        // the CLI sends session_state_changed (authoritative running/idle)
@@ -201,6 +204,7 @@ export class ClaudeSession implements HarnessSession {
   private cliVersion: string | null = null; // what the CLI says it is (initialize, system/init): drift reports name it
   private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
+  private readonly childTelemetry: AgentChildrenReporter;
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
@@ -214,6 +218,8 @@ export class ClaudeSession implements HarnessSession {
   private readonly exitPromise = new Promise<void>(r => { this.exitDone = r; });
 
   constructor(private readonly opts: ClaudeOptions, private readonly sink: SessionSink) {
+    this.selectedEffort = opts.effort ?? null;
+    this.childTelemetry = new AgentChildrenReporter(sink);
     // a fork gets its own id from the CLI at init: until then nothing may name the original session
     this.sessionId = opts.fork ? null : opts.sessionId ?? null;
     this.costBase = opts.costBaseUsd ?? 0;
@@ -261,6 +267,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   start(): void {
+    this.childTelemetry.coverage('partial');
     const chat = this.opts.chatId;
     // embedded engine by default (ADR 0010); an explicit path (tests, SB_CLAUDE_PATH) wins
     const cli = this.opts.claudePath ? findCli(this.opts.claudePath) : resolveClaude()?.path ?? null;
@@ -332,6 +339,7 @@ export class ClaudeSession implements HarnessSession {
     this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '' });
     // a message queued behind a running turn is not timed (its wait is the other turn's)
     if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };
+    if (!this.turnOpen) this.sink.changed({ effortSubmitted: this.selectedEffort });
     this.turnOpen = true;
     if (this.state !== 'waiting') this.setState('running');
   }
@@ -384,6 +392,7 @@ export class ClaudeSession implements HarnessSession {
 
   async setEffort(effort: Effort | null): Promise<void> {
     await this.control({ subtype: 'apply_flag_settings', settings: { effortLevel: effort } });
+    this.selectedEffort = effort;
     this.sink.changed({ effort });
   }
 
@@ -551,6 +560,7 @@ export class ClaudeSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    this.childTelemetry.end();
     this.readyDone();
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();
@@ -566,6 +576,8 @@ export class ClaudeSession implements HarnessSession {
    *  notification, a background agent), so the chat is running, not idle. */
   private activity(): void {
     if (this.turnOpen) return;
+    // The CLI can start its own turn. No per-turn effort parameter was submitted by the app.
+    this.sink.changed({ effortSubmitted: null });
     this.turnOpen = true;
     this.setState(this.calls.size ? 'waiting' : 'running');
   }
@@ -579,6 +591,24 @@ export class ClaudeSession implements HarnessSession {
     const n = this.tasks.size;
     if (live) this.tasks.add(id); else this.tasks.delete(id);
     if (this.tasks.size !== n) this.sink.changed({ background: this.tasks.size });
+  }
+
+  private childTask(m: Obj, state: ChildObservation['state']): void {
+    const id = s(m.task_id);
+    if (!id) return;
+    this.childTelemetry.observe({
+      key: `claude:task:${id}`, nativeId: id, toolCallId: s(m.tool_use_id) || null, parentNativeId: null,
+      kind: m.task_type === 'local_agent' ? 'agent' : m.task_type === 'local_bash' ? 'shell' : 'unknown',
+      state, task: s(m.description) || null, observedAt: Date.now(), source: 'live',
+    });
+  }
+
+  private childTool(id: string, input: unknown, state: ChildObservation['state']): void {
+    const raw = o(input);
+    this.childTelemetry.observe({
+      key: `claude:tool:${id}`, nativeId: null, toolCallId: id, parentNativeId: null,
+      kind: 'agent', state, task: s(raw.description) || s(raw.prompt) || null, observedAt: Date.now(), source: 'live',
+    });
   }
 
   private sys(text: string, level: 'info' | 'warn' | 'error'): void {
@@ -638,6 +668,7 @@ export class ClaudeSession implements HarnessSession {
     const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions: arr(r.permission_suggestions), question, noAlways };
     this.calls.set(id, call);
     const sub = s(r.agent_id) ? '(subagente) ' : '';
+    if (s(r.agent_id)) this.childTask({ task_id: r.agent_id, task_type: 'local_agent' }, 'waiting');
     let req: Omit<PendingRequest, 'chatId'>;
     if (question) {
       const questions = questionsFrom(input);
@@ -764,6 +795,7 @@ export class ClaudeSession implements HarnessSession {
         const diff = diffFor(name, b.input, this.opts.cwd);
         const item: ToolItem = { kind: 'tool', id: `t-${id}`, at, name, summary: toolSummary(name, b.input, this.opts.cwd), input: trimInput(b.input), status: 'running', ...(diff ? { diff } : {}) };
         this.tools.set(id, { item, input: b.input });
+        if (name === 'Agent' || name === 'Task') this.childTool(id, b.input, 'running');
         this.sink.item(item, false);
       }
     }
@@ -792,7 +824,15 @@ export class ClaudeSession implements HarnessSession {
         this.sink.item(item, true);
         // a finished background agent resumed by SendMessage works again: counted from its result too, so the chat is
         // never closed while it runs even if the CLI's task events say nothing (its task_notification ends it)
-        if (t.item.name === 'SendMessage' && b.is_error !== true) { const id = resumedAgent(m.tool_use_result, item.output ?? ''); if (id) this.task(id, true); }
+        if (t.item.name === 'SendMessage' && b.is_error !== true) {
+          const id = resumedAgent(m.tool_use_result, item.output ?? '');
+          if (id) { this.task(id, true); this.childTask({ task_id: id, task_type: 'local_agent' }, 'running'); }
+        }
+        // A tool result can acknowledge a background launch. Only an explicitly synchronous call proves the child
+        // completed here; native task events remain authoritative for background agents.
+        if ((t.item.name === 'Agent' || t.item.name === 'Task') && o(t.input).run_in_background !== true) {
+          this.childTool(tid, t.input, b.is_error === true ? 'failed' : o(t.input).run_in_background === false ? 'completed' : 'unknown');
+        }
       } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sysCode('interrupted', undefined, 'info');
     }
   }
@@ -838,7 +878,7 @@ export class ClaudeSession implements HarnessSession {
     this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
     // more sends wait in the CLI's queue: another turn follows on its own, the chat stays running
     const queued = num(m.queued_turn_count) ?? 0;
-    if (queued > 0) this.turnOpen = true;
+    if (queued > 0) { this.sink.changed({ effortSubmitted: null }); this.turnOpen = true; }
     else {
       this.turnOpen = false;
       // with session state events the CLI says itself when it is idle (after held-back results and background agents)
@@ -914,7 +954,7 @@ export class ClaudeSession implements HarnessSession {
       case 'session_state_changed': {
         this.stateEvents = true;
         const st = s(m.state);
-        if (st === 'running') { this.turnOpen = true; this.setState(this.calls.size ? 'waiting' : 'running'); }
+        if (st === 'running') { this.activity(); this.setState(this.calls.size ? 'waiting' : 'running'); }
         else if (st === 'requires_action') this.setState('waiting');
         else if (st === 'idle') { this.turnOpen = false; this.setState(this.calls.size ? 'waiting' : 'idle'); }
         if (!SESSION_STATES.has(st)) this.drift('session state', st, m);
@@ -922,9 +962,20 @@ export class ClaudeSession implements HarnessSession {
       }
       // background agents and shell commands (CLI 2.1.28x: task_started, task_updated with a status, task_notification
       // at the end): counted so the app never auto-closes a chat whose work still runs behind an idle prompt
-      case 'task_started': return this.task(s(m.task_id), true);
-      case 'task_updated': { const st = s(o(m.patch).status); this.taskStatus(st, m); if (st) this.task(s(m.task_id), !END_TASK.has(st)); return; }
-      case 'task_notification': { const st = s(m.status); this.taskStatus(st, m); if (!st || END_TASK.has(st)) this.task(s(m.task_id), false); return; }
+      case 'task_started': this.childTask(m, 'running'); return this.task(s(m.task_id), true);
+      case 'task_updated': {
+        const st = s(o(m.patch).status);
+        this.taskStatus(st, m);
+        if (st) { this.task(s(m.task_id), !END_TASK.has(st)); this.childTask(m, this.childTaskState(st)); }
+        return;
+      }
+      case 'task_notification': {
+        const st = s(m.status);
+        this.taskStatus(st, m);
+        this.childTask(m, this.childTaskState(st));
+        if (!st || END_TASK.has(st)) this.task(s(m.task_id), false);
+        return;
+      }
       case 'compact_boundary': {
         const meta = o(m.compact_metadata);
         this.sink.changed({ compacted: { pre: num(meta.pre_tokens) ?? null, post: num(meta.post_tokens) ?? null } });
@@ -948,5 +999,12 @@ export class ClaudeSession implements HarnessSession {
   /** A task status outside the known ones: a new end state would keep the task (and the chat) open for ever. */
   private taskStatus(st: string, m: Obj): void {
     if (st && !END_TASK.has(st) && !LIVE_TASK.has(st)) this.drift('task status', st, m);
+  }
+
+  private childTaskState(status: string): ChildObservation['state'] {
+    if (status === 'completed' || status === 'failed') return status;
+    if (status === 'killed' || status === 'stopped') return 'stopped';
+    if (status === 'running' || status === 'in_progress') return 'running';
+    return status === 'pending' || status === 'paused' ? 'waiting' : 'unknown';
   }
 }

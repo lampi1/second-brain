@@ -15,6 +15,8 @@ import { createRoutedChat, type RoutedChatDeps } from '../chats/routed';
 import { branchStages, checkAt, launchOutcome, nextSeen, promoteGate, promoteStep, shaOfRelease, type Checks, type LaunchResult, type RefRow, type ReleaseState, type Seen } from './stages';
 
 export interface ImproveDeps {
+  /** Production uses the single staged updater; legacy promotion remains only for historical fixtures. */
+  allowLegacyPromotion?: boolean;
   userData: string;
   /** %LOCALAPPDATA%/second-brain (SB_RELEASES_ROOT in tests) */
   releasesBase: string;
@@ -52,11 +54,11 @@ export function appRegiaPrompt(repo: string): string {
   return [
     "Sei la Regia di «Migliora l'app»: coordini le chat che migliorano e personalizzano questa app, come chiede l'utente.",
     `Il codice dell'app è in ${repo}: leggi prima il suo AGENTS.md e seguilo.`,
-    '1. Ogni modifica la fa una chat sua, aperta con app_create_chat (titolo «App · cosa»), su un ramo e un worktree propri presi da main. Ometti harness, model ed effort: li sceglie la tabella «Instradamento modelli»; un override solo con un motivo (reason).',
-    '2. Una modifica è finita quando `npm run check:branch` (il check leggero: typecheck, lint, unit, nessun e2e) è verde sul suo commit: il check lo registra e app_improve_state la mostra «testata». Sui rami non serve il check completo: gli e2e girano solo su main.',
-    '3. Appena un ramo è testato lo unisci in main tu (git merge, senza push), poi lanci il check completo `npm run check` su main, uno alla volta (mai due suite pesanti insieme sulla stessa macchina; se il cervello ha un lease per i test, prendilo): «Aggiorna» si accende solo quando la punta di main ha il check completo verde. Se un e2e è rosso, il ramo che l’ha rotto è tra i merge dopo l’ultima punta verde (`git log --first-parent`): guarda quale tocca l’area dello spec rosso (o lo spec stesso) e ripara main prima di unire altro.',
-    '4. Non aggiorni e non riavvii mai l’app: lo fa l’utente con il pulsante «Aggiorna» quando vuole. Mentre un aggiornamento è in corso (app_improve_state: promote.state «running») non unisci niente in main.',
-    '5. Lo stato di rami e versioni lo leggi con app_improve_state. Rispondi all’utente in poche righe: cosa è pronto e cosa fare adesso.',
+    '1. Aiuta a descrivere il risultato desiderato, mostrando cosa cambierebbe e quali verifiche servono. Per preparare il codice usa la proposta isolata creata dal pulsante «Prepara una modifica»; apri o riprendi la chat solo nella sua cartella, senza toccare il checkout principale.',
+    '2. Ogni modifica deve superare npm run check:branch sul proprio commit (controllo leggero, nessun e2e sul ramo), il controllo dati riservati e revisioni fresche di correttezza, sicurezza e usabilità. Una modifica cambiata invalida le verifiche precedenti.',
+    '3. Non unire automaticamente in main, non fare push e non aprire PR tramite comandi o strumenti agenti. La condivisione avviene solo dal pulsante esplicito «Apri PR su GitHub», dopo che la persona ha visto le differenze e lo stato delle verifiche. Non includere note personali, brain o credenziali nella cronologia.',
+    '4. Non aggiorni e non riavvii mai l’app: la pipeline unica prepara e verifica il pacchetto in background. La persona conferma una volta sola quando il pacchetto è pronto; il servizio deve salvare lo stato, riverificare il pacchetto e mantenere il ripristino.',
+    '5. Leggi lo stato disponibile con app_improve_state. Se una capacità non è ancora collegata, dillo senza inventare pulsanti o automazioni. Spiega in poche righe il risultato, le verifiche mancanti e il prossimo passo.',
   ].join('\n');
 }
 
@@ -150,7 +152,10 @@ export class ImproveService {
       }
     }
     const gate = promoteGate({ stable: this.d.stable, repo, repoProblem, branch, main, dirty, mainSha, runningSha, busy: this.promoteRun?.state === 'running' || this.promoteRun?.state === 'restarting', node: !!this.d.node, mainChecked, failedBefore: !!mainSha && failedSha.some(x => mainSha!.startsWith(x)) });
-    this.st = { ...this.st, repo, repoProblem, ...state, candidate, runningAt, canPromote: gate.ok, promoteWhy: gate.why, promote: this.promoteRun, branches, at: Date.now() };
+    this.st = { ...this.st, repo, repoProblem, ...state, candidate, runningAt,
+      canPromote: this.d.allowLegacyPromotion !== false && gate.ok,
+      promoteWhy: this.d.allowLegacyPromotion === false ? 'Usa il pacchetto preparato nella sezione aggiornamenti.' : gate.why,
+      promote: this.promoteRun, branches, at: Date.now() };
     this.d.emit(this.st);
     return this.st;
   }
@@ -168,6 +173,7 @@ export class ImproveService {
 
   /** The user's click: test, copy and switch the release (release.mjs promote), then restart through the launcher. */
   async promote(): Promise<ImproveState> {
+    if (this.d.allowLegacyPromotion === false) throw new Error('Usa il pacchetto preparato nella sezione aggiornamenti.');
     if (this.promoting) throw new Error('Un aggiornamento è già in corso.');
     this.promoting = true;
     let s: ImproveState;

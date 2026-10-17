@@ -9,6 +9,7 @@ import type { BrowserTabs, Tab } from './tabs';
 import { normalizeUrl, type BrowserActions, type Shot } from './actions';
 import { envForUrl, envSlug } from './envs';
 import { envRefusal, loginRefusal } from './rules';
+import { containsPaste } from './keys';
 import { fmtFactor } from './preview';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
@@ -16,7 +17,7 @@ export interface Scope { group: string; owner: string | null; chatId: string | n
 /** How often handoff_to_user tells the client it is still waiting (well under Claude Code's 300 s idle timeout). */
 export const PROGRESS_MS = 25_000;
 /** Key combos that paste from the clipboard (Ctrl+V, Ctrl+Shift+V, Shift+Insert, Cmd+V). */
-export const PASTE_KEYS = /(?:^|\s)(?:(?:ctrl|control|meta|cmd|command)\+(?:shift\+|alt\+)*v|shift\+insert|insert\+shift)(?=\s|$)/i;
+export const PASTE_KEYS = { test(keys: string): boolean { try { return containsPaste(keys); } catch { return false; } } };
 
 type Args = Record<string, unknown>;
 const str = (v: unknown, name: string): string => {
@@ -267,7 +268,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'javascript', annotations: { readOnlyHint: false, openWorldHint: true },
-      description: 'Evaluate JavaScript for INSPECTION only (reading state the tree does not show); act with click/type/fill_form instead. Top page: REPL semantics (last expression returned, top-level await). frame "f1" runs it inside that iframe (script semantics). Result as JSON, max 20000 chars.',
+      description: 'Run caller JavaScript only in the top page of a verified local stack (exact localhost, 127.0.0.1 or ::1; no host aliases), bound to its current execution context. Remote sites and iframe caller scripts are refused: inspect with read_page/get_page_text/screenshot and act with the standard validated click/type/fill_form tools. Local top page uses REPL semantics, top-level await, JSON result up to 20000 chars. Never use this tool for remote login.',
       inputSchema: schema({ code: { type: 'string' }, frame: { type: 'string' } }, ['code']),
       run: (a, ctx) => { const tab = tabOf(ctx, a); tabs.setLastAction(tab, 'javascript'); return actions.evaluate(tab, str(a.code, 'code'), a.frame); },
     },

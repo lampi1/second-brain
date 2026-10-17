@@ -1,13 +1,12 @@
-# CI on the three desktop systems (ADR 0054 stage 5): nobody on the team has a Mac, so macOS and Linux are proved
-# here. Runs on every push and pull request: setup (pinned, scripts off), typecheck, lint, unit tests, then the e2e
-# suite (Electron under xvfb on Linux; the suite hides its windows itself, SB_HIDDEN). Live tests (real CLIs, real
-# tokens) never run here. Until the macOS job is green, the README says macOS is "not yet tried". The guard job
-# (ADR 0061, at the end) scans the tree and the whole history for secrets and personal data.
+# Branches run check:branch, main runs check on all platforms. Windows main then proves stable and the exact offline
+# installer before upload. No live/token-spending tests; publishing remains a manual workflow and a draft review.
 name: ci
 
 on:
   push:
+    branches: ['**']
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -19,32 +18,58 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node-version: 22
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.23.2'
           cache: npm
       - name: Electron's system libraries (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libnss3 libgbm1 libasound2t64 libgtk-3-0t64
       - run: npm run setup
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - name: e2e (Linux, under xvfb)
-        if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" npm run test:e2e
-      - name: e2e
-        if: runner.os != 'Linux'
-        run: npm run test:e2e
+      - name: Main reference for branch gate
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
+        shell: bash
+        run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+      - name: Branch gate (no e2e)
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
+        run: npm run check:branch
+      - name: Main gate (Linux)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Linux'
+        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" npm run check
+      - name: Main gate
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os != 'Linux'
+        run: npm run check
+      - name: Stable copy (synthetic home, real auto-discovery)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Windows'
+        run: npm run test:stable
+      - name: Build offline Windows installer
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Windows'
+        run: npm run package:windows
+      - name: Install and launch without system Node
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Windows'
+        run: npm run test:installer
+      - name: Verified Windows installer
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-installer
+          path: test-results/installer/dist/
+          if-no-files-found: error
+          retention-days: 14
       - name: screenshots and traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-results-${{ matrix.os }}
-          path: test-results/
+          path: |
+            test-results/shots/
+            test-results/installer-smoke/
+            test-results/stable/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -55,10 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: '22.23.2'
       - run: node tools/guard/scan.mjs . --history

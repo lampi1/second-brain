@@ -36,6 +36,7 @@ test('nav shows Procedure, not Comunicazione; the list is grouped, searchable an
   await expect(page.getByTestId('nav-comunicazione')).toHaveCount(0);
   await page.getByTestId('nav-procedure').click();
   await expect(page.getByTestId('page-procedure')).toBeVisible();
+  await expect(page.getByTestId('page-procedure')).toContainText('Istruzioni riusabili per il tuo lavoro');
   const rows = page.getByTestId('bx-proc-row');
   await expect(rows.first()).toBeVisible();
   const titles = await rows.locator('.t').allTextContents();
@@ -74,6 +75,14 @@ test('a procedure opens rendered: Copia on each block copies it, no Esegui, the 
   await expect(buttons).toHaveCount(await md.locator('pre').count());
   await copied(buttons.last(), 'SELECT TOP 10 Id, Nome, Creato FROM Clienti ORDER BY Creato DESC;', 'Blocco copiato');
   await expect(page.getByTestId('bx-proc-discuss')).toBeVisible();
+  const prepare=page.getByTestId('bx-proc-discuss-chat');
+  await expect(prepare).toHaveText('Prepara richiesta');
+  await prepare.click();
+  const draft=page.getByTestId('bx-proc-discuss-box');
+  await expect(draft.getByRole('textbox')).toBeEditable();
+  await expect(page.getByTestId('bx-proc-discuss-mark')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(draft).toHaveCount(0);await expect(prepare).toBeFocused();
   await shot(page, 'procedure-open');
 
   await page.getByTestId('bx-proc-row').filter({ hasText: 'Cercare un cliente con lookup' }).click();

@@ -5,12 +5,14 @@
 // resumed). If something detaches the debugger (e.g. DevTools opened on the tab) it re-attaches. Used by browser/tabs.ts.
 import type { WebContents } from 'electron';
 import { log, errText } from '../log';
+import { ExecutionContexts } from './execution-contexts';
 
 export type CdpEvent = (method: string, params: Record<string, unknown>, sessionId: string) => void;
 
 const AUTO_ATTACH = { autoAttach: true, waitForDebuggerOnStart: true, flatten: true };
 
 export class TabCdp {
+  readonly executionContexts = new ExecutionContexts();
   private attached = false;
   private disposed = false;
   readonly children = new Map<string, { type: string; url: string }>();
@@ -34,6 +36,7 @@ export class TabCdp {
     dbg.on('message', this.onMessage);
     dbg.on('detach', this.onDetach);
     const steps: Array<[string, Record<string, unknown>]> = [
+      ['Runtime.enable', {}],
       ['Page.enable', {}],
       ['Network.enable', { maxPostDataSize: 65536 }],
       ['Emulation.setFocusEmulationEnabled', { enabled: true }],
@@ -50,12 +53,14 @@ export class TabCdp {
   }
 
   dispose(): void {
+    this.executionContexts.clear();
     this.disposed = true;
     this.attached = false;
     try { if (!this.wc.isDestroyed() && this.wc.debugger.isAttached()) this.wc.debugger.detach(); } catch { /* gone */ }
   }
 
   private onMessage = (_e: unknown, method: string, params: Record<string, unknown>, sessionId?: string): void => {
+    this.executionContexts.accept(method,params,sessionId??'');
     if (method === 'Target.attachedToTarget') {
       const sid = String(params.sessionId ?? '');
       const info = (params.targetInfo ?? {}) as { type?: string; url?: string };
@@ -63,6 +68,7 @@ export class TabCdp {
       void this.initChild(sid);
     } else if (method === 'Target.detachedFromTarget') {
       this.children.delete(String(params.sessionId ?? ''));
+      this.executionContexts.clear(String(params.sessionId??''));
     }
     try { this.onEvent(method, params, sessionId ?? ''); } catch (e) { log.warn('browser', 'CDP event handler failed', { cause: errText(e), data: { method } }); }
   };
@@ -71,6 +77,7 @@ export class TabCdp {
     const dbg = this.wc.debugger;
     try {
       await Promise.all([
+        dbg.sendCommand('Runtime.enable', {}, sid),
         dbg.sendCommand('Network.enable', { maxPostDataSize: 65536 }, sid),
         dbg.sendCommand('Target.setAutoAttach', AUTO_ATTACH, sid),
       ]);
@@ -82,6 +89,7 @@ export class TabCdp {
   }
 
   private onDetach = (_e: unknown, reason: string): void => {
+    this.executionContexts.clear();
     this.attached = false;
     this.children.clear();
     try { this.onDetached(); } catch { /* best effort */ }

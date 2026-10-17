@@ -24,19 +24,26 @@ import { IconBolt, IconPlus, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
 import { Kbd } from './ui';
 import { t } from '../i18n';
+import {validateRecoveryRaster} from '../lib/recovery-raster';
+import {updateIsFrozen} from '../lib/update-barrier';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Regia moving to the dock) and never follow the input to another chat
-const drafts = new Map<string, string>();
+// After restart recovery, keep its private durable draft copy current to prevent replaying sent text.
+class CheckpointMap<K,V> extends Map<K,V>{override set(key:K,value:V){super.set(key,value);persistChatRecovery();return this;}override delete(key:K){const result=super.delete(key);persistChatRecovery();return result;}override clear(){super.clear();persistChatRecovery();}}
+class CheckpointSet<T> extends Set<T>{override add(value:T){super.add(value);persistChatRecovery();return this;}override delete(value:T){const result=super.delete(value);persistChatRecovery();return result;}override clear(){super.clear();persistChatRecovery();}}
+let recoveredDrafts=false,draftStorageProblem=false;
+const drafts = new CheckpointMap<string, string>();
 /** per chat: what to run when the draft set by setDraft is sent, and a piece of it that must still be in the message */
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
 const draftSubs = new Set<(chatId: string) => void>();
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
-const newChatOn = new Set<string>(); // the Regie whose "Nuova chat" is ticked (kept across a remount, like the draft)
+const newChatOn = new CheckpointSet<string>(); // the Regie whose "Nuova chat" is ticked (kept across a remount, like the draft)
 
 /** Put `text` in the chat's input, not sent; what the user was already writing there stays above it. `onSent` runs
  *  once when a message that still contains the text's first line is sent or queued (an emptied input forgets it). */
 export function setDraft(chatId: string, text: string, onSent?: () => void): void {
+  if(updateIsFrozen())return;
   const old = (drafts.get(chatId) ?? '').trim();
   drafts.set(chatId, old && !old.includes(text.trim()) ? `${old}\n\n${text}` : text);
   const sig = (text.trim().split('\n')[0] ?? '').slice(0, 60);
@@ -44,7 +51,7 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   freshDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId);
 }
-const draftImages = new Map<string, ImageAttachment[]>();
+const draftImages = new CheckpointMap<string, ImageAttachment[]>();
 const readingN = new Map<string, number>();
 const watchers = new Set<() => void>();
 const changed = () => { for (const w of watchers) w(); };
@@ -166,6 +173,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const placeholder = enterNow ? t('chat.input.placeholderEnter') : regia && asNew ? t('chat.input.placeholderNewChat') : regia ? t('chat.input.placeholderRegia') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (newChat = asNew) => {
+    if(updateIsFrozen())return;
     if (reading) return; // a screenshot is still being read: it goes with this message, so wait for it
     if (newChat && !text.trim()) { toast(t('chat.input.emptyNewChat'), 'info'); return; } // a new chat needs a request in words
     const r = send(chat.id, newChat && regia ? withNewChat(text) : text, images);
@@ -304,3 +312,41 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     </div>
   );
 });
+
+interface ChatDraftCopy{version:1;entries:{id:string;text:string;images:ImageAttachment[];newChat:boolean}[]}
+const CHAT_RECOVERY_KEY='sb.update.chat-drafts.v1';
+export function chatDraftCheckpointProblem():string|null{
+  if(readingN.size)return 'Attendi la lettura degli allegati prima di aggiornare.';
+  if(onSentHooks.size)return 'Completa o svuota le bozze collegate ad azioni prima di aggiornare.';
+  if(draftStorageProblem)return 'La copia locale delle bozze non è stata salvata. Libera spazio e riapri l’app prima di aggiornare.';
+  return null;
+}
+export function chatDraftCheckpoint():ChatDraftCopy{
+  const ids=new Set([...drafts.keys(),...draftImages.keys(),...newChatOn]);
+  return {version:1,entries:[...ids].map(id=>({id,text:drafts.get(id)??'',images:[...(draftImages.get(id)??[])],newChat:newChatOn.has(id)}))};
+}
+export function validateChatDraftCopy(value:unknown):ChatDraftCopy{
+  const copy=value as ChatDraftCopy;
+  if(!copy||copy.version!==1||!Array.isArray(copy.entries)||copy.entries.length>1000)throw Error('Copia delle bozze non valida.');
+  const ids=new Set<string>();
+  for(const entry of copy.entries){
+    if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>160||ids.has(entry.id)||typeof entry.text!=='string'||entry.text.length>1000000||typeof entry.newChat!=='boolean'||!Array.isArray(entry.images)||entry.images.length>10)throw Error('Copia delle bozze non valida.');
+    ids.add(entry.id);
+    for(const image of entry.images){if(!image||!['image/png','image/jpeg','image/gif','image/webp'].includes(image.mimeType)||typeof image.data!=='string'||image.data.length>5000000||!/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)||image.thumb!==undefined&&(typeof image.thumb!=='string'||image.thumb.length>120000||!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(image.thumb)))throw Error('Allegato della copia non valido.');}
+    for(const image of entry.images){validateRecoveryRaster(`data:${image.mimeType};base64,${image.data}`,1920,1,3750000);if(image.thumb)validateRecoveryRaster(image.thumb,240,1,90000);}
+  }
+  return copy;
+}
+export function restoreChatDraftCopy(value:unknown):void{
+  const copy=validateChatDraftCopy(value);recoveredDrafts=false;
+  drafts.clear();draftImages.clear();newChatOn.clear();
+  for(const entry of copy.entries){drafts.set(entry.id,entry.text);if(entry.images.length)draftImages.set(entry.id,entry.images);if(entry.newChat)newChatOn.add(entry.id);}
+  recoveredDrafts=true;persistChatRecovery();
+}
+function persistChatRecovery():void{
+  if(!recoveredDrafts)return;
+  try{localStorage.setItem(CHAT_RECOVERY_KEY,JSON.stringify(chatDraftCheckpoint()));draftStorageProblem=false;}
+  catch{draftStorageProblem=true;}
+}
+
+export function enableChatDraftRecovery():void{recoveredDrafts=true;persistChatRecovery();}

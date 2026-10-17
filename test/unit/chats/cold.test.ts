@@ -81,12 +81,15 @@ describe('cold rules', () => {
 const managers: ChatManager[] = [];
 afterEach(async () => { await Promise.all(managers.splice(0).map(m => m.shutdown())); });
 
-function setup(extra: Partial<ChatManagerOptions> = {}) {
+function setup(extra: Partial<ChatManagerOptions> = {}, completeCensus = true) {
   const userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), log = path.join(userData, 'fake.jsonl');
   const make = (more: Partial<ChatManagerOptions> = {}) => {
     const m = new ChatManager({
       emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log },
       compactWindowTokens: () => 300_000, coldHandoff: () => true, coldIdleMs: () => 0, cacheTtlMs: 1500, coldEveryMs: 0, ...extra, ...more,
+      // These continuation cases explicitly model a provider with a complete census. Real Claude currently reports
+      // partial coverage; the separate partial case must never infer that it is safe to replace its session.
+      ...(completeCensus ? { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) } : {}),
     });
     managers.push(m);
     return m;
@@ -182,33 +185,37 @@ describe('ChatManager cold chats', () => {
     expect(m.coldTick()).toBe(1);
   }, 20_000);
 
-  it('the idle release and the auto-close keep the engine of a chat that still owes its note', async () => {
+  it('keeps the engine while its cold note is due and rejects the obsolete renderer auto-close path', async () => {
     const { make, cwd } = setup({ coldIdleMs: () => 60_000, cacheTtlMs: 120_000 });
     const m = make();
     const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
     await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
     expect(m.releaseIdle(1, Date.now() + 10)).toBe(0);
-    await m.archive(c.id, { auto: true });
-    expect(summary(m, c.id)?.closedAt).toBeTruthy();
+    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/timer verificato/);
+    expect(summary(m, c.id)?.closedAt).toBeUndefined();
     expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
-    // at its time the note is written on the kept engine, then the engine ends; the chat stays archived
+    // A note does not itself close the chat or its engine.
     expect(m.coldTick(Date.now() + 61_000)).toBe(1);
-    await waitFor(() => !m.engines().live.some(e => e.chatId === c.id), 'kept engine ended', 15_000);
+    await waitFor(() => summary(m, c.id)?.handoffSource === 'chat', 'cold note saved', 15_000);
     expect(summary(m, c.id)).toMatchObject({ handoffSource: 'chat' });
-    expect(summary(m, c.id)?.closedAt).toBeTruthy();
+    expect(summary(m, c.id)?.closedAt).toBeUndefined();
+    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
   }, 25_000);
 
-  it('a chat reopened while its engine is kept for the note is live again: the note is still asked', async () => {
-    const { make, cwd } = setup({ coldIdleMs: () => 60_000, cacheTtlMs: 120_000 });
+  it('can save a note on partial observations but never releases or replaces that engine automatically', async () => {
+    const { make, cwd } = setup({}, false);
     const m = make();
     const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
     await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    await m.archive(c.id, { auto: true });
-    await m.reopen(c.id);
-    expect(summary(m, c.id)?.state).toBe('idle');
-    expect(m.coldTick(Date.now() + 61_000)).toBe(1);
+    const session = summary(m, c.id)?.sessionId;
+    expect(summary(m, c.id)?.agentChildren?.coverage).toBe('partial');
+    expect(m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
+    expect(m.coldTick()).toBe(1);
     await waitFor(() => summary(m, c.id)?.handoffSource === 'chat', 'cold note');
-    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true); // reopened: the engine stays
+    await sleep(1600); await m.send(c.id, 'Continua');
+    await waitFor(() => idle(m, c.id), 'normal resumed turn');
+    expect(summary(m, c.id)?.sessionId).toBe(session);
+    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
   }, 25_000);
 
   it('a fresh session that does not start leaves the note for the next message', async () => {

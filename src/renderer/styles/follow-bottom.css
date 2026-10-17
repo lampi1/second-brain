@@ -1,0 +1,5 @@
+/* Intrinsic content has its own observed box; never shrink messages to the scroll viewport. */
+.items-content{display:flex;flex-direction:column;gap:var(--row-gap);flex:none;min-width:0}
+.items[role=log]:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.items-wrap .unseen{max-width:calc(100% - 16px);height:auto;min-height:26px;text-align:center;white-space:normal}
+@media(prefers-reduced-motion:reduce){.items-wrap .unseen{animation:none}}

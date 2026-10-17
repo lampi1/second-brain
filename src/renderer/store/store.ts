@@ -4,10 +4,16 @@
 // calls main (invoke), with optimistic updates and an error toast with the cause on failure.
 // Used by every component; App.tsx calls startStore() once.
 import type { Answer, ChatSummary, CliStatus, Effort, HandoffInfo, Harness, ImageAttachment, NewChat, PendingRequest, PermissionMode, RoutedNewChat, SettingsPatch } from '@shared/contract';
-import { sb } from '../sb';
+import { sb as rawSb } from '../sb';
+import {trackBridge} from '../lib/tracked-bridge';
+let localActions=0;
+// All store IPC actions, including optimistic pending removal, hold the checkpoint until completion.
+const sb=trackBridge(rawSb,delta=>{localActions+=delta;});
+import {updateIsFrozen} from '../lib/update-barrier';
 import { createStore } from './createStore';
+import { connectAutoClose } from './auto-close';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
-import { announce, hideChat, hideTab, setPrefs, toast, ui } from './ui';
+import { announce, hideChat, hideTab, setPrefs, toast,toastKey, ui } from './ui';
 import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
 import { setMark, type Mark } from '../lib/marks';
 import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } from '../lib/correction';
@@ -46,6 +52,12 @@ let started = false;
 export function startStore(): void {
   if (started) return;
   started = true;
+  connectAutoClose({
+    get: () => sb.invoke('chat:autoCloseGet', undefined),
+    presence: holds => sb.invoke('chat:autoClosePresence', { holds }),
+    keep: (chatId, keep) => sb.invoke('chat:autoCloseKeep', { chatId, keep }),
+    listen: accept => sb.on('chat:autoCloseStatus', accept),
+  });
   let loaded = false;
   const buffer: Action[] = [];
   const now = (a: Action) => (loaded ? dispatch(a) : buffer.push(a));
@@ -97,6 +109,7 @@ export function startStore(): void {
 
 /** View and theme live in the app settings too (config.json, ADR 0005/0008): read them at start, follow changes made
  *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them. */
+let settingsPending=false;
 function syncSettings(): void {
   let known: { view: string; theme: string } | null = null;
   void sb.invoke('settings:get', undefined).then(s => {
@@ -116,10 +129,11 @@ function syncSettings(): void {
     const p = ui.get().prefs;
     if (!known) return;
     // back to the saved value before the pending save (light, then dark at once): that save must not happen
-    if (known.view === p.view && known.theme === p.theme) { if (timer) { clearTimeout(timer); timer = null; } return; }
+    if (known.view === p.view && known.theme === p.theme) { if (timer) { clearTimeout(timer); timer = null; settingsPending=false; } return; }
     if (timer) clearTimeout(timer);
+    settingsPending=true;
     timer = setTimeout(() => {
-      timer = null;
+      timer = null;settingsPending=false;
       const next = { view: p.view, theme: p.theme };
       known = next;
       void sb.invoke('settings:set', next).catch(() => {});
@@ -145,6 +159,7 @@ const busyNow = (chatId: string, c: ChatSummary | undefined): boolean => inFligh
 
 /** The first queued message leaves (the chat went free): shown running at once, like a message sent by hand. */
 function flushOne(chatId: string, msg: QueuedMsg): void {
+  if(updateIsFrozen())return;
   dispatch({ type: 'unqueue', chatId, id: msg.id });
   const before = app.get().chats[chatId];
   if (before) dispatch({ type: 'chat:updated', chat: { ...before, state: 'running' } });
@@ -178,6 +193,7 @@ let localN = 0;
 /** Enter in a chat input: send now, or queue it while the chat is busy or waiting on a request (sent when idle).
  *  images: pasted or dropped screenshots (lib/images.ts); a message may be images only. */
 export function send(chatId: string, text: string, images: readonly ImageAttachment[] = []): 'sent' | 'queued' | 'empty' {
+  if(updateIsFrozen())return 'empty';
   const own = text.trim();
   if (!own && !images.length) return 'empty';
   const c = app.get().chats[chatId];
@@ -227,6 +243,7 @@ function addNote(chatId: string, n: Note): void {
 /** A free chat with a note that must be told (Mandato, Non serve): one short message with every waiting note. Never
  *  queued, and a closed chat is never woken by it (the notes go with its next message). */
 function tellNotes(chatId: string): void {
+  if(updateIsFrozen())return;
   const c = app.get().chats[chatId];
   if (!c || !isFree(c) || inFlight.has(chatId) || !tellable(chatId)) return; // a message on its way: after its reply
   sendOut(chatId, takeNotes(chatId).join('\n'), [], c);
@@ -272,7 +289,12 @@ export const unqueue = (chatId: string, id: string) => dispatch({ type: 'unqueue
  *  (e.g. a message re-queued after a failed send) gets it at once, with no interrupt. Messages the engine itself
  *  already holds (sent by an agent over app_send_to_chat) are kept, not cancelled: they were sent earlier and go first.
  *  Resolves 'sent' | 'interrupting' (the flush will send it) | 'failed' (still queued) | 'none' (no such message). */
-export async function sendQueuedNow(chatId: string, id: string): Promise<'sent' | 'interrupting' | 'failed' | 'none'> {
+let queuedActions=0;
+export async function sendQueuedNow(chatId:string,id:string):Promise<'sent'|'interrupting'|'failed'|'none'>{
+  if(updateIsFrozen())return 'failed';queuedActions++;try{return await sendQueuedNowImpl(chatId,id);}finally{queuedActions--;}
+}
+async function sendQueuedNowImpl(chatId: string, id: string): Promise<'sent' | 'interrupting' | 'failed' | 'none'> {
+  if(updateIsFrozen())return 'failed';
   const s = app.get();
   const msg = s.queued[chatId]?.find(m => m.id === id);
   if (!msg) return 'none';
@@ -294,6 +316,7 @@ export async function sendQueuedNow(chatId: string, id: string): Promise<'sent' 
  *  normal message. Refused (nothing sent) while the chat waits on a question or permission: the stop would cancel it.
  *  Resolves what happened, or the reason it was refused. */
 export async function correctThought(chatId: string, quote: string, fix: string, mode: 'stop' | 'step'): Promise<{ done: 'sent' | 'stopping' | 'step' | 'failed' } | { blocked: string }> {
+  if(updateIsFrozen())return {blocked:'Attendi l’esito dell’aggiornamento prima di inviare una correzione.'};
   const text = correctionText(quote, fix);
   if (!cleanQuote(quote) || !fix.trim()) return { blocked: 'Scrivi la correzione.' };
   const s = app.get();
@@ -399,7 +422,7 @@ export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary 
   } catch (e) { fail('Chat non creata')(e); return null; }
 }
 
-export async function setChat(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string }): Promise<void> {
+export async function setChat(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<void> {
   const c = app.get().chats[chatId];
   if (c) dispatch({ type: 'chat:updated', chat: { ...c, ...patch, model: patch.model !== undefined ? patch.model || null : c.model } as ChatSummary });
   try { dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:set', { chatId, ...patch }) }); }
@@ -457,7 +480,9 @@ export async function continueChat(chatId: string): Promise<ChatSummary | null> 
  *  A chat already closing (hidden, its undo still running) is left alone: a second Ctrl+W or click starts no second timer.
  *  A chat maximized or in focus mode leaves that view too (those views show it whatever the hidden list says); Annulla
  *  puts it back, unless another tile took that view in the meantime. */
+const pendingCloses=new Set<ReturnType<typeof setTimeout>>();
 export function closeChat(chatId: string): void {
+  if(updateIsFrozen())return;
   const c = app.get().chats[chatId];
   const u = ui.get();
   if (!c || u.hidden.includes(chatId)) return;
@@ -467,11 +492,13 @@ export function closeChat(chatId: string): void {
   hideChat(chatId, true);
   let undone = false;
   const timer = setTimeout(() => {
+    pendingCloses.delete(timer);
     if (undone) return;
     void sb.invoke('chat:close', { chatId }).catch(e => { hideChat(chatId, false); fail('Chat non chiusa')(e); }).then(() => hideChat(chatId, false));
   }, 6000);
+  pendingCloses.add(timer);
   toast(`Chiusa «${c.title}»`, 'info', { label: 'Annulla', run: () => {
-    undone = true; clearTimeout(timer); hideChat(chatId, false);
+    undone = true; clearTimeout(timer); pendingCloses.delete(timer); hideChat(chatId, false);
     if ((wasMax || wasFocus) && !ui.get().maximized && !ui.get().focusMode) ui.set(s => ({ ...s, maximized: wasMax, focusMode: wasFocus }));
   } }, 6000);
 }
@@ -481,6 +508,7 @@ export function closeChat(chatId: string): void {
  *  browser/closed.ts). A tab already closing is left alone; a maximized or Corsie-paired tab leaves that view, Annulla
  *  puts it back unless another tile took it meanwhile. */
 export function closeTab(tabId: string): void {
+  if(updateIsFrozen())return;
   const t = app.get().tabs.find(x => x.id === tabId);
   const u = ui.get();
   if (!t || u.hiddenTabs.includes(tabId)) return;
@@ -490,11 +518,13 @@ export function closeTab(tabId: string): void {
   hideTab(tabId, true);
   let undone = false;
   const timer = setTimeout(() => {
+    pendingCloses.delete(timer);
     if (undone) return;
     void sb.invoke('browser:close', { tabId }).catch(e => { hideTab(tabId, false); fail('Scheda non chiusa')(e); }).then(() => hideTab(tabId, false));
   }, 6000);
+  pendingCloses.add(timer);
   toast(`Chiusa la scheda «${t.title || t.url}»`, 'info', { label: 'Annulla', run: () => {
-    undone = true; clearTimeout(timer); hideTab(tabId, false);
+    undone = true; clearTimeout(timer); pendingCloses.delete(timer); hideTab(tabId, false);
     if ((wasMax || wasPair) && !ui.get().maximized && !ui.get().pair) ui.set(s => ({ ...s, maximized: wasMax, pair: wasPair }));
   } }, 6000);
 }
@@ -545,7 +575,7 @@ export async function cliCheck(harness: Harness): Promise<void> {
 
 /** The user's own change of a setting from the UI (logged as the user's), reflected at once. */
 export async function setSetting(patch: SettingsPatch): Promise<void> {
-  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); toast('Impostazione salvata', 'ok'); }
+  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); toastKey('essential.saved', 'ok'); }
   catch (e) { fail('Impostazione non salvata')(e); }
 }
 
@@ -577,4 +607,14 @@ export function dndActive(nowMs: number): boolean {
 export function checkDnd(nowMs: number): void {
   const u = dndUntil();
   if (u && nowMs >= u) dispatch({ type: 'settings', settings: { ...app.get().settings!, dndUntil: null } });
+}
+
+/** Pending local effects have no replay ledger: an update must wait rather than duplicate or discard them. */
+export function updateStoreProblem():string|null{
+  const state=app.get();
+  if(!state.ready)return 'Attendi il caricamento dello spazio di lavoro.';
+  if(Object.values(state.queued).some(queue=>queue.length))return 'Ci sono messaggi in coda. Inviali o rimuovili prima di aggiornare.';
+  if(settingsPending||localActions||pendingCloses.size||queuedActions||inFlight.size||undos.size||notes.size)return 'Ci sono invii o azioni da completare. Attendi e riprova.';
+  if(state.pending.length)return 'Rispondi alle richieste in attesa prima di aggiornare.';
+  return null;
 }

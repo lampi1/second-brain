@@ -1,31 +1,69 @@
+// Brain delivery timing remains readable while the retired transport switch is ignored. No personal files used.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readCrossHarness, writeCrossHarness } from '../../../src/main/brain/brain-settings';
+import { migrateCrossHarness, readRegiaMail } from '../../../src/main/brain/brain-settings';
 import { Live } from '../../../src/main/brain/live';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-bset-'));
 
-describe('brain-settings.json (Claude <-> Cursor switch)', () => {
-  it('missing file says nothing; written value is read back; other keys kept', () => {
+describe('brain-settings.json delivery timing', () => {
+  it('migrates only a valid legacy false, preserving other values and becoming a no-op on the next start', () => {
     const root = tmp();
-    expect(readCrossHarness(root)).toBeNull();
-    fs.writeFileSync(path.join(root, 'brain-settings.json'), JSON.stringify({ other: 1 }));
-    writeCrossHarness(root, false);
-    expect(readCrossHarness(root)).toBe(false);
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'brain-settings.json'), 'utf8'))).toEqual({ other: 1, crossHarnessMessages: false });
+    expect(migrateCrossHarness(root)).toBe('unchanged');
+    const file = path.join(root, 'brain-settings.json');
+    expect(fs.existsSync(file)).toBe(false);
+    const original = { other: { value: 7 }, crossHarnessMessages: false, regiaMail: { urgent: ['now'] } };
+    for (const raw of [Buffer.from(`\ufeff${JSON.stringify(original)}`),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(JSON.stringify(original), 'utf16le')])]) {
+      fs.writeFileSync(file, raw);
+      expect(migrateCrossHarness(root)).toBe('migrated');
+      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ ...original, crossHarnessMessages: true });
+      const saved = fs.readFileSync(file, 'utf8');
+      expect(migrateCrossHarness(root)).toBe('unchanged');
+      expect(fs.readFileSync(file, 'utf8')).toBe(saved);
+    }
+    fs.writeFileSync(file, '{broken');
+    expect(migrateCrossHarness(root)).toBe('unreadable');
+    expect(fs.readFileSync(file, 'utf8')).toBe('{broken');
   });
 
-  it('reads hand-edited files like inbox.mjs: BOM, UTF-16; unreadable fails closed', () => {
+  it('never follows a preexisting staging hardlink or a linked source file', () => {
+    const root = tmp(), victim = path.join(tmp(), 'keep.json');
+    fs.writeFileSync(victim, 'keep me');
+    fs.linkSync(victim, path.join(root, 'brain-settings.json.messaging-migration.tmp'));
+    const file = path.join(root, 'brain-settings.json');
+    fs.writeFileSync(file, '{"crossHarnessMessages":false}');
+    expect(migrateCrossHarness(root)).toBe('migrated');
+    expect(fs.readFileSync(victim, 'utf8')).toBe('keep me');
+    const linkedRoot = tmp();
+    fs.linkSync(file, path.join(linkedRoot, 'brain-settings.json'));
+    expect(migrateCrossHarness(linkedRoot)).toBe('unreadable');
+  });
+
+  it('reads timing words without rewriting a legacy false or other keys', () => {
+    const root = tmp();
+    expect(readRegiaMail(root)).toBeUndefined();
+    const f = path.join(root, 'brain-settings.json');
+    const raw = JSON.stringify({ other: 1, crossHarnessMessages: false, regiaMail: { urgent: ['urgent'] } });
+    fs.writeFileSync(f, raw);
+    expect(readRegiaMail(root)).toEqual({ urgent: ['urgent'] });
+    expect(fs.readFileSync(f, 'utf8')).toBe(raw);
+  });
+
+  it('accepts BOM and UTF-16 and leaves unreadable files unchanged', () => {
     const root = tmp();
     const f = path.join(root, 'brain-settings.json');
-    fs.writeFileSync(f, '﻿{"crossHarnessMessages":true}');
-    expect(readCrossHarness(root)).toBe(true);
-    fs.writeFileSync(f, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"crossHarnessMessages":false}', 'utf16le')]));
-    expect(readCrossHarness(root)).toBe(false);
+    for (const raw of [Buffer.from('\ufeff{"regiaMail":{"urgent":["now"]},"crossHarnessMessages":false}'),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"regiaMail":{"urgent":["now"]},"crossHarnessMessages":false}', 'utf16le')])]) {
+      fs.writeFileSync(f, raw);
+      expect(readRegiaMail(root)).toEqual({ urgent: ['now'] });
+      expect(fs.readFileSync(f)).toEqual(raw);
+    }
     fs.writeFileSync(f, '{oops');
-    expect(readCrossHarness(root)).toBe(false);
+    expect(readRegiaMail(root)).toBeUndefined();
+    expect(fs.readFileSync(f, 'utf8')).toBe('{oops');
   });
 
   it('a blocked row in the mailbox log becomes a "Messaggio bloccato" event; old rows never do', () => {

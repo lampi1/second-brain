@@ -6,7 +6,7 @@
 // Look: each piece is a neuron (a soft soma with a lighter core and a rim of light, a few short tapered dendrites, one
 // low-poly geometry per variant shared by all), each link an axon (a camera-facing ribbon bent slightly, thinner
 // towards its target, drawn by a shader from two endpoints: one shared geometry, nothing rebuilt when the layout moves).
-// A lit path and a live call send a soft signal along their axons; a piece at work breathes inside a halo of light.
+// Only observed running calls send a signal along their axons; a piece at work breathes inside a halo of light.
 // Cost: neurons (one batch per variant), halos and axons are each one instanced draw call, every piece and link a slot
 // of instance attributes; the library's scene keeps per object only what the picking and the labels need. Values at
 // rest are not repainted, and the hover picking answers again only when the pointer, the camera or the layout moved.
@@ -14,12 +14,13 @@
 // camera flight, the user's hand, a value easing to its target, a signal or a breath of a call at work) and stops
 // completely when nothing does, when the window is hidden or minimized, or when the map is closed; without focus it
 // draws at most ~30 frames a second. Every change of look (highlight, live light, newcomers) eases over a few hundred
-// ms through uniforms and opacities: nothing is rebuilt per frame and nothing is allocated per frame. Live fades are
+// ms through uniforms and opacities: nothing is rebuilt per frame with screen-label admission limited to camera/layout updates. Live fades are
 // carried between the app's snapshots (lib/map-motion.ts). A settled layout and its camera are remembered per view, so
 // reopening the map shows the same picture at once, without a warm-up or a camera flight.
 import type * as T3 from 'three';
 import type { MapEdge, MapNode } from '../types';
 import { ANCHOR_ESSENTIAL, ANCHOR_FULL, edgeKey, fileName, layerColor, NIGHT, nodeSize } from '../lib/map';
+import {mapLabels,mapObjectVisible,readableMapLabel,type MapLabelBox} from '../lib/map-labels';
 import { FADE_MS } from '../lib/live';
 import { approach, axonBend, breath, dendrites, liveTarget, neuronShape, pulseHead, tauFor } from '../lib/map-motion';
 
@@ -46,6 +47,8 @@ export interface Engine {
   lookAt(id: string, distance: number): void;
   frame(ids: string[], minDistance: number): void;
   fit(): void;
+  nudge(horizontal:number,vertical:number,zoom:number):void;
+  layoutChanged():void;
   destroy(): void;
 }
 
@@ -71,7 +74,7 @@ const VARIANTS = 5;
 /** segments along an axon (the shader bends them; the picking samples the same curve) */
 const AXON_SEG = 16;
 /** how long a lit path keeps sending signals before the picture rests (the path stays lit) */
-const PATH_PULSE_MS = 6000;
+
 /** while the window has no focus (the map seen beside another app) and no hand is on it: a frame every other display
  *  frame at most (about 30 a second) */
 const UNFOCUSED_MS = 25;
@@ -203,10 +206,9 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   let lv: LiveLook = { glow: new Map(), links: new Map() };
   /** when the live look last changed (its fading levels are carried forward from there) */
   let lvAt = 0, lvSig = '';
-  /** until when a lit path sends signals */
-  let pathPulseUntil = 0;
   // with reduced motion asked by the system the live map lights up without breathing or travelling signals
-  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motion=typeof matchMedia==='function'?matchMedia('(prefers-reduced-motion: reduce)'):null;
+  let still=!!motion?.matches;
   const t = () => performance.now();
 
   // ── shared resources: the library disposes the objects it removes; these outlive them (disposed in destroy) ──
@@ -305,7 +307,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   // ── a neuron: soma + dendrites, a halo (a faint glow of its color at rest, the live light at work), its labels ──
   interface NodeView {
     id: string; n: GNode; r: number; phase: number; variant: number; quat: T3.Quaternion; slotN: number; slotH: number; neuron: T3.Mesh;
-    labels: T3.Group; name: InstanceType<typeof SpriteText>; what: InstanceType<typeof SpriteText> | null;
+    active:boolean; labels: T3.Group; name: InstanceType<typeof SpriteText>; what: InstanceType<typeof SpriteText> | null;
     base: T3.Color; dimC: T3.Color; layer: T3.Color;
     lit: number; run: number; dim: number; focus: number; grow: number;
     /** breathing: painted every frame even with its values at rest */
@@ -319,6 +321,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   const pickHits = new WeakMap<object, T3.Intersection[]>();
   function gate(obj: T3.Object3D, real: (rc: T3.Raycaster, hits: T3.Intersection[]) => void) {
     obj.raycast = (rc, hits) => {
+      if(!mapObjectVisible(obj)){pickHits.delete(obj);return;}
       if (!pickFresh) { const h = pickHits.get(obj); if (h) hits.push(...h); return; }
       picked = true;
       const n = hits.length;
@@ -351,7 +354,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     g.add(labels);
     const old = nodeViews.get(n);
     const v: NodeView = {
-      id: n.id, n, r, phase: shape.phase, variant: shape.variant, quat: new THREE.Quaternion().setFromEuler(neuron.rotation), slotN: -1, slotH: -1, neuron, labels, name, what,
+      active:false, id: n.id, n, r, phase: shape.phase, variant: shape.variant, quat: new THREE.Quaternion().setFromEuler(neuron.rotation), slotN: -1, slotH: -1, neuron, labels, name, what,
       base, dimC: base.clone().lerp(BG, 0.8), layer: base,
       lit: old?.lit ?? 0, run: old?.run ?? 0, dim: old?.dim ?? 0, focus: old?.focus ?? 0, grow: old?.grow ?? (growIn ? 0 : 1), busy: false,
     };
@@ -392,7 +395,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
 
   // ── an axon: the shader draws the curve; the picking walks the same curve on the CPU ──
   interface LinkView {
-    key: string; kind: string; obj: T3.Object3D; slot: number; A: T3.Vector3; B: T3.Vector3; pts: Float32Array; center: T3.Vector3; rad: number; ready: boolean;
+    active?:boolean; key: string; kind: string; obj: T3.Object3D; slot: number; A: T3.Vector3; B: T3.Vector3; pts: Float32Array; center: T3.Vector3; rad: number; ready: boolean;
     bend: number; offset: number; lvl: number; run: number; hi: number; dim: number; pulse: number; w: number;
     /** its signal travels: painted every frame even with its values at rest */
     busy: boolean;
@@ -471,7 +474,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   const W = ess ? { base: 0.4, flow: 1.1, hi: 3.2, liveRun: 2.6, liveIdle: 1.4 } : { base: 0.4, flow: 0.7, hi: 2.2, liveRun: 1.4, liveIdle: 0.8 };
   const _col = new THREE.Color();
   function paintNode(v: NodeView, now: number): boolean {
-    const b = v.run > 0 && !still ? breath(now, v.phase) * v.run : 0;
+    const b = v.active && !still ? breath(now, v.phase) * v.run : 0;
     const s = v.r * (0.35 + 0.65 * v.grow);
     v.neuron.scale.setScalar(s);
     if (v.slotN >= 0) {
@@ -493,9 +496,9 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     }
     // labels: the pieces out of a lit path step back, the ones on it step forward
     v.name.material.opacity = v.grow * (1 - 0.62 * v.dim);
-    if (v.what) { v.what.material.opacity = v.grow * (1 - v.dim); v.what.visible = v.dim < 0.98; }
+    if (v.what) { v.what.material.opacity = v.grow * (1 - v.dim);  }
     v.labels.scale.setScalar(1 + 0.2 * v.focus);
-    return v.run > 0 && !still; // breathing: keeps the loop going
+    return v.active && !still; // breathing: keeps the loop going
   }
   function paintLink(v: LinkView, now: number): boolean {
     let alpha: number, w: number, minPx: number, pc: T3.Color, pulse: number, head: number;
@@ -505,7 +508,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       w = (W.liveIdle + (W.liveRun - W.liveIdle) * v.run) * (0.5 + 0.5 * v.lvl);
       minPx = 1.5 + v.run;
       pc = GLOW;
-      pulse = still ? 0 : v.run * v.lvl;
+      pulse = still || !v.active ? 0 : v.run * v.lvl;
       head = pulseHead(now, 1300, v.offset);
     } else {
       const flow = v.kind === 'flusso';
@@ -515,7 +518,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       w = (flow ? W.flow : W.base) + (W.hi - (flow ? W.flow : W.base)) * v.hi;
       minPx = (flow ? 1.6 : 1.3) + 1.2 * v.hi;
       pc = PULSE_PATH;
-      pulse = still ? 0 : v.pulse;
+      pulse = 0;
       head = pulseHead(now, 1700, v.offset);
     }
     v.w = w * 1.4;
@@ -534,7 +537,8 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     return pulse > 0.001 && shown;
   }
   function animate(now: number, dt: number): boolean {
-    const gd = graph.graphData(), dimmed = hi.size > 0, since = now - lvAt, pathOn = now < pathPulseUntil;
+    const gd = graph.graphData(), dimmed = hi.size > 0, since = now - lvAt,force=repaint;
+    repaint=false;
     let moving = false;
     const nodes = gd.nodes as GNode[];
     for (let i = 0; i < nodes.length; i++) {
@@ -542,9 +546,10 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       if (!v) continue;
       const g = lv.glow.get(n.id);
       const litT = g ? liveTarget(g.level, g.running, since, FADE_MS) : 0, runT = g?.running ? 1 : 0;
+      v.active=!!g?.running;
       const dimT = dimmed && !hi.has(n.id) ? 1 : 0, focusT = dimmed && hi.has(n.id) ? 1 : 0;
       // at rest (every value on its target, not breathing): nothing to paint
-      if (!v.busy && v.lit === litT && v.run === runT && v.dim === dimT && v.focus === focusT && v.grow === 1) continue;
+      if (!force&&!v.busy && v.lit === litT && v.run === runT && v.dim === dimT && v.focus === focusT && v.grow === 1) continue;
       v.lit = approach(v.lit, litT, dt, tauFor(v.lit, litT));
       v.run = approach(v.run, runT, dt, 300);
       v.dim = approach(v.dim, dimT, dt, 220);
@@ -559,9 +564,10 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       if (!v) continue;
       let lvlT = 0, runT = 0;
       if (v.kind === 'vivo') { const x = lv.links.get(v.key); if (x) { lvlT = liveTarget(x.level, x.running, since, FADE_MS); runT = x.running ? 1 : 0; } }
-      const on = hiL.has(v.key), hiT = on ? 1 : 0, dimT = hiL.size && !on ? 1 : 0, pulseT = on && pathOn ? 1 : 0;
+      v.active=runT>0;
+      const on = hiL.has(v.key), hiT = on ? 1 : 0, dimT = hiL.size && !on ? 1 : 0, pulseT = 0;
       // at rest (values on their targets, no signal travelling): its slot keeps what it has, nothing is uploaded
-      if (!v.busy && v.lvl === lvlT && v.run === runT && v.hi === hiT && v.dim === dimT && v.pulse === pulseT) continue;
+      if (!force&&!v.busy && v.lvl === lvlT && v.run === runT && v.hi === hiT && v.dim === dimT && v.pulse === pulseT) continue;
       v.lvl = approach(v.lvl, lvlT, dt, tauFor(v.lvl, lvlT));
       v.run = approach(v.run, runT, dt, 300);
       v.hi = approach(v.hi, hiT, dt, 220);
@@ -593,6 +599,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   let sig = dataSig(o.nodes, o.edges), details = detailSig(o.nodes, o.edges);
 
   // ── the render loop: ours, one frame per display frame while needed, nothing at rest ──
+  let labelsDirty=true,repaint=false,selected=o.focus??null;
   let alive = true, settling = true, awakeUntil = 0, raf = 0, lastDraw = 0, lastInput = 0, inFrame = false, frameNow = 0;
   /** the map's own nodes held still while only live nodes find their place */
   let pinned: GNode[] = [];
@@ -612,7 +619,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     // inside the frame the library calls back (controls 'change', onEngineStop): kick() must not start a second loop
     pickFresh = pickMoved || settling;
     inFrame = true;
-    try { step(); } finally { inFrame = false; }
+    try { step(); if(labelsDirty){labelsDirty=false;if(updateLabels())awakeUntil=Math.max(awakeUntil,now+34);} } finally { inFrame = false; }
     if (picked) { picked = false; pickMoved = false; }
     if (!raf && (settling || moving || now < awakeUntil)) raf = requestAnimationFrame(loop);
   };
@@ -650,7 +657,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     .nodeLabel(n => nodeCard(n as GNode, o.root ?? ''))
     .nodeThreeObject(n => makeNode(n as GNode)).nodeThreeObjectExtend(false)
     .linkThreeObject(l => makeLink(l as GLink)).linkThreeObjectExtend(false)
-    .nodePositionUpdate((_obj, pos, n) => { const v = nodeViews.get(n); if (v) placeNode(v, pos.x, pos.y ?? 0, pos.z ?? 0); return false; })
+    .nodePositionUpdate((_obj, pos, n) => { const v = nodeViews.get(n); if (v) placeNode(v, pos.x, pos.y ?? 0, pos.z ?? 0); labelsDirty=true; return false; })
     .linkPositionUpdate((obj, pos, l) => placeLink(obj, pos as Parameters<typeof placeLink>[1], l as GLink))
     .linkLabel(l => esc((l as GLink).label))
     .onNodeClick(n => o.onNode((n as GNode).id))
@@ -660,15 +667,15 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   if (seeded) pin(graph.graphData().nodes as GNode[]); // the remembered layout holds still; only newcomers move
   graph.d3Force('layer', ((alpha: number) => {
     for (const n of graph.graphData().nodes as GNode[]) {
-      const a = anchors[n.layer] ?? [0, 0, 0], k = ess ? 0.12 : 0.25;
+      const original=anchors[n.layer] ?? [0,0,0], a:[number,number,number]=[original[0]*1.3,original[1]*1.3,original[2]*1.3], k = ess ? 0.075 : 0.18;
       n.vx = (n.vx ?? 0) + (a[0] - (n.x ?? 0)) * k * alpha;
       n.vy = (n.vy ?? 0) + (a[1] - (n.y ?? 0)) * k * alpha;
       n.vz = (n.vz ?? 0) + (a[2] - (n.z ?? 0)) * (ess ? 0.6 : 0.25) * alpha;
     }
   }) as never);
-  (graph.d3Force('charge') as unknown as { strength: (v: number) => void } | undefined)?.strength(ess ? -1100 : -45);
+  (graph.d3Force('charge') as unknown as { strength: (v: number) => void } | undefined)?.strength(ess ? -2400 : -110);
   (graph.d3Force('link') as unknown as { distance: (f: () => number) => { strength: (f: (l: GLink) => number) => void } } | undefined)
-    ?.distance(() => (ess ? 180 : 55)).strength(l => (l.kind === 'usa' || l.kind === 'cita' ? 0.005 : ess ? 0.006 : 0.03));
+    ?.distance(() => (ess ? 260 : 90)).strength(l => (l.kind === 'usa' || l.kind === 'cita' ? 0.005 : ess ? 0.006 : 0.03));
   Object.assign(graph.controls() as object, { enableDamping: true, dampingFactor: 0.08, rotateSpeed: 0.6, zoomSpeed: 0.7, panSpeed: 0.6 });
   if (cam) {
     // reopened: the same picture at once, no flight
@@ -678,7 +685,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   } else graph.cameraPosition({ x: 0, y: -60, z: ess ? 1700 : 520 });
   // a first fit as soon as the warm-up layout is drawn, the final one when the layout stops moving
   const early = setTimeout(() => { if (!fitted && !o.focus) view(graph.graphData().nodes as GNode[], 0, 400); }, seeded ? 0 : 450);
-  const ro = new ResizeObserver(() => { if (el.clientWidth && el.clientHeight) { viewH.value = el.clientHeight; graph.width(el.clientWidth).height(el.clientHeight); wake(300); } });
+  const ro = new ResizeObserver(() => { if (el.clientWidth && el.clientHeight) { viewH.value = el.clientHeight; graph.width(el.clientWidth).height(el.clientHeight); labelsDirty=true; wake(300); } });
   ro.observe(el);
 
   // what moves the picture: the user (drag, wheel, hover for the tooltips), the orbit's damping, the window coming back
@@ -686,7 +693,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   // the orbit's damping keeps sending tiny changes long after the hand left: they count only just after a real input
   const onDown = () => { lastInput = t(); wake(2000); }, onUp = () => { lastInput = t(); wake(1200); };
   const onHover = () => { pickMoved = true; if (!pointerOn) onEnter(); wake(700); };
-  const onChange = () => { pickMoved = true; if (t() - lastInput < 1200) wake(500); };
+  const onChange = () => { labelsDirty=true; pickMoved = true; if (t() - lastInput < 1200) wake(500); };
   const onVis = () => { if (document.hidden) { if (raf) { cancelAnimationFrame(raf); raf = 0; } } else wake(600); };
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('wheel', onDown, { passive: true });
@@ -703,6 +710,8 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
   document.addEventListener('visibilitychange', onVis);
   // focus back: full rate again (a throttled loop picks it up at its next frame)
   window.addEventListener('focus', kick);
+  const onMotion=()=>{still=!!motion?.matches;repaint=true;wake(600);};
+  motion?.addEventListener('change',onMotion);
   // the GPU came back (sleep, driver reset) while the loop rests: nothing would redraw the restored canvas
   const glCanvas = graph.renderer().domElement;
   const onRestored = () => wake(600);
@@ -730,10 +739,34 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
     graph.cameraPosition({ x: cx, y: cy, z: cz + d }, { x: cx, y: cy, z: cz }, dur);
     wake(dur + 200);
   }
+  // Admit text in projected pixel space; the scratch vectors stay inside the lazy-loaded engine.
+  const labelScratch={position:new THREE.Vector3(),scale:new THREE.Vector3(),cameraPosition:new THREE.Vector3()};
+  function updateLabels(){
+    const width=el.clientWidth,height=el.clientHeight,camera=graph.camera();camera.updateMatrixWorld();
+    const boxes:MapLabelBox[]=[],views:NodeView[]=[];let changed=false;
+    for(const n of graph.graphData().nodes as GNode[]){
+      const v=nodeViews.get(n);if(!v||n.x==null)continue;views.push(v);
+      const priority=(n.id===selected?100:hi.has(n.id)?60:v.active?40:0)+(n.degree??0)*0.01;
+      for(const [id,sprite]of [[n.id,v.name],[n.id+':detail',v.what]] as const){
+        if(!sprite||id.endsWith(':detail')&&n.id!==selected)continue;
+        const detail=id.endsWith(':detail');
+        const box=readableMapLabel(sprite,camera as T3.PerspectiveCamera,width,height,sprite.textHeight,detail?12:n.id===selected?18:14,detail?16:22,labelScratch);if(!box)continue;
+        changed ||= box.resized;
+        if(box.resized){pickMoved=true;pickHits.delete(sprite);}
+        const {x,y,width:w,height:h}=box,ins=o.insets?.()??{left:0,right:0};
+        if(y<72||y+h>height-48||x<ins.left||x+w>width-ins.right)continue;
+        boxes.push({id,x,y,width:w,height:h,priority:id.endsWith(':detail')?priority-1:priority});
+      }
+    }
+    const accepted=mapLabels(boxes,width,height);
+    el.dataset.mapVisibleNames=String(views.filter(v=>accepted.has(v.id)).length);
+    for(const v of views){const name=accepted.has(v.id),detail=accepted.has(v.id+':detail');if(v.name.visible!==name||v.what&&v.what.visible!==detail){changed=true;pickMoved=true;pickHits.delete(v.name);if(v.what)pickHits.delete(v.what);}v.name.visible=name;if(v.what)v.what.visible=detail;}
+    return changed;
+  }
   function toLinks(edges: MapEdge[]): GLink[] { return edges.map(({ source: proof, ...e }) => ({ ...e, proof, source: e.from, target: e.to })); }
   const api: Engine = {
-    // a lit path sends signals along its axons for a few seconds, then the picture rests (the path stays lit)
-    setHighlight(nodes, links) { hi = nodes; hiL = links; pathPulseUntil = links.size ? t() + PATH_PULSE_MS : 0; kick(); },
+    // Selection highlights connections without impersonating observed running activity.
+    setHighlight(nodes, links) { hi = nodes; hiL = links; labelsDirty=true; kick(); },
     setData(nodes, edges) {
       const next = dataSig(nodes, edges);
       const nextDetails = detailSig(nodes, edges);
@@ -770,11 +803,18 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       lvAt = t();
       // a frame only when a target changed (a snapshot of chats that just wait changes nothing)
       const ls = [...lv.glow, ...lv.links].map(([k, g]) => `${k}:${g.running ? 'r' : g.level.toFixed(3)}`).join(',');
-      if (ls !== lvSig) { lvSig = ls; kick(); }
+      if (ls !== lvSig) { lvSig = ls; labelsDirty=true; kick(); }
     },
-    lookAt(id, dist) { api.frame([id], dist); },
+    lookAt(id, dist) { selected=id; labelsDirty=true; api.frame([id], dist); },
     frame(ids, minDist) { view((graph.graphData().nodes as GNode[]).filter(x => ids.includes(x.id)), minDist, 1100); },
-    fit() { view(graph.graphData().nodes as GNode[], 0, 700); },
+    fit() { selected=null; labelsDirty=true; view(graph.graphData().nodes as GNode[], 0, 700); },
+    layoutChanged(){labelsDirty=true;wake(100);},
+    nudge(horizontal,vertical,zoom){
+      const target=(graph.controls() as unknown as {target:T3.Vector3}).target;
+      const offset=graph.camera().position.clone().sub(target),spherical=new THREE.Spherical().setFromVector3(offset);
+      spherical.theta+=horizontal*0.12;spherical.phi=Math.max(0.1,Math.min(Math.PI-0.1,spherical.phi+vertical*0.12));spherical.radius=Math.max(10,spherical.radius*zoom);
+      offset.setFromSpherical(spherical).add(target);graph.cameraPosition(offset,target,still?0:120);labelsDirty=true;wake(400);
+    },
     destroy() {
       alive = false;
       if (!settling) remember();
@@ -793,6 +833,7 @@ export async function createEngine(el: HTMLElement, o: EngineOptions): Promise<E
       el.removeEventListener('pointerleave', onLeave);
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('focus', kick);
+      motion?.removeEventListener('change',onMotion);
       glCanvas.removeEventListener('webglcontextrestored', onRestored);
       try { controls.removeEventListener('change', onChange); } catch { /* gone */ }
       try { graph.pauseAnimation(); graph._destructor(); } catch { /* already gone */ }

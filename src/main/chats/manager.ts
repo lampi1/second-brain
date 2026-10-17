@@ -37,6 +37,7 @@ import { ContextCounters } from './context-stats';
 export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavoravi e il tuo turno si è interrotto. Riprendi da dove eri: prima rileggi lo stato (file, worktree, comandi che avevi lanciato), poi continua.";
 import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type SessionPatch, type SessionSink } from './session';
 import { ChatStore, type PastSession, type StoredChat } from './store';
+import { updateActivity } from '../update/activity';
 import { BufferedSink, WarmPool, type WarmEngine } from './warm';
 import { AdmissionQueue, type AdmissionLimits, type LoadSampler } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
@@ -46,8 +47,16 @@ import { sessionFor } from '../engines/sessions';
 import { cleanRegiaName, regieOf } from '../../shared/regia';
 import { waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
+import type { AgentCatalogService } from '../agents/catalog';
+import { compatibleOwner } from '../agents/catalog';
+import type { AgentOwnerSnapshot } from '../../shared/agents';
+import { AgentChildrenReducer } from './agent-children';
+import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
+import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 
 export interface ChatManagerOptions {
+  resolveAgent?: AgentCatalogService['resolve'];
+  onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
   userData: string;
   /** per engine, its command override (a .mjs fake for tests); absent = the installed one (cli.ts) */
@@ -155,7 +164,7 @@ export function turnReply(items: readonly ChatItem[]): string {
 
 /** Work still runs behind an idle prompt: background tasks the engine counts, or a final answer that says it waits
  *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
-export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork;
+export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';
 
 /** The final answer of the turn that just ended ('' when it wrote none). */
 export function lastAnswer(items: readonly ChatItem[]): string {
@@ -170,6 +179,14 @@ export function lastAnswer(items: readonly ChatItem[]): string {
 interface Rec {
   s: ChatSummary;
   createdAt: number;
+  agentInstructions?: string;
+  agentPrimed?: boolean;
+  children?: AgentChildrenReducer;
+  deliveryHolds?: number;
+  activityRevision?: number;
+  autoActivityAt?: number;
+  autoClosing?: boolean;
+  autoEnding?: boolean;
   /** last start or message: an idle engine is released this long after it (releaseIdle) */
   activeAt?: number;
   /** its engine is ending because it sat idle: the chat stays 'idle', the next message waits for it, then resumes */
@@ -221,7 +238,7 @@ interface Rec {
   /** the sessions before its cold continuations, oldest first (persisted; their transcripts show folded above) */
   pastSessions?: PastSession[];
   /** a cold continuation switching sessions: a second message waits for it */
-  switching?: Promise<ColdStep> | undefined;
+  switching?: Promise<ColdStep | null> | undefined;
   /** archived by the auto-close while it waited for its cold note: its engine ends once the note is written */
   closeAfterCold?: boolean;
   /** the next API calls count as "after" a continuation or a compaction (ADR 0031 counters) */
@@ -276,7 +293,7 @@ export class ChatManager implements ChatService {
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
-  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
+  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
     this.store = new ChatStore(opts.userData);
@@ -285,14 +302,15 @@ export class ChatManager implements ChatService {
     this.counters = new ContextCounters(opts.userData);
     this.home = opts.claudeHome ?? claudeHome();
     this.max = opts.maxItems ?? 2000;
-    for (const c of this.store.load()) this.chats.set(c.id, this.restore(c));
+    const stored = this.store.load();
+    for (const c of stored) this.chats.set(c.id, this.restore(c));
     // Regie saved before regiaSince keep their list order (ADR 0021)
     let seat = 0;
     for (const r of this.chats.values()) if (r.s.isRegia && r.s.regiaSince === undefined) r.s.regiaSince = seat++;
     // one app Regia ("Migliora l'app"): the newest keeps the role
     const appRegie = [...this.chats.values()].filter(r => r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt);
     for (const r of appRegie.slice(1)) delete r.s.appRegia;
-    if (appRegie.length > 1) this.persist();
+    if (appRegie.length > 1 || stored.some(c => !c.agent)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
@@ -327,7 +345,10 @@ export class ChatManager implements ChatService {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
   }
 
-  async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string }): Promise<ChatSummary> {
+    updateActivity.assertOpen();
+    const agent = inherited ? { ...inherited, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
+    req = agent.request;
     const engine = engineOrThrow(req.harness);
     this.needOn(engine.id);
     const caps = engine.caps;
@@ -367,6 +388,9 @@ export class ChatManager implements ChatService {
     const viaQueue = by === 'agent' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
+        agent: agent.owner,
+        ...(by === 'agent' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
+        effortStatus: initialEffort(caps.effort, req.effort ?? null),
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
         model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
         // a chat that goes through the queue has started nothing yet: 'starting' only with an engine on its way (a queued
@@ -379,6 +403,7 @@ export class ChatManager implements ChatService {
         ...(req.route ? { route: req.route } : {}),
       },
       createdAt: now,
+      agentInstructions: agent.instructions,
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
       worktree: !!req.worktree && caps.worktree,
@@ -411,7 +436,9 @@ export class ChatManager implements ChatService {
    *  from = not the user's: the sender shown above the bubble (another chat's title, the Regia);
    *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one */
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
+    updateActivity.assertOpen();
     const r = this.need(chatId);
+    this.autoActivity(r);
     this.needAgentMay(r, from);
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
@@ -499,7 +526,10 @@ export class ChatManager implements ChatService {
 
   /** The delivery of a message (send() decided it goes now). */
   private async deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
+    updateActivity.assertOpen();
     const r = this.need(chatId);
+    const releaseDelivery = this.holdActivity(chatId);
+    try {
     // an engine released for idleness still gets its mail: the chat resumes for it (ensureSession below)
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     const t = typeof text === 'string' ? text.trim() : '';
@@ -515,6 +545,7 @@ export class ChatManager implements ChatService {
     try {
       await this.ensureSession(r);
       if (!r.session) throw new Error(r.s.lastError ?? 'Avvio della chat non riuscito.');
+      if (liveOnly && engineOf(r.s.harness)?.kind !== 'claude' && (r.session.busy || r.s.state !== 'idle')) throw new Error('La chat sta lavorando: la posta resta da leggere fino al prossimo turno.');
     } catch (e) {
       if (cold) this.coldUndo(r, cold); // the note stays for the next message
       throw e;
@@ -526,7 +557,9 @@ export class ChatManager implements ChatService {
     this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
-    try { r.session.send(cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t, imgs); } catch (e) {
+    const body = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
+    const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente scelto dall’utente: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
+    try { r.session.send(`${profile}${body}`, imgs); r.agentPrimed = true; } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }
     // queued behind a quiet note turn: the engine reports no new "running", the tile shows the work from here
@@ -534,6 +567,64 @@ export class ChatManager implements ChatService {
     // queued behind a hand-off turn the CLI reports no new "running": mark the work here, resumed after a restart
     if (r.handoffTurn && !r.working) { r.working = true; this.persist(); }
     if (r.s.lastError) { delete r.s.lastError; this.updated(r); }
+    } finally { releaseDelivery(); }
+  }
+
+  private autoActivity(r: Rec): void {
+    r.autoActivityAt = autoCloseNow(); r.activityRevision = (r.activityRevision ?? 0) + 1;
+    this.opts.onAutoCloseActivity?.(r.s.id);
+  }
+
+  /** Main-only reservation held before delivery/mail takes its first asynchronous step. */
+  holdActivity(chatId: string): () => void {
+    const r = this.need(chatId); this.autoActivity(r);
+    r.deliveryHolds = (r.deliveryHolds ?? 0) + 1;
+    let released = false;
+    return () => { if (!released) { released = true; r.deliveryHolds = Math.max(0, (r.deliveryHolds ?? 1) - 1); this.autoActivity(r); } };
+  }
+
+  /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero. */
+  autoCloseCandidates(externalHold: (chatId: string) => boolean = () => true): AutoCloseCandidate[] {
+    return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
+      const c = r.s, child = c.agentChildren;
+      let held = true;
+      try { held = externalHold(c.id); } catch { /* fail closed */ }
+      const coordinated = [...this.chats.values()].some(x => !x.s.closedAt && x.s.regiaOf === c.id);
+        const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !c.appRegia && !c.space && !coordinated && !held &&
+        (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.queued && !r.deliveryHolds &&
+        !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
+        child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
+      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}`,
+        activityAt: r.autoActivityAt ??= autoCloseNow(), reason: child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
+    });
+  }
+
+  /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */
+  async archiveAutomatic(chatId: string, stillValid: () => boolean): Promise<boolean> {
+    const r = this.need(chatId);
+    const eligible = (): boolean => this.autoCloseCandidates(() => false).find(c => c.id === chatId)?.eligible === true;
+    if (!stillValid() || !eligible() || r.archiving || r.autoClosing || r.pending.size || r.deliveryHolds) return false;
+    r.autoClosing = true;
+    let authorized = false;
+    const valid = (): boolean => stillValid() && eligible() && this.chats.get(chatId) === r && !r.pending.size && !r.deliveryHolds && !r.session?.busy && !r.working && !workBehind(r.s);
+    const sess = r.session;
+    const run = (async () => {
+      if (!valid()) return;
+      try { await this.ensureHandoff(chatId, { ask: false, allowStart: false }); } catch { return; }
+      if (!valid()) return;
+      if (sess) { r.autoEnding = true; await sess.close(); if (!valid()) return; this.reapKept(r); }
+      authorized = true;
+    })();
+    r.archiving = run;
+    try {
+      await run;
+      if (!authorized || !valid()) return false;
+      this.flushItems(chatId);
+      r.s.closedAt = Date.now(); r.s.closedBy = 'auto'; r.s.state = 'closed';
+      this.pruneArchived(); this.persist(); this.updated(r);
+      return true;
+    } finally { r.archiving = undefined; r.autoClosing = false; r.autoEnding = false; }
   }
 
   async answer(chatId: string, requestId: string, answer: Answer): Promise<void> {
@@ -608,6 +699,7 @@ export class ChatManager implements ChatService {
     if (r.archiving) await r.archiving;
     if (r.s.closedAt) return { ...r.s };
     if (opts.auto && (r.session?.busy || r.pending.size > 0 || workBehind(r.s) || r.s.queued)) throw new Error('La chat è tornata al lavoro: resta aperta.');
+    if (opts.auto) throw new Error('La chiusura automatica richiede il timer verificato dal processo principale.');
     // closed by hand while an agent's message waited in the CPU queue: that message is dropped with the chat's work
     if (this.admission?.drop(chatId)) log.info('chats', 'queued work dropped: the chat was archived', { chat: chatId });
     const sess = r.session;
@@ -666,9 +758,17 @@ export class ChatManager implements ChatService {
     return cut.length;
   }
 
-  async set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string }): Promise<ChatSummary> {
+  async set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {
     const r = this.need(chatId);
     const sess = r.session;
+    if(patch.workStatus !== undefined){
+      if(Object.keys(patch).some(key=>key!=='workStatus'))throw new Error('Aggiorna lo stato incarico separatamente dalle altre impostazioni.');
+      if(!['assigned','waiting-mail','completed'].includes(patch.workStatus))throw new Error('Stato incarico non valido.');
+      const previous=r.s.work;
+      this.autoActivity(r);
+      r.s.work={status:patch.workStatus,updatedAt:Date.now()};
+      try{this.persist(true);}catch(error){r.s.work=previous;throw error;}
+    }
     const later: string[] = [];
     const apply = async (what: string, fn: (() => Promise<void>) | undefined): Promise<void> => {
       if (!sess || !fn) return;
@@ -698,6 +798,7 @@ export class ChatManager implements ChatService {
       if (!engine.caps.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
       const e = patch.effort;
       r.choice.effort = e; r.s.effort = e;
+      r.s.effortStatus = selectEffort(r.s.effortStatus ?? initialEffort(engine.caps.effort, null), e);
       await apply('effort', sess ? () => sess.setEffort(e) : undefined);
     }
     if (patch.permissionMode !== undefined) {
@@ -788,7 +889,7 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    });
+    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '' });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -825,7 +926,7 @@ export class ChatManager implements ChatService {
       // an archived chat kept alive for its note counts as idle (archive: closeAfterCold)
       state: r.closeAfterCold && r.s.closedAt && r.s.state === 'closed' ? 'idle' : r.s.state,
       // a final answer that waits for its work counts as one more background task: no note, no fresh session
-      pending: r.pending.size, background: (r.s.background ?? 0) + (r.s.waitsOnWork ? 1 : 0), busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
+      pending: r.pending.size, background: (r.s.background ?? 0) + (r.s.waitsOnWork ? 1 : 0) + (r.s.work && r.s.work.status !== 'completed' ? 1 : 0) + (this.observedChildrenBusy(r) ? 1 : 0), busy: !!r.session?.busy, alive: !!r.session?.alive, handoffTurn: !!r.handoffTurn,
       contextTokens: r.s.contextTokens ?? 0, lastTurnAt: r.lastTurnAt, noteAt: r.coldNoteAt ?? 0,
       lastCallAt: Math.max(r.lastTurnAt, r.coldNoteAt ?? 0), askedFor: r.coldAskedFor,
     };
@@ -834,10 +935,12 @@ export class ChatManager implements ChatService {
   /** Every minute (coldEveryMs): each idle long Claude chat whose cache is about to expire writes its note quietly;
    *  an archived chat kept for its note whose chance passed ends its engine. Returns how many were asked. */
   coldTick(now = Date.now()): number {
+    if (updateActivity.frozen) return 0;
     if (this.quitting) return 0;
     const on = this.coldOn(), idle = this.opts.coldIdleMs?.() ?? 50 * 60_000, day = !!this.opts.regiaDayCompact?.();
     let n = 0;
     for (const r of this.chats.values()) {
+      if ((r.deliveryHolds ?? 0) > 0 || this.observedChildrenBusy(r)) continue;
       const v = this.coldView(r);
       const step = continuityStep({ ...v, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now, { cold: on, day, idleMs: idle, ttlMs: this.ttl() });
       if (step === 'note') { n++; void this.coldNote(r); continue; }
@@ -893,7 +996,7 @@ export class ChatManager implements ChatService {
     const sess = r.session;
     // the note's result comes a moment before the engine reports idle
     for (let i = 0; i < 50 && sess?.busy && r.session === sess && r.s.closedAt; i++) await new Promise(res => setTimeout(res, 200));
-    if (!r.s.closedAt || !sess || sess.busy || r.session !== sess) return;
+    if (!r.s.closedAt || !sess || sess.busy || r.session !== sess || r.pending.size > 0 || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r)) return;
     await sess.close();
     this.reapKept(r);
   }
@@ -904,12 +1007,18 @@ export class ChatManager implements ChatService {
    *  goes on as usual. A second message meanwhile waits for the switch. */
   private async coldSwitch(r: Rec): Promise<ColdStep | null> {
     if (r.switching) { await r.switching; return null; }
-    if (!this.coldOn() || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
+    if (!this.coldOn() || this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
     const h = this.handoffs.read(r.s.id);
     if (!h || h.source !== 'chat' || h.at < r.lastTurnAt) { r.coldNoteAt = undefined; return null; }
-    const run = (async (): Promise<ColdStep> => {
+    const run = (async (): Promise<ColdStep | null> => {
       if (r.releasing) await r.releasing;
-      if (r.session) await this.closeKeeping(r, r.session);
+      if (this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
+      const revision = r.activityRevision;
+      if (r.session) {
+        r.autoEnding = true;
+        try { await this.closeKeeping(r, r.session); } finally { r.autoEnding = false; }
+      }
+      if (r.activityRevision !== revision || this.unsettledChildren(r) || r.pending.size > 0 || workBehind(r.s)) return null;
       const now = Date.now(), old = r.s.sessionId;
       const step: ColdStep = {
         h, old, at: now, idleMin: Math.round((now - Math.max(r.lastTurnAt, r.coldNoteAt ?? 0)) / 60000),
@@ -1003,11 +1112,11 @@ export class ChatManager implements ChatService {
    *  hand-off, never a Regia; idle counts from the last send, turn or end of a background task (activeAt). The chat stays on the grid as idle; its next message resumes it (ensureSession). Each
    *  engine ends like a ✕ (its tools reaped, its job released). Returns how many were released. */
   releaseIdle(idleMs: number, now = Date.now()): number {
-    if (idleMs <= 0 || this.quitting) return 0;
+    if (idleMs <= 0 || this.quitting || updateActivity.frozen) return 0;
     let n = 0;
     for (const r of this.chats.values()) {
       const sess = r.session;
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.handoffTurn || r.s.closedAt || r.s.isRegia || r.s.appRegia) continue;
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isRegia || r.s.appRegia) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
@@ -1018,6 +1127,15 @@ export class ChatManager implements ChatService {
       r.releasing = this.closeKeeping(r, sess).finally(() => { r.releasing = undefined; });
     }
     return n;
+  }
+
+  /** Unknown or partial observations are not evidence that a provider has no work left behind. */
+  private unsettledChildren(r: Rec): boolean {
+    const children = r.s.agentChildren;
+    return !children || children.coverage !== 'complete' || children.active === null || children.active > 0 || this.observedChildrenBusy(r);
+  }
+  private observedChildrenBusy(r: Rec): boolean {
+    return r.s.agentChildren?.children.some(child => ['running', 'waiting', 'unknown'].includes(child.state)) ?? false;
   }
 
   /** Synchronous last resort (before app.exit, will-quit, process exit): a detached taskkill /T for every CLI process
@@ -1089,6 +1207,7 @@ export class ChatManager implements ChatService {
 
   /** Starts the chat's engine if it is not running (a resumed Cursor chat: waits until its replayed past has landed). */
   private async ensureSession(r: Rec): Promise<void> {
+    updateActivity.assertOpen();
     if (r.releasing) await r.releasing; // never into an engine released for idleness: it ends, then this resumes
     if (!r.session) {
       this.needOn(r.s.harness);
@@ -1241,8 +1360,16 @@ export class ChatManager implements ChatService {
   }
 
   private restore(c: StoredChat): Rec {
+    const restored = new AgentChildrenReducer(c.agentChildren);
+    restored.end();
+    const children = new AgentChildrenReducer(restored.snapshot());
+    if (engineOf(c.harness)?.kind === 'api') children.coverage('complete');
     return {
       s: {
+        agent: c.agent ?? compatibleOwner(c.harness, c.model, true),
+        ...(c.work ? {work:c.work} : c.regiaOf ? {work:{status:'assigned' as const,updatedAt:c.createdAt}} : {}),
+        effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
+        agentChildren: children.snapshot(),
         id: c.id, harness: c.harness, origin: 'app', title: c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
         permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isRegia: c.isRegia, lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(c.regiaName ? { regiaName: c.regiaName } : {}), ...(c.regiaOf ? { regiaOf: c.regiaOf } : {}),
@@ -1256,6 +1383,8 @@ export class ChatManager implements ChatService {
         ...(c.route ? { route: c.route } : {}),
       },
       createdAt: c.createdAt,
+      agentInstructions: c.agentInstructions ?? '',
+      children,
       choice: { model: c.model, effort: c.effort, permissionMode: c.permissionMode },
       ...(c.forkFrom ? { forkFrom: c.forkFrom } : {}),
       worktree: false,
@@ -1272,9 +1401,12 @@ export class ChatManager implements ChatService {
     };
   }
 
-  private persist(): void {
-    this.store.save([...this.chats.values()].map(r => ({
+  private persist(strict = false): void {
+    const rows: StoredChat[] = [...this.chats.values()].map(r => ({
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
+      ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
+      ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
+      ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
       ...(r.s.regiaName ? { regiaName: r.s.regiaName } : {}), ...(r.s.regiaOf ? { regiaOf: r.s.regiaOf } : {}),
       ...(r.s.regiaSince !== undefined ? { regiaSince: r.s.regiaSince } : {}),
@@ -1290,7 +1422,26 @@ export class ChatManager implements ChatService {
       ...(r.working ? { working: true as const } : {}),
       ...(r.s.space ? { space: r.s.space, ...(r.s.appRegia ? { appRegia: true as const } : {}) } : {}),
       ...(r.s.route ? { route: r.s.route } : {}),
-    })));
+    }));
+    if (strict) this.store.checkpoint(rows); else this.store.save(rows);
+  }
+
+  /** Explicit update consent permits closing idle CLI sessions, including partially observable providers.
+   * Unlike automatic archive, this does not assert a complete child census or delete/archive any chat. */
+  updateReadiness(): string | null {
+    for (const r of this.chats.values()) {
+      const c = r.s;
+      if (r.working || r.session?.busy || c.state === 'running' || c.state === 'starting' || c.pending || c.queued || workBehind(c) ||
+        r.pending.size || r.deliveryHolds || r.opening || r.releasing || r.switching || r.archiving || r.handoffTurn ||
+        c.agentChildren?.children.some(x => x.state === 'running' || x.state === 'waiting')) return 'Una chat ha attività o richieste in corso. Attendi prima di aggiornare.';
+    }
+    return null;
+  }
+  checkpointForUpdate(): void {
+    if (!updateActivity.frozen) throw new Error('Salvataggio chat richiesto senza pausa aggiornamento.');
+    const problem = this.updateReadiness(); if (problem) throw new Error(problem);
+    for (const id of this.chats.keys()) this.flushItems(id);
+    this.persist(true);
   }
 
   private updated(r: Rec): void {
@@ -1409,6 +1560,8 @@ export class ChatManager implements ChatService {
   }
 
   private startSession(r: Rec): void {
+    r.agentPrimed = false;
+    r.s.effortStatus = initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort);
     const chatId = r.s.id;
     let sessionId = r.s.sessionId;
     let resume = false, fork = false;
@@ -1417,6 +1570,10 @@ export class ChatManager implements ChatService {
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
     else if (!isUuid(sessionId)) { sessionId = crypto.randomUUID(); r.s.sessionId = sessionId; this.persist(); }
+    const past = resume ? r.children?.snapshot() : undefined;
+    r.children = new AgentChildrenReducer(past);
+    r.children.coverage(engine.kind === 'api' ? 'complete' : 'unknown');
+    r.s.agentChildren = r.children.snapshot();
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, title: r.s.title,
@@ -1474,6 +1631,7 @@ export class ChatManager implements ChatService {
   /** A Claude engine for the next new chat in cwd: its chat id, session id and MCP endpoint are chosen now; no model,
    *  effort, mode or title (the user's defaults until the chat sends its own as control requests). */
   private spawnWarm(cwd: string): WarmEngine | null {
+    if (updateActivity.frozen) return null;
     const chatId = `c_${crypto.randomBytes(5).toString('hex')}`;
     const sessionId = crypto.randomUUID();
     const extraArgs = this.extraArgsFor('claude', chatId, undefined);
@@ -1530,6 +1688,7 @@ export class ChatManager implements ChatService {
     return {
       item: (item, replace) => {
         if (!live()) return;
+        this.autoActivity(r);
         if (r.handoffTurn && item.kind === 'assistant') {
           r.handoffTurn.texts.set(item.id, item.text);
           // the markers are for the app: the transcript shows the note without them
@@ -1542,6 +1701,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
+        this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };
         r.pending.set(req.id, full);
         r.s.pending = r.pending.size;
@@ -1553,12 +1713,28 @@ export class ChatManager implements ChatService {
       rateLimit: msg => { const on = this.opts.onRateLimit; if (live() && on) this.hook('onRateLimit', () => on(msg)); },
       commands: list => { if (live()) r.commands = list; },
       models: list => { const on = this.opts.onModels; if (live() && on) this.hook('onModels', () => on(r.s.harness, list)); },
+      children: observation => {
+        if (!live()) return;
+        this.autoActivity(r);
+        const children = r.children ??= new AgentChildrenReducer();
+        if (!children.observe(observation)) return;
+        r.s.agentChildren = children.snapshot(); this.persist(); this.updated(r);
+      },
+      childrenCoverage: (coverage, reason) => {
+        if (!live()) return;
+        const children = r.children ??= new AgentChildrenReducer();
+        if (reason === 'exit' && r.autoEnding && children.snapshot().coverage === 'complete' && children.snapshot().active === 0) return;
+        children.coverage(coverage); r.s.agentChildren = children.snapshot(); this.persist(); this.updated(r);
+      },
       resolved: id => { if (this.chats.get(chatId) === r) this.dropPending(r, id); },
       changed: p => { if (live()) this.applyPatch(r, p); },
       exit: ({ error }) => {
         const sess = current();
         if (!sess || this.chats.get(chatId) !== r || r.session !== sess) return;
         r.session = null;
+        const verifiedEmpty = r.autoEnding && !error && r.children?.snapshot().coverage === 'complete' && r.children.snapshot().active === 0;
+        if (engineOf(r.s.harness)?.kind !== 'api' && !verifiedEmpty) r.children?.end();
+        if (r.children) r.s.agentChildren = r.children.snapshot();
         // gone mid-turn (crash, close, kill): no result will settle the estimate, which stays as spent (no "≈")
         delete r.s.costLiveUsd;
         r.handoffTurn?.done(null);
@@ -1587,7 +1763,10 @@ export class ChatManager implements ChatService {
   }
 
   private applyPatch(r: Rec, p: SessionPatch): void {
+    if (!(r.autoClosing || r.autoEnding) || p.state !== 'closed') this.autoActivity(r);
     let save = false;
+    if ('effortSubmitted' in p) r.s.effortStatus = submitEffort(r.s.effortStatus ?? initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort), p.effortSubmitted);
+    if ('effortSessionDefault' in p) r.s.effortStatus = { ...(r.s.effortStatus ?? initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort)), sessionDefault: effortValue(p.effortSessionDefault) };
     if (p.state) {
       const was = r.s.state;
       // a cold note's turn is invisible (ADR 0031): the tile stays as it was

@@ -23,7 +23,9 @@
 //     and the turn's tokens; no USD: the engine reports no cost), error {error, willRetry}
 //   ← item/commandExecution/requestApproval, item/fileChange/requestApproval → permission panels answered accept /
 //     acceptForSession ("sempre", this session only: Codex keeps it in memory, it writes no rule; UNVERIFIED) / decline;
-//     Stop answers cancel. item/tool/requestUserInput → a question panel. serverRequest/resolved withdraws a panel.
+//     Stop answers cancel. item/tool/requestUserInput → a question panel. MCP elicitation form with an empty object
+//     schema → a one-request permission panel, answered {action, content}; other schemas/modes are explicit errors.
+//     serverRequest/resolved withdraws a panel without answering it again.
 //     Any other request is refused (-32601) and reported to drift.ts; never auto-approved.
 // Login: Codex's own (`codex login`, its CODEX_HOME as it is); the app never reads or copies auth.json. Under tests
 // only a .mjs fake may start (cli.ts engineAllowed; test/fixtures/fake-codex-app-server.mjs). Used by manager.ts
@@ -39,8 +41,11 @@ import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type Cli
 import { drift, record } from './drift';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
+import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
+import { AgentChildrenReporter } from './agent-children';
+import { codexChildren } from './codex-children';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink, type TokenUsage } from './session';
 
 export type CodexApproval = 'untrusted' | 'on-request' | 'never';
@@ -51,7 +56,7 @@ export interface CodexOptions extends SessionOptions {
   engineId: string;
   /** the engine's short name in every text the user reads ("Codex") */
   label: string;
-  /** the CLI's name on PATH (resolveAcp; default 'codex') */
+  /** the CLI's command (PATH or Codex app install via resolveAcp; default 'codex') */
   command?: string;
   /** the subcommand and its flags, after the config overrides (['app-server']) */
   args: string[];
@@ -67,6 +72,8 @@ export interface CodexOptions extends SessionOptions {
   /** approval policy and sandbox of the thread (default on-request + workspace-write; a read-only run: read-only) */
   approvalPolicy?: CodexApproval;
   sandbox?: CodexSandbox;
+  /** Re-read before each new turn; never answers an existing approval. */
+  executionPolicy?: () => CodexExecutionPolicy;
   /** the brain's rules for this thread (brain/adapters/codex.ts; UNVERIFIED how Codex composes it with AGENTS.md) */
   developerInstructions?: string | null;
   /** the brain's skill folders, given to this process with skills/extraRoots/set */
@@ -87,7 +94,7 @@ interface Rpc { resolve(v: Obj): void; reject(e: Error): void; method: string; t
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
 type StreamItem = Extract<ChatItem, { kind: 'assistant' | 'thinking' }>;
 interface Stream { item: StreamItem; emitted: boolean; dirty: boolean }
-interface Ask { rpcId: number | string; method: string; questions?: { id: string; text: string }[]; grantRoot?: string }
+interface Ask { rpcId: number | string; method: string; questions?: { id: string; text: string }[]; grantRoot?: string; turnId?: string }
 
 /** The app's effort → Codex's reasoning effort (none | minimal | low | medium | high | xhigh): max has no equal. */
 export const codexEffort = (e: Effort | null | undefined): string | null => (!e ? null : e === 'max' ? 'xhigh' : e);
@@ -136,6 +143,7 @@ const ITEM_TYPES = new Set([
 const TURN_STATUS = new Set(['completed', 'interrupted', 'failed', 'inProgress']);
 
 export class CodexSession implements HarnessSession {
+  private readonly childTelemetry: AgentChildrenReporter;
   readonly harness: string;
   state: ChatState = 'starting';
   sessionId: string | null;
@@ -183,6 +191,7 @@ export class CodexSession implements HarnessSession {
   readonly ready = new Promise<void>(r => { this.readyDone = r; });
 
   constructor(private readonly opts: CodexOptions, private readonly sink: SessionSink, private readonly command?: CliCommand | null) {
+    this.childTelemetry = new AgentChildrenReporter(sink);
     this.harness = opts.engineId;
     this.sessionId = opts.resume ? opts.sessionId ?? null : null;
     this.model = opts.model ?? null;
@@ -205,8 +214,14 @@ export class CodexSession implements HarnessSession {
   /** The command line after the CLI: the per-launch overrides, then the subcommand (`codex -c k=v … app-server`). */
   args(): string[] { return [...(this.opts.configArgs ?? []), ...(this.opts.extraArgs ?? []), ...this.opts.args]; }
 
-  private get approval(): CodexApproval { return this.opts.approvalPolicy ?? 'on-request'; }
-  private get sandbox(): CodexSandbox { return this.opts.readOnly ? 'read-only' : this.opts.sandbox ?? 'workspace-write'; }
+  private executionPolicy(): { approvalPolicy: CodexApproval; sandbox: CodexSandbox; writableRoots: string[] } {
+    if (this.opts.readOnly) return { approvalPolicy: 'on-request', sandbox: 'read-only', writableRoots: [] };
+    const policy = this.opts.executionPolicy?.();
+    return policy ?? { approvalPolicy: this.opts.approvalPolicy ?? 'on-request', sandbox: this.opts.sandbox ?? 'workspace-write', writableRoots: [] };
+  }
+
+  /** SandboxPolicy's tagged object uses camelCase; thread SandboxMode and AskForApproval remain kebab-case. */
+  private rpcSandbox(sandbox: CodexSandbox): string { return sandbox === 'read-only' ? 'readOnly' : sandbox === 'workspace-write' ? 'workspaceWrite' : 'dangerFullAccess'; }
 
   start(): void {
     const chat = this.opts.chatId, label = this.label, engine = this.engine;
@@ -315,8 +330,9 @@ export class CodexSession implements HarnessSession {
   }
 
   private threadParams(): Obj {
+    const policy = this.executionPolicy();
     return {
-      cwd: this.opts.cwd, approvalPolicy: this.approval, sandbox: this.sandbox,
+      cwd: this.opts.cwd, approvalPolicy: policy.approvalPolicy, sandbox: policy.sandbox,
       ...(this.model ? { model: this.model } : {}),
       ...(this.opts.developerInstructions ? { developerInstructions: this.opts.developerInstructions } : {}),
     };
@@ -328,6 +344,7 @@ export class CodexSession implements HarnessSession {
         const r = await this.request('thread/resume', { threadId: this.opts.sessionId, ...this.threadParams() }, 120000);
         this.sessionId = this.opts.sessionId;
         this.readThread(r);
+        for (const turn of arr(o(r.thread).turns).map(o)) for (const item of arr(turn.items)) this.observeChildren(item, 'replay');
         if (this.opts.showReplay) this.replay(arr(o(r.thread).turns));
         return;
       } catch (e) {
@@ -343,6 +360,7 @@ export class CodexSession implements HarnessSession {
   }
 
   private readThread(r: Obj): void {
+    if ('reasoningEffort' in r) this.sink.changed({ effortSessionDefault: s(r.reasoningEffort) || null });
     const model = s(r.model) || s(o(r.thread).model);
     if (model) { this.model = this.model ?? model; this.sink.changed({ model }); }
     const v = s(o(r.thread).cliVersion);
@@ -404,7 +422,14 @@ export class CodexSession implements HarnessSession {
     this.planItemId = null;
     this.chars += next.text.length;
     this.setState(this.asks.size ? 'waiting' : 'running');
+    const policy = this.executionPolicy();
+    const sandboxPolicy = policy.sandbox === 'workspace-write'
+      ? { type: 'workspaceWrite', writableRoots: policy.writableRoots.length ? policy.writableRoots : [this.opts.cwd], networkAccess: false,
+        ...(policy.approvalPolicy === 'never' ? { excludeTmpdirEnvVar: true, excludeSlashTmp: true } : {}) }
+      : { type: this.rpcSandbox(policy.sandbox) };
+    this.sink.changed({ effortSubmitted: this.effort });
     this.request('turn/start', {
+      approvalPolicy: policy.approvalPolicy, sandboxPolicy,
       threadId: this.sessionId, input, ...(this.model ? { model: this.model } : {}), ...(this.effort ? { effort: this.effort } : {}),
     }, 60000)
       .then(r => this.gotTurnId(s(o(r.turn).id)))
@@ -423,6 +448,11 @@ export class CodexSession implements HarnessSession {
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
     if (this.exited || !this.prompting) return;
     this.flushAll(true);
+    // Elicitation can be standalone (turnId null). Only requests correlated to this finished turn expire here.
+    for (const [id, ask] of this.asks) if (ask.method === 'mcpServer/elicitation/request' && ask.turnId && ask.turnId === this.turnId) {
+      this.asks.delete(id);
+      this.sink.resolved(id);
+    }
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     this.tools.clear();
     const stopped = this.stopping;
@@ -455,7 +485,11 @@ export class CodexSession implements HarnessSession {
     const ask = this.asks.get(requestId);
     if (!ask) return false;
     let result: Obj;
-    if (ask.method === 'item/tool/requestUserInput') {
+    if (ask.method === 'mcpServer/elicitation/request') {
+      if (answer.kind !== 'permission' || typeof answer.allow !== 'boolean') throw new Error('Questa è una conferma MCP: rispondi consenti o rifiuta.');
+      if (answer.always) throw new Error('La conferma MCP vale solo per questa richiesta.');
+      result = { action: answer.allow ? 'accept' : 'decline', content: answer.allow ? {} : null };
+    } else if (ask.method === 'item/tool/requestUserInput') {
       const answers: Obj = {};
       if (answer.kind === 'question') {
         for (const q of ask.questions ?? []) {
@@ -475,7 +509,7 @@ export class CodexSession implements HarnessSession {
     }
     this.respond(ask.rpcId, result);
     this.asks.delete(requestId);
-    log.info('chats', 'codex request answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId, method: ask.method, decision: result.decision ?? 'answers' } });
+    log.info('chats', 'codex request answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId, method: ask.method, decision: result.action ?? result.decision ?? 'answers' } });
     this.sink.resolved(requestId);
     this.setState(this.asks.size ? 'waiting' : this.prompting || this.queue.length ? 'running' : 'idle');
     return true;
@@ -488,7 +522,7 @@ export class CodexSession implements HarnessSession {
     if (this.queue.length && !opts?.keepQueued) { this.sys(`Messaggi in coda annullati: ${this.queue.length}.`, 'info'); this.queue = []; }
     if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued };
     for (const [id, ask] of [...this.asks]) {
-      this.respond(ask.rpcId, ask.method === 'item/tool/requestUserInput' ? { answers: {} } : { decision: 'cancel' });
+      this.respond(ask.rpcId, ask.method === 'mcpServer/elicitation/request' ? { action: 'cancel', content: null } : ask.method === 'item/tool/requestUserInput' ? { answers: {} } : { decision: 'cancel' });
       this.asks.delete(id);
       this.sink.resolved(id);
     }
@@ -665,6 +699,7 @@ export class CodexSession implements HarnessSession {
   private onRequest(id: number | string, method: string, p: Obj): void {
     const at = Date.now();
     const rid = nextId('ask');
+    if (method === 'mcpServer/elicitation/request') return this.elicitation(id, rid, p, at);
     if (method === 'item/commandExecution/requestApproval') {
       const known = this.tools.get(s(p.itemId));
       const command = s(p.command) || s(o(known?.input).command);
@@ -710,10 +745,53 @@ export class CodexSession implements HarnessSession {
       this.pending({ id: rid, type: 'question', tool: 'AskQuestion', title: cut(questions[0]?.question ?? 'Domanda', 140), detail: questions.map(q => q.question).join('\n'), input: trimInput(p), questions, at });
       return;
     }
-    // permissions/elicitation/dynamic tools/legacy approvals: not offered by the app; refused, never auto-approved
+    // The generated ServerRequest protocol uses item/tool/requestUserInput. The docs also mention tool/...;
+    // do not guess an alias and potentially answer a different approval protocol with {answers}.
+    if (method === 'tool/requestUserInput') this.sys(`${this.label}: tool/requestUserInput non supportato; il protocollo verificato usa item/tool/requestUserInput. Nessuna risposta utente inviata.`, 'warn');
+    // permissions/dynamic tools/legacy approvals: not offered by the app; refused, never auto-approved
     this.drift('server request', method, p);
     log.warn('chats', 'unsupported Codex request refused', { chat: this.opts.chatId, data: { engine: this.engine, method } });
     this.respondError(id, -32601, `Method not supported by this client: ${method}`);
+  }
+
+  /** The observed MCP approval is a form with no fields. Accept {} only when it satisfies the whole supported
+   *  schema; a mode/constraint we cannot render is a client error, never a fabricated decline from the user.
+   *  Metadata is display context only: persist hints never grant session-wide access. No raw values enter logs. */
+  private elicitation(id: number | string, rid: string, p: Obj, at: number): void {
+    if ([...this.asks.values()].some(ask => ask.rpcId === id)) return;
+    const refuse = (reason: string): void => {
+      this.respondError(id, -32602, `Unsupported or invalid MCP elicitation: ${reason}`);
+      this.sys(`MCP: richiesta non supportata o non valida (${reason}). Nessuna decisione utente inviata.`, 'warn');
+      log.warn('chats', 'Codex MCP elicitation unsupported or invalid', { chat: this.opts.chatId, cause: reason,
+        hint: 'the client supports only mode=form and an empty-object schema; update the client for other elicitation forms', data: { engine: this.engine } });
+    };
+    const object = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
+    if (!s(p.threadId) || p.threadId !== this.sessionId) return refuse('threadId non valido');
+    if (p.turnId !== undefined && p.turnId !== null && (!s(p.turnId) || p.turnId !== this.turnId)) return refuse('turnId non valido');
+    if (!s(p.serverName).trim() || !s(p.message).trim()) return refuse('serverName o message non valido');
+    if (p.mode !== 'form') return refuse('modalità diversa da form');
+    const schema = p.requestedSchema;
+    if (!object(schema) || schema.type !== 'object' || !object(schema.properties) || Object.keys(schema.properties).length) return refuse('schema diverso da oggetto senza campi');
+    if (Object.keys(schema).some(k => !['type', 'properties', 'required', 'additionalProperties', 'title', 'description'].includes(k))) return refuse('vincoli dello schema non supportati');
+    if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.length)) return refuse('campi obbligatori non supportati');
+    if (schema.additionalProperties !== undefined && typeof schema.additionalProperties !== 'boolean') return refuse('additionalProperties non supportato');
+    if ([schema.title, schema.description].some(v => v !== undefined && typeof v !== 'string')) return refuse('titolo o descrizione dello schema non valido');
+    if (p._meta !== undefined && p._meta !== null && !object(p._meta)) return refuse('metadati non validi');
+    const meta = o(p._meta);
+    if (meta.tool_params !== undefined && !object(meta.tool_params)) return refuse('parametri del tool non validi');
+    if (meta.tool_description !== undefined && typeof meta.tool_description !== 'string') return refuse('descrizione del tool non valida');
+    if (meta.tool_params_display !== undefined && (!Array.isArray(meta.tool_params_display) || meta.tool_params_display.some(v => !object(v) || typeof v.name !== 'string' || typeof v.value !== 'string' || (v.display_name !== undefined && typeof v.display_name !== 'string')))) return refuse('parametri visualizzati non validi');
+    if (this.stopping || this.interruptOnId) { this.respond(id, { action: 'cancel', content: null }); return; }
+    const server = s(p.serverName);
+    const candidates = [...this.tools.values()].filter(t => t.status === 'running' && t.name.startsWith(`mcp__${server}__`));
+    const tool = candidates.length === 1 ? candidates[0] : undefined;
+    const args = meta.tool_params ?? tool?.input ?? {};
+    const display = arr(meta.tool_params_display).map(o).map(v => `${s(v.display_name) || s(v.name)}: ${s(v.value)}`);
+    const detail = [s(p.message), `Server: ${server}`, tool ? `Tool: ${tool.name}` : '', s(meta.tool_description), ...display, `Parametri:\n${JSON.stringify(args, null, 2)}`].filter(Boolean).join('\n');
+    this.asks.set(rid, { rpcId: id, method: 'mcpServer/elicitation/request', ...(s(p.turnId) ? { turnId: s(p.turnId) } : {}) });
+    this.flushAll(true);
+    this.pending({ id: rid, type: 'permission', tool: tool?.name ?? `mcp__${server}`, title: cut(stripAnsi(s(p.message)), 140),
+      detail: cut(stripAnsi(detail), 8000), input: trimInput({ server, ...(tool ? { tool: tool.name } : {}), arguments: args }), noAlways: true, at });
   }
 
   private pending(req: Omit<PendingRequest, 'chatId'>): void {
@@ -758,7 +836,7 @@ export class CodexSession implements HarnessSession {
       case 'thread/compacted': this.sink.changed({ compacted: { pre: null, post: null } }); return;
       case 'serverRequest/resolved': {
         const rpcId = p.requestId;
-        for (const [id, ask] of this.asks) if (ask.rpcId === rpcId) { this.asks.delete(id); this.sink.resolved(id); }
+        for (const [id, ask] of this.asks) if (ask.rpcId === rpcId && (ask.method !== 'mcpServer/elicitation/request' || p.threadId === this.sessionId)) { this.asks.delete(id); this.sink.resolved(id); }
         if (!this.asks.size && this.state === 'waiting') this.setState(this.prompting || this.queue.length ? 'running' : 'idle');
         return;
       }
@@ -778,6 +856,10 @@ export class CodexSession implements HarnessSession {
     }
   }
 
+  private observeChildren(value: unknown, source: 'live' | 'replay'): void {
+    for (const row of codexChildren(value, source, Date.now())) this.childTelemetry.observe(row);
+  }
+
   private onTokens(u: Obj): void {
     const last = o(u.last), total = o(u.total), max = num(u.modelContextWindow);
     // OpenAI's inputTokens include the cached ones (UNVERIFIED for app-server: same as the Responses API usage)
@@ -793,6 +875,7 @@ export class CodexSession implements HarnessSession {
   private onItem(it: Obj, done: boolean): void {
     const type = s(it.type), id = s(it.id);
     if (!ITEM_TYPES.has(type)) { this.drift('item type', type, it); return; }
+    this.observeChildren(it, 'live');
     switch (type) {
       case 'userMessage': return; // our own message, already in the chat
       case 'agentMessage': case 'reasoning': {
@@ -938,6 +1021,7 @@ export class CodexSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    this.childTelemetry.end();
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     this.exitDone();
   }

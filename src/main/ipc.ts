@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type InvokeChannel, type InvokeResult } from '../shared/contract';
+import { updateActivity } from './update/activity';
 
 type Handler<K extends InvokeChannel> = (arg: InvokeArg<K>, e: IpcMainInvokeEvent) => InvokeResult<K> | Promise<InvokeResult<K>>;
 export type Handlers = { [K in InvokeChannel]: Handler<K> };
@@ -43,7 +44,8 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
     ipcMain.handle(ch, async (e, arg) => {
       const ok = isAppSender(e, appContents()) || (!!extra && extra.channels.includes(ch) && isAppSender(e, extra.contents()));
       if (!ok) throw new Error('forbidden sender');
-      return (handlers[ch] as Handler<typeof ch>)(arg as never, e);
+      const invoke = () => (handlers[ch] as Handler<typeof ch>)(arg as never, e);
+      return updateActivity.tracks(ch) ? updateActivity.run(invoke) : invoke();
     });
   }
 }
@@ -51,6 +53,7 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
 export class Emitter {
   constructor(private target: () => WebContents | null) {}
   emit<K extends EventChannel>(channel: K, payload: EventMap[K]): void {
+    if (channel === 'ui:command' && updateActivity.frozen) return;
     const wc = this.target();
     if (wc && !wc.isDestroyed()) wc.send(channel, payload);
   }

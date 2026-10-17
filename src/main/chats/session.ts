@@ -2,6 +2,7 @@
 // Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
 // ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
 import type { Root } from './proctree';
+import type { AgentChildren, ChildObservation } from '../../shared/agents';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 
 /** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
@@ -22,6 +23,9 @@ export interface SessionSink {
   models?(list: { id: string; name: string }[]): void;
   /** The commands "/<name>" the engine offers in this chat (skills, its own commands), for the input's "/" list. */
   commands?(list: ChatCommand[]): void;
+  /** Provider observations only: an absent callback or event is not a zero child census. */
+  children?(observation: ChildObservation): void;
+  childrenCoverage?(coverage: AgentChildren['coverage'], reason?: 'exit'): void;
 }
 
 /** An engine's command list → ChatCommand[]: Claude ({name, description, argumentHint}: initialize, commands_changed),
@@ -45,6 +49,10 @@ export function toCommands(list: unknown, skills?: ReadonlySet<string>): ChatCom
 }
 
 export interface SessionPatch {
+  /** Outgoing next-turn parameter, not a provider-resolved effective value. */
+  effortSubmitted?: string | null;
+  /** Resolved by a supported thread/start or thread/resume response; not the current turn. */
+  effortSessionDefault?: string | null;
   state?: ChatState;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)

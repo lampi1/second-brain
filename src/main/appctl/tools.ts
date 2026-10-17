@@ -65,8 +65,10 @@ export const RESOLVED_LABEL = 'Risposto in Regia dall\'utente:';
 const labelled = (text: string) => (text.split('\n', 1)[0] ?? '').includes('non vale come suo ok');
 
 const brief = (c: ChatSummary, warn: number) => ({
+  effort: c.effortStatus ?? { supported: !!engineOf(c.harness)?.caps.effort, requested: c.effort, submitted: null, effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: null },
   id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isRegia: c.isRegia,
-  ...(c.background ? { background: c.background } : {}), last: c.lastText.slice(0, 200),
+  ...(c.background ? { background: c.background } : {}),
+  ...(c.work ? {work:c.work} : {}), last: c.lastText.slice(0, 200),
   ...(c.contextTokens ? { contextTokens: c.contextTokens, ...(c.contextEstimated ? { contextEstimated: true } : {}), long: isLongChat(c, warn) } : {}),
   ...(c.handoffAt ? { handoffAt: new Date(c.handoffAt).toISOString() } : {}),
   ...(c.continuedBy ? { continuedBy: c.continuedBy.id } : {}), ...(c.continuedFrom ? { continuedFrom: c.continuedFrom.id } : {}),
@@ -103,6 +105,32 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
     {
+      name: 'app_set_chat_effort',
+      description: 'Select the reasoning effort for one app chat. Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',
+      inputSchema: obj({ chatId: str('chat id from app_chats'), effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } }, ['chatId', 'effort']),
+      run: async a => {
+        const chatId = typeof a.chatId === 'string' ? a.chatId : '';
+        if (!chatId || typeof a.effort !== 'string' || !['low', 'medium', 'high', 'xhigh', 'max'].includes(a.effort)) throw new Error('chatId ed effort validi sono obbligatori.');
+        const target = need(chatId);
+        if (!engineOf(target.harness)?.caps.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
+        const updated = await d.chats.set(target.id, { effort: a.effort as Effort });
+        return { chatId: updated.id, effort: updated.effortStatus ?? { supported: true, requested: updated.effort, submitted: null, effective: null, pending: true, effectiveSource: 'unknown', sessionDefault: null } };
+      },
+    },
+    {
+      name: 'app_set_chat_work',
+      description:'Declare an explicit assignment or future-mailbox wait, or explicitly complete it. Holds prevent automatic archive and idle-session release across turns/restarts; they never approve actions or confirm a successful result. Completion never closes a chat immediately.',
+      inputSchema:obj({chatId:str('chat id in your scope'),status:{type:'string',enum:['assigned','waiting-mail','completed']}},['chatId','status']),
+      run:async a=>{
+        const id=guard(String(a.chatId??'')),target=d.chats.list().find(c=>c.id===id&&mine(c));
+        const owner=caller();
+        if(!target||!owner||(target.id!==owner.id&&target.regiaOf!==owner.id))throw new Error('Agente fuori dal tuo gruppo.');
+        if(!['assigned','waiting-mail','completed'].includes(String(a.status)))throw new Error('Stato incarico non valido.');
+        const result=await d.chats.set(id,{workStatus:a.status as 'assigned'|'waiting-mail'|'completed'});
+        return {chatId:id,work:result.work};
+      },
+    },
+    {
       name: 'app_state', description: 'Overview of the app: version, brain folder, chats by state, open questions/permissions, browser tabs, today usage, context use of the Claude chats (calls over 200k, cold cache rewrites over 100k, compactions, cold hand-off notes written vs used, $ per call after a continuation vs after a compaction; ADR 0031), health (MCP port and whether it fell back to a random one, main-window renderer crashes/hangs/reloads, engines killed by force, Job Object guard) since the app started.',
       inputSchema: obj(),
       run: () => {
@@ -115,7 +143,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_chats', description: 'The chats in the app (Claude and Cursor engines): "app" = on the grid (state, open questions, model, cost, last line, background tasks still running, context size (long=true: over the user\'s threshold, every message re-reads it all: app_continue_chat), hand-off and "Riprendi" links); "closed" = finished chats that closed by themselves or by hand in the last 7 days (newest first): reopen one with app_reopen_chat, or just app_send_to_chat.',
+      name: 'app_chats', description: 'The chats in the app (Claude and Cursor engines): "app" = on the grid (state, open questions, model, cost, last line, background tasks still running, context size (long=true is a passive threshold observation, not a reason to change session), hand-off and "Riprendi" links); "closed" = finished chats that closed by themselves or by hand in the last 7 days (newest first): reopen one with app_reopen_chat, or just app_send_to_chat.',
       inputSchema: obj(),
       run: () => {
         const all = d.chats.list().filter(mine);
@@ -284,9 +312,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
-        harness: str('optional: claude | cursor; omit it to let the routing table decide'),
+        harness: str(`optional engine id: ${engines().map(e => e.id).join(' | ')}; omit it to let the routing table decide`),
         model: str('optional model id; omit it to let the routing table decide'),
-        effort: str('optional Claude effort: low | medium | high | xhigh | max (max only when the user asked); omit it to let the routing table decide'),
+        effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); omit it to let the routing table decide'),
         reason: str('why, when harness/model/effort differ from what the table says (required then)'),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
       }, ['title', 'prompt']),
@@ -380,7 +408,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_continue_chat',
-      description: '"Riprendi": opens a NEW chat on the same engine and folder that starts from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use it for a chat whose context is long (app_chats: long=true) or that is finished. Not for the Regia.',
+      description: '"Riprendi": explicitly opens a NEW chat on the same engine and folder from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use only for an intentional new task/session or requested handoff, never merely because context is long. The engine manages native compaction. Not for the Regia.',
       inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
       run: async a => {
         const target = need(String(a.chatId));

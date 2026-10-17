@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AGENT_LABEL, RESOLVED_LABEL, appControlTools, regiaEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
@@ -25,6 +25,20 @@ function deps() {
 }
 
 describe('app control tools', () => {
+  it('sets only a validated next-turn effort within the caller space and preserves the current report', async () => {
+    const current = { supported: true, requested: 'xhigh', submitted: 'xhigh', effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: 'high' };
+    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', space: 'app' }, { id: 'cursor', harness: 'cursor' }];
+    const set = vi.fn(async (id: string, patch: object) => ({ ...rows.find(c => c.id === id), id, effortStatus: { ...current, requested: 'medium', pending: true }, ...patch }));
+    const chats = { list: () => rows, set } as unknown as ChatService;
+    const tool = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(t => t.name === 'app_set_chat_effort')!;
+    expect(await tool.run({ chatId: 'work', effort: 'medium', model: 'other', approvalPolicy: 'never' })).toMatchObject({ chatId: 'work', effort: { requested: 'medium', submitted: 'xhigh', effective: null, pending: true } });
+    expect(set.mock.calls).toEqual([['work', { effort: 'medium' }]]);
+    for (const effort of [null, 1, 'bogus', { toString: () => 'medium' }]) await expect(Promise.resolve().then(() => tool.run({ chatId: 'work', effort }))).rejects.toThrow(/validi/);
+    await expect(Promise.resolve().then(() => tool.run({ chatId: 'app', effort: 'medium' }))).rejects.toThrow();
+    await expect(Promise.resolve().then(() => tool.run({ chatId: 'cursor', effort: 'medium' }))).rejects.toThrow(/non supporta/);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(rows[0]).toMatchObject({ model: 'chosen-model', effort: 'xhigh', effortStatus: current });
+  });
   it('can never answer permissions; questions only through app_resolve_question', () => {
     const { tools } = deps();
     expect(tools.map(t => t.name).some(n => /answer|approve|allow|permission/i.test(n))).toBe(false);
@@ -106,7 +120,7 @@ describe('app control tools', () => {
     await expect(Promise.resolve(tool('app_send_to_chat').run({ chatId: 'c1', text: '' }))).rejects.toThrow(/empty/);
   });
 
-  it('a Cursor chat gets agent messages only with the switch on and only while it runs', async () => {
+  it('a Cursor chat receives messages even with a legacy false; inactive chats stay guarded', async () => {
     const sent: string[] = [];
     let cross = true;
     const list = [{ id: 'cur', title: 'Ordini · Fix', harness: 'cursor', state: 'idle' }, { id: 'off', harness: 'cursor', state: 'closed' }];
@@ -117,11 +131,11 @@ describe('app control tools', () => {
     expect(sent).toEqual(['cur']);
     await expect(Promise.resolve(t.run({ chatId: 'off', text: 'ciao' }))).rejects.toThrow(/non è attiva/);
     cross = false;
-    await expect(Promise.resolve(t.run({ chatId: 'cur', text: 'ciao' }))).rejects.toThrow(/bloccato/);
-    expect(sent).toEqual(['cur']);
+    await t.run({ chatId: 'cur', text: 'ciao' });
+    expect(sent).toEqual(['cur', 'cur']);
   });
 
-  it('a Cursor Regia writes to its own engine freely; a Claude chat is the other engine (switch on, running only)', async () => {
+  it('a Cursor Regia writes across engines even with legacy false; inactive targets stay guarded', async () => {
     const sent: string[] = [];
     let cross = false;
     const list = [{ id: 'r', harness: 'cursor', state: 'idle', isRegia: true }, { id: 'cur', harness: 'cursor', state: 'closed' }, { id: 'cl', harness: 'claude', state: 'idle' }, { id: 'cloff', harness: 'claude', state: 'closed' }];
@@ -129,11 +143,11 @@ describe('app control tools', () => {
     const brain = { settings: () => ({ messaging: { crossHarness: cross } }) } as unknown as BrainService;
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_send_to_chat')!;
     await t.run({ chatId: 'cur', text: 'ciao' });
-    await expect(Promise.resolve(t.run({ chatId: 'cl', text: 'ciao' }))).rejects.toThrow(/bloccato/);
+    await t.run({ chatId: 'cl', text: 'ciao' });
     cross = true;
     await t.run({ chatId: 'cl', text: 'ciao' });
     await expect(Promise.resolve(t.run({ chatId: 'cloff', text: 'ciao' }))).rejects.toThrow(/Claude non è attiva/);
-    expect(sent).toEqual(['cur', 'cl']);
+    expect(sent).toEqual(['cur', 'cl', 'cl']);
   });
 
   it('the Regia creates work chats in the brain folder, labelled, and obeys the engine switches', async () => {
@@ -152,20 +166,20 @@ describe('app control tools', () => {
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', regia: true }))).rejects.toThrow(/Regia/);
     expect(made).toHaveLength(1);
     cross = false;
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/bloccato/);
-    // a Cursor Regia: its own engine is always allowed, Claude chats only with chats across engines on
+    expect(await t.run({ title: 'X', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
+    // A legacy false does not restrict either engine; engine launch permissions below still apply.
     regia = 'cursor';
     expect(await t.run({ title: 'Cursor · Prova', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'claude' }))).rejects.toThrow(/bloccato/);
+    expect(await t.run({ title: 'X', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
     cross = true;
     expect(await t.run({ title: 'Claude · Prova', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
-    expect(made.map(m => [m.harness, m.regia])).toEqual([['claude', false], ['cursor', false], ['claude', false]]);
+    expect(made.map(m => [m.harness, m.regia])).toEqual([['claude', false], ['cursor', false], ['cursor', false], ['claude', false], ['claude', false]]);
     // «Le Regie possono usare Cursor» off: refused to every Regia, a Cursor one too (review 2026-10-14)
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Le Regie possono usare Cursor/);
   });
 
-  it('long chats: app_chats flags them; hand-off and "Riprendi" follow the rule for chats across engines and label the new prompt', async () => {
+  it('long chats: hand-off and continuation cross engines with legacy false and keep their labels', async () => {
     const calls: [string, string, Record<string, unknown>][] = [];
     let cross = true;
     const list = [
@@ -192,14 +206,14 @@ describe('app control tools', () => {
     expect(await t('app_continue_chat').run({ chatId: 'cl' })).toMatchObject({ chatId: 'new', continuedFrom: 'cl' });
     expect(calls.at(-1)![2]).toMatchObject({ promptPrefix: AGENT_LABEL, allowStart: true });
     cross = false;
-    await expect(Promise.resolve(t('app_continue_chat').run({ chatId: 'cu' }))).rejects.toThrow(/bloccato/);
-    await expect(Promise.resolve(t('app_handoff_chat').run({ chatId: 'cu' }))).rejects.toThrow(/bloccato/);
+    await t('app_continue_chat').run({ chatId: 'cu' });
+    await t('app_handoff_chat').run({ chatId: 'cu' });
     await expect(Promise.resolve(t('app_handoff_chat').run({ chatId: 'nope' }))).rejects.toThrow(/sconosciuta/);
-    // a Cursor Regia: the rule turns around (its own engine is free, a Claude chat is the other engine)
+    // A Cursor Regia can reach Claude too; the stopped-chat wake rules still apply.
     list.push({ id: 'r', harness: 'cursor', state: 'idle', title: 'Regia', pending: 0, model: null, costUsd: 0, isRegia: true, lastText: '' });
     await t('app_handoff_chat').run({ chatId: 'cx' });
     expect(calls.at(-1)![2].allowStart).toBe(true);
-    await expect(Promise.resolve(t('app_continue_chat').run({ chatId: 'cl' }))).rejects.toThrow(/bloccato.*Claude/);
+    await t('app_continue_chat').run({ chatId: 'cl' });
     cross = true;
     await t('app_continue_chat').run({ chatId: 'cl' });
     expect(calls.at(-1)![2].allowStart).toBe(false);
@@ -442,8 +456,9 @@ describe('app control tools', () => {
     expect(made.slice(1).map(m => m.regiaOf)).toEqual(['r1', 'r1']);
     await run('r2', 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
     expect(sent).toEqual(['Regia · App']);
-    // the caller's engine decides what the other engine is: from the first Regia (Claude), a Cursor chat is blocked
-    await expect(Promise.resolve(run('r1', 'app_send_to_chat', { chatId: 'w', text: 'ciao' }))).rejects.toThrow(/bloccato/);
+    // Both callers can reach the chat, retaining their own sender identity.
+    await run('r1', 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
+    expect(sent).toEqual(['Regia · App', 'Regia']);
   });
 
   it("a Regia's own endpoint answers only that open Regia with its own token, never a guessed or borrowed one", () => {

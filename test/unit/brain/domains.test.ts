@@ -83,8 +83,8 @@ describe('config.json keeps its domains list', () => {
     fs.writeFileSync(path.join(ud, 'config.json'), JSON.stringify({ brainRoot: null, domains: [dom] }));
     const c = new ConfigStore(ud, {});
     expect(c.domains()).toEqual([dom]);
-    c.set({ view: 'corsie' });
-    expect(JSON.parse(fs.readFileSync(path.join(ud, 'config.json'), 'utf8'))).toMatchObject({ view: 'corsie', domains: [dom] });
+    c.set({ theme: 'light' });
+    expect(JSON.parse(fs.readFileSync(path.join(ud, 'config.json'), 'utf8'))).toMatchObject({ theme: 'light', domains: [dom] });
     expect(new ConfigStore(ud, { SB_DOMAINS: `${dom}\nrelative` }).domains()).toEqual([dom]);
     expect(new ConfigStore(ud, { SB_DOMAINS: '' }).domains()).toEqual([]);
   });
@@ -96,7 +96,7 @@ describe('config.json keeps its domains list', () => {
     fs.writeFileSync(file, JSON.stringify({ brainRoot: null, domains: [x] }));
     const c = new ConfigStore(ud, {});
     fs.writeFileSync(file, JSON.stringify({ brainRoot: null, domains: [x, y] }));
-    c.set({ view: 'corsie' });
-    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ view: 'corsie', domains: [x, y] });
+    c.set({ language: 'it' });
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ language: 'it', domains: [x, y] });
   });
 });

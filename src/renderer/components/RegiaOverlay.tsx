@@ -12,6 +12,8 @@
 // TopBar.tsx.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import { regiaLabel } from '@shared/regia';
+import { effortSummary } from '../lib/effort-status';
+import { engineCan } from '../lib/engines';
 import { regiaTabsOf } from '../lib/regia-route';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { isBusy, sameList } from '../store/state';
@@ -19,9 +21,11 @@ import { app, useApp } from '../store/store';
 import { openModal, openNewRegia, requestFocus, setPrefs, setRegiaOpen, setRegiaTab, ui } from '../store/ui';
 import { collapseRegia } from '../actions';
 import { scheduleLayer } from '../lib/layer';
-import { clampSize, reserveOf, seenAtCollapse, sizeIn, unreadOf, viewport, type DockSize, type Reserve } from '../lib/regia-dock';
+import { clampSize, reserveOf, seenAtCollapse, sizeIn, topSize, unreadOf, viewport, type DockSize, type Reserve } from '../lib/regia-dock';
 import { RegiaTile } from './RegiaTile';
-import { HarnessMark, IconArrowUp, IconList, IconMinimize, IconPlus } from './Icons';
+import {AgentAvatar}from'./AgentAvatar';
+import {t}from'../i18n';
+import { IconArrowUp, IconList, IconMinimize, IconPlus } from './Icons';
 import { IconButton } from './ui';
 
 const questions = (n: number) => (n === 1 ? '1 domanda' : `${n} domande`);
@@ -45,8 +49,9 @@ function useViewport() {
     const on = () => setV(viewport());
     window.addEventListener('resize', on);
     const ro = new ResizeObserver(on); // the sidebar collapsing or expanding moves its right edge
-    const side = document.querySelector('.sidebar');
+    const side = document.querySelector('.sidebar'),shell=document.querySelector('.shell');
     if (side) ro.observe(side);
+    if(shell)ro.observe(shell);
     return () => { window.removeEventListener('resize', on); ro.disconnect(); };
   }, []);
   return v;
@@ -55,29 +60,35 @@ function useViewport() {
 /** The expanded size shown now: the saved one kept usable in this window. */
 function useDockSize(): DockSize {
   const saved = ui.use(s => s.prefs.regiaSize);
+  const placement=ui.use(s=>s.prefs.regiaPlacement),topHeight=ui.use(s=>s.prefs.regiaTopHeight);
   const v = useViewport();
+  if(placement==='top')return topSize(topHeight,v.W,v.H,v.top,v.left);
   return sizeIn(saved, v.W, v.H, v.top, v.left);
 }
 
 /** The room the workspace leaves the widget in the bottom-right corner (App.tsx pads by it). */
 export function useDockReserve(): Reserve {
   const open = ui.use(s => s.prefs.regiaOpen);
-  const r = reserveOf(open, useDockSize());
-  useEffect(() => { scheduleLayer(); }, [r.right, r.bottom]); // the global layer moves aside at once
+  const placement=ui.use(s=>s.prefs.regiaPlacement),map=ui.use(s=>s.map),size=useDockSize();
+  const r:Reserve=reserveOf(open,size,placement,!!map);
+  useEffect(() => { scheduleLayer(); }, [r.right, r.bottom,r.top]); // native cards share the same geometry
   return r;
 }
 
 /** The collapsed bar: the mark, what is new (unread replies) and what waits (questions, permissions, commands). */
 function DockBar({ regie, waiting, active }: { regie: readonly string[]; waiting: number[]; active: string | null }) {
+  const owner = useApp(s => active ? s.chats[active] : undefined);
+  const effort = owner ? effortSummary(owner.effortStatus ?? { supported: engineCan(owner.harness, 'effort'), requested: owner.effort, submitted: null, effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: null }) : null;
   const busy = useApp(s => regie.some(id => { const c = s.chats[id]; return !!c && isBusy(c); }));
   const seenAt = ui.use(s => s.prefs.regiaSeenAt);
   const unread = useApp(s => regie.reduce((n, id) => n + unreadOf(s.items[id], seenAt), 0));
   const total = waiting.reduce((a, b) => a + b, 0);
-  const label = ['Regia', unread ? `${unread} ${unread === 1 ? 'risposta nuova' : 'risposte nuove'}` : '', total ? `${questions(total)} ${total === 1 ? 'ti aspetta' : 'ti aspettano'}` : ''].filter(Boolean).join(', ');
+  const label = ['Regia', effort?.badge, effort?.pending, unread ? `${unread} ${unread === 1 ? 'risposta nuova' : 'risposte nuove'}` : '', total ? `${questions(total)} ${total === 1 ? 'ti aspetta' : 'ti aspettano'}` : ''].filter(Boolean).join(', ');
   return (
     <button type="button" className={`regia-dock-bar ${total ? 'waits' : ''}`} data-testid="regia-pill" aria-expanded={false} aria-label={`${label}: espandi (Ctrl+R)`}
       data-tip="Espandi la Regia|Ctrl+R" onClick={() => { setRegiaOpen(true); if (active) requestFocus(active); }}>
-      <HarnessMark harness="claude" regia size={16} /><span className="regia-btn-label">Regia</span>
+      <AgentAvatar avatar={owner?.agent?.avatar} name={owner?.agent?.name||owner?.title||'Regia'} size={20}/><span className="regia-btn-label">{owner?.agent?.name||owner?.title||'Regia'}</span>
+      {effort?.compactBadge && <span className="regia-effort" data-testid="regia-pill-effort">{effort.compactBadge}</span>}
       {busy && <span className="regia-pill-busy" aria-hidden="true" />}
       {unread > 0 && <span className="regia-unread" data-testid="regia-pill-unread" aria-hidden="true">{unread} {unread === 1 ? 'nuova' : 'nuove'}</span>}
       {total > 0 && <span className="regia-badge" data-testid="regia-pill-count" aria-hidden="true">{total}</span>}
@@ -87,6 +98,7 @@ function DockBar({ regie, waiting, active }: { regie: readonly string[]; waiting
 }
 
 export function RegiaOverlay() {
+  const placement=ui.use(s=>s.prefs.regiaPlacement),map=ui.use(s=>s.map);
   const regie = useApp(regiaTabsOf, sameList);
   const labels = useApp(s => regie.map(id => regiaLabel(s.chats[id] ?? {})), sameList);
   const busy = useApp(s => regie.map(id => { const c = s.chats[id]; return !!c && isBusy(c); }), sameList);
@@ -99,7 +111,7 @@ export function RegiaOverlay() {
   const size = useDockSize();
   const [live, setLive] = useState<DockSize | null>(null); // while resizing
   // a browser view under the widget hides while it is there (the reserve keeps tiles out of its corner anyway)
-  useLayoutEffect(() => (ref.current ? registerOverlay(ref.current) : undefined), [open]);
+  useLayoutEffect(() => (ref.current ? registerOverlay(ref.current) : undefined), [open,map,placement]);
   // collapsed while a reply streams: it is not seen yet (setRegiaOpen marked everything up to now)
   useEffect(() => {
     if (open) return;
@@ -115,7 +127,7 @@ export function RegiaOverlay() {
     let last = size;
     const move = (ev: PointerEvent) => {
       const v = viewport();
-      last = clampSize({ w: start.s.w - (ev.clientX - start.px), h: start.s.h - (ev.clientY - start.py) }, v.W, v.H, v.top, v.left);
+      last = placement==='top'?{w:start.s.w,h:Math.max(180,Math.min(start.s.h+ev.clientY-start.py,560,(v.H-v.top)*.7))}:clampSize({ w: start.s.w - (ev.clientX - start.px), h: start.s.h - (ev.clientY - start.py) }, v.W, v.H, v.top, v.left);
       setLive(last);
       schedule(); // a browser view it now covers hides at once, not at the next safety poll
     };
@@ -123,7 +135,7 @@ export function RegiaOverlay() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       setLive(null);
-      if (last !== size) setPrefs({ regiaSize: last });
+      if (last !== size) setPrefs(placement==='top'?{regiaTopHeight:last.h}:{ regiaSize: last });
       schedule();
     };
     window.addEventListener('pointermove', move);
@@ -131,18 +143,20 @@ export function RegiaOverlay() {
     e.preventDefault();
   };
 
+  if(map&&placement==='top')return null;
+  const location:CSSProperties=placement==='top'?{left:viewport().left+8,top:viewport().top+8,right:'auto',bottom:'auto'}:{};
   if (!open) {
     return (
-      <div ref={ref} className="regia-dock collapsed" data-regia-overlay data-testid="regia-dock">
+      <div ref={ref} className="regia-dock collapsed" data-placement={placement} style={{...location,width:placement==='top'?size.w:undefined}} data-regia-overlay data-testid="regia-dock">
         <DockBar regie={regie} waiting={waiting} active={active} />
       </div>
     );
   }
 
   const shown = live ?? size;
-  const style = { width: shown.w, height: shown.h, '--regia-op': String(Math.min(100, Math.max(40, opacity)) / 100) } as CSSProperties;
+  const style:CSSProperties&{'--regia-op':string} = { ...location,width: shown.w, height: shown.h, '--regia-op': String(Math.min(100, Math.max(40, opacity)) / 100) };
   return (
-    <div ref={ref} className={`regia-dock regia-ov ${live ? 'moving' : ''}`} style={style} data-regia-overlay data-testid="regia-overlay"
+    <div ref={ref} className={`regia-dock regia-ov ${live ? 'moving' : ''}`} data-placement={placement} style={style} data-regia-overlay data-testid="regia-overlay"
       onKeyDown={e => {
         // Esc collapses the widget when there is nothing to back out of inside it (an empty input, no menu open)
         if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -152,7 +166,7 @@ export function RegiaOverlay() {
         e.preventDefault();
         collapseRegia();
       }}>
-      <div className="regia-bar" onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) setPrefs({ regiaSize: null }); }} data-testid="regia-bar">
+      <div className="regia-bar" onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) setPrefs(placement==='top'?{regiaTopHeight:null}:{ regiaSize: null }); }} data-testid="regia-bar">
         <div className="regia-tabs" role="tablist" aria-label="Regie" onKeyDown={e => {
           // the tab pattern: arrows and Home/End move between the Regie, one Tab stop for the list
           const i = regie.indexOf(active ?? '');
@@ -175,12 +189,13 @@ export function RegiaOverlay() {
         </div>
         <IconButton label="Nuova Regia" onClick={openNewRegia} testid="regia-tab-new"><IconPlus size={14} /></IconButton>
         <span className="sp regia-grip" data-tip="Doppio clic: misura di partenza" />
+        <button type="button" className="btn btn-ghost btn-s" onClick={()=>{setPrefs({regiaPlacement:placement==='top'?'corner':'top'});schedule();}}>{t(placement==='top'?'product.regiaCorner':'product.regiaTop')}</button>
         <IconButton label="Riduci la Regia" shortcut="Ctrl+R" onClick={collapseRegia} testid="regia-collapse"><IconMinimize size={14} /></IconButton>
       </div>
       <div className="regia-body" id="regia-panel" role="tabpanel" aria-labelledby={active ? `regia-tab-${active}` : undefined}>
         <RegiaTile key={active ?? 'none'} chatId={active} />
       </div>
-      <div className="regia-resize" onPointerDown={track} onDoubleClick={() => setPrefs({ regiaSize: null })} aria-hidden="true" data-testid="regia-resize"
+      <div className="regia-resize" onPointerDown={track} onDoubleClick={() => setPrefs(placement==='top'?{regiaTopHeight:null}:{ regiaSize: null })} role="separator" tabIndex={0} aria-label={t('product.resizeRegia')} aria-orientation={placement==='top'?'horizontal':'vertical'} onKeyDown={event=>{if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();setPrefs(placement==='top'?{regiaTopHeight:Math.max(180,Math.min(560,size.h+(event.key==='ArrowDown'?24:-24)))}:{regiaSize:{w:size.w,h:Math.max(260,size.h+(event.key==='ArrowUp'?24:-24))}});schedule();}}} data-testid="regia-resize"
         data-tip="Trascina per cambiare misura · doppio clic: misura di partenza" />
     </div>
   );
