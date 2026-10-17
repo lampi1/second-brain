@@ -32,3 +32,18 @@ asks for one search, by words and by meaning, local and offline, that still work
 - Chat transcripts are not in the hybrid index yet: Ctrl+K keeps ADR 0023's index for them.
 - The brain-side CLIs (session-find, ctx, the correction hook) need a loopback endpoint bound to 127.0.0.1 with the
   MCP server's auth: a later step (S3), proposed to the brain as a patch.
+
+## Themes (2026-10-17, SPEC 23 b)
+
+The Dashboard's Temi tab groups ai-errors.md and ideas.md by meaning (`search/hybrid/themes.ts`, `/api/themes`):
+
+- One entry per dated error line (the vector of its chunk, already in the index) or per idea section (its title and
+  "Idea:" line embedded on their own, cached by text: through the chunks every idea looked alike, the template
+  dominates them).
+- Average-linkage clustering over cosine, joined at 0.88; duplicates from 0.95. e5 cosines are compressed (unrelated
+  texts still score ~0.75), so both thresholds were measured on the real brain's 326 errors: 0.86 already chains most
+  errors into one theme. Only the newest 600 entries are clustered.
+- Label: the theme's three most distinctive words (tf-idf against the file). Growing: the theme's share of the last
+  7 days at least 1.5× its share of the 7 before, only once the file has 5 entries in that earlier week (a new brain
+  has no baseline, and more logging overall is not a theme growing).
+- Without the model the tab says the themes appear once it has read the brain; nothing falls back to words.

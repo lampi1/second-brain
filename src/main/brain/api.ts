@@ -16,7 +16,7 @@ import type { BrainApiResult } from '../../shared/contract';
 import { log, errText } from '../log';
 import type { NodeRunner } from './node';
 
-export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve', '/api/agents/analytics']);
+export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/themes', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve', '/api/agents/analytics']);
 
 /** Paths answered by main itself instead of the brain's server (brain.serveApi); undefined = not now, ask the server. */
 export type LocalApi = Map<string, (query: URLSearchParams) => unknown | Promise<unknown>>;
