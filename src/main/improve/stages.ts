@@ -66,8 +66,8 @@ export function promoteGate(o: {
   if (o.dirty) return no('Nella cartella del codice ci sono modifiche non salvate in un commit.');
   if (!o.mainSha) return no(`Il ramo «${o.main}» non si legge.`);
   if (o.runningSha && o.mainSha.startsWith(o.runningSha)) return no('Niente di nuovo: questa versione è già in uso.');
-  if (!o.mainChecked) return no(`«${o.main}» non ha ancora passato i test completi: la Regia dell’app lancia \`npm run check\` su ${o.main}, poi aggiorni.`);
-  if (o.failedBefore) return no('Questa versione non è partita all’ultimo avvio: la Regia dell’app la corregge, poi aggiorni.');
+  if (!o.mainChecked) return no(`«${o.main}» non ha ancora passato i test completi: l’Orchestrator lancia \`npm run check\` su ${o.main}, poi aggiorni.`);
+  if (o.failedBefore) return no('Questa versione non è partita all’ultimo avvio: l’Orchestrator la corregge, poi aggiorni.');
   return { ok: true, why: '' };
 }
 

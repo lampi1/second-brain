@@ -66,7 +66,7 @@ describe('Codex app_create_chat', () => {
     expect(turns).toHaveLength(1);
     const text = turns[0]!.msg!.params!.input!.find(i => i.type === 'text')!.text;
     expect(text.startsWith(AGENT_LABEL)).toBe(true);
-    expect(text).toContain(`La tua Regia è «${regia.title}»`);
+    expect(text).toContain(`Il tuo Orchestrator è «${regia.title}»`);
     expect(text.endsWith(prompt)).toBe(true);
     expect(lines().filter(l => l.cwd).every(l => l.cwd === cwd)).toBe(true);
     expect(manager.list().filter(c => c.isRegia)).toHaveLength(1);

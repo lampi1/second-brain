@@ -60,10 +60,10 @@ export class Artifacts {
     let owner = caller.id, where = 'in questa chat';
     if (target === 'regia') {
       const regia = caller.appRegia || caller.isRegia ? caller.id
-        : caller.space === 'app' ? all.find(c => c.appRegia && !c.closedAt)?.id ?? null
+        : caller.space === 'app' ? all.find(c => c.appRegia && !c.closedAt)?.id ?? regiaOfChat(caller, all.filter(c => !c.closedAt))
         : regiaOfChat(caller, all.filter(c => !c.closedAt));
-      if (regia) { owner = regia; where = regia === caller.id ? 'nel pannello della Regia' : `nella Regia «${all.find(c => c.id === regia)?.title ?? 'Regia'}»`; }
-      else where = 'in questa chat (nessuna Regia aperta)';
+      if (regia) { owner = regia; where = regia === caller.id ? 'nel pannello dell’Orchestrator' : `nell’Orchestrator «${all.find(c => c.id === regia)?.title ?? 'Orchestrator'}»`; }
+      else where = 'in questa chat (nessun Orchestrator aperto)';
     }
     // in another chat's list (its Regia) the id carries the sender: two chats with the same key never replace each
     // other; the sender's folder goes along, so its relative file paths open there (review 2026-10-13)
@@ -224,7 +224,7 @@ export function showUiTool(store: Artifacts): McpTool {
     name: 'show_ui',
     description: [
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
-      'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · regia (in your Regia\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
+      'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · regia (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
       'props per component:',
       'table {columns: string[], rows: [{cells: string[], status?, link?: {label, href}}]}',
       'cards {options: [{title, summary?, pros?: string[], cons?: string[], effort?, risk?: low|medium|high, recommended?: true on one at most}]} (1-6 options)',

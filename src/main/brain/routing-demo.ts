@@ -36,7 +36,7 @@ export class DemoRouting {
     this.versions.set(3, this.table);
     const earlier = new Date(Date.parse(at) - 86_400_000).toISOString();
     this.changes = [
-      { at: earlier, from: 1, to: 2, by: 'agente: Regia dell’app', reason: 'smistamento su Sonnet', evidence: '31 chat, stesso esito, −58% di costo', stored: false },
+      { at: earlier, from: 1, to: 2, by: 'agente: Orchestrator', reason: 'smistamento su Sonnet', evidence: '31 chat, stesso esito, −58% di costo', stored: false },
       { at, from: 2, to: 3, by: 'utente (Impostazioni)', reason: 'fix di bug: sforzo alto', evidence: null, stored: true },
     ];
   }

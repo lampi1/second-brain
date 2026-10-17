@@ -23,7 +23,7 @@ export const agentsMayOpen = (s: Pick<Settings, 'engineOn' | 'engines'>, h: Harn
 export class AgentMayNotWake extends Error {
   constructor(h: Harness) {
     const name = engineLabel(h);
-    super(`La chat è ferma e le Regie non possono usare ${name} (impostazione «Le Regie possono usare ${name}»): un agente non la riavvia.`);
+    super(`La chat è ferma e gli Orchestrator non possono usare ${name} (impostazione «Gli Orchestrator possono usare ${name}»): un agente non la riavvia.`);
   }
 }
 
@@ -36,6 +36,6 @@ export function crossRefusal(_s: Pick<Settings, 'messaging'>, _from: Harness, _t
 export function openRefusal(s: EngineSwitches, _from: Harness, to: Harness): string | null {
   const name = engineLabel(to);
   if (!engineOn(s, to)) return `${name} è spento nelle impostazioni`;
-  if (s.engines[to] !== true) return `le Regie non possono usare ${name} (impostazione «Le Regie possono usare ${name}»)`;
+  if (s.engines[to] !== true) return `gli Orchestrator non possono usare ${name} (impostazione «Gli Orchestrator possono usare ${name}»)`;
   return null;
 }

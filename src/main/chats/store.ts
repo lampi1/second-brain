@@ -32,6 +32,9 @@ export interface StoredChat {
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
   isRegia: boolean;
+  orchestrator?: true;
+  /** the Orchestrator's former titles (migrated Regie): mail sent to those boxes still reaches it (mail.ts) */
+  mailAliases?: string[];
   /** a Regia's tab name; a work chat's Regia (ADR 0021) */
   regiaName?: string;
   regiaOf?: string;
@@ -84,6 +87,11 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   // Invalid persisted holds fail closed until an explicit lifecycle update; they never turn into completed work.
   return {status:'assigned',updatedAt:0};
 }
+/** at most 10 former titles, each a usable box name */
+const mailAliases = (v: unknown): { mailAliases?: string[] } => {
+  const list = Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && !!x.trim()).map(x => x.trim().slice(0, 80)))].slice(-10) : [];
+  return list.length ? { mailAliases: list } : {};
+};
 function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route);
@@ -123,6 +131,7 @@ function valid(x: unknown, version: number): StoredChat | null {
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
     permissionMode: MODES.includes(String(c.permissionMode)) && !(version < 2 && c.permissionMode === 'default') ? (c.permissionMode as PermissionMode) : null,
     isRegia: c.isRegia === true,
+    ...(c.isRegia === true && c.orchestrator === true ? { orchestrator: true as const, ...mailAliases(c.mailAliases) } : {}),
     ...(c.isRegia === true && typeof c.regiaName === 'string' && c.regiaName ? { regiaName: c.regiaName.slice(0, 30) } : {}),
     ...(c.isRegia !== true && typeof c.regiaOf === 'string' && c.regiaOf ? { regiaOf: c.regiaOf } : {}),
     ...(c.isRegia === true && typeof c.regiaSince === 'number' && Number.isFinite(c.regiaSince) ? { regiaSince: c.regiaSince } : {}),

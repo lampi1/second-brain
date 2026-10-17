@@ -299,7 +299,7 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     const r = fresh();
     const { s, created } = service({ dir: r.dir, base: r.base, running: 'dev', stable: false });
     await s.createRegia('claude', 'claude-opus-5-5');
-    expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, space: 'app', appRegia: true, model: 'claude-opus-5-5', title: "Regia dell'app" });
+    expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, space: 'app', appRegia: true, model: 'claude-opus-5-5', title: 'Orchestrator' });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
     expect(appRegiaPrompt(r.dir)).toMatch(/Non aggiorni e non riavvii mai/);
   });

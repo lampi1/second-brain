@@ -36,16 +36,14 @@ const BASE: readonly SettingDef[] = [
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
     description: 'Porta locale (solo 127.0.0.1) dove gli agenti guidano il browser interno. 0 = una porta libera a caso.' },
-  { key: 'view', type: 'enum', values: ['mosaico'], default: 'mosaico', protected: false, label: 'Vista',
-    description: 'Mosaico: le chat come riquadri.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come il sistema.' },
   { key: 'language', type: 'enum', values: ['system', 'it', 'en'], default: 'system', protected: false, label: 'Lingua',
     description: "Lingua dell'interfaccia: come il sistema (italiano se Windows è in italiano, altrimenti inglese), italiano o inglese." },
   { key: 'compactWindowTokens', type: 'int', min: 0, max: 1_000_000, default: COMPACT_WINDOW, protected: false, label: 'Compatta le chat Claude a (token)',
-    description: 'Ogni chat Claude dell’app, Regia compresa, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
-  { key: 'regiaDayCompact', type: 'boolean', default: true, protected: false, label: 'Regie corte: compatta a inizio giornata',
-    description: 'Una Regia con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è ferma da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
+    description: 'Ogni chat Claude dell’app, Orchestrator compreso, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
+  { key: 'regiaDayCompact', type: 'boolean', default: true, protected: false, label: 'Orchestrator corti: compatta a inizio giornata',
+    description: 'Un Orchestrator con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è fermo da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
   { key: 'launchRulesClaude', type: 'boolean', default: false, protected: true, label: 'Regole del cervello alle chat Claude',
     description: 'A ogni avvio di una chat Claude l’app le passa le regole del cervello (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
   { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del cervello alle chat Codex',
@@ -61,10 +59,10 @@ const BASE: readonly SettingDef[] = [
   { key: 'autoCloseMin', type: 'int', min: 0, max: 240, default: 2, protected: false, label: 'Chiudi le chat finite dopo (minuti)',
     description: 'Una chat di lavoro che ha finito bene, senza domande, coda o lavori in background, e che non tocchi da tanti minuti si chiude da sola e libera spazio; la ritrovi con Ctrl+K e la riapri con Invio. 0 = mai.' },
   { key: 'engineIdleMin', type: 'int', min: 0, max: 1440, default: 30, protected: false, label: 'Libera il motore delle chat ferme dopo (minuti)',
-    description: 'Una chat ferma da tanti minuti, senza domande, coda o lavori in background, chiude il suo processo (con server MCP e shell) e resta sulla griglia; al prossimo messaggio riparte da sola dalla sua storia. La Regia non viene mai liberata. 0 = mai.' },
+    description: 'Una chat ferma da tanti minuti, senza domande, coda o lavori in background, chiude il suo processo (con server MCP e shell) e resta sulla griglia; al prossimo messaggio riparte da sola dalla sua storia. L’Orchestrator non viene mai liberato. 0 = mai.' },
   // protected: an agent turning the queue off, or raising its limits, would start its own chats ahead of the machine
   { key: 'loadQueue', type: 'boolean', default: true, protected: true, label: 'Coda per carico',
-    description: 'Con il PC sotto sforzo, le chat e i messaggi aperti dalla Regia o da altre chat aspettano in coda e partono uno alla volta quando il carico scende. I tuoi messaggi partono sempre subito; niente viene fermato.' },
+    description: 'Con il PC sotto sforzo, le chat e i messaggi aperti dall’Orchestrator o da altre chat aspettano in coda e partono uno alla volta quando il carico scende. I tuoi messaggi partono sempre subito; niente viene fermato.' },
   { key: 'loadQueueCpu', type: 'int', min: 30, max: 100, default: 75, protected: true, label: 'Coda per carico: CPU oltre (%)',
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
@@ -91,29 +89,29 @@ const BASE: readonly SettingDef[] = [
   // the chats the Regia opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
   // chooses whose credits and how many are spent
   { key: 'regiaChats.claudeModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Claude',
-    description: 'Il modello delle chat Claude aperte dalla Regia. Vuoto = il predefinito di Claude Code.' },
+    description: 'Il modello delle chat Claude aperte dall’Orchestrator. Vuoto = il predefinito di Claude Code.' },
   { key: 'regiaChats.claudeEffort', type: 'enum', values: ['', 'low', 'medium', 'high', 'xhigh', 'max'], default: '', protected: true, label: 'Effort per le chat Claude',
     description: 'Quanto ragiona Claude prima di rispondere. Vuoto = il predefinito di Claude Code.' },
   { key: 'regiaChats.cursorModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Cursor',
-    description: 'Il modello delle chat Cursor aperte dalla Regia. Vuoto = il predefinito di Cursor.' },
+    description: 'Il modello delle chat Cursor aperte dall’Orchestrator. Vuoto = il predefinito di Cursor.' },
   // every Cursor chat (the user, 2026-10-12: Grok medium, fast off): applied with ACP session/set_config_option
   { key: 'regiaChats.cursorReasoning', type: 'enum', values: ['', 'low', 'medium', 'high', 'xhigh'], default: 'medium', protected: true, label: 'Ragionamento per le chat Cursor',
     description: 'Quanto ragiona il modello di ogni chat Cursor. Vuoto = il predefinito del modello. Se il modello non lo offre, la chat lo dice.' },
   { key: 'regiaChats.cursorFast', type: 'boolean', default: false, protected: true, label: 'Fast per le chat Cursor',
     description: 'Acceso: ogni chat Cursor usa la variante fast del modello, se c’è (più veloce, consuma di più).' },
   // the floating Regia (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
-  { key: 'regiaOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità della Regia (%)',
-    description: 'Quanto si vede il riquadro della Regia sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
+  { key: 'regiaOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
+    description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
   // the Regia hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
-  { key: 'regiaEvents', type: 'boolean', default: true, protected: true, label: 'Eventi alla Regia',
-    description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive alla Regia (una riga per chat, al massimo una volta ogni 2 minuti per chat) e la sveglia se è ferma: decide lei se dirtelo. Ogni risveglio è un turno della Regia." },
+  { key: 'regiaEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
+    description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
   // comando dal play senza che ti scriva fatto")
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
     description: "Quando un comando lanciato con Esegui finisce, l'app scrive alla chat che l'ha proposto il comando, l'exit code e le ultime righe dell'output: non devi scriverle «fatto» né incollarle il risultato. Se la chat sta lavorando, il messaggio parte appena è libera. Ogni esito è un turno della chat." },
   // the user, 2026-10-12: "le domande vorrei un toggle per farle comparire proprio come modale"
   { key: 'questionsModal', type: 'boolean', default: false, protected: true, label: 'Domande in finestra',
-    description: 'Ogni domanda e permesso compare in una finestra in primo piano, una alla volta in coda, con il contesto. Mentre scrivi aspetta che ti fermi e non ti prende la tastiera. Spento: le domande restano nelle chat e nella Regia.' },
+    description: 'Ogni domanda e permesso compare in una finestra in primo piano, una alla volta in coda, con il contesto. Mentre scrivi aspetta che ti fermi e non ti prende la tastiera. Spento: le domande restano nelle chat e nell’Orchestrator.' },
   // "Migliora l'app" (ADR 0020): the chats there change and run this code, and "Aggiorna" builds from it
   { key: 'appRepo', type: 'path', nullable: true, default: null, protected: true, label: "Cartella del codice dell'app",
     description: "Dove «Migliora l'app» lavora e da dove «Aggiorna» prende la nuova versione (una cartella git). Vuoto = quella da cui è stata fatta la versione in uso." },
@@ -130,15 +128,15 @@ function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
   const label = engineLabel(id), on = engineOf(id)?.defaultOn ?? false;
   return group === 'engineOn'
     ? { key: `engineOn.${id}`, type: 'boolean', default: on, protected: true, label: `${label} acceso`,
-      description: `Spento: nessuna chat parte su ${label}, né quelle che apri tu né quelle delle Regie; si spegne anche «Le Regie possono usare ${label}».` }
-    : { key: `engines.${id}`, type: 'boolean', default: on, protected: true, label: `Le Regie possono usare ${label}`,
-      description: `Spento: nessuna Regia apre o riprende chat su ${label}; tu sì, da Nuova chat.` };
+      description: `Spento: nessuna chat parte su ${label}, né quelle che apri tu né quelle degli Orchestrator; si spegne anche «Gli Orchestrator possono usare ${label}».` }
+    : { key: `engines.${id}`, type: 'boolean', default: on, protected: true, label: `Gli Orchestrator possono usare ${label}`,
+      description: `Spento: nessun Orchestrator apre o riprende chat su ${label}; tu sì, da Nuova chat.` };
 }
 
 /** The engine a Regia's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
 function regiaEngineDef(): SettingDef {
-  return { key: 'regiaChats.harness', type: 'enum', values: engines().filter(e => e.caps.tools).map(e => e.id), default: 'claude', protected: true, label: 'Chat aperte dalla Regia: motore',
-    description: 'Con cosa la Regia apre le chat di lavoro quando non lo dice lei. Anche il punto di partenza di "Nuova chat".' };
+  return { key: 'regiaChats.harness', type: 'enum', values: engines().filter(e => e.caps.tools).map(e => e.id), default: 'claude', protected: true, label: 'Chat aperte dall’Orchestrator: motore',
+    description: 'Con cosa l’Orchestrator apre le chat di lavoro quando non lo dice lui. Anche il punto di partenza di "Nuova chat".' };
 }
 
 /** Every setting, the engines' ones for the engines in the registry now. */
@@ -195,7 +193,7 @@ export function validate(key: unknown, value: unknown): Checked {
 
 export function defaults(): Settings {
   return {
-    brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
+    brainRoot: null, mcpPort: 4319, autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
     contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),

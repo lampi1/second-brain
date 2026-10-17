@@ -33,6 +33,8 @@ describe('foreignOf', () => {
   it('folds an agent\'s prompt (app_create_chat) and message (app_send_to_chat)', () => {
     const created = `${AGENT_LABEL}\n\nLa tua Regia è «Regia dell'app»: scrivile con send_to_chat.\n\nYou work in the worktree X.\nMore.`;
     expect(foreignOf(user(created))).toMatchObject({ kind: 'agent', sender: 'un agente', summary: 'You work in the worktree X.' });
+    const renamed = `${AGENT_LABEL}\n\nIl tuo Orchestrator è «Orchestrator»: scrivigli con send_to_chat.\n\nYou work in the worktree X.`;
+    expect(foreignOf(user(renamed))).toMatchObject({ kind: 'agent', summary: 'You work in the worktree X.' });
     expect(foreignOf(user(`${AGENT_LABEL}\n\nRiprova il test.`, { from: 'Regia' }))).toMatchObject({ kind: 'agent', sender: 'Regia', summary: 'Riprova il test.' });
     // a from with an unknown text is still not the user's
     expect(foreignOf(user('ciao', { from: 'Regia' }))).toMatchObject({ kind: 'agent', sender: 'Regia', summary: 'ciao' });

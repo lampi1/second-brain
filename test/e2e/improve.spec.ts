@@ -82,7 +82,7 @@ test("Migliora l'app: the start notice, the stages, the app's Regia, Aggiorna", 
   await sec.getByTestId('improve-regia-create').click();
   await expect(sec.getByTestId('improve-regia')).toBeVisible();
   const chats = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).filter(c => c.space === 'app'));
-  expect(chats).toEqual([expect.objectContaining({ appRegia: true, isRegia: false, cwd: repo.dir, title: "Regia dell'app" })]);
+  expect(chats).toEqual([expect.objectContaining({ appRegia: true, isRegia: false, cwd: repo.dir, title: 'Orchestrator' })]);
   await shot(page, 'improve-regia');
 
   // Aggiorna: confirm, release.mjs promote runs, its steps show, the app asks the restart

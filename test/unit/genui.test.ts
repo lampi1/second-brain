@@ -134,7 +134,7 @@ describe('Artifacts: the store behind show_ui', () => {
     const all = [chat('r1', { isRegia: true, regiaSince: 1, title: 'Regia' }), chat('r2', { isRegia: true, regiaSince: 2, title: 'Regia · B' }), chat('w', { regiaOf: 'r2', title: 'QA · Rimborsi' }),
       chat('ar', { appRegia: true, space: 'app', title: 'Regia dell\'app' }), chat('aw', { space: 'app' })];
     const { store, sent } = setup(all);
-    expect(store.show('w', args({ target: 'regia' }))).toContain('nella Regia «Regia · B»');
+    expect(store.show('w', args({ target: 'regia' }))).toContain('nell’Orchestrator «Regia · B»');
     expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
     store.show('aw', args({ target: 'regia' }));
     expect(sent.at(-1)?.chatId).toBe('ar');
@@ -147,6 +147,13 @@ describe('Artifacts: the store behind show_ui', () => {
     store.show('r1', args({ target: 'regia' }));
     expect(sent.at(-1)).toMatchObject({ chatId: 'r1' });
     expect((sent.at(-1)?.item as Artifact).from).toBeUndefined();
+  });
+
+  it('target regia from an app chat with no app Regia (unified Orchestrator): the Regia it answers to', () => {
+    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { space: 'app', regiaOf: 'o' })];
+    const { store, sent } = setup(all);
+    expect(store.show('aw', args({ target: 'regia' }))).toContain('nell’Orchestrator «Orchestrator»');
+    expect(sent.at(-1)?.chatId).toBe('o');
   });
 
   it('target next-ask: waits, then attaches to the chat\'s next question; with none in 60 s it becomes a card', () => {

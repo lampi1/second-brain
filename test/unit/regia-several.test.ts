@@ -43,9 +43,9 @@ describe('which Regia a chat answers to', () => {
     expect(cleanRegiaName('x'.repeat(30))).toBe('x'.repeat(30));
   });
 
-  it('lists and cards name a Regia by its tab ("Regia · App"), the first one "Regia", any other chat by its title', () => {
-    expect(chatName({ isRegia: true, title: 'Regia' })).toBe('Regia');
-    expect(chatName({ isRegia: true, regiaName: 'App', title: 'Regia · App' })).toBe('Regia · App');
+  it('lists and cards name a Regia by its tab ("Orchestrator · App"), the first one "Orchestrator", any other chat by its title', () => {
+    expect(chatName({ isRegia: true, title: 'Regia' })).toBe('Orchestrator');
+    expect(chatName({ isRegia: true, regiaName: 'App', title: 'Regia · App' })).toBe('Orchestrator · App');
     expect(chatName({ isRegia: false, regiaName: 'App', title: 'Fix' })).toBe('Fix');
   });
 });

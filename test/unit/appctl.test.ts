@@ -96,7 +96,7 @@ describe('app control tools', () => {
         answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
       } as unknown as ChatService;
       const tool = (caller?: string) => appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller).find(x => x.name === 'app_resolve_question')!;
-      await expect(Promise.resolve().then(() => tool().run({ chatId: 'w', requestId: 'q1', answers: both }))).rejects.toThrow(/della Regia «Regia · Supporto»/);
+      await expect(Promise.resolve().then(() => tool().run({ chatId: 'w', requestId: 'q1', answers: both }))).rejects.toThrow(/dell’Orchestrator «Orchestrator · Supporto»/);
       expect(answered).toEqual([]);
       await tool('r2').run({ chatId: 'w', requestId: 'q1', answers: both });
       expect(answered).toHaveLength(1);
@@ -163,7 +163,7 @@ describe('app control tools', () => {
     expect(made[0]).not.toHaveProperty('effort');
     // never a second Regia, not even silently: the role is the user's choice
     expect(made[0]!.regia).toBe(false);
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', regia: true }))).rejects.toThrow(/Regia/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', regia: true }))).rejects.toThrow(/Orchestrator/);
     expect(made).toHaveLength(1);
     cross = false;
     expect(await t.run({ title: 'X', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
@@ -176,7 +176,7 @@ describe('app control tools', () => {
     expect(made.map(m => [m.harness, m.regia])).toEqual([['claude', false], ['cursor', false], ['cursor', false], ['claude', false], ['claude', false]]);
     // «Le Regie possono usare Cursor» off: refused to every Regia, a Cursor one too (review 2026-10-14)
     cursorOn = false;
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Le Regie possono usare Cursor/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
   });
 
   it('long chats: hand-off and continuation cross engines with legacy false and keep their labels', async () => {
@@ -318,8 +318,9 @@ describe('app control tools', () => {
     const out = await tool('app_logs').run({ level: 'warn', grep: 'slow' }) as { msg: string }[];
     expect(out.map(e => e.msg)).toContain('session slow');
     expect(out.every(e => e.msg !== 'tab opened')).toBe(true);
-    await tool('app_ui').run({ action: 'view', value: 'corsie' });
-    expect(ui).toEqual([{ action: 'view', value: 'corsie' }]);
+    await tool('app_ui').run({ action: 'page', value: 'devops' });
+    expect(ui).toEqual([{ action: 'page', value: 'devops' }]);
+    expect(() => tool('app_ui').run({ action: 'view', value: 'corsie' })).toThrow(/not allowed/);
   });
 
   it('lists the recent closed chats apart and lets the Regia reopen one', async () => {
@@ -409,7 +410,7 @@ describe('app control tools', () => {
     // closing too: never a chat of the other space, never the app's Regia
     await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'w' }))).rejects.toThrow(/non trovata/);
     await expect(Promise.resolve().then(() => t(work, 'app_close_chat').run({ chatId: 'a' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'ar' }))).rejects.toThrow(/Regia/);
+    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'ar' }))).rejects.toThrow(/Orchestrator/);
     expect(work.some(x => x.name === 'app_improve_state')).toBe(false);
     expect(await t(app, 'app_improve_state').run({})).toMatchObject({ repo: 'C:/code/app' });
     // no tool promotes, restarts or merges: the user presses Aggiorna
@@ -426,9 +427,9 @@ describe('app control tools', () => {
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_close_chat')!;
     expect(await t.run({ chatId: 'w' })).toBe('closed');
     expect(closed).toEqual(['w']);
-    expect(feed).toEqual([{ kind: 'chat-closed', title: 'Lavoro', detail: 'chiusa dalla Regia', chatId: 'w', who: 'claude' }]);
+    expect(feed).toEqual([{ kind: 'chat-closed', title: 'Lavoro', detail: 'chiusa dall’Orchestrator', chatId: 'w', who: 'claude' }]);
     expect(log.recent.some(e => e.msg === 'agent closed a chat' && e.chat === 'w')).toBe(true);
-    await expect(Promise.resolve(t.run({ chatId: 'r' }))).rejects.toThrow(/Regia/);
+    await expect(Promise.resolve(t.run({ chatId: 'r' }))).rejects.toThrow(/Orchestrator/);
     await expect(Promise.resolve(t.run({ chatId: 'q' }))).rejects.toThrow(/aspetta/);
     await expect(Promise.resolve(t.run({ chatId: 'nope' }))).rejects.toThrow(/non trovata/);
     expect(closed).toEqual(['w']);
@@ -449,7 +450,7 @@ describe('app control tools', () => {
     // (not an "App · …" title: the app's own chats never go to Cursor, a hard rule of the routing, ADR 0032)
     await run('r2', 'app_create_chat', { title: 'Sms · Fix', prompt: 'x', harness: 'cursor' });
     expect(made[0]).toMatchObject({ regiaOf: 'r2', harness: 'cursor' });
-    expect(String(made[0]!.prompt)).toContain('La tua Regia è «Regia · App»: scrivile con send_to_chat.');
+    expect(String(made[0]!.prompt)).toContain('Il tuo Orchestrator è «Regia · App»: scrivigli con send_to_chat.');
     // no caller or a stale one = the first Regia (test agents on /mcp/app)
     await run(undefined, 'app_create_chat', { title: 'Lavoro · Fix', prompt: 'x', harness: 'claude' });
     await run('gone', 'app_create_chat', { title: 'Lavoro · Fix 2', prompt: 'x', harness: 'claude' });

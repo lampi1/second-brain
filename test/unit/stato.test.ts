@@ -37,7 +37,7 @@ describe('statoChats', () => {
     ], { hidden: ['hidden'] }));
     expect(rows.map(r => r.id)).toEqual(['wait', 'err', 'run', 'done', 'regia']);
     expect(rows.find(r => r.id === 'err')!.lastLine).toBe('crash');
-    expect(rows.find(r => r.id === 'regia')!.name).toBe('Regia · Lavoro');
+    expect(rows.find(r => r.id === 'regia')!.name).toBe('Orchestrator · Lavoro');
   });
   it('lists what waits for the user by text (the question itself) and counts a command to run as waiting', () => {
     const q = req('a', 'q1', { type: 'question', title: 'Domanda', questions: [{ question: 'Quale ramo uso?', options: [], multiSelect: false }] });

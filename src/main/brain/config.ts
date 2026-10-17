@@ -33,8 +33,7 @@ export function fromSaved(raw: unknown): Settings {
     if (d.key === 'mute.*' || /^(engineOn|engines)\./.test(d.key)) continue;
     const v = d.key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), raw);
     if (v === undefined) continue;
-    // Corsie was retired: keep older files readable while every effective view uses Mosaico.
-    const c = validate(d.key, d.key === 'view' && v === 'corsie' ? 'mosaico' : v);
+    const c = validate(d.key, v);
     // Saved roots were canonical when the user selected them. Replacing one with a junction must not retarget consent.
     if (c.ok && d.key === 'codexAutonomyRoots') {
       const saved = v as string[], canonical = c.value as string[];
@@ -110,14 +109,15 @@ export class ConfigStore {
     this.migrateCompactWindow(raw !== undefined && raw !== null);
   }
 
-  /** Persist the retired Corsie choice explicitly, retaining the settings and history already loaded above. */
+  /** The view setting was retired (Mosaico and Corsie are gone): fromSaved ignores an old `view`; drop it from the
+   *  file once, retaining the settings and history already loaded above. */
   private migrateView(raw: unknown): void {
-    if ((raw as { view?: unknown } | null)?.view !== 'corsie') return;
+    if (!raw || typeof raw !== 'object' || !('view' in raw)) return;
     try {
       this.save(this.saved);
-      log.info('settings', 'retired Corsie view migrated to Mosaico');
+      log.info('settings', 'retired view setting removed');
     } catch (e) {
-      log.warn('settings', 'view migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'Mosaico applies for this run; the next start retries the migration' });
+      log.warn('settings', 'view removal not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old value is ignored; the next start retries' });
     }
   }
 

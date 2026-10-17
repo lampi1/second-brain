@@ -120,7 +120,7 @@ export function digest(inp: DigestInput): string {
   if (same.length) out.push('', `Invariate: ${same.join(', ')}.`);
   section(since !== null ? 'Chiuse da allora' : 'Chiuse nelle ultime 24 h', closed);
   section('Comandi eseguiti dall\'utente con Esegui', runs);
-  if (regie.length) section('Regie', regie);
+  if (regie.length) section('Orchestrator', regie);
 
   const d = inp.devops;
   if (!d || !d.at) out.push('', `DevOps: non letto dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`);

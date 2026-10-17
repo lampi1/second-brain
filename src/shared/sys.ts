@@ -71,8 +71,8 @@ export const SYS_IT = {
   'sys.handoffSavedChat': 'Passaggio di consegne salvato: «Riprendi» apre una chat nuova che parte da qui.',
   'sys.handoffSavedAuto': 'Passaggio di consegne automatico salvato (la chat non lo ha scritto): «Riprendi» apre una chat nuova che parte da qui.',
   'sys.continuedIn': (p: { title: string }) => `Il lavoro continua nella chat «${p.title}». Questa resta consultabile.`,
-  'sys.dayCompactStart': 'Giorno nuovo: compatto il contesto della Regia in un riassunto (le chat che segue e la coda restano).',
-  'sys.dayCompactFailed': 'Non sono riuscito a riassumere il contesto della Regia: ci riprovo domani; intanto si compatta da sola al limite impostato.',
+  'sys.dayCompactStart': 'Giorno nuovo: compatto il contesto dell’Orchestrator in un riassunto (le chat che segue e la coda restano).',
+  'sys.dayCompactFailed': 'Non sono riuscito a riassumere il contesto dell’Orchestrator: ci riprovo domani; intanto si compatta da solo al limite impostato.',
   'sys.handoffAsking': 'Chiedo alla chat il passaggio di consegne (un turno breve).',
   'sys.coldContinued': 'Continua da qui: sessione nuova dal passaggio di consegne (la cache della precedente era scaduta).',
 
@@ -192,8 +192,8 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.handoffSavedChat': 'Hand-off saved: "Resume" opens a new chat that starts from here.',
   'sys.handoffSavedAuto': 'Automatic hand-off saved (the chat did not write it): "Resume" opens a new chat that starts from here.',
   'sys.continuedIn': (p: { title: string }) => `The work continues in the chat "${p.title}". This one stays readable.`,
-  'sys.dayCompactStart': 'New day: compacting the Regia’s context into a summary (the chats it is following and the queue stay).',
-  'sys.dayCompactFailed': 'Could not summarise the Regia’s context: trying again tomorrow; meanwhile it compacts by itself at its set limit.',
+  'sys.dayCompactStart': 'New day: compacting the Orchestrator’s context into a summary (the chats it is following and the queue stay).',
+  'sys.dayCompactFailed': 'Could not summarise the Orchestrator’s context: trying again tomorrow; meanwhile it compacts by itself at its set limit.',
   'sys.handoffAsking': 'Asking the chat for its hand-off (a short turn).',
   'sys.coldContinued': 'Continuing from here: a new session from the hand-off (the previous one’s cache had expired).',
 

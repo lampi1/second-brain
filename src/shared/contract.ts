@@ -124,6 +124,10 @@ export interface ChatSummary {
   workSince?: number;
   pending: number;            // open questions/permissions
   isRegia: boolean;
+  /** The single coordinator of work and app improvements. Set only by main. */
+  orchestrator?: true;
+  /** The Orchestrator's former titles (migrated Regie): their mailboxes still reach it. Set only by main. */
+  mailAliases?: string[];
   /** a Regia's tab label (ADR 0021); absent on a Regia from before several Regie existed: shown "Lavoro" */
   regiaName?: string;
   /** a work chat: the Regia it answers to (the one that opened it, or the tab open when the user created it);
@@ -673,7 +677,6 @@ export interface KimiUsage {
 }
 
 // ── Settings (userData/config.json; never secrets) ─────────────────────────────────────────────────────────────────
-export type ViewMode = 'mosaico' | 'corsie';
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -687,7 +690,6 @@ export interface BudgetSettings { enabled: boolean; claude: BudgetLimits; cursor
 export interface Settings {
   brainRoot: string | null;
   mcpPort: number;
-  view: ViewMode;
   mute: Record<string, boolean>;   // feed kind → no toast (still in the feed)
   osToasts: ToastLevel;
   theme: ThemeMode;
@@ -773,10 +775,10 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
 };
 
-/** Every setting is one dot key ("view", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
+/** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
 export interface SettingDef {
@@ -1264,6 +1266,9 @@ export interface InvokeMap {
   'improve:promote': [void, ImproveState];
   /** the section's Regia: created in the code folder with its role prompt (harness/model: the user's choice) */
   'improve:regia': [{ harness: Harness; model?: string }, ChatSummary];
+  /** Read without starting an engine; ensure creates only when no coordinator exists. */
+  'orchestrator:get': [void, ChatSummary | null];
+  'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** the restart notice was read */
   'improve:dismissLaunch': [void, ImproveState];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
@@ -1352,6 +1357,7 @@ export const INVOKE_CHANNELS = [
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
+  'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve',
 ] as const satisfies readonly InvokeChannel[];

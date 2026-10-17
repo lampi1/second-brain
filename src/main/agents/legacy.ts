@@ -10,7 +10,7 @@ const EFFORTS: readonly unknown[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const LABELS: Record<RoutingRow['kind'], string> = {
   '*': 'Assistente', 'qa-run': 'Verifica', review: 'Revisione', 'bug-fix': 'Correzione bug',
   'ops-read': 'Lettura operativa', writing: 'Scrittura', triage: 'Triage', 'research-web': 'Ricerca web',
-  investigation: 'Indagine', 'app-feature': 'Sviluppo', regia: 'Regia', altro: 'Altre attività',
+  investigation: 'Indagine', 'app-feature': 'Sviluppo', regia: 'Orchestrator', altro: 'Altre attività',
 };
 
 /** Null means malformed; sorted labels make equivalent area sets share a stable identity. */

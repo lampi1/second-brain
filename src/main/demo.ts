@@ -98,7 +98,7 @@ export function seed(E: number): Seed {
     state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
   const chats: ChatSummary[] = [
-    chat({ id: 'regia', title: 'Regia', isRegia: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
+    chat({ id: 'regia', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
       lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
@@ -185,10 +185,10 @@ export function seed(E: number): Seed {
   };
   const pending: PendingRequest[] = [
     {
-      id: 'regia-q1', chatId: 'regia', type: 'question', tool: 'AskUserQuestion', title: 'Quale vista vuoi come predefinita?', detail: '', input: {}, at: E - 8 * MIN,
-      questions: [{ header: 'second-brain app', question: 'Quale vista vuoi come predefinita?', multiSelect: false, options: [
-        { label: 'Mosaico', description: 'tessere libere, i browser accanto alle loro chat' },
-        { label: 'Corsie', description: 'colonne per stato: ti aspettano, al lavoro, finite' },
+      id: 'regia-q1', chatId: 'regia', type: 'question', tool: 'AskUserQuestion', title: 'Da cosa riparto?', detail: '', input: {}, at: E - 8 * MIN,
+      questions: [{ header: 'second-brain app', question: 'Da cosa riparto?', multiSelect: false, options: [
+        { label: 'QA rimborsi', description: 'la cosa più vecchia che ti aspetta' },
+        { label: 'Note di rilascio', description: 'la bozza è pronta da rivedere' },
       ] }],
     },
     {
@@ -213,7 +213,7 @@ export function seed(E: number): Seed {
   const feed: FeedEvent[] = [
     ev('f-1', 2 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'App · Feedback', 'Permesso: npm run test:e2e', { chatId: 'feedback' }),
     ev('f-2', 4 * MIN, 'chat-waiting', 'Ti aspetta', 'urgent', 'QA · Rimborsi', 'Il test case 7 fallisce anche su master', { chatId: 'qa' }),
-    ev('f-3', 7 * MIN, 'idea', 'Idea dell\'IA', 'normal', 'Pausa automatica dei test lenti', 'Fermare i test che superano 2 minuti e chiedere se continuare', { who: 'Regia', file: 'ideas.md' }),
+    ev('f-3', 7 * MIN, 'idea', 'Idea dell\'IA', 'normal', 'Pausa automatica dei test lenti', 'Fermare i test che superano 2 minuti e chiedere se continuare', { who: 'Orchestrator', file: 'ideas.md' }),
     ev('f-4', 12 * MIN, 'error', 'Errore registrato', 'normal', '"fatto" senza screenshot', 'Una chat ha detto fatto senza guardare lo screenshot', { file: 'ai-errors.md' }),
     ev('f-5', 25 * MIN, 'chat-done', 'Chat finita', 'quiet', 'App · Mappa 3D', 'v2 in main, 14 test verdi', { chatId: 'mappa' }),
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
@@ -403,25 +403,33 @@ export class DemoChats implements ChatService {
   /** no engine: the "/" list comes from the demo's skills on disk (skills/demo.ts) */
   commands(): null { return null; }
 
-  async create(req: NewChat): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
+    // one Orchestrator, like the real manager (unifiedOrchestrator): a coordinator request returns the current one
+    // unless it replaces it; the app's Regia is folded into it
+    if (req.regia || req.appRegia) {
+      if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
+      const current = [...this.chats.values()].find(c => c.orchestrator && c.isRegia);
+      if (current && req.replaces !== current.id) return current;
+      req = { ...req, regia: true, appRegia: false, space: undefined };
+    }
     const id = `c${++this.counter}`;
     // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
-    if (req.regia && req.replaces && !old?.isRegia) throw new Error('La Regia da sostituire non c’è più.');
-    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome della Regia non valido: da 1 a 30 caratteri.');
+    if (req.regia && req.replaces && !old?.isRegia) throw new Error('L’Orchestrator da sostituire non c’è più.');
+    if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');
     const regiaName = req.regia ? cleanRegiaName(req.regiaName) ?? old?.regiaName : undefined;
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.isRegia ? req.regiaOf : undefined;
     if (old) {
-      this.patch(old.id, { isRegia: false, regiaName: undefined, regiaSince: undefined });
+      this.patch(old.id, { isRegia: false, orchestrator: undefined, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === old.id) this.patch(x.id, { regiaOf: id });
     }
     // one app Regia ("Migliora l'app"), never a work Regia: the new one takes the role
     const appRegia = req.space === 'app' && req.appRegia === true && !req.regia;
     if (appRegia) for (const c of [...this.chats.values()]) if (c.appRegia) this.patch(c.id, { appRegia: undefined });
     const c: ChatSummary = {
-      id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Regia · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
+      id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Orchestrator · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
-      ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now() } : {}),
+      ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
       ...(req.space === 'app' ? { space: 'app' as const, ...(appRegia ? { appRegia: true } : {}) } : {}),
@@ -505,8 +513,8 @@ export class DemoChats implements ChatService {
     if (!c) throw new Error('Chat non trovata.');
     if (c.isRegia) {
       const regie = regieOf([...this.chats.values()]);
-      if (opts.auto || regie.length < 2) throw new Error('La Regia non si chiude: è l’unica.');
-      if (regie[0]!.id === chatId) throw new Error('La prima Regia non si chiude: per ripartire usa Pulisci.');
+      if (opts.auto || regie.length < 2) throw new Error('L’Orchestrator non si chiude: è l’unico.');
+      if (regie[0]!.id === chatId) throw new Error('Il primo Orchestrator non si chiude: per ripartire usa Pulisci.');
       const next = regie[0]!;
       this.patch(chatId, { isRegia: false, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === chatId) this.patch(x.id, { regiaOf: next.id });
@@ -568,7 +576,7 @@ export class DemoChats implements ChatService {
   async continueChat(chatId: string): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
     if (!c) throw new Error(`demo: no chat ${chatId}`);
-    if (c.isRegia) throw new Error('La Regia non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    if (c.isRegia) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const by = c.continuedBy && this.chats.get(c.continuedBy.id);
     if (by) return by;
     const h = await this.ensureHandoff(chatId);
@@ -691,8 +699,8 @@ async function resumeSms(run: Run): Promise<void> {
 }
 
 const continueRegia: Continuation = async (run, a) => {
-  const label = picked(a, 'Quale vista vuoi come predefinita?') || 'Mosaico';
-  await run.say(`Segnato: **${label}** come vista predefinita. Puoi cambiarla quando vuoi con \`Ctrl+Shift+V\`. Adesso la cosa più vecchia che ti aspetta è la QA dei rimborsi.`);
+  const label = picked(a, 'Da cosa riparto?') || 'QA rimborsi';
+  await run.say(`Segnato: riparto da **${label}**.`);
 };
 
 const continueQa: Continuation = async (run, a) => {

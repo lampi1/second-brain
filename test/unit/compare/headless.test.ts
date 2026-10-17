@@ -69,7 +69,7 @@ describe('read-only answers (pure)', () => {
     expect(refusal('claude', { ...ON, engineOn: { claude: false } }, FAKE, env)).toMatch(/Claude è spento/);
     expect(refusal('kimi', { engineOn: { kimi: true }, engines: { kimi: true } }, FAKE_CURSOR, env)).toMatch(/Kimi è spento/); // on, but its definition never trusted
     // on, but «Le Regie possono usare Claude» off: the run comes from files agents write
-    expect(refusal('claude', { ...ON, engines: { claude: false } }, FAKE, env)).toMatch(/Le Regie possono usare Claude/);
+    expect(refusal('claude', { ...ON, engines: { claude: false } }, FAKE, env)).toMatch(/Gli Orchestrator possono usare Claude/);
     expect(refusal('nope', ON, undefined, env)).toBe('motore sconosciuto: nope');
     expect(refusal('claude', ON, undefined, env)).toMatch(/serve il fake \(SB_CLAUDE_PATH\)/);
     expect(refusal('cursor', ON, 'C:/x/agent.exe', env)).toMatch(/serve il fake/);
@@ -236,7 +236,7 @@ describe('hidden read-only runs on the fakes', { timeout: 60e3 }, () => {
     const r = await runner({ settings: () => ({ ...ON, engineOn: { claude: false, cursor: true } }) }).run(req('claude', 'ciao'));
     expect(r).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Claude è spento/) });
     const agents = await runner({ settings: () => ({ ...ON, engines: { claude: false } }) }).run(req('claude', 'ciao'));
-    expect(agents).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Le Regie possono usare Claude/) });
+    expect(agents).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Gli Orchestrator possono usare Claude/) });
     expect(await runner().run(req('claude', 'ciao', { model: 'claude-fable-1' }))).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Fable/) });
     expect(await runner().run(req('claude', 'ciao', { effort: 'max' }))).toMatchObject({ ok: false, refused: true });
     expect(fakeLog(claudeLog)).toEqual([]);

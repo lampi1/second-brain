@@ -122,12 +122,12 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   if (regiaTokens) {
     mcp.mount('/mcp/app/r/:chatId/:token', {
       name: 'app', instructions, authorize: regiaEndpointAuth(regiaTokens, () => deps.chats.list()), who: p => p.chatId,
-      tools: c => appControlTools(deps, c.params.chatId).map(as),
+      tools: c => appControlTools({ ...deps, unified: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }, c.params.chatId).map(as),
     });
   }
   mcp.mount('/mcp/improve', {
     name: 'app',
-    instructions: `"Migliora l'app": the Regia of the app's own improvements. Control and inspect ${what}, only the chats of this section; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
+    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, only the chats of this section; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
     tools: appControlTools({ ...deps, space: 'app', improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
   });
 }
@@ -314,6 +314,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const autoCloseRef: { current?: AutoCloseService } = {};
   const manager = new ChatManager({
+    unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),

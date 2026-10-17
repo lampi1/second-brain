@@ -36,6 +36,7 @@ import { BrainCreator } from './brain/create';
 import { BrainCreationController } from './brain/create-controller';
 import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
+import { OrchestratorService } from './chats/orchestrator-service';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -103,6 +104,10 @@ app.whenReady().then(async () => {
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
+  const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
+    route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
+    regiaChats: () => s.brain.settings().regiaChats,
+  });
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
     const handlers: Handlers = {
@@ -250,7 +255,9 @@ app.whenReady().then(async () => {
     // "Migliora l'app" (ADR 0020): promote and restart only on the user's click, never from an agent's tool
     'improve:get': a => (a?.refresh || !s.improve.state().at ? s.improve.refresh() : s.improve.state()),
     'improve:promote': () => s.improve.promote(),
-    'improve:regia': a => s.improve.createRegia(typeof a?.harness === 'string' && engineOf(a.harness) ? a.harness : 'claude', typeof a?.model === 'string' && a.model ? a.model : undefined),
+    'improve:regia': a => orchestrator.ensure(a),
+    'orchestrator:get': () => orchestrator.get(),
+    'orchestrator:ensure': a => orchestrator.ensure(a),
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),

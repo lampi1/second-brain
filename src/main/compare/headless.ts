@@ -199,7 +199,7 @@ export function refusal(id: Harness, settings: Pick<Settings, 'engineOn' | 'engi
   const engine = engineOf(id);
   if (!engine) return `motore sconosciuto: ${id}`;
   if (!engineOn(settings, id)) return `${engine.label} è spento nelle impostazioni (o la sua definizione è cambiata): l'app non lo avvia`;
-  if (!agentsMayOpen(settings, id)) return `le Regie non possono usare ${engine.label} (impostazione «Le Regie possono usare ${engine.label}»): il confronto non lo avvia`;
+  if (!agentsMayOpen(settings, id)) return `gli Orchestrator non possono usare ${engine.label} (impostazione «Gli Orchestrator possono usare ${engine.label}»): il confronto non lo avvia`;
   if (!(env.SB_TEST || env.VITEST)) return null;
   if (engine.kind === 'api') return /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(engine.baseUrl ?? '') ? null : `nei test ${engine.label} parte solo verso questo computer`;
   return override && /\.mjs$/i.test(override) ? null : `nei test il motore ${engine.label} reale non parte mai: serve il fake (SB_${id.toUpperCase().replace(/-/g, '_')}_PATH)`;
