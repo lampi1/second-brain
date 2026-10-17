@@ -2,6 +2,7 @@
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
 // string or, when it needs numbers or names, a function of one params object. Each area has its own pair of files in
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
+import { genuiRequestIt } from './areas/genui-request.it';
 import {studioIt}from'./areas/studio.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
@@ -11,8 +12,26 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {settingsIt}from'./areas/settings.it';
+import { homeIt } from './areas/home.it';
 
 export const it = {
+  ...homeIt,
+  ...genuiRequestIt,
+  'genui.request.question': 'Domanda',
+  'genui.request.permission': 'Permesso',
+  'genui.request.from': ({ kind, chat, title }: { kind: string; chat?: string; title: string }) => `${kind} da ${chat ?? 'una chat'}: ${title}`,
+  'genui.choice.preview': "Anteprima e dettagli",
+  'genui.cards.pros': "Vantaggi",
+  'genui.cards.cons': "Limiti",
+  'genui.table.region': "Tabella dati, scorri per leggere tutte le colonne",
+  'genui.table.links': "Collegamenti",
+  'genui.chart.data': "Dati del grafico",
+  'genui.chart.label': "Voce",
+  'genui.chart.value': "Valore",
+  'genui.chart.note': "Nota",
+  'genui.permission.once': "Consenti solo questa operazione.",
+  'genui.permission.session': "Consenti per questa sessione",
+  'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
   ...productIt,
   ...settingsIt,

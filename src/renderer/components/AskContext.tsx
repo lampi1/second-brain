@@ -60,13 +60,13 @@ function Prose({ chatId, itemId, text, docs = true }: { chatId: string; itemId: 
 
 const oneLine = (md: string) => withoutImages(md).replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`|[\]]/g, '').replace(/\(\s*(?:https?|file):[^)]*\)/g, '').replace(/\s+/g, ' ').trim();
 
-function LinkChip({ l, testid }: { l: ContextLink; testid: string }) {
+function LinkChip({ l, testid, chatId }: { l: ContextLink; testid: string; chatId: string }) {
   const tip = l.kind === 'file' ? l.href.replace(/^file:\/+/i, '') : l.href;
   if (l.kind === 'web') {
     return <a className="ctx-link" href={l.href} target="_blank" rel="noopener noreferrer" data-tip={tip} data-testid={testid}><IconGlobe size={12} /><span>{l.label}</span></a>;
   }
   return (
-    <button type="button" className="ctx-link file" onClick={() => void openFile(l.href)} data-tip={tip} data-testid={testid}>
+    <button type="button" className="ctx-link file" onClick={() => void openFile(l.href,chatId)} data-tip={tip} data-testid={testid}>
       <IconFile size={12} /><span>{l.label}</span>
     </button>
   );
@@ -146,7 +146,7 @@ function WindowContext({ req, testBase, onToggle, question, lead }: { req: Pendi
           {previews.map((p, i) => (
             <div key={i} className="ctx-piece preview">
               <div className="ctx-from">{t('chat.context.preview', { label: p.label })}</div>
-              <UiPreview text={p.text} />
+              <UiPreview text={p.text} chatId={req.chatId}/>
             </div>
           ))}
           <button type="button" className="wctx-less" onClick={() => toggle(false)} aria-expanded data-testid={`${testBase}-ctx-toggle`}>{t('chat.context.less')} <IconChevronDown size={12} className="up" /></button>
@@ -154,7 +154,7 @@ function WindowContext({ req, testBase, onToggle, question, lead }: { req: Pendi
       )}
       {links.length > 0 && (
         <div className="ctx-links" data-testid={`${testBase}-ctx-links`}>
-          {links.map((l, i) => <LinkChip key={`${l.kind}:${l.href}`} l={l} testid={`${testBase}-ctx-link-${i}`} />)}
+          {links.map((l, i) => <LinkChip key={`${l.kind}:${l.href}`} l={l} chatId={req.chatId} testid={`${testBase}-ctx-link-${i}`} />)}
         </div>
       )}
       {docs.map((d, i) => (
@@ -216,14 +216,14 @@ const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, on
           {previews.map((p, i) => (
             <div key={i} className="ctx-piece preview">
               <div className="ctx-from">{t('chat.context.preview', { label: p.label })}</div>
-              <UiPreview text={p.text} />
+              <UiPreview text={p.text} chatId={req.chatId}/>
             </div>
           ))}
         </div>
       )}
       {links.length > 0 && (
         <div className="ctx-links" data-testid={`${testBase}-ctx-links`}>
-          {links.map((l, i) => <LinkChip key={`${l.kind}:${l.href}`} l={l} testid={`${testBase}-ctx-link-${i}`} />)}
+          {links.map((l, i) => <LinkChip key={`${l.kind}:${l.href}`} l={l} chatId={req.chatId} testid={`${testBase}-ctx-link-${i}`} />)}
         </div>
       )}
     </div>

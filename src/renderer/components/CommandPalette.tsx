@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
+import { t } from '../i18n';
 import { chatName } from '@shared/regia';
 import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
@@ -20,7 +21,7 @@ import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
-  toggleMaximize, toggleRegia, askRenewRegia, askClearRegia, regiaId, toggleQuestionsModal,
+  toggleMaximize, toggleRegia, askRenewRegia, askClearRegia, regiaId, toggleQuestionsModal, newBrowser,
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
@@ -37,9 +38,10 @@ interface Cmd {
 }
 
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
+  home: <IconBrain />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, esplora: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
 };
 
 function buildCommands(): Cmd[] {
@@ -81,6 +83,7 @@ function buildCommands(): Cmd[] {
     { id: 'stato', title: 'Stato: a che punto siamo', sub: 'chat, domande in attesa, rami e le tue PR, senza token', shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: 'Prossima cosa che ti aspetta', shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
     { id: 'new', title: 'Nuova chat', shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => openModal('newChat') },
+    { id: 'new-browser', title: t('ui.newBrowser'), sub: t('ui.browserMine'), icon: <IconGlobe />, run: () => { void newBrowser(); }, text: 'browser tab scheda web' },
     { id: 'stopall', title: 'Ferma tutto', shortcut: 'Ctrl+Shift+.', icon: <IconStop />, run: stopAllAsk },
     { id: 'stop', title: 'Ferma la chat selezionata', shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
     { id: 'focus', title: u.focusMode ? 'Esci dalla modalità focus' : 'Modalità focus sulla chat selezionata', shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
@@ -109,7 +112,7 @@ function buildCommands(): Cmd[] {
     { id: 'copylink', title: 'Copia il link di questo punto', sub: currentLink(), icon: <IconLink />, run: () => { void copyLink(); } },
   ];
   for (const a of actions) out.push({ ...a, group: 'Azioni' });
-  out.push({ id: 'page:workspace', group: 'Vai a', title: 'Chat', sub: 'la griglia delle chat', shortcut: 'Ctrl+1', icon: <IconGrid />, run: () => go({ page: 'workspace' }) });
+  out.push({ id: 'page:workspace', group: 'Vai a', title: t('home.agents'), sub: t('home.workspace'), shortcut: 'Ctrl+1', icon: <IconGrid />, run: () => go({ page: 'workspace' }) });
   for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }) });
   out.push({ id: 'page:mappa', group: 'Vai a', title: 'Mappa 3D', sub: 'a tutto schermo', shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
   recentPlaces(6).forEach((p, i) => {

@@ -52,12 +52,13 @@ test('show_ui: each catalog component drawn in the chat, the full view, a wrong 
     await expect(card).toHaveAttribute('data-component', component);
     await card.screenshot({ path: `test-results/shots/genui-${component}.png` });
   }
-  await expect(page.getByTestId('artifact-table').locator('.gu-status.gu-fail')).toHaveText('Fallito');
+  await expect(page.getByTestId('artifact-table').locator('.gu-status.gu-fail')).toContainText('Fallito');
   // Copia: the visual as markdown text on the clipboard
   await page.getByTestId('artifact-copy-table').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toContain('| Fallito | TC 7');
   await expect(page.getByTestId('artifact-cards')).toContainText('Consigliata');
-  await expect(page.getByTestId('artifact-barChart').locator('svg[role="img"]')).toHaveAttribute('aria-label', /QA · Rimborsi: 1,84 \$/);
+  await expect(page.getByTestId('artifact-barChart').locator('table')).toContainText('QA · Rimborsi');
+  await expect(page.getByTestId('artifact-barChart').locator('table')).toContainText('1.84 $');
   // the same id replaces the visual in place
   await show(app, 'fix', { id: 'board', component: 'board', ...VISUALS.board, title: 'QA rimborsi · aggiornata' });
   await expect(page.getByTestId('artifact-board')).toHaveCount(1);

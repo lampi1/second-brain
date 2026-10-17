@@ -24,7 +24,7 @@ import { createPortal } from 'react-dom';
 import{t}from'../i18n';
 import { explainTool } from '@shared/explain';
 import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
-import { answerText, cleanDescription, cleanLabel, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
+import { answerText, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineOf } from '../lib/engines';
@@ -35,8 +35,9 @@ import { AskContext } from './AskContext';
 import { qwinStats } from '../lib/questions';
 import { withoutImages } from '../lib/askImages';
 import { splitAsk } from '../lib/askSplit';
-import { HarnessMark, IconCheck, IconQuestion, IconShield } from './Icons';
+import { HarnessMark, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
+import { ChoiceCard } from './genui/ChoiceCard';
 
 type Variant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
 
@@ -50,7 +51,7 @@ function RawCommand({ raw, testBase, onToggle }: { raw: string; testBase: string
       <pre className="ask-cmd" data-testid={`${testBase}-raw`}>{open ? raw : lines[0]}</pre>
       {more && (
         <button type="button" className="ask-raw-toggle" onClick={() => { setOpen(o => !o); onToggle(); }} aria-expanded={open} data-testid={`${testBase}-raw-toggle`}>
-          {open ? 'Mostra meno' : lines.length > 1 ? `Mostra tutto il comando (${lines.length} righe)` : 'Mostra tutto il comando'}
+          {open ? t('genui.request.less') : lines.length > 1 ? t('genui.request.commandLines', { count: lines.length }) : t('genui.request.command')}
         </button>
       )}
     </div>
@@ -146,7 +147,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return; // typing the "Altro…" answer
     // a command's code block on the Regia card (its buttons, its output read with the arrows): its keys stay its own
-    if ((e.target as HTMLElement).closest('.codeblock')) return;
+    if ((e.target as HTMLElement).closest('.codeblock, [data-option-preview]')) return;
     // Enter / Space on a focused button (Tab to "Rifiuta", "Invia", an option) is that button's own click
     if ((tag === 'BUTTON' || tag === 'A') && e.target !== e.currentTarget && (e.key === 'Enter' || e.key === ' ')) return;
     // Tab from the card reaches an option first, before the "Contesto" toggle and its links (Shift+Tab goes back to them)
@@ -179,71 +180,68 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   // a question's markdown images show as thumbnails (AskImages.tsx), never as ![](…) in the title
   const title = isPerm ? (ex?.line ?? req.title) : withoutImages(q?.question ?? req.title);
   const total = req.questions?.length ?? 0;
-  const stepBadge = total > 1 ? <span className="step" data-testid={`${testBase}-step`}>{draft.step + 1} di {total}</span> : null;
+  const stepBadge = total > 1 ? <span className="step" data-testid={`${testBase}-step`}>{draft.step + 1} {t('genui.request.of')} {total}</span> : null;
   const recIdx = q ? markedRecommended(q.options) : -1;
   const common = {
     ref, tabIndex: 0, onKeyDown: onKey, 'data-request-key': key, 'data-testid': testBase, 'aria-busy': sent,
-    role: 'group' as const, 'aria-label': `${isPerm ? 'Permesso' : 'Domanda'} da ${chatTitle ?? 'una chat'}: ${title}`,
+    role: 'group' as const, 'aria-label': t('genui.request.from', { kind: t(isPerm ? 'genui.request.permission' : 'genui.request.question'), chat: chatTitle, title }),
   };
 
   // the free-text box, the same in every size
   const otherBox = (compact: boolean): ReactNode => (
     <div className={`other-box ${compact ? 'compact' : ''}`} data-testid={`${testBase}-other-box`}>
-      <textarea className="other-input" autoFocus rows={compact ? 1 : 2} value={other ?? ''} placeholder="Scrivi la tua risposta" aria-label="Risposta libera" data-testid={`${testBase}-other-input`}
+      <textarea className="other-input" autoFocus rows={compact ? 1 : 2} value={other ?? ''} placeholder={t('genui.request.write')} aria-label={t('genui.request.free')} data-testid={`${testBase}-other-input`}
         onChange={e => setOther(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendOther(); }
           if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOther(); }
         }} />
-      {eng?.kind === 'acp' && !compact && <div className="other-note" data-testid={`${testBase}-other-note`}>{`${eng.label} la riceve come risposta scritta da te, al posto delle opzioni.`}</div>}
+      {eng?.kind === 'acp' && !compact && <div className="other-note" data-testid={`${testBase}-other-note`}>{t('genui.request.written', { engine: eng.label })}</div>}
       <div className="other-actions">
-        <span className="other-hint"><Kbd>Invio</Kbd> invia · <Kbd>Esc</Kbd> torna alle scelte</span>
+        <span className="other-hint"><Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.sendHint')} · <Kbd>Esc</Kbd>{' '}{t('genui.request.backHint')}</span>
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" onClick={closeOther} data-testid={`${testBase}-other-cancel`}>Annulla</button>
-        <button type="button" className="btn btn-primary btn-s" onClick={sendOther} disabled={sent || !(other ?? '').trim()} data-testid={`${testBase}-other-send`}>Invia</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={closeOther} data-testid={`${testBase}-other-cancel`}>{t('genui.request.cancel')}</button>
+        <button type="button" className="btn btn-primary btn-s" onClick={sendOther} disabled={sent || !(other ?? '').trim()} data-testid={`${testBase}-other-send`}>{t('genui.request.send')}</button>
       </div>
     </div>
   );
 
   const laterBtn = onLater ? (
     <button type="button" className="btn btn-ghost btn-s ask-later" onClick={onLater} disabled={sent} data-testid={`${testBase}-later`}
-      data-tip="Non rispondi adesso: la chat resta in attesa">Rispondi dopo{onEscape && <Kbd>Esc</Kbd>}</button>
+      data-tip={t('genui.request.laterHint')}>{t('genui.request.later')}{onEscape && <Kbd>Esc</Kbd>}</button>
   ) : null;
+
+  // One renderer for every host; disclosure actions are separate from answering.
+  const choiceCards = () => q?.options.map((option, i) => (
+    <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx}
+      picked={draft.picks.includes(i)} multi={q.multiSelect} current={i === draft.cursor} disabled={sent}
+      onChoose={() => apply(pickOption(req, draft, i))} testid={testBase + '-opt-' + (i + 1)} />
+  ));
+  const permissionCards = () => getPermissionOptions().map((option, i) => i === 1 && req.noAlways ? null : (
+    <ChoiceCard key={i} option={{ label: option.label, description: i === 0 ? t('genui.permission.once')
+      : i === 1 ? t('genui.permission.session') + (req.alwaysRules?.length ? ': ' + req.alwaysRules.join(', ') : '')
+      : t('genui.permission.deny') }} number={i + 1} tone={i === 2 ? 'deny' : undefined} disabled={sent}
+      onChoose={() => finish(permissionAnswer(i))} testid={testBase + '-opt-' + (i + 1)} />
+  ));
 
   // ---------- chips (lane, regia, compact)
   const chips = () => {
     if (isPerm) {
-      return getPermissionOptions().map((o, i) => (i === 1 && req.noAlways ? null : (
-        <button key={o.label} type="button" className={`chip-opt ${i === 0 ? 'rec' : ''} ${i === 2 ? 'deny' : ''}`} onClick={() => finish(permissionAnswer(i))} disabled={sent} data-testid={`${testBase}-opt-${i + 1}`}
-          title={i === 1 && req.alwaysRules?.length ? `Per questa sessione: ${req.alwaysRules.join(', ')}` : undefined}>
-          <Kbd>{i === 2 && onEscape ? '3' : o.hint}</Kbd><span className="chip-l">{i === 1 ? 'Sempre' : o.label}</span>
-        </button>
-      )));
+      return permissionCards();
     }
     if (!q) return null;
     if (other !== null) return otherBox(true);
     return (
       <>
-        {q.options.map((o, i) => {
-          const picked = draft.picks.includes(i);
-          return (
-            <button key={i} type="button" className={`chip-opt ${i === recIdx ? 'rec' : ''} ${picked ? 'picked' : ''} ${i === draft.cursor ? 'cur' : ''}`}
-              onClick={() => apply(pickOption(req, draft, i))} disabled={sent} title={o.description ? cleanDescription(o.description) : undefined} data-testid={`${testBase}-opt-${i + 1}`}
-              aria-pressed={q.multiSelect ? picked : undefined}>
-              {q.multiSelect ? <span className={`chip-check ${picked ? 'on' : ''}`} aria-hidden="true">{picked && <IconCheck size={10} />}</span> : <Kbd>{i + 1}</Kbd>}
-              <span className="chip-l">{cleanLabel(o.label)}</span>
-              {i === recIdx && <><span className="chip-rec" aria-hidden="true">★</span><span className="sr-only">consigliata</span></>}
-            </button>
-          );
-        })}
+        {choiceCards()}
         {canOther && (
-          <button type="button" className="chip-opt chip-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`} title="Scrivi la tua risposta">
+          <button type="button" className="chip-opt chip-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`} title={t('genui.request.write')}>
             {otherKey && <Kbd>{otherKey}</Kbd>}<span className="chip-l">{t('ui.other')}</span>
           </button>
         )}
         {q.multiSelect && (
           <button type="button" className="chip-opt chip-confirm" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>
-            <Kbd>Invio</Kbd><span className="chip-l">Conferma{draft.picks.length ? ` (${draft.picks.length})` : ''}</span>
+            <Kbd>{t('genui.request.enter')}</Kbd><span className="chip-l">{t('genui.request.confirm')}{draft.picks.length ? ` (${draft.picks.length})` : ''}</span>
           </button>
         )}
       </>
@@ -253,17 +251,17 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   // ---------- the questions window (ADR 0049): one page, read top to bottom
   if (variant === 'window') {
     qwinStats.cardRenders++;
-    const kicker = isPerm ? `Permesso · ${toolLabel(req.tool)}` : (q?.header ?? 'Domanda');
+    const kicker = isPerm ? `${t('genui.request.permission')} · ${toolLabel(req.tool)}` : (q?.header ?? t('genui.request.question'));
     // the agent's context sentence muted on top, the real question large under it (only when the split is certain)
     const split = isPerm ? null : splitAsk(title);
     return (
       <div {...common} className={`wq ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
-        {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd> scegli <Kbd>↑</Kbd><Kbd>↓</Kbd> muovi <Kbd>Invio</Kbd> conferma</>, keysTo)}
+        {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd>{' '}{t('genui.request.choose')} <Kbd>↑</Kbd><Kbd>↓</Kbd>{' '}{t('genui.request.move')} <Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.confirmHint')}</>, keysTo)}
         <div className="wq-kicker">
           {isPerm ? <IconShield size={13} /> : <IconQuestion size={13} />}
           <span data-testid={isPerm ? undefined : `${testBase}-header`}>{kicker}</span>
-          {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>domanda {draft.step + 1} di {total}</span>}
-          {q?.multiSelect && <span className="wq-step">più scelte</span>}
+          {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>{t('genui.request.question').toLowerCase()} {draft.step + 1} {t('genui.request.of')} {total}</span>}
+          {q?.multiSelect && <span className="wq-step">{t('genui.request.multiple')}</span>}
         </div>
         <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} layout="window" lead={split?.lead}
           question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>} />
@@ -271,46 +269,25 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           <>
             {/* the whole command, wrapped: it is what the user approves */}
             {rawFull && <pre className="ask-cmd wq-raw" data-testid={`${testBase}-raw`}>{rawFull}</pre>}
-            <div className="wq-perm">
-              <button type="button" className="btn btn-primary btn-l" onClick={() => finish(permissionAnswer(0))} disabled={sent} data-testid={`${testBase}-opt-1`}>Consenti <Kbd>Invio</Kbd></button>
-              {!req.noAlways && (
-                <button type="button" className="btn btn-ghost btn-l" onClick={() => finish(permissionAnswer(1))} disabled={sent} data-testid={`${testBase}-opt-2`}
-                  data-tip={req.alwaysRules?.length ? `Per questa sessione: ${req.alwaysRules.join(', ')}` : 'Per questa sessione'}>Consenti sempre <Kbd>2</Kbd></button>
-              )}
-              <span className="sp" />
-              <button type="button" className="btn btn-danger btn-l" onClick={() => finish(permissionAnswer(2))} disabled={sent} data-testid={`${testBase}-opt-3`}>Rifiuta <Kbd>3</Kbd></button>
+            <div className="wq-perm">{permissionCards()}
             </div>
           </>
         ) : q ? (
           <>
-            {commands && <div className="wq-cmds"><div className="wq-label">Comandi che la chat ti propone</div>{commands}</div>}
+            {commands && <div className="wq-cmds"><div className="wq-label">{t('genui.request.commands')}</div>{commands}</div>}
             <div className="wq-opts" role={q.multiSelect ? 'group' : undefined}>
-              {q.options.map((o, i) => {
-                const picked = draft.picks.includes(i);
-                const desc = o.description ? cleanDescription(withoutImages(o.description)) : '';
-                return (
-                  <button key={i} type="button" className={`wq-opt ${i === recIdx ? 'rec' : ''} ${picked ? 'picked' : ''} ${i === draft.cursor ? 'cur' : ''}`}
-                    onClick={() => apply(pickOption(req, draft, i))} disabled={sent} role={q.multiSelect ? 'checkbox' : undefined} aria-checked={q.multiSelect ? picked : undefined} data-testid={`${testBase}-opt-${i + 1}`}>
-                    <span className="wq-key" aria-hidden="true">{q.multiSelect && picked ? <IconCheck size={13} /> : i + 1}</span>
-                    <span className="wq-opt-text">
-                      <span className="wq-opt-label">{cleanLabel(o.label)}</span>
-                      {desc && <span className="wq-opt-desc">{desc}</span>}
-                    </span>
-                    {i === recIdx && <span className="wq-rec">Consigliata</span>}
-                  </button>
-                );
-              })}
+              {choiceCards()}
               {canOther && (other === null ? (
                 <button type="button" className="wq-opt wq-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>
                   <span className="wq-key" aria-hidden="true">{otherKey ?? '…'}</span>
-                  <span className="wq-opt-text"><span className="wq-opt-label">Rispondi a parole tue…</span></span>
+                  <span className="wq-opt-text"><span className="wq-opt-label">{t('genui.request.ownWords')}</span></span>
                 </button>
               ) : otherBox(false))}
             </div>
             {q.multiSelect && (
               <div className="wq-confirm">
-                <span className="wq-count" data-testid={`${testBase}-count`}>{draft.picks.length === 0 ? 'Nessuna scelta' : draft.picks.length === 1 ? '1 scelta' : `${draft.picks.length} scelte`}</span>
-                <button type="button" className="btn btn-primary btn-l" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>Conferma <Kbd>Invio</Kbd></button>
+                <span className="wq-count" data-testid={`${testBase}-count`}>{t('genui.request.count', { count: draft.picks.length })}</span>
+                <button type="button" className="btn btn-primary btn-l" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>{t('genui.request.confirm')} <Kbd>{t('genui.request.enter')}</Kbd></button>
               </div>
             )}
           </>
@@ -326,13 +303,13 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           {variant === 'lane' ? (
             <><HarnessMark harness={harness} size={16} /><b className="need-title">{chatTitle}</b></>
           ) : (
-            <span className="need-kind-head">{isPerm ? <IconShield size={13} /> : <IconQuestion size={13} />}{isPerm ? `Permesso · ${req.tool}` : (q?.header ?? 'Domanda')}</span>
+            <span className="need-kind-head">{isPerm ? <IconShield size={13} /> : <IconQuestion size={13} />}{isPerm ? `${t('genui.request.permission')} · ${req.tool}` : (q?.header ?? t('genui.request.question'))}</span>
           )}
           {stepBadge}
           <span className="need-age">{age}</span>
         </div>
         <div className="need-q" title={isPerm ? rawFull || title : title} data-testid={isPerm ? `${testBase}-explain` : undefined}>
-          {isPerm && variant === 'lane' ? <span className="need-kind">Permesso</span> : null}
+          {isPerm && variant === 'lane' ? <span className="need-kind">{t('genui.request.permission')}</span> : null}
           {title}
         </div>
         {isPerm && rawFull && <code className="need-raw" title={rawFull} data-testid={`${testBase}-raw`}>{rawFull.split('\n')[0]}</code>}
@@ -346,7 +323,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (variant === 'regia') {
     return (
       <div {...common} className={`decision ${sent ? 'sent' : ''}`}>
-        <div className="decision-k">Decisione{q?.header ? ` · ${q.header}` : ''}{stepBadge}</div>
+        <div className="decision-k">{t('genui.request.decision')}{q?.header ? ` · ${q.header}` : ''}{stepBadge}</div>
         <div className="decision-q" title={isPerm ? rawFull || undefined : undefined}>{title}</div>
         {isPerm && rawFull && <code className="need-raw" title={rawFull} data-testid={`${testBase}-raw`}>{rawFull.split('\n')[0]}</code>}
         <AskContext req={req} defaultOpen={!!ctxOpen} testBase={testBase} onToggle={refocus} />
@@ -365,9 +342,9 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     <div {...common} className={`ask ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
       <div className="ask-head">
         <span className="ask-icon">{isPerm ? <IconShield size={14} /> : <IconQuestion size={14} />}</span>
-        <span className="ask-kind">{isPerm ? 'Permesso' : 'Domanda'}</span>
+        <span className="ask-kind">{t(isPerm ? 'genui.request.permission' : 'genui.request.question')}</span>
         {isPerm ? <span className="ask-chip">{toolLabel(req.tool)}</span> : q?.header ? <span className="ask-chip" data-testid={`${testBase}-header`}>{q.header}</span> : null}
-        {q?.multiSelect && <span className="ask-chip soft">più scelte</span>}
+        {q?.multiSelect && <span className="ask-chip soft">{t('genui.request.multiple')}</span>}
         {stepBadge}
         <span className="sp" />
         <span className="ask-age">{age}</span>
@@ -380,35 +357,13 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       {isPerm ? (
         <>
           {rawFull && <RawCommand raw={rawFull} testBase={testBase} onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
-          <div className="ask-actions">
-            <button type="button" className="btn btn-primary btn-m" onClick={() => finish(permissionAnswer(0))} disabled={sent} data-testid={`${testBase}-opt-1`}>Consenti <Kbd>Invio</Kbd></button>
-            {!req.noAlways && (
-              <button type="button" className="btn btn-ghost btn-m" onClick={() => finish(permissionAnswer(1))} disabled={sent} data-testid={`${testBase}-opt-2`}
-                data-tip={req.alwaysRules?.length ? `Per questa sessione: ${req.alwaysRules.join(', ')}` : 'Per questa sessione'}>Consenti sempre <Kbd>2</Kbd></button>
-            )}
-            <span className="sp" />
-            <button type="button" className="btn btn-danger btn-m" onClick={() => finish(permissionAnswer(2))} disabled={sent} data-testid={`${testBase}-opt-3`}>Rifiuta <Kbd>{onEscape ? '3' : 'Esc'}</Kbd></button>
+          <div className="ask-actions">{permissionCards()}
           </div>
         </>
       ) : q ? (
         <>
           <div className="ask-opts" role={q.multiSelect ? 'group' : undefined}>
-            {q.options.map((o, i) => {
-              const picked = draft.picks.includes(i);
-              return (
-                <button key={i} type="button" className={`ask-opt ${i === recIdx ? 'rec' : ''} ${picked ? 'picked' : ''} ${i === draft.cursor ? 'cur' : ''}`}
-                  onClick={() => apply(pickOption(req, draft, i))} disabled={sent} role={q.multiSelect ? 'checkbox' : undefined} aria-checked={q.multiSelect ? picked : undefined} data-testid={`${testBase}-opt-${i + 1}`}>
-                  {q.multiSelect
-                    ? <span className={`ask-check ${picked ? 'on' : ''}`} aria-hidden="true">{picked && <IconCheck size={11} />}</span>
-                    : <Kbd>{i + 1}</Kbd>}
-                  <span className="ask-opt-text">
-                    <span className="ask-opt-label">{cleanLabel(o.label)}{i === recIdx && <span className="rec-tag">Consigliata</span>}</span>
-                    {o.description && cleanDescription(withoutImages(o.description)) && <span className="ask-opt-desc">{cleanDescription(withoutImages(o.description))}</span>}
-                  </span>
-                  {q.multiSelect && <span className="ask-opt-num"><Kbd>{i + 1}</Kbd></span>}
-                </button>
-              );
-            })}
+            {choiceCards()}
             {canOther && (other === null ? (
               <button type="button" className="ask-opt ask-opt-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>
                 {otherKey ? <Kbd>{otherKey}</Kbd> : <span className="ask-check" aria-hidden="true" />}
@@ -421,13 +376,13 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           </div>
           {q.multiSelect ? (
             <div className="ask-foot">
-              <span className="ask-hint" data-testid={`${testBase}-count`}>{draft.picks.length === 0 ? 'Nessuna scelta' : draft.picks.length === 1 ? '1 scelta' : `${draft.picks.length} scelte`} · <Kbd>1</Kbd>–<Kbd>{n}</Kbd> per scegliere</span>
+              <span className="ask-hint" data-testid={`${testBase}-count`}>{t('genui.request.count', { count: draft.picks.length })} · <Kbd>1</Kbd>–<Kbd>{n}</Kbd>{' '}{t('genui.request.toChoose')}</span>
               <span className="sp" />
-              <button type="button" className="btn btn-primary btn-m" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>Conferma <Kbd>Invio</Kbd></button>
+              <button type="button" className="btn btn-primary btn-m" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>{t('genui.request.confirm')} <Kbd>{t('genui.request.enter')}</Kbd></button>
             </div>
           ) : other === null && (
             <div className="ask-foot">
-              <span className="ask-hint"><Kbd>1</Kbd>–<Kbd>{n}</Kbd> scegli · <Kbd>↑</Kbd><Kbd>↓</Kbd> muovi · <Kbd>Invio</Kbd> conferma</span>
+              <span className="ask-hint"><Kbd>1</Kbd>–<Kbd>{n}</Kbd>{' '}{t('genui.request.choose')} · <Kbd>↑</Kbd><Kbd>↓</Kbd>{' '}{t('genui.request.move')} · <Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.confirmHint')}</span>
             </div>
           )}
         </>

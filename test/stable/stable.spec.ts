@@ -12,7 +12,7 @@ import path from 'node:path';
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
-const SECTIONS = ['fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'esplora'];
+const SECTIONS = ['fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto'];
 
 test('the packaged stable copy finds the brain by itself and every section shows data', async () => {
   test.setTimeout(600000);

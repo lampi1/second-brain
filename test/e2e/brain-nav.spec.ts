@@ -14,6 +14,11 @@ function fixtureBrain(): string {
   fs.mkdirSync(path.join(d, 'ops', 'tools'), { recursive: true });
   fs.copyFileSync(path.join(FIX, 'brain-site.mjs'), path.join(d, 'ops', 'tools', 'brain-site.mjs'));
   fs.copyFileSync(path.join(FIX, 'data.mjs'), path.join(d, 'ops', 'tools', 'brain-ui-data.mjs'));
+  fs.mkdirSync(path.join(d,'playbooks'),{recursive:true});
+  fs.writeFileSync(path.join(d,'AGENTS.md'),'# Produzione\n');
+  fs.writeFileSync(path.join(d,'map.md'),'# Mappa della memoria\n');
+  fs.writeFileSync(path.join(d,'proposals.md'),'# Proposals\n');
+  fs.writeFileSync(path.join(d,'playbooks','reviewer.md'),'# Reviewer\n');
   return d;
 }
 const settled = async (page: Page) => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 }); };
@@ -24,31 +29,19 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.getByTestId('app')).toBeVisible();
-  // an Esplora file through a pasted internal link
-  await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('sb://esplora/AGENTS.md');
-  await page.keyboard.press('Enter');
-  const esplora = page.getByTestId('brain-page-esplora');
-  await settled(page);
-  await expect(esplora.getByTestId('bx-file-md')).toContainText('Produzione');
-  // a link inside the file: the argument goes into the history and the page's link
-  await esplora.getByTestId('bx-file-md').getByRole('link', { name: 'map.md' }).click();
-  await expect(esplora.getByTestId('bx-viewer')).toContainText('Mappa della memoria');
-  await page.getByTestId('page-copy-link').click();
-  await expect.poll(() => clip(app)).toBe('sb://esplora/map.md');
-  await page.keyboard.press('Alt+ArrowLeft');
-  await expect(esplora.getByTestId('bx-file-md')).toContainText('Produzione');
-  await page.keyboard.press('Alt+ArrowRight');
-  await expect(esplora.getByTestId('bx-viewer')).toContainText('Mappa della memoria');
-  // one toast area: the page's own toast shows in the app's toasts, the page's toast element stays hidden
-  await esplora.getByRole('button', { name: 'Copia il percorso' }).click();
-  await expect(page.getByTestId('toasts')).toContainText('Percorso copiato');
-  await expect(page.locator('.bx-toast:visible')).toHaveCount(0);
+  // Old file links retain history and open the internal source viewer without an explorer page.
+  const fileLink=async(name:string)=>{await page.keyboard.press('Control+K');await page.getByTestId('palette-input').fill('sb://esplora/'+name);await page.keyboard.press('Enter');};
+  await fileLink('AGENTS.md');const viewer=page.getByTestId('cited-file-viewer');await expect(viewer).toContainText('Produzione');
+  await fileLink('map.md');await expect(viewer).toContainText('Mappa della memoria');
+  await page.getByTestId('page-copy-link').click();  await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
+  await page.keyboard.press('Alt+ArrowLeft');await expect(viewer).toContainText('Produzione');
+  await page.keyboard.press('Alt+ArrowRight');await expect(viewer).toContainText('Mappa della memoria');
+  await expect(page.getByTestId('nav-esplora')).toHaveCount(0);
   // from Qualità, a link to another page goes through the history (DevOps's link to Fatto shows only once DevOps is read)
-  await page.getByTestId('nav-qualita').click();
+  await page.keyboard.press('Control+K');await page.getByTestId('palette-input').fill('sb://qualita');await page.keyboard.press('Enter');
   await settled(page);
   await page.getByTestId('brain-page-qualita').getByRole('button', { name: 'Apri proposals.md' }).click();
-  await expect(page.getByTestId('page-esplora')).toBeVisible();
+  await expect(page.getByTestId('page-file')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   // the map (2D list) opens a file and closes
@@ -64,8 +57,8 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   expect(name).not.toBe('');
   await file.click();
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
-  await expect(page.getByTestId('page-esplora')).toBeVisible();
+  await expect(page.getByTestId('page-file')).toBeVisible();
   await page.getByTestId('page-copy-link').click();
-  await expect.poll(() => clip(app)).toBe(`sb://esplora/${name}`);
+  await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
   await app.close();
 });

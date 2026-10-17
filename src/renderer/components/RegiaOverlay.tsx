@@ -27,6 +27,7 @@ import {AgentAvatar}from'./AgentAvatar';
 import {t}from'../i18n';
 import { IconArrowUp, IconList, IconMinimize, IconPlus } from './Icons';
 import { IconButton } from './ui';
+import { useGuideCenter } from '../../modules/ai-first/presentation-hooks';
 
 const questions = (n: number) => (n === 1 ? '1 domanda' : `${n} domande`);
 
@@ -68,9 +69,10 @@ function useDockSize(): DockSize {
 
 /** The room the workspace leaves the widget in the bottom-right corner (App.tsx pads by it). */
 export function useDockReserve(): Reserve {
+  const hasRegia=useApp(s=>regiaTabsOf(s).length>0),guideCenter=useGuideCenter(hasRegia);
   const open = ui.use(s => s.prefs.regiaOpen);
   const placement=ui.use(s=>s.prefs.regiaPlacement),map=ui.use(s=>s.map),size=useDockSize();
-  const r:Reserve=reserveOf(open,size,placement,!!map);
+  const r:Reserve=guideCenter?{right:0,bottom:0,top:0}:reserveOf(open,size,placement,!!map);
   useEffect(() => { scheduleLayer(); }, [r.right, r.bottom,r.top]); // native cards share the same geometry
   return r;
 }
@@ -100,6 +102,7 @@ function DockBar({ regie, waiting, active }: { regie: readonly string[]; waiting
 export function RegiaOverlay() {
   const placement=ui.use(s=>s.prefs.regiaPlacement),map=ui.use(s=>s.map);
   const regie = useApp(regiaTabsOf, sameList);
+  const guideCenter=useGuideCenter(regie.length>0);
   const labels = useApp(s => regie.map(id => regiaLabel(s.chats[id] ?? {})), sameList);
   const busy = useApp(s => regie.map(id => { const c = s.chats[id]; return !!c && isBusy(c); }), sameList);
   const waiting = useWaiting(regie);
@@ -111,7 +114,7 @@ export function RegiaOverlay() {
   const size = useDockSize();
   const [live, setLive] = useState<DockSize | null>(null); // while resizing
   // a browser view under the widget hides while it is there (the reserve keeps tiles out of its corner anyway)
-  useLayoutEffect(() => (ref.current ? registerOverlay(ref.current) : undefined), [open,map,placement]);
+  useLayoutEffect(() => (!guideCenter && ref.current ? registerOverlay(ref.current) : undefined), [open,map,placement,guideCenter]);
   // collapsed while a reply streams: it is not seen yet (setRegiaOpen marked everything up to now)
   useEffect(() => {
     if (open) return;
@@ -143,7 +146,7 @@ export function RegiaOverlay() {
     e.preventDefault();
   };
 
-  if(map&&placement==='top')return null;
+  if(guideCenter||(map&&placement==='top'))return null;
   const location:CSSProperties=placement==='top'?{left:viewport().left+8,top:viewport().top+8,right:'auto',bottom:'auto'}:{};
   if (!open) {
     return (

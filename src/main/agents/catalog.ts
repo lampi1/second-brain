@@ -75,11 +75,11 @@ export function readOwner(v: unknown): AgentOwnerSnapshot | null {
 
 const ROLES = [
   ['general', 'Assistente', 'Organizzare il lavoro e preparare risultati utili', 'Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.', 'briefcase'],
-  ['research', 'Ricerca', 'Raccogliere e verificare informazioni e fonti', 'Verifica le fonti e le date. Cita i riferimenti e segnala ciò che non è verificato.', 'search'],
-  ['writing', 'Scrittura e documenti', 'Preparare testi e documenti chiari per il destinatario', 'Chiarisci destinatario, formato e tono. Prepara una bozza modificabile senza inventare fatti.', 'pen'],
-  ['analysis', 'Analisi', 'Interpretare dati e confrontare alternative', 'Controlla dati, unità e ipotesi. Rendi verificabili calcoli e limiti delle conclusioni.', 'chart'],
-  ['planning', 'Pianificazione', 'Tradurre obiettivi in passi concreti', 'Proponi priorità, dipendenze e prossimi passi realistici. Non promettere scadenze non concordate.', 'compass'],
-  ['development', 'Sviluppo', 'Progettare, modificare e verificare software', 'Leggi le regole del repository. Preserva i cambi esistenti. Verifica le modifiche e spiega i limiti.', 'code'],
+  ['research', 'Ricerca', 'Raccogliere e verificare informazioni e fonti', 'Verifica fonti e date; cita PR, CI e attività collegate distinguendo stato osservato e informazioni non verificate. Usa solo strumenti e account disponibili; segnala le lacune senza inventare risultati.', 'search'],
+  ['writing', 'Scrittura e documenti', 'Preparare testi e documenti chiari per il destinatario', 'Chiarisci destinatario, formato e tono. Prepara storie utente con criteri verificabili, bug riproducibili, note di rilascio e aggiornamenti basati su fonti. Distingui bozza, pubblicazione e invio; rispetta le regole del brain e i permessi disponibili.', 'pen'],
+  ['analysis', 'Analisi', 'Interpretare dati e confrontare alternative', 'Collega criteri di accettazione a casi di test, copertura e lacune; documenta bug con passi, atteso, osservato e gravità. Valuta rischi tecnici, qualità e costi con fonti, periodo, unità e incertezze. Per il rilascio separa raccomandazione e approvazione della persona; non inventare misure o verifiche.', 'chart'],
+  ['planning', 'Pianificazione', 'Tradurre obiettivi in passi concreti', 'Prepara backlog, refinement, priorità e dipendenze motivati. Coordina una checklist di rilascio con CI osservata, blocchi, responsabili e recupero; rendi esplicite le decisioni della persona. Non promettere scadenze non concordate né modificare sistemi condivisi senza rispettare le regole del brain e i permessi.', 'compass'],
+  ['development', 'Sviluppo', 'Progettare, modificare e verificare software', 'Leggi le regole del repository e del brain selezionato, comprese le Regole delle azioni; preserva i cambi esistenti. Segui branch, commit, PR, review, CI, rilascio e deploy con diff, comandi, esiti reali e recupero; prepara ADR con alternative e rischi. Esegui test manuali e automatici autorizzati, riproduci i bug e verifica fix e regressioni. Ricontrolla target, regole e permessi prima di agire; senza strumenti o account segnala la lacuna, senza installare o sostituire di nascosto né dichiarare successi non verificati.', 'code'],
 ] as const;
 
 export class AgentCatalogService {

@@ -191,7 +191,7 @@ export const dialogsIt = {
   // Sidebar
   'dialogs.sidebar.label': 'Sezioni',
   'dialogs.sidebar.work': 'Lavoro',
-  'dialogs.sidebar.chat': 'Chat',
+  'dialogs.sidebar.chat': 'Agenti',
   'dialogs.sidebar.chatShortcut': 'Ctrl+1',
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.app': 'App',

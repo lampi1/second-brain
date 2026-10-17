@@ -9,7 +9,8 @@ import{setLang}from'../../src/renderer/i18n';
 const mock=vi.hoisted(()=>({state:{} as Record<string,unknown>,ui:{prefs:{theme:'system',density:'comfortable',appearance:{version:1,preset:'standard',templates:{agents:'grid'}}}},setSetting:vi.fn()}));
 vi.mock('../../src/renderer/store/store',()=>({useApp:(select:(state:Record<string,unknown>)=>unknown)=>select(mock.state),setSetting:mock.setSetting}));
 // The app is client-only: supply an explicit frozen preference seed for SSR, without altering production stores.
-vi.mock('../../src/renderer/store/ui',()=>({ui:{use:(select:(state:typeof mock.ui)=>unknown)=>select(mock.ui)},setPrefs:vi.fn(),savePrefs:vi.fn(),openModal:vi.fn(),toast:vi.fn()}));
+vi.mock('../../src/renderer/store/ui',()=>({BRAIN_PAGES:[],ui:{use:(select:(state:typeof mock.ui)=>unknown)=>select(mock.ui)},setPrefs:vi.fn(),savePrefs:vi.fn(),openModal:vi.fn(),toast:vi.fn()}));
+vi.mock('../../src/renderer/store/agents',()=>({useAgents:()=>({catalog:null,error:null})}));
 import{SettingsPage}from'../../src/renderer/components/SettingsPage';
 beforeEach(()=>{mock.setSetting.mockClear();mock.state={settings:{...defaults(),engineOn:{claude:false},engines:{claude:false}},info:{engines:[{id:'claude',name:'Claude Code',kind:'claude',trusted:true,key:'none'}]}};setLang('it');});
 it('inventories every current schema setting without changing protection or defaults',()=>{

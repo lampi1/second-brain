@@ -10,6 +10,8 @@ import type { EventMap, Harness, PendingRequest } from '@shared/contract';
 import type { DiscussBridge } from './brain';
 import { setDraft } from './components/ChatInput';
 import { sb } from './sb';
+import { t } from './i18n';
+import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
 import { freezeClock, now } from './lib/clock';
 import { setReporting } from './lib/viewports';
 import { floatsBehindPopup, focusLayer, inLayer, regiaCardOnScreen, visibleRequestKeys } from './lib/layer';
@@ -23,8 +25,8 @@ import { answerLater, openQueue } from './lib/later';
 import { newAppRegia, showAppChat } from './store/improve';
 import { engineCan, engineLabel } from './lib/engines';
 import {
-  askConfirm, flashTile, highlight, isBrainPage, openInColumn, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setPair, setRead, setRegiaOpen, setRegiaTab, setView, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, type Place,
+  askConfirm, closeModal, flashTile, highlight, isBrainPage, openInColumn, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
+  openRegiaRenew, setPair, setRead, setRegiaOpen, setRegiaTab, setView, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Regia of the tab shown in the overlay (the first Regia when that tab is gone). */
@@ -141,15 +143,15 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'devops', home: 'devops', adesso: 'devops', dafare: 'devops', diario: 'fatto', grid: 'workspace', chat: 'workspace', chats: 'workspace', map: 'mappa', spunti: 'idee' };
+const ALIAS: Record<string, string> = { oggi: 'devops', adesso: 'devops', dafare: 'devops', diario: 'fatto', grid: 'workspace', chat: 'workspace', chats: 'workspace', map: 'mappa', spunti: 'idee',esplora:'file' };
 
 /** Go to a place: the chat grid, a brain page or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
   if (page !== 'workspace' && page !== 'mappa' && !isBrainPage(page)) { toast(`Pagina sconosciuta: ${place.page}`, 'warn'); return; }
-  const target: Place = { page, arg: (place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
+  const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
   if (page === 'mappa') setMap(true, target.arg ?? null);
-  else { setMap(false); openPage(page === 'workspace' ? null : page, target.arg ?? null); }
+    else { setMap(false); openPage(target.page === 'workspace' ? null : target.page as BrainPageId, target.arg ?? null); }
   if (page !== 'mappa') setRead(r => visitSection(visitSection(r, page, now()), page, now()));
   if (opts.push !== false) {
     ui.set(s => {
@@ -352,8 +354,18 @@ export async function openInAppBrowser(url: string): Promise<void> {
     const tab = await sb.invoke('browser:open', { url, ownerChatId: null });
     showTab(tab.id);
   } catch (e) {
-    toast(`Link non aperto: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    toast(t('ui.browserOpenError',{error:e instanceof Error ? e.message : String(e)}), 'err');
   }
+}
+
+/** Explicit user action from the toolbar/palette: an unowned blank tab, using existing native browser isolation. */
+export function newBrowser():Promise<void>{return openInAppBrowser('about:blank');}
+
+/** Opening a file is navigation only. Main resolves its scope when Esplora requests the bounded contents. */
+export function openFileViewer(raw:string,chatId?:string):void{
+  // A Regia artifact remains mounted across page navigation; release its focus trap before showing the file.
+  if(ui.get().modal==='visual')closeModal();
+  go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
 }
 
 /** "Apri" on a chat a Regia opened or wrote to (ChatRefChips, ADR 0034): that chat on screen from any place; a closed
@@ -489,6 +501,8 @@ export function nextThing(from?: string): void {
   const hidden = new Set(ui.get().hidden);
   const list = app.get().pending.filter(p => !hidden.has(p.chatId));
   if (!list.length) { toast('Niente ti aspetta adesso', 'ok'); return; }
+  // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
+  if (ui.get().later) { openQueue(null); return; }
   const active = from ?? (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
   const i = list.findIndex(p => reqKey(p) === active);
   focusRequest(list[(i + 1) % list.length]!);

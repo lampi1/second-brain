@@ -52,6 +52,6 @@ test('Ctrl+K: messages, branches and brain files, grouped; Enter reopens a close
   for (let i = 0; i < 20 && !(await active.getAttribute('data-testid'))?.startsWith('palette-item-found:brain:'); i++) await page.getByTestId('palette-input').press('ArrowDown');
   await expect(active).toHaveAttribute('data-testid', 'palette-item-found:brain:runbook/rimborsi.md');
   await page.getByTestId('palette-input').press('Enter');
-  await expect(page.getByTestId('brain-page-esplora')).toBeVisible();
+  await expect(page.getByTestId('brain-page-file')).toBeVisible();
   await app.close();
 });

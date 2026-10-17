@@ -5,7 +5,8 @@
 // snapshot fills the placeholder, so overlays and screenshots show the page instead of a hole. An open hand-off (the
 // chat waits for the user: login, MFA) shows its banner between the header and the page (HandoffBanner.tsx).
 // Used by Mosaico, Corsie (the big browser next to its chat) and the focus view.
-import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { t } from '../i18n';
 import { registerView } from '../lib/viewports';
 import { closeTab, goTab, navigateTab, useApp } from '../store/store';
 import { setFocused, ui } from '../store/ui';
@@ -24,7 +25,7 @@ function splitUrl(url: string): { host: string; rest: string } {
   } catch { return { host: url, rest: '' }; }
 }
 
-export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tabId: string; maximized?: boolean }) {
+export const BrowserTile = memo(function BrowserTile({ tabId, maximized, grip }: { tabId: string; maximized?: boolean; grip?: ReactNode }) {
   const tab = useApp(s => s.tabs.find(t => t.id === tabId));
   const owner = useApp(s => (tab?.ownerChatId ? s.chats[tab.ownerChatId] : undefined));
   const key = `browser:${tabId}`;
@@ -43,17 +44,18 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(tab.ownerChatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
+          {grip}
           <span className="bt-icon" aria-hidden="true">{tab.loading ? <IconSpinner size={14} /> : <IconGlobe size={14} />}</span>
           {editing ? (
-            <input className="url-input" defaultValue={tab.url} autoFocus aria-label="Indirizzo" data-testid={`browser-url-input-${tabId}`}
+            <input className="url-input" defaultValue={tab.url==='about:blank'?'':tab.url} placeholder={t('ui.browserAddress')} autoFocus aria-label={t('ui.browserAddress')} data-testid={`browser-url-input-${tabId}`}
               onKeyDown={e => {
                 if (e.key === 'Enter') { const v = e.currentTarget.value.trim(); if (v) void navigateTab(tabId, /^[a-z]+:/i.test(v) ? v : `https://${v}`); setEditing(false); }
                 if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); }
               }}
               onBlur={() => setEditing(false)} />
           ) : (
-            <button type="button" className="url" onClick={() => setEditing(true)} title={tab.url} data-testid={`browser-url-${tabId}`} aria-label={`Indirizzo ${tab.url}, modifica`}>
-              <span className="url-host">{host}</span><span className="url-rest">{rest}</span>
+            <button type="button" className="url" onClick={() => setEditing(true)} title={tab.url} data-testid={`browser-url-${tabId}`} aria-label={t('ui.browserEditAddress')}>
+              <span className="url-host">{tab.url==='about:blank'?t('ui.browserAddress'):host}</span><span className="url-rest">{tab.url==='about:blank'?'':rest}</span>
             </button>
           )}
           <span className="bt-nav">
@@ -70,7 +72,7 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
           {owner ? (
             <span className="drv"><span className="drv-of">di:</span><button type="button" className="pair-chip" onClick={() => focusChat(owner.id)} data-testid={`browser-owner-${tabId}`}
               aria-label={`Browser della chat ${owner.title}: vai alla chat`} data-tip="Vai alla chat che guida questo browser"><span className="pair-dot" aria-hidden="true" /><span className="pair-name">{owner.title}</span></button></span>
-          ) : <span className="drv mine">la tua scheda</span>}
+          ) : <span className="drv mine">{t('ui.browserMine')}</span>}
           {tab.lastAction && <span className="last-action" data-testid={`browser-action-${tabId}`}>{tab.lastAction}</span>}
         </div>
       </header>

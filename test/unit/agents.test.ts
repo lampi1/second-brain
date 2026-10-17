@@ -13,6 +13,18 @@ const choices = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', 
 const draft = (): AgentDraft => ({ name: 'Ricerca', purpose: 'Controllare fonti', instructions: 'Cita le fonti.', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'search' }, effort: 'medium' });
 
 describe('Agent catalog and local setup', () => {
+  it('adds concrete duties only to fresh seeds and preserves customized default identities on reload', () => {
+    const dir = tmp(), service = new AgentCatalogService({ userData: dir, models: choices });
+    const profiles = service.list().profiles;
+    for (const [id, word] of [['research', 'CI'], ['writing', 'criteri'], ['analysis', 'copertura'], ['planning', 'backlog'], ['development', 'ADR']]) {
+      expect(profiles.find(p => p.id === `default-${id}`)?.instructions).toContain(word);
+    }
+    expect(profiles.find(p => p.id === 'default-general')?.instructions).toBe('Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.');
+    service.save({ ...draft(), instructions: 'My customized workflow' }, 'default-development');
+    const file = path.join(dir, 'agents.json'), before = fs.readFileSync(file, 'utf8');
+    expect(new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === 'default-development')?.instructions).toBe('My customized workflow');
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  });
   it('offers professional defaults without inventing installed models or login', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices }).list();
     expect(c.profiles).toHaveLength(6);

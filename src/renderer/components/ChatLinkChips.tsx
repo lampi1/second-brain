@@ -8,6 +8,8 @@ import { memo, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '@shared/contract';
 import { extractDevLinks, linkKindLabel, linkLabel, type DevLink } from '../lib/devlinks';
 import { useDevops } from '../store/devops';
+import { useApp } from '../store/store';
+import type { AppState } from '../store/state';
 import { MenuItem, Popover } from './ui';
 
 const MAX_CHIPS = 4;
@@ -17,9 +19,21 @@ const openLink = (l: DevLink): void => { window.open(l.url, '_blank', 'noopener'
 
 const tipOf = (l: DevLink) => `${linkKindLabel(l)} ${l.id}${l.title ? `: ${l.title}` : ''}\n${l.url}\nSi apre nel browser di sistema`;
 
-export const ChatLinkChips = memo(function ChatLinkChips({ chatId, items }: { chatId: string; items: readonly ChatItem[] | undefined }) {
+export const ChatLinkChips = memo(function ChatLinkChips({ chatId }: { chatId: string }) {
   const devops = useDevops(s => s);
-  const links = useMemo(() => (items?.length ? extractDevLinks(items, devops) : []), [items, devops]);
+  const select = useMemo(() => {
+    let previous: readonly ChatItem[] | undefined, links: DevLink[] = [];
+    return (s: AppState) => {
+      const items = s.items[chatId];
+      if (items !== previous) { previous = items; links = items?.length ? extractDevLinks(items, devops) : []; }
+      return links;
+    };
+  }, [chatId, devops]);
+  // Mention timestamps affect sorting, not chip rendering; equal visual links keep the entire header asleep.
+  const links = useApp(select, (a, b) => a.length === b.length && a.every((link, i) => {
+    const other = b[i]!;
+    return link.kind === other.kind && link.id === other.id && link.url === other.url && link.title === other.title && link.type === other.type;
+  }));
   const more = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   if (!links.length) return null;

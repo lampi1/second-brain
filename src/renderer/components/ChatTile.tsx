@@ -6,8 +6,8 @@
 // (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
 // A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by Mosaico, Corsie and the
 // focus view.
-import { memo, useEffect, useRef, useState } from 'react';
-import type { ChatItem, PendingRequest } from '@shared/contract';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
@@ -25,7 +25,8 @@ import { AgentIdentity } from './AgentIdentity';
 import { AgentAvatar } from './AgentAvatar';
 import { AutoCloseNotice } from './AutoCloseNotice';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
-import { ItemList, turnActivity, Typing } from './ChatItems';
+import { turnActivity, Typing } from './ChatItems';
+import { ChatTranscript } from './ChatTranscript';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
@@ -34,7 +35,6 @@ import { questionsModalOn } from '../lib/questions';
 import { IconAlert, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
-const EMPTY_ITEMS: readonly ChatItem[] = [];
 // the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
 // next tile's ✕ lands under the pointer, so a double click would close two tiles. Not a time window: one swallowed a
 // deliberate ✕ right after a close and Annulla (close-fast.spec)
@@ -61,9 +61,9 @@ export function useFlash(key: string): boolean {
   return on;
 }
 
-export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean }) {
+export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus, grip }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean; grip?: ReactNode }) {
   const chat = useApp(s => s.chats[chatId]);
-  const items = useApp(s => s.items[chatId]);
+  const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   const inWindow = useApp(questionsModalOn);
   const queued = ui.use(s => s.later);
@@ -110,6 +110,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
+          {grip}
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
           <StatePill chat={chat} testid={`chat-state-${chatId}`} />
@@ -140,19 +141,14 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
         </div></details>
-        {!compact && <ChatLinkChips chatId={chatId} items={items} />}
+        {!compact && <ChatLinkChips chatId={chatId} />}
       </header>
       <AutoCloseNotice chatId={chatId} />
-      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={turnActivity(items)} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}<button type="button" className="link-btn" onClick={()=>reveal(true)}>{t('product.write')}</button></div>}
+      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={activity} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}<button type="button" className="link-btn" onClick={()=>reveal(true)}>{t('product.write')}</button></div>}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
-      {items === undefined ? (
-        <div className="items-wrap"><div className="items skeleton" aria-label="Caricamento"><i /><i /><i className="short" /></div></div>
-      ) : (
-        <ItemList chatId={chatId} items={items ?? EMPTY_ITEMS} empty="Nessun messaggio ancora: scrivi qui sotto da dove partire."
-          footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} /> : null} />
-      )}
+      <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       </div></div>
       {reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (

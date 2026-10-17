@@ -118,6 +118,7 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]),
 .topbar[data-fit~="4"] [data-testid="usage-kimi"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-kimi"]) { display: none; }
 .topbar[data-fit~="5"] .topbar-main .btn-primary > span { display: none; }
+.topbar[data-fit~="1"] .new-browser > span { display: none; }
 .topbar[data-fit~="6"] [data-testid="view-toggle"] { display: none; }
 .brand { display: flex; align-items: center; gap: 9px; font: 600 14px var(--font-display); letter-spacing: -0.005em; padding-right: 4px; white-space: nowrap; }
 

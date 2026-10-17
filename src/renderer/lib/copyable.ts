@@ -5,8 +5,10 @@
 // reviewers' reports), which lineless() takes away before the file is read or opened. Pure; used by lib/markdown.ts
 // (it marks the code elements) and LinkPeek.tsx; pinned by test/unit/copyable.test.ts.
 
+import { fileReference } from '@shared/file-view';
+
 /** "C:\x\a.ts:12:3" → "C:\x\a.ts" (a path's line and column suffix). */
-export const lineless = (s: string): string => s.trim().replace(/:\d+(?::\d+)?$/, '');
+export const lineless = (s: string): string => fileReference(s).path;
 
 /** A Windows absolute path, a file: URL or a relative path with a folder and a file extension (src/a.ts, .\x\y.md),
  *  optionally with :line(:col). */

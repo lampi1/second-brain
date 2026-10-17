@@ -1,13 +1,22 @@
+// Local setup preferences and resumable guide identity, never account credentials or permission grants.
 import path from 'node:path';
-import type { SetupDraft, SetupState } from '../../shared/agents';
+import type { SetupDraft, SetupState, SetupGuide } from '../../shared/agents';
 import { readLocal, writeLocal } from './local-store';
 
 const blank = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] });
 export function checkSetup(value: unknown): SetupDraft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Preferenze non valide.');
   const v = value as Record<string, unknown>;
+  let guide: SetupGuide | undefined;
+  if (v.guide !== undefined) {
+    if (!v.guide || typeof v.guide !== 'object' || Array.isArray(v.guide)) throw new Error('Guida non valida.');
+    const g = v.guide as Record<string, unknown>;
+    if (g.stage === 'fallback' || g.stage === 'choosing') guide = { stage: g.stage };
+    else if (['connecting', 'guided'].includes(String(g.stage)) && ['claude', 'codex', 'kimi', 'cursor'].includes(String(g.engine)) && typeof g.chatId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(g.chatId)) guide = { stage: g.stage as 'connecting' | 'guided', engine: g.engine as 'claude' | 'codex' | 'kimi' | 'cursor', chatId: g.chatId };
+    else throw new Error('Guida non valida.');
+  }
   if (!Number.isInteger(v.step) || Number(v.step) < 0 || Number(v.step) > 20 || !['', 'employee', 'independent', 'other'].includes(String(v.work)) || !['balanced', 'concise', 'detailed'].includes(String(v.style)) || typeof v.goals !== 'string' || v.goals.length > 2000 || typeof v.tools !== 'string' || v.tools.length > 2000 || !Array.isArray(v.agentIds) || v.agentIds.length > 64 || !v.agentIds.every(x => typeof x === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(x))) throw new Error('Preferenze non valide.');
-  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], agentIds: [...new Set(v.agentIds as string[])] };
+  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], agentIds: [...new Set(v.agentIds as string[])], ...(guide ? { guide } : {}) };
 }
 /** Local preferences only. Never applies brain paths, engine trust, permissions or account changes. */
 export class SetupService {

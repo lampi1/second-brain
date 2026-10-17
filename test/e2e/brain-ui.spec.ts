@@ -151,33 +151,11 @@ test('Confronto: the comparison report rendered, files to open and download', as
   await shot(page, 'brain-confronto');
 });
 
-test('Esplora: tree, file preview with links to other files, word search', async () => {
-  await open('esplora/AGENTS.md');
-  const p = page.getByTestId('brain-page-esplora');
-  await settled();
-  await expect(p.getByTestId('bx-file-md')).toContainText('Produzione');
-  await p.getByTestId('bx-file-md').getByRole('link', { name: 'map.md' }).click();
-  await expect(p.getByTestId('bx-viewer')).toContainText('Mappa della memoria');
-  await p.getByLabel('Cerca nei file').fill('reviewer');
-  await p.getByRole('button', { name: 'Cerca', exact: true }).click();
-  await expect(p.getByTestId('bx-hits')).toContainText('risultati per «reviewer»');
-  await shot(page, 'brain-esplora');
-  await p.getByTestId('bx-hits').getByRole('button', { name: /ops\/tools\/cost\.mjs|playbooks\/reviewer\.md/ }).first().click();
-  await expect(p.getByTestId('bx-viewer')).toBeVisible();
-
-  // a hostile markdown file: no script runs, no element keeps a link that could navigate the app window
-  await open('esplora/notes/trappola.md');
-  await expect(p.getByTestId('bx-file-md')).toContainText('relativo');
-  const leaks = await page.evaluate(() => {
-    const md = document.querySelector('[data-testid="bx-file-md"]')!;
-    const links = [...md.querySelectorAll('*')].flatMap(el => el.getAttributeNames().filter(n => /href|action|usemap/i.test(n)).map(n => `${el.tagName}:${n}=${el.getAttribute(n)}`));
-    return { links, tags: md.querySelectorAll('area, map, base, script, form, button').length, pwned: (window as unknown as { __pwned?: number }).__pwned ?? null, url: location.href };
-  });
-  expect(leaks.links).toEqual(['A:href=https://example.com']);
-  expect(leaks.tags).toBe(0);
-  expect(leaks.pwned).toBeNull();
-  expect(leaks.url).toMatch(/^file:.*index\.html#brain-test\/esplora/);
-  await expect(p.getByRole('link', { name: 'esterno' })).toHaveAttribute('target', '_blank');
+test('retired explorer links open a source file without a directory browser',async()=>{
+  fs.writeFileSync(path.join(brain,'viewer-source.ts'),'// first\n// second\n');
+  await open('esplora/viewer-source.ts:2');
+  const viewer=page.getByTestId('cited-file-viewer');await expect(viewer.locator('[data-l="2"]')).toContainText('second');
+  await expect(page.getByTestId('bx-tree')).toHaveCount(0);await expect(page.getByTestId('bx-search')).toHaveCount(0);await shot(page,'brain-file-viewer');
 });
 
 test('Mappa: direct exploration, optional filters, keyboard and accessible fallback without a player', async () => {

@@ -14,12 +14,12 @@ import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
 import { openModal, setPrefs, toggleBrowsers, ui, type Density, type Theme } from '../store/ui';
-import { back, focusChat, forward, go, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
+import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
-import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
+import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './RegiaOverlay';
@@ -234,6 +234,7 @@ export function TopBar() {
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
       <button type="button" className="btn btn-primary btn-m" onClick={() => openModal('newChat')} data-testid="topbar-new" data-tip={`${t('chat.input.newChatButton')}|Ctrl+N`}><IconPlus size={14} /><span>{t('chat.input.newChatButton')}</span></button>
+      <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."
         aria-label={`Ferma tutto: ${running} al lavoro (Ctrl+Shift+.)`}>
         <IconStop size={13} /><span>Ferma tutto</span>{running > 0 && <span className="count-badge red">{running}</span>}

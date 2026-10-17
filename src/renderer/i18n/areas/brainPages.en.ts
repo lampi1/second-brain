@@ -3,6 +3,7 @@ import type { brainPagesIt } from './brainPages.it';
 
 export const brainPagesEn: typeof brainPagesIt = {
   // index.tsx - brain page labels
+  'brainPages.nav.home': 'Home',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',
@@ -11,8 +12,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.procedure': 'Procedures',
   'brainPages.nav.confronto': 'Model comparison',
   'brainPages.nav.miglioramento': 'Learned rules',
-  'brainPages.nav.esplora': 'Explore',
-  'brainPages.nav.agenti': 'Agents',
+  'brainPages.nav.agenti': 'Manage agents',
   'brainPages.nav.skill': 'Technical skills',
   'brainPages.nav.impostazioni': 'Settings',
   'brainPages.nav.migliora': 'Improve the app',
@@ -57,30 +57,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.day.note': (p: { hasDevops: boolean }) => `From diary, chats${p.hasDevops ? ' and DevOps' : ''}; to do from brief and open threads.`,
 
   // Esplora.tsx
-  'brainPages.esplora.rootFolder': '(main folder)',
-  'brainPages.esplora.pageTitle': 'Explore',
-  'brainPages.esplora.lead': 'brain files: rules, memory, diary, runbook, reports, tools. Read-only.',
-  'brainPages.esplora.what': 'Only tracked brain files: secrets never appear. Search a word in all files or browse folders.',
-  'brainPages.esplora.searchPlaceholder': 'Search a word in all files…',
-  'brainPages.esplora.searchLabel': 'Search in files',
-  'brainPages.esplora.searchBtn': 'Search',
-  'brainPages.esplora.closeResults': 'Close results',
-  'brainPages.esplora.resultsLabel': 'Search results',
-  'brainPages.esplora.searching': 'Searching…',
-  'brainPages.esplora.resultCount': (p: { n: number; q: string; overflow: boolean }) => `${p.n}${p.overflow ? "+" : ""} results for «${p.q}»`,
-  'brainPages.esplora.filterPlaceholder': 'Filter file names…',
-  'brainPages.esplora.filterLabel': 'Filter files',
-  'brainPages.esplora.treeLabel': 'Brain files',
-  'brainPages.esplora.notFound': 'File not found',
-  'brainPages.esplora.notFoundDesc': (p: { arg: string }) => `«${p.arg}» is not among the files the brain shows.`,
-  'brainPages.esplora.chooseFile': 'Choose a file on the left',
-  'brainPages.esplora.chooseFileOr': 'Or search a word in all files. Main ones:',
-  'brainPages.esplora.pathCopied': 'Path copied',
-  'brainPages.esplora.copyFailed': 'Copy failed',
-  'brainPages.esplora.copyPath': 'Copy path',
-  'brainPages.esplora.downloadBtn': 'Download',
-  'brainPages.esplora.lastModified': 'last modified',
-  'brainPages.esplora.jsonlLine': 'line',
 
   // Fatto.tsx
   'brainPages.fatto.titleToday': 'Done today',

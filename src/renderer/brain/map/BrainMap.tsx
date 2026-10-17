@@ -12,7 +12,9 @@ import { liveGraph, liveMoving, type LiveGraph, type LiveSnapshot, type LiveSour
 
 type Sel = { kind: 'node'; id: string } | { kind: 'link'; edge: MapEdge } | null;
 
-export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, live: source, onOpenChat }: {
+export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, live: source, onOpenChat, embedded = false }: {
+  /** Home reuses the same map without modal focus, global Escape or a close button. */
+  embedded?: boolean;
   onClose: () => void;
   onNavigate?: (target: string) => void;
   /** what the app's chats are doing now (the live map); without it the map is the brain's structure only */
@@ -84,8 +86,8 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   const labelOf = (id: string) => allById.get(id)?.label ?? id;
 
   // Esc closes the map (one level at a time: full screen, the contextual detail, then the map)
-  useEsc(true, () => { if (document.fullscreenElement===root.current) void document.exitFullscreen(); else if (sel) setSel(null); else onClose(); });
-  useEffect(() => { root.current?.focus(); }, []);
+  useEsc(!embedded, () => { if (document.fullscreenElement===root.current) void document.exitFullscreen(); else if (sel) setSel(null); else onClose(); });
+  useEffect(() => { if (!embedded) root.current?.focus(); }, [embedded]);
   useEffect(()=>{if(sel)pieceClose.current?.focus();else if(returnFocus.current?.isConnected)returnFocus.current.focus();},[sel]);
   useEffect(() => { if (mode !== 'flat') setGl(webglAvailable() ? 'ok' : 'fail'); }, [mode]);
 
@@ -160,7 +162,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   ) : null;
 
   return (
-    <div ref={root} className="bx bx-map" role="dialog" aria-modal="true" aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
+    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
       <div className="bx-map-bar">
         <h2>Il tuo spazio</h2>
         <form className="bx-search" onSubmit={e => { e.preventDefault(); search(); }} role="search">
@@ -173,7 +175,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
         <button type="button" className="bx-btn" aria-pressed={!essential} title={essential ? 'Mostra ogni file e ogni freccia' : 'Torna ai pezzi principali'} onClick={() => { setEssential(e => !e); setKindOn(defaultKinds(!essential)); setSel(null); }} data-testid="bx-map-view">{essential ? 'Vista completa' : 'Vista essenziale'}</button>
         {!showFlat && <button type="button" className="bx-btn" onClick={() => engine.current?.fit()}>Reset vista</button>}
         {gl === 'ok' && <button type="button" className="bx-btn" aria-pressed={flat} onClick={() => setFlat(f => !f)} title="La mappa come elenco, per strato">{flat ? 'Mappa 3D' : 'Elenco'}</button>}
-        <button type="button" className="bx-btn close" aria-label="Chiudi la mappa" title="Chiudi (Esc)" onClick={onClose} data-testid="bx-map-close"><IconClose /></button>
+        {!embedded && <button type="button" className="bx-btn close" aria-label="Chiudi la mappa" title="Chiudi (Esc)" onClick={onClose} data-testid="bx-map-close"><IconClose /></button>}
       </div>
       <div className="bx-map-body">
         {!data ? (

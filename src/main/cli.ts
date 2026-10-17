@@ -7,6 +7,7 @@
 // embedded binary, Cursor's node.exe, fake .mjs engines for tests, kill tree) live in chats/cli.ts; used by index.ts,
 // wiring.ts.
 import { execFile, spawn } from 'node:child_process';
+import { launchPosixLogin } from '../modules/ai-first/login-terminal';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CliStatus, Harness } from '../shared/contract';
@@ -89,12 +90,13 @@ export async function engineStatuses(): Promise<Record<Harness, CliStatus>> {
 }
 
 /** Opens a visible console window running the engine's own login; returns at once (the user completes it there). */
-export function openLogin(harness: Harness): void {
+export function openLogin(harness: Harness): void | Promise<void> {
   const e = engineOrThrow(harness);
   if (e.kind === 'api' || !e.login.length) throw new Error(`${e.label} non ha un comando di accesso: usa una chiave API (Impostazioni → Motori) o accedi dentro la sua CLI.`);
   if (e.kind !== 'claude' && !acpRunnable(e)) throw new Error(e.trusted ? `Nei test il login di ${e.label} non si apre mai.` : `Accendi prima ${e.label} in Impostazioni → Motori.`);
   const p = e.kind === 'claude' ? claudePath() : acpPath(e);
   if (!p) { log.error('cli', 'login requested but the CLI is missing', { cause: `${e.label} CLI not found on PATH`, hint: `install the ${e.label} CLI` }); throw new Error(`${e.label} CLI not found`); }
+  if (process.platform === 'darwin' || process.platform === 'linux') return launchPosixLogin(process.platform, p, e.login);
   const args = e.login.join(' ');
   const title = `Accesso ${e.label}`;
   // `start "<title>" cmd /k ""<exe>" <args>"`: a new window that stays open after the login

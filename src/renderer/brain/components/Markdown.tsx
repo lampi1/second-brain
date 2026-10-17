@@ -29,9 +29,9 @@ function sanitizer() {
 }
 
 /** Markdown → safe HTML string (exported for tests of the page, not used elsewhere). */
-export function renderMarkdown(text: string, files?: Set<string>, root = ''): string {
+export function renderMarkdown(text: string, files?: Set<string>, root = '', images = true): string {
   const html = marked.parse(String(text ?? ''), { async: false }) as string;
-  const clean = sanitizer().sanitize(html, { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'button', 'iframe', 'area', 'map', 'base', 'link', 'meta', 'object', 'embed', 'frame', 'frameset'], FORBID_ATTR: ['style', 'usemap', 'formaction', 'action', 'xlink:href'] }) as unknown as string;
+  const clean = sanitizer().sanitize(html, { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'button', 'iframe', 'area', 'map', 'base', 'link', 'meta', 'object', 'embed', 'frame', 'frameset',...(images?[]:['img'])], FORBID_ATTR: ['style', 'usemap', 'formaction', 'action', 'xlink:href'] }) as unknown as string;
   if (!files?.size) return wrapTables(clean);
   // `ops/tools/mem.mjs` (or with the brain root in front) that is a brain file → a link to it
   const r = root.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -53,8 +53,8 @@ const wrapTables = (html: string) => {
   return html.replace(/<table>/g, () => `<div class="bx-mdtable"><table data-i="${i++}">`).replace(/<\/table>/g, '</table></div>');
 };
 
-export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean }) {
-  const html = useMemo(() => { const h = renderMarkdown(text, files, root); return copy ? withCopy(h) : h; }, [text, files, root, copy]);
+export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, images = true }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; images?:boolean }) {
+  const html = useMemo(() => { const h = renderMarkdown(text, files, root,images); return copy ? withCopy(h) : h; }, [text, files, root, copy,images]);
   const act = (e: MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     const c = copy ? t.closest<HTMLElement>('[data-copy]') : null;
