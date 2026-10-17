@@ -1,11 +1,12 @@
 // Automatic brain tests use ONLY synthetic templates and disposable app-data fixtures.
 import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { DefaultBrain } from './default-brain';
 const temporary: string[] = [];
 afterEach(async () => { for (const root of temporary.splice(0)) await fs.rm(root, { recursive: true, force: true }); });
 async function fixture() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-first-')); temporary.push(root);
+  // macOS /var and Windows short temp names can alias a different physical path.
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ai-first-'))); temporary.push(root);
   const userData = path.join(root, 'app'), templateRoot = path.join(root, 'template');
   await fs.mkdir(userData); await fs.mkdir(path.join(templateRoot, 'ops', 'tools'), { recursive: true });
   await fs.writeFile(path.join(templateRoot, 'AGENTS.md'), '# Memory {{BRAIN}}');
@@ -16,6 +17,24 @@ async function fixture() {
   await fs.writeFile(path.join(templateRoot, '.mcp.json'), '{}'); await fs.writeFile(path.join(templateRoot, 'install.mjs'), 'throw Error("never execute installer")');
   return { root, userData, templateRoot };
 }
+it('uses a physical fixture root when the OS temp directory is an alias', async () => {
+  const base = await fixture(), alias = path.join(base.root, 'temp-alias');
+  await fs.symlink(base.userData, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const temp = vi.spyOn(os, 'tmpdir').mockReturnValue(alias);
+  let f;
+  try { f = await fixture(); } finally { temp.mockRestore(); }
+  const creator = new DefaultBrain({ ...f, current: () => null, revision: () => 0, connect: async () => {} });
+  expect((await creator.ensure('en', 'none')).connected).toBe(true);
+});
+it('rejects linked input directories and links inside a canonical template', async () => {
+  const f = await fixture(), alias = path.join(f.root, 'alias');
+  await fs.symlink(f.templateRoot, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const host = { ...f, current: () => null, revision: () => 0, connect: async () => { throw new Error('must not connect'); } };
+  await expect(new DefaultBrain({ ...host, templateRoot: alias }).ensure('en', 'none')).rejects.toThrow('AI_SETUP_LOCAL_DIRECTORY');
+  await expect(new DefaultBrain({ ...host, userData: alias }).ensure('en', 'none')).rejects.toThrow('AI_SETUP_LOCAL_DIRECTORY');
+  await fs.symlink(f.userData, path.join(f.templateRoot, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+  await expect(new DefaultBrain(host).ensure('en', 'none')).rejects.toThrow('AI_SETUP_TEMPLATE_LIMIT');
+});
 it('allocates one fresh local memory for concurrent requests without activating project hooks or MCP', async () => {
   const f = await fixture(); let current: string | null = null;
   const creator = new DefaultBrain({ ...f, current: () => current, revision: () => 0, connect: async root => { current = root; } });

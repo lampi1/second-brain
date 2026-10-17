@@ -1,5 +1,5 @@
 // Isolated fixture tests: all config writes target disposable directories, never a real harness profile.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -34,7 +34,8 @@ describe('platform location fixtures', () => {
 });
 afterEach(async () => { await Promise.all(temporary.splice(0).map(p => fs.rm(p, { recursive: true, force: true }))); });
 async function fixture(local = new LocalFiles(async () => 0)) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sb-onboarding-')); temporary.push(root);
+  // Resolve the fixture boundary only; LocalFiles still rejects every link beneath it.
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'sb-onboarding-'))); temporary.push(root);
   const project = path.join(root, 'project'); await fs.mkdir(project);
   const host: Host = { home: root, backupRoot: path.join(root, 'private-backups'), allow: async () => true,
     // Fake vault for synthetic nonsecret fixtures ONLY. Production host must use OS-protected storage.
@@ -181,6 +182,27 @@ describe('project connector transaction', () => {
   });
 });
 describe('metadata-only discovery', () => {
+  it('uses a physical fixture root when the OS temp directory is an alias', async () => {
+    const base = await fixture(), alias = path.join(base.root, 'temp-alias');
+    await fs.symlink(base.project, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const temp = vi.spyOn(os, 'tmpdir').mockReturnValue(alias);
+    let f;
+    try { f = await fixture(); } finally { temp.mockRestore(); }
+    const plan = await f.service.prepare({ project: f.project, provider: 'github', harnesses: ['claude'] });
+    expect(plan.changes).toHaveLength(1);
+  });
+  it('accepts a canonical starting root while rejecting linked descendants', async () => {
+    const { root, project } = await fixture(), alias = path.join(root, 'alias');
+    await fs.mkdir(path.join(project, '.git'));
+    await fs.writeFile(path.join(project, '.git', 'config'), '[core]\n');
+    await fs.symlink(project, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const local = new LocalFiles(async () => 0);
+    // Models /var -> /private/var (and Windows temp aliases) before fixture use.
+    const canonical = await fs.realpath(alias);
+    expect((await discoverLocal({ home: root, roots: [canonical], cliPaths: {} }, local)).evidence.some(e => e.kind === 'repo' && e.path === project)).toBe(true);
+    await expect(local.check(alias)).rejects.toThrow('linked path');
+    await expect(local.read(path.join(alias, '.git', 'config'))).rejects.toThrow('linked path');
+  });
   it('fails closed without a native cloud metadata adapter on any operating system', async () => {
     await expect(discoverLocal({ home: os.tmpdir() })).rejects.toThrow('Native cloud');
   });
