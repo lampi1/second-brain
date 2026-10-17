@@ -26,7 +26,7 @@ test('the Regia closes a work chat\'s question with the user\'s answer, only aft
 
   // he answers the Regia's own question, then tells it what to do with the QA's
   const rq = pending.find(p => p.chatId === 'regia')!;
-  await page.evaluate(([rid, text]) => window.sb.invoke('chat:answer', { chatId: 'regia', requestId: rid, answer: { kind: 'question', answers: { [text]: 'Corsie' } } }), [rq.id, rq.questions?.[0]?.question ?? rq.title] as const);
+  await page.evaluate(([rid, text]) => window.sb.invoke('chat:answer', { chatId: 'regia', requestId: rid, answer: { kind: 'question', answers: { [text]: 'QA rimborsi' } } }), [rq.id, rq.questions?.[0]?.question ?? rq.title] as const);
   await page.evaluate(() => window.sb.invoke('chat:send', { chatId: 'regia', text: 'Per la QA dei rimborsi: apri il bug e tagga la QA.' }));
 
   const done = await regia.call('app_resolve_question', { chatId: 'qa', requestId: q.id, answers: { [question]: 'Apro un bug e taggo la QA' }, note: 'deciso in Regia' });

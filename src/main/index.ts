@@ -104,7 +104,10 @@ app.whenReady().then(async () => {
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
-  const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot);
+  const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
+    route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
+    regiaChats: () => s.brain.settings().regiaChats,
+  });
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
     const handlers: Handlers = {

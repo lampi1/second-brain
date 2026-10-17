@@ -318,8 +318,9 @@ describe('app control tools', () => {
     const out = await tool('app_logs').run({ level: 'warn', grep: 'slow' }) as { msg: string }[];
     expect(out.map(e => e.msg)).toContain('session slow');
     expect(out.every(e => e.msg !== 'tab opened')).toBe(true);
-    await tool('app_ui').run({ action: 'view', value: 'corsie' });
-    expect(ui).toEqual([{ action: 'view', value: 'corsie' }]);
+    await tool('app_ui').run({ action: 'page', value: 'devops' });
+    expect(ui).toEqual([{ action: 'page', value: 'devops' }]);
+    expect(() => tool('app_ui').run({ action: 'view', value: 'corsie' })).toThrow(/not allowed/);
   });
 
   it('lists the recent closed chats apart and lets the Regia reopen one', async () => {

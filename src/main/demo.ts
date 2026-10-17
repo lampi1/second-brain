@@ -185,10 +185,10 @@ export function seed(E: number): Seed {
   };
   const pending: PendingRequest[] = [
     {
-      id: 'regia-q1', chatId: 'regia', type: 'question', tool: 'AskUserQuestion', title: 'Quale vista vuoi come predefinita?', detail: '', input: {}, at: E - 8 * MIN,
-      questions: [{ header: 'second-brain app', question: 'Quale vista vuoi come predefinita?', multiSelect: false, options: [
-        { label: 'Mosaico', description: 'tessere libere, i browser accanto alle loro chat' },
-        { label: 'Corsie', description: 'colonne per stato: ti aspettano, al lavoro, finite' },
+      id: 'regia-q1', chatId: 'regia', type: 'question', tool: 'AskUserQuestion', title: 'Da cosa riparto?', detail: '', input: {}, at: E - 8 * MIN,
+      questions: [{ header: 'second-brain app', question: 'Da cosa riparto?', multiSelect: false, options: [
+        { label: 'QA rimborsi', description: 'la cosa più vecchia che ti aspetta' },
+        { label: 'Note di rilascio', description: 'la bozza è pronta da rivedere' },
       ] }],
     },
     {
@@ -699,8 +699,8 @@ async function resumeSms(run: Run): Promise<void> {
 }
 
 const continueRegia: Continuation = async (run, a) => {
-  const label = picked(a, 'Quale vista vuoi come predefinita?') || 'Mosaico';
-  await run.say(`Segnato: **${label}** come vista predefinita. Puoi cambiarla quando vuoi con \`Ctrl+Shift+V\`. Adesso la cosa più vecchia che ti aspetta è la QA dei rimborsi.`);
+  const label = picked(a, 'Da cosa riparto?') || 'QA rimborsi';
+  await run.say(`Segnato: riparto da **${label}**.`);
 };
 
 const continueQa: Continuation = async (run, a) => {

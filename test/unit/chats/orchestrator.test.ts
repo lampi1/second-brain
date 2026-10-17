@@ -15,8 +15,9 @@ import { RegiaWake } from '../../../src/main/chats/regia-wake';
 import { ChatMail, inboxDir, mailTools } from '../../../src/main/chats/mail';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
+import { DEMO_REGISTRY } from '../../../src/main/brain/routing-demo';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
-import type { ChatSummary } from '../../../src/shared/contract';
+import type { ChatSummary, RoutingTable } from '../../../src/shared/contract';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => {
@@ -163,6 +164,29 @@ describe('OrchestratorService', () => {
     expect(create.mock.calls[0]![0]).toMatchObject({ cwd: 'C:/brain', regia: true, harness: 'claude' });
     expect(await s.ensure({ harness: 'claude' })).toBe(rows[0]);
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensure routes like a Regia: the row for kind regia gives model and effort, a named model beats it', async () => {
+    const table = { version: 1, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
+      { kind: 'regia', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Regia: Sonnet', since: '2026-10-17', evidence: 'prova' },
+    ] } as RoutingTable;
+    const make = () => {
+      const made: Record<string, unknown>[] = [];
+      const create = async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `o${made.length}`, isRegia: true, orchestrator: true }); };
+      const s = new OrchestratorService({ list: () => [], create } as unknown as Pick<ChatService, 'list' | 'create'>, () => 'C:/brain', {
+        route: r => routeChat(r, table, DEMO_REGISTRY, null, 7), engineOn: () => true, agentsMayOpen: () => true,
+        regiaChats: () => ({ harness: 'claude', claudeModel: 'claude-opus-5-5', cursorModel: '', claudeEffort: 'medium', cursorReasoning: 'medium', cursorFast: false }),
+      });
+      return { made, s };
+    };
+    const a = make();
+    await a.s.ensure({ harness: 'claude' });
+    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', regia: true, regiaName: 'Orchestrator', title: 'Orchestrator', cwd: 'C:/brain' });
+    expect(a.made[0]!.route).toMatchObject({ kind: 'regia', source: 'table' });
+    const b = make();
+    await b.s.ensure({ harness: 'claude', model: 'claude-opus-5-5' });
+    expect(b.made[0]).toMatchObject({ model: 'claude-opus-5-5' });
+    expect(b.made[0]!.route).toMatchObject({ kind: 'regia', source: 'override' });
   });
 
   it('without a brain folder it refuses and creates nothing', async () => {

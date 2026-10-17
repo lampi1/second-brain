@@ -304,13 +304,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "view" (value mosaico|corsie), "maximize" (chat id), "restore", "page" (value: workspace|devops|fatto|idee|costi|qualita|procedure|confronto|esplora|mappa), "palette".',
-      inputSchema: obj({ action: str('view|maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: workspace|devops|fatto|idee|costi|qualita|procedure|confronto|esplora|mappa), "palette".',
+      inputSchema: obj({ action: str('maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
       // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
       // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)
       run: a => {
         const action = String(a.action);
-        if (!['view', 'maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (view|maximize|restore|page|palette)`);
+        if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette)`);
         // the section of "Migliora l'app" has no maximized view: its Regia never maximizes; the work Regia never
         // maximizes a chat of the app or one of its tabs
         if (action === 'maximize' && d.space === 'app') throw new Error("app_ui: maximize non c'è nella sezione «Migliora l'app»");

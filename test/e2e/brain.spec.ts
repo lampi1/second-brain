@@ -48,7 +48,8 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect(s.brainRoot).toBe(path.normalize(brain));
   expect(s.locked).toContain('brainRoot');
   const schema = await page.evaluate(() => window.sb.invoke('settings:schema', undefined));
-  expect(schema.find(d => d.key === 'view')).toMatchObject({ protected: false, label: 'Vista', values: ['mosaico'] });
+  expect(schema.find(d => d.key === 'theme')).toMatchObject({ protected: false, label: 'Tema' });
+  expect(schema.some(d => d.key === ('view' as string))).toBe(false);
   await page.evaluate(() => window.sb.invoke('settings:set', { language: 'it' }));
   await expect.poll(() => page.evaluate(() => (window as unknown as W).__changes.map(c => `${c.key}:${String(c.after)}:${c.by}`))).toContain('language:it:user');
   const [last] = await page.evaluate(() => window.sb.invoke('settings:history', { limit: 1 }));
@@ -64,7 +65,7 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect((await page.evaluate(() => window.sb.invoke('settings:pending', undefined))).map(p => p.id)).toEqual([pid]);
   const ok = await page.evaluate(id => window.sb.invoke('settings:confirm', { proposalId: id, accept: true }), pid);
   expect(ok.change).toMatchObject({ key: 'dnd', after: true, by: 'user', proposalId: pid });
-  await expect(page.evaluate(() => window.sb.invoke('settings:set', { view: 'griglia' as never }))).rejects.toThrow(/Vista/);
+  await expect(page.evaluate(() => window.sb.invoke('settings:set', { theme: 'griglia' as never }))).rejects.toThrow(/Tema/);
 
   // the brain's data server through the GET-only proxy; /api/send is never forwarded
   const tables = await page.evaluate(() => window.sb.invoke('brain:api', { path: '/api/tables' }));

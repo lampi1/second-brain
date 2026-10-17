@@ -71,7 +71,7 @@ test('answering a tile panel with "1" resolves the request without opening the c
   await expect(page.getByTestId('tile-chat-qa')).toContainText('Apro il bug');
   await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await openRegia(page);
-  await expect(page.getByTestId('tile-regia')).toContainText('Segnato: Mosaico');
+  await expect(page.getByTestId('tile-regia')).toContainText('Segnato: riparto da QA rimborsi');
   await closeRegia(page); // reduced again
   // a permission: Esc on the focused card rejects it
   await page.keyboard.press('Control+J');

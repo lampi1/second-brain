@@ -107,36 +107,36 @@ export function startStore(): void {
   });
 }
 
-/** View and theme live in the app settings too (config.json, ADR 0005/0008): read them at start, follow changes made
- *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them. */
+/** The theme lives in the app settings too (config.json, ADR 0005/0008): read it at start, follow changes made
+ *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them.
+ *  The view is no setting any more (Mosaico and Corsie were retired): it stays a local preference. */
 let settingsPending=false;
 function syncSettings(): void {
-  let known: { view: string; theme: string } | null = null;
+  let known: string | null = null;
   void sb.invoke('settings:get', undefined).then(s => {
-    known = { view: s.view, theme: s.theme };
+    known = s.theme;
     dispatch({ type: 'settings', settings: s });
-    setPrefs({ view: s.view === 'corsie' ? 'corsie' : 'mosaico', theme: s.theme });
+    setPrefs({ theme: s.theme });
   }).catch(() => {});
   let timer: ReturnType<typeof setTimeout> | null = null;
   sb.on('settings:changed', c => {
     dispatch({ type: 'settings', settings: c.settings });
     // a newer local choice is waiting to be saved: an older echo (light, then dark at once) must not undo it
     if (timer) return;
-    known = { view: c.settings.view, theme: c.settings.theme };
-    if (c.key === 'view' || c.key === 'theme') setPrefs({ view: c.settings.view === 'corsie' ? 'corsie' : 'mosaico', theme: c.settings.theme });
+    known = c.settings.theme;
+    if (c.key === 'theme') setPrefs({ theme: c.settings.theme });
   });
   ui.subscribe(() => {
     const p = ui.get().prefs;
-    if (!known) return;
+    if (known === null) return;
     // back to the saved value before the pending save (light, then dark at once): that save must not happen
-    if (known.view === p.view && known.theme === p.theme) { if (timer) { clearTimeout(timer); timer = null; settingsPending=false; } return; }
+    if (known === p.theme) { if (timer) { clearTimeout(timer); timer = null; settingsPending=false; } return; }
     if (timer) clearTimeout(timer);
     settingsPending=true;
     timer = setTimeout(() => {
       timer = null;settingsPending=false;
-      const next = { view: p.view, theme: p.theme };
-      known = next;
-      void sb.invoke('settings:set', next).catch(() => {});
+      known = p.theme;
+      void sb.invoke('settings:set', { theme: p.theme }).catch(() => {});
     }, 300);
   });
 }

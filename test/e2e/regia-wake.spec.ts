@@ -23,7 +23,7 @@ test('a work chat that finishes wakes the Regia with an app message, never while
 
   const pending = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
   const q = pending.find(p => p.chatId === 'regia')!;
-  await page.evaluate(([rid, question]) => window.sb.invoke('chat:answer', { chatId: 'regia', requestId: rid, answer: { kind: 'question', answers: { [question]: 'Corsie' } } }), [q.id, q.questions?.[0]?.question ?? q.title] as const);
+  await page.evaluate(([rid, question]) => window.sb.invoke('chat:answer', { chatId: 'regia', requestId: rid, answer: { kind: 'question', answers: { [question]: 'QA rimborsi' } } }), [q.id, q.questions?.[0]?.question ?? q.title] as const);
 
   await expect.poll(async () => (await appNews()).length, { timeout: 20_000 }).toBe(1);
   const news = (await appNews())[0]!;

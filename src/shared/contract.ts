@@ -677,7 +677,6 @@ export interface KimiUsage {
 }
 
 // ── Settings (userData/config.json; never secrets) ─────────────────────────────────────────────────────────────────
-export type ViewMode = 'mosaico' | 'corsie';
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -691,7 +690,6 @@ export interface BudgetSettings { enabled: boolean; claude: BudgetLimits; cursor
 export interface Settings {
   brainRoot: string | null;
   mcpPort: number;
-  view: ViewMode;
   mute: Record<string, boolean>;   // feed kind → no toast (still in the feed)
   osToasts: ToastLevel;
   theme: ThemeMode;
@@ -777,10 +775,10 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
 };
 
-/** Every setting is one dot key ("view", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
+/** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'brainRoot' | 'mcpPort' | 'view' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
 export interface SettingDef {

@@ -36,8 +36,6 @@ const BASE: readonly SettingDef[] = [
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
     description: 'Porta locale (solo 127.0.0.1) dove gli agenti guidano il browser interno. 0 = una porta libera a caso.' },
-  { key: 'view', type: 'enum', values: ['mosaico'], default: 'mosaico', protected: false, label: 'Vista',
-    description: 'Mosaico: le chat come riquadri.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come il sistema.' },
   { key: 'language', type: 'enum', values: ['system', 'it', 'en'], default: 'system', protected: false, label: 'Lingua',
@@ -195,7 +193,7 @@ export function validate(key: unknown, value: unknown): Checked {
 
 export function defaults(): Settings {
   return {
-    brainRoot: null, mcpPort: 4319, view: 'mosaico', autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
+    brainRoot: null, mcpPort: 4319, autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
     contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),

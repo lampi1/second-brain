@@ -18,11 +18,10 @@ describe('settings schema and validate()', () => {
     }
   });
 
-  it('protects engines, spending limits, notifications off and security keys; view and theme are free', () => {
+  it('protects engines, spending limits, notifications off and security keys; theme is free', () => {
     const prot = schema().filter(d => d.protected).map(d => d.key);
     for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
-    expect(defOf('view')!.protected).toBe(false);
     expect(defOf('devops.enabled')!.protected).toBe(true);
     expect(validate('devops.everyMin', 2).ok).toBe(false);
     expect(validate('devops.everyMin', 60).ok).toBe(true);
@@ -33,10 +32,9 @@ describe('settings schema and validate()', () => {
   it('accepts and normalizes good values, refuses bad ones with an Italian message', () => {
     expect(validate('budget.claude.dailyUsd', 199.999)).toMatchObject({ ok: true, value: 200 });
     expect(validate('budget.claude.dailyUsd', null)).toMatchObject({ ok: true, value: null });
-    expect(validate('view', 'mosaico')).toMatchObject({ ok: true });
-    expect(defOf('view')!.values).toEqual(['mosaico']);
+    expect(defOf('view' as never)).toBeNull();
     const bad: [string, unknown][] = [
-      ['brainRoot', 'relative/path'], ['mcpPort', 70000], ['mcpPort', 1.5], ['view', 'grid'], ['view', 'corsie'], ['osToasts', 'always'], ['dnd', 'yes'],
+      ['brainRoot', 'relative/path'], ['mcpPort', 70000], ['mcpPort', 1.5], ['view', 'mosaico'], ['osToasts', 'always'], ['dnd', 'yes'],
       ['mute.idea', 'yes'], ['mute.Bad Kind', true], ['budget.claude.mode', 'stop'], ['budget.claude.dailyUsd', -1], ['budget.enabled', 1],
       ['theme', null], ['nope', 1], ['engines.claude', 'on'],
     ];
@@ -74,7 +72,7 @@ describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
     expect('regiaDriven' in DEFAULTS).toBe(false);
     expect(defOf('regiaDriven' as never)).toBeNull();
     expect('regiaDriven' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
-    expect(fromSaved({ view: 'corsie', regiaDriven: false }).view).toBe('mosaico');
+    expect('view' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
   });
 });
 
@@ -138,7 +136,7 @@ describe('Chat aperte dalla Regia (regiaChats)', () => {
 describe('settings store', () => {
   it('starts from generic defaults (no personal numbers, $ limits off, budget on in warn mode, engines on)', () => {
     const s = new ConfigStore(tmpDir(), {}).get();
-    expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, view: 'mosaico', osToasts: 'urgent', theme: 'dark', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
+    expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, osToasts: 'urgent', theme: 'dark', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
     expect(s.budget).toEqual({ enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } });
     expect(s.locked).toBeUndefined();
     expect(s.devops).toEqual({ enabled: false, everyMin: 30, sound: true }); // DevOps reads only when the user turns it on; its alerts chime
@@ -150,7 +148,7 @@ describe('settings store', () => {
     const brain = path.join(dir, 'brain');
     a.set({ brainRoot: brain, language: 'it', mute: { idea: true }, budget: { claude: { dailyUsd: 200 } } });
     a.set({ mute: { error: true }, budget: { cursor: { mode: 'ask', perChatUsd: 5 } } });
-    expect(() => a.set({ theme: 'light', view: 'grid' as never })).toThrow();
+    expect(() => a.set({ theme: 'light', osToasts: 'always' as never })).toThrow();
     const b = new ConfigStore(dir, {}).get();
     expect(b.brainRoot).toBe(path.normalize(brain));
     expect(b.language).toBe('it');
@@ -177,7 +175,7 @@ describe('settings store', () => {
   it('a broken or partly wrong file falls back to the defaults per key', () => {
     expect(fromSaved('nonsense')).toEqual(DEFAULTS);
     const s = fromSaved({ view: 'grid', theme: 'light', mcpPort: 'x', budget: { enabled: false, claude: { mode: 'nope', dailyUsd: 50 } }, mute: { idea: true, 'Bad Kind': true } });
-    expect(s).toMatchObject({ view: 'mosaico', theme: 'light', mcpPort: 4319, mute: { idea: true } });
+    expect(s).toMatchObject({ theme: 'light', mcpPort: 4319, mute: { idea: true } });
     expect(s.budget.enabled).toBe(false);
     expect(s.budget.claude).toEqual({ mode: 'warn', dailyUsd: 50, perChatUsd: null });
     const dir = tmpDir();
@@ -280,27 +278,29 @@ describe('settings store', () => {
   });
 });
 
-describe('retired Corsie view', () => {
-  it('normalizes and persists the legacy view while preserving choices, domains and historical changes', () => {
+describe('retired view setting', () => {
+  it('an old file with view loads without it, drops it once, and keeps choices, domains and history', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
     const domains = [path.join(dir, 'other-domain')];
     const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, regiaChats: { claudeModel: 'claude-opus-5-5' } };
     const oldChange = { id: 'chg_old_view', at: 1, by: 'user', key: 'view', before: 'mosaico', after: 'corsie' };
     fs.writeFileSync(file, JSON.stringify({ view: 'corsie', ...choices, domains }));
-    fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}\n`);
+    fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}
+`);
     const store = new ConfigStore(dir, {});
-    expect(store.get()).toMatchObject({ view: 'mosaico', ...choices });
+    expect(store.get()).toMatchObject(choices);
+    expect('view' in store.get()).toBe(false);
     expect(store.domains()).toEqual(domains);
     expect(store.history()).toEqual([oldChange]);
     const migrated = fs.readFileSync(file, 'utf8');
-    expect(JSON.parse(migrated)).toMatchObject({ view: 'mosaico', ...choices, domains });
+    expect(JSON.parse(migrated)).toMatchObject({ ...choices, domains });
+    expect('view' in JSON.parse(migrated)).toBe(false);
     const restarted = new ConfigStore(dir, {});
-    expect(restarted.get()).toMatchObject({ view: 'mosaico', ...choices });
+    expect(restarted.get()).toMatchObject(choices);
     expect(restarted.history()).toEqual([oldChange]);
     expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
-    expect(() => restarted.set({ view: 'corsie' as never })).toThrow(/Vista/);
-    expect(restarted.request('view', 'corsie', { by: 'agent' })).toHaveProperty('error');
+    expect(restarted.request('view' as never, 'corsie', { by: 'agent' })).toHaveProperty('error');
   });
 });
 
