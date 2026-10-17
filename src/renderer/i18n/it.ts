@@ -15,12 +15,12 @@ import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {settingsIt}from'./areas/settings.it';
 import { homeIt } from './areas/home.it';
-import { sectionsIt } from './areas/sections.it';
+import { reviewedContextIt } from './areas/reviewed-context.it';
 
 export const it = {
   ...costsIt,
   ...connectorsIt,
-  ...sectionsIt,
+  ...reviewedContextIt,
   ...homeIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',

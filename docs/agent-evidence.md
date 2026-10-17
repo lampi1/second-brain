@@ -44,30 +44,18 @@ Passing the previous policy restores that order; source events, global rules and
 No sample-based productivity scores or token-volume awards exist. Source imports and policy persistence
 remain in existing app services; this pure selector creates no extra archive.
 
-## Confirmed user context and Improve
-
-`ConfirmedContextSource(userDataDirectory, clock?)` owns only the fixed confirmed-user-context.json file.
-`load`, `save(facts,expectedRevision)`, `getConfirmedEssential` and `readRequestedSource` are the API.
-Save input is strictly `{id,key,value,category}` facts; main stamps confirmation time and explicit-user-save
-provenance. The ONLY consumer allowed to call save is the explicit renderer action approving selected
-values for AI context. Setup completion and interview autosave are not that action. Corrupt/oversized/linked
-archives fail closed; requested sources all remain denied in this iteration. No real private files were read.
-
-Loader packets preserve source revision and scope. Canonical essential scope is user. Additional project,
-agent-private, task, procedure and archive scopes are labels for future allow-listed providers; authorization
-and namespace isolation must be enforced by main before a source is returned. They are not active providers.
-The current runtime template remains coding-oriented; no broad template rewrite was made.
+## Improve evidence
 
 `main/improve/evidence.ts` exports `buildImproveEvidence` for the EXISTING Improve coordinator. Caller
-passes the already assembled context packet, read model and explicit selected fact refs/agent IDs with a
-byte budget. It returns only selected facts, evidence-derived observations and comparable cohort data;
+passes the read model and explicit selected agent IDs/insight refs with a byte budget. It returns only
+evidence-derived observations, comparable cohort data and the selected insights;
 unknown selections fail, whole objects that do not fit are reported omitted. No full transcript is read.
 Invoke on an explicit preview/suggestion request; this function sends nothing and runs no model per refresh.
 Use the existing proposal, review ledger, preview and human publication flow. No new wizard/branch/autopush.
 
 ## Runtime routing metadata
 
-The EXISTING AgentDraft/Profile schema now includes optional routing metadata, not the data-section manifest:
+The EXISTING AgentDraft/Profile schema now includes optional routing metadata:
 whenToUse, whenNotToUse, input/output contract descriptions, declared tool IDs, access scopes and success
 criteria. Keep verified/unknown capability evidence separate and bound to profile ID/revision and harness
 observations; a creator's declaration alone is not verification. Compact candidate discovery should contain
@@ -77,17 +65,6 @@ Ambiguous matches and conflicting scopes require clarification; a user override 
 tool/access enforcement. Neither task mail nor a metadata declaration grants protected-operation consent.
 Runtime contract, discovery boundaries and compatibility behavior are documented in
 [ADR 0066](adr/0066-agent-operating-manifest.md). Declarations never replace harness security enforcement.
-
-## Memory sources consulted
-
-- [LangChain memory concepts](https://docs.langchain.com/oss/python/concepts/memory): thread state/checkpoints
-  differ from shared long-term namespaced memory; semantic, episodic and procedural material have different
-  roles. Reuse that separation without adopting its storage framework or copying user profiles per agent.
-- [AGENTS.md](https://agents.md/): repository coding instructions are one context source, not an entire
-  user/project/agent memory architecture.
-- [Evaluating AGENTS.md](https://arxiv.org/abs/2602.11988): its coding-agent experiments report that context files
-  can reduce success and increase inference costs. This is evidence for testing concise relevance, not a universal
-  claim about all memory systems or models. Offline fixture replay here does not measure weaker-model success.
 
 Runtime status is refined by the collector integration note below. Deterministic fixtures, isolated native
 config validation and code review do not certify enterprise behavior or eliminate model errors.

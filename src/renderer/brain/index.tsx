@@ -27,19 +27,16 @@ import { brainClient } from './api';
 import { DiscussContext, type DiscussBridge } from './components/Discuss';
 import { t } from '../i18n';
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
-// Page metadata is also imported by pure preference utilities. Load the native bridge only when this page mounts.
-const SectionsPage = lazy(() => import('../extensions/SectionsPage').then(module => ({ default: module.SectionsPage })));
 export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'sezioni';
+export type BrainPageId = 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
-const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='sezioni'?t('sections.title'):id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
+const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
 export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
   page('home', 'G H'),
-  page('sezioni', 'G Z'),
   page('agenti', 'G A'),
   page('devops', 'G O'),
   page('fatto', 'G F'),
@@ -94,7 +91,6 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
   let page: ReactNode;
   switch (cur.id) {
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
-    case 'sezioni': page = <Suspense fallback={null}><SectionsPage /></Suspense>; break;
     case 'fatto': page = <Fatto arg={cur.arg} nav={nav} />; break;
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'costi': page = <Costi arg={cur.arg} nav={nav} />; break;

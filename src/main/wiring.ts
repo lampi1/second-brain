@@ -13,8 +13,6 @@ import { AgentCatalogService } from './agents/catalog';
 import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
 import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
-import { createDataSections } from './extensions/wiring';
-import type { SectionController } from './extensions/controller';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
@@ -70,7 +68,6 @@ import { setRecorder } from './chats/drift';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
-  sections: SectionController;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -316,9 +313,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const autoCloseRef: { current?: AutoCloseService } = {};
-  const sections = createDataSections(ctx.userData, ctx.window, () => brain.settings().language);
   const manager = new ChatManager({
-    essentialContext: () => sections.context({ ids: [] }),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
@@ -472,7 +467,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -524,7 +519,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, sections, autoClose: autoCloseService, progress: progressService,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

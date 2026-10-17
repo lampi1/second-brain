@@ -22,7 +22,6 @@ import {activeRole} from '../lib/role-consumers';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
-  sezioni: <IconBook />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
@@ -80,8 +79,7 @@ export function Sidebar() {
         {devopsOn && show('devops') && page1('devops')}
         {show('fatto')&&page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}
-        {brainPages.filter(id => id !== 'sezioni').map(page1)}
-        {page1('sezioni')}
+        {brainPages.map(page1)}
         {item('mappa', t('dialogs.sidebar.map'), <IconMap />, map, () => go({ page: 'mappa' }), { key: t('dialogs.sidebar.mapShortcut'), testid: 'nav-map', onHover: () => preloadMap(true) })}
         {!composition&&title(t('dialogs.sidebar.app'), 'app')}
         {!composition&&APP_GROUP.map(page1)}
