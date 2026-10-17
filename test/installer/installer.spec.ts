@@ -21,7 +21,7 @@ test.afterEach(async ({ browserName: _browserName }, info) => {
   testRoot = null;
 });
 test('offline per-user installer starts and reopens its stable copy without system Node', async () => {
-  const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; sha256: string } };
+  const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; version: string; sha256: string } };
   expect(createHash('sha256').update(fs.readFileSync(latest.installer)).digest('hex')).toBe(latest.manifest.sha256);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-installer space & percent%-'));
   testRoot = root;
@@ -42,6 +42,21 @@ test('offline per-user installer starts and reopens its stable copy without syst
   expect(rejected.status).not.toBe(0);
   expect(fs.readFileSync(path.join(outside, 'config.json'), 'utf8')).toBe('preserve this profile');
   expect(fs.existsSync(path.join(install, 'current.json'))).toBe(false);
+  // A post-extraction initialization failure must not masquerade as successful Setup (exit 0).
+  const lock = path.join(install, '.release-writer-lock');
+  const owner = JSON.stringify({ token: 'installer-test-owned-lock', dirty: false });
+  fs.mkdirSync(lock, { recursive: true });
+  fs.writeFileSync(path.join(lock, 'owner.json'), owner);
+  const blocked = spawnSync(latest.installer, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SBTEST=1', `/DIR=${install}`, `/LOG=${path.join(diagnostics, 'setup-blocked.log')}`], { env, windowsHide: true, encoding: 'utf8', timeout: 120000 });
+  expect(blocked.error).toBeUndefined();
+  expect(blocked.status).toBe(1);
+  expect(fs.existsSync(path.join(userData, 'ready.json'))).toBe(false);
+  expect(fs.existsSync(path.join(install, 'current.json'))).toBe(false);
+  expect(fs.readFileSync(path.join(lock, 'owner.json'), 'utf8')).toBe(owner);
+  expect(fs.readdirSync(lock)).toEqual(['owner.json']);
+  // Remove only this test's unchanged sentinel, never an installer-owned lease or recovery journal.
+  fs.unlinkSync(path.join(lock, 'owner.json'));
+  fs.rmdirSync(lock);
   const setup = spawnSync(latest.installer, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SBTEST=1', `/DIR=${install}`, `/LOG=${path.join(diagnostics, 'setup.log')}`], { env, windowsHide: true, encoding: 'utf8', timeout: 120000 });
   expect(setup.error, `${setup.stdout}\n${setup.stderr}`).toBeUndefined();
   expect(setup.status).toBe(0);
@@ -50,9 +65,15 @@ test('offline per-user installer starts and reopens its stable copy without syst
   let executable = '';
   const stop = () => {
     if (!pid) return;
-    const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-InstallRoot', install, '-ProcessId', String(pid), '-Executable', executable], { windowsHide: true, encoding: 'utf8' });
-    expect(result.status, result.stderr).toBe(0);
+    const stopping = pid;
+    // Never mask the first stop failure with a retry in finally; afterEach still cleans failed isolated installs.
     pid = 0;
+    const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-InstallRoot', install, '-ProcessId', String(stopping), '-Executable', executable], { windowsHide: true, encoding: 'utf8', timeout: 45000 });
+    expect(result.error).toBeUndefined();
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const stopped = JSON.parse(result.stdout) as { pid: number; exitCode: number };
+    expect(stopped.pid).toBe(stopping);
+    expect(stopped.exitCode).toBe(0);
   };
   try {
     await expect.poll(() => { try { return JSON.parse(fs.readFileSync(readyFile, 'utf8')).release; } catch { return null; } }, { timeout: 60000 }).toBe(latest.manifest.id);
@@ -83,7 +104,21 @@ test('offline per-user installer starts and reopens its stable copy without syst
       await expect.poll(() => app.windows().some(p => !p.url().includes('#overlay'))).toBe(true);
       const page = app.windows().find(p => !p.url().includes('#overlay'))!;
       await expect(page.getByTestId('app')).toBeVisible();
-      await expect(page.getByTestId('brain-setup')).toBeVisible();
+      // Verify the real renderer IPC before the current first-run screen: a rejected sender must fail this smoke.
+      const initial = await page.evaluate(async () => ({
+        info: await window.sb.invoke('app:info', undefined),
+        setup: await window.sb.invoke('setup:get', undefined),
+      }));
+      expect(initial.info.version).toBe(latest.manifest.version);
+      expect(['new', 'draft']).toContain(initial.setup.status);
+      if (initial.info.brainRoot) {
+        const relative = path.relative(root, initial.info.brainRoot);
+        expect(path.isAbsolute(relative)).toBe(false);
+        expect(relative.split(path.sep)[0]).not.toBe('..');
+      }
+      await expect(page.getByTestId('ai-first-modal')).toBeVisible();
+      await expect(page.getByTestId('ai-setup-fallback')).toBeVisible();
+      await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('app:info', undefined)).health?.jobGuard), { timeout: 60000 }).toBe('ready');
       const shots = path.join(repo, 'test-results/shots');
       fs.mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: path.join(shots, 'installer-first-run.png') });

@@ -98,7 +98,10 @@ public static class SbJob {
   public static string SpawnBoost(string dll, int pid) {
     var si = new Si(); si.cb = Marshal.SizeOf(typeof(Si)); Pi pi;
     var cmd = new System.Text.StringBuilder("powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \\"[void][Reflection.Assembly]::LoadFrom('" + dll.Replace("'", "''") + "'); [SbJob]::Boost(" + pid + ", 30000)\\"");
-    if (!CreateProcessW(null, cmd, IntPtr.Zero, IntPtr.Zero, false, 0x08000080, IntPtr.Zero, null, ref si, out pi)) return "err spawn " + Err();
+    // Reuse this helper's executable: a clean installer PATH need not include WindowsPowerShell.
+    var exe = Process.GetCurrentProcess().MainModule.FileName;
+    cmd.Remove(0, "powershell.exe".Length).Insert(0, string.Concat((char)34, exe, (char)34));
+    if (!CreateProcessW(exe, cmd, IntPtr.Zero, IntPtr.Zero, false, 0x08000080, IntPtr.Zero, null, ref si, out pi)) return "err spawn " + Err();
     CloseHandle(pi.T); CloseHandle(pi.P); return "ok";
   }
   // The app's process after app.exit: Windows ends a process only once each of its threads has run, and the app's exit
@@ -237,7 +240,8 @@ export class JobGuard {
         fs.mkdirSync(cacheDir, { recursive: true });
         env.SB_JOBGUARD_DLL = path.join(cacheDir, `sbjob-${crypto.createHash('sha256').update(CS).digest('hex').slice(0, 12)}.dll`);
       }
-      this.proc = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env });
+      const powershell = path.join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
+      this.proc = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env });
     } catch (e) { this.failed(String(e)); return; }
     const p = this.proc;
     p.stdout.setEncoding('utf8');

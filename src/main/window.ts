@@ -29,8 +29,8 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
       contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false,
     },
   });
-  const page = path.join(outDir, 'renderer', 'index.html');
-  setAppPage(pathToFileURL(page).href);
+  const page = pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href;
+  setAppPage(page);
   const wc = win.webContents;
   // a link the page opens (a chat's DevOps chips, a question's context links, "Apri fuori") goes to the system browser;
   // an agent's run (SB_HIDDEN, the e2e suite) never opens one: it records it (hiddenOpened)
@@ -49,9 +49,9 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
   // and its page gets the keyboard inside the app as a shown window would, without activating it on the desktop
   win.once('ready-to-show', () => { if (hidden) { win.showInactive(); wc.focus(); } else win.show(); });
   // SB_HANG_RELOAD_MS: e2e only, a hang reloads at once
-  guardRenderer(win, () => win.loadFile(page), { hangMs: Number(process.env.SB_HANG_RELOAD_MS) || undefined });
+  guardRenderer(win, () => win.loadURL(page), { hangMs: Number(process.env.SB_HANG_RELOAD_MS) || undefined });
   // Bootstrap defers the first page load until recovery and service IPC handlers exist.
-  if (loadImmediately) void win.loadFile(page);
+  if (loadImmediately) void win.loadURL(page);
   return win;
 }
 

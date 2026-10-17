@@ -23,6 +23,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RELEASE_WRITER_PROTOCOL, acquireReleaseLock, assertReleaseLease, withReleaseLock, releaseLockInfo, stageInstall, prepareApply, safePayloadPath } from './update.mjs';
 
+// This maintenance process verifies and copies runtime archives as physical files, never as virtual directories.
+// Electron's ASAR shim otherwise makes lstat(default_app.asar).isFile() false even when its bytes match.
+if (process.versions.electron) process.noAsar = true;
+
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // the app's shared folder and Electron's appData per OS: same rule as src/main/platform.ts (this file runs without the build)
 const home = os.homedir();
@@ -379,7 +383,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   else if (cmd === 'install-payload') {
     const id = assertReleaseId(process.argv[3]);
     const payload = path.dirname(fileURLToPath(import.meta.url));
-    if (path.resolve(path.dirname(payload)) !== path.resolve(base, '.installer', id) || !/^[a-f0-9]{64}$/.test(path.basename(payload))) throw new Error('installer payload must run from its private staging directory');
+    if (path.resolve(path.dirname(payload)) !== path.resolve(base, '.installer') || !/^[a-f0-9]{32}$/.test(path.basename(payload))) throw new Error('installer payload must run from its private staging directory');
     withReleaseLock(base, 'install-payload', lease => {
       const marker = stageInstall(base, payload, process.argv[4], lease);
       if (marker.id !== id) throw new Error('installer release identifier mismatch');
