@@ -15,7 +15,7 @@ import fixture from '../fixtures/extensions/pratiche.json';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); calls.clear(); });
 it('requires the exact app top-frame and honors the update freeze for mutations', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-sections-ipc-')); roots.push(root);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-sections-ipc space & percent%-')); roots.push(root);
   const file = path.join(root, 'index.html'); fs.writeFileSync(file, '<!doctype html>');
   const frame = { url: pathToFileURL(file).href }, contents = { mainFrame: frame } as unknown as WebContents;
   const event = { sender: contents, senderFrame: frame } as unknown as IpcMainInvokeEvent;

@@ -168,11 +168,32 @@ it.skipIf(process.platform !== 'win32')('uninstall preflight requires the parent
 
 it('installs from a private verified payload under the common writer lock', () => {
   const base = make(), p = payload();
-  const staged = path.join(base, '.installer', target, 'a'.repeat(64));
+  const staged = path.join(base, '.installer', 'a'.repeat(32));
   fs.cpSync(p.root, staged, { recursive: true });
   const result = spawnSync(process.execPath, [path.join(staged, 'release.mjs'), 'install-payload', target, p.sha256], { encoding: 'utf8', windowsHide: true, env: { ...process.env, SB_RELEASES_ROOT: base } });
   expect(result.status, result.stderr).toBe(0);
   expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: target, writerProtocol: 1 });
   const launcher = process.platform === 'win32' ? 'launch.vbs' : 'launch.sh';
   expect(fs.readFileSync(path.join(base, launcher), 'utf8')).toContain('second-brain stable launcher');
+});
+
+it.skipIf(process.platform !== 'win32')('installs physical ASAR runtime assets with the bundled Electron-as-Node', () => {
+  const base = make(), p = payload();
+  const executable = path.resolve(import.meta.dirname, '../../node_modules/electron/dist/electron.exe');
+  const archive = path.join(path.dirname(executable), 'resources/default_app.asar');
+  const name = 'electron/2.0.0/resources/default_app.asar';
+  put(p.root, name, fs.readFileSync(archive));
+  const rel = JSON.parse(fs.readFileSync(path.join(p.root, `releases/${target}/release.json`), 'utf8'));
+  const { sha256 } = manifestPayload(p.root, rel, 'a'.repeat(40), true);
+  const staged = path.join(base, '.installer', 'b'.repeat(32));
+  fs.cpSync(p.root, staged, { recursive: true });
+  const result = spawnSync(executable, [path.join(staged, 'release.mjs'), 'install-payload', target, sha256], {
+    encoding: 'utf8', windowsHide: true, timeout: 30000,
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SB_RELEASES_ROOT: base, SB_NO_SYNC: '1' },
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+  expect(fs.statSync(path.join(base, name)).isFile()).toBe(true);
+  expect(hashFile(path.join(base, name))).toBe(hashFile(archive));
+  expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')).current).toBe(target);
 });

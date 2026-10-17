@@ -8,6 +8,7 @@
 // what the user does in the layer goes back to the app page (overlay:action). Used by index.ts.
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { OverlayAction, OverlayModel } from '../shared/contract';
 import { Emitter } from './ipc';
 import { swallowCloseKey } from './keyguard';
@@ -50,6 +51,8 @@ export class OverlayLayer {
     });
     view.setBackgroundColor('#00000000');
     const wc = view.webContents;
+    const page = pathToFileURL(path.join(this.outDir, 'renderer', 'index.html'));
+    page.hash = 'overlay';
     wc.setWindowOpenHandler(() => ({ action: 'deny' }));
     wc.on('will-navigate', e => e.preventDefault());
     swallowCloseKey(wc); // focused layer + Ctrl+W would reach the default menu and quit the app (keyguard.ts)
@@ -59,9 +62,9 @@ export class OverlayLayer {
     wc.on('render-process-gone', (_e, d) => {
       this.ready = false; // events sent now would be lost: the reloaded page gets the model on did-finish-load
       log.error('overlay', 'layer page crashed', { cause: d.reason, hint: 'it reloads by itself; questions stay answerable in the app' });
-      setTimeout(() => { if (!wc.isDestroyed()) void wc.loadFile(path.join(this.outDir, 'renderer', 'index.html'), { hash: 'overlay' }); }, 300);
+      setTimeout(() => { if (!wc.isDestroyed()) void wc.loadURL(page.href); }, 300);
     });
-    void wc.loadFile(path.join(this.outDir, 'renderer', 'index.html'), { hash: 'overlay' });
+    void wc.loadURL(page.href);
     this.view = view;
     win.on('resize', () => this.place());
     win.on('closed', () => this.stop());

@@ -34,7 +34,7 @@ WizardStyle=modern
 
 [Files]
 ; Inno never writes active/bootstrap/immutable assets outside the common release-writer lock.
-Source: "{#Payload}\*"; DestDir: "{app}\.installer\{#ReleaseId}\{code:InstallerToken}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Payload}\*"; DestDir: "{app}\.installer\{code:InstallerToken}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{code:DesktopShortcut}\second-brain"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; AppUserModelID: "second-brain"
@@ -59,6 +59,7 @@ Type: filesandordirs; Name: "{app}\.installer"
 var
   UninstallLock, UninstallOwner, UninstallToken: String;
   UninstallMutating, UninstallComplete: Boolean;
+  SetupInitializationPending: Boolean;
 
 function NativeCreateDirectory(Name: String; Security: Integer): Boolean;
   external 'CreateDirectoryW@kernel32.dll stdcall';
@@ -72,7 +73,8 @@ function SetEnvironmentVariable(Name, Value: String): Boolean;
 function InstallerToken(Param: String): String;
 begin
   { The installer-owned temp directory is unique per running Setup; concurrent builds never share a payload. }
-  Result := GetSHA256OfString(ExpandConstant('{tmp}'));
+  { 128 bits preserve isolation while keeping the nested payload below Inno 6's MAX_PATH limit. }
+  Result := Copy(GetSHA256OfString(ExpandConstant('{tmp}')), 1, 32);
 end;
 
 function JournalName(Index: Integer): String;
@@ -229,11 +231,12 @@ var
   ExitCode: Integer;
 begin
   if CurStep = ssPostInstall then begin
+    SetupInitializationPending := True;
     SetEnvironmentVariable('ELECTRON_RUN_AS_NODE', '1');
     SetEnvironmentVariable('SB_RELEASES_ROOT', ExpandConstant('{app}'));
     SetEnvironmentVariable('SB_NO_SYNC', '1');
-    if not Exec(ExpandConstant('{app}\.installer\{#ReleaseId}\{code:InstallerToken}\electron\{#ElectronVersion}\electron.exe'),
-      ExpandConstant('"{app}\.installer\{#ReleaseId}\{code:InstallerToken}\release.mjs" install-payload {#ReleaseId} {#PayloadManifestSha256}'), ExpandConstant('{app}'),
+    if not Exec(ExpandConstant('{app}\.installer\{code:InstallerToken}\electron\{#ElectronVersion}\electron.exe'),
+      ExpandConstant('"{app}\.installer\{code:InstallerToken}\release.mjs" install-payload {#ReleaseId} {#PayloadManifestSha256}'), ExpandConstant('{app}'),
       SW_HIDE, ewWaitUntilTerminated, ExitCode) then
       RaiseException('Cannot initialize the installed release. No application was started.');
     if ExitCode <> 0 then RaiseException('Release initialization failed. No application was started.');
@@ -241,5 +244,12 @@ begin
     if not ShellExec('', ExpandConstant('{sys}\wscript.exe'), ExpandConstant('"{app}\launch.vbs"'),
       ExpandConstant('{app}'), SW_HIDE, ewNoWait, ExitCode) then
       RaiseException('The application is installed, but could not be started.');
+    SetupInitializationPending := False;
   end;
+end;
+
+function GetCustomSetupExitCode: Integer;
+begin
+  if SetupInitializationPending then Result := 1
+  else Result := 0;
 end;

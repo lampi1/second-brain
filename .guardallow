@@ -8,6 +8,9 @@ build/windows.iss email sha256:be2f6db1732a34ceede3e44b5b9530539b242740a4ffb4939
 # Public AppId and fixed kernel32 API imports in the common release-writer protocol installer/uninstaller.
 build/windows.iss guid sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
 build/windows.iss email sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
+# Same public installer AppId and fixed kernel32 imports; shortened staging and explicit Setup initialization failure status.
+build/windows.iss guid sha256:bdd339a072e4c739253dea4ae3d3c04be71ce6f67a2b1f8f7af556969b43323d
+build/windows.iss email sha256:bdd339a072e4c739253dea4ae3d3c04be71ce6f67a2b1f8f7af556969b43323d
 # App icon, generated from build/icon.svg by scripts/make-icon.cjs: 10 PNG images (16-256 px), chunks IHDR/IDAT/IEND
 # only, no text or metadata (checked 2026-10-11). A new icon blocks the sync until someone checks it and ADDS a line
 # with its hash; never remove an old line: the public history keeps the old icon and the history scan checks it.

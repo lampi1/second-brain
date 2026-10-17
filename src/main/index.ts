@@ -4,7 +4,7 @@ import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { initRelease } from './release';
 import { createWindow, hiddenOpened, hiddenRun } from './window';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
@@ -271,7 +271,7 @@ app.whenReady().then(async () => {
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
-  void win.loadFile(path.join(outDir, 'renderer', 'index.html'));
+  void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting

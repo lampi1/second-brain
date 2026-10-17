@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JobGuard, parseMembers, type JobMember } from '../../../src/main/chats/jobguard';
 import { jobTools } from '../../../src/main/chats/proctree';
 import { alive, killStray, tmp, waitFor } from './helpers';
@@ -39,6 +39,7 @@ describe('jobguard', () => {
     for (const g of guards.splice(0)) g.stop();
     for (const pid of strays.splice(0)) killStray(pid);
     delete process.env.SB_JOBGUARD;
+    vi.unstubAllEnvs();
   });
 
   it('parses job members and skips bad parts', () => {
@@ -98,7 +99,11 @@ describe('jobguard', () => {
     expect(alive(keptChild)).toBe(true);
   }, 60000);
 
-  it.runIf(win)('quit kills the jobs, ends the helper and leaves a booster raising the threads of a process tree', async () => {
+  it.runIf(win)('quit kills the jobs and boosts its process tree without PowerShell on PATH', async () => {
+    const system = process.env.SystemRoot || 'C:/Windows';
+    const powershell = path.join(system, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+    // A colleague's installation has no dependency on a PowerShell PATH entry.
+    vi.stubEnv('PATH', `${system};${path.join(system, 'System32')}`);
     process.env.SB_JOBGUARD = '1';
     const g = new JobGuard(); guards.push(g);
     g.start(tmp('jg-cache')); // the booster loads the helper's assembly file
@@ -118,7 +123,7 @@ describe('jobguard', () => {
     const [kid, other] = await waitFor(() => { const v = out.trim().split(' ').map(Number); return v.length === 2 && v.every(Boolean) ? (v as [number, number]) : null; }, 'target children', 15000);
     strays.push(kid, other);
     for (const pid of [target.pid!, kid, other]) os.setPriority(pid, os.constants.priority.PRIORITY_LOW);
-    const bases = (pid: number) => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${pid}).Threads | % { $_.BasePriority }`], { encoding: 'utf8', windowsHide: true }).split(/\s+/).filter(Boolean).map(Number);
+    const bases = (pid: number) => execFileSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${pid}).Threads | % { $_.BasePriority }`], { encoding: 'utf8', windowsHide: true }).split(/\s+/).filter(Boolean).map(Number);
     expect(Math.max(...bases(target.pid!), ...bases(kid))).toBeLessThan(8);
     await g.quit(target.pid!, 10000);
     await waitFor(() => !alive(heldChild), 'held child killed by the quit', 10000);
