@@ -1,0 +1,21 @@
+// The owner's profile (me.md) texts: Settings → Il mio profilo and the first interview's profile questions.
+export const profileIt = {
+ 'profile.group':'Il mio profilo',
+ 'profile.lead':'Come ti conoscono i tuoi agenti: è il file me.md della tua memoria, letto all’inizio di ogni chat.',
+ 'profile.name':'Nome','profile.role':'Ruolo','profile.language':'Lingua in chat','profile.mainWork':'Aree di lavoro','profile.replyStyle':'Stile delle risposte',
+ 'profile.mainWorkHint':'Una riga per area: progetti, clienti o temi che segui.','profile.empty':'Ancora da indicare',
+ 'profile.edit':'Modifica','profile.save':'Salva il profilo','profile.saved':'Profilo salvato in me.md.','profile.open':'Apri me.md',
+ 'profile.rules':(p:{n:number})=>p.n===1?'1 regola su come lavorare con te':`${p.n} regole su come lavorare con te`,
+ 'profile.growth':'Il profilo cresce con l’uso: quando dici in chat «d’ora in poi…», brain-editor aggiunge la regola qui; il diario registra il lavoro di ogni giorno.',
+ 'profile.updated':(p:{date:string})=>`Ultima modifica del profilo: ${p.date}`,
+ 'profile.journal':(p:{n:number;date:string})=>p.n===1?`Diario: 1 giorno, l’ultimo il ${p.date}`:`Diario: ${p.n} giorni, l’ultimo il ${p.date}`,
+ 'profile.journalNone':'Diario: ancora nessun giorno scritto',
+ 'profile.locked':'Questo campo ha una forma personalizzata in me.md: si cambia chiedendolo in chat (brain-editor).',
+ 'profile.noBrain':'Collega una memoria di lavoro per vedere e modificare il tuo profilo.',
+ 'profile.missing':'La memoria collegata non ha un file me.md.',
+ 'profile.unreadable':'Il file me.md non si può leggere in modo sicuro (collegamento, dimensione o permessi).',
+ 'profile.changed':'me.md è cambiato nel frattempo: ho caricato la versione nuova, le tue modifiche sono ancora qui. Controlla e salva di nuovo.',
+ 'profile.tooMany':(p:{n:number})=>`Al massimo ${p.n} aree di lavoro: unisci quelle vicine.`,
+ 'profile.invalid':'Alcuni campi non sono validi: nome senza simboli, ogni campo su una riga.',
+ 'profile.error':'Salvataggio non riuscito. Il file non è stato modificato.',
+};

@@ -1,0 +1,11 @@
+/* Settings → Il mio profilo (components/ProfileSettings.tsx): the me.md view, its edit form and the growth notes. */
+.st-profile { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; }
+.st-profile-view { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+.st-profile-view dt { color: var(--text-2); font-size: var(--fs-s); font-weight: 600; }
+.st-profile-view dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.st-profile-view ul, .st-profile-rules ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: var(--fs-s); }
+.st-profile-form fieldset { display: flex; flex-direction: column; gap: 10px; border: 0; padding: 0; margin: 0; }
+.st-profile-form input, .st-profile-form textarea { width: 100%; max-width: 560px; }
+.st-profile-rules summary { cursor: pointer; font-weight: 600; font-size: var(--fs-s); }
+.st-profile-rules li + li { margin-top: 4px; }
+.st-profile-growth { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }

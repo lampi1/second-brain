@@ -10,6 +10,7 @@ import{ui,setPrefs,openModal,toast}from'../store/ui';
 import{t}from'../i18n';
 import{AppearancePreview}from'./AppearancePreview';
 import{RolePreferences}from'./RolePreferences';
+import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import'../styles/settings.css';
@@ -38,6 +39,7 @@ export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
  if(!settings)return null;
  const groups=[
+  {id:'profile',title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
   {id:'connectors',title:t('connector.group'),search:'GitHub Jira collegamenti connectors projects',body:<AppConnectorScreen/>},
   {id:'accounts',title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' '),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
   {id:'space',title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
