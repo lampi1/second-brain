@@ -58,6 +58,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 export interface ChatManagerOptions {
   /** Main-confirmed canonical data only; never renderer-provided system instructions or permission grants. */
   essentialContext?: () => { text: string };
+  agentCatalogBrief?: () => string;
   resolveAgent?: AgentCatalogService['resolve'];
   onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
@@ -574,9 +575,12 @@ export class ChatManager implements ChatService {
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
     const body = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
-    const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente scelto dall’utente: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
+    const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
     const essential = this.essentialPrefix(r.session);
-    try { r.session.send(`${essential}${profile}${body}`, imgs); r.agentPrimed = true; } catch (e) {
+    try {
+      const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
+      r.session.send(`${essential}${profile}${catalog}${body}`, imgs); r.agentPrimed = true;
+    } catch (e) {
       this.sentEssential.delete(r.session);
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }

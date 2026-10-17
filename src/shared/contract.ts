@@ -3,6 +3,7 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
+import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
 import type { SectionManifest } from './extension-section';
 import type { SectionSnapshot, SectionContextPacket, ContextArchive, ContextFactInput } from './data-sections';
@@ -1101,6 +1102,12 @@ export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexe
 export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
 
 export interface InvokeMap {
+  'connectors:list': [void, ConnectorState[]];
+  'connectors:login': [{ provider: ConnectorId }, void];
+  'connectors:cancelLogin': [void, void];
+  'connectors:probe': [{ provider: ConnectorId }, ConnectorState];
+  'connectors:select': [{ provider: ConnectorId; projects: string[] }, ConnectorState];
+  'connectors:disconnect': [{ provider: ConnectorId }, void];
   'update:get': [void, AppUpdateState];
   'update:apply': [{ id: string }, AppUpdateState];
   'update:checkpointAnswer': [UpdateCheckpointAnswer, void];
@@ -1339,6 +1346,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:brainCreation', 'app:createBrain',
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',

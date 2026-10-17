@@ -10,6 +10,8 @@ import { engineStatuses } from './cli';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
+import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
+import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
 import { createDataSections } from './extensions/wiring';
 import type { SectionController } from './extensions/controller';
@@ -116,7 +118,7 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Regia's input means (ADR 0034)
-  const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${NEW_CHAT_RULE}`;
+  const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${NEW_CHAT_RULE}`;
   // /mcp/app: test agents (acts as the first Regia); /mcp/app/r/<id>/<token>: each work Regia's own, so the tools know
   // the caller (ADR 0021). Only an open Regia with its own token answers (the token lives only here and in its config).
   mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools(deps).map(as) });
@@ -246,6 +248,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
   };
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    language: () => brain.settings().language === 'system' ? systemLang() : brain.settings().language as 'it' | 'en',
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
@@ -297,6 +300,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
   const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false);
+  addChatTools([agentCatalogTool(() => agents.list())]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -317,6 +321,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     essentialContext: () => sections.context({ ids: [] }),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
+    agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
     userData: ctx.userData,
     enginePaths: enginePathsFromEnv(),
@@ -467,7 +472,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), manager.analytics.readModel(), selection), chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();

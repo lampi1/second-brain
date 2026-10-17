@@ -65,16 +65,18 @@ unknown selections fail, whole objects that do not fit are reported omitted. No 
 Invoke on an explicit preview/suggestion request; this function sends nothing and runs no model per refresh.
 Use the existing proposal, review ledger, preview and human publication flow. No new wizard/branch/autopush.
 
-## Routing metadata proposal for s (not yet wired)
+## Runtime routing metadata
 
-Extend the EXISTING AgentDraft/Profile schema with optional routing metadata, not the data-section manifest:
+The EXISTING AgentDraft/Profile schema now includes optional routing metadata, not the data-section manifest:
 whenToUse, whenNotToUse, input/output contract descriptions, declared tool IDs, access scopes and success
 criteria. Keep verified/unknown capability evidence separate and bound to profile ID/revision and harness
 observations; a creator's declaration alone is not verification. Compact candidate discovery should contain
-metadata and status only; private instructions/skills are fetched by explicit profile ID under a separate budget.
+metadata and status only; private instructions/skills are excluded from discovery and remain in existing explicit
+profile editing and launch flows.
 Ambiguous matches and conflicting scopes require clarification; a user override still passes the harness's
 tool/access enforcement. Neither task mail nor a metadata declaration grants protected-operation consent.
-This is an integration API proposal awaiting s, not implemented runtime routing or security enforcement.
+Runtime contract, discovery boundaries and compatibility behavior are documented in
+[ADR 0066](adr/0066-agent-operating-manifest.md). Declarations never replace harness security enforcement.
 
 ## Memory sources consulted
 

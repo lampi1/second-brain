@@ -1,5 +1,9 @@
 /* Catalog, interview and agent identity. Reuses existing app controls without a second theme or overlay system. */
 .agent-studio { padding:20px; max-width:1440px; margin:auto; }
+.agent-manifest { min-width:0; overflow-wrap:anywhere; }
+.agent-catalog article > .agent-manifest { flex-basis:100%; }
+.agent-manifest summary { cursor:pointer; font-weight:600; }
+.agent-manifest > p,.agent-manifest > div,.agent-manifest > label { margin-top:8px; }
 .studio-columns.no-editor{display:block}.agent-catalog[data-agent-template="grid"]{grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr))}.agent-catalog[data-agent-template="list"]{grid-template-columns:1fr}.agent-catalog article{flex-wrap:wrap;align-content:start;border-color:var(--border-2)!important;border-radius:var(--r-m)!important;background:var(--surface)}.agent-catalog article>div{min-width:140px}.agent-catalog article>button{font-size:var(--fs-s)}.agent-editor{border-color:var(--border-2)!important;min-width:0}.agent-editor input,.agent-editor textarea,.agent-editor select{max-width:100%;width:100%}.agent-editor .field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.agent-editor .field{min-width:0}.agent-editor p{font-size:var(--fs-s);color:var(--text-2)}.agent-editor details{border-top:1px solid var(--border);padding-top:10px}.agent-editor summary{cursor:pointer;font-weight:600}
 .studio-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }.studio-head > div { flex:1; min-width:240px; }
 .studio-columns { display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.3fr); gap:24px; align-items:start; }

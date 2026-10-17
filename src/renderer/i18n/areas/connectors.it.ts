@@ -1,0 +1,21 @@
+// App-owned connector UI: account evidence is distinct from agent permissions and native harness setup.
+export const connectorsIt = {
+ 'connector.group':'Strumenti e progetti',
+ 'connector.title':'Collega i tuoi strumenti','connector.intro':'Scegli GitHub o Jira e i progetti che usi. Puoi tornare qui dalle Impostazioni.',
+ 'connector.scope':'Il collegamento vale per questa app. Gli accessi dei singoli agenti restano separati.',
+ 'connector.githubHint':'Usa il tuo accesso GitHub CLI.','connector.jiraHint':'Collega il tuo sito Jira Cloud.',
+ 'connector.githubDetails':'Serve GitHub CLI (gh), disponibile dal sito ufficiale.','connector.jiraDetails':'Il token API classico si inserisce in una pagina locale dedicata e viene cifrato sul computer.',
+ 'connector.pending':'Accesso da completare','connector.verified':'Collegato e verificato','connector.failed':'Verifica non riuscita',
+ 'connector.failureHint':'Controlla accesso, scadenza del token, rete e permessi, poi riprova.',
+ 'connector.checked':({at}:{at:string})=>`Ultima verifica: ${at}`,
+ 'connector.login':({name}:{name:string})=>`Accedi a ${name}`,'connector.probe':({name}:{name:string})=>`Verifica accesso a ${name}`,
+ 'connector.disconnect':({name}:{name:string})=>`Scollega ${name} dall’app`,
+ 'connector.projects':'Quali progetti vuoi ritrovare? (fino a 100)','connector.empty':'Nessun progetto visibile con questo account.',
+ 'connector.details':'Dettagli del collegamento','connector.revoke':'Scollegare rimuove le scelte locali. Per revocare l’accesso usa il sito ufficiale.',
+ 'connector.revokeJira':'Scollegare rimuove le scelte locali e il token cifrato. Per revocare l’accesso usa il sito ufficiale.',
+ 'connector.loadError':'Impossibile leggere i collegamenti. Riapri il pannello per riprovare.',
+ 'connector.error':'Operazione non completata. Controlla accesso, GitHub CLI o portachiavi di sistema e riprova.',
+ 'connector.notice':'Completa l’accesso nella finestra dedicata, poi torna qui e premi Verifica accesso.',
+ 'connector.loading':'Caricamento dei collegamenti…','connector.cancel':'Annulla accesso','connector.cancelError':'Annullamento non completato',
+ 'connector.continue':'Continua','connector.later':'Più tardi',
+};

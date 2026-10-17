@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/format';
 import { IconRefresh } from './ui';
 import { HelpTip } from '../../components/HelpTip';
+import { t } from '../../i18n';
 
 export function Loading({ label = 'Leggo il cervello…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
   const [slow, setSlow] = useState(false);
@@ -23,14 +24,14 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 }
 
 /** What failed, why (the server's own words) and one thing to do. */
-export function ErrorState({ what = 'Non riesco a leggere questi dati', error, onRetry }: { what?: string; error: string; onRetry?: () => void }) {
-  const hint = /server dati|brain-site|non è partito|uscito/.test(error) ? 'Il cervello scelto non ha il suo server dati, o non parte: guarda in Impostazioni la cartella del cervello.'
-    : /tempo|timeout/.test(error) ? 'Il calcolo è lento (fino a un minuto la prima volta): riprova tra poco.'
-      : /DevOps|az login/.test(error) ? 'DevOps non risponde: rifai "az login" nel terminale, poi riprova.' : '';
+export function ErrorState({ what = t('costs.readError'), error, onRetry }: { what?: string; error: string; onRetry?: () => void }) {
+  const hint = /server dati|brain-site|non è partito|uscito/.test(error) ? t('costs.serverHint')
+    : /tempo|timeout/.test(error) ? t('costs.slowHint')
+      : /DevOps|az login/.test(error) ? t('costs.devopsHint') : '';
   return (
     <div className="bx-error" role="alert" data-testid="bx-error">
       <div className="t"><b>{what}</b><span className="cause">{error}</span>{hint && <span className="cause">{hint}</span>}</div>
-      {onRetry && <button type="button" className="bx-btn" onClick={onRetry}><IconRefresh /> Riprova</button>}
+      {onRetry && <button type="button" className="bx-btn" onClick={onRetry}><IconRefresh /> {t('costs.retry')}</button>}
     </div>
   );
 }
@@ -53,9 +54,9 @@ export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions
         <span className="sp" />
         <div className="bx-meta">
           {live && <span className="bx-live" aria-hidden="true" />}
-          {at ? <span title={fmt.when(at)}>{refreshing ? 'ricalcolo in corso · ' : ''}aggiornato {fmt.ago(at)}</span> : refreshing ? <span>ricalcolo in corso</span> : null}
+          {at ? <span title={fmt.when(at)}>{refreshing ? `${t('costs.recalculating')} · ` : ''}{t('costs.updated')} {fmt.ago(at)}</span> : refreshing ? <span>{t('costs.recalculating')}</span> : null}
           {actions}
-          {onRefresh && <button type="button" className="bx-btn s" onClick={onRefresh} title="Rilegge i file adesso (zero token)" data-testid="bx-refresh"><IconRefresh /> Aggiorna</button>}
+          {onRefresh && <button type="button" className="bx-btn s" onClick={onRefresh} title={t('costs.refreshHint')} data-testid="bx-refresh"><IconRefresh /> {t('costs.refresh')}</button>}
         </div>
       </div>
       {lead && <p className="bx-lead" data-testid="bx-lead">{lead}</p>}
@@ -74,9 +75,9 @@ export function Explain({ find, next, says, why }: ExplainProps) {
       {next && <p className="next">→ {next}</p>}
       {(says || why) && (
         <span className="more">
-          <HelpTip text="Cosa significa?">
-            {says && <p><b>Cosa ti dice:</b> {says}</p>}
-            {why && <p><b>Perché ti interessa:</b> {why}</p>}
+          <HelpTip text={t('costs.meaning')}>
+            {says && <p><b>{t('costs.says')}</b> {says}</p>}
+            {why && <p><b>{t('costs.why')}</b> {why}</p>}
           </HelpTip>
         </span>
       )}

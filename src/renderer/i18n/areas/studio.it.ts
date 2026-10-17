@@ -1,5 +1,17 @@
 // Agent catalog/editor labels; no model/provider output is translated or invented.
 export const studioIt={
+  "studio.manifest": "Quando delegare a questo agente",
+  "studio.manifestHint": "Indicazioni dichiarate per scegliere l’agente. Non verificano capacità né concedono permessi o accessi.",
+  "studio.manifest.whenToUse": "Quando usarlo",
+  "studio.manifest.whenNotToUse": "Quando non usarlo",
+  "studio.manifest.input": "Input richiesto",
+  "studio.manifest.output": "Risultato atteso",
+  "studio.manifest.declaredTools": "Strumenti dichiarati",
+  "studio.manifest.accessScopes": "Accessi richiesti",
+  "studio.manifest.successCriteria": "Criteri di successo",
+  "studio.manifestUnknown": "Non specificato",
+  "studio.manifestLines": "Una voce per riga, massimo 12 voci da 200 caratteri.",
+  "studio.manifestInvalid": "Controlla il manifest: rispetta i limiti delle voci e rimuovi caratteri di controllo.",
   "studio.retry": "Riprova",
   "studio.loading": "Caricamento del catalogo…",
   "studio.edit": "Modifica",

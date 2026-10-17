@@ -7,7 +7,7 @@ import { lang } from '../../renderer/i18n';
 import { createAiSetupPort } from './port';
 import { AiSetupScreen } from './Screen';
 import { aiCopy } from './i18n';
-export function AiFirstGate({ setup, onFallback }: { setup: SetupState; onFallback: () => void }) {
-  const language = lang(), port = useMemo(() => createAiSetupPort(setup, language), []);
+export function AiFirstGate({ setup, onFallback, onConnected }: { setup: SetupState; onFallback: () => void; onConnected?: () => void }) {
+  const language = lang(), port = useMemo(() => createAiSetupPort(setup, language, onConnected), []);
   return <Modal onClose={closeModal} label={aiCopy[language].title} className="modal-ai-first" testid="ai-first-modal"><div className="modal-body"><AiSetupScreen port={port} language={language} guide={setup.preferences.guide} onFallback={onFallback}/></div></Modal>;
 }

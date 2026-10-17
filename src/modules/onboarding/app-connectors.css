@@ -1,0 +1,8 @@
+/* Minimal connector cards; status once, essential actions visible, security details on demand. Shared by setup and Settings. */
+.app-connectors{display:grid;gap:14px}.app-connectors>h2,.app-connectors>p{margin:0}
+.app-connector-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:12px}
+.app-connector-card{border:1px solid var(--border);border-radius:var(--r-m,8px);padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.app-connector-card h3,.app-connector-card p{margin:0}.app-connector-card header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.app-connector-card header [role=status]{font-size:11px;color:var(--muted)}.app-connector-card .st-inline{flex-wrap:wrap}
+.app-connector-card small{display:block;color:var(--muted);overflow-wrap:anywhere}.app-connector-card details{font-size:12px}.app-connector-card details p{margin:8px 0}
+.app-connector-card fieldset{min-width:0;margin:0;padding:8px}.app-connector-card .interview-choice{display:flex;gap:8px;align-items:center}

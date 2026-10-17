@@ -53,6 +53,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.start();
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => null, settings: brain });
+  const agents = createAgentCatalog(ctx, brain, engines, () => null, true);
   const devopsRun = demoDevopsRun(now);
   const devops = new DevopsService({
     file: path.join(ctx.userData, 'devops-demo.json'), brainRoot: () => 'demo', locate: () => 'devops-me.mjs (demo)', locateQa: () => 'qa-status.mjs (demo)',
@@ -83,7 +84,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const sections = createDataSections(ctx.userData, ctx.window, () => brain.settings().language);
   // The demo has no native collector observations. Empty evidence is explicit, never inferred from scripted chat text.
   brain.serveApi('/api/agents/analytics', () => aggregateAgentUsage([]));
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), aggregateAgentUsage([]), selection), chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), aggregateAgentUsage([]), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -143,7 +144,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, engines, later: createLater(ctx),
-    agents: createAgentCatalog(ctx, brain, engines, () => null, true),
+    agents,
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => null, brain, chats, emit: () => {}, focus: () => {}, disabled: true }),
     setup: new SetupService(ctx.userData, true, now),
     sections,

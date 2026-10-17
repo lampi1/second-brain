@@ -12,6 +12,8 @@ import { AppearancePreview } from './AppearancePreview';
 import {t}from'../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
+import { AgentManifestPanel } from './AgentManifestPanel';
+import { checkedManifest } from '@shared/agent-manifest';
 import '../styles/agent-studio.css';
 
 export function AgentStudio() {
@@ -41,7 +43,9 @@ export function AgentStudio() {
   const change = (patch: Partial<AgentDraft>) => { revision.current++; setUploading(false); setEditing(p => p ? { ...p, ...patch } : p); setSuggestion(null); };
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
   const knownModel = !!choice && (editing?.model === null ? choice.defaultModel : choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
-  const canSave = !!editing?.name.trim() && !!editing.purpose.trim() && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !uploading && !catalog?.problem;
+  let validManifest = true;
+  try { checkedManifest(editing?.manifest); } catch { validManifest = false; }
+  const canSave = !!editing?.name.trim() && !!editing.purpose.trim() && validManifest && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !uploading && !catalog?.problem;
   const save = async () => {
     if (!editing || !canSave || working.current) return;
     working.current = true;
@@ -85,12 +89,15 @@ export function AgentStudio() {
         <AgentAvatar avatar={profile.avatar} name={profile.name} size={36} /><div><h3>{profile.name}</h3><p>{profile.purpose}</p><small>{catalog.models.find(e => e.engine === profile.engine)?.label ?? profile.engine} · {profile.model || t('studio.defaultEngine')}</small></div>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => pick(profile)}>{t('studio.edit')}</button>
         <button type="button" className="link-btn" disabled={busy} onClick={() => { setBusy(true); void duplicateAgent(profile.id).then(profile => pick(profile), () => setProblem(t('studio.duplicateError'))).finally(() => setBusy(false)); }}>{t('studio.duplicate')}</button>
+        <AgentManifestPanel manifest={profile.manifest} />
       </article>)}
       {catalog?.profiles.length === 0 && <p>{t('studio.empty')}</p>}
     </div>{editing && catalog && <form className="agent-editor" onSubmit={e => { e.preventDefault(); void save(); }} aria-label={id ? t('studio.editAgent') : t('studio.createAgent')}>
       <fieldset disabled={busy} className="agent-editor-fields"><legend>{id ? t('studio.editAgent') : t('studio.newAgent')}</legend><p>{t('studio.newSessions')}</p>
       <label className="field"><span>{t('studio.name')}</span><input ref={nameInput} maxLength={80} value={editing.name} onChange={e => change({ name: e.target.value })} required data-testid="agent-name" /></label>
       <label className="field"><span>{t('studio.purpose')}</span><textarea maxLength={400} rows={2} value={editing.purpose} onChange={e => change({ purpose: e.target.value })} required data-testid="agent-purpose" /></label>
+      <AgentManifestPanel manifest={editing.manifest} onChange={manifest => change({ manifest })} />
+      {!validManifest && <p role="alert">{t('studio.manifestInvalid')}</p>}
       <details className="agent-advanced"><summary>{t('product.advanced')}</summary>
       <label className="field"><span>{t('studio.instructions')}</span><textarea maxLength={6000} rows={4} value={editing.instructions} onChange={e => change({ instructions: e.target.value })} placeholder={t('studio.instructionsHint')} data-testid="agent-instructions" /></label>
       <div className="field-row"><label className="field"><span>{t('studio.engine')}</span><select value={editing.engine} onChange={e => change({ engine: e.target.value, model: null, effort: undefined })} data-testid="agent-engine">{catalog.models.map(e => <option key={e.engine} value={e.engine} disabled={!e.enabled || !e.trusted}>{e.label}{!e.enabled ? ` · ${t('studio.disabled')}` : !e.trusted ? ` · ${t('studio.trust')}` : ''}</option>)}</select></label>
@@ -109,7 +116,7 @@ export function AgentStudio() {
         <textarea rows={3} value={guideText} onChange={e => setGuideText(e.target.value)} maxLength={6000} placeholder={t('studio.guideExample')} aria-label={t('studio.guideMessage')} />
         {catalog.builder.available ? <label className="field"><span>{t('studio.guideModel')}</span><select value={guideModel || catalog.builder.models[0] || ''} onChange={e => setGuideModel(e.target.value)}>{catalog.builder.models.map(m => <option key={m}>{m}</option>)}</select></label> : <p role="status">{catalog.builder.reason || t('studio.guideUnavailable')}</p>}
         <button type="button" className="btn btn-ghost" disabled={busy || !catalog.builder.available || !guideText.trim()} onClick={() => void askGuide()}>{t('studio.sendGuide')}</button>
-        {suggestion && <section aria-label={t('studio.suggestion')}><h4>{suggestion.name}</h4><p>{suggestion.purpose}</p><pre>{suggestion.instructions}</pre><p>{t('studio.engine')}: {suggestion.engine} · {suggestion.model || t('studio.defaultEngine')}</p><button type="button" className="btn btn-ghost" onClick={() => { change(suggestion); setSuggestion(null); }}>{t('studio.useDraft')}</button></section>}
+        {suggestion && <section aria-label={t('studio.suggestion')}><h4>{suggestion.name}</h4><p>{suggestion.purpose}</p><pre>{suggestion.instructions}</pre><AgentManifestPanel manifest={suggestion.manifest} /><p>{t('studio.engine')}: {suggestion.engine} · {suggestion.model || t('studio.defaultEngine')}</p><button type="button" className="btn btn-ghost" onClick={() => { change(suggestion); setSuggestion(null); }}>{t('studio.useDraft')}</button></section>}
       </details>
       <button type="submit" className="btn btn-primary" disabled={!canSave} data-testid="agent-save">{busy ? t('studio.busy') : t('studio.save')}</button>
       </fieldset>

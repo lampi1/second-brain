@@ -194,7 +194,8 @@ export function match(routes: RoutingRow[] | undefined, item: { kind: TaskKind; 
   return best;
 }
 
-export interface RouteAsk { harness?: Harness; model?: string; effort?: Effort; reason?: string }
+/** Explicit null selects the engine default; omission inherits routing policy. Neither grants permission. */
+export interface RouteAsk { harness?: Harness; model?: string | null; effort?: Effort | null; reason?: string }
 /** The user's "Chat aperte dalla Regia": the engine, each engine's model ('' / null = the CLI's) and the Claude effort. */
 export interface RouteDefaults { harness: Harness; models: Record<Harness, string | null>; effort: Effort | null }
 export type Resolved = { harness: Harness; model: string | null; effort: Effort | null; source: RouteDecision['source']; reason: string | null } | { error: string };
@@ -214,9 +215,9 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   const harness = ask.harness ?? base.harness;
   // a model belongs to its harness: switching harness takes that harness's default model, never the other one's
   const sameEngine = harness === base.harness;
-  const model = ask.model ?? (sameEngine ? base.model : defaults.models[harness] || null);
+  const model = ask.model !== undefined ? ask.model : (sameEngine ? base.model : defaults.models[harness] || null);
   const m = modelRow(model, reg);
-  let effort = ask.effort ?? (!takesEffort(harness) ? null : sameEngine ? base.effort : defaults.effort);
+  let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaults.effort);
   // an effort nobody named that the chosen model lacks is dropped (the CLI's default), never an error
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };

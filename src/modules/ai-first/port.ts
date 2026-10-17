@@ -9,9 +9,9 @@ import { engines, guidePrompt, replyProof } from './model';
 import type { SetupEngine } from './model';
 import type { AiSetupPort, EngineOption } from './contract';
 import type { ChatItem, CliStatus } from '../../shared/contract';
-export function createAiSetupPort(initial: SetupState, language: 'it' | 'en'): AiSetupPort {
+export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', onConnected?: () => void): AiSetupPort {
   let preferences = initial.preferences;
-  const persist = async (guide?: SetupGuide) => { const value = await saveSetup({ ...preferences, ...(guide ? { guide } : {}) }, 'draft'); preferences = value.preferences; };
+  const persist = async (guide?: SetupGuide) => { const value = await saveSetup({ ...preferences, ...(guide ? { guide } : {}) }, guide?.stage === 'guided' ? 'completed' : 'draft'); preferences = value.preferences; };
   const trust = async (engine: SetupEngine) => {
     const info = await sb.invoke('app:info', undefined), definition = info.engines.find(e => e.id === engine && e.source === 'app');
     if (!definition) throw new Error('AI_SETUP_ENGINE_POLICY');
@@ -67,6 +67,6 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en'): A
     },
     async cancel(chatId) { await sb.invoke('chat:stop', { chatId }); },
     persist,
-    open(chatId) { closeModal(); if (!app.get().chats[chatId]) return; focusChat(chatId); },
+    open(chatId) { if (onConnected) onConnected(); else closeModal(); if (!app.get().chats[chatId]) return; focusChat(chatId); },
   };
 }

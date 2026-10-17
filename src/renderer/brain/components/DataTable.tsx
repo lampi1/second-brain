@@ -6,6 +6,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { facetValues, nextSort, queryRows, scrollIntoRow, stamp, toCsv, toJson, windowRange, fileSafe, type ColBase, type TableQuery } from '../lib/table';
 import { fmt } from '../lib/format';
+import { t as tr } from '../../i18n';
 import { Explain, type ExplainProps } from './States';
 import { HelpTip } from '../../components/HelpTip';
 import { download, IconChevL, IconChevR, IconClose, IconColumns, IconDownload, IconSearch, useEsc } from './ui';
@@ -52,7 +53,7 @@ function cellText<R>(c: Col<R>, r: R): string {
   return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
 }
 
-export function DataTable<R>({ name, label, rows, cols, filters = [], sort, search = true, detail, detailTitle, empty = 'Niente da mostrare.', explain, maxHeight, testId }: DataTableProps<R>) {
+export function DataTable<R>({ name, label, rows, cols, filters = [], sort, search = true, detail, detailTitle, empty = tr('costs.tableEmpty'), explain, maxHeight, testId }: DataTableProps<R>) {
   const uid = useId();
   const [q, setQ] = useState('');
   const [facet, setFacet] = useState<Record<string, string>>({});
@@ -120,22 +121,22 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
         {search && (
           <label className="bx-search">
             <IconSearch />
-            <input className="bx-input" type="search" placeholder="Cerca in tabella…" aria-label={`Cerca in ${label ?? name}`} value={q} onChange={e => setQ(e.target.value)} />
+            <input className="bx-input" type="search" placeholder={tr('costs.tableSearch')} aria-label={tr('costs.tableSearchLabel',{name:label??name})} value={q} onChange={e => setQ(e.target.value)} />
           </label>
         )}
         {facets.map(({ col, values }) => (
-          <select key={col.key} className={`bx-select ${facet[col.key] ? 'on' : ''}`} aria-label={`Filtra per ${col.label}`} value={facet[col.key] ?? ''} onChange={e => setFacet(f => ({ ...f, [col.key]: e.target.value }))}>
-            <option value="">{col.label}: tutti</option>
+          <select key={col.key} className={`bx-select ${facet[col.key] ? 'on' : ''}`} aria-label={tr('costs.tableFilter',{name:col.label})} value={facet[col.key] ?? ''} onChange={e => setFacet(f => ({ ...f, [col.key]: e.target.value }))}>
+            <option value="">{col.label}: {tr('costs.tableAll')}</option>
             {values.map(v => <option key={v.value} value={v.value}>{v.value} ({v.count})</option>)}
           </select>
         ))}
-        <span className="count" aria-live="polite">{visible.length === rows.length ? `${fmt.int(rows.length)} righe` : `${fmt.int(visible.length)} di ${fmt.int(rows.length)} righe`}</span>
-        {filtered && <button type="button" className="bx-btn ghost s" onClick={() => { setQ(''); setFacet({}); }}>Azzera</button>}
+        <span className="count" aria-live="polite">{visible.length === rows.length ? tr('costs.tableRows',{count:fmt.int(rows.length)}) : tr('costs.tableFilteredRows',{count:fmt.int(visible.length),total:fmt.int(rows.length)})}</span>
+        {filtered && <button type="button" className="bx-btn ghost s" onClick={() => { setQ(''); setFacet({}); }}>{tr('costs.tableReset')}</button>}
         <span className="sp" />
         <div className="bx-rel" ref={menuRef}>
-          <button type="button" className="bx-btn s" aria-expanded={menu} aria-haspopup="true" onClick={() => setMenu(m => !m)} title="Scegli le colonne"><IconColumns /> Colonne</button>
+          <button type="button" className="bx-btn s" aria-expanded={menu} aria-haspopup="true" onClick={() => setMenu(m => !m)} title={tr('costs.tableChooseColumns')}><IconColumns /> {tr('costs.tableColumns')}</button>
           {menu && (
-            <div className="bx-colmenu" role="group" aria-label="Colonne da mostrare" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); } }}>
+            <div className="bx-colmenu" role="group" aria-label={tr('costs.tableShownColumns')} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); } }}>
               {cols.map(c => (
                 <label key={c.key}>
                   <input type="checkbox" checked={!hidden.has(c.key)} disabled={!hidden.has(c.key) && shown.length === 1}
@@ -146,8 +147,8 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
             </div>
           )}
         </div>
-        <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.csv`, toCsv(shown, visible), 'text/csv')} title="Le righe filtrate in CSV (Excel)"><IconDownload /> CSV</button>
-        <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.json`, toJson(shown, visible), 'application/json')} title="Le righe filtrate in JSON"><IconDownload /> JSON</button>
+        <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.csv`, toCsv(shown, visible), 'text/csv')} title={tr('costs.tableCsv')}><IconDownload /> CSV</button>
+        <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.json`, toJson(shown, visible), 'application/json')} title={tr('costs.tableJson')}><IconDownload /> JSON</button>
       </div>
       <div ref={box} className={`bx-tbox bx-scroll ${virt ? 'virt' : ''}`} style={height ? { maxHeight: height } : undefined} tabIndex={0} role="grid" aria-label={label ?? name}
         aria-rowcount={visible.length + 1} aria-activedescendant={active >= 0 ? `${uid}-r${active}` : undefined} onKeyDown={onKey}
@@ -161,7 +162,7 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
                 return (
                   <th key={c.key} role="columnheader" scope="col" aria-label={c.label} aria-sort={s ? (s > 0 ? 'ascending' : 'descending') : 'none'} className={`${c.type === 'num' || c.type === 'usd' ? 'num' : ''} ${c.help ? 'has-help' : ''}`}>
                     <div className="bx-th">
-                      <button type="button" className="bx-sort" data-tip="Clic per ordinare" onClick={() => setOrder(nextSort(order, c))}>
+                      <button type="button" className="bx-sort" data-tip={tr('costs.tableSort')} onClick={() => setOrder(nextSort(order, c))}>
                         <span className="l">{c.label}</span>{s !== 0 && <span className="arrow" aria-hidden="true">{s > 0 ? '▲' : '▼'}</span>}
                       </button>
                       {c.help && <HelpTip label={c.label}>{c.help}</HelpTip>}
@@ -172,7 +173,7 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
             </tr>
           </thead>
           <tbody>
-            {!visible.length && <tr className="empty"><td colSpan={shown.length}>{filtered ? 'Nessuna riga con questi filtri.' : empty}</td></tr>}
+            {!visible.length && <tr className="empty"><td colSpan={shown.length}>{filtered ? tr('costs.tableNoMatches') : empty}</td></tr>}
             {range.padTop > 0 && <tr className="spacer" aria-hidden="true"><td colSpan={shown.length} style={{ height: range.padTop }} /></tr>}
             {visible.slice(range.start, range.end).map((r, j) => {
               const i = range.start + j;
@@ -197,13 +198,13 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
         </table>
       </div>
       {peek && cur !== undefined && (
-        <aside className="bx-peek bx" role="dialog" aria-label="Dettaglio della riga" data-testid="bx-peek">
+        <aside className="bx-peek bx" role="dialog" aria-label={tr('costs.tableRowDetail')} data-testid="bx-peek">
           <header>
-            <h3>{detailTitle ? detailTitle(cur) : cellText(shown[0] ?? cols[0]!, cur) || 'Dettaglio'}</h3>
-            <span className="pos">{active + 1} di {visible.length}</span>
-            <button type="button" className="bx-btn ghost s" aria-label="Riga precedente" disabled={active <= 0} onClick={() => go(active - 1)}><IconChevL /></button>
-            <button type="button" className="bx-btn ghost s" aria-label="Riga successiva" disabled={active >= visible.length - 1} onClick={() => go(active + 1)}><IconChevR /></button>
-            <button type="button" className="bx-btn ghost s" aria-label="Chiudi (Esc)" title="Chiudi (Esc)" onClick={() => { setPeek(false); box.current?.focus(); }}><IconClose /></button>
+            <h3>{detailTitle ? detailTitle(cur) : cellText(shown[0] ?? cols[0]!, cur) || tr('costs.tableDetail')}</h3>
+            <span className="pos">{tr('costs.tablePosition',{index:active+1,total:visible.length})}</span>
+            <button type="button" className="bx-btn ghost s" aria-label={tr('costs.tablePrevious')} disabled={active <= 0} onClick={() => go(active - 1)}><IconChevL /></button>
+            <button type="button" className="bx-btn ghost s" aria-label={tr('costs.tableNextRow')} disabled={active >= visible.length - 1} onClick={() => go(active + 1)}><IconChevR /></button>
+            <button type="button" className="bx-btn ghost s" aria-label={tr('costs.tableClose')} title={tr('costs.tableClose')} onClick={() => { setPeek(false); box.current?.focus(); }}><IconClose /></button>
           </header>
           <div className="body">{detail ? detail(cur, () => setPeek(false)) : <RowFields row={cur} cols={cols} />}</div>
         </aside>

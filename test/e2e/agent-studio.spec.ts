@@ -25,3 +25,37 @@ test('offline interview is resumable and agent drafts survive page navigation',a
     await shot(page,'agent-editor-local-draft');
   } finally {await app.close();}
 });
+
+test('agent manifest edits survive navigation, save and restart, with safe read-only display',async()=>{
+  const first=await launchDemo();
+  try {
+    await first.page.getByTestId('nav-agenti').click();
+    const studio=first.page.getByTestId('agent-studio');
+    await studio.getByRole('button',{name:'Crea agente',exact:true}).click();
+    await first.page.getByTestId('agent-name').fill('Manifest test');
+    await first.page.getByTestId('agent-purpose').fill('Check persisted delegation criteria');
+    await first.page.getByTestId('agent-manifest-editor').locator('summary').click();
+    await first.page.getByTestId('agent-manifest-whenToUse').fill('<script>untrusted declaration</script>');
+    await first.page.getByTestId('agent-manifest-input').fill('Question and constraints');
+    await first.page.getByTestId('agent-manifest-output').fill('Cited result');
+    await first.page.getByTestId('agent-manifest-accessScopes').fill('Authorized sources only');
+    await first.page.getByTestId('agent-manifest-successCriteria').fill('Checkable references\nUnknowns explicit');
+    await first.page.getByTestId('nav-devops').click();
+    await first.page.getByTestId('nav-agenti').click();
+    await expect(first.page.getByTestId('agent-manifest-whenToUse')).toHaveValue('<script>untrusted declaration</script>');
+    await first.page.getByTestId('agent-save').click();
+    const card=studio.locator('article').filter({has: first.page.getByRole('heading',{name:'Manifest test',exact:true})});
+    await card.getByTestId('agent-manifest-view').locator('summary').click();
+    await expect(card).toContainText('<script>untrusted declaration</script>');
+    await expect(card.locator('script')).toHaveCount(0);
+    await shot(first.page,'agent-manifest-saved');
+  } finally {await first.app.close();}
+  const second=await launchDemo({userData:first.userData});
+  try {
+    await second.page.getByTestId('nav-agenti').click();
+    const card=second.page.getByTestId('agent-studio').locator('article').filter({has:second.page.getByRole('heading',{name:'Manifest test',exact:true})});
+    await card.getByRole('button',{name:'Modifica',exact:true}).click();
+    await expect(second.page.getByTestId('agent-manifest-input')).toHaveValue('Question and constraints');
+    await expect(second.page.getByTestId('agent-manifest-successCriteria')).toHaveValue('Checkable references\nUnknowns explicit');
+  } finally {await second.app.close();}
+});

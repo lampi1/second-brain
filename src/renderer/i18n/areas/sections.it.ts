@@ -1,5 +1,6 @@
 // Data-section UI chrome; imported titles and cells remain user-authored content.
 export const sectionsIt = {
+ 'sections.draftContext':'Dati allegati alla bozza','sections.removeContext':'Rimuovi dati','sections.exactPayload':'Testo esatto per l’agente',
  'sections.actions':'Azioni','sections.removeRow':'Rimuovi riga',
  'sections.memory':'Memoria condivisa','sections.memoryHint':'Scrivi solo informazioni utili e senza credenziali. Dopo la conferma entrano nei prossimi turni delle IA; la cronologia esistente non viene cancellata.',
  'sections.memory.work':'Il tuo lavoro','sections.memory.goals':'Obiettivi','sections.memory.style':'Come preferisci lavorare','sections.memory.constraints':'Limiti da rispettare',
