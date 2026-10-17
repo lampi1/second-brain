@@ -1,9 +1,9 @@
-// Which Regia is which (ADR 0021): the first Regia, every work Regia's id, the overlay's tabs (work Regie, then the
-// app's own Regia, ADR 0020), the Regia a chat answers to and the chats of "Migliora l'app". Also the commands a chat
+// Which Regia is which (ADR 0021): the first Regia, the Orchestrator (the right column), every work Regia's id, the
+// Regia a chat answers to and the chats of "Migliora l'app". Also the commands a chat
 // gave in the turn that ends with its question (commandsOfTurn: shown with "Esegui" on the question's popup, the
 // questions window). "Domande alla Regia" is gone: a work chat's request never shows in the Regia (the user,
 // 2026-10-13: "la regia mi serve principalmente per lo stato… e per spostarmi da una chat all'altra"). Pure (no store
-// import). Used by RegiaOverlay.tsx, RegiaTile.tsx, QuestionsWindow.tsx, ChatMenu.tsx and actions.ts.
+// import). Used by RegiaOverlay.tsx, RegiaTile.tsx, QuestionsWindow.tsx, ChatMenu.tsx, Home.tsx and actions.ts.
 import type { ChatItem } from '@shared/contract';
 import { isRunnable } from '@shared/runnable';
 import type { AppState } from '../store/state';
@@ -13,15 +13,13 @@ import { regiaOfChat, regieOf } from '@shared/regia';
 /** The Regia's chat id, if there is one. */
 export const regiaIdOf = (s: Pick<AppState, 'order' | 'chats'>): string | null => s.order.find(x => s.chats[x]?.isRegia) ?? null;
 
+/** The Orchestrator's id: the one coordinator of work and app improvements (main marks it `orchestrator`, migrating
+ *  the old work and app Regie into it), null while there is none. The right column and every "the Regia" lookup. */
+export const orchestratorIdOf = (s: Pick<AppState, 'order' | 'chats'>): string | null =>
+  s.order.find(x => { const c = s.chats[x]; return !!c?.orchestrator && c.isRegia && !c.closedAt; }) ?? null;
+
 /** Every work Regia's id, in tab order (regiaSince). */
 export const regieIdsOf = (s: Pick<AppState, 'order' | 'chats'>): string[] => regieOf(s.order.flatMap(x => (s.chats[x] ? [s.chats[x]!] : []))).map(c => c.id);
-
-/** The Regia overlay's tabs (ADR 0021): the work Regie, then the app's own Regia ("Migliora l'app", ADR 0020) when
- *  there is one: the Regie that exist, one tab each. */
-export const regiaTabsOf = (s: Pick<AppState, 'order' | 'chats'>): string[] => {
-  const app = s.order.find(x => s.chats[x]?.appRegia && !s.chats[x]?.closedAt);
-  return app ? [...regieIdsOf(s), app] : regieIdsOf(s);
-};
 
 /** The Regia a chat answers to (itself for a Regia; null with none). */
 export function regiaOfIn(s: Pick<AppState, 'order' | 'chats'>, chatId: string): string | null {

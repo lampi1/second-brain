@@ -1,6 +1,6 @@
 // "Domande in finestra" stays on once the user turns it on (the user, 2026-10-16: "li voglio sempre a modale se ho
 // settato l'impostazione. È come se a volte si togliesse da sola"): an agent cannot turn it off (protected key: a
-// proposal, the value stays), and only the deliberate switches (Settings, the "…" menu, Ctrl+K) change it. The
+// proposal, the value stays), and only the deliberate switches (Settings, the top bar switch, Ctrl+K) change it. The
 // questions window itself has no off button any more: one in its head, under the pointer when the window popped up,
 // turned it off by mistake (stable changes.jsonl: each "off" seconds after a request appeared).
 import { describe, expect, it } from 'vitest';

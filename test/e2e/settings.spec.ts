@@ -172,15 +172,15 @@ test('Chat aperte dalla Regia: engine, models (Cursor\'s own list), effort; save
 
   // "Nuova chat" starts from them: Cursor with Grok 4.7; switching to Claude takes Claude's model and effort
   await page.getByTestId('page-back').click();
-  await page.getByTestId('topbar-new').click();
+  await page.keyboard.press('Control+N');
   const d = page.getByTestId('newchat');
   await d.getByTestId('newchat-engine-options').locator('summary').click();
   await expect(d.getByTestId('newchat-harness-cursor')).toHaveAttribute('aria-checked', 'true');
   await d.getByTestId('newchat-advanced').locator('summary').click();
-  await expect(d.getByTestId('newchat-model')).toHaveValue('grok-4.7');
+  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'grok-4.7');
   await shot(page, 'settings-regia-chats-newchat');
   await d.getByTestId('newchat-harness-claude').click();
-  await expect(d.getByTestId('newchat-model')).toHaveValue('claude-opus-5-5');
+  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'claude-opus-5-5');
   // the effort stays "automatico" (the table's, ADR 0051) until the user picks one
   await expect(d.getByTestId('newchat-effort-default')).toHaveAttribute('aria-checked', 'true');
   await app.close();

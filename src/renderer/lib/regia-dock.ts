@@ -7,6 +7,13 @@ import type { ChatItem } from '@shared/contract';
 export interface DockSize { w: number; h: number }
 export interface Reserve { right: number; bottom: number;top?:number }
 
+/** Persistent right column: broad on home, quieter on detail pages. Heights never resize. */
+export function columnSize(saved: DockSize | null, v: { W: number; H: number; top: number; left: number }, home: boolean): DockSize {
+  const max = Math.max(280, v.W - v.left - 360);
+  const preferred = (saved?.w ?? Math.min(680, Math.max(440, v.W * .42))) * (home ? 1 : .78);
+  return { w: Math.round(Math.min(max, Math.max(280, preferred))), h: Math.max(120, v.H - v.top) };
+}
+
 /** the collapsed bar's height; EDGE = the workspace's --gap; MIN_WORK = what the chats always keep in width */
 export const BAR_H = 34, EDGE = 8, MIN_W = 340, MIN_H = 260, MIN_WORK = 420;
 

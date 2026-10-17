@@ -66,21 +66,10 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
   await expect(page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' })).toHaveCount(0);
 
-  // Corsie with another chat's tab big next to its chat: the chat selected before is off screen, Ctrl+W leaves it
-  await page.getByTestId('tile-chat-fix').locator('.th-title').click();
-  await page.keyboard.press('Control+Shift+V');
-  await page.getByTestId('thumb-tab-sms').click();
-  await expect(page.getByTestId('tile-chat-sms')).toBeVisible();
-  await page.keyboard.press('Control+W');
-  await expect(refused).toHaveCount(before + 2);
-  await expect(page.getByTestId('toast').filter({ hasText: 'Chiusa' })).toHaveCount(0);
-  await page.keyboard.press('Control+Shift+V');
-  await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
-
   // the Regia: Ctrl+W only explains
   await page.getByTestId('tile-regia').locator('h3').first().click();
   await page.keyboard.press('Control+W');
-  await expect(page.getByTestId('toast').filter({ hasText: 'La Regia non si chiude con Ctrl+W' })).toBeVisible();
+  await expect(page.getByTestId('toast').filter({ hasText: 'L’Orchestrator non si chiude con Ctrl+W' })).toBeVisible();
   await expect(page.getByTestId('tile-regia')).toBeVisible();
 
   // under a dialog: nothing closes, the window stays. A real key event (sendInputEvent), not page.keyboard: only a real

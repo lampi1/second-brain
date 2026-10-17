@@ -28,14 +28,13 @@ async function settingsWork(page: Page): Promise<void> {
   await expect(page.getByTestId('settings-pop')).toHaveCount(0);
 }
 
-/** "…" is always on screen and lists the actions used now and then; the view switch too once it left the bar. */
-const ALWAYS_MORE = ['more-browsers', 'more-qwin', 'more-credentials', 'more-improve'];
+/** "…" is always on screen and lists the actions used now and then. */
+const ALWAYS_MORE = ['more-browsers', 'more-credentials', 'more-improve'];
 async function everyHiddenListed(page: Page): Promise<void> {
   await expect(page.getByTestId('topbar-more')).toBeInViewport({ ratio: 1 });
-  const items = [...ALWAYS_MORE, ...((await page.getByTestId('view-toggle').isVisible()) ? [] : ['more-view-corsie'])];
   await page.getByTestId('topbar-more').click();
   await expect(page.getByTestId('topbar-more-pop')).toBeVisible();
-  for (const item of items) await expect(page.getByTestId(item)).toBeVisible();
+  for (const item of ALWAYS_MORE) await expect(page.getByTestId(item)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
 }
@@ -51,33 +50,28 @@ test('settings and every action stay reachable at 1280, 1366 and 1920 px, window
       await expect.poll(() => page.evaluate(() => innerWidth)).toBeGreaterThanOrEqual(w);
       await settingsWork(page);
       expect(await allOnScreen(page)).toEqual([]);
-      // the view switch is a primary action: on the bar down to 1280 px
-      await expect(page.getByTestId('view-toggle-corsie')).toBeVisible();
       await everyHiddenListed(page);
       await shot(page, `topbar-fit-${w}`);
     }
-    // the narrowest window (1000 px, also at 110 % zoom = 909 px): every action off the bar is listed in "â€¦", which
-    // still drives it; the view switch is the last to go
+    // the narrowest window (1000 px, also at 110 % zoom = 909 px): every action off the bar is listed in "…", which
+    // still drives it
     await setSize(app, 1000, 700);
     await expect(page.getByTestId('topbar-more')).toBeVisible();
     await settingsWork(page);
     expect(await allOnScreen(page)).toEqual([]);
-    await expect(page.getByTestId('view-toggle-corsie')).toBeVisible();
     await everyHiddenListed(page);
     await page.getByTestId('topbar-more').click();
     await shot(page, 'topbar-fit-1000-more');
     await page.keyboard.press('Escape');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1.1));
-    await expect(page.getByTestId('view-toggle')).toBeHidden();
     await settingsWork(page);
     expect(await allOnScreen(page)).toEqual([]);
     await everyHiddenListed(page);
     await page.getByTestId('topbar-more').click();
     await shot(page, 'topbar-fit-909-more');
-    await page.getByTestId('more-view-corsie').click();
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1));
-    await expect(page.getByTestId('view-toggle-corsie')).toHaveAttribute('aria-checked', 'true');
     // real full screen (F11-like): whatever the display, the bar fits it
     await fullScreen(app, true);
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isFullScreen())).toBe(true);

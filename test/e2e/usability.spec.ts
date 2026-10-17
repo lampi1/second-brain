@@ -85,7 +85,7 @@ test('Trovo una chat con la ricerca', async () => {
   await s.press('Control+K', 'Ctrl+K: cerca');
   await s.type('mappa');
   await s.press('Enter', 'Invio: apro la chat');
-  await s.check('la chat finita torna nel mosaico con il cursore nel suo campo', async () => {
+  await s.check('la chat finita torna nella colonna degli agenti con il cursore nel suo campo', async () => {
     await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
     await expect(page.getByTestId('chat-input-mappa')).toBeFocused();
   });
@@ -100,8 +100,8 @@ test('Seguo un browser a schermo intero e torno', async () => {
   await s.check('il browser riempie lo spazio di lavoro', async () => {
     await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(1000);
   });
-  await s.press('Escape', 'Esc: torno al mosaico');
-  await s.check('di nuovo il mosaico', async () => { await expect(page.getByTestId('tile-chat-qa')).toBeVisible(); });
+  await s.press('Escape', 'Esc: torno alla colonna degli agenti');
+  await s.check('di nuovo la colonna degli agenti', async () => { await expect(page.getByTestId('tile-chat-qa')).toBeVisible(); });
   await s.done(2);
   await app.close();
 });

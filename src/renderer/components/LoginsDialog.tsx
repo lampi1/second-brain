@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CredentialEntry } from '@shared/contract';
 import { sb } from '../sb';
-import { closeModal, setMaximized, setPair, toast, ui } from '../store/ui';
+import { closeModal, setMaximized, toast } from '../store/ui';
 import { t } from '../i18n';
 import { IconAlert, IconCheck, IconLogin, IconSearch, IconShield, IconSpinner } from './Icons';
 import { Button, Keys, Modal } from './ui';
@@ -33,12 +33,12 @@ function CopyButton({ id, field, label, testid }: { id: string; field: 'user' | 
   );
 }
 
-/** The sign-in URL in a new tab of the user's, shown big (next to the chats in Corsie). */
+/** The sign-in URL in a new tab of the user's, shown big. */
 async function openUrl(url: string): Promise<void> {
   try {
     const tab = await sb.invoke('browser:open', { url });
     closeModal();
-    if (ui.get().prefs.view === 'corsie' && !ui.get().prefs.browsersHidden) setPair(tab.id); else setMaximized(`browser:${tab.id}`);
+    setMaximized(`browser:${tab.id}`);
   } catch (e) { toast(t('dialogs.logins.openPageError', { error: errText(e) }), 'err'); }
 }
 

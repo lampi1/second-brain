@@ -24,7 +24,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -85,7 +85,7 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await page.keyboard.press('Enter');
   await expect(input).toHaveValue('');
   await expect(fnv.getByTestId('bx-q-pattern-discuss-mark')).toContainText('Discusso');
-  await expect(fnv.getByTestId('bx-q-pattern-discuss-mark')).toContainText('con la Regia');
+  await expect(fnv.getByTestId('bx-q-pattern-discuss-mark')).toContainText('con l’Orchestrator');
 });
 
 test('Costi: the period against the one before, Discutine on the total and on every chart', async () => {

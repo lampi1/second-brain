@@ -3,7 +3,7 @@
 // oldest-first, queued messages flush when a chat becomes idle, Corsie columns.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { corsie, initialState, reduce, runningCount, toFlush, todayCost, type AppState } from '../../src/renderer/store/state';
+import { initialState, reduce, runningCount, toFlush, todayCost, type AppState } from '../../src/renderer/store/state';
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
@@ -159,27 +159,6 @@ describe('selectors', () => {
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'waiting' }), q)).toBeNull();
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle', pending: 1 }), q)).toBeNull();
     expect(toFlush(chat('a', { state: 'running' }), chat('a', { state: 'idle' }), [])).toBeNull();
-  });
-
-  it('corsie: waiting by oldest request, then working with the finished ones newest first; Regia excluded', () => {
-    const now = new Date(2026, 9, 11, 12, 0).getTime();
-    const s = {
-      order: ['r', 'w1', 'w2', 'run', 'd1', 'd2', 'old'],
-      chats: {
-        r: chat('r', { isRegia: true, state: 'waiting' }),
-        w1: chat('w1', { state: 'waiting', pending: 1 }),
-        w2: chat('w2', { state: 'waiting', pending: 1 }),
-        run: chat('run', { state: 'running' }),
-        d1: chat('d1', { updatedAt: now - 3600_000 }),
-        d2: chat('d2', { updatedAt: now - 60_000 }),
-        old: chat('old', { updatedAt: now - 2 * 86400_000 }),
-      },
-      pending: [req('w2', 'x', 5), req('w1', 'y', 9)],
-    };
-    const c = corsie(s);
-    expect(c.waiting.map(x => x.id)).toEqual(['w2', 'w1']);
-    // the finished chats still open follow the busy ones, newest first (no "Finite oggi" column: they close by themselves)
-    expect(c.working.map(x => x.id)).toEqual(['run', 'd2', 'd1', 'old']);
   });
 
   it('runningCount and todayCost', () => {

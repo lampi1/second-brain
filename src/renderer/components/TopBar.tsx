@@ -1,14 +1,18 @@
-// The top bar: brand, back/forward (Alt+←/→) and the recent places, the Stato button, search/palette trigger (Ctrl+K), view
-// toggle Mosaico/Corsie (Ctrl+Shift+V), the usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status
+// The top bar: brand, back/forward (Alt+←/→) and the recent places, the Stato button, search/palette trigger (Ctrl+K), the
+// usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status
 // (each engine's CLI found, version, login, "Accedi"), the brain-sync status (SyncStatus: only when a domain syncs), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi
-// dopo" is on, "Da rispondere": the queue's counter, it opens the queue, lib/later.ts), "＋ Nuova chat" (Ctrl+N),
-// "■ Ferma tutto" (confirm only with >1 running), then the end group: "…" (browsers on/off, Credenziali, the questions
-// window, Migliora l'app: always there, 2026-10-15), the notification bell (Ctrl+Shift+N) and the settings menu (look and
+// dopo" is on, "Da rispondere": the queue's counter, it opens the queue, lib/later.ts), the full-screen popups switch
+// (the questions window, lib/questions.ts) and the connectors with their status dots (SPEC 21: one click, no Settings dive;
+// new agents start from the Grindhouse, Ctrl+N or the palette, so no "Nuova chat" here), "Nuovo browser", "■ Ferma tutto"
+// (confirm only with >1 running), then the end group: "…" (browsers on/off, Credenziali, Migliora l'app: always there, 2026-10-15), the notification bell (Ctrl+Shift+N) and the settings menu (look and
 // the way to Settings). Used by App.tsx. On a bar too full for its width (useFit) the labels go first; the end group never
 // shrinks, so it stays on screen at any width (2026-10-13).
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import{t}from'../i18n';
 import type { CliStatus, EngineInfo } from '@shared/contract';
+import type { ConnectorState } from '@shared/connectors';
+import { sb } from '../sb';
+import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
@@ -19,7 +23,7 @@ import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
-import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconPlus, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
+import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './RegiaOverlay';
@@ -140,24 +144,69 @@ function Bell() {
   );
 }
 
+/** The full-screen popups (the questions window, lib/questions.ts) on and off in one click, with its state in sight
+ *  (SPEC 21; before, a "…" menu item). The setting is the same one Settings writes. */
+function PopupsSwitch() {
+  const on = useApp(questionsModalOn);
+  const label = t(on ? 'ui.popupsOn' : 'ui.popupsOff');
+  return (
+    <button type="button" role="switch" aria-checked={on} className={`btn btn-ghost btn-m popups-switch${on ? ' on' : ''}`} onClick={toggleQuestionsModal}
+      aria-label={label} data-tip={label} data-testid="topbar-qwin">
+      <span className="popups-track" aria-hidden="true"><span className="popups-knob" /></span>
+      <span className="popups-label">{t('ui.popups')} <b>{t(on ? 'ui.popupsStateOn' : 'ui.popupsStateOff')}</b></span>
+    </button>
+  );
+}
+
+const CONNECTOR_NAME: Record<ConnectorState['provider'], string> = { github: 'GitHub', jira: 'Jira' };
+const CONNECTOR_DOT: Record<ConnectorState['status'], string> = { verified: 'ok', pending: 'warn', failed: 'bad' };
+
+/** The connectors (GitHub, Jira) with one status dot each (SPEC 21): green connected, amber to verify, red failed; a
+ *  click opens the same panel as Settings → Strumenti e progetti, the dots are read again when it closes. */
+function ConnectorsButton() {
+  const [list, setList] = useState<ConnectorState[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  // stable: Popover re-runs its focus effect when onClose changes, which would pull the focus back to the first button
+  const close = useCallback(() => setOpen(false), []);
+  useEffect(() => {
+    if (open) return;
+    let live = true;
+    sb.invoke('connectors:list', undefined).then(value => { if (live) setList(value); }, () => { if (live) setList([]); });
+    return () => { live = false; };
+  }, [open]);
+  const label = !list ? t('ui.connectorsLoading') : list.length ? t('ui.connectorsTip', { list: list.map(c => `${CONNECTOR_NAME[c.provider]} ${t(`ui.connector.${c.status}`)}`).join(', ') }) : t('ui.connectorsNone');
+  return (
+    <>
+      <button ref={ref} type="button" className="btn btn-ghost btn-m connectors-btn" onClick={() => setOpen(o => !o)} aria-label={label} data-tip={label} aria-expanded={open} aria-haspopup="dialog" data-testid="topbar-connectors">
+        <span className="connectors-label">{t('ui.connectors')}</span>
+        {list?.map(c => <span key={c.provider} className="connector-mark" data-testid={`topbar-connector-${c.provider}`} data-status={c.status}>
+          <small aria-hidden="true">{CONNECTOR_NAME[c.provider]}</small><span className={`cli-dot ${CONNECTOR_DOT[c.status]}`} aria-hidden="true" />
+        </span>)}
+      </button>
+      <Popover anchor={ref} open={open} onClose={close} testid="topbar-connectors-pop" width={420} kind="dialog" label={t('ui.connectors')}>
+        <AppConnectorScreen />
+      </Popover>
+    </>
+  );
+}
+
 /** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width): the
- *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, the questions window, Migliora l'app; the
- *  view switch too, only at the last fit step (it is a primary action). */
+ *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, Migliora l'app (the questions window moved
+ *  onto the bar, PopupsSwitch). */
 function MoreButton() {
   const hide = ui.use(s => s.prefs.browsersHidden);
   const tabs = useApp(s => s.tabs.length);
-  const qwin = useApp(questionsModalOn);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const run = (f: () => void) => () => { setOpen(false); f(); };
   const toggle = () => setOpen(o => !o);
   return (
     <span className="topbar-more">
-      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? `Altre azioni: ${tabs} browser nascosti` : 'Altre azioni: browser nascosti') : 'Altre azioni'} data-tip={hide ? 'Altre azioni|browser nascosti: continuano a lavorare (Ctrl+Shift+B li mostra)' : "Altre azioni|browser, credenziali, domande in finestra, Migliora l'app"} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
+      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? `Altre azioni: ${tabs} browser nascosti` : 'Altre azioni: browser nascosti') : 'Altre azioni'} data-tip={hide ? 'Altre azioni|browser nascosti: continuano a lavorare (Ctrl+Shift+B li mostra)' : "Altre azioni|browser, credenziali, Migliora l'app"} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
       {hide && tabs > 0 && <span className="count-badge more-badge" aria-hidden="true" data-testid="topbar-browsers-count">{tabs}</span>}
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
         <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? `Browser nascosti (${tabs}): continuano a lavorare` : 'Nascondi i browser'}</MenuItem>
-        <MenuItem checked={qwin} onSelect={run(toggleQuestionsModal)} testid="more-qwin">Domande in finestra, una alla volta</MenuItem>
         <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">Credenziali degli ambienti…</MenuItem>
         <MenuSep />
         <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">Migliora l'app</MenuItem>
@@ -167,8 +216,8 @@ function MoreButton() {
 }
 
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
- *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only "Nuova chat", 6 the
- *  view switch into "…" too (kept on the bar down to 1280 px). Read by app.css (data-fit). */
+ *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only popups switch and
+ *  connectors. Read by app.css (data-fit). */
 const FIT_STEPS = 5;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
@@ -233,7 +282,8 @@ export function TopBar() {
         <IconBolt size={14} /><span className="next-label">{inQueue ? 'Da rispondere' : paused ? 'Popup in pausa' : waiting ? 'Prossima cosa per te' : 'Niente ti aspetta'}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
-      <button type="button" className="btn btn-primary btn-m" onClick={() => openModal('newChat')} data-testid="topbar-new" data-tip={`${t('chat.input.newChatButton')}|Ctrl+N`}><IconPlus size={14} /><span>{t('chat.input.newChatButton')}</span></button>
+      <PopupsSwitch />
+      <ConnectorsButton />
       <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."
         aria-label={`Ferma tutto: ${running} al lavoro (Ctrl+Shift+.)`}>

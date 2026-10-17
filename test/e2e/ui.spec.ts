@@ -1,14 +1,13 @@
-// E2E tests of the renderer UI on the demo (SB_DEMO=1; frozen = deterministic): both views, the view preference
-// surviving a reload, answering a tile's panel with "1", sending and queueing from a tile input, Ferma tutto
+// E2E tests of the renderer UI on the demo (SB_DEMO=1; frozen = deterministic): the agents workspace, answering a tile's panel with "1", sending and queueing from a tile input, Ferma tutto
 // with its confirm, maximize/restore, the palette hiding every browser view, ui:command from main, new chat, brain
-// pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for Mosaico, Corsie, a maximized
-// chat and the palette; extra screenshots (1280x800, light theme) in test-results/shots/.
+// pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
+// palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { closeRegia, demoLayout, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { demoLayout, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
-test('Mosaico: Regia, chat tiles and browser tiles next to their chats', async () => {
+test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
   await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Regia's own floats in the layer
   for (const id of ['qa', 'fix', 'sms', 'feedback']) await expect(page.getByTestId(`tile-chat-${id}`)).toBeVisible();
@@ -16,43 +15,15 @@ test('Mosaico: Regia, chat tiles and browser tiles next to their chats', async (
   // no "Finite oggi" dock: a finished chat stays a tile until it closes by itself (autoclose.spec.ts)
   await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
   await expect(page.getByTestId('folded-dock')).toHaveCount(0);
-  // the Regia starts reduced to its top-bar button (ADR 0021): nothing covers the chats
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
-  await expect(page.getByTestId('regia-overlay')).toHaveCount(0);
-  // the browser tiles sit in their own zone, right of the chats (browser-zone.spec.ts checks their order)
-  await expect(page.getByTestId('zone-browsers').getByTestId('tile-browser-tab-qa')).toBeVisible();
-  await expect(page.getByTestId('zone-browsers').getByTestId('tile-browser-tab-sms')).toBeVisible();
+  // the Orchestrator column is always open beside the Grindhouse (ADR 0068)
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  // one column: each browser follows the chat that drives it
+  const panes = await page.locator('[data-workspace-pane]').evaluateAll(els => els.map(e => e.getAttribute('data-workspace-pane')));
+  expect(panes.indexOf('browser:tab-qa')).toBe(panes.indexOf('chat:qa') + 1);
+  expect(panes.indexOf('browser:tab-sms')).toBe(panes.indexOf('chat:sms') + 1);
   await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(2);
   await waitThumbs(page);
-  await shot(page, 'mosaico');
-  await expect(page).toHaveScreenshot('mosaico.png', VISUAL);
-  await app.close();
-});
-
-test('Corsie: columns by state and the browser strip; the view is remembered after a reload', async () => {
-  const { app, page } = await launchDemo();
-  await page.getByTestId('view-toggle-corsie').click();
-  await expect(page.getByTestId('view-corsie')).toBeVisible();
-  await expect(page.getByTestId('col-waiting')).toContainText('QA · Rimborsi');
-  await expect(page.getByTestId('col-working')).toContainText('Fix totale ordine');
-  await expect(page.getByTestId('col-working')).toContainText('App · Mappa 3D'); // finished: in "Al lavoro" until it closes
-  await expect(page.getByTestId('col-done')).toHaveCount(0);
-  await expect(page.getByTestId('thumb-tab-qa')).toBeVisible();
-  await expect.poll(async () => (await demoLayout(app)).every(l => l.rect === null)).toBe(true); // thumbnails only
-  await waitThumbs(page);
-  await shot(page, 'corsie');
-  await expect(page).toHaveScreenshot('corsie.png', VISUAL);
-  // a thumbnail opens that browser big next to its chat; Esc goes back
-  await page.getByTestId('thumb-tab-sms').click();
-  await expect(page.getByTestId('corsie-pair')).toBeVisible();
-  await expect(page.getByTestId('tile-chat-sms')).toBeVisible();
-  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect?.width ?? 0).toBeGreaterThan(600);
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('corsie-pair')).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByTestId('view-corsie')).toBeVisible();
-  await page.keyboard.press('Control+Shift+V');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await shot(page, 'agents');
   await app.close();
 });
 
@@ -72,7 +43,6 @@ test('answering a tile panel with "1" resolves the request without opening the c
   await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await openRegia(page);
   await expect(page.getByTestId('tile-regia')).toContainText('Segnato: riparto da QA rimborsi');
-  await closeRegia(page); // reduced again
   // a permission: Esc on the focused card rejects it
   await page.keyboard.press('Control+J');
   await expect(page.getByTestId('request-feedback-feedback-p1')).toBeFocused();
@@ -159,17 +129,15 @@ test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', 
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await shot(page, 'ui-palette-costi');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await app.close();
 });
 
-test('ui:command from main steers the UI (view, maximize, restore, page, palette)', async () => {
+test('ui:command from main steers the UI (maximize, restore, page, palette)', async () => {
   const { page, app } = await launchDemo();
   const send = (action: string, value?: string) => app.evaluate(({ BrowserWindow }, cmd) => {
     BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))?.webContents.send('ui:command', cmd);
   }, { action, value });
-  await send('view', 'corsie');
-  await expect(page.getByTestId('view-corsie')).toBeVisible();
   await send('maximize', 'qa');
   await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:qa');
   await send('restore');
@@ -222,10 +190,7 @@ test('screenshots at 1280x800, in light theme, and with no data (empty states)',
   {
     const { page, app } = await launchDemo({ width: 1280, height: 800 });
     await waitThumbs(page);
-    await shot(page, 'mosaico-1280');
-    await page.getByTestId('view-toggle-corsie').click();
-    await waitThumbs(page);
-    await shot(page, 'corsie-1280');
+    await shot(page, 'agents-1280');
     await app.close();
   }
   {
@@ -235,16 +200,16 @@ test('screenshots at 1280x800, in light theme, and with no data (empty states)',
     await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
     await waitThumbs(page);
     await page.mouse.move(2, 2);
-    await shot(page, 'mosaico-light');
+    await shot(page, 'agents-light');
     await app.close();
   }
   {
     const { page, app } = await launch();
     await setSize(app, 1600, 1000);
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.getByTestId('regia-pill').click(); // no Regia yet: the overlay offers to create one
+    // no Orchestrator yet: the column offers to create one
     await expect(page.getByTestId('regia-create')).toBeVisible();
-    await expect(page.getByTestId('mosaico-empty')).toBeVisible();
+    await expect(page.getByTestId('agents-empty')).toBeVisible();
     await shot(page, 'empty');
     await app.close();
   }

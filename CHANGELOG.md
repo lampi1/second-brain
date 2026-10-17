@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- The Grindhouse (home, Ctrl+1) is the one place for the agents: a strip each, in the Orchestrator's order, the
+  browser it drives right under it; the Chat page and its Mosaico and Corsie views are retired, old links still work
+  (ADR 0068). One Orchestrator column stays open beside every page.
+- Top bar: the full-screen popups switch and the connectors (GitHub, Jira) with their status are one click away; the
+  "Nuova chat" button is gone (Nuovo agente in the Grindhouse, Ctrl+N or Ctrl+K start one).
+- Pages fade in on every change and progress bars move smoothly, both off under reduced motion.
+
 ### Added
 - Texts for colleagues (blocks tagged md, mail, teams, comment) show formatted in the chat, and Copia copies them
   formatted: bold, lists and links survive a paste into Outlook, Teams or DevOps (ADR 0043).

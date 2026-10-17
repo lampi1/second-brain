@@ -13,7 +13,6 @@ export type Command =
   | { type: 'stopFocused' }
   | { type: 'closeFocused' }
   | { type: 'stopAll' }
-  | { type: 'toggleView' }
   | { type: 'toggleBrowsers' }
   | { type: 'maximize' }
   | { type: 'escape' }

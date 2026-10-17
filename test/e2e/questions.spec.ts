@@ -1,7 +1,7 @@
 // E2E of questions with their context and of the user's typing (the user, 2026-10-12): the "Contesto" block of a
 // question (the turn's prose, even when the model wrote it only in its reasoning; web and file links; a click on a file
 // opens it through app:openPath, recorded in a hidden run), the reasoning before a question shown open in the
-// transcript, no "Ti aspettano" strip in the Mosaico, the focus kept when a Corsie tile changes column, and the
+// transcript, no "Ti aspettano" strip in the agents workspace, and the
 // questions window ("Domande in finestra"): it waits while the user types, never takes their field, it is always the one
 // modal in the middle (anchored near the top, ADR 0049) (never a second, backdrop-less copy beside the field: the user, 2026-10-14), Ctrl+J brings it,
 // it reads context first (the agent's lead muted above the real question), 1 answers and the next card takes the
@@ -11,7 +11,7 @@
 // on (no off button in the window: the user, 2026-10-16).
 // Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, moreAction, shot } from './helpers';
+import { launchDemo, shot } from './helpers';
 
 type Demo = { __sbDemo: { answers(): { chatId: string }[]; stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: Demo['__sbDemo'], ...a: A) => void, ...a: A) =>
@@ -24,7 +24,7 @@ const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis
 
 test('a question carries its context: the turn\'s prose, the reasoning before it, web and file links', async () => {
   const { app, page } = await launchDemo();
-  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the Mosaico has no "Ti aspettano" strip any more
+  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip
   await demo(app, (d, id) => {
     d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md). La PR è https://dev.azure.com/o/proj/_git/app/pullrequest/27.');
     d.toolDone(id, 'Write', { file_path: 'C:\\progetti\\report\\tc16-screen.png' });
@@ -53,23 +53,9 @@ test('a question carries its context: the turn\'s prose, the reasoning before it
   await app.close();
 });
 
-test('Corsie: the field the user types in keeps the keyboard when its chat starts waiting and changes column', async () => {
-  const { app, page } = await launchDemo();
-  await page.getByTestId('view-toggle-corsie').click();
-  const field = page.getByTestId('chat-input-fix');
-  await field.click();
-  await page.keyboard.type('ab');
-  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo?', ['Sì', 'No']));
-  await expect(page.getByTestId('col-waiting').getByTestId('chat-input-fix')).toBeVisible();
-  await page.keyboard.type('cd');
-  await expect(page.getByTestId('chat-input-fix')).toBeFocused();
-  await expect(page.getByTestId('chat-input-fix')).toHaveValue('abcd');
-  await app.close();
-});
-
 test('the questions window: waits while the user types, never takes the field, Ctrl+J brings it, 1 answers, Esc is "Rispondi dopo"', async () => {
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin');
+  await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
   // the open requests of the demo (Regia, QA, Feedback) are in the window now; the tiles keep one line
   await expect(page.getByTestId('qwin')).toBeVisible();
@@ -138,7 +124,7 @@ test('the questions window: waits while the user types, never takes the field, C
 
 test('the questions window stays on: a question from the chat the user is in goes to the window, never inline, and the switch stays on', async () => {
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin');
+  await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   const inline = page.locator('.tile-requests [data-request-key]');
@@ -163,8 +149,7 @@ test('the questions window stays on: a question from the chat the user is in goe
   await page.keyboard.press('Control+J');
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await page.getByTestId('topbar-more').click();
-  await expect(page.getByTestId('more-qwin')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('topbar-qwin')).toHaveAttribute('aria-checked', 'true');
   await app.close();
 });
 
@@ -172,7 +157,7 @@ test('the questions window: the first click on an option answers, even when the 
   // the user, 2026-10-15: "a volte nella modale della domanda devo premere 2 volte". The note left on the mousedown (the
   // option took the keyboard) and the options moved up under the pointer: the mouseup fell elsewhere, no click.
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin');
+  await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await page.getByTestId('chat-input-fix').click();
@@ -197,7 +182,7 @@ test('the questions window: the first click on an option answers, even when the 
 
 test('the questions window, two questions in a row: the second shows once, with its own reasoning, and says it is asked again', async () => {
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin');
+  await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -228,8 +213,8 @@ test('the questions window, two questions in a row: the second shows once, with 
 
 test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin'); // "Domande in finestra": the Regia's question first, QA and Feedback under it
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Regia's question first, QA and Feedback under it
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   const picks = page.getByTestId('qwin-pick');
   await expect(picks).toHaveCount(2);
   await expect(picks.nth(0)).toContainText('QA · Rimborsi');
@@ -243,22 +228,22 @@ test('the questions window answers in any order: a waiting request is one click 
   await expect(page.getByTestId('qwin-chat')).toHaveText('QA · Rimborsi');
   await expect(page.getByTestId('qwin-card')).toBeFocused();
   await expect(picks).toHaveCount(2);
-  await expect(picks.nth(0)).toContainText('Regia');
+  await expect(picks.nth(0)).toContainText('Orchestrator');
   await page.keyboard.press('1');
   await expect.poll(() => app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.answers().map(a => a.chatId))).toEqual(['qa']);
   // answered: back to the oldest still waiting, the Regia's, with the half-written answer; Feedback can still go first
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   await expect(page.getByTestId('qwin-card-other-input')).toHaveValue('ci penso');
   await expect(picks).toHaveCount(1);
   await picks.click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
-  await expect(picks).toContainText('Regia');
+  await expect(picks).toContainText('Orchestrator');
   await app.close();
 });
 
 test('the questions window reads context first: the agent\'s lead muted on top, the real question large under it', async () => {
   const { app, page } = await launchDemo();
-  await moreAction(page, 'more-qwin');
+  await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await demo(app, (d, id, t) => d.say(id, t), 'fix', 'Ho rilanciato il test case 7 su master e sul ramo della PR: fallisce su entrambi.');

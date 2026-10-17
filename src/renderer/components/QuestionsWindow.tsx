@@ -122,10 +122,10 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
-  const name = useApp(s => (s.chats[cur.chatId]?.isRegia ? 'Regia' : (s.chats[cur.chatId]?.title ?? 'Chat')));
+  const name = useApp(s => (s.chats[cur.chatId]?.isRegia ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
   const harness = useApp(s => s.chats[cur.chatId]?.harness ?? 'claude');
   const isRegia = useApp(s => !!s.chats[cur.chatId]?.isRegia);
-  const titles = useApp(s => all.map(p => (s.chats[p.chatId]?.isRegia ? 'Regia' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
+  const titles = useApp(s => all.map(p => (s.chats[p.chatId]?.isRegia ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
   const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${s.chats[p.chatId]?.isRegia ? ':r' : ''}`), sameList);
   const now = useNow(30_000);
   // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)

@@ -15,7 +15,7 @@ import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
 import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
-import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPair, setPrefs, setRegiaOpen, ui, type BrainPageId } from '../store/ui';
+import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPrefs, setRegiaOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
 import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
@@ -25,7 +25,7 @@ import {
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconCompass, IconFocus, IconGlobe, IconGrid,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconCompass, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTarget, IconTicket,
 } from './Icons';
@@ -73,7 +73,7 @@ function buildCommands(): Cmd[] {
     const owner = t.ownerChatId ? s.chats[t.ownerChatId]?.title : null;
     out.push({
       id: `tab:${t.id}`, group: 'Browser', title: t.title || t.url, sub: owner ? `guidato da ${owner} · ${t.url}` : t.url, icon: <IconGlobe />, text: `${t.title} ${t.url} ${owner ?? ''}`,
-      run: () => { if (ui.get().prefs.view === 'corsie' && !ui.get().prefs.browsersHidden) setPair(t.id); else setMaximized(`browser:${t.id}`); },
+      run: () => setMaximized(`browser:${t.id}`),
     });
   }
   // the Regia of the tab shown in the overlay (ADR 0021)
@@ -89,15 +89,15 @@ function buildCommands(): Cmd[] {
     { id: 'stop', title: 'Ferma la chat selezionata', shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
     { id: 'focus', title: u.focusMode ? 'Esci dalla modalità focus' : 'Modalità focus sulla chat selezionata', shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
     { id: 'max', title: 'Ingrandisci / ripristina la tessera selezionata', shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
-    { id: 'regia', title: 'Vai alla Regia', sub: regia ? `su ${engineName(regia.harness)}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
+    { id: 'regia', title: 'Vai all’Orchestrator', sub: regia ? `su ${engineName(regia.harness)}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
     ...(regia ? [
-      { id: 'regiaclear', title: `Regia: pulisci «${regia.title}»`, sub: 'riparte vuota dalla memoria, la conversazione resta tra le chat chiuse', icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera regia' },
+      { id: 'regiaclear', title: `Orchestrator: pulisci «${regia.title}»`, sub: 'riparte vuoto dalla memoria, la conversazione resta tra le chat chiuse', icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera orchestrator regia' },
       { id: 'regianew', title: 'Nuova Regia', sub: 'una tab in più, es. «App»', icon: <IconPlus />, run: openNewRegia },
-      { id: 'regiarenew', title: 'Regia: ricomincia da capo', sub: `nuova Regia su ${engineName(regia.harness)}, la vecchia resta tra le chat`, shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
-      ...(to ? [{ id: 'regiaengine', title: `Regia: passa a ${engineName(to)}`, sub: `cambia motore, la Regia su ${engineName(regia.harness)} resta tra le chat`, icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
+      { id: 'regiarenew', title: 'Orchestrator: ricomincia da capo', sub: `nuovo Orchestrator su ${engineName(regia.harness)}, il vecchio resta tra le chat`, shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
+      ...(to ? [{ id: 'regiaengine', title: `Orchestrator: passa a ${engineName(to)}`, sub: `cambia motore, l’Orchestrator su ${engineName(regia.harness)} resta tra le chat`, icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
     ] : []),
     { id: 'qwin', title: questionsModalOn(s) ? 'Domande in finestra: spegni' : 'Domande in finestra: accendi',
-      sub: questionsModalOn(s) ? 'ora le domande compaiono in primo piano, una alla volta' : 'ora le domande restano nelle chat e nella Regia',
+      sub: questionsModalOn(s) ? 'ora le domande compaiono in primo piano, una alla volta' : 'ora le domande restano nelle chat e nell’Orchestrator',
       icon: <IconQuestion />, run: toggleQuestionsModal, text: 'domande finestra modale popup permessi' },
     { id: 'density', title: u.prefs.density === 'compact' ? 'Densità comoda' : 'Densità compatta', icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
     { id: 'theme', title: 'Tema: chiaro / scuro / come il sistema', sub: `ora: ${u.prefs.theme === 'system' ? 'come il sistema' : u.prefs.theme === 'dark' ? 'scuro' : 'chiaro'}`, icon: <IconSettings />,
@@ -106,15 +106,16 @@ function buildCommands(): Cmd[] {
       text: 'credenziali password utente login account ambienti test url pms' },
     { id: 'keys', title: 'Scorciatoie da tastiera', shortcut: 'Ctrl+/', icon: <IconKeyboard />, run: () => openModal('shortcuts') },
     { id: 'center', title: 'Notifiche', shortcut: 'Ctrl+Shift+N', icon: <IconBell />, run: toggleCenter },
-    { id: 'regiadock', title: 'Espandi o riduci la Regia', shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" regia size={18} />, run: toggleRegia },
-    { id: 'regiaplace', title: 'Regia: misura di partenza', sub: 'in basso a destra, la misura iniziale', icon: <HarnessMark harness="claude" regia size={18} />, run: () => { setPrefs({ regiaSize: null }); setRegiaOpen(true); }, text: 'misura dimensione reset regia' },
+    { id: 'regiadock', title: 'Espandi o riduci l’Orchestrator', shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" regia size={18} />, run: toggleRegia },
+    { id: 'regiaplace', title: 'Orchestrator: misura di partenza', sub: 'in basso a destra, la misura iniziale', icon: <HarnessMark harness="claude" regia size={18} />, run: () => { setPrefs({ regiaSize: null }); setRegiaOpen(true); }, text: 'misura dimensione reset orchestrator regia' },
     { id: 'back', title: 'Indietro', shortcut: 'Alt+←', icon: <IconArrowLeft />, run: back },
     { id: 'forward', title: 'Avanti', shortcut: 'Alt+→', icon: <IconArrowRight />, run: forward },
     { id: 'copylink', title: 'Copia il link di questo punto', sub: currentLink(), icon: <IconLink />, run: () => { void copyLink(); } },
   ];
   for (const a of actions) out.push({ ...a, group: 'Azioni' });
-  out.push({ id: 'page:workspace', group: 'Vai a', title: t('home.agents'), sub: t('home.workspace'), shortcut: 'Ctrl+1', icon: <IconGrid />, run: () => go({ page: 'workspace' }) });
-  for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }) });
+  // the Grindhouse holds the agents (SPEC 19): Ctrl+1 and a search for "agenti" or "chat" land there
+  for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.id === 'home' ? 'Ctrl+1' : p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }),
+    ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : {}) });
   out.push({ id: 'page:mappa', group: 'Vai a', title: 'Mappa 3D', sub: 'a tutto schermo', shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
   recentPlaces(6).forEach((p, i) => {
     if (i === 0) return; // where you are now
