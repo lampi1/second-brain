@@ -9,6 +9,7 @@ import{useApp,setSetting}from'../store/store';
 import{ui,setPrefs,openModal,toast}from'../store/ui';
 import{t}from'../i18n';
 import{AppearancePreview}from'./AppearancePreview';
+import{RolePreferences}from'./RolePreferences';
 import{holdUpdate}from'../lib/update-barrier';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
@@ -37,7 +38,8 @@ export function SettingsPage(){
  if(!settings)return null;
  const groups=[
   {id:'accounts',title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' '),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
-  {id:'space',title:t('essential.space'),search:[t('essential.memory'),t('essential.archive')].join(' '),body:<>
+  {id:'space',title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
+   <RolePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>
    <Row title={t('essential.archive')} description={t('essential.archiveHint')}><select aria-label={t('essential.archive')} value={settings.autoCloseMin} onChange={event=>void setSetting({autoCloseMin:Number(event.target.value)})}>{[...new Set([0,5,10,30,settings.autoCloseMin])].sort((a,b)=>a-b).map(count=><option key={count} value={count}>{count?t('essential.minutes',{count}):t('essential.never')}</option>)}</select></Row>
    <div className="st-row"><button type="button" className="btn btn-ghost" onClick={()=>openModal('setup')}>{t('essential.setup')}</button></div>

@@ -12,20 +12,25 @@ import { AgentReadiness } from './AgentReadiness';
 import { CreateMemory } from './CreateMemory';
 import { Modal } from './ui';
 import '../styles/agent-studio.css';
+import { AiFirstGate } from '../../modules/ai-first/Gate';
+import { aiCopy } from '../../modules/ai-first/i18n';
+import { lang } from '../i18n';
 
 export function FirstInterviewGate() {
   const { setup, catalog, error } = useAgents(), modal = ui.use(s => s.modal);
   const offered = useRef(false);
+  const [fallback, setFallback] = useState(false);
   useEffect(() => {
     if (modal === 'setup') offered.current = true;
     if (!offered.current && setup && (setup.status === 'new' || setup.status === 'draft') && !modal) { offered.current = true; openModal('setup'); }
   }, [setup?.status, modal]);
   if (modal !== 'setup') return null;
   if (!setup) return <Modal onClose={closeModal} label="Configura il tuo spazio di lavoro" testid="first-interview"><div className="modal-body"><p role="status">{error ?? 'Caricamento della configurazione…'}</p>{error && <button type="button" className="btn" onClick={() => void refreshSetup()}>Riprova</button>}<button type="button" className="btn btn-ghost" onClick={closeModal}>Chiudi</button></div></Modal>;
-  return <FirstInterview initial={setup} catalog={catalog} />;
+  if (!fallback && (setup.status === 'new' || (setup.preferences.guide && setup.preferences.guide.stage !== 'fallback'))) return <AiFirstGate setup={setup} onFallback={() => setFallback(true)}/>;
+  return <FirstInterview initial={setup} catalog={catalog} onConnectAi={async preferences => { await saveSetup({ ...preferences, guide: { stage: 'choosing' } }, 'draft'); setFallback(false); }}/>;
 }
 
-function FirstInterview({ initial, catalog }: { initial: SetupState; catalog: AgentCatalog | null }) {
+function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState; catalog: AgentCatalog | null; onConnectAi: (preferences: SetupDraft) => Promise<void> }) {
   const [draft, setDraft] = useState<SetupDraft>(() => ({ ...initial.preferences, step: ['new', 'draft'].includes(initial.status) ? validSetupStep(initial.preferences.step) : 0 }));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
   const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(initial.preferences.step >= 3);
@@ -55,9 +60,16 @@ function FirstInterview({ initial, catalog }: { initial: SetupState; catalog: Ag
     finally { setBusy(false); }
   };
   const selected = catalog?.profiles.filter(p => draft.agentIds.includes(p.id)) ?? [];
+  const connectAi = async () => {
+    if (busy) return;
+    terminal.current = true; setBusy(true);
+    try { await onConnectAi(draft); }
+    catch { terminal.current = false; setBusy(false); setError('Configurazione non salvata. Riprova.'); }
+  };
   return <Modal onClose={() => void saveAndClose('draft')} label="Configura il tuo spazio di lavoro" testid="first-interview" className="modal-interview">
     <div className="modal-head"><h2>Facciamo spazio al tuo lavoro</h2><span className="sp" /><small>Passo {draft.step + 1} di {INTERVIEW_STEPS.length}</small></div>
     <div className="modal-body"><fieldset disabled={busy} className="agent-editor-fields">
+      <button type="button" className="btn" onClick={() => void connectAi()}>{aiCopy[lang()].title}</button>
       <p>Le risposte restano su questo computer. Puoi saltare, tornare indietro o riprendere più tardi. Non servono risposte AI per completare il setup.</p>
       <ol className="interview-steps" aria-label="Passi del setup">{INTERVIEW_STEPS.map((step, i) => <li key={step} aria-current={i === draft.step ? 'step' : undefined}>{step}</li>)}</ol>
       {draft.step === 0 && <fieldset><legend>Come lavori di solito?</legend>{([

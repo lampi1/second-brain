@@ -18,6 +18,24 @@ const scan = (root: string, ...args: string[]) => spawnSync(process.execPath, [s
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 describe('scanner input and history boundaries', () => {
+  it.each([
+    ['noreply', 'github.com', 0],
+    ['personal', 'github.com', 2],
+    ['personal', 'gmail.com', 2],
+    ['noreply', 'github.com.evil.test', 2],
+    ['noreply', 'github.com-personal.test', 2],
+    ['prefix-noreply', 'github.com', 2],
+    ['noreply+personal', 'github.com', 2],
+    ['.noreply', 'github.com', 2],
+    ['+noreply', 'github.com', 2],
+  ])('only exempts the exact GitHub system mailbox: %s at %s', (name, domain, status) => {
+    const { base, root } = setup();
+    const meta = path.join(base, 'meta.json');
+    fs.writeFileSync(meta, JSON.stringify([{ label: 'fixture', text: ['GitHub <', name, '@', domain, '>'].join('') }]));
+    const result = scan(root, '--meta', meta);
+    expect(result.status, result.stderr).toBe(status);
+    expect(JSON.parse(result.stdout).findings).toEqual(status === 0 ? [] : [expect.objectContaining({ rule: 'email' })]);
+  });
   it('rejects unknown options instead of silently omitting requested checks', () => {
     const { root } = setup();
     const result = scan(root, '--unsupported-check');

@@ -36,6 +36,8 @@ import { useLinkPeek } from './LinkPeek';
 import { sysText, t } from '../i18n';
 import { ThoughtText } from './CorrectThought';
 import { correctedThoughts, parseCorrection } from '../lib/correction';
+import { agents } from '../store/agents';
+import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -206,7 +208,7 @@ const ToolItem = memo(function ToolItem({ item }: { item: Tool }) {
 function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> }) {
   const chatId = useContext(ChatIdCtx);
   const cwd = useApp(s => (chatId ? s.chats[chatId]?.cwd : undefined));
-  return <ArtifactCard item={item} cwd={item.cwd ?? cwd} />;
+  return <ArtifactCard item={item} cwd={item.cwd ?? cwd} chatId={chatId??undefined}/>;
 }
 
 /** A correction of the reasoning the user sent (lib/correction.ts): the sentence struck through, then the fix. */
@@ -297,7 +299,11 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
 }
 
 type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null};
-export function ItemList(props:ItemListProps){return <ItemListFor key={props.chatId??'unowned'} {...props}/>;}
+export function ItemList(props:ItemListProps){
+  const guideId=agents.use(s=>guideChatId(s.setup));
+  const items=useMemo(()=>visibleGuideItems(props.items,props.chatId??null,guideId),[props.items,props.chatId,guideId]);
+  return <ItemListFor key={props.chatId??'unowned'} {...props} items={items}/>;
+}
 function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const ref = useRef<HTMLDivElement>(null);
   const peek = useLinkPeek(chatId);

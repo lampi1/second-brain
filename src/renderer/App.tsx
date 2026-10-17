@@ -154,11 +154,11 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   return (
     <div className="page-frame" data-testid={`page-${id}`}>
       <div className="page-bar">
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'workspace' })} data-testid="page-back" data-tip="Torna alle chat|Ctrl+1"><IconArrowLeft size={13} /> Chat</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'workspace' })} data-testid="page-back" data-tip={`${t('home.backAgents')}|Ctrl+1`}><IconArrowLeft size={13} /> {t('home.agents')}</button>
         <h2>{pageLabel(id)}</h2>
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> {t('chat.menu.copyLink')}</button>
-        <span className="page-hint"><Keys combo="Esc" /> chat</span>
+        <span className="page-hint"><Keys combo="Esc" /> {t('home.agents')}</span>
       </div>
       <div className="page-body">
         {id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'

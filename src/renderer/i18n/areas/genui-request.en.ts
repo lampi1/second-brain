@@ -1,0 +1,28 @@
+// English equivalents of the rich request-panel chrome, checked against the Italian module.
+import type { genuiRequestIt } from './genui-request.it';
+export const genuiRequestEn: typeof genuiRequestIt = {
+  'genui.request.less': 'Show less',
+  'genui.request.command': 'Show full command',
+  'genui.request.commandLines': ({ count }) => `Show full command (${count} lines)`,
+  'genui.request.write': 'Write your answer',
+  'genui.request.free': 'Free text answer',
+  'genui.request.written': ({ engine }) => `${engine} receives this as your written answer instead of the options.`,
+  'genui.request.enter': 'Enter',
+  'genui.request.sendHint': 'send',
+  'genui.request.backHint': 'back to choices',
+  'genui.request.cancel': 'Cancel',
+  'genui.request.send': 'Send',
+  'genui.request.later': 'Answer later',
+  'genui.request.laterHint': 'Leave this unanswered: the chat keeps waiting',
+  'genui.request.confirm': 'Confirm',
+  'genui.request.choose': 'choose',
+  'genui.request.move': 'move',
+  'genui.request.confirmHint': 'confirm',
+  'genui.request.of': 'of',
+  'genui.request.multiple': 'multiple choices',
+  'genui.request.commands': 'Commands proposed by the chat',
+  'genui.request.ownWords': 'Answer in your own words…',
+  'genui.request.count': ({ count }) => count === 0 ? 'No choices' : count === 1 ? '1 choice' : `${count} choices`,
+  'genui.request.decision': 'Decision',
+  'genui.request.toChoose': 'to choose',
+};

@@ -113,3 +113,81 @@
 .peek-acts { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
 .peek-act { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border-2); border-radius: var(--r-xs); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
 .peek-act:hover, .peek-act:focus-visible { background: var(--surface-3); outline: none; box-shadow: 0 0 0 2px var(--focus); }
+
+/* Product hierarchy shared by light/dark themes. Keep all meaning in words as well as colour. */
+.gu-art { border-radius: 12px; }
+.gu-head { padding: 12px 12px 4px; gap: 8px; }
+.gu-title { font-size: 14px; }
+.gu-sum { margin: 2px 12px 12px; line-height: 1.55; }
+.gu-body { padding: 0 12px 12px; }
+.gu-btn { width: 32px; height: 32px; }
+.gu-status { padding: 3px 7px; border-radius: 6px; background: var(--surface-3); }
+.gu-status-icon { display: inline-grid; place-items: center; width: 12px; font-weight: 700; }
+.gu-table-wrap:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.gu-table th { padding: 10px 12px; background: var(--surface-3); color: var(--text-2); }
+.gu-table td { padding: 10px 12px; line-height: 1.5; }
+.gu-table tbody tr:hover td { background: var(--surface-3); }
+.gu-link { min-height: 28px; white-space: normal; overflow-wrap: anywhere; }
+.gu-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.gu-card { padding: 16px; gap: 12px; border-radius: 10px; }
+.gu-card.rec { border-color: var(--blue-line); box-shadow: inset 3px 0 var(--blue); }
+.gu-card-head { flex-wrap: wrap; font-size: 14px; line-height: 1.4; }
+.gu-rec { color: var(--blue-strong); background: var(--blue-bg); padding: 3px 8px; white-space: normal; }
+.gu-card-sum, .gu-pros, .gu-cons { line-height: 1.55; overflow-wrap: anywhere; }
+.gu-tradeoffs > b { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text-3); }
+.gu-card-foot { padding-top: 10px; }
+.gu-lane { padding: 12px; gap: 10px; flex-basis: 240px; border-radius: 10px; }
+.gu-lane-head { flex-wrap: wrap; }
+.gu-lane-head b { white-space: normal; overflow-wrap: anywhere; flex-basis: 100%; order: -1; }
+.gu-item { padding: 10px; gap: 7px; line-height: 1.5; }
+.gu-item-detail, .gu-why { color: var(--text-2); line-height: 1.5; }
+.gu-empty { padding: 12px; color: var(--text-3); }
+.gu-diff-group { border: 1px solid var(--border-2); border-radius: 10px; overflow: hidden; }
+.gu-diff-area { padding: 10px 12px; background: var(--surface-3); }
+.gu-diff-file { padding: 10px 12px; border-left: 0; border-bottom: 1px solid var(--border); align-items: center; }
+.gu-diff-file:last-child { border-bottom: 0; }
+.gu-diff-file > svg { flex: none; color: var(--text-3); }
+.gu-diff-file .gu-copy { width: 32px; height: 32px; opacity: 1; }
+.gu-path { min-width: 0; flex: 1 1 180px; }
+.gu-why { padding-left: 23px; }
+
+/* Choice body submits; its sibling disclosure only inspects. Every RequestPanel host uses this module. */
+.gu-choice { container-type: inline-size; min-width: 0; width: 100%; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.gu-choice.rec { border-color: var(--blue-line); box-shadow: inset 3px 0 var(--blue); }
+.gu-choice.picked { background: var(--blue-bg); border-color: var(--blue); }
+.gu-choice.cur { border-color: var(--blue-line); }
+.gu-choice-answer { width: 100%; min-height: 68px; display: flex; align-items: flex-start; gap: 12px; padding: 14px; color: var(--text); text-align: left; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.gu-choice-answer:hover:not(:disabled) { background: var(--surface-3); }
+.gu-choice-answer:disabled { opacity: .55; cursor: default; }
+.gu-choice-answer:focus-visible, .gu-choice-preview summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.gu-choice-key { display: grid; place-items: center; flex: none; min-width: 26px; height: 26px; border: 1px solid var(--border-3); border-radius: 7px; color: var(--text-2); font-size: 12px; }
+.gu-choice-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
+.gu-choice-copy strong { font-size: 14px; line-height: 1.45; }
+.gu-choice-description { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
+.gu-choice.deny .gu-choice-key { color: var(--red); border-color: var(--red); }
+.gu-choice-preview { border-top: 1px solid var(--border); }
+.gu-choice-preview summary { padding: 10px 14px; color: var(--blue-strong); font-size: 12px; cursor: pointer; min-height: 36px; }
+.gu-choice-preview-body { padding: 0 14px 14px; overflow: auto; max-height: 440px; user-select: text; }
+.gu-choice-preview .gu-preview { margin-top: 8px; }
+.need-opts:has(> .gu-choice), .ask-actions:has(> .gu-choice), .wq-perm:has(> .gu-choice) { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
+.need-card .gu-choice-answer { min-height: 56px; padding: 10px; }
+
+/* Chart text never scales with the drawing and negative values never collide with category labels. */
+.gu-chart { padding: 8px 0; }
+.gu-chart-bars { display: grid; gap: 16px; }
+.gu-chart-row { min-width: 0; }
+.gu-chart-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.gu-chart-caption > span { overflow-wrap: anywhere; }
+.gu-chart-caption strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.gu-chart-track { position: relative; height: 10px; margin-top: 6px; border-radius: 3px; background: var(--surface-3); }
+.gu-chart-zero { position: absolute; height: 16px; top: -3px; width: 1px; background: var(--border-3); }
+.gu-chart-fill { position: absolute; height: 100%; background: var(--blue); border-radius: 3px; transition: width 180ms ease, left 180ms ease; }
+.gu-chart-fill.negative { background: var(--violet); }
+.gu-chart-note { color: var(--text-3); font-size: 11.5px; margin-top: 5px; }
+@media (prefers-reduced-motion: reduce) { .gu-chart-fill { transition: none; } }
+@media (max-width: 600px) { .gu-choice-answer { flex-wrap: wrap; } .gu-choice-answer > .gu-rec { margin-left: 38px; } }
+@container (max-width: 420px) {
+  .gu-choice-answer { flex-wrap: wrap; }
+  .gu-choice-copy { flex-basis: calc(100% - 38px); }
+  .gu-choice-answer > .gu-rec { margin-left: 38px; }
+}

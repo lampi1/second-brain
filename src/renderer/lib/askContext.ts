@@ -36,7 +36,7 @@ const MD_LINK = /\[([^\]\n]{1,120})\]\(\s*<?((?:https?|file):[^)\s>]+)>?\s*\)/gi
 const URL_RE = /\b(?:https?:\/\/|file:\/\/\/)[^\s<>"'`)\]]+/gi;
 // C:\x\y.md, C:/x/y.md or /Users/x/y.md (pathPatterns.ts; spaces end a path: a path with spaces is caught only as a
 // markdown link or a file:/// URL)
-const LOCAL_PATH = new RegExp(String.raw`(?<![\w/\\])${LOCAL_START}[^\s<>"'\`|*?]+\.[A-Za-z0-9]{1,6}\b`, 'g');
+const LOCAL_PATH = new RegExp(String.raw`(?<![\w/\\])${LOCAL_START}[^\s<>"'\`|*?]+\.[A-Za-z0-9]{1,6}\b(?::\d+(?::\d+)?)?`, 'g');
 
 function webLabel(href: string): string {
   try {

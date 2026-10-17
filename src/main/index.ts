@@ -1,5 +1,6 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
+import { DefaultBrain } from '../modules/ai-first/default-brain';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,7 @@ import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
 import { openLocal, type Shell } from './open-path';
 import { peekFile } from './peek-file';
+import { readFileView } from './file-view';
 import { askImageRoots, readAskImage } from './ask-image';
 import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
@@ -95,6 +97,7 @@ app.whenReady().then(async () => {
     }, currentRoot: () => s.brain.settings().brainRoot, selectionRevision: () => brainChoiceRevision, engineKnown: id => !!engineOf(id),
     connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
   });
+  const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); } });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
@@ -106,7 +109,7 @@ app.whenReady().then(async () => {
       'update:recovery': () => updates.recovery(),
       'update:recoveryAck': a => updates.acknowledge(a?.id),
     'app:brainCreation': () => brainCreation.capability(),
-    'app:createBrain': a => brainCreation.create(a),
+    'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
     'improve:proposals': () => s.proposals.list(),
     'improve:proposalAvailability': () => s.proposals.availability(),
     'improve:proposalCreate': () => s.proposals.create(),
@@ -135,6 +138,11 @@ app.whenReady().then(async () => {
     // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
     'app:openPath': a => openLocal(a.path, hiddenRun() ? hiddenShell : shell),
     'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
+    'app:readFile': a => {
+      const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
+      const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
+      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,roots:[brainRoot,s.brain.settings().appRepo,chat?.cwd].filter((root):root is string=>typeof root==='string'&&!!root)});
+    },
     'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
       userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],

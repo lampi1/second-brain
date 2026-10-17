@@ -18,6 +18,14 @@ function scripts(dir: string): string[] {
 }
 
 describe('brain-template', () => {
+  it('ships one action rules table without granting tools or weakening production query approval', () => {
+    const text = fs.readFileSync(path.join(tpl, 'me.template.md'), 'utf8');
+    expect(text.split('### Regole delle azioni')).toHaveLength(2);
+    for (const action of ['push', 'PR', 'merge']) expect(text).toContain(`| ${action} | non produzione | mostra-e-conferma |`);
+    for (const action of ['deploy', 'scritture']) expect(text).toContain(`| ${action} | produzione | l'agente propone e la persona esegue |`);
+    expect(text).toContain('Queries on production databases');
+    expect(text).toContain('This table grants no tool permissions');
+  });
   it('has the installer and the guides a new user opens first', () => {
     for (const f of ['install.mjs', 'README.md', 'START-HERE.md', 'AGENTS.md', 'me.template.md']) expect(fs.existsSync(path.join(tpl, f)), f).toBe(true);
   });

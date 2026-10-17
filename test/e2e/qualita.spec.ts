@@ -59,5 +59,5 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await shot(page, 'qualita-dettagli');
 
   await p.getByTestId('bx-q-proposte').getByRole('button', { name: 'Apri proposals.md' }).click();
-  await expect(page.getByTestId('page-esplora')).toBeVisible();
+  await expect(page.getByTestId('page-file')).toBeVisible();
 });

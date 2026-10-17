@@ -193,7 +193,7 @@ export const dialogsEn: typeof dialogsIt = {
   // Sidebar
   'dialogs.sidebar.label': 'Sections',
   'dialogs.sidebar.work': 'Work',
-  'dialogs.sidebar.chat': 'Chat',
+  'dialogs.sidebar.chat': 'Agents',
   'dialogs.sidebar.chatShortcut': 'Ctrl+1',
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.app': 'App',

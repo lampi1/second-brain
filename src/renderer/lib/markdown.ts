@@ -11,6 +11,11 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { isCopyable, isFilePath } from './copyable';
 
+// A local citation is an inert internal fragment until the user clicks; it never becomes a navigable file URL.
+function localFileLink(token:{type:string;href?:unknown}):void{
+  if(token.type==='link'&&typeof token.href==='string'&&isFilePath(token.href))token.href='#sb-file='+encodeURIComponent(token.href);
+}
+
 const SAFE_URI = /^(?:https?:|mailto:|#)/i;
 const FORBID_TAGS = ['area', 'map', 'form', 'input', 'button', 'select', 'textarea', 'iframe', 'frame', 'frameset', 'object', 'embed', 'base', 'meta', 'link', 'style', 'svg', 'math', 'video', 'audio', 'source', 'track', 'portal'];
 const FORBID_ATTR = ['style', 'usemap', 'srcset', 'action', 'formaction', 'ping', 'xlink:href', 'background', 'poster', 'longdesc'];
@@ -49,7 +54,7 @@ const sanitize = (raw: string): string => { hook(); return DOMPurify.sanitize(ra
 export function renderMarkdown(text: string, useCache = true): string {
   const hit = cache.get(text);
   if (hit !== undefined) return hit;
-  const html = sanitize(marked.parse(text, { async: false, gfm: true, breaks: true }));
+  const html = sanitize(marked.parse(text, { async: false, gfm: true, breaks: true, walkTokens:localFileLink }));
   if (!useCache) return html;
   cache.set(text, html);
   if (cache.size > 300) cache.delete(cache.keys().next().value as string);
@@ -76,6 +81,7 @@ export function markdownParts(text: string, useCache = true): MdPart[] {
   // a real LRU: a streaming message asks for its finished blocks every frame, they must stay
   if (hit) { partsCache.delete(text); partsCache.set(text, hit); return hit; }
   const tokens = marked.lexer(text, { gfm: true, breaks: true });
+  marked.walkTokens(tokens,localFileLink);
   const parts: MdPart[] = [];
   let group: typeof tokens[number][] = [];
   const flush = () => {

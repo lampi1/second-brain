@@ -64,7 +64,8 @@ export const DATA_RULES = [
   ['user-path', /\b[A-Za-z]:(?:\\\\|\\|\/)+Users(?:\\\\|\\|\/)+(?!Public\b|Default\b|<|\{\{|%|\$|\*|you\b|USERNAME\b|name\b|me\b)[A-Za-z0-9._~-]{2,}/i],
   ['short-user-name', /\b[A-Z0-9]{2,6}~\d\.[A-Z0-9]{1,3}\b/],   // Windows 8.3 short name of a user folder
   ['home-path', /(?:^|[^\w.])\/(?:[a-z]\/)?(?:home|Users)\/(?!runner\/|user\/|you\/|me\/|name\/|<|\{\{|\$)[a-z0-9._~-]{2,}\//i],
-  ['email', /\b[A-Za-z0-9._%+-]+@(?!(?:users\.noreply\.github\.com|example\.(?:com|org|net)|localhost)\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/],
+  // GitHub's exact system identity is public metadata; other github.com mailboxes remain personal data.
+  ['email', /(?<![A-Za-z0-9._%+-])(?!noreply@github\.com(?![A-Za-z0-9._%+-]))[A-Za-z0-9._%+-]+@(?!(?:users\.noreply\.github\.com|example\.(?:com|org|net)|localhost)\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/],
   ['guid', /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i],
   ['ipv4-private', /\b(?:10\.\d{1,3}|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/],
   ['internal-host', /\b[a-z0-9-]+\.(?:database\.windows\.net|vault\.azure\.net|azurewebsites\.net|scm\.azurewebsites\.net|visualstudio\.com|blob\.core\.windows\.net|servicebus\.windows\.net)\b|\bdev\.azure\.com\/(?!\{\{)[A-Za-z0-9-]{3,}/i],

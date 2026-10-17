@@ -74,8 +74,8 @@ export function AgentStudio() {
     } catch { setProblem(t('studio.guideError')); }
     finally { working.current = false; setBusy(false); }
   };
-  return <section className="agent-studio" aria-label="Agenti" data-testid="agent-studio">
-    <header className="studio-head"><div><h2>{t('product.agents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
+  return <section className="agent-studio" aria-label={t('home.manageAgents')} data-testid="agent-studio">
+    <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
     <AppearancePreview />
     {problem && <p role="alert">{problem}</p>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}

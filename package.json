@@ -29,6 +29,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "genui:preview": "node scripts/genui-preview.mjs",
+    "genui:test": "vitest run test/unit/genui.test.ts test/unit/genui-render.test.ts test/unit/keys.test.ts",
+    "genui:lint": "eslint src/renderer/components/GenUi.tsx src/renderer/components/RequestPanel.tsx src/renderer/components/genui src/renderer/genui-preview.tsx src/renderer/i18n/it.ts src/renderer/i18n/en.ts src/renderer/i18n/areas/genui-request.it.ts src/renderer/i18n/areas/genui-request.en.ts scripts/genui-preview.mjs test/unit/genui-render.test.ts test/e2e/genui.spec.ts test/e2e/genui-choices.spec.ts",
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs --dev && electron .",
     "start": "electron .",

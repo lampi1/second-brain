@@ -1,6 +1,7 @@
 // Italian UI texts of the "brainPages" area (ADR 0057): spread into it.ts. Keys start with "brainPages.".
 export const brainPagesIt = {
   // index.tsx - brain page labels
+  'brainPages.nav.home': 'Home',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Fatto e standup',
   'brainPages.nav.idee': 'Idee',
@@ -9,8 +10,7 @@ export const brainPagesIt = {
   'brainPages.nav.procedure': 'Procedure',
   'brainPages.nav.confronto': 'Confronto modelli',
   'brainPages.nav.miglioramento': 'Regole imparate',
-  'brainPages.nav.esplora': 'Esplora',
-  'brainPages.nav.agenti': 'Agenti',
+  'brainPages.nav.agenti': 'Gestisci agenti',
   'brainPages.nav.skill': 'Skill tecniche',
   'brainPages.nav.impostazioni': 'Impostazioni',
   'brainPages.nav.migliora': "Migliora l'app",
@@ -55,30 +55,6 @@ export const brainPagesIt = {
   'brainPages.day.note': (p: { hasDevops: boolean }) => `Fatto dal diario, dalle chat${p.hasDevops ? ' e da DevOps' : ''}; da fare dal brief e dai fili aperti.`,
 
   // Esplora.tsx
-  'brainPages.esplora.rootFolder': '(cartella principale)',
-  'brainPages.esplora.pageTitle': 'Esplora',
-  'brainPages.esplora.lead': 'file del cervello: regole, memoria, diario, runbook, report, tool. Solo lettura.',
-  'brainPages.esplora.what': "Solo i file tracciati del cervello: i segreti non compaiono mai. Cerca una parola in tutti i file o sfoglia le cartelle.",
-  'brainPages.esplora.searchPlaceholder': 'Cerca una parola in tutti i file…',
-  'brainPages.esplora.searchLabel': 'Cerca nei file',
-  'brainPages.esplora.searchBtn': 'Cerca',
-  'brainPages.esplora.closeResults': 'Chiudi i risultati',
-  'brainPages.esplora.resultsLabel': 'Risultati della ricerca',
-  'brainPages.esplora.searching': 'Cerco…',
-  'brainPages.esplora.resultCount': (p: { n: number; q: string; overflow: boolean }) => `${p.n}${p.overflow ? "+" : ""} risultati per «${p.q}»`,
-  'brainPages.esplora.filterPlaceholder': 'Filtra i nomi dei file…',
-  'brainPages.esplora.filterLabel': 'Filtra i file',
-  'brainPages.esplora.treeLabel': 'File del cervello',
-  'brainPages.esplora.notFound': 'File non trovato',
-  'brainPages.esplora.notFoundDesc': (p: { arg: string }) => `«${p.arg}» non è tra i file che il cervello mostra.`,
-  'brainPages.esplora.chooseFile': 'Scegli un file a sinistra',
-  'brainPages.esplora.chooseFileOr': "Oppure cerca una parola in tutti i file. I principali:",
-  'brainPages.esplora.pathCopied': 'Percorso copiato',
-  'brainPages.esplora.copyFailed': 'Copia non riuscita',
-  'brainPages.esplora.copyPath': 'Copia il percorso',
-  'brainPages.esplora.downloadBtn': 'Scarica',
-  'brainPages.esplora.lastModified': 'ultima modifica',
-  'brainPages.esplora.jsonlLine': 'riga',
 
   // Fatto.tsx
   'brainPages.fatto.titleToday': 'Fatto oggi',

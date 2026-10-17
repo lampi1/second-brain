@@ -5,19 +5,21 @@
 // list (compact; click or ⤢ = full width over the app, Esc closes); AskArtifacts = the visuals attached to a question;
 // UiPreview = an option's preview with its sb-ui fences drawn. None of them answers anything: their keys stay theirs
 // (Esc in the full view never reaches a question panel). Used by ChatItems.tsx and AskContext.tsx.
-import { Component, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ChatItem, PendingRequest, UiBarChart, UiBoard, UiCards, UiDiffList, UiLink, UiSpec, UiStatus, UiTable } from '@shared/contract';
+import { Component, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ChatItem, PendingRequest, UiBoard, UiCards, UiDiffList, UiLink, UiSpec, UiStatus, UiTable } from '@shared/contract';
 import { describeUi, safeHref, splitUiFences, textOfUi } from '@shared/genui';
 import { renderMarkdown } from '../lib/markdown';
-import { sb } from '../sb';
 import { useApp } from '../store/store';
 import { closeModal, openModal, toast, ui } from '../store/ui';
 import { IconAlert, IconChart, IconCheck, IconColumns, IconCopy, IconFile, IconGlobe, IconLayers, IconList, IconMaximize, IconX } from './Icons';
 import { Modal } from './ui';
+import { BarChart } from './genui/BarChart';
 import { copyText } from '../brain/components/ui';
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
+import { openFileViewer } from '../actions';
 
 type Art = Extract<ChatItem, { kind: 'artifact' }>;
+const FileChat=createContext<string|undefined>(undefined);
 
 const getStatus = (): Record<UiStatus, string> => ({ ok: t('tools.genui.statusOk'), fail: t('tools.genui.statusFail'), blocked: t('tools.genui.statusBlocked'), running: t('tools.genui.statusRunning'), todo: t('tools.genui.statusTodo'), info: t('tools.genui.statusInfo'), warn: t('tools.genui.statusWarn') });
 
@@ -33,33 +35,31 @@ const getRisk = () => ({ low: t('tools.genui.riskLow'), medium: t('tools.genui.r
 
 /** A local file named by a chat, opened on the user's click (main/open-path.ts decides how: documents open, the rest
  *  is only shown in its folder). */
-export async function openFile(href: string): Promise<void> {
-  try {
-    const r = await sb.invoke('app:openPath', { path: href });
-    if (r.how === 'folder') toast(t('tools.genui.shownInFolder'), 'info');
-    else if (r.how === 'missing' || r.how === 'refused') toast(r.reason, 'err');
-  } catch (e) { toast(`${t('tools.genui.fileNotOpened')} ${e instanceof Error ? e.message : String(e)}`, 'err'); }
+export async function openFile(href: string,chatId?:string): Promise<void> {
+  openFileViewer(href,chatId);
 }
 
 function Status({ s }: { s: UiStatus }) {
   const STATUS = getStatus();
-  return <span className={`gu-status gu-${s}`}><i aria-hidden="true" />{STATUS[s]}</span>;
+  return <span className={`gu-status gu-${s}`}><span aria-hidden="true" className="gu-status-icon">{({ ok: '✓', fail: '×', blocked: '⊘', running: '↻', todo: '○', info: 'i', warn: '!' })[s]}</span>{STATUS[s]}</span>;
 }
 
 function Link({ l }: { l: UiLink }) {
+  const chatId=useContext(FileChat);
   const kind = safeHref(l.href);
   if (kind === 'web') return <a className="gu-link" href={l.href} target="_blank" rel="noopener noreferrer" title={l.href}><IconGlobe size={11} />{l.label}</a>;
-  if (kind === 'file') return <button type="button" className="gu-link" onClick={() => void openFile(l.href)} title={l.href}><IconFile size={11} />{l.label}</button>;
+  if (kind === 'file') return <button type="button" className="gu-link" onClick={() => void openFile(l.href,chatId)} title={l.href}><IconFile size={11} />{l.label}</button>;
   return <span className="gu-link off">{l.label}</span>;
 }
 
 function Table({ p }: { p: UiTable }) {
   const status = p.rows.some(r => r.status), link = p.rows.some(r => r.link);
   return (
-    <div className="gu-table-wrap">
+    <div className="gu-table-wrap" tabIndex={0} role="region" aria-label={t('genui.table.region')}>
       <table className="gu-table">
-        <thead><tr>{status && <th>{t('tools.genui.stateHeader')}</th>}{p.columns.map((c, i) => <th key={i}>{c}</th>)}{link && <th />}</tr></thead>
+        <thead><tr>{status && <th scope="col">{t('tools.genui.stateHeader')}</th>}{p.columns.map((c, i) => <th scope="col" key={i}>{c}</th>)}{link && <th scope="col"><span className="sr-only">{t('genui.table.links')}</span></th>}</tr></thead>
         <tbody>
+          {!p.rows.length && <tr><td colSpan={p.columns.length + Number(status) + Number(link)} className="gu-empty">{t('tools.genui.empty')}</td></tr>}
           {p.rows.map((r, i) => (
             <tr key={i} className={r.status ? `gu-row-${r.status}` : undefined}>
               {status && <td>{r.status && <Status s={r.status} />}</td>}
@@ -81,8 +81,8 @@ function Cards({ p }: { p: UiCards }) {
         <div key={i} className={`gu-card ${o.recommended ? 'rec' : ''}`}>
           <div className="gu-card-head"><b>{o.title}</b>{o.recommended && <span className="gu-rec">{t('tools.genui.recommended')}</span>}</div>
           {o.summary && <p className="gu-card-sum">{o.summary}</p>}
-          {!!o.pros?.length && <ul className="gu-pros">{o.pros.map((x, j) => <li key={j}><IconCheck size={11} />{x}</li>)}</ul>}
-          {!!o.cons?.length && <ul className="gu-cons">{o.cons.map((x, j) => <li key={j}><IconX size={11} />{x}</li>)}</ul>}
+          {!!o.pros?.length && <div className="gu-tradeoffs"><b>{t('genui.cards.pros')}</b><ul className="gu-pros">{o.pros.map((x, j) => <li key={j}><IconCheck size={11} />{x}</li>)}</ul></div>}
+          {!!o.cons?.length && <div className="gu-tradeoffs"><b>{t('genui.cards.cons')}</b><ul className="gu-cons">{o.cons.map((x, j) => <li key={j}><IconX size={11} />{x}</li>)}</ul></div>}
           {(o.effort || o.risk) && (
             <div className="gu-card-foot">
               {o.effort && <span>{t('tools.genui.effort')} <b>{o.effort}</b></span>}
@@ -95,18 +95,12 @@ function Cards({ p }: { p: UiCards }) {
   );
 }
 
-/** A lane's status: the dot, and its word unless the lane's title already says it ("Falliti" for fail), never color alone. */
-function LaneStatus({ s, title }: { s: UiStatus; title: string }) {
-  const said = title.toLowerCase().includes(getStatus()[s].toLowerCase().slice(0, 5));
-  return said ? <i className={`gu-dot gu-${s}`} aria-hidden="true" /> : <Status s={s} />;
-}
-
 function Board({ p }: { p: UiBoard }) {
   return (
     <div className="gu-board">
       {p.lanes.map((l, i) => (
         <div key={i} className={`gu-lane ${l.status ? `gu-lane-${l.status}` : ''}`}>
-          <div className="gu-lane-head">{l.status && <LaneStatus s={l.status} title={l.title} />}<b>{l.title}</b><span className="gu-count">{l.items.length}</span></div>
+          <div className="gu-lane-head">{l.status && <Status s={l.status} />}<b>{l.title}</b><span className="gu-count">{l.items.length}</span></div>
           {l.items.map((it, j) => (
             <div key={j} className="gu-item">
               <div className="gu-item-title">{it.status && <Status s={it.status} />}<span>{it.title}</span></div>
@@ -141,6 +135,7 @@ function CopyBtn({ text, label, testid }: { text: string; label: string; testid?
 }
 
 function DiffList({ p, cwd }: { p: UiDiffList; cwd?: string }) {
+  const chatId=useContext(FileChat);
   return (
     <div className="gu-diff">
       {p.groups.map((g, i) => (
@@ -150,10 +145,10 @@ function DiffList({ p, cwd }: { p: UiDiffList; cwd?: string }) {
             const h = fileHref(f, cwd);
             const name = <span className="mono">{f.path}</span>;
             return (
-              <div key={j} className="gu-diff-file">
+              <div key={j} className="gu-diff-file"><IconFile size={15} />
                 {h ? (safeHref(h) === 'web'
                   ? <a className="gu-path" href={h} target="_blank" rel="noopener noreferrer" title={h}>{name}</a>
-                  : <button type="button" className="gu-path" onClick={() => void openFile(h)} title={h}>{name}</button>)
+                  : <button type="button" className="gu-path" onClick={() => void openFile(h,chatId)} title={h}>{name}</button>)
                   : <span className="gu-path off">{name}</span>}
                 {(f.added !== undefined || f.removed !== undefined) && <span className="gu-diff-n"><span className="add">+{f.added ?? 0}</span> <span className="del">−{f.removed ?? 0}</span></span>}
                 <CopyBtn text={f.path} label={t('tools.genui.copyPath', { path: f.path })} />
@@ -164,42 +159,6 @@ function DiffList({ p, cwd }: { p: UiDiffList; cwd?: string }) {
         </div>
       ))}
     </div>
-  );
-}
-
-const fmt = (v: number) => (Math.abs(v) >= 100 ? Math.round(v).toLocaleString(locale()) : v.toLocaleString(locale(), { maximumFractionDigits: 2 }));
-
-/** One series of horizontal bars (inline SVG): one hue, rounded data end, 2 px gap, value at the bar's end, a tooltip
- *  per bar; a zero line when values go negative. */
-function BarChart({ p }: { p: UiBarChart }) {
-  const W = 640, LABEL = 170, VAL = 80, ROW = 22, BAR = 14;
-  const lo = Math.min(0, ...p.bars.map(b => b.value)), hi = Math.max(0, ...p.bars.map(b => b.value));
-  const span = hi - lo || 1;
-  const plot = W - LABEL - VAL;
-  const x = (v: number) => LABEL + ((v - lo) / span) * plot;
-  const H = p.bars.length * ROW + 4;
-  const unit = p.unit ? ` ${p.unit}` : '';
-  return (
-    <svg className="gu-bars" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={p.bars.map(b => `${b.label}: ${fmt(b.value)}${unit}`).join('; ')}>
-      <line x1={x(0)} x2={x(0)} y1={0} y2={H} className="gu-axis" />
-      {p.bars.map((b, i) => {
-        const y = i * ROW + 4, x0 = x(Math.min(0, b.value)), w = Math.max(2, Math.abs(x(b.value) - x(0)));
-        const r = Math.min(4, w / 2);
-        // rounded only at the data end (the end away from zero)
-        const d = b.value >= 0
-          ? `M${x0},${y}h${w - r}a${r},${r} 0 0 1 ${r},${r}v${BAR - 2 * r}a${r},${r} 0 0 1 -${r},${r}h-${w - r}z`
-          : `M${x0 + w},${y}h-${w - r}a${r},${r} 0 0 0 -${r},${r}v${BAR - 2 * r}a${r},${r} 0 0 0 ${r},${r}h${w - r}z`;
-        return (
-          <g key={i} className="gu-bar">
-            <title>{`${b.label}: ${fmt(b.value)}${unit}${b.note ? ` · ${b.note}` : ''}`}</title>
-            <rect x={0} y={y - 3} width={W} height={ROW} className="gu-hit" />
-            <text x={LABEL - 8} y={y + BAR / 2} className="gu-label" textAnchor="end" dominantBaseline="central">{b.label.length > 26 ? `${b.label.slice(0, 25)}…` : b.label}</text>
-            <path d={d} className="gu-fill" />
-            <text x={(b.value >= 0 ? x0 + w : x0) + (b.value >= 0 ? 6 : -6)} y={y + BAR / 2} className="gu-value" textAnchor={b.value >= 0 ? 'start' : 'end'} dominantBaseline="central">{fmt(b.value)}{unit}</text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 
@@ -217,19 +176,22 @@ export function UiView({ spec, cwd }: { spec: UiSpec; cwd?: string }) {
 class Boundary extends Component<{ fallback: string; children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
+  override componentDidUpdate(prev: Readonly<{ fallback: string; children: ReactNode }>) {
+    if (this.state.failed && prev.children !== this.props.children) this.setState({ failed: false });
+  }
   override render() {
     return this.state.failed ? <div className="gu-fallback" role="note"><IconAlert size={12} />{this.props.fallback}</div> : this.props.children;
   }
 }
 
-export function SafeView({ spec, summary, cwd }: { spec: UiSpec; summary: string; cwd?: string }) {
-  return <Boundary fallback={summary}><UiView spec={spec} cwd={cwd} /></Boundary>;
+export function SafeView({ spec, summary, cwd,chatId }: { spec: UiSpec; summary: string; cwd?: string;chatId?:string }) {
+  return <FileChat.Provider value={chatId}><Boundary fallback={summary}><UiView spec={spec} cwd={cwd} /></Boundary></FileChat.Provider>;
 }
 
 /** The full-width view over the app (the user's click): an app dialog (ui.modal 'visual'), so the questions window hides
  *  under it and a new question never takes its keyboard; Modal traps Tab, Esc or ✕ closes it and the keyboard goes back
  *  where it was. Another dialog opening (Ctrl+K) closes it. */
-function FullView({ item, cwd, onClose }: { item: Art; cwd?: string; onClose: () => void }) {
+function FullView({ item, cwd, onClose,chatId }: { item: Art; cwd?: string; onClose: () => void;chatId?:string }) {
   const modal = ui.use(s => s.modal);
   const seen = useRef(false);
   useLayoutEffect(() => {
@@ -252,14 +214,14 @@ function FullView({ item, cwd, onClose }: { item: Art; cwd?: string; onClose: ()
           <button type="button" className="gu-btn" onClick={onClose} aria-label={t('tools.genui.closeEsc')} data-autofocus data-testid={`artifact-close-${item.key}`}><IconX size={14} /></button>
         </div>
         <p className="gu-sum">{item.summary}</p>
-        <div className="gu-full-body"><SafeView spec={item.ui} summary={item.summary} cwd={cwd} /></div>
+        <div className="gu-full-body"><SafeView spec={item.ui} summary={item.summary} cwd={cwd} chatId={chatId}/></div>
       </Modal>
     </span>
   );
 }
 
 /** A visual in a list (a chat's items, a question's context): compact, the whole of it a click away. */
-export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached }: { item: Art; cwd?: string; attached?: boolean }) {
+export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached,chatId }: { item: Art; cwd?: string; attached?: boolean;chatId?:string }) {
   const [full, setFull] = useState(false);
   const close = useCallback(() => setFull(false), []);
   const k = getKind()[item.ui.component];
@@ -274,11 +236,11 @@ export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached }: 
         <button type="button" className="gu-btn" onClick={() => setFull(true)} aria-label={t('tools.genui.openFullWidthTitle', { title: item.title })} data-tip={t('tools.genui.openFullWidth')}
           data-testid={`artifact-expand-${item.key}`}><IconMaximize size={13} /></button>
       </div>
-      <p className="gu-sum">{item.summary}</p>
+      <p className="gu-sum" role="status" aria-live="polite" aria-atomic="true">{item.summary}</p>
       <div className="gu-body" onClick={e => { if (!(e.target as HTMLElement).closest('a, button')) setFull(true); }}>
-        <SafeView spec={item.ui} summary={item.summary} cwd={cwd} />
+        <SafeView spec={item.ui} summary={item.summary} cwd={cwd} chatId={chatId}/>
       </div>
-      {full && <FullView item={item} cwd={cwd} onClose={close} />}
+      {full && <FullView item={item} cwd={cwd} onClose={close} chatId={chatId}/>}
     </div>
   );
 });
@@ -289,18 +251,18 @@ export function AskArtifacts({ req, testBase }: { req: PendingRequest; testBase:
   const cwd = useApp(s => s.chats[req.chatId]?.cwd);
   const mine = useMemo(() => (arts ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === req.id), [arts, req.id]);
   if (!mine.length) return null;
-  return <div className="gu-ask" data-testid={`${testBase}-visuals`}>{mine.map(a => <ArtifactCard key={a.id} item={a} cwd={cwd} attached />)}</div>;
+  return <div className="gu-ask" data-testid={`${testBase}-visuals`}>{mine.map(a => <ArtifactCard key={a.id} item={a} cwd={cwd} chatId={req.chatId} attached />)}</div>;
 }
 
 /** An option's preview: its markdown, with each ```sb-ui fence drawn as a catalog view (a wrong one shows its error). */
-export function UiPreview({ text }: { text: string }) {
+export function UiPreview({ text,chatId }: { text: string;chatId?:string }) {
   const parts = useMemo(() => splitUiFences(text), [text]);
   return (
     <>
       {parts.map((p, i) => p.kind === 'md'
         ? <div key={i} className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text) }} />
         : p.kind === 'ui'
-          ? <div key={i} className="gu-preview" data-testid="preview-visual" data-component={p.spec.component}>{p.title && <b className="gu-title">{p.title}</b>}<SafeView spec={p.spec} summary={describeUi(p.spec)} /></div>
+          ? <div key={i} className="gu-preview" data-testid="preview-visual" data-component={p.spec.component}>{p.title && <b className="gu-title">{p.title}</b>}<SafeView spec={p.spec} summary={describeUi(p.spec)} chatId={chatId}/></div>
           : <div key={i} className="gu-fallback" role="note" data-testid="preview-visual-bad"><IconAlert size={12} />{p.error}<pre className="tool-pre">{p.raw}</pre></div>)}
     </>
   );

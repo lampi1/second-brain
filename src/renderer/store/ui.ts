@@ -5,30 +5,34 @@
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, PermissionMode } from '@shared/contract';
+import type { RoleSelection } from '@shared/role-presets';
+import { readFileViewArg } from '@shared/file-view';
 import {readAppearance,type AppearancePreference} from '@shared/appearance';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { emptyRead, type ReadState } from '../lib/notify';
 import { now } from '../lib/clock';
 import { DEFAULT_V, type DockSize } from '../lib/regia-dock';
 import { createStore } from './createStore';
-import type{TextKey}from'../i18n';
+import{t,type TextKey}from'../i18n';
 
 export type View = 'mosaico' | 'corsie';
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
 export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'regiaRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
-export const isBrainPage = (id: string): id is BrainPageId => BRAIN_PAGES.some(p => p.id === id);
-export const pageLabel = (id: string): string => (id === 'workspace' ? 'Chat' : id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
-export const placeLabel = (p: Place): string => `${pageLabel(p.page)}${p.arg ? ` · ${p.arg}` : ''}${p.element ? ` · ${p.element.replace(/^chat-/, '')}` : ''}`;
+export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
+export const pageLabel = (id: string): string => (id === 'workspace' ? t('home.agents') : id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
+export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.page==='esplora'?readFileViewArg(p.arg??undefined):null;const arg=file?`${file.path}${file.line?`:${file.line}`:''}`:p.arg;return `${p.page==='file'||p.page==='esplora'?t('viewer.title'):pageLabel(p.page)}${arg ? ` · ${arg}` : ''}${p.element ? ` · ${p.element.replace(/^chat-/, '')}` : ''}`;};
 
 /** A place in the app: the chat grid, a brain page or the full-screen map; `element` = what to highlight there. */
 /** A place in the app: the chat grid, a brain page or the full-screen map. `arg` is what the page shows inside
  *  ("esplora" → a file, "costi" → a period; "mappa" → "tutto", "flat" or a piece to focus); `element` = what to
  *  highlight on the chat grid. */
-export interface Place { page: 'workspace' | 'mappa' | BrainPageId; arg?: string | null; element?: string | null }
+export interface Place { page: 'workspace' | 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
 
 export interface Prefs {
+  /** Validate against the loaded agent/page catalogs before use; preserve invalid saved data for explicit recovery. */
+  role?: RoleSelection;
   appearance:AppearancePreference;
   chatPanelsV:0|1;
   chatExpanded:Record<string,boolean>;
@@ -167,9 +171,9 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: null, pair: null, open: {},
+  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home', pair: null, open: {},
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], regiaFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
-  map: false, pageArg: null, mapArg: null, history: [{ page: 'workspace' }], hist: 0, center: false, newChatRegia: false, read: readRead(), highlight: null, toastDismissed: [],
+  map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, newChatRegia: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
 export function setRead(fn: (r: ReadState) => ReadState): void {
@@ -187,6 +191,14 @@ export function savePrefs(): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(ui.get().prefs)); } catch { /* storage off: keep in memory */ }
+}
+/** Explicit role commits are durable before publishing; stale previews cannot overwrite a newer choice. */
+export function saveRolePreference(role: RoleSelection | undefined, expected: string | undefined): void {
+  const current = ui.get().prefs;
+  if (JSON.stringify(current.role) !== expected) throw new Error('Role preference changed; preview again.');
+  const next = { ...current, role };
+  localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+  ui.set(s => ({ ...s, prefs: next }));
 }
 /** Expansion is independent of transcript/draft state. Collapsing never unmounts the input or item list. */
 export function setChatExpanded(id:string,expanded:boolean):void{

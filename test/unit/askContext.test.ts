@@ -24,6 +24,10 @@ describe('turnItems', () => {
 });
 
 describe('linksIn', () => {
+  it('preserves cited line and column coordinates in question file chips', () => {
+    expect(linksIn(['Read C:/client-work/report.ts:40:3 and /home/u/work/report.md:12.']).map(link=>link.href))
+      .toEqual(['C:/client-work/report.ts:40:3','/home/u/work/report.md:12']);
+  });
   it('names PRs and work items, keeps a markdown link\'s text, never repeats', () => {
     const l = linksIn([
       'La PR: https://dev.azure.com/o/p/_git/app/pullrequest/27. Il bug: https://dev.azure.com/o/p/_workitems/edit/4242',

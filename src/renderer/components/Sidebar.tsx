@@ -17,16 +17,19 @@ import {
   IconBook, IconBrain, IconChart, IconChevronRight, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconMap, IconSettings, IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
+import {useAgents} from '../store/agents';
+import {activeRole} from '../lib/role-consumers';
 
 const ICON: Record<BrainPageId, ReactNode> = {
+  home: <IconGrid />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, esplora: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Chat is not a page, DevOps can hide). */
-const BRAIN_GROUP: BrainPageId[] = ['idee', 'procedure', 'miglioramento', 'esplora'];
-const APP_GROUP: BrainPageId[] = ['costi', 'qualita', 'confronto', 'skill'];
+const BRAIN_GROUP: BrainPageId[] = ['procedure', 'miglioramento'];
+const APP_GROUP: BrainPageId[] = ['skill'];
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;
@@ -34,6 +37,10 @@ function Badge({ n, warn }: { n: number; warn?: boolean }) {
 }
 
 export function Sidebar() {
+  const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
+  const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
+  const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','devops','fatto','impostazioni'].includes(id)):BRAIN_GROUP;
   const collapsedPref = ui.use(s => s.prefs.navCollapsed);
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
@@ -55,7 +62,7 @@ export function Sidebar() {
   );
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
-    return item(p.id, p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
+    return item(p.id, p.id==='agenti'?t('product.profiles'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
       key: p.key, testid: `nav-${p.id}`, badge: <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
@@ -63,20 +70,19 @@ export function Sidebar() {
   return (
     <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
+        {page1('home')}
         {!collapsed && <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>}
         {item('workspace', t('dialogs.sidebar.chat'), <IconGrid />, !page && !map, () => go({ page: 'workspace' }), {
           key: t('dialogs.sidebar.chatShortcut'), testid: 'nav-workspace',
           badge: waiting ? <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span> : <span data-testid="nav-badge-workspace"><Badge n={b.workspace ?? 0} /></span>,
         })}
-        {page1('agenti')}
-        {devopsOn && page1('devops')}
-        {page1('fatto')}
+        {devopsOn && show('devops') && page1('devops')}
+        {show('fatto')&&page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}
-        {BRAIN_GROUP.map(page1)}
+        {brainPages.map(page1)}
         {item('mappa', t('dialogs.sidebar.map'), <IconMap />, map, () => go({ page: 'mappa' }), { key: t('dialogs.sidebar.mapShortcut'), testid: 'nav-map', onHover: () => preloadMap(true) })}
-        {title(t('dialogs.sidebar.app'), 'app')}
-        {APP_GROUP.map(page1)}
-        {item('migliora', t('dialogs.sidebar.improve'), <IconSparkle />, page === 'migliora' && !map, () => go({ page: 'migliora' }), { key: t('dialogs.sidebar.improveShortcut'), testid: 'nav-migliora' })}
+        {!composition&&title(t('dialogs.sidebar.app'), 'app')}
+        {!composition&&APP_GROUP.map(page1)}
       </div>
       <div className="nav-sep" role="separator" />
       <div className="nav-group">

@@ -1,0 +1,22 @@
+// Home dashboard strings; no model-generated text is needed to explain its measurements.
+export const homeIt = {
+  'home.greeting': (p: { name: string }) => `Ehi ${p.name}, cosa facciamo oggi?`,
+  'home.agents': 'Agenti', 'home.manageAgents': 'Gestisci agenti', 'home.backAgents': 'Torna agli agenti', 'home.workspace': 'Lo spazio di lavoro degli agenti',
+  'home.chooseEngine': 'Scegli il motore per la Regia', 'home.createRegia': 'Avvia la Regia dell’app',
+  'home.title': 'Il tuo spazio', 'home.lead': 'Guarda i dati, apri i dettagli e parlane con la Regia.',
+  'home.map': 'Mappa del tuo spazio', 'home.summary': 'Riepilogo dai dati reali',
+  'home.spend': 'Spesa a listino', 'home.works': 'Cosa funziona', 'home.errors': 'Errori ricorrenti', 'home.ideas': 'Idee aperte',
+  'home.spendReading': (p: { calls: number }) => `${p.calls} chiamate nel periodo. Prezzi API di listino: non è una fattura e non include automaticamente tutti i motori.`,
+  'home.rulesReading': (p: { days: number; pending: number }) => `Regole il cui errore non è ricomparso entro ${p.days} giorni osservati; ${p.pending} non valutabili. Non dimostra un successo causale.`,
+  'home.noRules': 'Non ci sono ancora regole valutabili nella finestra osservata.',
+  'home.errorsReading': (p: { count: number; unknown: number }) => `Categorie ripetute tra ${p.count} errori registrati; ${p.unknown} senza categoria riconosciuta. Non è un tasso per turno.`,
+  'home.ideasReading': (p: { active: number }) => `Idee ancora da valutare; altre ${p.active} sono in corso.`,
+  'home.registeredThrough': 'Storico registrato al', 'home.loading': 'Leggo i dati disponibili…', 'home.unavailable': 'Dato non disponibile: apri il dettaglio per verificarne la fonte.',
+  'home.updated': 'Letto il', 'home.readFailed': 'Aggiornamento non riuscito; gli eventuali dati precedenti restano visibili.',
+  'home.retry': 'Riprova', 'home.details': 'Vedi dettaglio', 'home.conversation': 'Parla con l’app e il suo brain',
+  'home.ask': 'Scrivi alla Regia dell’app già esistente. Il modello parte solo quando invii.',
+  'home.noRegia': 'La Regia dell’app non è attiva. Apri lo spazio modifiche o crea una Regia App dal suo pannello; qui non viene avviata automaticamente.',
+  'home.question': 'La tua richiesta', 'home.placeholder': 'Che cosa vuoi capire o migliorare?', 'home.send': 'Invia alla Regia',
+  'home.openRegia': 'Apri conversazione', 'home.sent': 'Richiesta inviata.', 'home.queued': 'Richiesta in coda nella Regia.', 'home.notSent': 'Richiesta non inviata: il testo resta qui. Riprova quando la chat è disponibile.',
+  'home.improve': 'Modifiche e aggiornamenti', 'home.compare': 'Confronto modelli',
+};

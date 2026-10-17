@@ -6,13 +6,15 @@ import { useState } from 'react';
 import { sb } from '../sb';
 import { refreshInfo, useApp } from '../store/store';
 import { t } from '../i18n';
+import { useAgents } from '../store/agents';
 
 export function BrainSetupBanner() {
+  const { setup } = useAgents();
   const problem = useApp(s => s.info?.brainProblem ?? null);
   const loaded = useApp(s => !!s.info);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!loaded || !problem) return null;
+  if (!loaded || !problem || !setup || setup.status === 'new' || (setup.preferences.guide && setup.preferences.guide.stage !== 'fallback')) return null;
   const pick = async () => {
     setBusy(true); setError(null);
     try {

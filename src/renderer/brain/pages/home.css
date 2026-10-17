@@ -1,0 +1,23 @@
+/* Home uses the existing map engine in a bounded, non-modal region; cards wrap without hiding detail controls. */
+.home-page { width: 100%; }
+@keyframes home-settle { from { opacity: .7; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.home-map, .home-card { animation: home-settle 240ms ease-out both; }
+.home-card:nth-child(2) { animation-delay: 25ms; }
+.home-card:nth-child(3) { animation-delay: 50ms; }
+.home-card:nth-child(4) { animation-delay: 75ms; }
+@media (prefers-reduced-motion: reduce) { .home-map, .home-card { animation: none; } }
+.home-map { position: relative; width: 100%; height: clamp(320px, 43vh, 520px); overflow: hidden; border-radius: 12px; }
+.bx.bx-map.bx-map-embedded { position: relative; inset: auto; z-index: auto; width: 100%; height: 100%; min-height: 0; }
+.bx-map-embedded .bx-map-bar { flex-wrap: wrap; }
+.home-content { padding: 20px 0; }
+.home-content header p, .home-card small { color: var(--bx-text-3); }
+.home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; margin: 20px 0; }
+.home-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; }
+.home-card h2, .home-conversation h2 { font-size: 16px; margin: 0; }
+.home-card p { flex: 1; margin: 0; }
+.home-card small { overflow-wrap: anywhere; }
+.home-value { font-size: 28px; font-variant-numeric: tabular-nums; }
+.home-conversation textarea { display: block; box-sizing: border-box; width: 100%; min-height: 80px; margin: 8px 0; border: 1px solid var(--bx-border); border-radius: 8px; padding: 12px; color: var(--bx-text); background: var(--bx-surface); font: inherit; resize: vertical; }
+.home-conversation .bx-btn { margin: 4px 8px 4px 0; }
+.home-links { margin-top: 12px; }
+[data-testid="brain-page-home"] > .bx-inner { max-width: none; }

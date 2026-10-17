@@ -1,5 +1,6 @@
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
+import { genuiRequestEn } from './areas/genui-request.en';
 import {studioEn}from'./areas/studio.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
@@ -10,8 +11,26 @@ import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import {settingsEn}from'./areas/settings.en';
+import { homeEn } from './areas/home.en';
 
 export const en: Dict = {
+  ...homeEn,
+  ...genuiRequestEn,
+  'genui.request.question': 'Question',
+  'genui.request.permission': 'Permission',
+  'genui.request.from': ({ kind, chat, title }) => `${kind} from ${chat ?? 'a chat'}: ${title}`,
+  'genui.choice.preview': "Preview and details",
+  'genui.cards.pros': "Benefits",
+  'genui.cards.cons': "Tradeoffs",
+  'genui.table.region': "Data table, scroll to read all columns",
+  'genui.table.links': "Links",
+  'genui.chart.data': "Chart data",
+  'genui.chart.label': "Label",
+  'genui.chart.value': "Value",
+  'genui.chart.note': "Note",
+  'genui.permission.once': "Allow this operation only.",
+  'genui.permission.session': "Allow for this session",
+  'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
   ...productEn,
   ...settingsEn,
