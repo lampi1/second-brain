@@ -1,6 +1,6 @@
 // Main-only connector UI coverage with synthetic IPC adapters; no real CLI, credential, provider or visible window.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, openAgents, shot } from './helpers';
 import type { ConnectorState } from '../../src/shared/connectors';
 test('Settings connects, verifies, selects and disconnects projects with honest failure evidence', async () => {
   const { app, page } = await launchDemo();
@@ -34,7 +34,7 @@ test('Settings connects, verifies, selects and disconnects projects with honest 
 test('offline setup completion continues to connectors and can be skipped', async () => {
   const { app, page } = await launchDemo();
   try {
-    await page.getByTestId('nav-agenti').click();
+    await openAgents(page);
     await page.getByTestId('agent-studio').getByRole('button', { name: 'Configura il tuo lavoro', exact: true }).click();
     const setup = page.getByTestId('first-interview');
     for (let step = 0; step < 4; step++) await setup.getByRole('button', { name: 'Continua', exact: true }).click();

@@ -37,6 +37,6 @@ export function Home({ nav }: { nav: (target: string) => void }) {
       <div className="home-section-head"><h2 id="home-agents-title">{t('home.agents')}</h2><span className="home-count">{chats.length}</span><span className="sp" /><AgentStripsActions /><button type="button" className="btn btn-ghost btn-s" onClick={() => openModal('newChat')}><IconPlus size={14} /> {t('home.newAgent')}</button></div>
       <AgentStrips />
     </section>
-    <footer className="home-footer"><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('agenti')}>{t('home.manageAgents')}</button><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('mappa')}>{t('home.map')} ↗</button><span className="sp" /><span>{t('home.regiaBeside')}</span></footer>
+    <footer className="home-footer"><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('agenti')} data-testid="home-manage-agents">{t('home.manageAgents')}</button><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('mappa')}>{t('home.map')} ↗</button><span className="sp" /><span>{t('home.regiaBeside')}</span></footer>
   </div>;
 }
