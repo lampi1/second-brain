@@ -9,6 +9,10 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
   try {
     await expect(page.getByTestId('home')).toBeVisible();
     await expect(page.getByRole('heading', { name: it ? 'Ehi Brother, cosa facciamo oggi?' : 'Hey Brother, what shall we do today?', exact: true })).toBeVisible();
+    // the headline (SPEC 18): the demo never calls a model, so a line of the app's own list
+    const headline = page.getByTestId('home-headline');
+    await expect(headline).toHaveAttribute('data-source', 'builtin');
+    await expect(headline).not.toBeEmpty();
     await expect(page.getByRole('heading', { name: it ? 'Agenti' : 'Agents', exact: true })).toBeVisible();
     await expect(page.getByTestId('view-agents')).toBeVisible();
     await expect(page.getByTestId('regia-overlay')).toBeVisible();

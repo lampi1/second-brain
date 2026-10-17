@@ -67,6 +67,13 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // the Grindhouse's headline (SPEC 18, main/headline.ts). Protected: it spends the API credits about once an hour
+  { key: 'headlineOn', type: 'boolean', default: true, protected: true, label: 'Battuta del Grindhouse',
+    description: 'Circa una volta l’ora un modello scrive una battuta sui fatti veri della giornata (crediti API, al massimo 1500 token). Spento: una battuta della lista dell’app, zero token.' },
+  { key: 'headlineModel', type: 'model', default: '', protected: true, label: 'Battuta: modello',
+    description: 'Il modello Claude che scrive la battuta, sul motore Anthropic API. Vuoto = claude-opus-5-5.' },
+  { key: 'headlineEffort', type: 'enum', values: ['', 'low', 'medium', 'high'], default: '', protected: true, label: 'Battuta: effort',
+    description: 'Quanto ragiona il modello della battuta. Vuoto = low.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -207,6 +214,7 @@ export function defaults(): Settings {
     questionsModal: false,
     appRepo: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    headlineOn: true, headlineModel: '', headlineEffort: '',
   };
 }
 
