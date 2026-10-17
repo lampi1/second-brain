@@ -1,0 +1,20 @@
+// Data-section UI chrome; imported titles and cells remain user-authored content.
+export const sectionsIt = {
+ 'sections.actions':'Azioni','sections.removeRow':'Rimuovi riga',
+ 'sections.memory':'Memoria condivisa','sections.memoryHint':'Scrivi solo informazioni utili e senza credenziali. Dopo la conferma entrano nei prossimi turni delle IA; la cronologia esistente non viene cancellata.',
+ 'sections.memory.work':'Il tuo lavoro','sections.memory.goals':'Obiettivi','sections.memory.style':'Come preferisci lavorare','sections.memory.constraints':'Limiti da rispettare',
+ 'sections.memorySave':'Rivedi e conferma','sections.memoryClear':'Svuota la memoria','sections.memorySaved':'Memoria aggiornata. Vale dai prossimi turni.','sections.contextDraft':'Prepara per la Regia',
+ 'sections.title':'Le mie tabelle','sections.intro':'Organizza pratiche, scadenze e liste. I dati restano in questa app.',
+ 'sections.new':'Nuova tabella','sections.name':'Nome della tabella','sections.preview':'Anteprima','sections.save':'Salva tabella','sections.cancel':'Annulla',
+ 'sections.empty':'Non ci sono ancora tabelle. Crea la prima o importa un modello.', 'sections.loading':'Caricamento delle tabelle…',
+ 'sections.import':'Importa modello JSON','sections.importHint':'Solo dati: testo, date e stati. Nessun codice viene eseguito.',
+ 'sections.remove':'Rimuovi tabella','sections.restore':'Annulla ultima modifica','sections.reload':'Ricarica',
+ 'sections.failure':'Operazione non completata. Ricarica i dati prima di riprovare; la bozza resta aperta.',
+ 'sections.item':'Attività','sections.due':'Scadenza','sections.status':'Stato','sections.open':'Aperta','sections.done':'Completata','sections.blocked':'Bloccata',
+ 'sections.addRow':'Aggiungi riga','sections.noRows':'Nessun elemento. Aggiungi la prima riga.',
+ 'sections.invalid':'Dati non validi o troppo grandi. Usa un modello valido, entro 256 KB.',
+ 'sections.context':'Contesto disponibile','sections.reviewContext':'Rivedi i dati personali','sections.contextHint':'Solo i dati personali confermati entrano nel contesto. Le righe importate restano da confermare.',
+ 'sections.contextEmpty':'Nessun dato confermato disponibile. Completa la configurazione e rivedi i dati personali.',
+ 'sections.contextPending':'Elementi in attesa di conferma','sections.contextOmitted':'Elementi esclusi','sections.contextSource':'Fonti non disponibili',
+ 'sections.select':'Scegli una tabella','sections.edit':'Modifica dati','sections.details':'Dettagli',
+};

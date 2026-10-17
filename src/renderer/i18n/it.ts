@@ -13,8 +13,10 @@ import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {settingsIt}from'./areas/settings.it';
 import { homeIt } from './areas/home.it';
+import { sectionsIt } from './areas/sections.it';
 
 export const it = {
+  ...sectionsIt,
   ...homeIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',

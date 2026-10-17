@@ -28,14 +28,16 @@ describe('ClaudeSession', () => {
     expect(efforts).toEqual(['xhigh', null]);
   });
   it('does not reuse the previous submitted effort for a turn queued inside the CLI', async () => {
-    const { s, sink } = start({ effort: 'xhigh', env: { FAKE_CLAUDE_DELAY: '30' } });
-    s.send('slow');
-    await waitFor(() => sink.last('assistant')?.text.includes('tick'), 'current turn');
+    const { s, sink } = start({ effort: 'xhigh', env: { FAKE_CLAUDE_DELAY: '0' } });
+    // A protocol question holds the turn until the explicit reply, instead of racing200 timed text deltas.
+    s.send('ask me');
+    const question = await waitFor(() => sink.pendings[0], 'current turn question');
     await s.setEffort('medium');
     s.send('queued new assignment');
+    // Both writes use the same stdin: the queued message arrives before the reply releases the current turn.
+    expect(s.answer(question.id, { kind: 'question', answers: { 'Che colore?': 'Blu' } })).toBe(true);
     await waitFor(() => [...sink.items.values()].filter(i => i.kind === 'result').length === 2 && s.state === 'idle', 'both turns');
-    expect(sink.patches.some(p => p.effortSubmitted === 'xhigh')).toBe(true);
-    expect(sink.patches.some(p => 'effortSubmitted' in p && p.effortSubmitted === null)).toBe(true);
+    expect(sink.patches.filter(p => 'effortSubmitted' in p).map(p => p.effortSubmitted)).toEqual(['xhigh', null]);
     expect(sink.patch.effort).toBe('medium');
   });
   it('passes the permission mode only when chosen and maps resume, fork, model, effort, name, mcp', () => {
@@ -102,7 +104,8 @@ describe('ClaudeSession', () => {
     expect(versions.at(-1)?.replace).toBe(true);
     expect(s.state).toBe('idle');
     expect(s.sessionId).toBe('11111111-2222-4333-8444-555555555555');
-    expect(sink.patch.sessionId).toBeUndefined(); // reported only when the CLI changes it (fork, /clear)
+    // A requested UUID is not a provider observation until native init confirms it, even when unchanged.
+    expect(sink.patch.sessionId).toBe('11111111-2222-4333-8444-555555555555');
     expect(sink.patch).toMatchObject({ model: 'claude-fake-1', permissionMode: 'default', lastText: 'Ciao dal motore', turnCostUsd: 0.01, totalCostUsd: 0.01, version: '0.0.0-fake' });
     await waitFor(() => sink.patch.contextTokens === 1234, 'context usage after the turn');
     expect(sink.patch.contextMaxTokens).toBe(200000);

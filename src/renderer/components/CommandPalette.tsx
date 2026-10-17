@@ -38,6 +38,7 @@ interface Cmd {
 }
 
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
+  sezioni: <IconBrain />,
   home: <IconBrain />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,

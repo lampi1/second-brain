@@ -49,6 +49,9 @@ export function toCommands(list: unknown, skills?: ReadonlySet<string>): ChatCom
 }
 
 export interface SessionPatch {
+  /** Explicit provider event metadata only; configured/default values must not populate these. */
+  modelObserved?: string | null;
+  effortObserved?: string | null;
   /** Outgoing next-turn parameter, not a provider-resolved effective value. */
   effortSubmitted?: string | null;
   /** Resolved by a supported thread/start or thread/resume response; not the current turn. */

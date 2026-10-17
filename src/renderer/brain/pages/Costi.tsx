@@ -21,6 +21,7 @@ import { DataTable, type Col } from '../components/DataTable';
 import { Kpi, Pill, Section, Seg } from '../components/ui';
 import { DiscussBar, DiscussContext } from '../components/Discuss';
 import { Reading } from '../components/Stats';
+import { AgentAnalytics } from '../components/AgentAnalytics';
 import { useAppChats } from '../components/Composer';
 import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
@@ -113,6 +114,7 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
         what="Prezzi di listino delle API: con l'abbonamento non è una fattura, serve a vedere dove va il lavoro. Calcolato dal cervello sulle chat vere, zero token."
         actions={<Seg label="Periodo" value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? 'Oggi' : `${d} giorni` }))} />} />
       <LiveNow />
+      <AgentAnalytics />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label="Calcolo i costi (fino a 20 secondi la prima volta)…" lines={5} block>
         {() => c && (
           <>

@@ -40,3 +40,5 @@ docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42
 test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4adbcde2e77beea32d931cdb55459e803194f1c0476b8248da327f
 # Public GitHub SSH clone syntax in the publication-boundary fixture, not an email address or private identity.
 test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8a73384493e1663bd8f8b1fafc
+# Same two public GitHub SSH clone literals after reviewed publication regression additions; no private email.
+test/unit/proposals.test.ts email sha256:62c51e8ad51e3e2f4332a47438bf33467c5e194fa5c378f05f90f7e3103c6423

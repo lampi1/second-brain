@@ -1,6 +1,7 @@
 // Parsers of the brain's own files into table rows for the brain site (ops/tools/brain-site.mjs). Pure functions, no
 // I/O: each takes the file text and returns plain objects. A line that does not fit its format is kept with its raw
 // text (never dropped), so a table always shows everything the file holds.
+import { parseOriginField } from '../event-origin.mjs';
 
 const strip = s => String(s ?? '').replace(/\*\*/g, '').replace(/`/g, '').trim();
 const lines = t => String(t ?? '').split(/\r?\n/);
@@ -60,7 +61,8 @@ export function aiErrors(text) {
       }
     }
     out.push({ data: m[1], ora: /\d/.test(m[2] ?? '') ? m[2] : '', chi, area, tipo, detto: claim, vero, visto,
-      regola: labelled(p, 'regola'), riga: l.slice(2) });
+      regola: labelled(p, 'regola'), riga: l.slice(2), reporterOrigin: parseOriginField(labelled(p, 'reporter-origin')),
+      responsibleEpisode: parseOriginField(labelled(p, 'responsible-episode')) });
   }
   return out;
 }
@@ -76,7 +78,7 @@ export function aiWins(text) {
     let i = p.findIndex(x => /^parole:/i.test(x));
     if (i < 0) i = p.length;
     out.push({ data: m[1], ora: m[2], harness: p[0] ?? '', chat: p.slice(1, Math.max(1, i - 2)).join(' · '), area: i >= 4 ? p[i - 2] : '', esito: i >= 4 ? p[i - 1] : '',
-      parole: labelled(p, 'parole').replace(/^"|"$/g, ''), consegnato: labelled(p, 'consegnato'), riga: l.slice(2) });
+      parole: labelled(p, 'parole').replace(/^"|"$/g, ''), consegnato: labelled(p, 'consegnato'), riga: l.slice(2), origin: parseOriginField(labelled(p, 'event-origin')) });
   }
   return out;
 }
@@ -120,7 +122,7 @@ export function ideas(text) {
     if (!cur) continue;
     cur.testo += `${l}\n`;
     const f = l.match(/^- \*\*([^*:]+):\*\*\s*(.*)$/);
-    if (f) { const k = f[1].toLowerCase(); cur._k = k.startsWith('idea') ? 'idea' : k.startsWith('perch') ? 'perche' : k.startsWith('riprend') ? 'riprendere' : k === 'come' ? 'come' : k === 'fonte' ? 'fonte' : k === 'per' ? 'per' : k === 'notato' ? 'notato' : k === 'penso' ? 'penso' : k === 'sicurezza' ? 'sicurezza' : k === 'non so' ? 'nonso' : null; if (cur._k) cur[cur._k] = f[2]; }
+    if (f) { const k = f[1].toLowerCase(); if (k === 'event origin') { cur.origin = parseOriginField(f[2]); cur._k = null; continue; } cur._k = k.startsWith('idea') ? 'idea' : k.startsWith('perch') ? 'perche' : k.startsWith('riprend') ? 'riprendere' : k === 'come' ? 'come' : k === 'fonte' ? 'fonte' : k === 'per' ? 'per' : k === 'notato' ? 'notato' : k === 'penso' ? 'penso' : k === 'sicurezza' ? 'sicurezza' : k === 'non so' ? 'nonso' : null; if (cur._k) cur[cur._k] = f[2]; }
     else if (cur._k && /^\s{2,}\S/.test(l)) cur[cur._k] += ` ${l.trim()}`;
     else if (/^- /.test(l)) cur._k = null;
   }

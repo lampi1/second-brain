@@ -5,11 +5,12 @@
 // instead of trusting the shape. Used by the pages.
 import type { AppQuality, Procedure, ProcedureSummary } from '@shared/contract';
 
-export interface ErrorRow { data: string; ora: string; chi: string; area: string; tipo: string; detto: string; vero: string; visto: string; regola: string; riga?: string }
-export interface WinRow { data: string; ora: string; harness: string; chat: string; area: string; esito: string; parole: string; consegnato: string }
+export interface ErrorRow { data: string; ora: string; chi: string; area: string; tipo: string; detto: string; vero: string; visto: string; regola: string; riga?: string; responsibleEpisode?: unknown; reporterOrigin?: unknown }
+export interface WinRow { data: string; ora: string; harness: string; chat: string; area: string; esito: string; parole: string; consegnato: string; origin?: unknown }
 export interface JournalRow { data: string; ora: string; tag: string; area: string; testo: string }
 export interface NowRow { sezione: string; filo: string; dove: string; prossimo: string; stato: string; aggiornato: string }
 export interface Idea {
+  origin?: unknown;
   data: string; area: string; titolo: string; stato: string; idea: string; come: string; perche: string; riprendere: string; fonte: string; per: string;
   notato: string; penso: string; sicurezza: string; nonso: string; testo: string; chi: string; scaduta: string;
 }

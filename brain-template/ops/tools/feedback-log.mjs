@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { positiveKind } from './signals-regex.mjs';
+import { originField } from './event-origin.mjs';
 
 export const WINS = process.env.BRAIN_WINS_FILE || '{{BRAIN}}/ai-wins.md';
 const AREAS = ['Regia', 'Prod', 'B', 'A', 'OS', 'Pers'];
@@ -54,7 +55,7 @@ export function logPositive({ harness, chat, cwd, text, lastAssistant, file = WI
     const kind = positiveKind(text);
     if (!kind) return null;
     const line = `- ${rome({ year: 'numeric', month: '2-digit', day: '2-digit' })} ${rome({ hour: '2-digit', minute: '2-digit' })} · ` +
-      `${harness} · ${field(chat || '?', 60)} · ${field(areaOf(chat, cwd), 30)} · ${kind} · parole: ${quote(text)} · consegnato: ${delivered(lastAssistant)}`;
+      `${harness} · ${field(chat || '?', 60)} · ${field(areaOf(chat, cwd), 30)} · ${kind} · parole: ${quote(text)} · consegnato: ${delivered(lastAssistant)} · event-origin: ${originField({ kind: 'human' })}`;
     let before = '';
     try { before = fs.readFileSync(file, 'utf8'); } catch { /* first line ever: the file comes with the brain */ }
     const month = `## ${line.slice(2, 9)}`;

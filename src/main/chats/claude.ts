@@ -775,6 +775,7 @@ export class ClaudeSession implements HarnessSession {
 
   private onAssistant(m: Obj): void {
     const msg = o(m.message);
+    if (s(msg.model)) this.sink.changed({ modelObserved: s(msg.model) });
     const mid = s(msg.id);
     const at = Date.now();
     for (const raw of arr(msg.content)) {
@@ -917,13 +918,14 @@ export class ClaudeSession implements HarnessSession {
         const sid = s(m.session_id);
         if (s(m.claude_code_version)) this.cliVersion = s(m.claude_code_version);
         if (!sid) this.drift('init field', 'session_id', m);
-        if (sid && sid !== this.sessionId) { this.sessionId = sid; this.sink.changed({ sessionId: sid }); }
+        // Init confirms the native id even when it matches the UUID requested at launch.
+        if (sid) { this.sessionId = sid; this.sink.changed({ sessionId: sid }); }
         const mode = s(m.permissionMode) as PermissionMode;
         const effort = s(m.effort) as Effort;
         this.sink.changed({
-          ...(s(m.model) ? { model: s(m.model) } : {}),
+          ...(s(m.model) ? { model: s(m.model), modelObserved: s(m.model) } : {}),
           ...(PERMISSION_MODES.includes(mode) ? { permissionMode: mode } : {}),
-          ...(EFFORTS.includes(effort) ? { effort } : {}),
+          ...(EFFORTS.includes(effort) ? { effort, effortObserved: effort } : {}),
           ...(s(m.claude_code_version) ? { version: s(m.claude_code_version) } : {}),
         });
         if (this.pendingTitle && this.sessionId) {

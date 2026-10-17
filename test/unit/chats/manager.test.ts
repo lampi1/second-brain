@@ -48,6 +48,12 @@ describe('ChatManager', () => {
     expect(a).not.toContain('--permission-mode');
     const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; sessionId: string; costTotalUsd: number }[] };
     expect(stored.chats[0]).toMatchObject({ id: c.id, sessionId: c.sessionId, costTotalUsd: 0.01 });
+    // The matching --session-id init must still confirm a native analytics session.
+    const observed = m.analytics.readModel();
+    expect(observed.agents).toHaveLength(1);
+    expect(observed.agents[0]?.costs.listPriceUsd.total).toBe(0.01);
+    expect(observed.agents[0]?.costs.actualUsd.total).toBeNull();
+    expect(observed.agents[0]?.evidence[0]?.provenance.modelObserved).toBe('sonnet');
   });
 
   it('routes a question to pending and back', async () => {

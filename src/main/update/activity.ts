@@ -3,6 +3,7 @@
 import type { InvokeChannel } from '../../shared/contract';
 
 const READS = new Set<InvokeChannel>([
+  'sections:list', 'sections:context', 'sections:memory',
   'app:info', 'app:usage', 'app:brainCreation', 'app:inputLag', 'chat:list', 'chat:items', 'chat:pending', 'chat:commands', 'chat:handoffRead',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'browser:list', 'browser:handoffs', 'browser:envList', 'views:layout', 'feed:list',
   'settings:get', 'settings:schema', 'settings:history', 'settings:pending', 'models:seen', 'routing:get', 'routing:preview',

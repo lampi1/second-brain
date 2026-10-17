@@ -32,10 +32,12 @@ function parseFacts(input: unknown, confirmed = false): FactInput[] {
     return { id: f.id, key: f.key, value: f.value, category: f.category as FactInput['category'] };
   });
 }
+/** Validate a renderer proposal without accepting confirmation/provenance metadata from it. */
+export const validateContextFacts = (input: unknown): FactInput[] => parseFacts(input);
 
 /** Fixed trusted userData root only. No user supplied source paths and no automatic confirmation. */
 export class ConfirmedContextSource {
-  constructor(private readonly userDataDirectory: string, private readonly now: () => Date = () => new Date()) {}
+  constructor(private readonly userDataDirectory: string, private readonly now: () => Date = () => new Date(), private readonly requested?: (id: string) => unknown) {}
 
   private location(create = false): string | null {
     let stat: fs.Stats;
@@ -117,5 +119,8 @@ export class ConfirmedContextSource {
     return archive.facts.length ? { schemaVersion: 1 as const, id: 'essential', label: 'User-confirmed information', facts: archive.facts, revision: archive.revision, scope: 'user' as const } : null;
   };
 
-  readRequestedSource = (_id: string): never => { throw new Error('Context source unavailable'); };
+  readRequestedSource = (id: string): unknown => {
+    if (!identifier(id) || !this.requested) throw new Error('Context source unavailable');
+    return this.requested(id);
+  };
 }

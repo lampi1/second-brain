@@ -34,7 +34,7 @@ describe('renderer proposal bridge', () => {
       brain: { settings: () => settings, route: req => routeChat(req, null, DEMO_REGISTRY, null) },
       chats: { list: () => rows, create: async req => { requests.push(req); const row = { id: 'work', ...req } as ChatSummary; rows.push(row); return row; }, reopen: async id => { const row = rows.find(c => c.id === id)!; delete row.closedAt; return row; } },
       emit: vi.fn(), focus });
-    expect(await bridge.availability()).toMatchObject({ available: true, publishBlocked: expect.any(String) });
+    expect(await bridge.availability()).toMatchObject({ available: true, publishBlocked: null });
     const proposal = await bridge.create();
     expect(proposal.phase).toBe('editing'); expect(proposal.directory.startsWith(userData + path.sep)).toBe(true);
     expect(requests[0]).toMatchObject({ cwd: proposal.directory, space: 'app' });
@@ -42,7 +42,7 @@ describe('renderer proposal bridge', () => {
     expect(runGit(repo, 'branch', '--show-current')).toBe('main'); expect(runGit(repo, 'status', '--porcelain')).toBe('');
     rows[0]!.closedAt = Date.now(); await bridge.resume(proposal.id); await bridge.resume(proposal.id);
     expect(requests).toHaveLength(1); expect(rows[0]!.closedAt).toBeUndefined(); expect(focus).toHaveBeenCalledTimes(3);
-    await expect(bridge.publish({ id: proposal.id, reviewedHead: 'a'.repeat(40) })).rejects.toThrow(/registro delle revisioni/);
+    expect(await bridge.publish({ id: proposal.id, reviewedHead: 'a'.repeat(40) })).toMatchObject({ phase: 'blocked', problem: expect.stringMatching(/Rivedi prima/) });
     expect(runGit(repo, 'remote')).toBe('');
   });
 });

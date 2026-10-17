@@ -11,6 +11,8 @@ import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { SetupService } from './agents/setup';
+import { createDataSections } from './extensions/wiring';
+import type { SectionController } from './extensions/controller';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
@@ -66,6 +68,7 @@ import { setRecorder } from './chats/drift';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  sections: SectionController;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -110,7 +113,7 @@ export function toMcp(out: ToolOut): ToolOutput {
 /** The app-control tools on the local MCP server: /mcp/app for the work Regia, /mcp/improve for the Regia of
  *  "Migliora l'app" (its own chats, the branches' state). */
 export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'space' | 'improve'>, improve: ImproveService, demo = false, regiaTokens?: EndpointTokens): void {
-  const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => toMcp(await t.run(a)) });
+  const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Regia's input means (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${NEW_CHAT_RULE}`;
@@ -309,7 +312,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const autoCloseRef: { current?: AutoCloseService } = {};
+  const sections = createDataSections(ctx.userData, ctx.window, () => brain.settings().language);
   const manager = new ChatManager({
+    essentialContext: () => sections.context({ ids: [] }),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
     emitter: ctx.emitter,
@@ -462,7 +467,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  attachAppTools(mcp, { chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(sections.context({ ids: [] }), manager.analytics.readModel(), selection), chats, browser, brain, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -482,6 +487,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     devops: () => devops.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
   });
   brain.serveApi('/api/quality', q => quality.get({ fresh: q.get('fresh') === '1' }));
+  brain.serveApi('/api/agents/analytics', () => manager.analytics.readModel());
 
   // "Skill e agenti" (ADR 0018): the user's ~/.claude and ~/.cursor (SB_SKILLS_HOME: a fixture home for tests), the
   // brain folder and the chats' folders; deletes go to the Recycle Bin (tests delete for real)
@@ -513,7 +519,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, sections, autoClose: autoCloseService, progress: progressService,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

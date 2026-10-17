@@ -56,7 +56,7 @@ export function Idee({ arg, nav }: { arg?: string; nav: Navigate }) {
   const cols: Col<Idea>[] = ([
     { key: 'data', label: tr('brainPages.idee.colData'), type: 'date', nowrap: true, width: '96px', render: r => fmt.day(r.data) },
     { key: 'titolo', label: tr('brainPages.idee.colIdea'), render: r => <><b>{r.titolo}</b>{discussed[topicKey({ kind: 'idea', idea: r })] && <span className="bx-discuss-tag" title={tr('brainPages.idee.discussedTitle')} data-testid="bx-idea-discussed">{tr('brainPages.idee.discussedMark')}</span>}</>, width: '34%' },
-    { key: 'chi', label: tr('brainPages.idee.colChi'), width: '120px', value: who, render: r => <><Pill tone={r.chi === 'IA' ? 'violet' : ''}>{who(r)}</Pill><ModelOrigin human={r.chi!=='IA'}/></> },
+    { key: 'chi', label: tr('brainPages.idee.colChi'), width: '120px', value: who, render: r => <><Pill tone={r.chi === 'IA' ? 'violet' : ''}>{who(r)}</Pill><ModelOrigin human={r.chi!=='IA'} origin={r.origin}/></> },
     { key: 'per', label: tr('brainPages.idee.colPer'), width: '96px', help: tr('brainPages.idee.colHelpPer'), value: r => (r.chi === 'IA' ? perOf(r) : '') },
     { key: 'area', label: tr('brainPages.idee.colArea'), width: '96px' },
     { key: 'stato', label: tr('brainPages.idee.colStato'), width: '92px', render: r => <Pill tone={stateTone(r.stato)}>{r.stato}</Pill> },

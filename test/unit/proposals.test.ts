@@ -13,13 +13,14 @@ afterAll(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(overrides: { dirty?: boolean; file?: string; guard?: boolean; quality?: boolean; reviews?: boolean; changed?: boolean; remoteBase?: string; publishFails?: boolean; prState?: string; wrongBranch?: boolean } = {}) {
+function fixture(overrides: { dirty?: boolean; file?: string; guard?: boolean; quality?: boolean; reviews?: boolean; changed?: boolean; remoteBase?: string; publishFails?: boolean; ghUnavailable?: boolean; prState?: string; wrongBranch?: boolean } = {}) {
   const calls: { command: string; args: string[] }[] = [];
   let snapshots = 0;
   let branch = '';
   const run: NonNullable<ProposalDeps['run']> = async (_cwd, command, raw) => {
     const args = command === 'git' ? raw.slice(5) : raw;
     calls.push({ command, args });
+    if (command === 'gh' && overrides.ghUnavailable) throw new Error('ENOENT or unauthenticated; private command diagnostic');
     if (args[0] === 'worktree') { branch = args[3]!; fs.mkdirSync(args[4]!, { recursive: true }); return ''; }
     if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) return root;
     if (args[0] === 'rev-parse') return args[1] === 'HEAD' ? (overrides.changed && ++snapshots > 2 ? newer : head) : base;
@@ -110,6 +111,13 @@ describe('publication boundary', () => {
     const f = fixture({ publishFails: true }); const p = await f.service.create(); await f.service.refresh(p.id);
     const result = await f.service.openPullRequest({ id: p.id, reviewedHead: head });
     expect(result.phase).toBe('blocked'); expect(result.directory).toBe(p.directory); expect(result.problem).not.toContain('Command failed');
+  });
+  it('keeps the change local with a clear message when gh is absent or not authenticated', async () => {
+    const f = fixture({ ghUnavailable: true }); const p = await f.service.create(); await f.service.refresh(p.id);
+    const result = await f.service.openPullRequest({ id: p.id, reviewedHead: head });
+    expect(result.phase).toBe('blocked'); expect(result.problem).toContain('GitHub non è pronto');
+    expect(result.problem).not.toContain('private command diagnostic');
+    expect(f.calls.some(c => c.args[0] === 'push' || (c.command === 'gh' && c.args[0] === 'pr'))).toBe(false);
   });
   it('recovers isolated work after restart and invalidates all cached checks/diffs', async () => {
     const f = fixture(); const p = await f.service.create(); await f.service.refresh(p.id);
