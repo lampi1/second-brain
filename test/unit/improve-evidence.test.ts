@@ -4,6 +4,7 @@ import { buildImproveEvidence } from '../../src/main/improve/evidence';
 import { aggregateAgentUsage, buildAgentReadModel } from '../../src/main/agents/analytics';
 import { loadUserContext } from '../../src/main/brain/user-context';
 import canonical from '../fixtures/extensions/context-selection.json';
+import { ImproveService, appRegiaPrompt } from '../../src/main/improve/service';
 
 it('includes only selected confirmed facts with source/version/scope and leaves empty selections empty', () => {
   const context = loadUserContext({ ...canonical, revision: 3, scope: 'user' }, [], () => null);
@@ -33,4 +34,15 @@ it('rejects unavailable selection and reports whole-object budget omissions with
   expect(report.omitted).toEqual(['selected-fact']);
   expect(report.text).toBe('');
   expect(report.pending).toContain('essential/pending-role');
+});
+
+it('connects the Regia adapter to selected evidence and explains observation and publication limits', () => {
+  // evidence is read-only and requires none of the lifecycle constructor dependencies.
+  const service = Object.create(ImproveService.prototype) as ImproveService;
+  const context = loadUserContext({ ...canonical, revision: 3 }, [], () => null);
+  const packet = service.evidence(context, aggregateAgentUsage([]), { factRefs: ['essential/z-constraint'], agentIds: [], budgetBytes: 4096 });
+  expect(packet.text).toContain('z-constraint'); expect(packet.text).not.toContain('Italiano');
+  expect(packet.guidance).toContain('Untrusted'); expect(packet.guidance).toContain('explicit PR confirmation');
+  expect(appRegiaPrompt('/synthetic-product')).toContain('app_improve_evidence');
+  expect(service.evidence(context, aggregateAgentUsage([]), { factRefs: [], agentIds: [], budgetBytes: 4096 }).text).toBe('');
 });

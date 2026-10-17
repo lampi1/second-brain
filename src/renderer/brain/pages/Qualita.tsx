@@ -10,6 +10,7 @@
 // bugs); computations in lib/quality.ts and lib/stats.ts.
 import type { ReactNode } from 'react';
 import { normAppQuality, normTables } from '../types';
+import { FeedbackOrigins } from '../components/FeedbackOrigins';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
 import { ownerOf, short } from '../lib/text';
@@ -184,6 +185,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
               </Section>
             )}
 
+            <FeedbackOrigins rows={d.wins} />
             <p className="bx-q-row" data-testid="bx-q-proposte">
               <b>Proposte di miglioramento:</b> {d.proposals.length}, di cui {applied} applicate, {measured} misurate (confermate, inutili o peggiorate).
               {' '}<button type="button" className="bx-go" onClick={() => nav('esplora/proposals.md')}>Apri proposals.md</button>

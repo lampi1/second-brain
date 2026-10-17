@@ -52,6 +52,7 @@ export class ProposalService {
   private readonly proposals = new Map<string, AppProposal>();
   private readonly busy = new Set<string>();
   private readonly run: NonNullable<ProposalDeps['run']>;
+  private saving: Promise<void> = Promise.resolve();
   constructor(private readonly d: ProposalDeps) {
     this.run = d.run ?? processRun;
     const repo = fs.realpathSync(d.repo);
@@ -64,13 +65,34 @@ export class ProposalService {
   list(): AppProposal[] { return structuredClone([...this.proposals.values()]); }
   private publishState(): void { this.d.emit(this.list()); }
   private metadataFile(): string { return path.join(this.d.workspaceRoot, 'proposals.json'); }
-  private save(): void {
+  private save(): Promise<void> {
+    // Serialize replacements: a delayed older rename must never overwrite a newer proposal list.
+    const saved = this.saving.then(() => this.writeRecovery());
+    this.saving = saved.catch(() => {});
+    return saved;
+  }
+  private async writeRecovery(): Promise<void> {
     // Only recovery metadata, never diffs, prompts, requests or credentials. Written outside every Git worktree.
     const temporary = `${this.metadataFile()}.${randomUUID()}.tmp`;
+    let owned = false;
     try {
-      fs.writeFileSync(temporary, JSON.stringify({ version: 1, proposals: [...this.proposals.values()].map(p => ({ id: p.id, base: p.base })) }), { mode: 0o600 });
-      fs.renameSync(temporary, this.metadataFile());
-    } catch { throw new ProposalProblem('Non è stato possibile salvare il punto di ripresa. La modifica locale è conservata.'); }
+      const handle = await fs.promises.open(temporary, 'wx', 0o600);
+      owned = true;
+      try { await handle.writeFile(JSON.stringify({ version: 1, proposals: [...this.proposals.values()].map(p => ({ id: p.id, base: p.base })) })); }
+      finally { await handle.close(); }
+      for (let attempt = 0; ; attempt++) {
+        try { await fs.promises.rename(temporary, this.metadataFile()); break; }
+        catch (error) {
+          // Windows can briefly deny replacement while a reader/scanner holds the destination.
+          // Keep the old file intact; retry only bounded contention errors, never unlink the destination.
+          if (attempt >= 4 || !['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+          await new Promise(resolve => setTimeout(resolve, 20 * 2 ** attempt));
+        }
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      throw new ProposalProblem('Non è stato possibile salvare il punto di ripresa. La modifica locale è conservata.', { cause: { code: typeof code === 'string' && /^[A-Z0-9_]{1,24}$/.test(code) ? code : 'UNKNOWN' } });
+    } finally { if (owned) await fs.promises.unlink(temporary).catch(() => {}); }
   }
   private restore(): void {
     if (!fs.existsSync(this.metadataFile())) return;
@@ -109,13 +131,14 @@ export class ProposalService {
     this.proposals.set(id, p);
     // Recovery metadata changes only when a proposal is created. Status/preview updates must not repeatedly replace
     // the same JSON file (nor turn a successful verification into a disk-write error on Windows).
-    this.save();
     this.busy.add(id);
-    this.publishState();
-    try { await this.assertEnvironment(p); await this.d.startWork(structuredClone(p)); }
-    catch { p.phase = 'blocked'; p.problem = 'La chat di lavoro non è partita. Puoi riaprirla: la modifica è conservata.'; this.publishState(); }
-    finally { this.busy.delete(id); }
-    return structuredClone(p);
+    try {
+      await this.save();
+      this.publishState();
+      try { await this.assertEnvironment(p); await this.d.startWork(structuredClone(p)); }
+      catch { p.phase = 'blocked'; p.problem = 'La chat di lavoro non è partita. Puoi riaprirla: la modifica è conservata.'; this.publishState(); }
+      return structuredClone(p);
+    } finally { this.busy.delete(id); }
   }
 
   /** Reopens/focuses the work chat after a failed start or application restart, preserving its isolated worktree. */
@@ -190,7 +213,7 @@ export class ProposalService {
       const remote = githubRepository(await this.git(this.d.repo, ['remote', 'get-url', 'origin']));
       if (!remote) throw new ProposalProblem('Collega il repository GitHub del prodotto nelle impostazioni.');
       try { await this.run(p.directory, 'gh', ['auth', 'status', '--hostname', 'github.com']); }
-      catch { throw new ProposalProblem('GitHub non è pronto su questo computer. La modifica resta locale; completa il collegamento GitHub prima di condividerla.'); }
+      catch { throw new ProposalProblem('GitHub non è pronto su questo computer. Verifica che la CLI gh sia installata e autenticata su github.com. La modifica resta locale; riprova dopo aver completato il collegamento.'); }
       const args = ['--repo', remote.slug, '--head', p.branch, '--base', this.d.baseBranch];
       const existing = await this.run(p.directory, 'gh', ['pr', 'list', ...args, '--state', 'all', '--json', 'url,state,headRefOid', '--limit', '1']);
       const found: unknown = JSON.parse(existing);

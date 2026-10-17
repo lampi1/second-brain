@@ -87,7 +87,7 @@ This is an integration API proposal awaiting s, not implemented runtime routing 
   can reduce success and increase inference costs. This is evidence for testing concise relevance, not a universal
   claim about all memory systems or models. Offline fixture replay here does not measure weaker-model success.
 
-All runtime registration/UI/source collection remain integration work. Deterministic fixtures, isolated native
+Runtime status is refined by the collector integration note below. Deterministic fixtures, isolated native
 config validation and code review do not certify enterprise behavior or eliminate model errors.
 
 ## Event model provenance and settings boundary
@@ -109,3 +109,21 @@ There is no new global activity toggle matrix or first-use wizard here. Disabled
 disabled. Codex uses the reviewed native per-tool launch allowlist for ten exact local app read/mail tools,
 with prompt fallback for every other tool. No per-engine permission toggle or synthetic approval response is added.
 Existing launches and pending requests are never answered by this launch configuration.
+
+## Minimal runtime collector integration
+
+`ChatManager.analytics` now collects native-confirmed sink patches/results and explicit pending/state intervals
+in bounded local observations; Costi consumes `/api/agents/analytics` through the existing brain API. The integrator
+registers that endpoint as `() => manager.analytics.readModel()` beside the existing local quality endpoint.
+The renderer displays all observed history separately from the legacy cost period. Only provider-observed
+metadata enters model provenance; configuration/default model changes do not supply historical evidence.
+
+This first collector preserves partial timing only: authoritative task type, full native-session lifecycle,
+actual charges and calibrated estimates are not captured, and therefore runtime comparable cohorts remain empty.
+The existing Cursor ledger adapter is not invoked to read native account archives by this collector.
+
+Memory tables/ModelOrigin preserve explicit event origin, reporter and responsible-episode snapshots. Template
+producers can read an execution-bound explicit snapshot when one is provided, but normal and warm chat launch
+environments clear `SB_EVENT_CONTEXT`: native subagents inherit environment variables, so a per-chat snapshot
+cannot prove the writing agent's model. Automatic producer binding remains open. Existing brains need their usual
+template sync for parser/producer changes; no historical model or error responsibility is reconstructed.

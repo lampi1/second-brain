@@ -1,6 +1,11 @@
-// Historical brain records and session aggregates do not carry event-level model provenance.
-// Never borrow the current profile/model to fill that gap; human authors have no AI model.
-import{t}from'../i18n';
-export function ModelOrigin({human=false}:{human?:boolean}){
- return <small className="model-origin" title={human?undefined:t('origin.missingHint')} data-testid="model-origin">{human?t('origin.user'):`${t('product.model')}: ${t('origin.unavailable')}`}</small>;
+// Shows only an individual event's preserved provider observation. Legacy records never borrow the active model.
+import { readEventOrigin } from '@shared/event-origin';
+import { t } from '../i18n';
+
+export function ModelOrigin({ human = false, origin }: { human?: boolean; origin?: unknown }) {
+  const observed = readEventOrigin(origin);
+  const isHuman = human || observed?.kind === 'human';
+  const model = isHuman ? null : observed?.modelObserved;
+  const title = isHuman ? undefined : model ? [observed?.engine, observed?.source, observed?.sessionId].filter(Boolean).join(' · ') : t('origin.missingHint');
+  return <small className="model-origin" title={title} data-testid="model-origin">{isHuman ? t('origin.user') : `${t('product.model')}: ${model || t('origin.unavailable')}`}</small>;
 }

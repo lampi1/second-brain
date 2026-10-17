@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { eventContext, originField } from './event-origin.mjs';
 // Automatic work attribution belongs to the optional improve analytics package; ordinary memory never requires it.
 const analyticsFile = new URL('../improve/work-keys.mjs', import.meta.url);
 const analytics = fs.existsSync(analyticsFile) ? await import(analyticsFile.href) : null;
@@ -191,7 +192,10 @@ const errorCmd = (text, agent, work) => {
   // the whole work fails, not only this chat (2026-10-14, "il voto va al lavoro intero"): its key, when known
   let key = work ?? null;
   if (!key) try { key = workOfLine(f.slice(1).join(' · '), { ...(arg('--app') ? { appDir: arg('--app') } : {}) }); } catch { key = null; }
-  const line = bullet(text) + (agent ? ` · agente: ${agent}` : '') + (key ? ` · lavoro: ${key}` : '');
+  const context = eventContext();
+  const line = bullet(text) + (agent ? ` · agente: ${agent}` : '') + (key ? ` · lavoro: ${key}` : '') +
+    (context.origin ? ` · reporter-origin: ${originField(context.origin)}` : '') +
+    (context.responsibleEpisode ? ` · responsible-episode: ${originField(context.responsibleEpisode)}` : '');
   const [, , area, type] = f;
   const sig = words(area).filter(w => w.length >= 4);
   edit('ai-errors.md', lines => {
@@ -255,6 +259,11 @@ const ideaCmd = body => {
   if (per && !field('Per')) lines.splice(lines.findIndex(l => /^- \*\*Fonte:\*\*/i.test(l)), 0, `- **Per:** ${per}`);
   const chatOf = fonte => { const p = (fonte || '').replace(/^- \*\*Fonte:\*\*\s*/i, '').split(' · ').map(x => x.trim()); return p.length >= 3 ? p.slice(1, -1).join(' · ').toLowerCase() : ''; };
   const chat = chatOf(field('Fonte'));
+  const origin = eventContext().origin;
+  // Source text identifies human vs AI only; it cannot supply an AI model or identify its session.
+  if (origin && (fromAI ? origin.kind === 'model' : origin.kind === 'human')) {
+    lines.push(`- **Event origin:** ${originField(origin)}`);
+  }
   edit('ideas.md', file => {
     const entries = [];
     file.forEach((l, i) => { const h = l.match(/^## (\d{4}-\d{2}-\d{2}) · \[(\w+)\] · (.+?) · `([^`]+)`\s*$/); if (h) entries.push({ i, date: h[1], title: h[3], state: h[4] }); });

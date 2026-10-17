@@ -87,7 +87,7 @@ function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
         ? <p className="bx-pattern-last"><span className="muted">Ultimo:</span> detto «{short(g.latest.detto, 120)}» <span className="muted">→ vero:</span> {short(g.latest.vero, 140)}</p>
         : <p className="bx-pattern-last"><span className="muted">Ultimo:</span> <span className="bx-raw">{short(g.latest.riga ?? '', 220)}</span></p>}
       <dl className="bx-pattern-facts">
-        <dt><ModelOrigin/></dt><dd/>
+        <dt><ModelOrigin origin={g.latest.responsibleEpisode}/></dt><dd/>
         {g.areas.length > 0 && <><dt>Aree</dt><dd>{g.areas.slice(0, 3).map(([a, n]) => `${short(a, 40)}${n > 1 ? ` (${n})` : ''}`).join(' · ')}{g.areas.length > 3 ? ` · altre ${g.areas.length - 3}` : ''}</dd></>}
         {g.chats.length > 0 && <><dt>Chat</dt>
           <dd className="bx-pattern-chats">

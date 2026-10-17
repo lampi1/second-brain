@@ -4,6 +4,8 @@
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
 import type { FileViewResult } from './file-view';
+import type { SectionManifest } from './extension-section';
+import type { SectionSnapshot, SectionContextPacket, ContextArchive, ContextFactInput } from './data-sections';
 import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
@@ -1121,6 +1123,14 @@ export interface InvokeMap {
   'agents:duplicate': [{ id: string }, AgentProfile];
   'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
+  'sections:list': [void, SectionSnapshot];
+  'sections:register': [{ manifest: SectionManifest; expectedRevision: number }, SectionSnapshot];
+  'sections:remove': [{ id: string; expectedRevision: number }, SectionSnapshot];
+  'sections:rollback': [{ targetRevision: number; expectedRevision: number }, SectionSnapshot];
+  'sections:context': [{ ids: string[] }, SectionContextPacket];
+  'sections:requestedContext': [{ ids: string[] }, SectionContextPacket | null];
+  'sections:memory': [void, ContextArchive];
+  'sections:saveMemory': [{ facts: ContextFactInput[]; expectedRevision: number }, ContextArchive | null];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
@@ -1335,6 +1345,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'agents:save', 'agents:duplicate', 'agents:draft', 'setup:get', 'setup:save',
+  'sections:list', 'sections:register', 'sections:remove', 'sections:rollback', 'sections:context', 'sections:requestedContext', 'sections:memory', 'sections:saveMemory',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',

@@ -31,9 +31,12 @@ import { isLongChat } from '../../shared/context';
 import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
+import { parseImproveSelection } from './improve-evidence';
+import type { ImproveService } from '../improve/service';
+import type { ImproveEvidenceSelection } from '../improve/evidence';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
-export interface ToolDef { name: string; description: string; inputSchema: object; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
+export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
   chats: ChatService; browser: BrowserService; brain: BrainService;
@@ -48,6 +51,7 @@ export interface AppCtlDeps {
   space?: ChatSpace;
   /** "Migliora l'app": the code folder and the branches' state (read-only) */
   improve?: { repo: () => string | null; state: () => Promise<ImproveState>; inRepo?: (dir: string) => Promise<boolean> };
+  improveEvidence?: (selection: ImproveEvidenceSelection) => ReturnType<ImproveService['evidence']>;
   /** the DevOps page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
   devops?: () => DevopsState | null;
 }
@@ -456,6 +460,22 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
   ];
   if (d.space === 'app' && d.improve) {
+    if (d.improveEvidence) {
+      const evidence = d.improveEvidence;
+      tools.push({
+        name: 'app_improve_evidence',
+        description: 'Read selected confirmed context and observed agent evidence for an explicit improvement discussion. Supply exact references; empty lists select nothing. Does not send prompts, change settings, publish, grant permissions or call a model. Missing observations remain unavailable.',
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        inputSchema: { ...obj({ factRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 64 }, agentIds: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 20 }, insightRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 50 }, budgetBytes: { type: 'integer', minimum: 256, maximum: 32768 } }, ['factRefs', 'agentIds', 'budgetBytes']), additionalProperties: false },
+        run: args => {
+          const result = evidence(parseImproveSelection(args));
+          // These describe the whole canonical archive, not the selected packet. Do not disclose unselected keys.
+          // Missing selected references still fail explicitly in the service; omission is not a fabricated zero.
+          const { conflicts: _conflicts, pending: _pending, unavailable: _unavailable, contextStatus: _contextStatus, ...selected } = result;
+          return { ...selected, metadataScope: 'selected-evidence-only' };
+        },
+      });
+    }
     const improve = d.improve;
     tools.push({
       name: 'app_improve_state',

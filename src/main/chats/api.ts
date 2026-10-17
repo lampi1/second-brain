@@ -260,6 +260,7 @@ export class ApiSession implements HarnessSession {
   /** true = the stream is over */
   private openaiEvent(ev: Obj, onText: (t: string) => void, usage: Usage): boolean {
     if (ev.error) throw new ApiError('apiProviderError', { host: this.host, detail: this.providerText(o(ev.error).message) });
+    if (typeof ev.model === 'string' && ev.model) this.sink.changed({ modelObserved: ev.model });
     const delta = o(o((ev.choices as unknown[] | undefined)?.[0]).delta);
     if (typeof delta.content === 'string' && delta.content) onText(delta.content);
     const u = o(ev.usage);
@@ -270,6 +271,8 @@ export class ApiSession implements HarnessSession {
   private anthropicEvent(ev: Obj, onText: (t: string) => void, usage: Usage): boolean {
     switch (ev.type) {
       case 'message_start': {
+        const model = o(ev.message).model;
+        if (typeof model === 'string' && model) this.sink.changed({ modelObserved: model });
         const u = o(o(ev.message).usage);
         usage.input = n(u.input_tokens); usage.cacheRead = n(u.cache_read_input_tokens); usage.cacheWrite = n(u.cache_creation_input_tokens);
         usage.output = n(u.output_tokens);

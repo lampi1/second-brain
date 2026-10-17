@@ -1,4 +1,4 @@
-// Renderer-only orchestration for isolated proposals. Missing review publication infrastructure fails closed.
+// Renderer-only orchestration for isolated proposals, exact-head ledgers and user-confirmed GitHub publication.
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -12,8 +12,8 @@ import { electronNode } from '../brain/node';
 import { readLocal } from '../agents/local-store';
 import type { Checks } from './stages';
 import { ProposalService } from './proposals';
+import { proposalReviews } from './reviews';
 
-const PUBLICATION_BLOCK = 'Il collegamento GitHub e il registro delle revisioni per questa modifica non sono ancora disponibili. Puoi prepararla, riprenderla e verificare i file in locale.';
 export function proposalQuality(checks: Checks | undefined, head: string): boolean {
   const hit = checks?.[head];
   return !!hit && ['light', 'full'].includes(hit.kind ?? 'full') && Number.isFinite(Date.parse(hit.at));
@@ -56,8 +56,9 @@ export class ProposalBridge {
         const common = await git(directory, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
         let quality = false;
         try { const checks = readLocal(path.join(common, 'sb-checks.json')) as Checks | undefined; quality = proposalQuality(checks, head); } catch { /* An unreadable ledger proves nothing. */ }
-        // No established, exact-head fresh-review ledger exists yet. Do not invent reviewer approvals.
-        return { quality, reviews: false };
+        let reviews = false;
+        try { reviews = proposalReviews(readLocal(path.join(common, 'sb-proposal-reviews.json')), head); } catch { /* Missing/corrupt attestations fail closed. */ }
+        return { quality, reviews };
       },
       startWork: async proposal => {
         const previous = this.d.chats.list().find(c => c.space === 'app' && path.resolve(c.cwd) === path.resolve(proposal.directory));
@@ -66,7 +67,7 @@ export class ProposalBridge {
         const model = defaults.harness === 'claude' ? defaults.claudeModel : defaults.harness === 'cursor' ? defaults.cursorModel : undefined;
         const chat = await createRoutedChat({ route: req => this.d.brain.route(req), engineOn: h => engineOn(settings, h), agentsMayOpen: h => agentsMayOpen(settings, h), create: req => this.d.chats.create(req) }, {
           title: 'Personalizza l’app', cwd: proposal.directory, kind: 'app-feature', area: 'App',
-          prompt: 'Chiedi quale modifica all’app desidera preparare l’utente e attendi la sua descrizione. Lavora solo in questo worktree. Leggi le regole del repository, conserva i dati personali fuori da Git e prepara test e revisioni. Non pubblicare, aggiornare o riavviare l’app. Non effettuare commit senza autorizzazione dell’utente.',
+          prompt: 'Chiedi quale modifica all’app desidera preparare l’utente e attendi la sua descrizione. Lavora solo in questo worktree. Leggi le regole del repository, conserva i dati personali fuori da Git e prepara test e revisioni indipendenti. Dopo le verifiche registra ogni verdetto con scripts/record-proposal-review.mjs (vedi docs/proposal-publication.md). Non pubblicare, aggiornare o riavviare l’app. Non effettuare commit senza autorizzazione dell’utente.',
           defaults: { harness: defaults.harness, ...(model ? { model } : {}), ...(defaults.claudeEffort && defaults.harness === 'claude' ? { effort: defaults.claudeEffort } : {}) },
         }, { space: 'app', byUser: true });
         this.d.focus(chat.id);
@@ -74,12 +75,12 @@ export class ProposalBridge {
     });
   }
   async availability(): Promise<ProposalAvailability> {
-    try { await this.service(); return { available: true, reason: null, publishBlocked: PUBLICATION_BLOCK }; }
-    catch { return { available: false, reason: 'Il repository del prodotto non è disponibile oppure manca un ramo main/master. La cartella in uso resta invariata.', publishBlocked: PUBLICATION_BLOCK }; }
+    try { await this.service(); return { available: true, reason: null, publishBlocked: null }; }
+    catch { return { available: false, reason: 'Il repository del prodotto non è disponibile oppure manca un ramo main/master. La cartella in uso resta invariata.', publishBlocked: 'Collega prima il repository del prodotto.' }; }
   }
   async list(): Promise<AppProposal[]> { try { return (await this.service()).list(); } catch { return []; } }
   async create(): Promise<AppProposal> { return (await this.service()).create(); }
   async refresh(id: string): Promise<AppProposal> { return (await this.service()).refresh(id); }
   async resume(id: string): Promise<AppProposal> { return (await this.service()).resume(id); }
-  publish(_request: ProposalPublication): Promise<AppProposal> { return Promise.reject(new Error(PUBLICATION_BLOCK)); }
+  async publish(request: ProposalPublication): Promise<AppProposal> { return (await this.service()).openPullRequest(request); }
 }
