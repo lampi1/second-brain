@@ -1,5 +1,5 @@
 /* Component styles of the cockpit, built only on styles/tokens.css: shell, top bar, needs lane, tiles (chat, Regia,
-   browser), transcript rows, request panels, views (Mosaico, Corsie, focus, brain pages), menus, dialogs, palette,
+   browser), transcript rows, request panels, views (agents workspace, focus, brain pages), menus, dialogs, palette,
    toasts, tooltips. Motion is 120-180 ms ease-out for enter/expand only (never for streaming updates); everything
    turns off with prefers-reduced-motion. Imported once by main.tsx. */
 
@@ -113,13 +113,23 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,
 .topbar[data-fit~="3"] .ub-meter:not(.wide), .topbar[data-fit~="3"] .ub-pill { display: none; }
 .topbar[data-fit~="3"] .search { flex: none; min-width: 0; width: auto; }
-/* 4 the usage strip without Cursor and Kimi (still in its panel); 5 icon-only "Nuova chat"; 6 (the narrowest windows) the
-   view switch into "…" too */
+/* 4 the usage strip without Cursor and Kimi (still in its panel); 5 the popups switch and the connectors without
+   their words (the switch and the dots stay) */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]),
 .topbar[data-fit~="4"] [data-testid="usage-kimi"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-kimi"]) { display: none; }
-.topbar[data-fit~="5"] .topbar-main .btn-primary > span { display: none; }
+.topbar[data-fit~="5"] .popups-label, .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
+/* the full-screen popups switch and the connectors (SPEC 21) */
+.popups-switch, .connectors-btn { gap: 7px; }
+.popups-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--border-3); flex: none; transition: background var(--dur-fast); }
+.popups-knob { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast), background var(--dur-fast); }
+.popups-switch.on .popups-track { background: var(--blue); }
+.popups-switch.on .popups-knob { transform: translateX(11px); background: #fff; }
+.popups-label b { font-weight: 600; }
+.connector-mark { display: inline-flex; align-items: center; gap: 4px; }
+.connector-mark small { font-size: 11.5px; color: var(--text-2); }
+.cli-dot.warn { background: var(--amber); }
+@media (prefers-reduced-motion: reduce) { .popups-track, .popups-knob { transition: none; } }
 .topbar[data-fit~="1"] .new-browser > span { display: none; }
-.topbar[data-fit~="6"] [data-testid="view-toggle"] { display: none; }
 .brand { display: flex; align-items: center; gap: 9px; font: 600 14px var(--font-display); letter-spacing: -0.005em; padding-right: 4px; white-space: nowrap; }
 
 .brand-mark { width: 14px; height: 14px; border-radius: 3.5px; background: linear-gradient(135deg, var(--blue), var(--violet)); transform: rotate(45deg); box-shadow: 0 0 12px color-mix(in srgb, var(--blue) 40%, transparent); }
@@ -338,7 +348,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ctx-bar.busy { padding: 8px 10px; }
 .ctx-x { flex: none; width: 22px; height: 22px; display: inline-grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); cursor: pointer; }
 .ctx-x:hover { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--text); }
-/* a normal mosaic tile (≈300-700px): the text gets its own row, the × stays beside it, the buttons go below */
+/* a narrow tile (≈300-700px): the text gets its own row, the × stays beside it, the buttons go below */
 @container (max-width: 760px) {
   .ctx-bar { flex-wrap: wrap; row-gap: 6px; }
   .ctx-bar .ctx-text { order: 1; flex: 1 1 calc(100% - 60px); }
@@ -753,72 +763,25 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
   .chat-tile .th-sub > .pill-sub { display: inline-flex; height: 17px; padding: 0 6px; font-size: 10.5px; }
 }
 
-/* ---------------------------------------------------------------- Mosaico */
-.mosaico { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
-.mosaic-area { flex: 1; min-height: 0; position: relative; display: flex; }
-.mosaic-grid { flex: 1; min-width: 0; min-height: 0; display: grid; position: relative; }
-.mosaic-zones { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
-.cell { min-width: 0; min-height: 0; display: flex; }
-.cell > .tile { flex: 1; }
-.mosaic-max { flex: 1; min-height: 0; display: flex; animation: zoomIn var(--dur-slow) var(--ease); }
-.mosaic-max > .tile { flex: 1; }
+/* ---------------------------------------------------------------- Workspace and focus view */
 /* a maximized or focused chat keeps a readable column, like a desktop chat app */
-.mosaic-max .chat-tile .items, .mosaic-max .chat-tile .tile-requests, .mosaic-max .chat-tile .composer, .mosaic-max .regia-tile .items,
+.workspace-max .chat-tile .items, .workspace-max .chat-tile .tile-requests, .workspace-max .chat-tile .composer,
 .focus-body > .chat-tile .items, .focus-body > .chat-tile .tile-requests, .focus-body > .chat-tile .composer {
   padding-left: max(var(--pad), calc((100% - 880px) / 2)); padding-right: max(var(--pad), calc((100% - 880px) / 2));
 }
 .splitter { position: absolute; z-index: 5; touch-action: none; }
 .splitter.v { cursor: col-resize; }
-.splitter.h { cursor: row-resize; }
 .splitter::after { content: ""; position: absolute; border-radius: 2px; background: var(--blue); opacity: 0; transition: opacity var(--dur) var(--ease); }
 .splitter.v::after { top: 14px; bottom: 14px; left: calc(50% - 1px); width: 2px; }
-.splitter.h::after { left: 14px; right: 14px; top: calc(50% - 1px); height: 2px; }
 .splitter:hover::after, .splitter:focus-visible::after, .splitter:active::after { opacity: 0.75; }
 .splitter:focus-visible { outline: none; }
 .splitter.static { position: relative; }
 .view-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 32px; text-align: center; border: 1px dashed var(--border-2); border-radius: var(--r-l); }
 .view-empty .empty-text { margin-bottom: 10px; }
 
-/* ---------------------------------------------------------------- Corsie */
-.corsie { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
-.corsie-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
-.col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.col-head { flex: none; display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 4px; font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3); }
-.col-title { font-weight: 700; }
-.col-waiting .col-title { color: var(--amber); }
-.col-working .col-title { color: var(--blue); }
-.col-count { font-weight: 700; color: var(--text-2); }
-.col-hint { letter-spacing: 0.07em; color: var(--text-4); font-weight: 500; }
-.col-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); overflow-y: auto; }
-.col-tile { flex: 1 1 0; min-height: 270px; display: flex; }
-.col-tile > .tile { flex: 1; }
-.mini {
-  flex: none; height: 42px; display: flex; align-items: center; gap: 9px; padding: 0 10px 0 12px; border-radius: var(--r-m); border: 1px solid var(--border);
-  background: var(--surface); color: var(--text); cursor: pointer; text-align: left; transition: border-color var(--dur-fast), background-color var(--dur-fast);
-}
-.mini:hover { border-color: var(--border-3); background: var(--surface-2); }
-.mini-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.col-empty { display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px dashed var(--border-2); border-radius: var(--r-l); color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
-.col-empty b { color: var(--text-2); font-weight: 600; }
-.strip { flex: none; display: flex; flex-direction: column; gap: 6px; }
-.thumbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
-.thumb {
-  height: 156px; display: flex; flex-direction: column; padding: 0; border-radius: var(--r-m); border: 1px solid var(--border); background: var(--surface); overflow: hidden;
-  cursor: zoom-in; text-align: left; color: inherit; transition: border-color var(--dur-fast), transform var(--dur) var(--ease);
-}
-.thumb:hover { border-color: var(--border-3); transform: translateY(-1px); }
-.thumb-img { flex: 1; position: relative; overflow: hidden; background: var(--page-bg); }
-.thumb-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; }
-.thumb-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #8a94a6; }
-.thumb-cap { flex: none; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-3); min-width: 0; }
-.thumb-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); min-width: 0; }
-.thumb-title::before { content: "▸ "; color: var(--blue); }
-.thumb-owner { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; color: var(--blue); white-space: nowrap; }
-.pair, .focus-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
-.pair-bar { flex: none; display: flex; align-items: center; gap: 10px; }
-.pair-hint { font-size: 11.5px; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; }
-.pair-body, .focus-body { flex: 1; min-height: 0; display: grid; animation: zoomIn var(--dur-slow) var(--ease); }
-.pair-body > .tile, .focus-body > .tile { min-height: 0; }
+.focus-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.focus-body { flex: 1; min-height: 0; display: grid; animation: zoomIn var(--dur-slow) var(--ease); }
+.focus-body > .tile { min-height: 0; }
 .focus-bar { flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px 0 12px; border-radius: var(--r-m); background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-3); }
 .focus-bar svg { color: var(--blue); }
 .focus-title { color: var(--text); font-weight: 600; }

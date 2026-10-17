@@ -58,7 +58,7 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   const first = page.getByTestId('tile-chat-regia');
   await expect(first).toBeVisible(); // the old one is a normal chat, history kept
   await expect(first).toContainText('Regia precedente · Claude');
-  await expect(page.getByTestId('toasts')).toContainText('Regia nuova su Claude');
+  await expect(page.getByTestId('toasts')).toContainText('Orchestrator nuovo su Claude');
   await expect(page.getByTestId('regia-input')).toBeFocused();
   // through the routing table (ADR 0032): a Regia's work is 'regia', its route reaches the ledger
   const renewed = await regiaIdOf(page);
@@ -113,10 +113,10 @@ test('new chat dialog: "È la Regia" with a Regia already there asks a name and 
   await expect(page.getByTestId('newchat-regia')).not.toBeChecked(); // a Regia exists: off by default
   await expect(page.getByTestId('newchat-regia-note')).toHaveCount(0);
   await page.getByTestId('newchat-regia').check();
-  await expect(page.getByTestId('newchat-regia-note')).toContainText('Si aggiunge come nuova tab accanto alle altre Regie');
+  await expect(page.getByTestId('newchat-regia-note')).toContainText('Si aggiunge come nuova tab accanto agli altri Orchestrator');
   await page.getByTestId('newchat-prompt').fill('Coordina la ricerca');
   await page.keyboard.press('Control+Enter');
-  await expect(page.getByTestId('newchat').locator('.field-error')).toContainText('Dai un nome alla nuova Regia');
+  await expect(page.getByTestId('newchat').locator('.field-error')).toContainText('Dai un nome al nuovo Orchestrator');
   await page.getByTestId('newchat-regia-name').fill('Ricerca');
   await shot(page, 'newchat-regia-note');
   await page.keyboard.press('Control+Enter');

@@ -26,7 +26,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 

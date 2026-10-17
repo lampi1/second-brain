@@ -41,13 +41,13 @@ export function isActionable(e: Ev & Partial<Pick<FeedEvent, 'chatId'>>, open?: 
   return true;
 }
 
-/** Nav section a kind counts for: brain page ids, or 'workspace' (the chat grid). */
+/** Nav section a kind counts for: brain page ids ('home' = the Grindhouse, where the agents are). */
 export function sectionOf(kind: string): string | null {
   if (kind === 'idea') return 'idee';
   if (kind === 'reflection') return 'idee';
   if (kind === 'error' || kind === 'win' || kind === 'playbook' || kind === 'proposal') return 'qualita';
   if (kind === 'budget') return 'costi';
-  if (kind.startsWith('chat-')) return 'workspace';
+  if (kind.startsWith('chat-')) return 'home';
   // sync-* (the brain's own sync) had Oggi's badge, mail-* had Comunicazione's; both pages are gone: center only
   if (kind === 'devops' || kind === 'devops-alert') return 'devops';
   return null;
@@ -105,15 +105,15 @@ export function toastGroups(feed: readonly FeedEvent[], opts: { since: number; d
   return [...groups.values()].sort((a, b) => b.at - a.at).slice(0, opts.max ?? 2);
 }
 
-/** Where an event leads: its chat on the grid; an idea or reflection to Idee filtered by its author (the AI's: "Dall'IA");
- *  else the brain file it is about (Esplora), else its section (none: the workspace). */
+/** Where an event leads: its chat in the Grindhouse; an idea or reflection to Idee filtered by its author (the AI's: "Dall'IA");
+ *  else the brain file it is about (Esplora), else its section (none: the Grindhouse). */
 export function linkOfEvent(e: Pick<FeedEvent, 'id' | 'kind' | 'chatId' | 'file' | 'who'>): string {
-  if (e.chatId) return `sb://workspace/chat-${e.chatId}`;
+  if (e.chatId) return `sb://home/chat-${e.chatId}`;
   if (e.kind === 'reflection' || (e.kind === 'idea' && e.who === AI_WHO)) return 'sb://idee/ia';
   if (e.kind === 'idea') return 'sb://idee/mie';
   if (e.file) return `sb://esplora/${e.file}`;
   const sec = sectionOf(e.kind);
-  return sec && sec !== 'workspace' ? `sb://${sec}` : 'sb://workspace';
+  return `sb://${sec ?? 'home'}`;
 }
 
 export interface Link { page: string; element: string | null }

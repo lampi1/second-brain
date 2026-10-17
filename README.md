@@ -23,7 +23,7 @@ This repository is private: the link works for anyone with repository access. A 
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![Mosaico: chats as tiles, their questions as panels, the browsers they drive next to them](docs/screenshots/mosaic.webp)
+![The Grindhouse: every agent as a strip, its questions as panels, the browser it drives right under it](docs/screenshots/mosaic.webp)
 
 When you work with five agents at once, the bottleneck is no longer the model: it is you. Which chat is waiting on
 you? Which one is burning tokens in a loop? What did the QA agent see in its browser? second-brain puts every chat,
@@ -58,12 +58,13 @@ background staging contract. A Release is published only after its CI and instal
 
 ## Features
 
-### Chats as tiles, questions as panels
+### Agents as strips, questions as panels
 
-Every Claude Code or Cursor chat is a tile with its streaming text, tool calls, diffs, cost and context size. When an
+Every Claude Code or Cursor chat is a strip in the **Grindhouse** with its streaming text, tool calls, diffs, cost and context size. When an
 agent asks a question or a permission, it shows up as a panel right in its tile (or in a floating layer, wherever you
-are in the app): answer with one key, with the context the agent had when it asked. Two views: **Mosaico** (free
-tiles) and **Corsie** (columns: waiting for you, working, done).
+are in the app): answer with one key, with the context the agent had when it asked. The strips are grouped by area
+and ordered by the Orchestrator; each expands inline, maximizes or opens in focus mode, and the browser an agent
+drives sits right under it. One switch on the top bar turns the full-screen popups on or off.
 
 ### The Regia: a chat that coordinates the others
 
@@ -133,7 +134,7 @@ it checks a promoted stable release.
 ```mermaid
 flowchart LR
   subgraph Renderer["Renderer (React, sandboxed)"]
-    UI["Mosaico · Corsie · Regia widget<br/>brain pages · 3D map"]
+    UI["Grindhouse · Orchestrator column<br/>brain pages · 3D map"]
   end
   subgraph Main["Electron main (Node)"]
     CM["ChatManager"] --> CS["ClaudeSession<br/>stream-json"]

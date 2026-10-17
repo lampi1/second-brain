@@ -108,8 +108,7 @@ export function startStore(): void {
 }
 
 /** The theme lives in the app settings too (config.json, ADR 0005/0008): read it at start, follow changes made
- *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them.
- *  The view is no setting any more (Mosaico and Corsie were retired): it stays a local preference. */
+ *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them. */
 let settingsPending=false;
 function syncSettings(): void {
   let known: string | null = null;
@@ -363,7 +362,7 @@ export async function runCommand(req: PendingRequest, confirmProd = false): Prom
   try {
     await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}) });
     const chat = app.get().chats[req.chatId];
-    toast(`Comando avviato: l’output è nella chat ${chat?.isRegia ? 'Regia' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
+    toast(`Comando avviato: l’output è nella chat ${chat?.isRegia ? 'Orchestrator' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
     return true;
   } catch (e) {
     // the card comes back usable everywhere (the layer re-mounts it: its key carries the attempt)
@@ -420,6 +419,17 @@ export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary 
     void loadItems(c.id);
     return c;
   } catch (e) { fail('Chat non creata')(e); return null; }
+}
+
+/** The Orchestrator, made once on the engine the user picked (main: single-flight, in the brain folder; an existing
+ *  one is returned as is). null = failed (told). */
+export async function ensureOrchestrator(harness: Harness): Promise<ChatSummary | null> {
+  try {
+    const c = await sb.invoke('orchestrator:ensure', { harness });
+    dispatch({ type: 'chat:updated', chat: c });
+    void loadItems(c.id);
+    return c;
+  } catch (e) { fail('Orchestrator non creato')(e); return null; }
 }
 
 export async function setChat(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<void> {
@@ -505,7 +515,7 @@ export function closeChat(chatId: string): void {
 
 /** Close a browser tab like a chat (✕, Ctrl+W, Ctrl+W inside its page): its tile disappears at once, the tab really
  *  closes when the 6-second undo toast expires (its agent then gets "The user closed tab …" at its next call, main
- *  browser/closed.ts). A tab already closing is left alone; a maximized or Corsie-paired tab leaves that view, Annulla
+ *  browser/closed.ts). A tab already closing is left alone; a maximized tab leaves that view, Annulla
  *  puts it back unless another tile took it meanwhile. */
 export function closeTab(tabId: string): void {
   if(updateIsFrozen())return;
@@ -513,8 +523,7 @@ export function closeTab(tabId: string): void {
   const u = ui.get();
   if (!t || u.hiddenTabs.includes(tabId)) return;
   const wasMax = u.maximized === `browser:${tabId}` ? u.maximized : null;
-  const wasPair = u.pair === tabId ? tabId : null;
-  if (wasMax || wasPair) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, pair: wasPair ? null : s.pair }));
+  if (wasMax) ui.set(s => ({ ...s, maximized: null }));
   hideTab(tabId, true);
   let undone = false;
   const timer = setTimeout(() => {
@@ -525,7 +534,7 @@ export function closeTab(tabId: string): void {
   pendingCloses.add(timer);
   toast(`Chiusa la scheda «${t.title || t.url}»`, 'info', { label: 'Annulla', run: () => {
     undone = true; clearTimeout(timer); pendingCloses.delete(timer); hideTab(tabId, false);
-    if ((wasMax || wasPair) && !ui.get().maximized && !ui.get().pair) ui.set(s => ({ ...s, maximized: wasMax, pair: wasPair }));
+    if (wasMax && !ui.get().maximized) ui.set(s => ({ ...s, maximized: wasMax }));
   } }, 6000);
 }
 

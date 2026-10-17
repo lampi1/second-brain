@@ -1,6 +1,6 @@
-// The app shell: top bar, the left navigation (chat grid, brain sections, the map), the needs-you lane (focus mode's
-// peek), the workspace (the current view: Mosaico, Corsie or focus mode) or a brain page, the full-screen 3D map, the
-// Regia widget docked bottom-right over all of them, with its room kept free (RegiaOverlay.tsx, ADR 0028), the notification center, toasts, the live
+// The app shell: top bar, the left navigation (the Grindhouse, brain sections, the map), the needs-you lane (focus mode's
+// peek), a brain page (the Grindhouse holds the agents' vertical strips; focus mode replaces it with one chat), the full-screen 3D map, the
+// persistent Orchestrator column on the right, with its room kept free (RegiaOverlay.tsx, ADR 0068), the notification center, toasts, the live
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
@@ -13,7 +13,7 @@ import { makeLink } from './lib/notify';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleBrowsers, toggleView, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleBrowsers, ui } from './store/ui';
 import {
   back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia, askRenewRegia,
 } from './actions';
@@ -24,7 +24,6 @@ import { Sidebar } from './components/Sidebar';
 import { NeedsLane, LiveRegion } from './components/NeedsLane';
 import { RegiaOverlay, useDockReserve } from './components/RegiaOverlay';
 import {UpdateCheckpointStatus} from './components/UpdateCheckpointStatus';
-import { AgentsWorkspace } from './components/AgentsWorkspace';
 
 import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
@@ -82,7 +81,6 @@ function onKey(e: KeyboardEvent): void {
     case 'stopFocused': stopFocused(); break;
     case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
-    case 'toggleView': toggleView(); break;
     case 'toggleBrowsers': toggleBrowsers(); break;
     case 'maximize': toggleMaximize(); break;
     case 'focusMode': toggleFocusMode(); break;
@@ -152,16 +150,18 @@ function useHighlight(): void {
  *  widget sits in the bottom-right corner, over the page too). */
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   const arg = ui.use(s => s.pageArg);
+  const home = id === 'home'; // the Grindhouse is where every way back leads (Esc, Ctrl+1): no back button on it
   return (
     <div className="page-frame" data-testid={`page-${id}`}>
       <div className="page-bar">
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'workspace' })} data-testid="page-back" data-tip={`${t('home.backAgents')}|Ctrl+1`}><IconArrowLeft size={13} /> {t('home.agents')}</button>
+        {!home && <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'home' })} data-testid="page-back" data-tip={`${t('home.back')}|Ctrl+1`}><IconArrowLeft size={13} /> {pageLabel('home')}</button>}
         <h2>{pageLabel(id)}</h2>
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> {t('chat.menu.copyLink')}</button>
-        <span className="page-hint"><Keys combo="Esc" /> {t('home.agents')}</span>
+        {!home && <span className="page-hint"><Keys combo="Esc" /> {pageLabel('home')}</span>}
       </div>
-      <div className="page-body">
+      {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
+      <div className="page-body" key={id}>
         {id === 'dashboard' ? <Dashboard /> : id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
@@ -180,7 +180,6 @@ export function App() {
   }, []);
   useHighlight();
   useBrainToastRelay();
-  const view = ui.use(s => s.prefs.view);
   const density = ui.use(s => s.prefs.density);
   const theme = ui.use(s => s.prefs.theme);
   const appearance=ui.use(s=>s.prefs.appearance);
@@ -206,18 +205,18 @@ export function App() {
   const qShown = ui.use(s => s.qwin.shown);
   useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
-  useEffect(() => { schedule(420); }, [view, maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
+  useEffect(() => { schedule(420); }, [maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
   useEffect(() => { if (focused) setPrefs({ lastFocus: focused }); }, [focused]);
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
-  const onPage = !!page;
-  // the Mosaico has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
+  const inFocus = !!focusMode && page === 'home';
+  // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
   // aspettano, adesso me le fa la regia"): each request is in its tile, the Regia or the global layer; focus mode keeps
   // its Ctrl+J peek
-  const showLane = !onPage && lanePeek;
+  const showLane = inFocus && lanePeek;
   return (
     // the Regia widget's corner: the workspace, the map and the questions window leave it free (shell.css)
-    <div className="app" data-testid="app" data-view={view} style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
+    <div className="app" data-testid="app" style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
       <BrainSetupBanner />
@@ -229,7 +228,7 @@ export function App() {
           {showLane && <NeedsLane peek={lanePeek} />}
           <main className="workspace no-regia" data-testid="workspace">
             <div className="view-area">
-              {onPage ? <PageFrame id={page} /> : focusMode ? <FocusView chatId={focusMode} /> : <AgentsWorkspace />}
+              {inFocus ? <FocusView chatId={focusMode} /> : <PageFrame id={page} />}
             </div>
           </main>
         </div>

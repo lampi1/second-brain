@@ -5,12 +5,11 @@
 // and no Esegui anywhere; the fake connection string is masked; the credentials file never
 // shows. Screenshots: test-results/shots/procedure-*.png.
 import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { closeRegia, launchDemo, shot } from './helpers';
+import { launchDemo, shot } from './helpers';
 
 let app: ElectronApplication, page: Page;
 test.beforeAll(async () => {
   ({ app, page } = await launchDemo());
-  await closeRegia(page);
   // The system clipboard is shared with every app and chat on the machine (a read can get their text): the page's
   // clipboard writes are recorded here instead, and the system clipboard is never touched.
   await page.evaluate(() => {

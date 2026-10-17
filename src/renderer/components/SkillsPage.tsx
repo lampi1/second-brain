@@ -6,6 +6,7 @@
 // Recycle Bin after a confirmation; "Prova nella Regia" writes "/<name> " in the Regia's input. Why: the user, 12/10,
 // "deve anche essere facile dall'app creare e modificare skill una sezione apposta, anche per gli agenti". Rendered by
 // App.tsx PageFrame for the 'skill' place (.bx classes of the brain pages, styles/skills.css).
+import { Select } from './Select';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Harness, MdIssue, SkillCatalog, SkillEntry, SkillKind, SkillPlace } from '@shared/contract';
 import { checkMd, DESC_MAX, field, newMd, parseMd, setBody, setFields, template } from '@shared/skillmd';
@@ -120,10 +121,10 @@ function Editor({ draft, places, onChange, onSaved, onDeleted, onPlace }: {
             {!draft.entry && (
               <label className="sk-field">
                 <span>{t('tools.skillsPage.whereLabel')}</span>
-                <select className="st-select" value={placeKey(draft.place)} data-testid="sk-place"
+                <Select className="st-select" value={placeKey(draft.place)} data-testid="sk-place"
                   onChange={e => { const n = samePlaces.find(x => placeKey(x) === e.target.value); if (n) onPlace(n); }}>
                   {samePlaces.map(x => <option key={placeKey(x)} value={placeKey(x)}>{x.label}</option>)}
-                </select>
+                </Select>
               </label>
             )}
             <label className="sk-field">

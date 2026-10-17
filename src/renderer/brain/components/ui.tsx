@@ -3,6 +3,7 @@
 // copy to clipboard and file download (both with fallbacks: the app window grants no permissions). Used by every page.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { HelpTip } from '../../components/HelpTip';
+import { inSelectList } from '../../components/Select';
 
 export type Tone = 'good' | 'warn' | 'bad' | 'blue' | 'violet' | 'outline' | 'neutral' | '';
 export function Pill({ tone = '', children, title }: { tone?: Tone; children: ReactNode; title?: string }) {
@@ -136,7 +137,7 @@ export function useEsc(active: boolean, fn: () => void): void {
       escBound = true;
       window.addEventListener('keydown', e => {
         const top = escStack[escStack.length - 1];
-        if (e.key !== 'Escape' || !top) return;
+        if (e.key !== 'Escape' || !top || inSelectList(e.target)) return;
         e.preventDefault(); e.stopImmediatePropagation();
         top.fn();
       }, true);

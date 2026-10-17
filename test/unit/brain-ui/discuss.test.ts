@@ -81,7 +81,7 @@ describe('work chat', () => {
     const p = chatPrompt(I(), 10);
     expect(p).toContain("Let's work on the idea «Diario vocale» (ideas.md, line 10");
     expect(p).toContain('from line 10');
-    expect(p).toContain('Only the Regia');
+    expect(p).toContain('Only the Orchestrator');
     expect(chatPrompt(I(), null)).not.toContain('from line');
   });
 });

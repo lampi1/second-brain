@@ -2,9 +2,9 @@
 // anywhere on screen float in a small top-most view, above pages and browser tiles; they never take the keyboard while
 // the user types; Ctrl+J or a click moves the keyboard there; 1-9 / Enter answer, Esc is "Rispondi dopo" (all of them
 // wait in "Da rispondere", the tiles say "Da rispondere").
-// None while the Regia widget shows a request card: one popup at a time (the user, 2026-10-13).
+// None while the Orchestrator column shows a request card: one popup at a time (the user, 2026-10-13).
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { closeRegia, demoLayout, launchDemo, layerPage, layerState, windowShot } from './helpers';
+import { demoLayout, expandChats, launchDemo, layerPage, layerState, windowShot } from './helpers';
 
 type Demo = { __sbDemo: { stop(id: string): Promise<void> } };
 
@@ -18,20 +18,13 @@ const focusOf = (app: ElectronApplication) => app.evaluate(({ BrowserWindow }) =
 
 test('requests not on screen float above a page, without taking the keyboard', async () => {
   const { app, page } = await launchDemo();
-  await expect.poll(async () => (await layerState(app)).cards).toBe(1); // the Regia reduced: her own question floats
-  await page.getByTestId('regia-pill').click();
-  await expect.poll(async () => (await layerState(app)).attached).toBe(false); // Mosaico + the Regia open: the tiles show them all (nothing waits off screen)
-  await closeRegia(page); // reduced again
+  await expect.poll(async () => (await layerState(app)).attached).toBe(false); // the strips + the Orchestrator column: they show them all (nothing waits off screen)
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('devops');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('brain-page-devops')).toBeVisible(); // a page (Oggi is now DevOps)
-  await expect.poll(async () => (await layerState(app)).cards).toBe(3); // on a page all three float, the Regia's too
-  // above the collapsed Regia bar, never on it (ADR 0028)
-  const bar = (await page.getByTestId('regia-dock').boundingBox())!;
-  await expect.poll(async () => { const b = (await layerState(app)).bounds!; return b.y + b.height <= bar.y && b.x + b.width === 1600 - 16; }).toBe(true);
-  await page.keyboard.press('Control+R'); // the Regia overlay on the page: its decision is the one popup on screen
-  await page.getByTestId('regia-input').click();
+  // the Orchestrator column stays on the page (ADR 0068): its decision is the one popup on screen
+  await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(1);
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // never two popups at once (the user, 2026-10-13)
   await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // her request leaves
   await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(0);
@@ -40,7 +33,7 @@ test('requests not on screen float above a page, without taking the keyboard', a
   const st = await layerState(app);
   expect(st.attached).toBe(true);
   const ov = (await page.getByTestId('regia-overlay').boundingBox())!;
-  expect(st.bounds!.x + st.bounds!.width).toBe(Math.round(ov.x) - 16); // left of the expanded Regia, never over it
+  expect(st.bounds!.x + st.bounds!.width).toBe(Math.round(ov.x) - 16); // left of the Orchestrator column, never over it
   await expect.poll(async () => { const b = (await layerState(app)).bounds!; return b.y + b.height; }).toBe(1000 - 16);
   const layer = await layerPage(app);
   await expect(layer.getByTestId('layer-card')).toContainText('QA · Rimborsi');
@@ -68,9 +61,9 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
   await page.getByTestId('palette-input').fill('costi');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('brain-page-costi')).toBeVisible();
-  await page.keyboard.press('Control+R'); // the Regia overlay here: its card is the one popup, the layer waits
+  await page.keyboard.press('Control+R'); // the Orchestrator column here too: its card is the one popup, the layer waits
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  await page.keyboard.press('Control+J'); // the oldest is the Regia's, on screen in the dock: focused there, nothing moves
+  await page.keyboard.press('Control+J'); // the oldest is the Orchestrator's, on screen in its column: focused there, nothing moves
   await expect(page.locator('[data-request-key="regia/regia-q1"]')).toBeFocused();
   await expect(page.getByTestId('brain-page-costi')).toBeVisible();
   await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // her request leaves: the next one floats
@@ -87,7 +80,7 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // (a "chat finita" toast may stay: the QA chat just ended)
   await expect(layer.getByText(/da rispondere|in attesa/)).toHaveCount(0); // no waiting strip: the top bar counts them
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
-  await page.getByTestId('page-back').click(); // back to the workspace: the tile says "Da rispondere", no panel, no layer card
+  await page.getByTestId('page-back').click(); // back to the Grindhouse: the tile says "Da rispondere", no panel, no layer card
   await expect(page.getByTestId('chat-queued-feedback')).toBeVisible();
   await expect(page.getByTestId('request-feedback-feedback-p1')).toHaveCount(0);
   await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
@@ -98,11 +91,13 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
 
 test('the layer stays above browser tiles (focus mode, the chat browser beside it)', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // its input: the strips start collapsed
   await page.getByTestId('chat-input-qa').click();
   await page.keyboard.press('Control+Shift+F');
   await expect(page.getByTestId('focus-view')).toBeVisible();
-  await expect.poll(async () => (await layerState(app)).cards).toBe(2); // the Regia's and the Feedback's
-  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(500);
+  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // the column's card is the one popup: let it go
+  await expect.poll(async () => (await layerState(app)).cards).toBe(1); // the Feedback's
+  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(300); // beside the chat, left of the Orchestrator column
   const tab = (await demoLayout(app)).find(l => l.tabId === 'tab-qa')!.rect!;
   const b = (await layerState(app)).bounds!;
   expect(b.x < tab.x + tab.width && tab.x < b.x + b.width && b.y < tab.y + tab.height && tab.y < b.y + b.height).toBe(true); // over the browser

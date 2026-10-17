@@ -9,6 +9,7 @@ import { fmt } from '../lib/format';
 import { t as tr } from '../../i18n';
 import { Explain, type ExplainProps } from './States';
 import { HelpTip } from '../../components/HelpTip';
+import { Select } from '../../components/Select';
 import { download, IconChevL, IconChevR, IconClose, IconColumns, IconDownload, IconSearch, useEsc } from './ui';
 
 export interface Col<R> extends ColBase<R> {
@@ -125,10 +126,10 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
           </label>
         )}
         {facets.map(({ col, values }) => (
-          <select key={col.key} className={`bx-select ${facet[col.key] ? 'on' : ''}`} aria-label={tr('costs.tableFilter',{name:col.label})} value={facet[col.key] ?? ''} onChange={e => setFacet(f => ({ ...f, [col.key]: e.target.value }))}>
+          <Select key={col.key} className={`bx-select ${facet[col.key] ? 'on' : ''}`} aria-label={tr('costs.tableFilter',{name:col.label})} value={facet[col.key] ?? ''} onChange={e => setFacet(f => ({ ...f, [col.key]: e.target.value }))}>
             <option value="">{col.label}: {tr('costs.tableAll')}</option>
             {values.map(v => <option key={v.value} value={v.value}>{v.value} ({v.count})</option>)}
-          </select>
+          </Select>
         ))}
         <span className="count" aria-live="polite">{visible.length === rows.length ? tr('costs.tableRows',{count:fmt.int(rows.length)}) : tr('costs.tableFilteredRows',{count:fmt.int(visible.length),total:fmt.int(rows.length)})}</span>
         {filtered && <button type="button" className="bx-btn ghost s" onClick={() => { setQ(''); setFacet({}); }}>{tr('costs.tableReset')}</button>}

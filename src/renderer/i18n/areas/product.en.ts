@@ -12,6 +12,7 @@ export const productEn:typeof productIt={
  'viewer.loading':'Opening file…','viewer.outside':'The file is outside the available work folders.','viewer.private':'This file may contain credentials and is not displayed.','viewer.unsupported':'This format is not available in the viewer.','viewer.missing':'The file is not available.','viewer.changed':'The file changed while opening. Open it again.','viewer.binary':'This file does not contain readable text.','viewer.image':'The image is unsupported or exceeds the viewer limits.','viewer.truncated':'Preview limited to the first MB of the file.','viewer.lineUnavailable':'The cited line is outside the loaded portion.','viewer.window':p=>`Lines ${p.first}–${p.last} of ${p.total}`,
  'ui.newBrowser':'New browser','ui.browserMine':'Your tab','ui.browserAddress':'Enter an address','ui.browserEditAddress':'Edit address','ui.browserOpenError':p=>`Browser could not open: ${p.error}`,
  'ui.state.waiting':'waiting for you','ui.state.queued':'queued','ui.state.running':'working','ui.state.starting':'starting…','ui.state.error':'error','ui.state.closed':'closed','ui.state.regia':'listening','ui.state.done':'finished',
+ 'ui.popups':'Popups','ui.popupsOn':'Full-screen popups: on (click to turn them off)','ui.popupsOff':'Full-screen popups: off, questions and permissions stay in their chat (click to turn them on)','ui.popupsStateOn':'on','ui.popupsStateOff':'off','ui.connectors':'Connectors','ui.connectorsTip':p=>`Connectors: ${p.list}`,'ui.connectorsNone':'Connectors: none to show','ui.connectorsLoading':'Connectors: checking','ui.connector.verified':'connected','ui.connector.pending':'to verify','ui.connector.failed':'failed',
  'ui.other':'Other…','ui.writeAnswer':'write your answer','ui.mapDetails':'Sources and details',
  'context.handoffBusy':"Preparing the handoff.",
  'context.native':'Codex manages native compaction. Context length alone does not require a new chat.','context.passive':'Context size reported by the engine; continuing in a new chat remains a manual choice.',
@@ -26,7 +27,7 @@ export const productEn:typeof productIt={
  'product.running':'Working','product.waiting':'Waiting','product.completed':'Completed','product.failed':'Error','product.stopped':'Stopped','product.unknown':'Status not reported',
  'product.teamExplain':'Internal collaborators observed by the engine. Missing data does not mean zero activity.','product.teamEmpty':'No internal activity observed.','product.teamIncomplete':'The engine does not provide a complete list.',
  'product.coordinated':p=>`Agents in the workspace (${p.count})`,'product.backRegia':p=>`Back to ${p.name}`,
- 'product.move':p=>`Move ${p.name}. Alt and arrow keys to dock`,'product.moveHint':'Drag to dock · Alt + arrow keys',
- 'product.regiaTop':'Regia at the top','product.regiaCorner':'Regia in the corner','product.resizeRegia':'Resize Regia','product.advanced':'Advanced details',
+ 'product.restoreLayout':'Back to the column','product.showBrowsers':'Show browsers','product.hideBrowsers':'Hide browsers','product.noArea':'No project',
+ 'product.advanced':'Advanced details',
  'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.newAgent':'Create agent','product.setup':'Set up your work',
 };

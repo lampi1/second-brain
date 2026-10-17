@@ -24,7 +24,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -63,7 +63,7 @@ test("Idee · Dall'IA: Discutine docks the Regia with an editable draft that quo
   await expect(row.getByTestId('bx-idea-discussed')).toBeVisible();
   await row.click();
   await expect(peek.getByTestId('bx-discuss-mark')).toContainText('Discussa');
-  await expect(peek.getByTestId('bx-discuss-mark')).toContainText('con la Regia');
+  await expect(peek.getByTestId('bx-discuss-mark')).toContainText('con l’Orchestrator');
   await expect(page.locator('[data-testid="regia-overlay"]')).toContainText('Rispondi breve.');
   await shot(page, 'discuss-regia-sent');
   await page.keyboard.press('Escape');
@@ -71,7 +71,6 @@ test("Idee · Dall'IA: Discutine docks the Regia with an editable draft that quo
 });
 
 test('Idee · Dall\'IA: Apri una chat shows the editable first message; Ctrl+Invio creates "Idea · <titolo>", the page stays', async () => {
-  await page.getByTestId('regia-collapse').click();
   await page.getByRole('row').filter({ hasText: 'Le domande in fila, una alla volta' }).click();
   const card = page.getByTestId('bx-peek');
   await expect(card).toContainText('Le domande in fila, una alla volta');
@@ -98,7 +97,7 @@ test('Idee · Dall\'IA: Apri una chat shows the editable first message; Ctrl+Inv
 
   // the mark leads to the chat
   await card.getByTestId('bx-discuss-open').click();
-  await expect(page.getByTestId('view-mosaico').or(page.getByTestId('view-corsie'))).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
 });
 
 test('Idee: the table marks the discussed idea; the side peek has Discutine and Apri una chat (light theme too)', async () => {

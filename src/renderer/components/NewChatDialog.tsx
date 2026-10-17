@@ -1,14 +1,15 @@
 // "Nuova chat" (Ctrl+N): engine (every engine of the registry, lib/engines.ts, with its CLI's status), folder (recent
 // folders suggested), model, effort, permission mode and separate worktree (each only on an engine that has it), title,
-// the first message, "È la Regia" (several Regie, ADR 0021: with a Regia already there the new one needs a tab name and
+// the first message, "È l’Orchestrator" (several Regie, ADR 0021: with a Regia already there the new one needs a tab name and
 // sits next to the others; the overlay's + opens this dialog as "Nuova Regia"). A work chat answers to the Regia of the
 // tab open now (regiaOf). Engine, model and effort come from the routing table (chat:createRouted, ADR 0032: the
 // user, 2026-10-14, the app spent twice what it did before, «Nuova chat passa dalla tabella dei modelli»): the kind
 // read from title and prompt, shown in one line under the engines (routing:preview) and in the fields; what the user
-// picks by hand there beats the row (an override); no row = the settings' "Chat aperte dalla Regia". Folder and
+// picks by hand there beats the row (an override); no row = the settings' "Chat aperte dall’Orchestrator". Folder and
 // permissions from the last choices; Ctrl+Enter creates; the new chat's input gets the focus. The CLI status comes from
 // app:info, or is asked on open while the check at start has not reported ("non verificato" when nothing answers).
 // Used by App.tsx.
+import { Select } from './Select';
 import { useEffect, useMemo, useState } from 'react';
 import type { CliStatus, Effort, Harness, PermissionMode, RoutedNewChat, RoutePreview } from '@shared/contract';
 import { EFFORTS, effortLabel, PERMISSION_MODES, permissionLabel } from '../lib/format';
@@ -33,7 +34,7 @@ export function NewChatDialog() {
   const hasRegia = !!current;
   const asRegia = ui.use(s => s.newChatRegia);
   const recent = useApp(s => [...new Set(s.order.map(id => s.chats[id]?.cwd).filter((x): x is string => !!x))].slice(0, 8), (a, b) => a.join('|') === b.join('|'));
-  // engine, model and effort start from "Chat aperte dalla Regia" (Settings page), the same defaults app_create_chat uses
+  // engine, model and effort start from "Chat aperte dall’Orchestrator" (Settings page), the same defaults app_create_chat uses
   const def = useApp(s => s.settings?.regiaChats);
   const modelOf = (h: Harness) => (def && (h === 'claude' || h === 'cursor') ? (h === 'cursor' ? def.cursorModel : def.claudeModel) : last.harness === h ? last.model : '');
   const harness0: Harness = def?.harness ?? last.harness;
@@ -133,9 +134,9 @@ export function NewChatDialog() {
         <div className="modal-body">
           <label className="field">
             <span>{labels.path}</span>
-            <select value={path} onChange={e => setPath(e.target.value as WorkPath)} data-testid="newchat-work-path">
+            <Select value={path} onChange={e => setPath(e.target.value as WorkPath)} data-testid="newchat-work-path">
               {WORK_PATHS.map(p => <option key={p} value={p}>{labels.paths[p]}</option>)}
-            </select>
+            </Select>
             <small>{labels.hint}</small>
           </label>
           <label className="field">
@@ -181,17 +182,17 @@ export function NewChatDialog() {
           <div className="field-row">
             <label className="field">
               <span>{t('dialogs.newChat.modelLabel')}</span>
-              <select value={model} onChange={e => setPick(p => ({ ...p, model: e.target.value || undefined }))} data-testid="newchat-model">
+              <Select value={model} onChange={e => setPick(p => ({ ...p, model: e.target.value || undefined }))} data-testid="newchat-model">
                 {models.map(m => <option key={m.id || 'default'} value={m.id}>{m.label}</option>)}
-              </select>
+              </Select>
             </label>
             {can.perm && (
               <label className="field">
                 <span>{t('dialogs.newChat.permissionsLabel')}</span>
-                <select value={perm} onChange={e => setPerm(e.target.value as PermissionMode | '')} data-testid="newchat-perm">
+                <Select value={perm} onChange={e => setPerm(e.target.value as PermissionMode | '')} data-testid="newchat-perm">
                   <option value="">{t('dialogs.newChat.permissionsDefault')}</option>
                   {PERMISSION_MODES.map(p => <option key={p} value={p}>{permissionLabel(p)}</option>)}
-                </select>
+                </Select>
               </label>
             )}
           </div>
