@@ -38,19 +38,20 @@ describe('agent manifest', () => {
     expect(result.instructions).toBe(draft.instructions);
     expect(service.save({ ...draft, manifest: {} }, saved.id).manifest).toEqual({});
   });
-  it('loads version 1 without rewriting identities, instructions, timestamps or missing metadata', () => {
+  it('migrates version 1 without changing identities, instructions, timestamps or missing metadata, leaving the v1 file for a rolled-back build', () => {
     const userData = tmp(), file = path.join(userData, 'agents.json');
     const original = { version: 1, profiles: [{ ...draft, id: 'default-development', createdAt: 3, updatedAt: 9 }] };
     fs.writeFileSync(file, JSON.stringify(original));
     const before = fs.readFileSync(file, 'utf8'), service = new AgentCatalogService({ userData, models, language: () => 'en' });
-    expect(service.list().profiles).toEqual(original.profiles);
+    expect(service.list().profiles).toEqual([expect.objectContaining(original.profiles[0])]);
+    expect(service.list().profiles[0]?.manifest).toBeUndefined();
     expect(service.list().problem).toBeNull();
-    expect(fs.readFileSync(file, 'utf8')).toBe(before);
     service.save({ ...draft, manifest }, 'default-development');
     expect(service.list().profiles[0]?.createdAt).toBe(3);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
   it('preserves malformed archives and rejects invalid saves without changing the file', () => {
-    const userData = tmp(), service = new AgentCatalogService({ userData, models }), file = path.join(userData, 'agents.json');
+    const userData = tmp(), service = new AgentCatalogService({ userData, models }), file = path.join(userData, 'agents.v2.json');
     const before = fs.readFileSync(file, 'utf8');
     expect(() => service.save({ ...draft, manifest: { permissionMode: 'bypassPermissions' } })).toThrow();
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
@@ -67,9 +68,11 @@ describe('agent manifest', () => {
     service.save({ ...draft, manifest }, 'default-general');
     expect(new AgentCatalogService({ userData, models, language: () => 'it' }).list().profiles[0]?.manifest).toEqual(manifest);
   });
-  it('adds missing declarations to pristine existing system seeds without rewriting their archive', () => {
+  it('adds missing declarations to pristine existing system seeds and leaves their v1 archive unchanged', () => {
     const userData = tmp(), service = new AgentCatalogService({ userData, models, now: () => 40 });
     const profiles = service.list().profiles.map(p => { const { manifest: omitted, ...old } = p; void omitted; return old; });
+    // An install that still has only the v1 file.
+    fs.rmSync(path.join(userData, 'agents.v2.json'));
     const file = path.join(userData, 'agents.json');
     fs.writeFileSync(file, JSON.stringify({ version: 1, profiles }));
     const before = fs.readFileSync(file, 'utf8');

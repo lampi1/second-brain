@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest';
 import type { AgentProfile } from '@shared/agents';
 import { emptySetup, recommendedAgents, validSetupStep } from '../../src/renderer/lib/agent-setup';
-const profile=(id:string):AgentProfile=>({id,name:id,purpose:'Useful work',instructions:'',engine:'claude',model:null,avatar:{kind:'symbol',value:'briefcase'},createdAt:1,updatedAt:1});
+const profile=(id:string):AgentProfile=>({id,name:id,purpose:'Useful work',instructions:'',engine:'claude',model:null,avatar:{kind:'symbol',value:'briefcase'},createdAt:1,updatedAt:1,role:'',category:'other',tools:null,permissionCeiling:null,origin:{kind:'user'},version:1,activeVersion:1,lastEditedBy:'user',userLocked:true,status:'active'});
 const catalog=['general','planning','writing','analysis','research','development'].map(role=>profile(`default-${role}`));
 it('starts an offline interview with no assumed work context or connections',()=>{
   expect(emptySetup()).toEqual({step:0,work:'',goals:'',tools:'',style:'balanced',agentIds:[]});

@@ -3,7 +3,8 @@ import type {AgentCatalog,AgentProfile,AgentModelChoice} from '@shared/agents';
 import {savedRole} from './role-preferences';
 export function activeRole(raw:unknown,catalog:AgentCatalog|null,pageIds:readonly string[]){
  if(raw===undefined||!catalog)return null;
- try{return savedRole(raw,{agentIds:catalog.profiles.map(profile=>profile.id),pageIds}).resolved;}catch{return null;}
+ // Archived agents stay valid references (a restore brings them back); roleAgents lists only launchable ones.
+ try{return savedRole(raw,{agentIds:[...catalog.profiles,...catalog.archived].map(profile=>profile.id),pageIds}).resolved;}catch{return null;}
 }
 export function roleAgents(raw:unknown,catalog:AgentCatalog|null,pageIds:readonly string[]){
  if(!catalog)return[];

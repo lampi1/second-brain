@@ -28,6 +28,10 @@ export async function saveAgent(profile: AgentDraft, id?: string) {
   const saved = await sb.invoke('agents:save', { profile, ...(id ? { id } : {}) }); await refreshAgents(); return saved;
 }
 export async function duplicateAgent(id: string) { const saved = await sb.invoke('agents:duplicate', { id }); await refreshAgents(); return saved; }
+export async function archiveAgent(id: string) { const saved = await sb.invoke('agents:archive', { id }); await refreshAgents(); return saved; }
+export async function restoreAgent(id: string) { const saved = await sb.invoke('agents:restore', { id }); await refreshAgents(); return saved; }
+export const agentHistory = (id: string) => sb.invoke('agents:history', { id });
+export async function restoreAgentVersion(id: string, version: number) { const saved = await sb.invoke('agents:restoreVersion', { id, version }); await refreshAgents(); return saved; }
 export const draftAgent = (request: AgentDraftRequest) => sb.invoke('agents:draft', request);
 let saving: Promise<unknown> = Promise.resolve();
 export function saveSetup(preferences: SetupDraft, status: 'draft' | 'completed' | 'skipped'): Promise<SetupState> {

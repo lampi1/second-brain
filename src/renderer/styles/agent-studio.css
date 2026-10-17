@@ -11,6 +11,9 @@
 .agent-editor { display:grid; gap:12px; padding:16px; border:1px solid var(--line,#8884); border-radius:10px; }.agent-editor p { margin:0; }.agent-editor pre { white-space:pre-wrap; max-height:180px; overflow:auto; }
 .agent-editor-fields{display:grid;gap:12px;border:0;padding:0;margin:0;min-width:0}.agent-editor-fields>legend{font-weight:600;padding:0 0 10px}.agent-guide [role=log]{max-height:220px;overflow:auto;overflow-wrap:anywhere}
 .agent-avatar { display:inline-flex; flex:none; align-items:center; justify-content:center; border-radius:8px; object-fit:cover; background:var(--surface2,#7a8cff22); color:var(--accent,#aab6ff); }
+.agent-avatar[data-tone] { --tone:#7a8cff; background:color-mix(in srgb,var(--tone) 18%,transparent); color:var(--tone); }
+.agent-avatar[data-tone=blue]{--tone:#5b8def}.agent-avatar[data-tone=violet]{--tone:#9b7bf0}.agent-avatar[data-tone=amber]{--tone:#e0a33a}.agent-avatar[data-tone=teal]{--tone:#2fb3a3}.agent-avatar[data-tone=red]{--tone:#e06060}
+.agent-avatar[data-tone=slate]{--tone:#8a97a8}.agent-avatar[data-tone=cyan]{--tone:#38b6d8}.agent-avatar[data-tone=pink]{--tone:#e070b0}.agent-avatar[data-tone=indigo]{--tone:#6c72e8}.agent-avatar[data-tone=green]{--tone:#4fb36a}
 .avatar-options { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }.avatar-options button { border:1px solid transparent; padding:3px; border-radius:8px; background:transparent; }.avatar-options button[aria-pressed=true] { border-color:var(--accent,#7a8cff); }
 .agent-guide { display:grid; gap:10px; }.agent-guide textarea { width:100%; }.agent-readiness { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
 .interview-steps { display:flex; gap:12px; list-style:none; padding:0; flex-wrap:wrap; font-size:12px; }.interview-steps [aria-current=step] { font-weight:700; text-decoration:underline; text-underline-offset:4px; }

@@ -6,7 +6,7 @@ import{activeRole,roleAgents,profileCanStart}from'../../src/renderer/lib/role-co
 import{initialRolePresets}from'../../src/shared/role-preset-catalog';
 const pages=[...new Set(initialRolePresets().flatMap(role=>role.pageIds))];
 const profiles=['general','development','research','planning','analysis','writing'].map(id=>({id:'default-'+id,name:id,engine:'claude',model:null}as AgentProfile));
-const catalog={profiles}as AgentCatalog;
+const catalog={profiles,archived:[]}as unknown as AgentCatalog;
 it('Dev suggests its primary agent first and changes navigation references, with common Home kept separate',()=>{
  const raw=rolePreview(undefined,'dev',{pageIds:pages,agentIds:profiles.map(profile=>profile.id)}).next;
  expect(roleAgents(raw,catalog,pages).map(profile=>profile.id)).toEqual(['default-development','default-research','default-planning']);
@@ -17,7 +17,13 @@ it('preserves customized membership and never invents a missing catalog profile'
  const raw=rolePreview(undefined,'dev',{pageIds:pages,agentIds:profiles.map(profile=>profile.id)}).next;
  raw.overrides={addPageIds:['costi'],addAgentIds:['default-writing'],defaults:{primaryAgentId:'default-writing'}};
  expect(roleAgents(raw,catalog,pages)[0]?.id).toBe('default-writing');expect(activeRole(raw,catalog,pages)?.pageIds).toContain('costi');
- expect(activeRole(raw,{profiles:[]}as unknown as AgentCatalog,pages)).toBeNull();expect(roleAgents(raw,null,pages)).toEqual([]);
+ expect(activeRole(raw,{profiles:[],archived:[]}as unknown as AgentCatalog,pages)).toBeNull();expect(roleAgents(raw,null,pages)).toEqual([]);
+});
+it('keeps a role whose agent is archived and suggests only launchable agents',()=>{
+ const raw=rolePreview(undefined,'dev',{pageIds:pages,agentIds:profiles.map(profile=>profile.id)}).next;
+ const archived={profiles:profiles.filter(profile=>profile.id!=='default-research'),archived:profiles.filter(profile=>profile.id==='default-research')}as unknown as AgentCatalog;
+ expect(activeRole(raw,archived,pages)?.agentIds).toContain('default-research');
+ expect(roleAgents(raw,archived,pages).map(profile=>profile.id)).toEqual(['default-development','default-planning']);
 });
 it('keeps legacy navigation recoverable for invalid selections and proposes the real general profile without a role',()=>{
  expect(activeRole({presetId:'missing'},catalog,pages)).toBeNull();expect(roleAgents(undefined,catalog,pages)[0]?.id).toBe('default-general');

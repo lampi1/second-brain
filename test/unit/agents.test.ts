@@ -21,7 +21,7 @@ describe('Agent catalog and local setup', () => {
     }
     expect(profiles.find(p => p.id === 'default-general')?.instructions).toBe('Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.');
     service.save({ ...draft(), instructions: 'My customized workflow' }, 'default-development');
-    const file = path.join(dir, 'agents.json'), before = fs.readFileSync(file, 'utf8');
+    const file = path.join(dir, 'agents.v2.json'), before = fs.readFileSync(file, 'utf8');
     expect(new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === 'default-development')?.instructions).toBe('My customized workflow');
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
@@ -41,7 +41,7 @@ describe('Agent catalog and local setup', () => {
     const restored = new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === saved.id)!;
     expect(restored).toEqual(saved);
     expect(restored).not.toHaveProperty('permissionMode');
-    expect(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')).not.toContain('private');
+    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).not.toContain('private');
   });
   it('freezes owner choices and instructions; profile edits never change an old snapshot', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices });
@@ -77,7 +77,7 @@ describe('Agent catalog and local setup', () => {
     let rejected = false;
     for (let i = 0; i < 30; i++) { try { c.duplicate(p.id); } catch { rejected = true; break; } }
     expect(rejected).toBe(true);
-    expect(fs.statSync(path.join(dir, 'agents.json')).size).toBeLessThanOrEqual(8_000_000);
+    expect(fs.statSync(path.join(dir, 'agents.v2.json')).size).toBeLessThanOrEqual(8_000_000);
     expect(new AgentCatalogService({ userData: dir, models: choices, imageSize: () => ({ width: 64, height: 64 }) }).list().problem).toBeNull();
   });
   it('rejects active/remote/mislabeled images and excessive decoded dimensions', () => {
@@ -102,10 +102,10 @@ describe('Agent catalog and local setup', () => {
     const complete = vi.fn(async () => ({ ok: true as const, text: JSON.stringify({ ...draft(), permissionMode: 'bypassPermissions' }) }));
     const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices, builder: () => ({ available: true, engine: 'api', models: ['known-api'], reason: null }), complete });
     expect(complete).not.toHaveBeenCalled();
-    const before = fs.readFileSync(path.join(dir, 'agents.json'), 'utf8');
+    const before = fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8');
     const result = await c.draft({ text: 'Prepara ricerca', engine: 'api', model: 'known-api' });
     expect(result).toEqual({ ok: true, draft: draft() });
-    expect(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')).toBe(before);
+    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).toBe(before);
     expect(await c.draft({ text: 'Hi', engine: 'other', model: 'known-api' })).toMatchObject({ ok: false });
     expect(complete).toHaveBeenCalledTimes(1);
   });

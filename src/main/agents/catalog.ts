@@ -2,18 +2,29 @@
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Effort, NewChat, RoutingRow } from '../../shared/contract';
-import { AGENT_SYMBOLS, type AgentAvatar, type AgentCatalog, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, TOOL_CLASSES, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, type ToolClass } from '../../shared/agents';
 import { checkImages } from '../chats/images';
 import { readLocal, writeLocal } from './local-store';
 import { boundedRaster } from './raster';
 import { legacyAgentProfiles } from './legacy';
 import { checkedManifest } from '../../shared/agent-manifest';
 import { DEFAULT_MANIFESTS, DEFAULT_MANIFESTS_EN } from './manifest-defaults';
+import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile } from './versions';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
+const MCP_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
+const EVIDENCE: readonly AgentEvidenceRef['kind'][] = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'];
+/** Launchable definitions; archived ones only count toward the file bound. */
+export const MAX_ACTIVE_AGENTS = 64;
+export const MAX_AGENTS = 256;
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
+const has = <T>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
+/** Validated draft with the v2 definition fields resolved (older clients omit them). */
+type CheckedDraft = AgentDraft & { role: string; category: AgentCategory; tools: AgentToolPolicy | null; permissionCeiling: PermissionCeiling | null };
 function text(v: unknown, max: number, label: string, empty = false): string {
   if (typeof v !== 'string' || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v) || (!empty && !v.trim())) throw new Error(`${label}: testo ${empty ? 'fino a' : 'da 1 a'} ${max} caratteri.`);
   return v.trim();
@@ -50,15 +61,39 @@ function checkedImage(value: unknown): { avatar: AgentAvatar; data: Buffer; head
 /** No executable content, remote URL, SVG, HTML or arbitrary local path reaches the renderer. */
 export function checkedAvatar(value: unknown, size?: AgentCatalogDeps['imageSize']): AgentAvatar {
   const a = obj(value);
-  if (a.kind === 'symbol' && (AGENT_SYMBOLS as readonly unknown[]).includes(a.value)) return { kind: 'symbol', value: a.value as (typeof AGENT_SYMBOLS)[number] };
+  if (a.kind === 'symbol' && has(AGENT_SYMBOLS, a.value)) {
+    if (a.tone !== undefined && !has(AGENT_TONES, a.tone)) throw new Error('Colore del simbolo non valido.');
+    return { kind: 'symbol', value: a.value, ...(a.tone !== undefined ? { tone: a.tone } : {}) };
+  }
   const { avatar, data, header } = checkedImage(value);
   const dims = size?.(data);
   if (!dims || !(dims.width === header.width && dims.height === header.height || dims.width === header.height && dims.height === header.width)) throw new Error('L’immagine deve essere leggibile e misurare tra 16 e 1024 pixel per lato.');
   return avatar;
 }
 
+/** null/omitted inherits the engine defaults. A policy can only list known classes; MCP servers need the 'mcp' class. */
+function checkedTools(value: unknown): AgentToolPolicy | null {
+  if (value === undefined || value === null) return null;
+  const t = obj(value);
+  if (!Array.isArray(t.allow) || t.allow.length > TOOL_CLASSES.length || !t.allow.every(c => has(TOOL_CLASSES, c)) || new Set(t.allow).size !== t.allow.length) throw new Error('Strumenti dell’Agente non validi.');
+  if (t.mcp === undefined) return { allow: [...t.allow] as ToolClass[] };
+  if (!Array.isArray(t.mcp) || t.mcp.length > 32 || !t.mcp.every(n => typeof n === 'string' && MCP_NAME.test(n)) || new Set(t.mcp).size !== t.mcp.length || !t.allow.includes('mcp')) throw new Error('Server MCP dell’Agente non validi.');
+  return { allow: [...t.allow] as ToolClass[], mcp: [...t.mcp] as string[] };
+}
+function readOrigin(value: unknown): AgentOrigin {
+  const o = obj(value);
+  if (o.kind === 'user') return { kind: 'user' };
+  if (o.kind === 'preset' && typeof o.presetId === 'string' && ID.test(o.presetId) && Number.isSafeInteger(o.presetRevision) && (o.presetRevision as number) >= 0) return { kind: 'preset', presetId: o.presetId, presetRevision: o.presetRevision as number };
+  if (o.kind === 'orchestrator' && typeof o.reason === 'string' && o.reason.length <= 600 && Array.isArray(o.evidence) && o.evidence.length <= 20) {
+    const evidence = o.evidence.map(obj);
+    if (evidence.every(e => has(EVIDENCE, e.kind) && typeof e.ref === 'string' && e.ref.length <= 200 && typeof e.at === 'number' && Number.isFinite(e.at)))
+      return { kind: 'orchestrator', reason: o.reason, evidence: evidence.map(e => ({ kind: e.kind as AgentEvidenceRef['kind'], ref: e.ref as string, at: e.at as number })) };
+  }
+  throw new Error('Origine Agente non valida.');
+}
+
 export function ownerOf(p: AgentProfile): AgentOwnerSnapshot {
-  return { id: p.id, name: p.name, purpose: p.purpose, avatar: structuredClone(p.avatar), engine: p.engine, model: p.model, revision: p.updatedAt, source: 'catalog' };
+  return { id: p.id, name: p.name, purpose: p.purpose, avatar: structuredClone(p.avatar), engine: p.engine, model: p.model, revision: p.updatedAt, source: 'catalog', version: p.activeVersion };
 }
 export function compatibleOwner(engine: string, model: string | null, legacy = false): AgentOwnerSnapshot {
   const key = createHash('sha256').update(`${engine}\n${model ?? ''}`).digest('hex').slice(0, 12);
@@ -68,13 +103,14 @@ export function compatibleOwner(engine: string, model: string | null, legacy = f
 /** Bounded validation for snapshots read from chats.json; model/engine never replace the effective session facts. */
 export function readOwner(v: unknown): AgentOwnerSnapshot | null {
   const a = obj(v), avatar = obj(a.avatar);
-  if (typeof a.id !== 'string' || !ID.test(a.id) || typeof a.name !== 'string' || !a.name.trim() || a.name.length > 80 || typeof a.purpose !== 'string' || a.purpose.length > 400 || typeof a.engine !== 'string' || !/^[a-z][a-z0-9_-]{0,59}$/.test(a.engine) || !(a.model === null || typeof a.model === 'string' && MODEL.test(a.model)) || typeof a.revision !== 'number' || !Number.isFinite(a.revision) || !['catalog', 'legacy', 'routed'].includes(String(a.source))) return null;
+  if (typeof a.id !== 'string' || !ID.test(a.id) || typeof a.name !== 'string' || !a.name.trim() || a.name.length > 80 || typeof a.purpose !== 'string' || a.purpose.length > 400 || typeof a.engine !== 'string' || !/^[a-z][a-z0-9_-]{0,59}$/.test(a.engine) || !(a.model === null || typeof a.model === 'string' && MODEL.test(a.model)) || typeof a.revision !== 'number' || !Number.isFinite(a.revision) || !['catalog', 'legacy', 'routed'].includes(String(a.source)) || !(a.version === undefined || count(a.version))) return null;
   // Restored data is untrusted even if the original catalog upload was validated.
   let icon: AgentAvatar;
-  if (avatar.kind === 'symbol' && (AGENT_SYMBOLS as readonly unknown[]).includes(avatar.value)) icon = { kind: 'symbol', value: avatar.value as (typeof AGENT_SYMBOLS)[number] };
+  // A symbol or tone this build does not know (a newer app wrote it) keeps the chat readable with the default look.
+  if (avatar.kind === 'symbol') icon = has(AGENT_SYMBOLS, avatar.value) ? { kind: 'symbol', value: avatar.value, ...(has(AGENT_TONES, avatar.tone) ? { tone: avatar.tone } : {}) } : { kind: 'symbol', value: 'briefcase' };
   else if (avatar.kind === 'image') { try { icon = checkedImage(avatar).avatar; } catch { return null; } }
   else return null;
-  return { id: a.id, name: a.name, purpose: a.purpose, engine: a.engine, model: a.model as string | null, revision: a.revision, source: a.source as AgentOwnerSnapshot['source'], avatar: icon };
+  return { id: a.id, name: a.name, purpose: a.purpose, engine: a.engine, model: a.model as string | null, revision: a.revision, source: a.source as AgentOwnerSnapshot['source'], avatar: icon, ...(a.version !== undefined ? { version: a.version as number } : {}) };
 }
 
 const ROLES = [
@@ -88,53 +124,122 @@ const ROLES = [
 
 export class AgentCatalogService {
   private readonly file: string;
+  private readonly store: AgentHistory;
+  /** Active and archived definitions, in file order. */
   private profiles: AgentProfile[] = [];
   private problem: string | null = null;
   private legacyRouting: AgentCatalog['legacyRouting'] = { preserved: true, imported: 0, remaining: 0 };
   constructor(private readonly d: AgentCatalogDeps) {
-    this.file = path.join(d.userData, 'agents.json');
+    // v2 lives in its own file: agents.json (v1) stays as it was, so a rolled-back build still reads its catalog.
+    this.file = path.join(d.userData, 'agents.v2.json');
+    this.store = new AgentHistory(d.userData);
+    let pending: AgentVersion[] | null = null;
     try {
-      const raw = readLocal(this.file);
+      const current = readLocal(this.file), raw = current ?? readLocal(path.join(d.userData, 'agents.json'));
       if (raw !== undefined) {
         const a = obj(raw);
-        if (a.version !== 1 || !Array.isArray(a.profiles) || a.profiles.length > 64) throw new Error('Catalogo Agenti non valido.');
-        const ids = new Set<string>();
-        this.profiles = a.profiles.map(value => {
-          const p = obj(value);
-          if (typeof p.id !== 'string' || !ID.test(p.id) || ids.has(p.id) || typeof p.createdAt !== 'number' || !Number.isFinite(p.createdAt) || typeof p.updatedAt !== 'number' || !Number.isFinite(p.updatedAt)) throw new Error('Identità Agente non valida.');
-          ids.add(p.id);
-          const draft = this.validate(p, false);
-          // Add metadata only to identifiable pristine system seeds, without rewriting the archive or its identity.
-          const role = ROLES.find(([id, name, purpose, instructions]) => p.id === `default-${id}` && draft.name === name && draft.purpose === purpose && draft.instructions === instructions);
-          const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
-          return { ...draft, ...(draft.manifest === undefined && role ? { manifest: checkedManifest(manifests[role[0]]) } : {}), id: p.id, createdAt: p.createdAt, updatedAt: p.updatedAt };
-        });
+        if (current !== undefined) {
+          if (a.version !== 2) throw new Error('Catalogo Agenti non valido.');
+          this.profiles = this.readV2(a);
+        } else if (a.version === 1) {
+          const v1 = this.readV1(a);
+          this.profiles = v1.map(({ profile, pristine }) => upgradeProfile(profile, pristine));
+          pending = this.profiles.map(p => firstVersion(p, 'migration', 'Versione esistente prima delle versioni', this.now()));
+        } else throw new Error('Catalogo Agenti non valido.');
         const migration = obj(a.legacyRouting);
         if (Number.isSafeInteger(migration.imported) && Number(migration.imported) >= 0 && Number.isSafeInteger(migration.remaining) && Number(migration.remaining) >= 0) this.legacyRouting = { preserved: true, imported: Number(migration.imported), remaining: Number(migration.remaining) };
       } else {
         const defaults = this.defaults(), legacy = legacyAgentProfiles(d.legacyRoutes?.() ?? [], this.now(), { apiEngine: d.legacyApiEngine?.() ?? null });
-        const imported = legacy.profiles.slice(0, Math.max(0, 64 - defaults.length));
+        const imported = legacy.profiles.slice(0, Math.max(0, MAX_ACTIVE_AGENTS - defaults.length)).map(p => upgradeProfile(p, false));
         this.profiles = [...defaults, ...imported];
         this.legacyRouting = { preserved: true, imported: imported.length, remaining: legacy.skipped + legacy.profiles.length - imported.length };
-        writeLocal(this.file, { version: 1, profiles: this.profiles, legacyRouting: this.legacyRouting });
+        pending = [...defaults.map(p => firstVersion(p, 'preset', 'Agente iniziale', this.now())), ...imported.map(p => firstVersion(p, 'migration', 'Importato dal routing', this.now()))];
       }
-    } catch { this.problem = 'Il catalogo locale non è leggibile. Il file è conservato; correggilo prima di salvare nuovi Agenti.'; }
+    } catch { this.problem = 'Il catalogo locale non è leggibile. Il file è conservato; correggilo prima di salvare nuovi Agenti.'; return; }
+    if (!pending) return;
+    // History, then catalog: a retry after any failure redoes the same steps (history replaces same versions).
+    try {
+      const body = this.body(this.profiles);
+      this.store.commit(pending);
+      writeLocal(this.file, body);
+    } catch { this.problem = this.store.problem ?? 'Il catalogo Agenti non è stato aggiornato sul disco. Il file è conservato; le modifiche sono sospese.'; }
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
+  private identity(p: Record<string, unknown>, ids: Set<string>): void {
+    if (typeof p.id !== 'string' || !ID.test(p.id) || ids.has(p.id) || typeof p.createdAt !== 'number' || !Number.isFinite(p.createdAt) || typeof p.updatedAt !== 'number' || !Number.isFinite(p.updatedAt)) throw new Error('Identità Agente non valida.');
+    ids.add(p.id);
+  }
+  /** v1 records; `pristine` marks identifiable untouched system seeds, which also gain their manifest as before. */
+  private readV1(a: Record<string, unknown>): { profile: AgentProfileV1; pristine: boolean }[] {
+    if (!Array.isArray(a.profiles) || a.profiles.length > MAX_ACTIVE_AGENTS) throw new Error('Catalogo Agenti non valido.');
+    const ids = new Set<string>();
+    return a.profiles.map(value => {
+      const p = obj(value);
+      this.identity(p, ids);
+      const draft = this.validate(p, false);
+      const role = ROLES.find(([id, name, purpose, instructions]) => p.id === `default-${id}` && draft.name === name && draft.purpose === purpose && draft.instructions === instructions);
+      const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
+      const profile: AgentProfileV1 = { ...draft, ...(draft.manifest === undefined && role ? { manifest: checkedManifest(manifests[role[0]]) } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number };
+      // v1 never stored a category: let the migration derive it from the seed role.
+      if (p.category === undefined) delete profile.category;
+      return { profile, pristine: role !== undefined };
+    });
+  }
+  private readV2(a: Record<string, unknown>): AgentProfile[] {
+    if (!Array.isArray(a.profiles) || a.profiles.length > MAX_AGENTS) throw new Error('Catalogo Agenti non valido.');
+    const ids = new Set<string>();
+    const profiles = a.profiles.map(value => {
+      const p = obj(value);
+      this.identity(p, ids);
+      const draft = this.validate(p, false);
+      const trial = p.trial === undefined ? undefined : obj(p.trial);
+      if (!count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean' || !has(['active', 'archived'] as const, p.status)
+        || (p.status === 'archived' ? typeof p.archivedAt !== 'number' || !Number.isFinite(p.archivedAt) : p.archivedAt !== undefined)
+        || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number' || !Number.isFinite(trial.startedAt)))) throw new Error('Versione Agente non valida.');
+      return { ...draft, id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
+        ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
+        lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
+    });
+    if (profiles.filter(p => p.status === 'active').length > MAX_ACTIVE_AGENTS) throw new Error('Troppi Agenti attivi.');
+    return profiles;
+  }
   private defaults(): AgentProfile[] {
     const choices = this.d.models();
     const e = choices.find(x => x.enabled && x.trusted && x.defaultModel) ?? choices.find(x => x.defaultModel);
     if (!e) return [];
     const at = this.now();
     const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
-    return ROLES.map(([id, name, purpose, instructions, icon]) => ({ id: `default-${id}`, name, purpose, instructions, manifest: checkedManifest(manifests[id]), engine: e.engine, model: null, avatar: { kind: 'symbol', value: icon }, createdAt: at, updatedAt: at }));
+    return ROLES.map(([id, name, purpose, instructions, icon]) => upgradeProfile({ id: `default-${id}`, name, purpose, instructions, manifest: checkedManifest(manifests[id]), engine: e.engine, model: null, avatar: { kind: 'symbol', value: icon }, createdAt: at, updatedAt: at }, true, 'preset'));
+  }
+  /** Size-checked before any history write, so a refused save leaves no version behind. */
+  private body(next: AgentProfile[]) {
+    const body = { version: 2, profiles: next, legacyRouting: this.legacyRouting };
+    if (Buffer.byteLength(JSON.stringify(body, null, 2), 'utf8') + 1 > 8_000_000) throw new Error('Il catalogo è troppo grande. Riduci le immagini prima di aggiungere altri Agenti.');
+    return body;
+  }
+  private writable(): void {
+    const problem = this.problem ?? this.store.problem;
+    if (problem) throw new Error(problem);
+  }
+  /** History first: a catalog never points to a version without its snapshot. */
+  private commit(next: AgentProfile[], versions: AgentVersion[], states: Parameters<AgentHistory['commit']>[1] = []): void {
+    const body = this.body(next);
+    if (versions.length || states.length) this.store.commit(versions, states);
+    writeLocal(this.file, body);
+    this.profiles = next;
+    this.d.emit?.(this.list());
+  }
+  private find(id: string): AgentProfile {
+    const p = this.profiles.find(x => x.id === id);
+    if (!p) throw new Error('Agente non trovato.');
+    return p;
   }
   list(): AgentCatalog {
-    return structuredClone({ profiles: this.profiles, models: this.d.models(), problem: this.problem, legacyRouting: this.legacyRouting,
+    return structuredClone({ profiles: this.profiles.filter(p => p.status === 'active'), archived: this.profiles.filter(p => p.status === 'archived'), models: this.d.models(), problem: this.problem ?? this.store.problem, legacyRouting: this.legacyRouting,
       builder: this.d.builder?.() ?? { available: false, engine: null, models: [], reason: 'La guida AI richiede un servizio testuale configurato. La creazione manuale funziona offline.' },
       imageGeneration: { available: false as const, reason: 'Nessun servizio di generazione immagini è collegato. Scegli un simbolo o carica un’immagine.' } });
   }
-  private validate(value: unknown, current: boolean, partial = false): AgentDraft {
+  private validate(value: unknown, current: boolean, partial = false): CheckedDraft {
     const p = obj(value);
     const engine = text(p.engine, 60, 'Motore');
     if (!/^[a-z][a-z0-9_-]*$/.test(engine)) throw new Error('Motore non valido.');
@@ -148,37 +253,102 @@ export class AgentCatalogService {
       if (p.effort !== undefined && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
     }
     const manifest = checkedManifest(p.manifest);
-    return { name: text(p.name, 80, 'Nome', partial), purpose: text(p.purpose, 400, 'Scopo', partial), instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model: p.model as string | null,
+    const purpose = text(p.purpose, 400, 'Scopo', partial);
+    if (p.category !== undefined && !has(AGENT_CATEGORIES, p.category)) throw new Error('Categoria non valida.');
+    if (!(p.permissionCeiling === undefined || p.permissionCeiling === null || has(PERMISSION_CEILINGS, p.permissionCeiling))) throw new Error('Limite dei permessi non valido.');
+    return { name: text(p.name, 80, 'Nome', partial), purpose, instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model: p.model as string | null,
       ...(manifest !== undefined ? { manifest } : {}),
-      ...(p.effort !== undefined ? { effort: p.effort as Effort } : {}), avatar: checkedAvatar(p.avatar, this.d.imageSize) };
+      ...(p.effort !== undefined ? { effort: p.effort as Effort } : {}), avatar: checkedAvatar(p.avatar, this.d.imageSize),
+      role: p.role === undefined || p.role === '' ? purpose : text(p.role, 160, 'Ruolo'), category: (p.category ?? 'other') as AgentCategory,
+      tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null };
   }
+  /** Brother's edit. A behaviour change becomes a new active version; a cosmetic one (name, avatar, role…) saves in place. */
   save(value: unknown, id?: string): AgentProfile {
-    if (this.problem) throw new Error(this.problem);
-    const old = id === undefined ? undefined : this.profiles.find(p => p.id === id);
-    if (id !== undefined && !old) throw new Error('Agente non trovato.');
+    this.writable();
+    const old = id === undefined ? undefined : this.find(id);
+    if (old?.status === 'archived') throw new Error('Ripristina l’Agente prima di modificarlo.');
     const input = obj(value);
-    // Old clients omit the additive field. An explicit empty object clears declarations without losing other data.
-    const draft = this.validate({ ...input, ...(input.manifest === undefined && old?.manifest !== undefined ? { manifest: old.manifest } : {}) }, true);
-    if (!old && this.profiles.length >= 64) throw new Error('Il catalogo contiene già 64 Agenti.');
+    // Old clients omit additive fields: keep the stored ones. An explicit empty manifest or null policy clears them.
+    const kept = old ? Object.fromEntries((['manifest', 'role', 'category', 'tools', 'permissionCeiling'] as const).filter(k => input[k] === undefined && old[k] !== undefined).map(k => [k, old[k]])) : {};
+    const draft = this.validate({ ...input, ...kept }, true);
+    if (!old && this.profiles.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error(`Il catalogo contiene già ${MAX_ACTIVE_AGENTS} Agenti attivi. Archiviane uno prima di crearne un altro.`);
+    if (!old && this.profiles.length >= MAX_AGENTS) throw new Error(`Il catalogo ha raggiunto ${MAX_AGENTS} Agenti, archiviati compresi.`);
     const at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1);
-    const profile: AgentProfile = { ...draft, id: old?.id ?? `agent-${randomUUID()}`, createdAt: old?.createdAt ?? at, updatedAt: at };
-    const next = old ? this.profiles.map(p => p.id === old.id ? profile : p) : [...this.profiles, profile];
-    if (Buffer.byteLength(JSON.stringify({ version: 1, profiles: next }, null, 2), 'utf8') + 1 > 8_000_000) throw new Error('Il catalogo è troppo grande. Riduci le immagini prima di aggiungere altri Agenti.');
-    writeLocal(this.file, { version: 1, profiles: next, legacyRouting: this.legacyRouting });
-    this.profiles = next;
+    let profile: AgentProfile, versions: AgentVersion[] = [], states: Parameters<AgentHistory['commit']>[1] = [];
+    if (!old) {
+      profile = { ...draft, id: `agent-${randomUUID()}`, createdAt: at, updatedAt: at, origin: { kind: 'user' }, version: 1, activeVersion: 1, lastEditedBy: 'user', userLocked: true, status: 'active' };
+      versions = [firstVersion(profile, 'user', 'Creato da Brother', at)];
+    } else {
+      const { manifest: _m, effort: _e, ...rest } = old;
+      void _m; void _e;
+      profile = { ...rest, ...draft, updatedAt: at, lastEditedBy: 'user', userLocked: true };
+      if (!sameBehaviour(draft, old)) {
+        if (old.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di cambiarne il comportamento.');
+        const version = old.version + 1;
+        profile = { ...profile, version, activeVersion: version };
+        versions = [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'user', reason: 'Modificato da Brother', at, state: 'active' }];
+        states = [{ agentId: old.id, version: old.activeVersion, state: 'superseded' }];
+      }
+    }
+    this.commit(old ? this.profiles.map(p => p.id === old.id ? profile : p) : [...this.profiles, profile], versions, states);
     this.d.onCustomized?.();
-    this.d.emit?.(this.list());
     return structuredClone(profile);
   }
   duplicate(id: string): AgentProfile {
-    const p = this.profiles.find(x => x.id === id);
-    if (!p) throw new Error('Agente non trovato.');
+    const p = this.find(id);
     return this.save({ ...p, name: `${p.name.slice(0, 72)} (copia)` });
+  }
+  /** Out of the launch list and the active limit; definition and history stay. */
+  archive(id: string): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (p.status === 'archived') return structuredClone(p);
+    if (p.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di archiviarlo.');
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...p, status: 'archived', archivedAt: at, updatedAt: at };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), []);
+    return structuredClone(profile);
+  }
+  restore(id: string): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (p.status === 'active') return structuredClone(p);
+    if (this.profiles.filter(x => x.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error(`Ci sono già ${MAX_ACTIVE_AGENTS} Agenti attivi. Archiviane uno prima di ripristinare questo.`);
+    const { archivedAt: _a, ...rest } = p;
+    void _a;
+    const profile: AgentProfile = { ...rest, status: 'active', updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), []);
+    return structuredClone(profile);
+  }
+  history(id: string): AgentVersion[] {
+    this.find(id);
+    return this.store.list(id);
+  }
+  /** Makes an older version the one new runs use. The next edit records it as the parent. */
+  restoreVersion(id: string, version: number): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (p.status === 'archived') throw new Error('Ripristina l’Agente prima di cambiarne la versione.');
+    if (p.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di cambiare versione.');
+    if (!count(version) || version > p.version) throw new Error('Versione non valida.');
+    if (version === p.activeVersion) return structuredClone(p);
+    const entry = this.store.get(id, version);
+    if (!entry) throw new Error('Questa versione non è più nella cronologia.');
+    const { manifest: _m, effort: _e, ...rest } = p;
+    void _m; void _e;
+    // Same availability checks as a save: an engine or model that is gone is refused, never replaced.
+    const draft = this.validate({ ...rest, ...entry.behaviour }, true);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'user', userLocked: true };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);
+    this.d.onCustomized?.();
+    return structuredClone(profile);
   }
   resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string } {
     if (req.agentId === undefined) return { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
     const p = this.profiles.find(x => x.id === req.agentId);
     if (!p) throw new Error('L’Agente selezionato non esiste più. Scegline un altro.');
+    if (p.status === 'archived') throw new Error('L’Agente selezionato è archiviato. Ripristinalo o scegline un altro.');
     // Validate known availability again at launch, without falling back to another engine/model.
     this.validate(p, true);
     const e = this.d.models().find(x => x.engine === p.engine)!;
@@ -203,7 +373,13 @@ export class AgentCatalogService {
     try {
       const generated = obj(JSON.parse(result.text) as unknown);
       // Older builders may omit the new optional field; preserve the user's manifest in that case.
-      return { ok: true, draft: this.validate({ ...generated, ...(generated.manifest === undefined && base?.manifest !== undefined ? { manifest: base.manifest } : {}) }, true) };
+      const checked = this.validate({ ...generated, ...(generated.manifest === undefined && base?.manifest !== undefined ? { manifest: base.manifest } : {}) }, true);
+      // Definition fields never come from generated text (no tool or permission choice by a model); the base keeps its own.
+      const { role: _r, category: _c, tools: _t, permissionCeiling: _p, ...draft } = checked;
+      void _r; void _c; void _t; void _p;
+      const own = obj(req.base);
+      const kept = base ? Object.fromEntries((['role', 'category', 'tools', 'permissionCeiling'] as const).filter(k => own[k] !== undefined).map(k => [k, base[k]])) : {};
+      return { ok: true, draft: { ...draft, ...kept } };
     }
     catch { return { ok: false, reason: 'La guida ha prodotto una bozza non valida. Nessun Agente è stato salvato: modifica la richiesta o usa la creazione manuale.' }; }
   }
