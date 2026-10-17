@@ -237,4 +237,8 @@ export const toolsIt = {
   'tools.devops.settingsSaved': 'Impostazione salvata',
   'tools.devops.settingsNotSaved': 'Impostazione non salvata:',
   'tools.devops.notMarkedRead': 'Non segnate come lette:',
+  // Ctrl+K: the brain search's model (searching by meaning)
+  'tools.search.modelDownloading': (p: { pct: number }) => `Ricerca per significato: scarico il modello ${p.pct}%`,
+  'tools.search.wordsOnly': 'Brain: ricerca solo per parole',
+  'tools.search.retry': 'Riprova',
 };

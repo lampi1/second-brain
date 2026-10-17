@@ -239,4 +239,8 @@ export const toolsEn: typeof toolsIt = {
   'tools.devops.settingsSaved': 'Setting saved',
   'tools.devops.settingsNotSaved': 'Setting not saved:',
   'tools.devops.notMarkedRead': 'Not marked as read:',
+  // Ctrl+K: the brain search's model (searching by meaning)
+  'tools.search.modelDownloading': p => `Search by meaning: downloading the model ${p.pct}%`,
+  'tools.search.wordsOnly': 'Brain: searching by words only',
+  'tools.search.retry': 'Retry',
 };

@@ -1097,6 +1097,14 @@ export interface SyncState { domains: DomainSyncStatus[]; at: number }
 export type SyncChoice = 'mine' | 'theirs' | 'both';
 
 export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexed: { chats: number; files: number } }
+/** The hybrid brain search (SPEC 23): its local embedding model and index. Without the model, words only (BM25). */
+export type SearchModelState =
+  | { state: 'missing' }                                   // not downloaded (tests, or not started yet)
+  | { state: 'downloading'; done: number; total: number }  // bytes
+  | { state: 'loading' }
+  | { state: 'ready' }
+  | { state: 'failed'; error: string };                    // download or load failed: retry from the palette
+export interface SearchIndexStatus { model: SearchModelState; docs: number; chunks: number; vectors: number; vec: boolean }
 
 /** renderer → main. Each entry: [argument, result]. */
 /** Key → letter on screen in the app page over one window (ms): keydown to the first frame after its input event. */
@@ -1284,6 +1292,9 @@ export interface InvokeMap {
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
   'search:query': [{ q: string }, SearchResult];
+  /** the hybrid search's model and index; retryModel starts the model download again after a failure */
+  'search:status': [void, SearchIndexStatus];
+  'search:retryModel': [void, SearchIndexStatus];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:get': [void, AnswerLater];
   'later:set': [{ on: boolean }, AnswerLater];
@@ -1337,6 +1348,7 @@ export interface EventMap {
   'run:updated': RunInfo;
   'improve:state': ImproveState;
   'later:changed': AnswerLater;
+  'search:status': SearchIndexStatus;
   /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
   'procedures:changed': void;
   /** a domain's sync status changed (ADR 0059) */
@@ -1367,7 +1379,7 @@ export const INVOKE_CHANNELS = [
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
-  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
+  'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
@@ -1377,7 +1389,7 @@ export const EVENT_CHANNELS = [
   'chat:autoCloseStatus',
   'agents:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;
