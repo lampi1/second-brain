@@ -2,7 +2,7 @@
 // Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
 // ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
 import type { Root } from './proctree';
-import type { AgentChildren, ChildObservation } from '../../shared/agents';
+import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 
 /** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
@@ -127,6 +127,12 @@ export interface SessionOptions {
    *  turns them into deny rules (Claude: Read(//…/**) in its session settings; ACP/Cursor: Read(…/**) in its config
    *  copy). Its owner refuses a read there too when the engine asks. */
   denyRead?: string[];
+  /** an agent's tool allow-list (A2, tool-policy.ts): Claude keeps only these built-in tools and narrows MCP; Codex
+   *  narrows its sandbox. null/absent = the engine's defaults. */
+  toolPolicy?: AgentToolPolicy | null;
+  /** an agent's permission ceiling: Codex asks for every action at or below 'default'; ACP runs 'plan' in its
+   *  read-only mode or not at all. Claude gets it through permissionMode (manager modeFor). */
+  ceiling?: PermissionCeiling | null;
 }
 
 export interface HarnessSession {

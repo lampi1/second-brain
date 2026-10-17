@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Effort, NewChat, RoutingRow } from '../../shared/contract';
-import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, TOOL_CLASSES, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, type ToolClass } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
 import { checkImages } from '../chats/images';
 import { readLocal, writeLocal } from './local-store';
 import { boundedRaster } from './raster';
@@ -10,10 +10,11 @@ import { legacyAgentProfiles } from './legacy';
 import { checkedManifest } from '../../shared/agent-manifest';
 import { DEFAULT_MANIFESTS, DEFAULT_MANIFESTS_EN } from './manifest-defaults';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile } from './versions';
+import { checkedTools, type AgentPolicy } from './tool-policy';
+import { engineOf } from '../engines/registry';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
-const MCP_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
 const EVIDENCE: readonly AgentEvidenceRef['kind'][] = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'];
@@ -71,15 +72,6 @@ export function checkedAvatar(value: unknown, size?: AgentCatalogDeps['imageSize
   return avatar;
 }
 
-/** null/omitted inherits the engine defaults. A policy can only list known classes; MCP servers need the 'mcp' class. */
-function checkedTools(value: unknown): AgentToolPolicy | null {
-  if (value === undefined || value === null) return null;
-  const t = obj(value);
-  if (!Array.isArray(t.allow) || t.allow.length > TOOL_CLASSES.length || !t.allow.every(c => has(TOOL_CLASSES, c)) || new Set(t.allow).size !== t.allow.length) throw new Error('Strumenti dell’Agente non validi.');
-  if (t.mcp === undefined) return { allow: [...t.allow] as ToolClass[] };
-  if (!Array.isArray(t.mcp) || t.mcp.length > 32 || !t.mcp.every(n => typeof n === 'string' && MCP_NAME.test(n)) || new Set(t.mcp).size !== t.mcp.length || !t.allow.includes('mcp')) throw new Error('Server MCP dell’Agente non validi.');
-  return { allow: [...t.allow] as ToolClass[], mcp: [...t.mcp] as string[] };
-}
 function readOrigin(value: unknown): AgentOrigin {
   const o = obj(value);
   if (o.kind === 'user') return { kind: 'user' };
@@ -251,6 +243,9 @@ export class AgentCatalogService {
       if (p.model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo adattatore. Usa il default CLI.');
       if (p.model === null ? !e.defaultModel : !e.models.some(m => m.id === p.model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o scegli il default CLI.');
       if (p.effort !== undefined && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
+      // the API engine has no tools: a policy that lists any beyond reading describes something it cannot do
+      const tools = obj(p.tools).allow;
+      if (engineOf(engine)?.kind === 'api' && Array.isArray(tools) && tools.some(c => c !== 'read')) throw new Error('Il motore API non ha strumenti: lascia solo la lettura o scegli un altro motore.');
     }
     const manifest = checkedManifest(p.manifest);
     const purpose = text(p.purpose, 400, 'Scopo', partial);
@@ -344,8 +339,8 @@ export class AgentCatalogService {
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
-  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string } {
-    if (req.agentId === undefined) return { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
+  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null } {
+    if (req.agentId === undefined) return { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     const p = this.profiles.find(x => x.id === req.agentId);
     if (!p) throw new Error('L’Agente selezionato non esiste più. Scegline un altro.');
     if (p.status === 'archived') throw new Error('L’Agente selezionato è archiviato. Ripristinalo o scegline un altro.');
@@ -356,7 +351,7 @@ export class AgentCatalogService {
     if (req.harness !== p.engine || req.model !== undefined && req.model !== p.model || req.effort !== undefined && req.effort !== p.effort) throw new Error('La configurazione della nuova chat non corrisponde all’Agente scelto.');
     const { model: _model, effort: _effort, ...rest } = req;
     void _model; void _effort;
-    return { request: { ...rest, ...(p.model ? { model: p.model } : {}), ...(p.effort ? { effort: p.effort } : {}) }, owner: ownerOf(p), instructions: p.instructions };
+    return { request: { ...rest, ...(p.model ? { model: p.model } : {}), ...(p.effort ? { effort: p.effort } : {}) }, owner: ownerOf(p), instructions: p.instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling ?? null } : null };
   }
   async draft(req: AgentDraftRequest): Promise<AgentDraftResult> {
     const info = this.d.builder?.();

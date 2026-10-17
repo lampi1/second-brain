@@ -13,6 +13,7 @@ import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
 import type { AgentOwnerSnapshot, AgentChildren } from '../../shared/agents';
 import { readOwner } from '../agents/catalog';
+import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 
 export interface StoredChat {
@@ -21,6 +22,8 @@ export interface StoredChat {
   work?: NonNullable<ChatSummary['work']>;
   agentInstructions?: string;
   agentChildren?: AgentChildren;
+  /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
+  agentPolicy?: AgentPolicy;
   harness: Harness;
   cwd: string;
   sessionId: string | null;
@@ -99,6 +102,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
     ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= 8000 ? { agentInstructions: c.agentInstructions } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
+    ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
     ...(route ? { route } : {}),
     ...(c.work !== undefined ? {work:readChatWork(c.work)} : {}),
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),
