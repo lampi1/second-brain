@@ -98,7 +98,7 @@ export function seed(E: number): Seed {
     state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
   const chats: ChatSummary[] = [
-    chat({ id: 'regia', title: 'Regia', isRegia: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
+    chat({ id: 'regia', title: 'Regia', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.' }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
       lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
@@ -403,7 +403,15 @@ export class DemoChats implements ChatService {
   /** no engine: the "/" list comes from the demo's skills on disk (skills/demo.ts) */
   commands(): null { return null; }
 
-  async create(req: NewChat): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
+    // one Orchestrator, like the real manager (unifiedOrchestrator): a coordinator request returns the current one
+    // unless it replaces it; the app's Regia is folded into it
+    if (req.regia || req.appRegia) {
+      if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
+      const current = [...this.chats.values()].find(c => c.orchestrator && c.isRegia);
+      if (current && req.replaces !== current.id) return current;
+      req = { ...req, regia: true, appRegia: false, space: undefined };
+    }
     const id = `c${++this.counter}`;
     // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -412,7 +420,7 @@ export class DemoChats implements ChatService {
     const regiaName = req.regia ? cleanRegiaName(req.regiaName) ?? old?.regiaName : undefined;
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.isRegia ? req.regiaOf : undefined;
     if (old) {
-      this.patch(old.id, { isRegia: false, regiaName: undefined, regiaSince: undefined });
+      this.patch(old.id, { isRegia: false, orchestrator: undefined, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === old.id) this.patch(x.id, { regiaOf: id });
     }
     // one app Regia ("Migliora l'app"), never a work Regia: the new one takes the role
@@ -421,7 +429,7 @@ export class DemoChats implements ChatService {
     const c: ChatSummary = {
       id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Regia · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
-      ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now() } : {}),
+      ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
       ...(req.space === 'app' ? { space: 'app' as const, ...(appRegia ? { appRegia: true } : {}) } : {}),

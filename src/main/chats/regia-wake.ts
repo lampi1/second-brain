@@ -46,7 +46,7 @@ export interface RegiaWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isRegia' | 'space' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending'>;
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isRegia' | 'orchestrator' | 'space' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending'>;
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -103,8 +103,9 @@ export class RegiaWake {
   private updated(c: ChatSummary): void {
     const was = this.chats.get(c.id);
     this.remember(c);
-    // the chats of "Migliora l'app" (its Regia included) report to their own Regia, never to this one (ADR 0020)
-    if (c.space === 'app') return;
+    // the chats of "Migliora l'app" (its Regia included) report to their own Regia, never to this one (ADR 0020);
+    // the unified Orchestrator coordinates both spaces, so it hears them too
+    if (c.space === 'app' && !this.unified()) return;
     // the Regia's gate changed (only the change: its other updates never cut the grouping window short): what it now
     // lets through is timed again (it started working: all goes into its turn; it is free again: what waited goes)
     if (c.isRegia) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
@@ -123,7 +124,7 @@ export class RegiaWake {
 
   private pending(p: PendingRequest): void {
     const c = this.chats.get(p.chatId);
-    if (!c || c.isRegia || c.space === 'app' || c.closedAt) return;
+    if (!c || c.isRegia || (c.space === 'app' && !this.unified()) || c.closedAt) return;
     const detail = p.type === 'command' ? (p.command?.code ?? p.detail).split('\n')[0] ?? '' : p.type === 'question' ? (p.questions?.[0]?.question ?? p.title) : p.title;
     this.add({ id: p.chatId, title: c.title, harness: c.harness }, p.type, detail, p.id);
   }
@@ -177,7 +178,7 @@ export class RegiaWake {
   private readyAt(chatId: string): number { return (this.lastSent.get(chatId) ?? -Infinity) + this.perChatMs; }
 
   private remember(c: ChatSummary): void {
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isRegia: c.isRegia, space: c.space, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending });
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isRegia: c.isRegia, orchestrator: c.orchestrator, space: c.space, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending });
   }
 
   /** the first Regia in tab order (ADR 0021: regiaSince, kept by Pulisci / Ricomincia), which every work chat's news go
@@ -188,6 +189,9 @@ export class RegiaWake {
     for (const [id, c] of this.chats) if (c.isRegia) return id;
     return null;
   }
+
+  /** the news go to the unified Orchestrator: app-space chats report to it as well */
+  private unified(): boolean { return !!this.regia()?.orchestrator; }
 
   private regia(): Seen | undefined {
     const id = this.regiaId();

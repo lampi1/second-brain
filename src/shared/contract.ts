@@ -124,6 +124,10 @@ export interface ChatSummary {
   workSince?: number;
   pending: number;            // open questions/permissions
   isRegia: boolean;
+  /** The single coordinator of work and app improvements. Set only by main. */
+  orchestrator?: true;
+  /** The Orchestrator's former titles (migrated Regie): their mailboxes still reach it. Set only by main. */
+  mailAliases?: string[];
   /** a Regia's tab label (ADR 0021); absent on a Regia from before several Regie existed: shown "Lavoro" */
   regiaName?: string;
   /** a work chat: the Regia it answers to (the one that opened it, or the tab open when the user created it);
@@ -1264,6 +1268,9 @@ export interface InvokeMap {
   'improve:promote': [void, ImproveState];
   /** the section's Regia: created in the code folder with its role prompt (harness/model: the user's choice) */
   'improve:regia': [{ harness: Harness; model?: string }, ChatSummary];
+  /** Read without starting an engine; ensure creates only when no coordinator exists. */
+  'orchestrator:get': [void, ChatSummary | null];
+  'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** the restart notice was read */
   'improve:dismissLaunch': [void, ImproveState];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
@@ -1352,6 +1359,7 @@ export const INVOKE_CHANNELS = [
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
+  'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve',
 ] as const satisfies readonly InvokeChannel[];

@@ -149,6 +149,13 @@ describe('Artifacts: the store behind show_ui', () => {
     expect((sent.at(-1)?.item as Artifact).from).toBeUndefined();
   });
 
+  it('target regia from an app chat with no app Regia (unified Orchestrator): the Regia it answers to', () => {
+    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { space: 'app', regiaOf: 'o' })];
+    const { store, sent } = setup(all);
+    expect(store.show('aw', args({ target: 'regia' }))).toContain('nella Regia «Orchestrator»');
+    expect(sent.at(-1)?.chatId).toBe('o');
+  });
+
   it('target next-ask: waits, then attaches to the chat\'s next question; with none in 60 s it becomes a card', () => {
     vi.useFakeTimers();
     const { store, sent } = setup([chat('w'), chat('o')]);

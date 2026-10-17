@@ -55,7 +55,12 @@ import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
+import { migrateOrchestrator, ORCHESTRATOR_ROLE } from './orchestrator';
+import { slug as slugTitle } from './mail';
+
 export interface ChatManagerOptions {
+  /** Production singleton; legacy fixtures may still exercise the old separate roles. */
+  unifiedOrchestrator?: boolean;
   agentCatalogBrief?: () => string;
   resolveAgent?: AgentCatalogService['resolve'];
   onAutoCloseActivity?: (chatId: string) => void;
@@ -306,7 +311,8 @@ export class ChatManager implements ChatService {
     this.counters = new ContextCounters(opts.userData);
     this.home = opts.claudeHome ?? claudeHome();
     this.max = opts.maxItems ?? 2000;
-    const stored = this.store.load();
+    const loaded = this.store.load();
+    const stored = opts.unifiedOrchestrator ? migrateOrchestrator(loaded) : loaded;
     for (const c of stored) this.chats.set(c.id, this.restore(c));
     // Regie saved before regiaSince keep their list order (ADR 0021)
     let seat = 0;
@@ -314,7 +320,7 @@ export class ChatManager implements ChatService {
     // one app Regia ("Migliora l'app"): the newest keeps the role
     const appRegie = [...this.chats.values()].filter(r => r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt);
     for (const r of appRegie.slice(1)) delete r.s.appRegia;
-    if (appRegie.length > 1 || stored.some(c => !c.agent)) this.persist();
+    if (appRegie.length > 1 || stored.some(c => !c.agent) || JSON.stringify(stored) !== JSON.stringify(loaded)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
@@ -351,6 +357,13 @@ export class ChatManager implements ChatService {
 
   async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string }): Promise<ChatSummary> {
     updateActivity.assertOpen();
+    if (this.opts.unifiedOrchestrator && (req.regia || req.appRegia)) {
+      if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
+      const current = this.list().find(c => c.orchestrator && c.isRegia);
+      // one Orchestrator: only a replacement of the current one (Cambia motore, Ricomincia) creates another
+      if (current && req.replaces !== current.id) return current;
+      req = { ...req, regia: true, appRegia: false, space: undefined, title: 'Orchestrator', regiaName: 'Orchestrator' };
+    }
     const agent = inherited ? { ...inherited, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
     req = agent.request;
     const engine = engineOrThrow(req.harness);
@@ -402,6 +415,7 @@ export class ChatManager implements ChatService {
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: now, browserTabIds: [],
         ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
         ...(req.regia ? { regiaSince: old?.s.regiaSince ?? now } : {}),
+        ...(req.regia && this.opts.unifiedOrchestrator ? { orchestrator: true as const, ...(old?.s.mailAliases?.length ? { mailAliases: [...old.s.mailAliases] } : {}) } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(space ? { space, ...(appRegia ? { appRegia: true } : {}) } : {}),
         ...(req.route ? { route: req.route } : {}),
@@ -417,7 +431,11 @@ export class ChatManager implements ChatService {
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
     this.chats.set(id, r);
-    if (old) this.demoteRegia(old, id);
+    if (old) {
+      this.demoteRegia(old, id);
+      // two chats titled "Orchestrator" would make its mailbox ambiguous (mail.ts liveChats): the old one gives the name up
+      if (r.s.orchestrator && slugTitle(old.s.title) === slugTitle(title)) old.s.title = `Orchestrator precedente · ${old.s.id.slice(2)}`;
+    }
     for (const x of oldApp) this.demoteRegia(x, id);
     this.ensureHistory(r); // a fork shows the past it starts from
     this.persist();
@@ -565,7 +583,8 @@ export class ChatManager implements ChatService {
     const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
     try {
       const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
-      r.session.send(`${profile}${catalog}${body}`, imgs); r.agentPrimed = true;
+      const role = r.s.orchestrator ? `${ORCHESTRATOR_ROLE}\n\n` : '';
+      r.session.send(`${role}${profile}${catalog}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }
@@ -1331,6 +1350,8 @@ export class ChatManager implements ChatService {
     delete r.s.regiaName;
     delete r.s.regiaSince;
     delete r.s.appRegia;
+    delete r.s.orchestrator;
+    delete r.s.mailAliases;
     // its work chats answer to the Regia that takes over
     for (const c of this.chats.values()) if (c.s.regiaOf === r.s.id) { c.s.regiaOf = to; this.updated(c); }
     this.persist();
@@ -1382,6 +1403,7 @@ export class ChatManager implements ChatService {
         permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isRegia: c.isRegia, lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(c.regiaName ? { regiaName: c.regiaName } : {}), ...(c.regiaOf ? { regiaOf: c.regiaOf } : {}),
         ...(c.regiaSince !== undefined ? { regiaSince: c.regiaSince } : {}),
+        ...(c.orchestrator ? { orchestrator: true as const, ...(c.mailAliases?.length ? { mailAliases: [...c.mailAliases] } : {}) } : {}),
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
@@ -1418,6 +1440,7 @@ export class ChatManager implements ChatService {
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
       ...(r.s.regiaName ? { regiaName: r.s.regiaName } : {}), ...(r.s.regiaOf ? { regiaOf: r.s.regiaOf } : {}),
       ...(r.s.regiaSince !== undefined ? { regiaSince: r.s.regiaSince } : {}),
+      ...(r.s.orchestrator ? { orchestrator: true as const, ...(r.s.mailAliases?.length ? { mailAliases: [...r.s.mailAliases] } : {}) } : {}),
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
