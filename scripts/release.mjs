@@ -74,10 +74,10 @@ export function assertStagingRoot(dir) {
   const resolved = path.resolve(dir);
   let ancestor = resolved;
   while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
-  const actual = path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, resolved));
+  const actual = path.resolve(fs.realpathSync.native(ancestor), path.relative(ancestor, resolved));
   const same = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
   if (!same(actual, resolved)) throw new Error('staging through a symlink or junction is not allowed');
-  if (!(inside(fs.realpathSync(os.tmpdir()), actual) || inside(path.join(repo, 'test-results'), actual)) ||
+  if (!(inside(fs.realpathSync.native(os.tmpdir()), actual) || inside(path.join(repo, 'test-results'), actual)) ||
       same(actual, sharedDir) || inside(actual, sharedDir) || inside(sharedDir, actual)) throw new Error('stage-test requires a disposable directory under the OS temp folder or this checkout/test-results');
   if (fs.existsSync(resolved) && fs.readdirSync(resolved).length) throw new Error('stage-test destination must be empty');
 }

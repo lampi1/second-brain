@@ -51,6 +51,19 @@ function launch(base: string, userData: string, plan: string, waitMs = 3000): { 
   return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
 }
 
+async function launchWhileReaping(base: string, userData: string, plan: string, waitMs: number): Promise<ReturnType<typeof launch>> {
+  // The old instance is a child of this test worker. A synchronous launcher would block Node's SIGCHLD handling,
+  // leaving that exited child a zombie on POSIX: the launcher would correctly still see its PID as existing.
+  const child = spawn(process.execPath, [script, 'launch'], { windowsHide: true, timeout: 60000,
+    env: { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_TEST_RELEASE_SCRIPT: path.join(base, 'release.mjs'), SB_FAKE_PLAN: plan, SB_LAUNCH_WAIT_MS: String(waitMs) },
+    stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  child.stdout?.on('data', data => { out += String(data); });
+  child.stderr?.on('data', data => { out += String(data); });
+  await new Promise<void>((resolve, reject) => { child.once('error', reject); child.once('close', () => resolve()); });
+  return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
+}
+
 beforeAll(() => { root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-launch-'))); });
 afterAll(() => { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* a fake app may still hold a file */ } });
 
@@ -160,7 +173,7 @@ describe('release.mjs launch', () => {
     expect(launch(base, userData, 'ready').result.attempts.map(a => [a.id, a.outcome])).toEqual([['b', 'skipped-bad'], ['a', 'started']]);
   }, 60_000);
 
-  it('the app still quitting (its pid gone soon): waits, starts the same release again, never marks it bad', () => {
+  it('the app still quitting (its pid gone soon): waits, starts the same release again, never marks it bad', async () => {
     const { base, userData } = setup(['b', 'a']);
     // the old instance, recorded in ready.json as the last one that started: it ends 3 s after the new start was
     // refused (the fake app's first start writes the starts file), so the launcher finds it still quitting
@@ -168,7 +181,8 @@ describe('release.mjs launch', () => {
     const old = spawn(process.execPath, ['-e', `const fs=require('node:fs');const t=setInterval(()=>{if(fs.existsSync(${starts})){clearInterval(t);setTimeout(()=>{},3000);}},50)`], { stdio: 'ignore' });
     fs.writeFileSync(path.join(userData, 'ready.json'), JSON.stringify({ release: 'a', pid: old.pid, at: new Date(Date.now() - 60_000).toISOString() }));
     fs.writeFileSync(path.join(userData, 'quitting.json'), JSON.stringify({ pid: old.pid })); // index.ts before-quit
-    const r = launch(base, userData, 'busy,ready', 15_000);
+    const r = await launchWhileReaping(base, userData, 'busy,ready', 15_000);
+    expect(old.exitCode).toBe(0);
     expect(r.out).toContain('started b');
     expect(r.state.bad).toEqual([]);
     expect(r.starts).toBe(2);
