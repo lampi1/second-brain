@@ -387,6 +387,16 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-hits .f { font: 12px var(--bx-mono); color: var(--bx-blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-hits .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-hits mark { background: var(--bx-amber-bg); color: var(--bx-amber); border-radius: 3px; padding: 0 1px; }
+/* syntax colours of the file viewer (highlight.js classes, FileViewer.tsx): the palette's own tones, no theme file */
+.bx-code.hljs .hljs-comment, .bx-code.hljs .hljs-quote, .bx-code.hljs .hljs-meta { color: var(--bx-text-3); font-style: italic; }
+.bx-code.hljs .hljs-keyword, .bx-code.hljs .hljs-selector-tag, .bx-code.hljs .hljs-built_in, .bx-code.hljs .hljs-doctag { color: var(--bx-violet); }
+.bx-code.hljs .hljs-string, .bx-code.hljs .hljs-regexp, .bx-code.hljs .hljs-addition, .bx-code.hljs .hljs-template-tag { color: var(--bx-green); }
+.bx-code.hljs .hljs-number, .bx-code.hljs .hljs-literal, .bx-code.hljs .hljs-symbol, .bx-code.hljs .hljs-bullet { color: var(--bx-amber); }
+.bx-code.hljs .hljs-title, .bx-code.hljs .hljs-section, .bx-code.hljs .hljs-function .hljs-title, .bx-code.hljs .hljs-selector-id { color: var(--bx-blue); }
+.bx-code.hljs .hljs-attr, .bx-code.hljs .hljs-attribute, .bx-code.hljs .hljs-name, .bx-code.hljs .hljs-tag, .bx-code.hljs .hljs-variable, .bx-code.hljs .hljs-type, .bx-code.hljs .hljs-selector-class { color: var(--bx-blue); opacity: 0.85; }
+.bx-code.hljs .hljs-deletion { color: var(--bx-red); }
+.bx-code.hljs .hljs-emphasis { font-style: italic; }
+.bx-code.hljs .hljs-strong { font-weight: 600; }
 .bx-viewer { display: grid; gap: 12px; min-width: 0; }
 .bx-viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bx-viewer-head h2 { font: 600 var(--bx-fs-l) var(--bx-mono); min-width: 0; overflow-wrap: anywhere; }

@@ -1,6 +1,6 @@
 // E2E of questions with their context and of the user's typing (the user, 2026-10-12): the "Contesto" block of a
 // question (the turn's prose, even when the model wrote it only in its reasoning; web and file links; a click on a file
-// opens it through app:openPath, recorded in a hidden run), the reasoning before a question shown open in the
+// opens it in the app's read-only file viewer, nothing opened outside), the reasoning before a question shown open in the
 // transcript, no "Ti aspettano" strip in the agents workspace, and the
 // questions window ("Domande in finestra"): it waits while the user types, never takes their field, it is always the one
 // modal in the middle (anchored near the top, ADR 0049) (never a second, backdrop-less copy beside the field: the user, 2026-10-14), Ctrl+J brings it,
@@ -46,9 +46,9 @@ test('a question carries its context: the turn\'s prose, the reasoning before it
   await expect(page.getByTestId(`${base}-ctx-body`)).toContainText('Ho preparato il report dei rimborsi');
   await expect(panel).toBeFocused(); // the toggle gives the keyboard back to the panel
   await shot(page, 'questions-context-tile');
-  // a file link opens through main (a hidden run only records it); a missing one says so
+  // a file link opens in the app's viewer, never outside (a hidden run would record it); a missing one says so
   await page.getByTestId(`${base}-ctx-links`).getByText('report TC16').click();
-  await expect(page.getByText(/Il file non c'è più/)).toBeVisible();
+  await expect(page.getByTestId('cited-file-viewer')).toContainText('Il file non è disponibile');
   expect(await opened(app)).toEqual([]);
   await app.close();
 });

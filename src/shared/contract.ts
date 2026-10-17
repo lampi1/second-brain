@@ -242,7 +242,7 @@ export type ChatItem =
 // ```sb-ui fence inside an AskUserQuestion option's preview). Shapes only; validation and caps: shared/genui.ts ──
 /** ok = passed/done · fail = failed · blocked · running = in progress · todo = not run yet · info · warn */
 export type UiStatus = 'ok' | 'fail' | 'blocked' | 'running' | 'todo' | 'info' | 'warn';
-/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened through app:openPath) */
+/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened in the app's read-only file viewer) */
 export interface UiLink { label: string; href: string }
 export interface UiTable { columns: string[]; rows: { cells: string[]; status?: UiStatus; link?: UiLink }[] }
 export interface UiCards {
@@ -290,7 +290,7 @@ export interface PendingRequest {
  *  prod = why it looks like production (Esegui asks a second click, shared/runnable.ts prodRisk); lead = the chat's
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
-export type OpenPathResult = { how: 'opened' | 'folder' } | { how: 'missing' | 'refused'; reason: string };
+export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
 /** app:peekFile: a clicked file's preview (main/peek-file.ts): its first lines, an image thumbnail, or why not */
 export type PeekResult =
   | { kind: 'text'; path: string; size: number; text: string; more: boolean }
@@ -1148,12 +1148,11 @@ export interface InvokeMap {
   'app:pickBrain': [void, string | null];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
-  /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
-   *  images with their app, anything else only shown in its folder (main/open-path.ts) */
-  'app:openPath': [{ path: string }, OpenPathResult];
+  /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
+  'app:showInFolder': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
-  /** A user-opened citation, read within main-owned brain/project/chat roots. Main renderer only. */
+  /** A user-opened file link: any local file, never a network share, read-only and bounded. Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string }, FileViewResult];
   /** an image named in a question (main/ask-image.ts) */
   'app:askImage': [{ path: string }, AskImageResult];
@@ -1357,7 +1356,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',

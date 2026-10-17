@@ -191,8 +191,6 @@ export const brainPagesIt = {
   'brainPages.procedure.maskedMany': (p: { n: number }) => `${p.n} righe nascoste`,
   'brainPages.procedure.maskedBecause': (p: { n: number }) => `perché ${p.n === 1 ? "può" : "possono"} contenere una credenziale.`,
   'brainPages.procedure.defaultTitle': 'Procedura',
-  'brainPages.procedure.openFileError': 'Non riesco ad aprire il file',
-  'brainPages.procedure.fileSelected': 'Il file è selezionato in Esplora risorse',
   'brainPages.procedure.pathCopied': 'Percorso copiato',
   'brainPages.procedure.copyFailed': 'Copia non riuscita',
   'brainPages.procedure.rowTitle': (p: { file: string; line: number }) => `${p.file}, riga ${p.line}`,

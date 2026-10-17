@@ -1,8 +1,9 @@
 // Read-only local file references: preserve citation coordinates without exposing file URLs or executable actions.
+// `shown` = the bytes read from the start of a text file (at most the main-side cap; `more` = the file goes on).
 export interface FileReference { path:string; line?:number; column?:number; chatId?:string }
-export type FileReadReason='outside'|'private'|'unsupported'|'missing'|'changed'|'binary'|'image';
+export type FileReadReason='outside'|'unsupported'|'missing'|'changed'|'binary'|'image';
 export type FileViewResult=
- |{kind:'text';path:string;size:number;text:string;more:boolean}
+ |{kind:'text';path:string;size:number;shown:number;text:string;more:boolean}
  |{kind:'image';path:string;size:number;dataUrl:string}
  |{kind:'refused'|'missing'|'unsupported';reason:FileReadReason};
 const coordinate=(raw:string|undefined):number|undefined=>{const n=Number(raw);return Number.isSafeInteger(n)&&n>0&&n<=10_000_000?n:undefined;};
