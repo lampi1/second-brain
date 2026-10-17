@@ -5,7 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
-import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -89,6 +89,8 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 export interface ChatSummary {
   id: string;                 // app id (stable across resumes)
   agent?: AgentOwnerSnapshot;
+  /** the agent run this chat is (a chat started from a catalog agent): a mirror of its agent-runs.json record */
+  run?: AgentRun;
   agentChildren?: AgentChildren;
   harness: Harness;
   origin: ChatOrigin;

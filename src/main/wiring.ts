@@ -147,14 +147,17 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): Co
 
 /** "Comando da eseguire" requests (run/asks.ts): they watch every event main sends to the page (the emitter is tapped
  *  here, for the real app and the demo alike) and notify through the feed like a question ("Domanda per te"). */
-export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number): CommandAsks {
+export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked'>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
     // through the emitter as it is when called: the taps added later (the Regia's news) hear it too
     emit: (ch, p) => ctx.emitter.emit(ch, p),
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
     ...(now ? { now } : {}),
-    onAsk: (req, title) => brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]),
+    onAsk: (req, title) => {
+      chats?.commandAsked?.(req.chatId, req.id);
+      brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]);
+    },
   });
   ctx.emitter.emit = (ch, p) => { send(ch, p); asks.observe(ch, p); };
   return asks;
@@ -442,7 +445,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([showUiTool(artifacts)]);
 
   const runner = commandRunner(ctx, chats);
-  const asks = attachCommandAsks(ctx, runner, brain);
+  const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
   try {
