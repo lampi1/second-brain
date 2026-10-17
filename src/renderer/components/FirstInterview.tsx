@@ -15,22 +15,25 @@ import '../styles/agent-studio.css';
 import { AiFirstGate } from '../../modules/ai-first/Gate';
 import { aiCopy } from '../../modules/ai-first/i18n';
 import { lang } from '../i18n';
+import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 
 export function FirstInterviewGate() {
   const { setup, catalog, error } = useAgents(), modal = ui.use(s => s.modal);
   const offered = useRef(false);
   const [fallback, setFallback] = useState(false);
+  const [connectors, setConnectors] = useState(false);
   useEffect(() => {
     if (modal === 'setup') offered.current = true;
     if (!offered.current && setup && (setup.status === 'new' || setup.status === 'draft') && !modal) { offered.current = true; openModal('setup'); }
   }, [setup?.status, modal]);
   if (modal !== 'setup') return null;
+  if (connectors) return <Modal onClose={closeModal} label="Collega i tuoi strumenti" testid="connector-setup"><div className="modal-body"><AppConnectorScreen onClose={() => { setConnectors(false); closeModal(); }}/></div></Modal>;
   if (!setup) return <Modal onClose={closeModal} label="Configura il tuo spazio di lavoro" testid="first-interview"><div className="modal-body"><p role="status">{error ?? 'Caricamento della configurazione…'}</p>{error && <button type="button" className="btn" onClick={() => void refreshSetup()}>Riprova</button>}<button type="button" className="btn btn-ghost" onClick={closeModal}>Chiudi</button></div></Modal>;
-  if (!fallback && (setup.status === 'new' || (setup.preferences.guide && setup.preferences.guide.stage !== 'fallback'))) return <AiFirstGate setup={setup} onFallback={() => setFallback(true)}/>;
-  return <FirstInterview initial={setup} catalog={catalog} onConnectAi={async preferences => { await saveSetup({ ...preferences, guide: { stage: 'choosing' } }, 'draft'); setFallback(false); }}/>;
+  if (!fallback && (setup.status === 'new' || (setup.preferences.guide && setup.preferences.guide.stage !== 'fallback'))) return <AiFirstGate setup={setup} onFallback={() => setFallback(true)} onConnected={() => setConnectors(true)}/>;
+  return <FirstInterview initial={setup} catalog={catalog} onCompleted={() => setConnectors(true)} onConnectAi={async preferences => { await saveSetup({ ...preferences, guide: { stage: 'choosing' } }, 'draft'); setFallback(false); }}/>;
 }
 
-function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState; catalog: AgentCatalog | null; onConnectAi: (preferences: SetupDraft) => Promise<void> }) {
+function FirstInterview({ initial, catalog, onConnectAi, onCompleted }: { initial: SetupState; catalog: AgentCatalog | null; onConnectAi: (preferences: SetupDraft) => Promise<void>; onCompleted: () => void }) {
   const [draft, setDraft] = useState<SetupDraft>(() => ({ ...initial.preferences, step: ['new', 'draft'].includes(initial.status) ? validSetupStep(initial.preferences.step) : 0 }));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
   const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(initial.preferences.step >= 3);
@@ -45,7 +48,7 @@ function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState
   const saveAndClose = async (status: 'draft' | 'completed' | 'skipped') => {
     if (saving.current || busy) return;
     saving.current = true; terminal.current = true; setBusy(true); setError(null);
-    try { await saveSetup(draft, status); if (ui.get().modal === 'setup') closeModal(); }
+    try { await saveSetup(draft, status); if (ui.get().modal === 'setup') { if (status === 'completed') onCompleted(); else closeModal(); } }
     catch { terminal.current = false; setError('Salvataggio non completato. Le risposte restano qui: riprova.'); }
     finally { saving.current = false; setBusy(false); }
   };

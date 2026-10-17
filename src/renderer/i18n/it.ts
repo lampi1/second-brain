@@ -1,3 +1,5 @@
+import { costsIt } from './areas/costs.it';
+import { connectorsIt } from './areas/connectors.it';
 // The Italian UI texts (ADR 0057): the source dictionary. Every key the UI shows lives here; en.ts must have the same
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
 // string or, when it needs numbers or names, a function of one params object. Each area has its own pair of files in
@@ -16,6 +18,8 @@ import { homeIt } from './areas/home.it';
 import { sectionsIt } from './areas/sections.it';
 
 export const it = {
+  ...costsIt,
+  ...connectorsIt,
   ...sectionsIt,
   ...homeIt,
   ...genuiRequestIt,

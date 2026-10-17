@@ -1,4 +1,16 @@
+// Agent catalog and session identity contracts, shared by main, renderer and read-only discovery.
 import type { Effort, Harness } from './contract';
+
+/** Untrusted routing declarations. Never authorization, verified capability or executable configuration. */
+export interface AgentManifest {
+  whenToUse?: string;
+  whenNotToUse?: string;
+  input?: string;
+  output?: string;
+  declaredTools?: string[];
+  accessScopes?: string[];
+  successCriteria?: string[];
+}
 
 export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark'] as const;
 export type AgentSymbol = (typeof AGENT_SYMBOLS)[number];
@@ -8,6 +20,7 @@ export interface AgentDraft {
   name: string;
   purpose: string;
   instructions: string;
+  manifest?: AgentManifest;
   engine: Harness;
   /** null = the engine's own default, explicitly unknown until reported by the session. */
   model: string | null;

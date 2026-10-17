@@ -1,6 +1,7 @@
 // English counterpart of the bounded data-section workflow.
 import type { sectionsIt } from './sections.it';
 export const sectionsEn: typeof sectionsIt = {
+ 'sections.draftContext':'Context attached to this draft','sections.removeContext':'Remove context','sections.exactPayload':'Exact text for the agent',
  'sections.actions':'Actions','sections.removeRow':'Remove row',
  'sections.memory':'Shared memory','sections.memoryHint':'Write useful details without credentials. After confirmation they enter future AI turns; existing conversation history is not erased.',
  'sections.memory.work':'Your work','sections.memory.goals':'Goals','sections.memory.style':'How you prefer to work','sections.memory.constraints':'Boundaries to respect',

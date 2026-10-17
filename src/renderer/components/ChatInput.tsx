@@ -26,6 +26,8 @@ import { Kbd } from './ui';
 import { t } from '../i18n';
 import {validateRecoveryRaster} from '../lib/recovery-raster';
 import {updateIsFrozen} from '../lib/update-barrier';
+import { reviewedContextDraft, withReviewedContext } from '../lib/reviewed-context';
+import { ReviewedContextPreview } from './ReviewedContextPreview';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Regia moving to the dock) and never follow the input to another chat
@@ -103,6 +105,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(p
 
 const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ chat, regia, testid }, handle) {
   const [text, setText] = useState(() => drafts.get(chat.id) ?? '');
+  const context = reviewedContextDraft(text), visibleText = context?.message ?? text;
   const [asNew, setAsNewState] = useState(() => !!regia && newChatOn.has(chat.id));
   const setAsNew = (on: boolean) => { if (on) newChatOn.add(chat.id); else newChatOn.delete(chat.id); setAsNewState(on); };
   const [, rerender] = useState(0);
@@ -120,7 +123,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const [cmds, setCmds] = useState<ChatCommand[] | null>(null);
   const [sel, setSel] = useState(0);
   const [slashOff, setSlashOff] = useState<string | null>(null);
-  const query = slashQuery(text, caret);
+  const query = slashQuery(visibleText, caret);
   const matches = query !== null && cmds && query !== slashOff ? filterCommands(cmds, query) : [];
   const slashOpen = matches.length > 0;
   const slashing = query !== null;
@@ -128,9 +131,9 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const [chose, setChose] = useState(false); // the arrows moved the choice
   useEffect(() => { setSel(0); setChose(false); }, [query]);
   const pick = (c: ChatCommand) => {
-    const r = applyCommand(text, c.name);
-    setText(r.text);
-    drafts.set(chat.id, r.text);
+    const r = applyCommand(visibleText, c.name), next = withReviewedContext(r.text, context);
+    setText(next);
+    drafts.set(chat.id, next);
     setCaret(r.caret);
     requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(r.caret, r.caret); } });
   };
@@ -268,6 +271,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         </div>
       )}
       <div className={`composer-box ${dragging ? 'is-drop' : ''}`} onDragOver={onDragOver} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+        {context && <ReviewedContextPreview context={context} onRemove={() => { setText(context.message); drafts.set(chat.id, context.message); onSentHooks.delete(chat.id); ta.current?.focus(); }}/>}
         {(images.length > 0 || reading > 0) && (
           <div className="composer-images">
             <ImageStrip images={images.map(im => ({ thumb: im.thumb ?? fullSrc(im), full: fullSrc(im) }))} onRemove={i => setImages(cur => cur.filter((_, k) => k !== i))} testid={`${testid}-images`} />
@@ -277,10 +281,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         <div className="composer-row">
           {slashOpen && <SlashMenu items={matches} sel={Math.min(sel, matches.length - 1)} onPick={pick} testid={testid} />}
           <textarea
-            ref={ta} rows={1} value={text} placeholder={placeholder} aria-label={regia ? t('chat.input.messageToRegia') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
+            ref={ta} rows={1} value={visibleText} placeholder={placeholder} aria-label={regia ? t('chat.input.messageToRegia') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
             aria-expanded={slashOpen} aria-controls={slashOpen ? `${testid}-slash-list` : undefined} aria-autocomplete="list"
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
-            onChange={e => { setText(e.target.value); setCaret(e.target.selectionStart); drafts.set(chat.id, e.target.value); if (!e.target.value.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); }}
+            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); }}
             onSelect={e => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
             onKeyDown={e => {

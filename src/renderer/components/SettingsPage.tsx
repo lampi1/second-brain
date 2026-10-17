@@ -11,6 +11,7 @@ import{t}from'../i18n';
 import{AppearancePreview}from'./AppearancePreview';
 import{RolePreferences}from'./RolePreferences';
 import{holdUpdate}from'../lib/update-barrier';
+import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -37,6 +38,7 @@ export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
  if(!settings)return null;
  const groups=[
+  {id:'connectors',title:t('connector.group'),search:'GitHub Jira collegamenti connectors projects',body:<AppConnectorScreen/>},
   {id:'accounts',title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' '),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
   {id:'space',title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
    <RolePreferences/>

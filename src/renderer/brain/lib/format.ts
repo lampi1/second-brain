@@ -2,7 +2,9 @@
 // Pure functions (no DOM), unit-tested in test/unit/brain-ui/format.test.ts. Dates of the brain are local calendar days
 // "AAAA-MM-GG"; day arithmetic is done at noon so a DST change never shifts a day.
 
-const it = (v: number, digits: number) => v.toLocaleString('it-IT', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+import { locale, t } from '../../i18n';
+
+const it = (v: number, digits: number) => v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 export const fmt = {
   /** 1,84 $ under 10 $, 38 $ above (list-price estimates: the decimals stop mattering) */
@@ -10,11 +12,11 @@ export const fmt = {
     if (v == null || !Number.isFinite(v)) return '';
     return `${it(v, Math.abs(v) < 10 ? 2 : 0)} $`;
   },
-  int(v: number | null | undefined): string { return v == null || !Number.isFinite(v) ? '' : Math.round(v).toLocaleString('it-IT'); },
+  int(v: number | null | undefined): string { return v == null || !Number.isFinite(v) ? '' : Math.round(v).toLocaleString(locale()); },
   /** 704k, 1,2M */
   k(v: number | null | undefined): string {
     if (v == null || !Number.isFinite(v)) return '';
-    if (Math.abs(v) >= 1e6) return `${(v / 1e6).toLocaleString('it-IT', { maximumFractionDigits: 1 })}M`;
+    if (Math.abs(v) >= 1e6) return `${(v / 1e6).toLocaleString(locale(), { maximumFractionDigits: 1 })}M`;
     if (Math.abs(v) >= 1e3) return `${Math.round(v / 1e3)}k`;
     return String(Math.round(v));
   },
@@ -22,20 +24,20 @@ export const fmt = {
   /** "sab 11/10" */
   day(s: string | null | undefined): string {
     const d = dayDate(s);
-    return d ? d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }) : String(s ?? '');
+    return d ? d.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' }) : String(s ?? '');
   },
   /** "sabato 11 ottobre" */
   dayLong(s: string | null | undefined): string {
     const d = dayDate(s);
-    return d ? d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) : String(s ?? '');
+    return d ? d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }) : String(s ?? '');
   },
   /** "11/10, 14:08" from an ISO string or ms */
   when(t: string | number | null | undefined): string {
     if (t == null || t === '') return '';
     const d = new Date(t);
-    return Number.isNaN(d.getTime()) ? String(t) : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return Number.isNaN(d.getTime()) ? String(t) : d.toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   },
-  time(t: number): string { return new Date(t).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); },
+  time(t: number): string { return new Date(t).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }); },
   ago(t: string | number | null | undefined, now = Date.now()): string {
     if (t == null || t === '') return '';
     const ms = typeof t === 'number' ? t : new Date(t).getTime();
@@ -45,11 +47,11 @@ export const fmt = {
 };
 
 export function minutesAgo(m: number): string {
-  if (m < 1) return 'adesso';
-  if (m < 60) return `${m} min fa`;
-  if (m < 1440) return `${Math.round(m / 60)} h fa`;
+  if (m < 1) return t('costs.now');
+  if (m < 60) return t('costs.minutesAgo',{count:m});
+  if (m < 1440) return t('costs.hoursAgo',{count:Math.round(m/60)});
   const d = Math.round(m / 1440);
-  return d === 1 ? 'ieri' : `${d} giorni fa`;
+  return d === 1 ? t('costs.yesterday') : t('costs.daysAgo',{count:d});
 }
 
 const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -83,12 +85,12 @@ export function daysBetween(day: string, today: string): number {
 export function dayAge(day: string, today: string): { label: string; tone: 'good' | 'warn' | 'bad' } | null {
   const n = daysBetween(day, today);
   if (!Number.isFinite(n)) return null;
-  const label = n <= 0 ? 'oggi' : n === 1 ? 'ieri' : `${n} giorni fa`;
+  const label = n <= 0 ? t('costs.today').toLocaleLowerCase(locale()) : n === 1 ? t('costs.yesterday') : t('costs.daysAgo',{count:n});
   return { label, tone: n > 7 ? 'bad' : n > 3 ? 'warn' : 'good' };
 }
 
 /** "Oggi" / "Ieri" / "sab 11/10" relative to today. */
 export function dayName(day: string, today: string): string {
   const n = daysBetween(day, today);
-  return n === 0 ? 'Oggi' : n === 1 ? 'Ieri' : fmt.day(day);
+  return n === 0 ? t('costs.today') : n === 1 ? t('costs.yesterday').replace(/^./, letter => letter.toLocaleUpperCase(locale())) : fmt.day(day);
 }

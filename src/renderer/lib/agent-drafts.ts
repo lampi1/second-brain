@@ -1,6 +1,7 @@
 // Unsaved editor state survives navigation/profile switches in a bounded memory cache.
 // An explicitly applied update may adopt a private local restart copy, then keeps it current to avoid stale replay.
 import {validateRecoveryRaster} from './recovery-raster';
+import {checkedManifest} from '@shared/agent-manifest';
 import {AGENT_SYMBOLS,type AgentDraft} from '@shared/agents';
 export interface AgentEditorDraft { id?:string; draft:AgentDraft; message:string; history:{role:'user'|'assistant';text:string}[]; suggestion:AgentDraft|null }
 const drafts=new Map<string,AgentEditorDraft>();
@@ -21,6 +22,7 @@ let recoveredAgents=false,agentStorageProblem=false;
 export function agentDraftCheckpointProblem():string|null{return agentStorageProblem?'La copia locale delle bozze Agenti non è stata salvata. Libera spazio prima di aggiornare.':null;}
 export function agentDraftCheckpoint(){return {version:1,active,entries:[...drafts.entries()]};}
 function validDraft(value:unknown):value is AgentDraft{
+  try { checkedManifest((value as AgentDraft | null)?.manifest); } catch { return false; }
   const draft=value as AgentDraft;if(!draft||typeof draft.name!=='string'||draft.name.length>80||typeof draft.purpose!=='string'||draft.purpose.length>400||typeof draft.instructions!=='string'||draft.instructions.length>8000||typeof draft.engine!=='string'||draft.engine.length>160||draft.model!==null&&(typeof draft.model!=='string'||draft.model.length>300)||draft.effort!==undefined&&!['low','medium','high','xhigh','max'].includes(draft.effort))return false;
   const avatar=draft.avatar;return !!avatar&&(avatar.kind==='symbol'?AGENT_SYMBOLS.includes(avatar.value):avatar.kind==='image'&&typeof avatar.dataUrl==='string'&&avatar.dataUrl.length<=350000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(avatar.dataUrl));
 }

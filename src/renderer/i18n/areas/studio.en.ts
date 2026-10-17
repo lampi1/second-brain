@@ -1,6 +1,18 @@
 // Agent catalog/editor labels; no model/provider output is translated or invented.
 import type{studioIt}from'./studio.it';
 export const studioEn:typeof studioIt={
+  "studio.manifest": "When to delegate to this agent",
+  "studio.manifestHint": "Declared guidance for choosing an agent. It does not verify capabilities or grant permissions or access.",
+  "studio.manifest.whenToUse": "When to use",
+  "studio.manifest.whenNotToUse": "When not to use",
+  "studio.manifest.input": "Required input",
+  "studio.manifest.output": "Expected output",
+  "studio.manifest.declaredTools": "Declared tools",
+  "studio.manifest.accessScopes": "Required access",
+  "studio.manifest.successCriteria": "Success criteria",
+  "studio.manifestUnknown": "Not specified",
+  "studio.manifestLines": "One item per line, up to 12 items of 200 characters each.",
+  "studio.manifestInvalid": "Check the manifest: respect item limits and remove control characters.",
   "studio.retry": "Retry",
   "studio.loading": "Loading agents…",
   "studio.edit": "Edit",

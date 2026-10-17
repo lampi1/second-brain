@@ -1,6 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
+import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -103,7 +104,15 @@ app.whenReady().then(async () => {
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
   const sections = s.sections;
-  const handlers: Handlers = {
+    const connectors = createAppConnectors(app.getPath('userData'));
+    await connectors.ready;
+    const handlers: Handlers = {
+      'connectors:list': () => connectors.service.list(),
+      'connectors:login': a => connectors.service.login(a?.provider),
+      'connectors:cancelLogin': () => connectors.service.cancelLogin(),
+      'connectors:probe': a => connectors.service.probe(a?.provider),
+      'connectors:select': a => connectors.service.select(a?.provider, a?.projects),
+      'connectors:disconnect': a => connectors.service.disconnect(a?.provider),
       'update:get': () => updates.state(),
       'update:apply': a => updates.apply(a?.id),
       'update:checkpointAnswer': a => updates.answer(a),
@@ -283,6 +292,7 @@ app.whenReady().then(async () => {
     e.preventDefault();
     if (quitting) return;
     quitting = true;
+    void connectors.service.cancelLogin();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

@@ -34,11 +34,14 @@ import { gitBranch } from '../chats/branch';
 import { parseImproveSelection } from './improve-evidence';
 import type { ImproveService } from '../improve/service';
 import type { ImproveEvidenceSelection } from '../improve/evidence';
+import type { AgentCatalog } from '../../shared/agents';
+import { agentCatalogTool, discoverAgents } from '../agents/discovery';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
+  agents?: () => AgentCatalog;
   chats: ChatService; browser: BrowserService; brain: BrainService;
   window: () => BrowserWindow | null;
   emitUi: (cmd: EventMap['ui:command']) => void;
@@ -108,6 +111,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
+    ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverAgents(d.agents!, a) }] : []),
     {
       name: 'app_set_chat_effort',
       description: 'Select the reasoning effort for one app chat. Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',
@@ -315,6 +319,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       description: 'Create a work chat in the app and start it with a prompt (the Regia does this instead of the user). Never a Regia: only the user picks it. Title "Area · cosa". Engine, model and effort: omit harness/model/effort and the routing table decides by kind of task and area (the user edits it in Impostazioni → «Instradamento modelli»; no row = the user’s "Chat aperte dalla Regia"); naming something else is an override and needs a reason (logged and measured). The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do'),
+        agentId: str('optional profile id from agent_catalog; uses its engine/model/effort and instructions under existing launch policy. Manifest never grants access.'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         harness: str(`optional engine id: ${engines().map(e => e.id).join(' | ')}; omit it to let the routing table decide`),
         model: str('optional model id; omit it to let the routing table decide'),
@@ -331,11 +336,21 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
         const kind = text(a.kind);
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
-        const askedEffort = text(a.effort);
+        let askedEffort: string | null | undefined = text(a.effort);
         if (askedEffort && !(EFFORTS as readonly string[]).includes(askedEffort)) throw new Error(`effort: ${EFFORTS.join(' | ')}`);
         let said: Harness | undefined = typeof a.harness === 'string' && engineOf(a.harness) ? a.harness : undefined;
         if (a.harness !== undefined && a.harness !== null && a.harness !== '' && !said) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`);
-        const askedModel = text(a.model);
+        let askedModel: string | null | undefined = text(a.model);
+        let selected: AgentCatalog['profiles'][number] | undefined;
+        if (a.agentId !== undefined) {
+          if (typeof a.agentId !== 'string') throw Error('agentId non valido.');
+          const catalog = d.agents?.();
+          if (!catalog || catalog.problem) throw Error('Catalogo Agenti non disponibile.');
+          selected = catalog.profiles.find(p => p.id === a.agentId);
+          if (!selected) throw Error('Agente non trovato.');
+          if (said && said !== selected.engine || askedModel !== undefined && askedModel !== selected.model || askedEffort !== undefined && askedEffort !== selected.effort) throw Error('La configurazione non corrisponde all’Agente scelto.');
+          said = selected.engine; askedModel = selected.model; askedEffort = selected.effort ?? null;
+        }
         // a model id belongs to one engine: without harness, the registry says which; an unknown one needs harness
         if (askedModel && !said) {
           const row = modelRow(askedModel, d.brain.routingInfo().registry);
@@ -349,9 +364,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // what nobody names comes from the routing table, else from the user's "Chat aperte dalla Regia" (read now); a
         // row on an engine this Regia may not start now leaves the choice to the defaults
         const routed = d.brain.route({
+          ...(selected ? { api: null } : {}),
           canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appSpace: d.space === 'app',
-          ask: { ...(said ? { harness: said } : {}), ...(askedModel ? { model: askedModel } : {}), ...(askedEffort ? { effort: askedEffort as Effort } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
+          ask: { ...(said ? { harness: said } : {}), ...(askedModel !== undefined ? { model: askedModel } : {}), ...(askedEffort !== undefined ? { effort: askedEffort as Effort | null } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
           defaults: { harness: s.regiaChats.harness, models: { claude: s.regiaChats.claudeModel || null, cursor: s.regiaChats.cursorModel || null }, effort: s.regiaChats.claudeEffort || null },
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
@@ -366,7 +382,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (app && !(await d.improve?.inRepo?.(cwd))) throw new Error(`cartella non ammessa: le chat di «Migliora l'app» lavorano solo nella cartella del codice dell'app o in un suo worktree (${d.improve?.repo() ?? '-'})`);
         // a work chat answers to the Regia that opens it: its questions go to her tab, and it knows whom to write to
         const yours = regia ? `\n\nLa tua Regia è «${regia.title}»: scrivile con send_to_chat.` : '';
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, regia: false, ...(app ? { space: 'app' as const } : regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(app ? { space: 'app' as const } : regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason } };

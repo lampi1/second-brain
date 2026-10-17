@@ -10,6 +10,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { registerOverlay, report } from '../lib/viewports';
+import { t } from '../i18n';
 import { placeBubble, type Pos } from '../lib/tips';
 import '../styles/helptip.css';
 
@@ -117,7 +118,7 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
   }, [open]);
   useEffect(() => () => { clear(); if (current === self.current) current = null; }, []);
 
-  const name = `Spiegazione: ${label ?? (typeof title === 'string' ? title : text ?? 'cosa significa')}`;
+  const name = t('costs.helpName',{label:label ?? (typeof title === 'string' ? title : text ?? t('costs.helpFallback'))});
   return (
     <>
       <button ref={btn} type="button" className={`help-tip ${text ? 'with-text' : ''} ${className}`} aria-label={text ? undefined : name}
@@ -130,13 +131,14 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
         <span className="help-tip-mark" aria-hidden="true" />
         {text && <span className="help-tip-text">{text}</span>}
       </button>
-      {createPortal(
+      {/* Server rendering has no tooltip host. The closed button remains readable; browser behavior is unchanged. */}
+      {typeof document !== 'undefined' && createPortal(
         <div ref={bubble} id={tipId} role="tooltip" className={`help-bubble ${pos?.side ?? 'below'} ${wide ? 'wide' : ''}`} hidden={!open}
           style={{ left: pos?.x ?? -9999, top: pos?.y ?? -9999, visibility: pos ? 'visible' : 'hidden', ['--arrow' as string]: `${pos?.arrow ?? 0}px` }}
           onPointerEnter={() => { hover.current = true; clear(); }} onPointerLeave={leave} data-testid={testid ? `${testid}-bubble` : undefined}>
           {title && <b className="help-title">{title}</b>}
           <div className="help-body">{children}</div>
-          {example && <p className="help-ex"><span>Esempio:</span> {example}</p>}
+          {example && <p className="help-ex"><span>{t('costs.helpExample')}</span> {example}</p>}
         </div>,
         document.body,
       )}
