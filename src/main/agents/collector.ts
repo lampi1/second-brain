@@ -6,7 +6,8 @@ import type { SessionPatch, TokenUsage } from '../chats/session';
 import { aggregateAgentUsage, type AgentSessionObservation, type ObservedProvenance, type TimingKind } from './analytics';
 import { readLocal, writeLocal } from './local-store';
 
-interface Row { observation: AgentSessionObservation; resultIds: string[]; partialCost: number; costMissing: boolean; partialTokens: TokenUsage; tokensMissing: boolean }
+// rolledUp: the chat's agent run ended and keeps its own cost, tokens and time (agent-runs.json): the row may be evicted
+interface Row { observation: AgentSessionObservation; resultIds: string[]; partialCost: number; costMissing: boolean; partialTokens: TokenUsage; tokensMissing: boolean; rolledUp?: boolean }
 interface Live { kind: TimingKind | null; since: number; pending: Map<string, PendingRequest['type']>; cost: number | null; costKnown: boolean | null; tokens: TokenUsage | null; metrics: boolean; origin: Partial<ObservedProvenance>; result?: Extract<ChatItem, { kind: 'result' }> }
 const LIMIT = 1000, EVENT_LIMIT = 2000, SPAN_LIMIT = 2000;
 const emptyTokens = (): TokenUsage => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
@@ -29,7 +30,7 @@ export class AgentAnalyticsCollector {
     const data = saved as { version?: unknown; rows?: unknown };
     if (data.version !== 1 || !Array.isArray(data.rows) || data.rows.length > LIMIT) throw new Error('Invalid analytics archive');
     for (const value of data.rows as Row[]) {
-      if (!value?.observation || !Array.isArray(value.resultIds) || value.resultIds.length > EVENT_LIMIT || value.resultIds.some(id => typeof id !== 'string') || !finite(value.partialCost) || typeof value.costMissing !== 'boolean' || typeof value.tokensMissing !== 'boolean' || !value.partialTokens || !Object.values(value.partialTokens).every(finite) || value.observation.spans.length > SPAN_LIMIT || this.rows.has(value.observation.sessionKey)) throw new Error('Invalid analytics archive');
+      if (!value?.observation || !Array.isArray(value.resultIds) || value.resultIds.length > EVENT_LIMIT || value.resultIds.some(id => typeof id !== 'string') || !finite(value.partialCost) || typeof value.costMissing !== 'boolean' || typeof value.tokensMissing !== 'boolean' || !value.partialTokens || !Object.values(value.partialTokens).every(finite) || value.observation.spans.length > SPAN_LIMIT || (value.rolledUp !== undefined && value.rolledUp !== true) || this.rows.has(value.observation.sessionKey)) throw new Error('Invalid analytics archive');
       this.rows.set(value.observation.sessionKey, value);
     }
     aggregateAgentUsage([...this.rows.values()].map(row => row.observation));
@@ -44,7 +45,8 @@ export class AgentAnalyticsCollector {
     let row = this.rows.get(key);
     if (row && (row.observation.owner.id !== chat.agent.id || row.observation.owner.revision !== chat.agent.revision)) return null;
     if (!row) {
-      if (this.rows.size >= LIMIT) return null; // Preserve existing evidence rather than silently evict history.
+      // full: only a row already rolled up into its ended run may go (oldest first); otherwise keep the evidence
+      if (this.rows.size >= LIMIT && !this.evict()) return null;
       row = { observation: { sessionKey: key, owner: { id: chat.agent.id, name: chat.agent.name, revision: chat.agent.revision }, observedAt: this.clock(), source: 'chat-events', parentSessionKey: null, childTotals: 'unknown', actualUsd: null, listPriceUsd: null, estimatedUsd: null, tokens: { input: null, output: null, cacheRead: null, cacheWrite: null }, startedAt: null, endedAt: null, spans: [], completed: false, taskType: null, model: null, effort: null, provenance: { agentId: chat.agent.id, agentRevision: chat.agent.revision, sessionId: key, engine: chat.harness, source: 'chat-events' }, modelAttribution: 'unknown' }, resultIds: [], partialCost: 0, costMissing: false, partialTokens: emptyTokens(), tokensMissing: false };
       this.rows.set(key, row);
     }
@@ -59,6 +61,20 @@ export class AgentAnalyticsCollector {
       this.live.set(key, live);
     }
     return { row, live };
+  }
+
+  private evict(): boolean {
+    for (const [key, row] of this.rows) if (row.rolledUp && !this.live.has(key)) { this.rows.delete(key); return true; }
+    return false;
+  }
+
+  /** The chat's agent run ended (ChatManager.finishRun): its row is now prunable. */
+  rolledUp(chat: ChatSummary): void {
+    if (this.problem || !chat.sessionId) return;
+    const row = this.rows.get(`${chat.harness}:${chat.sessionId}`);
+    if (!row || row.rolledUp || row.observation.owner.id !== chat.agent?.id) return;
+    row.rolledUp = true;
+    this.save(row);
   }
 
   private save(row: Row): void {

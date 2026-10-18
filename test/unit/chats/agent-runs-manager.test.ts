@@ -232,3 +232,107 @@ describe('agent runs on chats', () => {
     expect(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')).toBe('{"version":1,"runs":[{"runId":"bad"}]}');
   });
 });
+
+describe('agent run evidence (A6)', () => {
+  const reply = (f: ReturnType<typeof fixture>, id: string, text: string, at = Date.now()) => {
+    f.sink(id).item({ kind: 'user', id: `u${at}`, at, text: 'vai' }, false);
+    f.sink(id).item({ kind: 'assistant', id: `a${at}`, at, text }, false);
+    f.sink(id).item({ kind: 'result', id: `r${at}`, at, costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+  };
+  const report = (o: object) => `Fatto.\n\n\`\`\`run-report\n${JSON.stringify(o)}\n\`\`\``;
+
+  it('keeps the run-report of the latest turn that has one, a garbage mark for a bad one', async () => {
+    const f = fixture();
+    const c = await f.create();
+    reply(f, c.id, report({ outcome: 'partial', verified: 'no', summary: 'metà' }), 10);
+    expect(f.run(c.id)?.report).toEqual({ ok: true, at: 10, outcome: 'partial', verified: 'no', summary: 'metà' });
+    reply(f, c.id, 'nessun report', 20);
+    expect(f.run(c.id)?.report).toMatchObject({ at: 10 });
+    reply(f, c.id, report({ outcome: 'done' }), 30);
+    expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'dopo' }), 40); // an ended run takes nothing
+    expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
+  });
+
+  it('a run ended during the turn (its Regia marked it completed) still takes that turn’s report', async () => {
+    const f = fixture();
+    const c = await f.create();
+    f.sink(c.id).changed({ state: 'running' });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'chiuso a metà turno', findings: 3 }), Date.now() + 1);
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, findings: 3 } });
+    expect(f.file().runs[0]).toMatchObject({ report: { findings: 3 } });
+  });
+
+  it('counts the user’s corrections: a tagged message, else a reopen after a report; the reopen drops the report', async () => {
+    const f = fixture();
+    const c = await f.create();
+    f.m.resumedByUser(c.id, '[Reasoning correction]\nNo, il bug è nel parser.');
+    f.m.resumedByUser(c.id, '[Correzione del ragionamento]\nAncora no.');
+    f.m.resumedByUser(c.id, 'grazie');
+    expect(f.run(c.id)?.corrections).toEqual({ tagged: 2, afterReport: 0 });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    f.m.resumedByUser(c.id, 'riapro'); // no report: a reopen, not a correction
+    expect(f.run(c.id)).toMatchObject({ corrections: { tagged: 2, afterReport: 0 }, counters: { reopened: 1 } });
+    reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'fatto' }));
+    await f.m.set(c.id, { workStatus: 'completed' });
+    f.m.resumedByUser(c.id, 'non va');
+    const run = f.run(c.id)!;
+    expect(run).toMatchObject({ corrections: { tagged: 2, afterReport: 1 }, counters: { reopened: 2 } });
+    expect(run.report).toBeUndefined();
+    expect(f.file().runs[0]).toMatchObject({ corrections: { tagged: 2, afterReport: 1 } });
+  });
+
+  it('a run recorded before corrections were counted stays unknown', async () => {
+    const f = fixture();
+    const c = await f.create();
+    delete f.m.runs.get(f.run(c.id)!.runId)!.corrections;
+    f.m.resumedByUser(c.id, '[Reasoning correction]\nNo.');
+    expect(f.run(c.id)?.corrections).toBeUndefined();
+  });
+
+  it('measures the time spent running while the run is open, settled at its end', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    const c = await f.create();
+    const t0 = Date.now();
+    f.sink(c.id).changed({ state: 'running' });
+    vi.setSystemTime(t0 + 5000);
+    f.sink(c.id).changed({ state: 'running' }); // still the same turn
+    vi.setSystemTime(t0 + 6000);
+    f.sink(c.id).changed({ state: 'waiting' });
+    vi.setSystemTime(t0 + 60_000); // waiting on the user: not execution
+    f.sink(c.id).changed({ state: 'running' });
+    vi.setSystemTime(t0 + 62_000);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    expect(f.run(c.id)?.executionMs).toBe(8000);
+    f.sink(c.id).changed({ state: 'running' });
+    vi.setSystemTime(t0 + 99_000);
+    f.sink(c.id).changed({ state: 'idle' });
+    expect(f.run(c.id)?.executionMs).toBe(8000);
+  });
+
+  it('the turn that reopens a run counts from the reopen (chat:send starts it first)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    const c = await f.create();
+    await f.m.set(c.id, { workStatus: 'completed' });
+    const t0 = Date.now();
+    f.sink(c.id).changed({ state: 'running' }); // the ended run takes nothing yet
+    f.m.resumedByUser(c.id, 'correggi X');
+    vi.setSystemTime(t0 + 3000);
+    f.sink(c.id).changed({ state: 'idle' });
+    expect(f.run(c.id)?.executionMs).toBe(3000);
+  });
+
+  it('a hand-off continuation links the new run to the old one', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const old = f.run(c.id)!.runId;
+    await f.m.ensureHandoff(c.id, { ask: false }); // the token-free note: the fake session writes none
+    const n = await f.m.continueChat(c.id);
+    expect(f.run(n.id)).toMatchObject({ agentId: 'reviewer', continuedFrom: old });
+    expect(f.file().runs.find(r => r.runId === f.run(n.id)!.runId)).toMatchObject({ continuedFrom: old });
+  });
+});

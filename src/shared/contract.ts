@@ -5,7 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
-import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentMetrics, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -1140,6 +1140,8 @@ export interface InvokeMap {
   'agents:archive': [{ id: string }, AgentProfile];
   'agents:restore': [{ id: string }, AgentProfile];
   'agents:history': [{ id: string }, AgentVersion[]];
+  /** the §5 metrics per agent and version (A6); since = only runs ended from then on */
+  'agents:metrics': [{ since?: number } | undefined, AgentMetrics[]];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
   'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
@@ -1380,7 +1382,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',

@@ -164,6 +164,12 @@ app.whenReady().then(async () => {
     'agents:archive': a => s.agents.archive(a.id),
     'agents:restore': a => s.agents.restore(a.id),
     'agents:history': a => s.agents.history(a.id),
+    'agents:metrics': a => {
+      const root = demo ? null : s.brain.info().brainRoot;
+      let aiErrors: string | undefined;
+      try { if (root) aiErrors = fs.readFileSync(path.join(root, 'ai-errors.md'), 'utf8'); } catch { aiErrors = undefined; }
+      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}) }) ?? [];
+    },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
@@ -199,7 +205,7 @@ app.whenReady().then(async () => {
     // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId); },
+    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
