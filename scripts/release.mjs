@@ -317,7 +317,19 @@ function startSelected(id, rel, ready, snapshot) {
 // the new release started, or the previous one and why). Atomic, never an error if it cannot be written.
 function writeResult(result) {
   const f = path.join(base, 'launch-result.json');
-  try { fs.writeFileSync(`${f}.tmp`, JSON.stringify(result, null, 2)); fs.renameSync(`${f}.tmp`, f); } catch { /* best effort */ }
+  try { fs.writeFileSync(`${f}.tmp`, JSON.stringify(result, null, 2)); } catch { return; /* best effort */ }
+  // Windows refuses to replace a file while anyone has it open (EPERM/EBUSY): the starting app reading this file, an
+  // antivirus scan. A single try silently lost the 'started' record under load, so retry for a bounded 5 s (a real
+  // ACL denial, EACCES, just gives up after it: still best effort). Duplicated from update.mjs renameRetry on purpose:
+  // a new named import would break this launcher next to an older installed update.mjs.
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  for (const until = Date.now() + 5000; ;) {
+    try { fs.renameSync(`${f}.tmp`, f); return; } catch (e) {
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(e.code) || Date.now() > until) break;
+      Atomics.wait(pause, 0, 0, 20);
+    }
+  }
+  try { fs.unlinkSync(`${f}.tmp`); } catch { /* best effort */ }
 }
 
 async function launch() {

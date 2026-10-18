@@ -134,7 +134,7 @@ it('applies the exact selection and permits only the matching conditional rollba
   expect(cli(base, 'rollback-if', target).status).toBe(1);
   expect(cli(base, 'rollback-if', target, 'running').status).toBe(0);
   expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: 'running', previous: target });
-});
+}, 60_000); // Six sequential real release.mjs children, each a cold node start.
 
 it('refuses automatic apply on legacy state and reports a distinct state protocol', () => {
   const { base, sha256 } = setup();
@@ -177,6 +177,8 @@ it('installs from a private verified payload under the common writer lock', () =
   expect(fs.readFileSync(path.join(base, launcher), 'utf8')).toContain('second-brain stable launcher');
 });
 
+// Child budget for the real electron.exe as Node copying a multi-MB ASAR; the test adds margin (not the 15 s default).
+const ASAR_CHILD_MS = 30_000;
 it.skipIf(process.platform !== 'win32')('installs physical ASAR runtime assets with the bundled Electron-as-Node', () => {
   const base = make(), p = payload();
   const executable = path.resolve(import.meta.dirname, '../../node_modules/electron/dist/electron.exe');
@@ -188,7 +190,7 @@ it.skipIf(process.platform !== 'win32')('installs physical ASAR runtime assets w
   const staged = path.join(base, '.installer', 'b'.repeat(32));
   fs.cpSync(p.root, staged, { recursive: true });
   const result = spawnSync(executable, [path.join(staged, 'release.mjs'), 'install-payload', target, sha256], {
-    encoding: 'utf8', windowsHide: true, timeout: 30000,
+    encoding: 'utf8', windowsHide: true, timeout: ASAR_CHILD_MS,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SB_RELEASES_ROOT: base, SB_NO_SYNC: '1' },
   });
   expect(result.error).toBeUndefined();
@@ -196,4 +198,4 @@ it.skipIf(process.platform !== 'win32')('installs physical ASAR runtime assets w
   expect(fs.statSync(path.join(base, name)).isFile()).toBe(true);
   expect(hashFile(path.join(base, name))).toBe(hashFile(archive));
   expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')).current).toBe(target);
-});
+}, ASAR_CHILD_MS + 15_000);

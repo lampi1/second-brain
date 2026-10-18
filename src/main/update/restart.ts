@@ -4,6 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+// Readiness means a cold node + Windows PowerShell 5.1 start (antivirus scan included): 5 s was too tight on a busy PC
+// (the native test failed under load). Both windows only bound a helper that never answers; a healthy one is faster.
+export const RESTART_READY_MS = 30_000;
+export const RESTART_CANCEL_MS = 15_000;
+
 // Fixed code: all paths/PID travel in environment values. The launcher may legitimately change during apply,
 // so verify its complete generated grammar both at readiness and immediately before starting it.
 const helper = String.raw`
@@ -119,7 +124,7 @@ export async function prepareUpdateRestart({ base, pid }: { base: string; pid: n
     if (child.connected) child.send({ type: 'cancel' }, () => {});
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([exited, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Helper di riavvio non terminato: aggiornamento bloccato.')), 5000); })]);
+      await Promise.race([exited, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Helper di riavvio non terminato: aggiornamento bloccato.')), RESTART_CANCEL_MS); })]);
       if (!stopped) throw new Error('Uscita del waiter di riavvio non confermata: aggiornamento bloccato.');
     } finally { clearTimeout(timer); }
   };
@@ -127,7 +132,7 @@ export async function prepareUpdateRestart({ base, pid }: { base: string; pid: n
   const isReady = (message: unknown) => message !== null && typeof message === 'object' && 'type' in message && message.type === 'ready';
   try {
     await new Promise<void>((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('Helper di riavvio non pronto.')), 5000);
+      timer = setTimeout(() => reject(new Error('Helper di riavvio non pronto.')), RESTART_READY_MS);
       child.on('message', message => {
         if (isReady(message)) resolve();
         else if (message && typeof message === 'object' && 'type' in message && message.type === 'failed') reject(new Error('Helper di riavvio non pronto.'));

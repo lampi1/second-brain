@@ -76,11 +76,13 @@ describe('release.mjs launch', () => {
     fs.mkdirSync(path.join(output, 'main'), { recursive: true });
     fs.writeFileSync(path.join(output, 'main/index.js'), '// Inert activation fixture');
     fs.writeFileSync(path.join(output, 'icon.ico'), 'fixture');
-    const result = launch(base, userData, 'reselect');
+    // The fake app runs a cold `install external` before exiting: give it the production window, not the 3 s default.
+    // Its exit ends the wait at once, so a healthy run is no slower.
+    const result = launch(base, userData, 'reselect', 30_000);
     expect(result.out).toContain('stale launcher');
     expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: 'external', previous: 'b', bad: [] });
     expect(result.starts).toBe(1);
-  }, 15000);
+  }, 75_000); // the launch helper's own 60 s child timeout, plus margin
   it.skipIf(process.platform !== 'win32')('the installed VBS shortcut bootstraps a retained runtime when the current runtime is missing', async () => {
     const { base, userData } = setup(['b', 'a']);
     fs.copyFileSync(script, path.join(base, 'release.mjs'));
@@ -102,7 +104,7 @@ describe('release.mjs launch', () => {
     const startedAt = Date.now();
     let cscriptError: string | null = null;
     try {
-      execFileSync(path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'cscript.exe'), ['//B', '//Nologo', path.join(base, 'launch.vbs')], { env: { ...env, PATH: '' }, windowsHide: true, timeout: 10000 });
+      execFileSync(path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'cscript.exe'), ['//B', '//Nologo', path.join(base, 'launch.vbs')], { env: { ...env, PATH: '' }, windowsHide: true, timeout: 30_000 }); // script host cold start under load: the launch window
     } catch (error) { cscriptError = String(error); }
     const scriptHostMs = Date.now() - startedAt;
     const result = path.join(base, 'launch-result.json');
@@ -127,7 +129,7 @@ describe('release.mjs launch', () => {
     expect(cscriptError, detail).toBeNull();
     expect(observed, detail).toMatchObject({ wanted: 'b', started: 'a' });
     expect(state?.bad, detail).toContain('b');
-  }, 90000);
+  }, 120_000); // cscript 30 s + the 70 s readiness poll + setup
 
   it.each(['missing', 'malformed'])('invalid current metadata (%s) falls back to the previous release', kind => {
     const { base, userData } = setup(['b', 'a']);

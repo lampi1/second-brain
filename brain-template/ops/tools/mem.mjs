@@ -14,11 +14,12 @@
 //        READ-ONLY: only the now.md lines asked for (your own line, a thread, a section, the lines dated in the last N
 //        days), with their line numbers, instead of reading the whole file (~9k tokens re-read by every later step;
 //        2026-10-13: 475 now.md reads a week)
-//   node .../mem.mjs error --text "<line in ai-errors.md format>" [--agent <type>] [--work wi:<id>|branch:<repo>/<b>]
+//   node .../mem.mjs error --text "<line in ai-errors.md format>" [--agent <type>] [--work wi:<id>|branch:<repo>/<b>] [--run r_<id>]
 //        (prints earlier lines with the same type + area; --agent = a sub-agent of that chat made the error: adds
 //        " · agente: <type>", which settles that sub-agent's routing outcome, improve/routing-outcomes.mjs; adds
 //        " · lavoro: <key>", the work the error fails as a whole (improve/work-keys.mjs: --work, else the key of the
-//        app chat whose title the line names; none found = no field, matched later by that title))
+//        app chat whose title the line names; none found = no field, matched later by that title); adds " · run: <id>",
+//        the agent run the error belongs to (--run, else the run of that app chat): the app's agent metrics count it)
 //   node .../mem.mjs journal --text "<tag · text>"                   (adds "- HH:MM · " and today's file)
 //   node .../mem.mjs idea --area lavoro|personale --title "<title>" --file <md: Idea / Come / Perché / Fonte lines>
 //        [--per second-brain|owner|ia]   (required when Fonte starts with "IA": what the AI's idea improves; an
@@ -168,32 +169,51 @@ const nowCmd = (sub, text) => {
 };
 
 export const WORK_KEY = /^(wi:\d{4,7}|branch:[\w.-]+\/[\w./-]+|chat:[\w:.-]+)$/;
-/** The work key of the app chat a line names (the stable app's chats.json, or `appDir`), or null. `rest` = the line
- *  after its time: titles contain " · " themselves, so the chat is the longest title the line starts with. */
-export function workOfLine(rest, { appDir = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'second-brain'), state = path.join(ROOT, 'ops', 'state', 'improve') } = {}) {
-  if (!analytics) return null;
+export const RUN_ID = /^r_[a-f0-9]{12}$/;
+const APP_DIR = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'second-brain');
+/** The app chats (the stable app's chats.json, or `appDir`) and the one a line names, or null. `rest` = the line after
+ *  its time: titles contain " · " themselves, so the chat is the longest title the line starts with. */
+function chatOfLine(rest, appDir) {
   let chats = [];
   try { chats = JSON.parse(fs.readFileSync(path.join(appDir, 'chats.json'), 'utf8')).chats ?? []; } catch { return null; }
+  if (!Array.isArray(chats)) return null;
   // the longest title, then the newest chat with it (a title is reused after a chat is closed)
-  const c = chats.filter(x => x.title && rest.startsWith(`${x.title} · `))
+  const c = chats.filter(x => x && typeof x.title === 'string' && x.title && rest.startsWith(`${x.title} · `))
     .sort((a, b) => b.title.length - a.title.length || (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))[0];
+  return c ? { c, chats } : null;
+}
+/** The work key of the app chat a line names, or null. */
+export function workOfLine(rest, { appDir = APP_DIR, state = path.join(ROOT, 'ops', 'state', 'improve') } = {}) {
+  if (!analytics) return null;
+  const hit = chatOfLine(rest, appDir);
   // its hand-off chain too: the chain is one work, keyed by the first key found along it
-  return c ? analytics.workKeys(analytics.chainOf(c, chats), { state }).get(c.id) ?? null : null;
+  return hit ? analytics.workKeys(analytics.chainOf(hit.c, hit.chats), { state }).get(hit.c.id) ?? null : null;
+}
+/** The agent run of the app chat a line names (its latest, open or ended), or null: a chat not started from an agent has none. */
+export function runOfLine(rest, { appDir = APP_DIR } = {}) {
+  const id = chatOfLine(rest, appDir)?.c.run?.runId;
+  return typeof id === 'string' && RUN_ID.test(id) ? id : null;
 }
 
-const errorCmd = (text, agent, work) => {
+const errorCmd = (text, agent, work, run) => {
   if (text === undefined) fail('--text or --file is required');
   if (agent !== undefined && !/^[\w-]{1,40}$/.test(agent)) fail('--agent: the sub-agent type (reviewer, general-purpose, Explore…)');
   if (agent !== undefined && / · agente: /.test(text)) fail('--agent given and the text already has "· agente:"');
   if (work !== undefined && !WORK_KEY.test(work)) fail('--work: wi:<id>, branch:<repo>/<branch> or chat:<id>');
   if (/ · lavoro: /.test(text)) fail('the text already has "· lavoro:": pass it with --work');
+  if (run !== undefined && !RUN_ID.test(run)) fail('--run: the agent run id, r_ and 12 hex digits');
+  if (/ · run: /.test(text)) fail('the text already has "· run:": pass it with --run');
   const f = bullet(text).slice(2).split(' · ');
   if (f.length < 6) fail('not in ai-errors.md format: "AAAA-MM-GG HH:MM · chat · area · tipo · detto: … · vero: … · visto da: …"');
   // the whole work fails, not only this chat (2026-10-14, "il voto va al lavoro intero"): its key, when known
   let key = work ?? null;
-  if (!key) try { key = workOfLine(f.slice(1).join(' · '), { ...(arg('--app') ? { appDir: arg('--app') } : {}) }); } catch { key = null; }
+  const app = arg('--app') ? { appDir: arg('--app') } : {};
+  if (!key) try { key = workOfLine(f.slice(1).join(' · '), app); } catch { key = null; }
+  // the agent run it belongs to (AGENTS-DESIGN §5: the app counts the lines Brother saw per run, as a secondary column)
+  let runId = run ?? null;
+  if (!runId) try { runId = runOfLine(f.slice(1).join(' · '), app); } catch { runId = null; }
   const context = eventContext();
-  const line = bullet(text) + (agent ? ` · agente: ${agent}` : '') + (key ? ` · lavoro: ${key}` : '') +
+  const line = bullet(text) + (agent ? ` · agente: ${agent}` : '') + (key ? ` · lavoro: ${key}` : '') + (runId ? ` · run: ${runId}` : '') +
     (context.origin ? ` · reporter-origin: ${originField(context.origin)}` : '') +
     (context.responsibleEpisode ? ` · responsible-episode: ${originField(context.responsibleEpisode)}` : '');
   const [, , area, type] = f;
@@ -333,7 +353,8 @@ const main = () => {
   // --agent needs its type: a forgotten one would write an untagged line and the sub-agent would close as a success
   if (cmd === 'error' && argv.includes('--agent') && !/^[^-]/.test(arg('--agent') ?? '')) fail('--agent needs the sub-agent type (reviewer, general-purpose, Explore…)');
   if (cmd === 'error' && argv.includes('--work') && !/^[^-]/.test(arg('--work') ?? '')) fail('--work needs its key (wi:<id>, branch:<repo>/<branch>)');
-  if (cmd === 'error') return errorCmd(text, arg('--agent'), arg('--work'));
+  if (cmd === 'error' && argv.includes('--run') && !/^[^-]/.test(arg('--run') ?? '')) fail('--run needs the agent run id (r_…)');
+  if (cmd === 'error') return errorCmd(text, arg('--agent'), arg('--work'), arg('--run'));
   if (cmd === 'journal') return journalCmd(text);
   const src = fs.readFileSync(new URL(import.meta.url), 'utf8');
   console.log(src.slice(0, src.indexOf('import ')).trim());
