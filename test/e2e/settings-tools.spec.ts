@@ -5,6 +5,7 @@ test('Settings shows three connectors and the supported engines with explicit Co
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
     await page.getByTestId('st-search').fill('Azure');
     const cards = page.getByTestId('app-connectors');
     for (const name of ['GitHub', 'Jira Cloud', 'Azure DevOps']) await expect(cards.getByRole('article', { name })).toBeVisible();
