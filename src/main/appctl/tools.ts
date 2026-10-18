@@ -252,6 +252,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           const owner = regiaOfChat(target, all);
           if (owner !== regia.id) throw new Error(`bloccato: questa domanda è dell’Orchestrator «${chatName(all.find(c => c.id === owner) ?? regia)}»: la risponde l'utente lì`);
         }
+        // the legacy /mcp/improve Regia now sees every chat, but closes questions only of app-code work: a chat in the
+        // source repo or one of its worktrees that no other Orchestrator coordinates (its authority stays as before)
+        if (regia && d.sourceOnly) {
+          const others = target.regiaOf && target.regiaOf !== regia.id && d.chats.list().some(c => c.id === target.regiaOf && c.isRegia && !c.closedAt);
+          if (others || !(await d.improve?.inRepo?.(target.cwd))) throw new Error('bloccato: questa domanda non è di una chat sul codice dell’app: la risponde l’utente nella sua chat');
+        }
         if (!regia || !decidedSince(regia.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
         const given = a.answers && typeof a.answers === 'object' && !Array.isArray(a.answers) ? a.answers as Record<string, unknown> : {};
         const asked = req.questions.map(q => q.question);

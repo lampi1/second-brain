@@ -18,6 +18,11 @@ Known gaps:
 - `ChatManager.appMcpFor` still passes `'app'` to `appMcpUrl` for a legacy `appRegia` chat, routing it to `/mcp/improve`; intended for compatibility.
 - `ImproveService` (branch → chat link) and `ProposalBridge` (reuse of a proposal's chat) now match any open chat whose cwd is the worktree, not only former app-space chats; confirm that is the wanted scope.
 
-Validation: not run on this machine (PC overloaded); TypeScript, ESLint, unit tests and `test/e2e/improve.spec.ts` must run in the cloud session before the PR is opened.
+Integration (rebase on main 4e01cee):
+- `app_resolve_question` on the legacy `/mcp/improve` mount: with the partition gone that Regia now sees every chat, and the mount skipped the per-Regia ownership check. It now closes a question only for a chat whose cwd is the source repo or a verified worktree and that no other open Orchestrator coordinates (unit test in `test/unit/appctl.test.ts`).
+- Conflicts with main's i18n pass in `ChatTile.tsx` and `ImprovePage.tsx`: kept the translated labels, dropped the `space` wrapper and the removed "Agenti delle modifiche" card; its two now unused `audit.ImprovePage.*` keys are removed from both locales.
+- `test/unit/improve.test.ts` (engine parity, added on main) expected `space: 'app'` on the app Regia; it now expects the App route area and no `space`.
+
+`test/e2e/improve.spec.ts` is changed on this branch and runs first on main, in `npm run check` after the merge.
 
 No new dependency, approval popup, updater promotion or production integration.

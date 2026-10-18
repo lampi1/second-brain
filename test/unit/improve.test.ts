@@ -317,7 +317,9 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
     // engine parity: the app's Regia runs on the engine the user picked, keeping its app scope and never Claude's model
     await s.createRegia('cursor');
-    expect(created[1]).toMatchObject({ harness: 'cursor', space: 'app', appRegia: true, cwd: r.dir, route: { source: 'override', kind: 'regia', area: 'App' } });
+    // its app scope is the App area of its route (ADR 0071: no chat space any more)
+    expect(created[1]).toMatchObject({ harness: 'cursor', appRegia: true, cwd: r.dir, route: { source: 'override', kind: 'regia', area: 'App' } });
+    expect(created[1]!.space).toBeUndefined();
     expect(created[1]!.model ?? null).not.toBe('claude-opus-5-5');
     expect(created[1]!.prompt).toBe(appRegiaPrompt(r.dir));
     // an engine that is off is still refused for the user's own pick: nothing created

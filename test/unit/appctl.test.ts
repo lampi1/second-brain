@@ -102,6 +102,27 @@ describe('app control tools', () => {
       expect(answered).toHaveLength(1);
     });
 
+    it('the legacy /mcp/improve Regia closes questions only of app-code work, never of another Orchestrator\'s chat', async () => {
+      const answered: unknown[] = [];
+      const pend = [q, { ...q, id: 'q2', chatId: 'app' }, { ...q, id: 'q3', chatId: 'owned' }];
+      const chats = {
+        list: () => [{ id: 'regia', isRegia: true, harness: 'claude' }, { id: 'ar', isRegia: false, appRegia: true, harness: 'claude', cwd: 'C:/code/app' },
+          { id: 'w', isRegia: false, harness: 'claude', cwd: 'C:/brain' }, { id: 'app', isRegia: false, harness: 'claude', cwd: 'C:/code/app-wt/x' },
+          { id: 'owned', isRegia: false, harness: 'claude', cwd: 'C:/code/app', regiaOf: 'regia' }],
+        pending: () => pend,
+        items: () => [{ kind: 'user', id: 'u', at: 150, text: 'sì' }],
+        answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
+      } as unknown as ChatService;
+      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0', sourceOnly: true,
+        improve: { repo: () => 'C:/code/app', state: async () => ({}) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } }).find(x => x.name === 'app_resolve_question')!;
+      const run = (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a));
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/codice dell’app/);
+      await expect(run({ chatId: 'owned', requestId: 'q3', answers: both })).rejects.toThrow(/codice dell’app/);
+      expect(answered).toEqual([]);
+      await run({ chatId: 'app', requestId: 'q2', answers: both });
+      expect(answered).toHaveLength(1);
+    });
+
     it('never a permission, the Regia\'s own question, a closed request or a partial answer', async () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'ok' }]);
       await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
