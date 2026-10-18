@@ -20,20 +20,24 @@ Counts of agents continue to exclude shell commands. No new IPC, hooks, dependen
 Claude nested Agent/Task messages are now observed even when their transcript is intentionally hidden from the
 parent conversation; a regression test covers the nested synchronous lifecycle without transcript leakage.
 
-Validation:
-- Added provider/reducer tests for background acknowledgment, launch failure, command lifecycle and persisted start time.
-- Added child selection and actual React component render tests, including Italian/English labels and escaped descriptions.
-- Added test/e2e/child-strips.spec.ts with collapsed/expanded screenshots and maximized visibility assertions.
-  This spec has NOT run: e2e runs only on main after merge, and this brief forbids starting the app.
-- npm.cmd run check:branch FAILED at typecheck: missing highlight.js and pdfjs-dist dependencies in this checkout.
-  A new test cast reported in that run was corrected. Check metadata also cannot be written (EPERM).
-- Targeted Vitest run BLOCKED before executing tests: EPERM creating its temporary ssr directory. No tests passed.
-- npm.cmd run build BLOCKED by esbuild Access is denied resolving the entry from this sandbox. No app was started.
-- Targeted lint passed on all changed code files, including the final nested-Claude addition. Repeated typecheck
-  after the mock fix reports only missing highlight.js/pdfjs-dist dependencies; the branch gate is still not green.
-- git diff --check passed. Staging was attempted once and denied creating index.lock: work remains uncommitted.
+Integrator review fix: a Codex turn runs dozens of commands, and each became a child row. With the reducer capped at
+500 rows and no eviction, a long session filled it with finished commands and then refused every new sub-agent. Now
+at most the newest 20 finished commands are kept. When the reducer is full, the oldest finished row goes first: a
+command first, an agent only if no command is left. Dropping an agent makes the census unknown, never wrong. A new row
+is refused only when all 500 are unfinished. Shell rows are labelled "command" / "comando": the protocol does not say
+whether a command runs in the background.
+
+Validation (integrator, rebased on main 01a0bca):
+- Provider/reducer tests for background acknowledgment, launch failure, command lifecycle, persisted start time,
+  pruning to 20 finished commands (a sub-agent after 600 commands is still recorded) and eviction when full.
+- Child selection and actual React component render tests, including Italian/English labels and escaped descriptions.
+- `npx tsc --noEmit` and lint of the changed files pass; touched suites (agent-children, codex-children,
+  agent-children-rows, child-strips-render) 24/24.
+- `npm run check:branch`: unit 1205 passed, 2 failed, both timeouts in files this branch does not touch, both passing
+  alone: correction-catch-hook "gives no warning when not ready, slow…" (hook runtime over 1400 ms under load) and
+  compare/headless "a run past its time is killed". To check in the final gate on main.
+- test/e2e/child-strips.spec.ts (collapsed/expanded screenshots, maximized visibility) has NOT run: e2e runs on main.
 
 Limits: observations remain partial; no claim of a complete provider census is made. Start time means first seen,
 not an invented engine start timestamp. Historical activity absent from saved telemetry cannot be reconstructed
-from the aggregate background count. The Regia must run the fresh visible review, dependency setup if needed,
-branch checks, main-only e2e and dev visual verification before release. This work is not yet release-validated.
+from the aggregate background count. Main-only e2e and dev visual verification are still to do before release.
