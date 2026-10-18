@@ -13,15 +13,24 @@ export function projectedMapLabel(sprite:Sprite,camera:PerspectiveCamera,width:n
 }
 /** Keep admitted names readable at overview zoom; collision checks use the actual resized sprite, never a fake box. */
 export function readableMapLabel(sprite:Sprite,camera:PerspectiveCamera,width:number,height:number,naturalHeight:number,minHeight:number,maxHeight:number,scratch?:ProjectionScratch){
+  const previous=sprite.scale.y,previousX=sprite.scale.x;
+  if(!(previous>0)||!(naturalHeight>0))return null;
+  // SpriteText's textHeight is the unscaled single-line height; its width follows its canvas (as it sets it itself),
+  // a plain sprite keeps its own aspect
+  const image=sprite.material.map?.image as {width?:number;height?:number}|undefined;
+  const aspect=image?.width&&image.height?image.width/image.height:sprite.scale.x/previous;
+  // Measured at the natural size and set from it, never from the current scale nor left "close enough": the same
+  // camera always gives the very same labels (Home after a rotation draws the same picture to the pixel).
+  sprite.scale.set(aspect*naturalHeight,naturalHeight,sprite.scale.z);
+  const natural=projectedMapLabel(sprite,camera,width,height,scratch);
+  if(!natural||!Number.isFinite(natural.height)||natural.height<=0){sprite.scale.set(previousX,previous,sprite.scale.z);return null;}
+  const target=natural.height<minHeight?naturalHeight*minHeight/natural.height:natural.height>maxHeight?naturalHeight*maxHeight/natural.height:naturalHeight;
+  // any change, however small, is a change: the engine draws one more frame for it, so the picture never keeps a stale size
+  const resized=target!==previous;
+  if(target===naturalHeight)return {...natural,resized};
+  sprite.scale.set(aspect*target,target,sprite.scale.z);
   const box=projectedMapLabel(sprite,camera,width,height,scratch);
-  if(!box||!Number.isFinite(box.height)||box.height<=0||!(sprite.scale.y>0)||!(naturalHeight>0))return null;
-  // SpriteText's textHeight is the unscaled single-line height, independent of prior zoom admissions.
-  const naturalPixels=box.height*naturalHeight/sprite.scale.y;
-  const wanted=Math.max(minHeight,Math.min(maxHeight,naturalPixels)),factor=wanted/box.height;
-  if(Math.abs(factor-1)<0.001)return {...box,resized:false};
-  sprite.scale.multiplyScalar(factor);
-  const resized=projectedMapLabel(sprite,camera,width,height,scratch);
-  return resized?{...resized,resized:true}:null;
+  return box?{...box,resized}:null;
 }
 export function mapObjectVisible(object:{visible:boolean;parent?:{visible:boolean;parent?:unknown}|null}):boolean{
   let current: {visible:boolean;parent?:unknown}|null=object;

@@ -43,10 +43,13 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await app?.close(); });
 
 test('Oggi and Adesso are gone: their old links open DevOps', async () => {
-  await open('home');
+  await open('oggi');
   await expect(page.getByTestId('brain-page-devops')).toBeVisible();
   await open('adesso');
   await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  // "home" is no longer an alias of Oggi: since 73a4e37 it is the Home page itself (index.tsx BRAIN_PAGES)
+  await open('home');
+  await expect(page.getByTestId('brain-page-home')).toBeVisible();
 });
 
 test('Fatto e standup: done by topic with DevOps links, diary table, another day', async () => {
@@ -168,13 +171,23 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
   if(await canvas.count()){
     await expect.poll(async()=>Number(await canvas.getAttribute('data-map-visible-names'))).toBeGreaterThan(0);
     const gl=canvas.locator('canvas');await expect(gl).toHaveCount(1);await page.emulateMedia({reducedMotion:'reduce'});await canvas.focus();
+    // the map's picture without the canvas focus ring: it shows from the first key only when an earlier test clicked
+    const pic=()=>gl.screenshot({style:'.bx-map-canvas:focus-visible{outline:none!important}'});
+    // the same picture: the GPU draws an identical scene (camera, labels, buffers equal to the bit) with up to a few
+    // pixels one colour level off, so at most 0.01% of the pixels may differ, by at most 2 levels per channel
+    const same=(a:Buffer,b:Buffer)=>page.evaluate(async([x,y])=>{
+      const read=async(s:string)=>{const i=await createImageBitmap(await (await fetch('data:image/png;base64,'+s)).blob()),c=new OffscreenCanvas(i.width,i.height),g=c.getContext('2d')!;g.drawImage(i,0,0);return g.getImageData(0,0,i.width,i.height);};
+      const p=await read(x),q=await read(y);if(p.width!==q.width||p.height!==q.height)return false;
+      let off=0;for(let i=0;i<p.data.length;i+=4){let d=0;for(let k=0;k<4;k++)d=Math.max(d,Math.abs(p.data[i+k]!-q.data[i+k]!));if(d>2)return false;if(d)off++;}
+      return off<=p.width*p.height*1e-4;
+    },[a.toString('base64'),b.toString('base64')] as const);
     let previous:Buffer=Buffer.alloc(0),stable=0;
-    await expect.poll(async()=>{const current=await gl.screenshot();stable=current.equals(previous)?stable+1:0;previous=current;return stable;},{timeout:20000,intervals:[150]}).toBeGreaterThanOrEqual(3);
-    const original=await gl.screenshot();await page.keyboard.press('ArrowRight');
-    await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(false);
-    await page.keyboard.press('Home');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(true);
-    await page.keyboard.press('+');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(false);
-    await page.keyboard.press('Home');await expect.poll(async()=>(await gl.screenshot()).equals(original)).toBe(true);
+    await expect.poll(async()=>{const current=await pic();stable=current.equals(previous)?stable+1:0;previous=current;return stable;},{timeout:20000,intervals:[150]}).toBeGreaterThanOrEqual(3);
+    const original=await pic();await page.keyboard.press('ArrowRight');
+    await expect.poll(async()=>same(await pic(),original)).toBe(false);
+    await page.keyboard.press('Home');await expect.poll(async()=>same(await pic(),original)).toBe(true);
+    await page.keyboard.press('+');await expect.poll(async()=>same(await pic(),original)).toBe(false);
+    await page.keyboard.press('Home');await expect.poll(async()=>same(await pic(),original)).toBe(true);
   }else await expect(m.getByTestId('bx-map-flat')).toBeVisible();
   await shot(page,'brain-map-direct');
   await expect(m.getByRole('button',{name:'Filtri',exact:true})).toHaveCount(0);
