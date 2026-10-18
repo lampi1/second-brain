@@ -248,7 +248,7 @@ describe('ChatManager with the CPU queue', () => {
     const { m, f, cwd, users } = setup();
     const app = await m.create({ harness: 'claude', cwd, prompt: 'fix the app', title: 'App · coda' }, 'agent');
     const pers = await m.create({ harness: 'claude', cwd, prompt: 'pers app', title: 'Pers · App: tile' }, 'agent');
-    const improve = await m.create({ harness: 'claude', cwd, prompt: 'improve', title: 'Qualcosa', space: 'app' }, 'agent');
+    const improve = await m.create({ harness: 'claude', cwd, prompt: 'improve', title: 'App · Qualcosa' }, 'agent');
     const work = await m.create({ harness: 'claude', cwd, prompt: 'plan it', title: 'Shop · sprint' }, 'agent');
     expect(m.queueState()?.waiting.map(w => w.chatId)).toEqual([work.id, app.id, pers.id, improve.id]);
     expect(m.list().find(x => x.id === work.id)?.queued?.position).toBe(1);

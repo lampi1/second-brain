@@ -3,7 +3,8 @@
 // (the user, 2026-10-13): no routing left to test.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
-import { appChatIds, commandsOfTurn, regiaIdOf } from '../../src/renderer/lib/regia-route';
+import { commandsOfTurn, regiaIdOf } from '../../src/renderer/lib/regia-route';
+import { workspaceTiles } from '../../src/renderer/lib/grid';
 import type { AppState } from '../../src/renderer/store/state';
 
 describe('the Regia from the app state', () => {
@@ -14,10 +15,10 @@ describe('the Regia from the app state', () => {
   });
 });
 
-describe("the chats of \"Migliora l'app\"", () => {
-  it('appChatIds lists the app space only, in grid order', () => {
+describe('one Grindhouse for every worker', () => {
+  it('lists legacy app chats alongside normal chats, in grid order', () => {
     const s = { order: ['a', 'app1', 'b', 'app2'], chats: { a: {}, app1: { space: 'app' }, b: {}, app2: { space: 'app', appRegia: true } } } as unknown as Pick<AppState, 'order' | 'chats'>;
-    expect(appChatIds(s)).toEqual(['app1', 'app2']);
+    expect(workspaceTiles(s.order, s.chats, []).map(t => t.id)).toEqual(['a', 'app1', 'b', 'app2']);
   });
 });
 

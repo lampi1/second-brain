@@ -28,3 +28,5 @@ folder/engine rules and pending permissions remain enforced independently of all
 Tests cover validation, corrupt-file preservation, version 1 compatibility, seed migration, read-only
 discovery, prompt delivery, renderer recovery, IT/EN escaping and profile routing policy. The panel e2e
 with screenshot first runs on main under the existing check policy; it invokes no real model.
+
+> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

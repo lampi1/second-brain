@@ -40,7 +40,7 @@ const LIVE = new Set(['running', 'waiting', 'idle']);
 // hand-off only urgent mail. Nothing is dropped: held mail stays unread in its box, delivered in full with the first
 // message that goes.
 export { REGIA_GROUP_MS, REGIA_HOLD_MS } from './regia-delivery';
-const isRegiaChat = (c: ChatSummary): boolean => c.isRegia || (c.space === 'app' && !!c.appRegia);
+const isRegiaChat = (c: ChatSummary): boolean => c.isRegia || !!c.appRegia;
 
 /** sig = the app's signature (sendMail): only then the sender is the chat it says */
 /** kind = what the sender says it is (send_to_chat): it times the mail to an idle Regia (regia-delivery.ts) */

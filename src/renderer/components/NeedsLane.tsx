@@ -25,7 +25,7 @@ export function NeedsLane({ peek }: { peek?: boolean }) {
   const hidden = ui.use(s => s.hidden, sameList);
   const later = ui.use(s => s.later);
   // the chats of "Migliora l'app" ask in their own section (and in the global layer when it is not on screen)
-  const pending = useApp(s => s.pending.filter(p => !hidden.includes(p.chatId) && s.chats[p.chatId]?.space !== 'app'), sameList);
+  const pending = useApp(s => s.pending.filter(p => !hidden.includes(p.chatId)), sameList);
   if (pending.length === 0 || later) return null;
   return (
     <section className={`lane ${peek ? 'peek' : ''}`} aria-label={t('dialogs.needsLane.label', { count: pending.length })} data-testid="needs-lane">

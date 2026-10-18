@@ -16,7 +16,7 @@ it('advertises only on Improve and returns only selected evidence with no invent
     improveEvidence: selected => ImproveService.prototype.evidence(aggregateAgentUsage([]), selected),
   };
   expect(appControlTools(deps).some(tool => tool.name === 'app_improve_evidence')).toBe(false);
-  const tool = appControlTools({ ...deps, space: 'app' }).find(tool => tool.name === 'app_improve_evidence')!;
+  const tool = appControlTools({ ...deps, sourceOnly: true }).find(tool => tool.name === 'app_improve_evidence')!;
   expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
   const empty = await tool.run(selection);
   expect(empty).toMatchObject({ text: '', bytes: 0, publication: 'existing-human-reviewed-flow-only', metadataScope: 'selected-evidence-only' });

@@ -576,9 +576,9 @@ describe('ChatManager', () => {
     expect(lines.find(l => l.includes('--allowedTools mcp__second-brain-app'))).toContain("--name Regia dell'app");
     expect(lines.filter(l => l.includes('App · tema')).every(l => !l.includes('--allowedTools mcp__second-brain-app'))).toBe(true);
     const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; space?: string; appRegia?: boolean }[] };
-    expect(stored.chats.map(c => [c.id, c.space ?? null, c.appRegia ?? false])).toEqual([[r1.id, 'app', false], [r2.id, 'app', true], [a.id, 'app', false]]);
+    expect(stored.chats.map(c => [c.id, c.space ?? null, c.appRegia ?? false])).toEqual([[r1.id, null, false], [r2.id, null, true], [a.id, null, false]]);
     const again = manager(e, opts).m;
-    expect(again.list().map(c => [c.id, c.space ?? null, !!c.appRegia])).toEqual([[r1.id, 'app', false], [r2.id, 'app', true], [a.id, 'app', false]]);
+    expect(again.list().map(c => [c.id, c.space ?? null, !!c.appRegia])).toEqual([[r1.id, null, false], [r2.id, null, true], [a.id, null, false]]);
   });
 
   // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Regia takes the role, name and work chats; the

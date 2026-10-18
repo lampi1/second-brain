@@ -168,8 +168,7 @@ export interface ChatSummary {
   /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
-  /** 'app' = a chat of the "Migliora l'app" section (it changes the app's own code): shown there, never on the work grid
-   *  nor routed to the work Regia */
+  /** @deprecated Legacy input only. Ignored for visibility and dropped on restore/creation. */
   space?: ChatSpace;
   /** the section's own Regia ("Regia dell'app"): it coordinates the 'app' chats; one at a time, never closed */
   appRegia?: boolean;
@@ -349,7 +348,7 @@ export interface NewChat {
   /** a work chat: the Regia it answers to */
   regiaOf?: string;
   worktree?: boolean;         // claude --worktree
-  space?: ChatSpace;          // 'app': a chat of the "Migliora l'app" section
+  space?: ChatSpace;          // deprecated input: never persisted or used for visibility
   appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */

@@ -26,9 +26,6 @@ export function regiaOfIn(s: Pick<AppState, 'order' | 'chats'>, chatId: string):
   return regiaOfChat(s.chats[chatId], s.order.map(x => s.chats[x]).filter(c => !!c));
 }
 
-/** The chats of "Migliora l'app" (their own section and Regia), in order. */
-export const appChatIds = (s: Pick<AppState, 'order' | 'chats'>): string[] => s.order.filter(x => s.chats[x]?.space === 'app');
-
 export interface TurnCommand { itemId: string; lang: string; code: string }
 
 /** The shell blocks of the chat's current turn (its assistant messages after the user's last one), in order: the

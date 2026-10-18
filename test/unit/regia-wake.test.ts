@@ -98,14 +98,15 @@ describe('RegiaWake', () => {
     expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
   });
 
-  it("the chats of \"Migliora l'app\" (its Regia too) never wake the work Regia", async () => {
+  it('legacy app workers report to the shared coordinator', async () => {
     const { w, sent, up, finish } = make();
     finish('fix', 'Ramo pronto.', { space: 'app' });
     finish('app-regia', 'Fatto.', { space: 'app', appRegia: true });
     up({ id: 'fix', space: 'app', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'fix', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Unisco?', options: [], multiSelect: false }] } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(5000);
-    expect(sent).toEqual([]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('Unisco?');
   });
 
   it('a turn that ended with an error result is an error', async () => {

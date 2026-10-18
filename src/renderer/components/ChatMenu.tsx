@@ -53,7 +53,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
     <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={regia ? 290 : 270}>
       <MenuItem onSelect={pick(onRename)} testid={`chat-rename-${id}`}>{t('chat.menu.rename')}</MenuItem>
       <MenuItem onSelect={pick(() => void copyLink(makeLink('home', regia ? 'regia' : `chat-${id}`)))} testid={`chat-link-${id}`}>{t('chat.menu.copyLink')}</MenuItem>
-      {!regia && chat.space !== 'app' && <MenuItem onSelect={pick(() => { setFocused(`chat:${id}`); toggleFocusMode(); })} shortcut="Ctrl+Shift+F" testid={`chat-focusmode-${id}`}>{t('chat.menu.focusMode')}</MenuItem>}
+      {!regia && <MenuItem onSelect={pick(() => { setFocused(`chat:${id}`); toggleFocusMode(); })} shortcut="Ctrl+Shift+F" testid={`chat-focusmode-${id}`}>{t('chat.menu.focusMode')}</MenuItem>}
       <MenuSep />
       {regia && (
         <>

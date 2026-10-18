@@ -123,14 +123,14 @@ export function toMcp(out: ToolOut): ToolOutput {
 
 /** The app-control tools on the local MCP server: /mcp/app for the work Regia, /mcp/improve for the Regia of
  *  "Migliora l'app" (its own chats, the branches' state). */
-export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'space' | 'improve'>, improve: ImproveService, demo = false, regiaTokens?: EndpointTokens): void {
+export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'sourceOnly' | 'improve'>, improve: ImproveService, demo = false, regiaTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Regia's input means (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${NEW_CHAT_RULE}`;
   // /mcp/app: test agents (acts as the first Regia); /mcp/app/r/<id>/<token>: each work Regia's own, so the tools know
   // the caller (ADR 0021). Only an open Regia with its own token answers (the token lives only here and in its config).
-  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools(deps).map(as) });
+  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as) });
   if (regiaTokens) {
     mcp.mount('/mcp/app/r/:chatId/:token', {
       name: 'app', instructions, authorize: regiaEndpointAuth(regiaTokens, () => deps.chats.list()), who: p => p.chatId,
@@ -139,8 +139,8 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   }
   mcp.mount('/mcp/improve', {
     name: 'app',
-    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, only the chats of this section; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
-    tools: appControlTools({ ...deps, space: 'app', improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
+    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, all chats in the Grindhouse; creation requires the app source repository; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
+    tools: appControlTools({ ...deps, sourceOnly: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
   });
 }
 

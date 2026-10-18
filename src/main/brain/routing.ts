@@ -41,9 +41,9 @@ const writeAtomic = (f: string, text: string): void => {
 };
 const areasOf = (r: Pick<RoutingRow, 'area'>): string[] | null => (r.area === undefined || r.area === null ? null : Array.isArray(r.area) ? r.area : [r.area]);
 const isApp = (area: string): boolean => APP_AREAS.includes(area);
-/** A chat on the app itself: of the "Migliora l'app" space, or titled in an app area ("App · …", "Pers · App: …").
+/** A chat titled in an app area ("App · …", "Pers · App: …").
  *  Its queued work waits behind the other chats' (ADR 0036; chats/manager.ts). */
-export const isAppChat = (title: string, space?: string): boolean => space === 'app' || isApp(areaOf(title, undefined));
+export const isAppChat = (title: string): boolean => isApp(areaOf(title, undefined));
 
 // ── the registry ────────────────────────────────────────────────────────────────────────────────────────────────────
 const bare = (m: string): string => m.toLowerCase().trim().replace(/\[.*\]$/, '').replace(/-\d{8}$/, '');
@@ -275,8 +275,8 @@ export interface RouteRequest {
   title: string; prompt: string;
   /** the agent's own kind (app_create_chat `kind`); else the brain's rules on title and prompt */
   kind?: TaskKind;
-  /** a chat of the "Migliora l'app" section is on the app whatever its title says */
-  appSpace?: boolean;
+  /** Verified app-source work uses app routing regardless of its title. */
+  appCode?: boolean;
   /** the caller's own area (a DevOps record's project or repo); else the title's label */
   area?: string;
   ask: RouteAsk; defaults: RouteDefaults;
@@ -296,7 +296,7 @@ export type RouteResult = { harness: Harness; model: string | null; effort: Effo
 export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: ModelRegistry | null,
   rules: { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
-  const area = req.appSpace ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
+  const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
   const r = resolve(table, { kind, area }, req.ask, req.defaults, reg, req.canRun);
   if ('error' in r) return r;
   // a writing row the user set «Sui crediti API»: the same model on the user's API key, no effort (the API engine takes

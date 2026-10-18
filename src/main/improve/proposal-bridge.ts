@@ -61,7 +61,7 @@ export class ProposalBridge {
         return { quality, reviews };
       },
       startWork: async proposal => {
-        const previous = this.d.chats.list().find(c => c.space === 'app' && path.resolve(c.cwd) === path.resolve(proposal.directory));
+        const previous = this.d.chats.list().find(c => path.resolve(c.cwd) === path.resolve(proposal.directory));
         if (previous) { if (previous.closedAt) await this.d.chats.reopen(previous.id); this.d.focus(previous.id); return; }
         const settings = this.d.brain.settings(), defaults = settings.regiaChats;
         const model = defaults.harness === 'claude' ? defaults.claudeModel : defaults.harness === 'cursor' ? defaults.cursorModel : undefined;
@@ -69,7 +69,7 @@ export class ProposalBridge {
           title: 'Personalizza l’app', cwd: proposal.directory, kind: 'app-feature', area: 'App',
           prompt: 'Chiedi quale modifica all’app desidera preparare l’utente e attendi la sua descrizione. Lavora solo in questo worktree. Leggi le regole del repository, conserva i dati personali fuori da Git e prepara test e revisioni indipendenti. Dopo le verifiche registra ogni verdetto con scripts/record-proposal-review.mjs (vedi docs/proposal-publication.md). Non pubblicare, aggiornare o riavviare l’app. Non effettuare commit senza autorizzazione dell’utente.',
           defaults: { harness: defaults.harness, ...(model ? { model } : {}), ...(defaults.claudeEffort && defaults.harness === 'claude' ? { effort: defaults.claudeEffort } : {}) },
-        }, { space: 'app', byUser: true });
+        }, { appCode: true, byUser: true });
         this.d.focus(chat.id);
       }, emit: rows => { if (this.active?.repo === repo) this.d.emit(rows); },
     });

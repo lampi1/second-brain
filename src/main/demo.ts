@@ -443,7 +443,7 @@ export class DemoChats implements ChatService {
       for (const x of [...this.chats.values()]) if (x.regiaOf === old.id) this.patch(x.id, { regiaOf: id });
     }
     // one app Regia ("Migliora l'app"), never a work Regia: the new one takes the role
-    const appRegia = req.space === 'app' && req.appRegia === true && !req.regia;
+    const appRegia = req.appRegia === true && !req.regia;
     if (appRegia) for (const c of [...this.chats.values()]) if (c.appRegia) this.patch(c.id, { appRegia: undefined });
     const c: ChatSummary = {
       id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Orchestrator · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
@@ -451,7 +451,7 @@ export class DemoChats implements ChatService {
       ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(req.space === 'app' ? { space: 'app' as const, ...(appRegia ? { appRegia: true } : {}) } : {}),
+      ...(appRegia ? { appRegia: true } : {}),
       ...(req.route ? { route: req.route } : {}),
     };
     this.chats.set(id, c);

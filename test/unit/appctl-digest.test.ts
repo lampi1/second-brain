@@ -100,14 +100,14 @@ describe('app_digest', () => {
     expect(askLine({ id: 'c', chatId: 'c', type: 'command', tool: 'Esegui', title: 'Comando', detail: '', input: {}, at: 0, command: { itemId: 'i', code: 'npm run promote\nx', lang: 'powershell' } })).toBe('comando da eseguire `npm run promote`');
   });
 
-  it('the tool: since "last" remembers the previous call per caller; the other space is never shown', async () => {
+  it('the tool: since "last" remembers the previous call per caller; legacy app chats are shown too', async () => {
     let list: ChatSummary[] = [chat('w', { updatedAt: NOW - 60 * MIN }), chat('fix', { space: 'app', lastText: 'segreto' })];
     const chats = { list: () => list, pending: () => [], items: () => [] } as unknown as ChatService;
     const brain = { settings: () => ({ contextWarnTokens: 200_000 }) } as unknown as BrainService;
     const tool = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', devops: () => null }).find(t => t.name === 'app_digest')!;
     const first = String(await tool.run({}));
     expect(first).toContain('«Web · w»');
-    expect(first).not.toContain('fix');
+    expect(first).toContain('fix');
     list = [chat('w', { updatedAt: Date.now() - 60 * MIN })];
     const second = String(await tool.run({ since: 'last' }));
     expect(second).toContain('Invariate: «Web · w».');

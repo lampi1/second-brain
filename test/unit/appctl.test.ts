@@ -34,9 +34,9 @@ describe('app control tools', () => {
     expect(await tool.run({ chatId: 'work', effort: 'medium', model: 'other', approvalPolicy: 'never' })).toMatchObject({ chatId: 'work', effort: { requested: 'medium', submitted: 'xhigh', effective: null, pending: true } });
     expect(set.mock.calls).toEqual([['work', { effort: 'medium' }]]);
     for (const effort of [null, 1, 'bogus', { toString: () => 'medium' }]) await expect(Promise.resolve().then(() => tool.run({ chatId: 'work', effort }))).rejects.toThrow(/validi/);
-    await expect(Promise.resolve().then(() => tool.run({ chatId: 'app', effort: 'medium' }))).rejects.toThrow();
+    expect(await tool.run({ chatId: 'app', effort: 'medium' })).toMatchObject({ chatId: 'app' });
     await expect(Promise.resolve().then(() => tool.run({ chatId: 'cursor', effort: 'medium' }))).rejects.toThrow(/non supporta/);
-    expect(set).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledTimes(2);
     expect(rows[0]).toMatchObject({ model: 'chosen-model', effort: 'xhigh', effortStatus: current });
   });
   it('can never answer permissions; questions only through app_resolve_question', () => {
@@ -99,6 +99,27 @@ describe('app control tools', () => {
       await expect(Promise.resolve().then(() => tool().run({ chatId: 'w', requestId: 'q1', answers: both }))).rejects.toThrow(/dell’Orchestrator «Orchestrator · Supporto»/);
       expect(answered).toEqual([]);
       await tool('r2').run({ chatId: 'w', requestId: 'q1', answers: both });
+      expect(answered).toHaveLength(1);
+    });
+
+    it('the legacy /mcp/improve Regia closes questions only of app-code work, never of another Orchestrator\'s chat', async () => {
+      const answered: unknown[] = [];
+      const pend = [q, { ...q, id: 'q2', chatId: 'app' }, { ...q, id: 'q3', chatId: 'owned' }];
+      const chats = {
+        list: () => [{ id: 'regia', isRegia: true, harness: 'claude' }, { id: 'ar', isRegia: false, appRegia: true, harness: 'claude', cwd: 'C:/code/app' },
+          { id: 'w', isRegia: false, harness: 'claude', cwd: 'C:/brain' }, { id: 'app', isRegia: false, harness: 'claude', cwd: 'C:/code/app-wt/x' },
+          { id: 'owned', isRegia: false, harness: 'claude', cwd: 'C:/code/app', regiaOf: 'regia' }],
+        pending: () => pend,
+        items: () => [{ kind: 'user', id: 'u', at: 150, text: 'sì' }],
+        answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
+      } as unknown as ChatService;
+      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0', sourceOnly: true,
+        improve: { repo: () => 'C:/code/app', state: async () => ({}) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } }).find(x => x.name === 'app_resolve_question')!;
+      const run = (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a));
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/codice dell’app/);
+      await expect(run({ chatId: 'owned', requestId: 'q3', answers: both })).rejects.toThrow(/codice dell’app/);
+      expect(answered).toEqual([]);
+      await run({ chatId: 'app', requestId: 'q2', answers: both });
       expect(answered).toHaveLength(1);
     });
 
@@ -343,7 +364,7 @@ describe('app control tools', () => {
     await expect(Promise.resolve(tools.find(t => t.name === 'app_reopen_chat')!.run({ chatId: 'nope' }))).rejects.toThrow(/non trovata/);
   });
 
-  it('two Regie, two spaces: each sees, writes to and creates only its own chats; only the app space reads the branches', async () => {
+  it('legacy mounts share chats; the improve mount retains source-folder gates and read-only branch tools', async () => {
     const made: Record<string, unknown>[] = [];
     const sent: string[] = [];
     const list = [
@@ -370,46 +391,47 @@ describe('app control tools', () => {
     const runs = (chatId?: string) => [run('w'), run('a')].filter(r => !chatId || r.chatId === chatId);
     const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', runs: runs as never };
     const work = appControlTools(base);
-    const app = appControlTools({ ...base, space: 'app', improve: { repo: () => 'C:/code/app', state: async () => ({ repo: 'C:/code/app' }) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } });
+    const app = appControlTools({ ...base, sourceOnly: true, improve: { repo: () => 'C:/code/app', state: async () => ({ repo: 'C:/code/app' }) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } });
     const t = (tools: typeof work, n: string) => tools.find(x => x.name === n)!;
 
     const ids = async (tools: typeof work) => ((await t(tools, 'app_chats').run({})) as { app: { id: string }[] }).app.map(c => c.id);
-    expect(await ids(work)).toEqual(['r', 'w']);
-    expect(await ids(app)).toEqual(['ar', 'a']);
+    expect(await ids(work)).toEqual(['r', 'w', 'ar', 'a']);
+    expect(await ids(app)).toEqual(['r', 'w', 'ar', 'a']);
 
-    await expect(Promise.resolve(t(work, 'app_send_to_chat').run({ chatId: 'a', text: 'x' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve(t(app, 'app_send_to_chat').run({ chatId: 'w', text: 'x' }))).rejects.toThrow(/non trovata/);
+    await t(work, 'app_send_to_chat').run({ chatId: 'a', text: 'x' });
+    await t(app, 'app_send_to_chat').run({ chatId: 'w', text: 'x' });
     await t(app, 'app_send_to_chat').run({ chatId: 'a', text: 'x' });
-    expect(sent).toEqual(['a']);
+    expect(sent).toEqual(['a', 'w', 'a']);
 
     await t(app, 'app_create_chat').run({ title: 'App · tema', prompt: 'tema scuro' });
-    expect(made[0]).toMatchObject({ cwd: 'C:/code/app', space: 'app', regia: false });
+    expect(made[0]).toMatchObject({ cwd: 'C:/code/app', regia: false });
     await t(work, 'app_create_chat').run({ title: 'Ordini', prompt: 'x' });
     expect(made[1]).toMatchObject({ cwd: 'C:/brain' });
+    expect(made[0]).not.toHaveProperty('space');
     expect(made[1]).not.toHaveProperty('space');
     // the app's chats start only in the code folder or one of its worktrees
     await expect(Promise.resolve().then(() => t(app, 'app_create_chat').run({ title: 'App · x', prompt: 'x', cwd: 'C:/brain' }))).rejects.toThrow(/non ammessa/);
     expect(made).toHaveLength(2);
 
     // items, runs and requests of the other space read as unknown
-    await expect(Promise.resolve().then(() => t(app, 'app_chat_items').run({ chatId: 'w' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve().then(() => t(work, 'app_chat_items').run({ chatId: 'a' }))).rejects.toThrow(/non trovata/);
-    expect(((await t(app, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['a']);
-    expect(((await t(work, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w']);
-    expect(((await t(app, 'app_command_runs').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['a']);
-    await expect(Promise.resolve().then(() => t(app, 'app_command_runs').run({ chatId: 'w' }))).rejects.toThrow(/non trovata/);
-    expect(((await t(app, 'app_state').run({})) as { pending: number }).pending).toBe(1);
+    expect(await t(app, 'app_chat_items').run({ chatId: 'w' })).toEqual([]);
+    expect(await t(work, 'app_chat_items').run({ chatId: 'a' })).toEqual([]);
+    expect(((await t(app, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
+    expect(((await t(work, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
+    expect(((await t(app, 'app_command_runs').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
+    expect(await t(app, 'app_command_runs').run({ chatId: 'w' })).toHaveLength(1);
+    expect(((await t(app, 'app_state').run({})) as { pending: number }).pending).toBe(2);
     // the CPU queue (ADR 0036): each space sees only its own waiting chats
-    expect(((await t(app, 'app_state').run({})) as { queue: { waiting: { chatId: string }[] } }).queue.waiting.map(w => w.chatId)).toEqual(['a']);
-    expect(((await t(work, 'app_state').run({})) as { queue: { cpu: number; waiting: { chatId: string }[] } }).queue).toMatchObject({ cpu: 90, waiting: [{ chatId: 'w', position: 1 }] });
+    expect(((await t(app, 'app_state').run({})) as { queue: { waiting: { chatId: string }[] } }).queue.waiting.map(w => w.chatId)).toEqual(['w', 'a']);
+    expect(((await t(work, 'app_state').run({})) as { queue: { cpu: number; waiting: { chatId: string }[] } }).queue).toMatchObject({ cpu: 90, waiting: [{ chatId: 'w', position: 1 }, { chatId: 'a', position: 2 }] });
     // feed, logs and maximize stay in the caller's space too
-    expect(await t(app, 'app_feed').run({})).toEqual([{ id: 'f2', chatId: 'a' }, { id: 'f3' }]);
-    expect(((await t(app, 'app_logs').run({ grep: 'space-probe' })) as { chat: string }[]).map(e => e.chat)).toEqual(['a']);
-    expect(() => t(app, 'app_ui').run({ action: 'maximize', value: 'a' })).toThrow(/maximize non c'è/);
-    expect(() => t(work, 'app_ui').run({ action: 'maximize', value: 'a' })).toThrow(/non trovata/);
+    expect(await t(app, 'app_feed').run({})).toEqual([{ id: 'f1', chatId: 'w' }, { id: 'f2', chatId: 'a' }, { id: 'f3' }]);
+    expect(((await t(app, 'app_logs').run({ grep: 'space-probe' })) as { chat: string }[]).map(e => e.chat)).toEqual(['w', 'a']);
+    expect(() => t(app, 'app_ui').run({ action: 'maximize', value: 'a' })).not.toThrow();
+    expect(() => t(work, 'app_ui').run({ action: 'maximize', value: 'a' })).not.toThrow();
     // closing too: never a chat of the other space, never the app's Regia
-    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'w' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve().then(() => t(work, 'app_close_chat').run({ chatId: 'a' }))).rejects.toThrow(/non trovata/);
+    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'missing' }))).rejects.toThrow(/non trovata/);
+    await expect(Promise.resolve().then(() => t(work, 'app_close_chat').run({ chatId: 'missing' }))).rejects.toThrow(/non trovata/);
     await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'ar' }))).rejects.toThrow(/Orchestrator/);
     expect(work.some(x => x.name === 'app_improve_state')).toBe(false);
     expect(await t(app, 'app_improve_state').run({})).toMatchObject({ repo: 'C:/code/app' });

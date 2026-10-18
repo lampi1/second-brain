@@ -22,7 +22,6 @@ import { app, closeChat, closeTab, continueChat, createRoutedChat, dispatch, set
 import { orchestratorIdOf, regiaOfIn, regieIdsOf } from './lib/regia-route';
 import { questionsModalOn } from './lib/questions';
 import { answerLater, openQueue } from './lib/later';
-import { showAppChat } from './store/improve';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -160,9 +159,7 @@ export function go(place: Place, opts: { push?: boolean } = {}): void {
 /** Bring an element on screen and highlight it. */
 export function reveal(element: string): void {
   const chat = /^chat-(.+)$/.exec(element)?.[1];
-  const c = chat ? app.get().chats[chat] : undefined;
-  // a chat of "Migliora l'app" (a notification, a copied link) opens in its section, never on the work grid
-  if (chat && c?.space === 'app') { focusChat(chat); return; }
+  if (chat) focusChat(chat);
   highlight(element);
 }
 
@@ -297,14 +294,6 @@ export function focusChat(chatId: string): void {
   if (chatId === orchestratorIdOf(s)) {
     if (u.map || u.page === 'dashboard') go({ page: 'home' });
     setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return;
-  }
-  // a chat of "Migliora l'app" lives in its section: open it there (its Regia is always shown)
-  if (c.space === 'app') {
-    if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
-    showAppChat(chatId);
-    flashTile(`chat:${chatId}`);
-    requestFocus(chatId);
-    return;
   }
   if (c.isRegia) {
     // Existing work coordinators remain accessible as chats; only the app coordinator owns the column.
@@ -450,21 +439,6 @@ export function focusRequest(req: PendingRequest): void {
   if (here) { here.focus(); here.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
   const c = app.get().chats[req.chatId];
   const u = ui.get();
-  if (c?.space === 'app' && !regiaOwn) {
-    // a chat of "Migliora l'app": its tile in the section shows the request
-    if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
-    setChatExpanded(req.chatId, true); // collapsed, it shows only its pill: open it so the panel mounts
-    showAppChat(req.chatId);
-    flashTile(`chat:${req.chatId}`);
-    let n = 0;
-    const take = () => {
-      const el = document.querySelector<HTMLElement>(sel);
-      if (el) { el.focus(); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
-      if (++n < 10) requestAnimationFrame(take);
-    };
-    requestAnimationFrame(take);
-    return;
-  }
   // the Regia's own requests: answered in her tile
   const inRegia = regiaOwn;
   // her tab, over anything, with this request as the card shown (the widget shows one at a time)
@@ -525,8 +499,8 @@ export function closeFocused(): void {
   const id = chatOfTile(u.focused);
   if (id && u.hidden.includes(id)) return;
   const c = id ? app.get().chats[id] : undefined;
-  // a chat of "Migliora l'app" is on screen only in its section, a work chat only in the Grindhouse
-  const pageOff = !!c && (c.space === 'app' ? u.page !== 'migliora' : u.page !== 'home');
+  // Every worker lives in the Grindhouse.
+  const pageOff = !!c && u.page !== 'home';
   const offScreen = !!c && (!!c.closedAt || pageOff || u.map || (!!u.maximized && u.maximized !== `chat:${c.id}`) || (!!u.focusMode && u.focusMode !== c.id));
   if (!c || offScreen) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
   if (c.isRegia || c.appRegia) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
@@ -561,7 +535,6 @@ export function toggleMaximize(key?: string | null): void {
   const k = key ?? ui.get().focused ?? ui.get().prefs.lastFocus;
   if (!k) { toast('Seleziona prima una tessera', 'info'); return; }
   if (k === 'regia') { toast('L’Orchestrator si allarga trascinando il suo angolo in basso a destra', 'info'); return; }
-  if (app.get().chats[chatOfTile(k) ?? '']?.space === 'app') return; // the section's tiles are not maximized
   setMaximized(ui.get().maximized === k ? null : k);
 }
 
@@ -569,8 +542,8 @@ export function toggleFocusMode(): void {
   const u = ui.get();
   if (u.focusMode) { setFocusMode(null); return; }
   const s = app.get();
-  // never a closed one, nor a chat of "Migliora l'app" (it lives in its section)
-  const open = (x: string | null | undefined): x is string => !!x && !!s.chats[x] && !s.chats[x]!.closedAt && s.chats[x]!.space !== 'app';
+  // Never focus an archived chat.
+  const open = (x: string | null | undefined): x is string => !!x && !!s.chats[x] && !s.chats[x]!.closedAt;
   const sel = chatOfTile(u.focused);
   const id = (open(sel) ? sel : null) ?? s.order.find(x => open(x) && !s.chats[x]!.isRegia && isBusy(s.chats[x]!)) ?? s.order.find(x => open(x) && !s.chats[x]!.isRegia);
   if (!id || s.chats[id]?.isRegia) { toast('Seleziona una chat per la modalità focus', 'info'); return; }

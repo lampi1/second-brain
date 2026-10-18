@@ -66,7 +66,7 @@ export function statoChats(inp: StatoInput): StatoChat[] {
     // a command left to run does not block the chat (ChatSummary.pending skips it) but still waits for the user
     const st = stateInfo({ ...c, pending: c.pending + asks.length });
     rows.push({
-      id, name: c.appRegia ? 'Orchestrator' : chatName(c), harness: c.harness, regia: c.isRegia || c.appRegia === true, app: c.space === 'app',
+      id, name: c.appRegia ? 'Orchestrator' : chatName(c), harness: c.harness, regia: c.isRegia || c.appRegia === true, app: c.route?.area === 'App',
       state: st, lastLine: oneLine(c.lastError && c.state === 'error' ? c.lastError : c.lastText ?? ''), asks,
       folder: folderOf(c.cwd), branch: inp.branches[c.cwd] ?? null, updatedAt: c.updatedAt,
     });

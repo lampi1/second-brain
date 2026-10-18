@@ -144,12 +144,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
             <IconButton label={t('chat.tile.stop')} shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
           )}
           <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
-          {/* the chats of "Migliora l'app" live in their section, which has no maximized view */}
-          {chat.space !== 'app' && (
-            <IconButton label={t(maximized ? 'chat.tile.restore' : 'chat.tile.maximize')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
-              {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
-            </IconButton>
-          )}
+          <IconButton label={t(maximized ? 'chat.tile.restore' : 'chat.tile.maximize')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
+            {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+          </IconButton>
           {!chat.isRegia && !chat.appRegia && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
           </div>
         </div>
