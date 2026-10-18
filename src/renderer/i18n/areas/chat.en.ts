@@ -80,8 +80,6 @@ export const chatEn: typeof chatIt = {
   'chat.menu.clear': 'Clear…',
   'chat.menu.renew': 'Start over…',
   'chat.menu.switchEngine': (p: { engine: string }) => `Switch engine → ${p.engine}…`,
-  'chat.menu.opacityWord': 'Opacity',
-  'chat.menu.opacityLabel': 'Orchestrator opacity',
   'chat.menu.modelLabel': 'Model',
   'chat.menu.effortLabel': 'Reasoning',
   'chat.menu.permissionLabel': 'Permission prompts',

@@ -738,8 +738,6 @@ export interface Settings {
   engineIdleMin?: number;
   /** DevOps page: read by the brain's devops-me.mjs (no AI, no tokens), on a timer only when the user turns it on */
   devops: { enabled: boolean; everyMin: number; /** a short sound with a DevOps alert (a mention, a change on my items) */ sound: boolean };
-  /** the Regia overlay's opacity in %, 40-100 (fully opaque while hovered or focused; ADR 0021) */
-  regiaOpacity: number;
   /** "Eventi alla Regia": a work chat that finishes, fails, waits for the user or leaves a command wakes the Regia with a
    *  short app message (main/chats/regia-wake.ts) */
   regiaEvents: boolean;
@@ -781,7 +779,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
+  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
   type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths'; // repo-paths: explicit existing repository roots
