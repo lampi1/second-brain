@@ -59,7 +59,7 @@ it('selects the profile without interpreting declared access as permission and r
   allowed = false;
   await expect(tool.run(args)).rejects.toThrow(/spento/);
   expect(create).toHaveBeenCalledTimes(4);
-  expect(tools.find(t => t.name === 'agent_catalog')!.run({ id: profile.id })).toMatchObject({ permissionsGranted: false });
+  await expect(Promise.resolve(tools.find(t => t.name === 'agent_catalog')!.run({ id: profile.id }))).resolves.toMatchObject({ permissionsGranted: false });
 });
 
 it('refreshes compact declarations for Regia turns and keeps them out of work-chat turns', async () => {

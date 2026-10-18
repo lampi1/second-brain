@@ -47,6 +47,7 @@ import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
 import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
+import { classifierRequest, classifyByWords } from './agents/classifier';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -172,6 +173,8 @@ app.whenReady().then(async () => {
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'agents:list': () => s.agents.list(),
+    // the demo has no local model: its ranking is words only, labelled as such in the dialog
+    'agents:classify': a => s.classifyAgents ? s.classifyAgents(a?.request) : classifyByWords(classifierRequest(a?.request), s.agents.list().profiles),
     'agents:save': a => s.agents.save(a.profile, a.id),
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:archive': a => s.agents.archive(a.id),

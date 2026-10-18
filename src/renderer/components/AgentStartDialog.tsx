@@ -18,6 +18,7 @@ import { Keys, Modal } from './ui';
 import {roleAgents,profileCanStart} from '../lib/role-consumers';
 import {t} from '../i18n';
 import { Select } from './Select';
+import type { AgentClassification } from '@shared/agent-classifier';
 
 export function AgentStartDialog() {
   const { catalog, setup, error: catalogError } = useAgents();
@@ -34,6 +35,20 @@ export function AgentStartDialog() {
   const [cwd, setCwd] = useState(info?.brainRoot || prefs.cwd || '');
   const [permissionMode, setPermissionMode] = useState<PermissionMode | ''>(prefs.permissionMode);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
+  const [matching, setMatching] = useState<{ request: string; result: AgentClassification } | null>(null);
+  // the task field alone: context and expected result describe the case, not which agent fits it, and dilute the match
+  const request = prompt.trim().slice(0, 2000);
+  const ranking = matching?.request === request ? matching.result : null;
+  useEffect(() => {
+    let stale = false;
+    if (!request || regia) return;
+    const timer = setTimeout(() => {
+      void window.sb.invoke('agents:classify', { request }).then(result => {
+        if (!stale) setMatching({ request, result });
+      }).catch(() => { if (!stale) setMatching(null); });
+    }, 400);
+    return () => { stale = true; clearTimeout(timer); };
+  }, [request, regia, catalog]);
   const creating = useRef(false);
   const live = useRef(true);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
@@ -70,6 +85,11 @@ export function AgentStartDialog() {
           {suggested.length>0&&<optgroup label={t('roleFlow.suggested')}>{suggested.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
           <optgroup label={t('roleFlow.catalog')}>{profiles.filter(p=>!suggested.some(item=>item.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
         </Select></label>
+        {!regia && ranking && <p role="status" data-testid="agent-classification">
+          {ranking.noneCloseEnough ? t('start.matchNone') : t('start.matchSuggestion', { name: profiles.find(p => p.id === ranking.candidates[0]?.id)?.name ?? '', score: ranking.candidates[0]?.score ?? 0, high: (ranking.candidates[0]?.score ?? 0) >= 80 })}
+          {' '}{t(ranking.mode === 'words' ? 'start.matchWords' : 'start.matchLocal')}
+          {!ranking.noneCloseEnough && <button type="button" className="link-btn" disabled={busy} onClick={() => choose(ranking.candidates[0]!.id)}>{t('start.matchChoose')}</button>}
+        </p>}
         {unavailable&&<p role="status">{t('roleFlow.unavailable')}</p>}
         {profile && <div className="agent-start-owner"><AgentAvatar avatar={profile.avatar} name={profile.name} /><p>{profile.purpose}</p></div>}
         <button type="button" className="link-btn" onClick={() => { closeModal(); go({ page: 'agenti' }); }}>{t('start.editAgent')}</button>
