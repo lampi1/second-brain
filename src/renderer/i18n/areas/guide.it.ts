@@ -1,4 +1,4 @@
-// Italian UI texts of the "guide" area (ADR 0057): the frame of the Guida page (components/GuidePage.tsx); the cards'
+// Italian UI texts of the "guide" area (ADR 0057): the frame of the Guida page (components/GuidePage.tsx: header, cards, reading panel); the cards'
 // own content is in src/shared/concept-guide.ts. Spread into it.ts. Keys start with "guide.".
 export const guideIt = {
   'guide.eyebrow': 'GUIDA',
@@ -24,4 +24,8 @@ export const guideIt = {
   'guide.toAgent': (p: { name: string }) => `Chat aperta con ${p.name}: la scheda è nell’input, premi Invio per iniziare.`,
   'guide.toRegia': 'Bozza nell’Orchestrator: la scheda e la richiesta di un agente che spiega. Premi Invio per mandarla.',
   'guide.noRegia': 'Nessun agente che spiega e nessun Orchestrator aperto: avvia l’Orchestrator (Ctrl+R) e riprova.',
+  'guide.close': 'Chiudi',
+  'guide.startHere': 'Parti da qui',
+  'guide.pointsCount': (p: { count: number }) => `${p.count} punti`,
+  'guide.withDiagram': 'con schema',
 };

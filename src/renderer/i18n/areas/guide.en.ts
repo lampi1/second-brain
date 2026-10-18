@@ -24,4 +24,8 @@ export const guideEn: typeof guideIt = {
   'guide.toAgent': (p: { name: string }) => `Chat opened with ${p.name}: the card is in the input, press Enter to start.`,
   'guide.toRegia': 'Draft in the Orchestrator: the card and the request for an explainer agent. Press Enter to send it.',
   'guide.noRegia': 'No explainer agent and no Orchestrator open: start the Orchestrator (Ctrl+R) and try again.',
+  'guide.close': 'Close',
+  'guide.startHere': 'Start here',
+  'guide.pointsCount': (p: { count: number }) => `${p.count} points`,
+  'guide.withDiagram': 'with diagram',
 };
