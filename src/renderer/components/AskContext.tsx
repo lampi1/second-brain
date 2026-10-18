@@ -1,8 +1,7 @@
 // The "Contesto" block of a question or permission (the user, 2026-10-12: "quando mi fai le domande voglio sempre il
 // contesto e il contenuto magari in un qualcosa di espandibile o il link dei report o pr"): the links the chat named
-// (web pages and PRs open in the system browser, local files through app:openPath: documents open, anything else is
-// only shown in Explorer) always in sight as chips; under a toggle, the prose of the turn that ends with the request
-// (its reasoning too, when that is where the model wrote it) and the options' previews, as sanitized markdown. Folded in
+// (web pages and PRs open in the system browser, local files in the app's read-only file viewer, ADR 0068) always in
+// sight as chips; under a toggle, the prose of the turn that ends with the request (its reasoning too, when that is where the model wrote it) and the options' previews, as sanitized markdown. Folded in
 // a chat's own tile (the transcript is right above), open in the Regia's card and in the questions window. Its keys
 // stay its own: the panel ignores Enter on its links and toggle (RequestPanel.tsx). Visuals (ADR 0033): the ones the chat
 // attached to this question (show_ui next-ask) always in sight on top, and an option's ```sb-ui preview fences drawn as

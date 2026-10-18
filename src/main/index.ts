@@ -18,7 +18,7 @@ import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
-import { openLocal, type Shell } from './open-path';
+import { showLocal, type Shell } from './open-path';
 import { peekFile } from './peek-file';
 import { readFileView } from './file-view';
 import { askImageRoots, readAskImage } from './ask-image';
@@ -74,7 +74,7 @@ app.whenReady().then(async () => {
   overlay.start();
   (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
   const opened = hiddenOpened;
-  const hiddenShell: Shell = { openPath: async p => { opened.push(`open ${p}`); return ''; }, showItemInFolder: p => { opened.push(`folder ${p}`); } };
+  const hiddenShell: Shell = { showItemInFolder: p => { opened.push(`folder ${p}`); } };
   (globalThis as Record<string, unknown>).__sbOpened = opened; // e2e: what a hidden run would have opened
   const clip = clipReader();
   // Ctrl+K full-text search (ADR 0023): indexed on the first query, updated only when the user searches
@@ -190,13 +190,13 @@ app.whenReady().then(async () => {
       if (dir) { brainChoiceRevision++; await s.brain.setSettings({ brainRoot: dir }); }
       return dir;
     },
-    // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
-    'app:openPath': a => openLocal(a.path, hiddenRun() ? hiddenShell : shell),
+    // an agent's run (SB_HIDDEN, the e2e suite) never opens Explorer: it records what it would have shown
+    'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
     'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
     'app:readFile': a => {
       const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
       const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
-      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,roots:[brainRoot,s.brain.settings().appRepo,chat?.cwd].filter((root):root is string=>typeof root==='string'&&!!root)});
+      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined});
     },
     'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
       userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,
