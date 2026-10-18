@@ -13,46 +13,59 @@
 import{execFile}from'node:child_process';import fs from'node:fs';import path from'node:path';
 import{DIFF_BYTES,gitRefOk,type DiffAgainst,type FileDiffReason,type FileDiffResult}from'../shared/file-diff';
 import{localFile}from'./file-view';
+import{linksToShare}from'./open-path';
 const GIT_COMMANDS=new Set(['rev-parse','cat-file']);
 const refuse=(reason:FileDiffReason):FileDiffResult=>({kind:'refused',reason});
 const share=(value:string)=>/^[\\/]{2}/.test(value);
-let gitPath:string|null|undefined;
 /** git.exe from an absolute PATH folder (Windows would otherwise try the current folder first); null when there is none. */
 function gitBinary():string|null{
- if(gitPath!==undefined)return gitPath;
- if(process.platform!=='win32')return gitPath='git';
+ if(process.platform!=='win32')return'git';
  for(const dir of(process.env.PATH??process.env.Path??'').split(path.delimiter)){
   const file=path.join(dir,'git.exe');
-  if(path.isAbsolute(dir)&&!share(dir)&&fs.existsSync(file))return gitPath=file;
+  if(path.isAbsolute(dir)&&!share(dir)&&!linksToShare(file)&&fs.existsSync(file))return file;
  }
- return gitPath=null;
+ return null;
 }
 function git(repo:{gitDir:string;top:string},args:string[],maxBuffer=64_000):Promise<Buffer>{
  const bin=gitBinary();
  if(!bin||!GIT_COMMANDS.has(args[0]??''))return Promise.reject(new Error('git not available'));
  const env:NodeJS.ProcessEnv=Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^GIT_/i.test(name)));
- const options=['-c','core.fsmonitor=false','-c','protocol.allow=never','--no-replace-objects',`--git-dir=${repo.gitDir}`,`--work-tree=${repo.top}`];
+ const protocols=['ext','ssh','git','http','https','file'].flatMap(p=>['-c',`protocol.${p}.allow=never`]);
+ const options=['-c','core.fsmonitor=false','-c','protocol.allow=never',...protocols,'--no-replace-objects',`--git-dir=${repo.gitDir}`,`--work-tree=${repo.top}`];
  return new Promise((resolve,reject)=>{
-  execFile(bin,[...options,...args],{cwd:repo.top,windowsHide:true,timeout:20_000,maxBuffer,encoding:'buffer',env:{...env,GIT_OPTIONAL_LOCKS:'0',GIT_TERMINAL_PROMPT:'0',GIT_NO_LAZY_FETCH:'1'}},(err,stdout)=>{if(err)reject(err);else resolve(stdout);});
+  execFile(bin,[...options,...args],{cwd:repo.top,windowsHide:true,timeout:20_000,maxBuffer,encoding:'buffer',env:{...env,GIT_OPTIONAL_LOCKS:'0',GIT_TERMINAL_PROMPT:'0',GIT_NO_LAZY_FETCH:'1',GIT_ALLOW_PROTOCOL:''}},(err,stdout)=>{if(err)reject(err);else resolve(stdout);});
  });
 }
 const real=(file:string):string|null=>{try{return fs.realpathSync.native(file);}catch{return null;}};
 const read=(file:string):string=>{try{return fs.readFileSync(file,'utf8');}catch{return'';}};
+/** Check before stat, realpath or reading: those operations may already authenticate to a Windows share. */
+function unsafe(file:string):boolean{
+ if(share(file)||linksToShare(file))return true;
+ try{return fs.lstatSync(file).isSymbolicLink()&&share(fs.readlinkSync(file));}catch{return false;}
+}
+const failedGit=(error:unknown,fallback:FileDiffReason):FileDiffReason=>
+ typeof(error as NodeJS.ErrnoException)?.code==='number'?fallback:'git';
 /**
  * The repository holding `file`: the nearest folder above it with a `.git` folder or `.git` file (a worktree or a
  * submodule); null when there is none, 'share' when following it could reach a network path.
  */
 export function findRepo(file:string):{gitDir:string;top:string}|'share'|null{
  for(let dir=path.dirname(file);;){
-  const dot=path.join(dir,'.git');let stats:fs.Stats|null=null;try{stats=fs.statSync(dot);}catch{/* not here */}
+  const dot=path.join(dir,'.git');if(unsafe(dot))return'share';
+  let stats:fs.Stats|null=null;try{stats=fs.statSync(dot);}catch{/* not here */}
   if(stats){
    let gitDir:string|null=dot;
    if(stats.isFile()){const target=/^gitdir:\s*(.+?)\s*$/m.exec(read(dot))?.[1];if(!target||share(target))return'share';gitDir=path.resolve(dir,target);}
-   gitDir=real(gitDir);if(!gitDir)return null;
-   const pointer=read(path.join(gitDir,'commondir')).trim();if(pointer&&share(pointer))return'share';
-   const common=pointer?real(path.resolve(gitDir,pointer)):gitDir;if(!common)return null;
-   const objects=real(path.join(common,'objects'))??path.join(common,'objects');
-   const config=[path.join(common,'config'),path.join(gitDir,'config.worktree')].map(read).join('\n');
+   if(unsafe(gitDir))return'share';gitDir=real(gitDir);if(!gitDir)return null;if(share(gitDir))return'share';
+   const commonFile=path.join(gitDir,'commondir');if(unsafe(commonFile))return'share';
+   const pointer=read(commonFile).trim();if(pointer&&share(pointer))return'share';
+   const commonTarget=pointer?path.resolve(gitDir,pointer):gitDir;if(unsafe(commonTarget))return'share';
+   const common=real(commonTarget);if(!common||share(common))return'share';
+   const objectTarget=path.join(common,'objects');if(unsafe(objectTarget))return'share';
+   const objects=real(objectTarget);if(!objects||share(objects))return'share';
+   const configs=[path.join(common,'config'),path.join(gitDir,'config.worktree')];
+   if([...configs,path.join(objects,'info','alternates')].some(unsafe))return'share';
+   const config=configs.map(read).join('\n');
    if([gitDir,common,objects].some(share)||read(path.join(objects,'info','alternates')).trim()||/include/i.test(config))return'share';
    return{gitDir,top:dir};
   }
@@ -79,13 +92,13 @@ const resolved=(raw:string,cwd?:string):Local|FileDiffReason=>{
 async function atRef(file:string,ref:string):Promise<{label:string;text:string}|FileDiffReason>{
  if(!gitRefOk(ref))return'ref';
  const repo=findRepo(file);if(!repo)return'repo';if(repo==='share')return'outside';
- const rel=path.relative(repo.top,file);if(!rel||rel.startsWith('..')||path.isAbsolute(rel))return'repo';
+ const rel=path.relative(repo.top,file);if(!rel||rel==='..'||rel.startsWith('..'+path.sep)||path.isAbsolute(rel))return'repo';
  let sha:string;
- try{sha=String(await git(repo,['rev-parse','--verify','--quiet',`${ref}^{commit}`])).trim();}catch{return'ref';}
+ try{sha=String(await git(repo,['rev-parse','--verify','--quiet',`${ref}^{commit}`])).trim();}catch(error){return failedGit(error,'ref');}
  if(!/^[0-9a-f]{40,64}$/.test(sha))return'ref';
  const spec=`${sha}:${rel.split(path.sep).join('/')}`;
  let size:number;
- try{size=Number(String(await git(repo,['cat-file','-s',spec])).trim());}catch{return'untracked';}
+ try{size=Number(String(await git(repo,['cat-file','-s',spec])).trim());}catch(error){return failedGit(error,'untracked');}
  if(!Number.isSafeInteger(size)||size>DIFF_BYTES)return'big';
  let blob:Buffer;try{blob=await git(repo,['cat-file','blob',spec],DIFF_BYTES+1);}catch{return'git';}
  const text=decode(blob);return typeof text==='string'?text:{label:`${ref} · ${sha.slice(0,7)}`,text:text.text};
