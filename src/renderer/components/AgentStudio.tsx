@@ -18,12 +18,12 @@ import { ProgressPanel } from './ProgressPanel';
 import { checkedManifest } from '@shared/agent-manifest';
 import '../styles/agent-studio.css';
 
-export function AgentStudio() {
+export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile } = {}) {
   const presentation=ui.use(s=>s.prefs.appearance.templates.agents);
   const { catalog, error } = useAgents();
-  const restored = useRef(readAgentEditor(undefined,true));
-  const [editing, setEditing] = useState<AgentDraft | null>(restored.current?.draft ?? null);
-  const [id, setId] = useState<string | undefined>(restored.current?.id);
+  const restored = useRef(initialProfile ? readAgentEditor(initialProfile.id) : readAgentEditor(undefined,true));
+  const [editing, setEditing] = useState<AgentDraft | null>(restored.current?.draft ?? initialProfile ?? null);
+  const [id, setId] = useState<string | undefined>(restored.current?.id ?? initialProfile?.id);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
   const [guideText, setGuideText] = useState(restored.current?.message ?? ''), [guideModel, setGuideModel] = useState('');

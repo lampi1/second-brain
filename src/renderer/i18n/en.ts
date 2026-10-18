@@ -1,4 +1,5 @@
 import { costsEn } from './areas/costs.en';
+import { catalogEn } from './areas/catalog.en';
 import { connectorsEn } from './areas/connectors.en';
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
@@ -19,6 +20,7 @@ import { guideEn } from './areas/guide.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 
 export const en: Dict = {
+  ...catalogEn,
   ...costsEn,
   ...connectorsEn,
   ...reviewedContextEn,

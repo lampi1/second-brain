@@ -30,7 +30,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
 import { AgentStartDialog as NewChatDialog } from './components/AgentStartDialog';
-import { AgentStudio } from './components/AgentStudio';
+import { AgentCatalogPage } from './components/AgentCatalogPage';
 import { FirstInterviewGate } from './components/FirstInterview';
 import { RegiaRenewDialog } from './components/RegiaRenewDialog';
 import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
@@ -156,14 +156,14 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
     <div className="page-frame" data-testid={`page-${id}`}>
       <div className="page-bar">
         {!home && <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'home' })} data-testid="page-back" data-tip={`${t('home.back')}|Ctrl+1`}><IconArrowLeft size={13} /> {pageLabel('home')}</button>}
-        <h2>{pageLabel(id)}</h2>
+        <h2>{id === 'agenti' ? t('catalog.title') : pageLabel(id)}</h2>
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> {t('chat.menu.copyLink')}</button>
         {!home && <span className="page-hint"><Keys combo="Esc" /> {pageLabel('home')}</span>}
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>

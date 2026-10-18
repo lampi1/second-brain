@@ -1,0 +1,18 @@
+// Catalogue overview strings for Italian users; composed into the typed UI dictionary.
+export const catalogIt = {
+  'catalog.title': 'Agenti', 'catalog.create': 'Crea agente', 'catalog.studio': 'Apri Studio agenti',
+  'catalog.intro': 'Gli agenti sono assistenti riutilizzabili con un ruolo, istruzioni e un motore: parti da un preset o creane uno con l’Orchestratore.',
+  'catalog.subtitle': 'La tua squadra, le sue specialità e i risultati osservati.',
+  'catalog.role': 'Ruolo', 'catalog.engine': 'Motore', 'catalog.all': 'Tutti', 'catalog.sort': 'Ordina per', 'catalog.name': 'Nome',
+  'catalog.empty': 'Nessun agente corrisponde ai filtri.', 'catalog.active': 'Attivo', 'catalog.probation': 'In prova',
+  'catalog.runs': 'Esecuzioni concluse', 'catalog.open': 'In corso', 'catalog.success': 'Successi verificati',
+  'catalog.cost': 'Costo mediano / esecuzione', 'catalog.last': 'Ultimo avvio osservato', 'catalog.unknown': 'Non disponibile',
+  'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} esecuzioni`,
+  'catalog.note': 'Statistiche sulle versioni note. I successi contano solo esiti verificati; l’ultimo avvio riguarda le chat disponibili. Dati mancanti non significano zero.',
+  'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
+  'catalog.task': 'Cosa deve fare?', 'catalog.area': 'Su quale repository o area?',
+  'catalog.guide': 'Apri Orchestratore', 'catalog.guideNote': 'L’Orchestratore ti aiuta a definire il profilo. Salvalo poi nello Studio agenti: apparirà qui automaticamente.',
+  'catalog.cancel': 'Annulla', 'catalog.createError': 'Impossibile aprire l’Orchestratore. Riprova.',
+  'catalog.noRoot': 'Scegli la cartella del brain nelle Impostazioni prima di aprire l’Orchestratore.',
+  'catalog.preset': 'Preset', 'catalog.custom': 'Personalizzato',
+};
