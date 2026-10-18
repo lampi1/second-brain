@@ -176,7 +176,7 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
     // the same picture: the GPU draws an identical scene (camera, labels, buffers equal to the bit) with up to a few
     // pixels one colour level off, so at most 0.01% of the pixels may differ, by at most 2 levels per channel
     const same=(a:Buffer,b:Buffer)=>page.evaluate(async([x,y])=>{
-      const read=async(s:string)=>{const i=await createImageBitmap(await (await fetch('data:image/png;base64,'+s)).blob()),c=new OffscreenCanvas(i.width,i.height),g=c.getContext('2d')!;g.drawImage(i,0,0);return g.getImageData(0,0,i.width,i.height);};
+      const read=async(s:string)=>{const i=await createImageBitmap(new Blob([Uint8Array.from(atob(s),ch=>ch.charCodeAt(0))],{type:'image/png'})),c=new OffscreenCanvas(i.width,i.height),g=c.getContext('2d')!;g.drawImage(i,0,0);return g.getImageData(0,0,i.width,i.height);};
       const p=await read(x),q=await read(y);if(p.width!==q.width||p.height!==q.height)return false;
       let off=0;for(let i=0;i<p.data.length;i+=4){let d=0;for(let k=0;k<4;k++)d=Math.max(d,Math.abs(p.data[i+k]!-q.data[i+k]!));if(d>2)return false;if(d)off++;}
       return off<=p.width*p.height*1e-4;
