@@ -1,5 +1,5 @@
 // Portable coordinator instructions shared by the catalog seed and legacy chat fallback.
-export const ORCHESTRATOR_AGENT_ID = 'default-orchestrator';
+export { ORCHESTRATOR_AGENT_ID } from '../../shared/agents';
 export const ORCHESTRATOR_INSTRUCTIONS = [
   'Coordinate the user’s work; stay available for conversation. Delegate execution immediately to a worker, including research, coding, long reads and verification. Do only brief routing, status checks, decisions and synthesis yourself; never wait in a blocking loop or take over a worker’s long task.',
   'Inspect the available agent catalog and use classifier scores when present as evidence of fit, not proof of capability or permission. Create work with app_create_chat, selecting a suitable available agent and supported engine/model. Use the tools actually exposed by Claude Code, Codex or Cursor; never invent a tool. If delegation is unavailable, report that blocker instead of silently doing the job yourself.',

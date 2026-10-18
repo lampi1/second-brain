@@ -101,6 +101,8 @@ export interface AgentVersion {
 }
 /** The built-in agent a chat started without an agent runs as (AGENTS-DESIGN §4.7): it can never be archived. */
 export const GENERAL_AGENT_ID = 'default-general';
+/** The coordinator preset: it shapes the Orchestrator chat only and never starts a work chat. */
+export const ORCHESTRATOR_AGENT_ID = 'default-orchestrator';
 /** Frozen when a chat starts; editing the catalog never relabels existing sessions. */
 export interface AgentOwnerSnapshot {
   id: string; name: string; purpose: string; avatar: AgentAvatar;
