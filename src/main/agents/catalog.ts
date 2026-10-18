@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Effort, NewChat, RoutingRow } from '../../shared/contract';
-import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, GENERAL_AGENT_ID, inProbation, type AgentProbationDecision } from '../../shared/agents';
 import { checkImages } from '../chats/images';
 import { readLocal, writeLocal } from './local-store';
 import { boundedRaster } from './raster';
@@ -12,6 +12,7 @@ import { DEFAULT_MANIFESTS, DEFAULT_MANIFESTS_EN } from './manifest-defaults';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { engineOf } from '../engines/registry';
+import { log, errText } from '../log';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
@@ -106,13 +107,16 @@ export function readOwner(v: unknown): AgentOwnerSnapshot | null {
 }
 
 const ROLES = [
-  ['general', 'Assistente', 'Organizzare il lavoro e preparare risultati utili', 'Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.', 'briefcase'],
+  ['general', 'Generale', 'Organizzare il lavoro e preparare risultati utili', 'Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.', 'briefcase'],
   ['research', 'Ricerca', 'Raccogliere e verificare informazioni e fonti', 'Verifica fonti e date; cita PR, CI e attività collegate distinguendo stato osservato e informazioni non verificate. Usa solo strumenti e account disponibili; segnala le lacune senza inventare risultati.', 'search'],
   ['writing', 'Scrittura e documenti', 'Preparare testi e documenti chiari per il destinatario', 'Chiarisci destinatario, formato e tono. Prepara storie utente con criteri verificabili, bug riproducibili, note di rilascio e aggiornamenti basati su fonti. Distingui bozza, pubblicazione e invio; rispetta le regole del brain e i permessi disponibili.', 'pen'],
   ['analysis', 'Analisi', 'Interpretare dati e confrontare alternative', 'Collega criteri di accettazione a casi di test, copertura e lacune; documenta bug con passi, atteso, osservato e gravità. Valuta rischi tecnici, qualità e costi con fonti, periodo, unità e incertezze. Per il rilascio separa raccomandazione e approvazione della persona; non inventare misure o verifiche.', 'chart'],
   ['planning', 'Pianificazione', 'Tradurre obiettivi in passi concreti', 'Prepara backlog, refinement, priorità e dipendenze motivati. Coordina una checklist di rilascio con CI osservata, blocchi, responsabili e recupero; rendi esplicite le decisioni della persona. Non promettere scadenze non concordate né modificare sistemi condivisi senza rispettare le regole del brain e i permessi.', 'compass'],
   ['development', 'Sviluppo', 'Progettare, modificare e verificare software', 'Leggi le regole del repository e del brain selezionato, comprese le Regole delle azioni; preserva i cambi esistenti. Segui branch, commit, PR, review, CI, rilascio e deploy con diff, comandi, esiti reali e recupero; prepara ADR con alternative e rischi. Esegui test manuali e automatici autorizzati, riproduci i bug e verifica fix e regressioni. Ricontrolla target, regole e permessi prima di agire; senza strumenti o account segnala la lacuna, senza installare o sostituire di nascosto né dichiarare successi non verificati.', 'code'],
 ] as const;
+/** The seed's name before it became the agent of agentless chats: a pristine copy is renamed, never as Brother's edit. */
+const LEGACY_GENERAL_NAME = 'Assistente';
+const GENERAL_LOCKED = 'Il Generale non si può archiviare: è l’Agente delle chat avviate senza sceglierne uno.';
 
 export class AgentCatalogService {
   private readonly file: string;
@@ -148,13 +152,49 @@ export class AgentCatalogService {
         pending = [...defaults.map(p => firstVersion(p, 'preset', 'Agente iniziale', this.now())), ...imported.map(p => firstVersion(p, 'migration', 'Importato dal routing', this.now()))];
       }
     } catch { this.problem = 'Il catalogo locale non è leggibile. Il file è conservato; correggilo prima di salvare nuovi Agenti.'; return; }
-    if (!pending) return;
-    // History, then catalog: a retry after any failure redoes the same steps (history replaces same versions).
+    if (pending) {
+      // History, then catalog: a retry after any failure redoes the same steps (history replaces same versions).
+      try {
+        const body = this.body(this.profiles);
+        this.store.commit(pending);
+        writeLocal(this.file, body);
+      } catch { this.problem = this.store.problem ?? 'Il catalogo Agenti non è stato aggiornato sul disco. Il file è conservato; le modifiche sono sospese.'; return; }
+    }
+    this.ensureGeneral(this.renamed);
+    this.renamed = false;
+  }
+  /** readV2 renamed the pristine seed "Assistente" to "Generale" in memory: written once, with no version or lock. */
+  private renamed = false;
+  /**
+   * The agent of agentless chats is always there and active: an archived one (an older build, a hand edit) is restored, a
+   * missing one is recreated from its seed. Null when that is impossible (unreadable catalog, no default engine, limits).
+   */
+  private ensureGeneral(persist = false): AgentProfile | null {
+    const g = this.profiles.find(p => p.id === GENERAL_AGENT_ID);
+    if (this.problem || this.store.problem) return g?.status === 'active' ? g : null;
     try {
-      const body = this.body(this.profiles);
-      this.store.commit(pending);
-      writeLocal(this.file, body);
-    } catch { this.problem = this.store.problem ?? 'Il catalogo Agenti non è stato aggiornato sul disco. Il file è conservato; le modifiche sono sospese.'; }
+      if (g?.status === 'active') {
+        if (persist) writeLocal(this.file, this.body(this.profiles));
+        return g;
+      }
+      const active = this.profiles.filter(p => p.status === 'active').length;
+      if (active >= MAX_ACTIVE_AGENTS) return null;
+      if (g) {
+        const { archivedAt: _a, ...rest } = g;
+        void _a;
+        const profile: AgentProfile = { ...rest, status: 'active', updatedAt: Math.max(this.now(), g.updatedAt + 1) };
+        this.commit(this.profiles.map(x => x.id === g.id ? profile : x), []);
+        return profile;
+      }
+      if (this.profiles.length >= MAX_AGENTS) return null;
+      const seed = this.defaults().find(p => p.id === GENERAL_AGENT_ID);
+      if (!seed) return null;
+      this.commit([seed, ...this.profiles], [firstVersion(seed, 'preset', 'Agente Generale ricreato', this.now())]);
+      return seed;
+    } catch (e) {
+      log.warn('agents', 'the Generale agent could not be restored', { cause: errText(e), hint: 'agentless chats start without a run until the catalog is writable' });
+      return null;
+    }
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private identity(p: Record<string, unknown>, ids: Set<string>): void {
@@ -169,9 +209,9 @@ export class AgentCatalogService {
       const p = obj(value);
       this.identity(p, ids);
       const draft = this.validate(p, false);
-      const role = ROLES.find(([id, name, purpose, instructions]) => p.id === `default-${id}` && draft.name === name && draft.purpose === purpose && draft.instructions === instructions);
+      const role = ROLES.find(([id, name, purpose, instructions]) => p.id === `default-${id}` && (draft.name === name || id === 'general' && draft.name === LEGACY_GENERAL_NAME) && draft.purpose === purpose && draft.instructions === instructions);
       const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
-      const profile: AgentProfileV1 = { ...draft, ...(draft.manifest === undefined && role ? { manifest: checkedManifest(manifests[role[0]]) } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number };
+      const profile: AgentProfileV1 = { ...draft, ...(role ? { name: role[1] } : {}), ...(draft.manifest === undefined && role ? { manifest: checkedManifest(manifests[role[0]]) } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number };
       // v1 never stored a category: let the migration derive it from the seed role.
       if (p.category === undefined) delete profile.category;
       return { profile, pristine: role !== undefined };
@@ -185,11 +225,17 @@ export class AgentCatalogService {
       this.identity(p, ids);
       const draft = this.validate(p, false);
       const trial = p.trial === undefined ? undefined : obj(p.trial);
+      const probation = p.probation === undefined ? undefined : obj(p.probation);
+      if (probation && (typeof probation.since !== 'number' || !Number.isFinite(probation.since) || typeof probation.requestItemId !== 'string' || !probation.requestItemId.trim()
+        || probation.requestItemId.length > 200 || !(probation.keptBy === undefined || probation.keptBy === 'brother'))) throw new Error('Prova dell’Agente non valida.');
+      // the pristine seed renamed "Generale" (AGENTS-DESIGN §4.7): not Brother's edit, so no version and no lock
+      if (p.id === GENERAL_AGENT_ID && p.userLocked === false && draft.name === LEGACY_GENERAL_NAME) { draft.name = ROLES[0][1]; this.renamed = true; }
       if (!count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean' || !has(['active', 'archived'] as const, p.status)
         || (p.status === 'archived' ? typeof p.archivedAt !== 'number' || !Number.isFinite(p.archivedAt) : p.archivedAt !== undefined)
         || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number' || !Number.isFinite(trial.startedAt)))) throw new Error('Versione Agente non valida.');
       return { ...draft, id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
+        ...(probation ? { probation: { since: probation.since as number, requestItemId: probation.requestItemId as string, ...(probation.keptBy ? { keptBy: 'brother' as const } : {}) } } : {}),
         lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
     });
     if (profiles.filter(p => p.status === 'active').length > MAX_ACTIVE_AGENTS) throw new Error('Troppi Agenti attivi.');
@@ -284,6 +330,11 @@ export class AgentCatalogService {
         versions = [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'user', reason: 'Modificato da Brother', at, state: 'active' }];
         states = [{ agentId: old.id, version: old.activeVersion, state: 'superseded' }];
       }
+      // Brother's edit ends a probation as kept (AGENTS-DESIGN §4.7 "Brother wins")
+      if (inProbation(old)) {
+        profile = { ...profile, probation: { ...old.probation!, keptBy: 'brother' } };
+        states = [...states, { agentId: old.id, version: old.activeVersion, probation: this.decision('kept', 'brother', 'Modificato da Brother', at) }];
+      }
     }
     this.commit(old ? this.profiles.map(p => p.id === old.id ? profile : p) : [...this.profiles, profile], versions, states);
     this.d.onCustomized?.();
@@ -297,6 +348,7 @@ export class AgentCatalogService {
   archive(id: string): AgentProfile {
     this.writable();
     const p = this.find(id);
+    if (id === GENERAL_AGENT_ID) throw new Error(GENERAL_LOCKED);
     if (p.status === 'archived') return structuredClone(p);
     if (p.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di archiviarlo.');
     const at = Math.max(this.now(), p.updatedAt + 1);
@@ -304,6 +356,7 @@ export class AgentCatalogService {
     this.commit(this.profiles.map(x => x.id === id ? profile : x), []);
     return structuredClone(profile);
   }
+  /** A restore is Brother's choice: a retired probation agent comes back kept, or the evaluator would retire it again. */
   restore(id: string): AgentProfile {
     this.writable();
     const p = this.find(id);
@@ -311,8 +364,43 @@ export class AgentCatalogService {
     if (this.profiles.filter(x => x.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error(`Ci sono già ${MAX_ACTIVE_AGENTS} Agenti attivi. Archiviane uno prima di ripristinare questo.`);
     const { archivedAt: _a, ...rest } = p;
     void _a;
-    const profile: AgentProfile = { ...rest, status: 'active', updatedAt: Math.max(this.now(), p.updatedAt + 1) };
-    this.commit(this.profiles.map(x => x.id === id ? profile : x), []);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const judged = inProbation(p);
+    const profile: AgentProfile = { ...rest, status: 'active', updatedAt: at, ...(judged ? { probation: { ...p.probation!, keptBy: 'brother' as const } } : {}) };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], judged ? [{ agentId: id, version: p.activeVersion, probation: this.decision('kept', 'brother', 'Ripristinato da Brother', at) }] : []);
+    return structuredClone(profile);
+  }
+  private decision(decision: AgentProbationDecision['decision'], by: AgentProbationDecision['by'], reason: string, at: number): AgentProbationDecision {
+    return { decision, by, reason: reason.slice(0, 600), at };
+  }
+  /**
+   * Ends a probation as kept (AGENTS-DESIGN §4.7). Brother's Tieni marks it `keptBy: 'brother'`; the evaluator removes it,
+   * so the agent becomes a normal catalog agent. The decision goes on the active version's history entry.
+   */
+  keep(id: string, by: AgentProbationDecision['by'] = 'brother', reason?: string): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (!inProbation(p)) throw new Error('Questo Agente non è in prova.');
+    if (p.status === 'archived') throw new Error('L’Agente è già stato ritirato: ripristinalo per tenerlo.');
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const { probation: _p, ...rest } = p;
+    void _p;
+    const profile: AgentProfile = by === 'brother' ? { ...p, probation: { ...p.probation!, keptBy: 'brother' }, updatedAt: at } : { ...rest, updatedAt: at };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, probation: this.decision('kept', by, reason ?? (by === 'brother' ? 'Tenuto da Brother' : 'Prova superata'), at) }]);
+    return structuredClone(profile);
+  }
+  /** Ends a probation as retired: archived at once, `probation` kept for the 14-day no-recreate check. */
+  retire(id: string, reason: string, by: AgentProbationDecision['by'] = 'brother'): AgentProfile {
+    this.writable();
+    if (id === GENERAL_AGENT_ID) throw new Error(GENERAL_LOCKED);
+    const p = this.find(id);
+    if (!inProbation(p)) throw new Error('Questo Agente non è in prova: archivialo invece di ritirarlo.');
+    if (p.status === 'archived') return structuredClone(p);
+    if (p.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di ritirarlo.');
+    const why = typeof reason === 'string' && reason.trim() ? reason.trim() : by === 'brother' ? 'Ritirato da Brother' : 'Prova non superata';
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...p, status: 'archived', archivedAt: at, updatedAt: at };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, probation: this.decision('retired', by, why, at) }]);
     return structuredClone(profile);
   }
   history(id: string): AgentVersion[] {
@@ -334,13 +422,26 @@ export class AgentCatalogService {
     // Same availability checks as a save: an engine or model that is gone is refused, never replaced.
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
-    const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'user', userLocked: true };
-    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);
+    const judged = inProbation(p);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'user', userLocked: true, ...(judged ? { probation: { ...p.probation!, keptBy: 'brother' as const } } : {}) };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded', ...(judged ? { probation: this.decision('kept', 'brother', 'Versione cambiata da Brother', at) } : {}) }, { agentId: id, version, state: 'active' }]);
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
   resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null } {
-    if (req.agentId === undefined) return { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
+    if (req.agentId === undefined) {
+      const compatible = { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
+      // the Orchestrator is no agent's run; any other chat started without an agent runs as Generale (AGENTS-DESIGN §4.7)
+      if (req.regia || req.appRegia) return compatible;
+      const g = this.ensureGeneral();
+      if (!g) {
+        log.warn('agents', 'Generale is unavailable: the chat starts without an agent run', { hint: this.problem ?? this.store.problem ?? 'no default engine to recreate it from' });
+        return compatible;
+      }
+      // engine, model and effort stay the chat's (Brother's choice or the routing table); a null ceiling = his settings
+      return { request: req, owner: { ...ownerOf(g), engine: req.harness, model: req.model ?? null }, instructions: g.instructions,
+        policy: g.tools || g.permissionCeiling ? { tools: g.tools ? structuredClone(g.tools) : null, ceiling: g.permissionCeiling ?? null } : null };
+    }
     const p = this.profiles.find(x => x.id === req.agentId);
     if (!p) throw new Error('L’Agente selezionato non esiste più. Scegline un altro.');
     if (p.status === 'archived') throw new Error('L’Agente selezionato è archiviato. Ripristinalo o scegline un altro.');

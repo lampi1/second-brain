@@ -43,11 +43,14 @@ describe('agent manifest', () => {
     const original = { version: 1, profiles: [{ ...draft, id: 'default-development', createdAt: 3, updatedAt: 9 }] };
     fs.writeFileSync(file, JSON.stringify(original));
     const before = fs.readFileSync(file, 'utf8'), service = new AgentCatalogService({ userData, models, language: () => 'en' });
-    expect(service.list().profiles).toEqual([expect.objectContaining(original.profiles[0])]);
-    expect(service.list().profiles[0]?.manifest).toBeUndefined();
+    // A7b: a catalog without Generale gets it back (agentless chats run as Generale)
+    expect(service.list().profiles.map(p => p.id)).toEqual(['default-general', 'default-development']);
+    const migrated = () => service.list().profiles.find(p => p.id === 'default-development');
+    expect(migrated()).toEqual(expect.objectContaining(original.profiles[0]));
+    expect(migrated()?.manifest).toBeUndefined();
     expect(service.list().problem).toBeNull();
     service.save({ ...draft, manifest }, 'default-development');
-    expect(service.list().profiles[0]?.createdAt).toBe(3);
+    expect(migrated()?.createdAt).toBe(3);
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
   it('preserves malformed archives and rejects invalid saves without changing the file', () => {

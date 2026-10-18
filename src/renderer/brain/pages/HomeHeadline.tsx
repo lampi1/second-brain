@@ -1,5 +1,6 @@
-// The Grindhouse's headline under the greeting (SPEC 18, main/headline.ts): the line main has now ('headline:get'), then
-// each new one ('headline:changed'). The Home never waits for it: until the first answer the line keeps its place empty
+// The headline (SPEC 18, main/headline.ts), on the Dashboard under its title since 18/10 (Brother: «la frase io me la
+// aspetto nella dashboard»; the Grindhouse shows only the strips): the line main has now ('headline:get'), then each
+// new one ('headline:changed'). The page never waits for it: until the first answer the line keeps its place empty
 // (no jump when it arrives); main itself never waits for a model either (a previous or built-in line).
 import { useEffect, useState } from 'react';
 import type { HeadlineState } from '@shared/contract';
@@ -28,5 +29,5 @@ export function HeadlineCost() {
 
 export function HeadlineLine({ state }: { state: HeadlineState | null }) {
   const by = state?.source === 'builtin' ? t('home.headlineBuiltin') : state ? t('home.headlineBy', { model: state.model }) : undefined;
-  return <p className="home-headline" data-testid="home-headline" data-source={state?.source ?? 'loading'} title={by} aria-live="polite">{state?.text ?? ''}</p>;
+  return <p className="dash-headline" data-testid="dash-headline" data-source={state?.source ?? 'loading'} title={by} aria-live="polite">{state?.text ?? ''}</p>;
 }

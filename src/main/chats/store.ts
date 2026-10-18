@@ -12,7 +12,7 @@ import { errText, log } from '../log';
 import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
 import type { AgentOwnerSnapshot, AgentChildren, AgentRun } from '../../shared/agents';
-import { readRun } from '../agents/runs';
+import { RUN_ID, readRun } from '../agents/runs';
 import { readOwner } from '../agents/catalog';
 import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
@@ -29,6 +29,8 @@ export interface StoredChat {
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
   runIdleSince?: number;
+  /** its run (this id) was pruned into the rollups: it counts there only, so the chat never gets a backfilled run */
+  runPruned?: string;
   harness: Harness;
   cwd: string;
   sessionId: string | null;
@@ -109,6 +111,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
     ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
+    ...(typeof c.runPruned === 'string' && RUN_ID.test(c.runPruned) ? { runPruned: c.runPruned } : {}),
     ...(route ? { route } : {}),
     ...(c.work !== undefined ? {work:readChatWork(c.work)} : {}),
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),

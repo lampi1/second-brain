@@ -4,7 +4,7 @@
 // an option preview's ```sb-ui fence drawn in the context) that never answers it: keys 1-9 still do; with no question in
 // time it falls back to a card; a visual sent to the Regia shows in the Regia widget with the sender's name.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { __sbDemo: { show(id: string, a: object): string; ask(id: string, r: object): void } };
 const show = (app: ElectronApplication, chatId: string, args: object) =>
@@ -80,6 +80,7 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   const fence = '```sb-ui\n' + JSON.stringify({ component: 'barChart', title: 'Tempo stimato', props: { unit: 'h', bars: [{ label: 'A', value: 0.5 }, { label: 'B', value: 8 }] } }) + '\n```';
   await ask(app, 'fix', { type: 'question', tool: 'AskUserQuestion', title: 'Quale correzione?', detail: 'Quale correzione?', input: {},
     questions: [{ question: 'Quale correzione?', header: 'Fix', multiSelect: false, options: [{ label: 'A · Arrotonda alla fine (consigliato)', preview: `Piccola.\n\n${fence}` }, { label: 'B · Riscrivi il calcolo' }] }] });
+  await expandChats(page, 'fix'); // the request's panel is on the open strip
   const panel = page.locator('[data-testid^="request-fix-"][data-request-key]').first();
   await expect(panel).toBeVisible();
   const base = (await panel.getAttribute('data-testid'))!;

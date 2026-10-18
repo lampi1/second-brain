@@ -5,19 +5,22 @@
 // "Rispondi dopo" is on, one "Da rispondere" line: the chat waits, lib/later.ts), an error bar with one action, and the always-visible input (the menu is ChatMenu). Small tiles render compact
 // (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
 // A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by the agents' strips in the
-// Grindhouse (AgentStrips.tsx) and the focus view.
+// Grindhouse (AgentStrips.tsx) and the focus view. A strip (Brother, 18/10): a click anywhere on it expands it, a click on
+// the head of an expanded one collapses it; the key facts (model, effort, cost, work time, context) stay on screen
+// collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
+// off); the inline panels show only on the expanded strip.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
-import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
+import { chatCost, effortLabel, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
-import { setFocused, setChatExpanded,ui } from '../store/ui';
+import { callQuestions, setFocused, setChatExpanded, ui } from '../store/ui';
 import {t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
-import { answerLater } from '../lib/later';
-import { admitNow, toggleMaximize } from '../actions';
+import { answerLater, openQueue } from '../lib/later';
+import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
 import { ChatLinkChips } from './ChatLinkChips';
 import { EffortControl } from './EffortControl';
@@ -32,7 +35,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { IconAlert, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
+import { IconAlert, IconChevronDown, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
 // the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
@@ -77,7 +80,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const expandedChoice=ui.use(s=>s.prefs.chatPanelsV===0||s.prefs.chatExpanded[chatId]===true);
+  const expandedChoice=ui.use(s=>s.prefs.chatExpanded[chatId]===true);
   const expanded=!!maximized||!!focus||expandedChoice;
   const expansionButton=useRef<HTMLButtonElement>(null);
   const reveal=(compose=false)=>{setChatExpanded(chatId,true);if(compose)requestAnimationFrame(()=>input.current?.focus());};
@@ -88,6 +91,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const lqRam = useApp(s => s.settings?.loadQueueRam ?? 15);
   const size = useSize(ref);
   const pair = usePair(chatId);
+  const browsers = useApp(s => s.tabs.filter(tab => tab.ownerChatId === chatId).length);
   const now = useNow(15_000); // the running work span grows on screen
   useEffect(() => {
     if (!focusReq) return;
@@ -100,57 +104,72 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const busy = isBusy(chat);
   const st = stateInfo(chat);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
-  const sub = [prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ');
+  // the effort shown is the one chosen (EffortControl tells what the provider reports, when it does)
+  const sub = [prettyModel(chat.model, chat.harness), chat.effort ? t('product.effortChosen', { effort: effortLabel(chat.effort) ?? chat.effort }) : null, chatCost(chat)].filter(Boolean).join(' · ');
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);
+  const strip = !focus && !maximized;
+  // a click on the strip itself (not on one of its controls, nor inside a portalled menu) expands or collapses it
+  const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
+    const el = e.target as Element;
+    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic')) return;
+    if (window.getSelection()?.toString()) return; // selecting text is not a click
+    if (!expanded) setChatExpanded(chatId, true);
+    else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
+  };
+  const first = reqs[0] ? reqKey(reqs[0]) : null;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
       aria-label={`Chat ${chat.title}, ${st.label}`} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
-      onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
+      onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
-          <StatePill chat={chat} testid={`chat-state-${chatId}`} />
+          {/* the pill takes the state's place; the state stays in the DOM (hidden) as the strip's data-state hook */}
+          {first ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
+          {first && <button type="button" className="strip-wait" onClick={() => (queued ? openQueue(first) : callQuestions(first))} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
+            <span className="strip-wait-dot" aria-hidden="true" />{t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
+          </button>}
           <EffortControl chat={chat} />
           {chat.resumedAt && (
             <span className="th-resumed" data-tip="Il suo turno si era interrotto con il riavvio dell'app: l'app l'ha fatta ripartire da sola. Sparisce al tuo prossimo messaggio."
               data-testid={`chat-resumed-${chatId}`}>ripresa dopo il riavvio</span>
           )}
           <div className="chat-header-actions">
-          {!focus&&!maximized&&<button ref={expansionButton} type="button" className="btn btn-ghost btn-s chat-expand" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} onClick={()=>{setChatExpanded(chatId,!expanded);if(expanded)expansionButton.current?.focus();}} data-testid={`chat-expand-${chatId}`}>{t(expanded?'product.collapse':'product.expand')}</button>}
+          {strip&&<button ref={expansionButton} type="button" className="icon-btn chat-expand" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} aria-label={t(expanded?'product.collapse':'product.expand')} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>{setChatExpanded(chatId,!expanded);if(expanded)expansionButton.current?.focus();}} data-testid={`chat-expand-${chatId}`}><IconChevronDown size={14}/></button>}
           {(busy || chat.state === 'waiting') && (
             <IconButton label="Ferma" shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
           )}
           <IconButton ref={menuBtn} label="Rinomina, modello, permessi e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
           {/* the chats of "Migliora l'app" live in their section, which has no maximized view */}
           {chat.space !== 'app' && (
-            <IconButton label={maximized ? 'Ripristina' : 'Ingrandisci'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
+            <IconButton label={maximized ? 'Ripristina' : 'Chat a tutto schermo'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
               {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
             </IconButton>
           )}
           {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
           </div>
         </div>
-        <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>
-        <details className="chat-session-detail" data-testid={`chat-sub-${chatId}`}><summary>{t('product.model')}</summary><div className="th-sub">
-          <span className={`pill pill-${st.tone} pill-sub`} aria-hidden="true">{st.label}</span>
-          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip="Tempo di lavoro effettivo: senza le attese delle tue risposte">lavoro {minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
+        {expanded && <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>}
+        {renaming && !expanded && <TitleInput chat={chat} onDone={()=>setRenaming(false)}/>}
+        <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
+          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip="Tempo di lavoro effettivo: senza le attese delle tue risposte">lavoro {minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}{browsers && !expanded ? ` · ${t('product.browsersN', { n: browsers })}` : ''}</span>
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
-        </div></details>
+        </div>
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>
       <AutoCloseNotice chatId={chatId} />
-      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={activity} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}<button type="button" className="link-btn" onClick={()=>reveal(true)}>{t('product.write')}</button></div>}
+      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={activity} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       </div></div>
-      {reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
+      {expanded && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
           {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
         </div>
