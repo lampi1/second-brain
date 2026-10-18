@@ -1,7 +1,13 @@
 // Dashboard truthfulness and graph behaviour: unknowns, real message activity and bounded navigation.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, ChatItem } from '../../src/shared/contract';
-import { chatName, connections, contextLevel, contextRatio, cursorCoverage, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+
+it('groups distinct brain diagnostics without inventing checks for a new brain', () => {
+  expect(brainChecks(null)).toEqual([]);
+  expect(brainChecks({ warnings: [], problems: [] })).toEqual([]);
+  expect(brainChecks({ warnings: ['flow reference missing', ''], problems: ['flow reference missing', 'missing file'] })).toEqual(['flow reference missing', 'missing file']);
+});
 
 const chat = (id: string, patch: Partial<ChatSummary> = {}): ChatSummary => ({
   id, title: id, harness: 'codex', origin: 'app', cwd: '', sessionId: null, model: null, effort: null,

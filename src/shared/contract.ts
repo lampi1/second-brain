@@ -1167,6 +1167,8 @@ export interface InvokeMap {
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
+  /** Suggestions only: discovering a folder never selects it. SB_HOME isolates discovery in local trials. */
+  'app:brainCandidates': [void, string[]];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
@@ -1389,7 +1391,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 export const INVOKE_CHANNELS = [
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
-  'app:brainCreation', 'app:createBrain',
+  'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
