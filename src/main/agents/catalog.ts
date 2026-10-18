@@ -13,6 +13,8 @@ import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile 
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
+import { LEGACY_ROLE_REPLACEMENTS, roleAgentPresets } from '../../shared/agent-presets';
+import { presetDraft, presetHash } from './preset-support';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
@@ -32,6 +34,7 @@ function text(v: unknown, max: number, label: string, empty = false): string {
   return v.trim();
 }
 export interface AgentCatalogDeps {
+  presetEvent?: (message: string) => void;
   pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
   language?: () => 'it' | 'en';
   userData: string;
@@ -146,6 +149,7 @@ export class AgentCatalogService {
         const migration = obj(a.legacyRouting);
         if (Number.isSafeInteger(migration.imported) && Number(migration.imported) >= 0 && Number.isSafeInteger(migration.remaining) && Number(migration.remaining) >= 0) this.legacyRouting = { preserved: true, imported: Number(migration.imported), remaining: Number(migration.remaining) };
       } else {
+        this.fresh = true;
         const defaults = this.defaults(), legacy = legacyAgentProfiles(d.legacyRoutes?.() ?? [], this.now(), { apiEngine: d.legacyApiEngine?.() ?? null });
         const imported = legacy.profiles.slice(0, Math.max(0, MAX_ACTIVE_AGENTS - defaults.length)).map(p => upgradeProfile(p, false));
         this.profiles = [...defaults, ...imported];
@@ -172,7 +176,77 @@ export class AgentCatalogService {
     }
     this.ensureGeneral(this.renamed);
     this.renamed = false;
+    this.installPresets();
   }
+  /** One conservative startup transaction; corrupt usage data prevents retirement, never implies no usage. */
+  private installPresets(): void {
+    if (this.problem || this.store.problem) return;
+    try {
+      let next = [...this.profiles];
+      const versions: AgentVersion[] = [], states: Parameters<AgentHistory['commit']>[1] = [], events: string[] = [];
+      for (const preset of roleAgentPresets()) {
+        const old = next.find(p => p.id === preset.id);
+        if (old && (old.origin.kind !== 'preset' || old.origin.presetId !== preset.id || old.origin.presetRevision >= preset.presetRevision || old.status === 'archived' || old.trial || old.userLocked || old.presetHash !== presetHash(old))) continue;
+        if (!old && (next.length >= MAX_AGENTS || next.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS)) continue;
+        const draft = presetDraft(preset, this.d.models(), this.d.legacyRoutes?.() ?? [], old);
+        if (!draft) continue;
+        const at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1), version = (old?.version ?? 0) + 1;
+        const profile: AgentProfile = { ...upgradeProfile({ ...draft, id: preset.id, createdAt: old?.createdAt ?? at, updatedAt: at }, true, 'preset'),
+          ...(old ? { name: old.name, purpose: old.purpose, role: old.role, avatar: old.avatar, category: old.category } : {}),
+          origin: { kind: 'preset', presetId: preset.id, presetRevision: preset.presetRevision }, version, activeVersion: version, presetHash: presetHash(draft) };
+        next = old ? next.map(p => p.id === old.id ? profile : p) : [...next, profile];
+        versions.push({ ...firstVersion(profile, 'preset', 'Preset installato o aggiornato', at), version, parentVersion: old?.activeVersion ?? null });
+        if (old) { states.push({ agentId: old.id, version: old.activeVersion, state: 'superseded' }); events.push(`${profile.name}: preset aggiornato`); }
+      }
+      let used: Set<string> | null = null;
+      try {
+        const raw = readLocal(path.join(this.d.userData, 'chats.json'));
+        const chats = raw === undefined ? [] : obj(raw).chats;
+        if (Array.isArray(chats) && chats.every(c => c && typeof c === 'object')) {
+          used = new Set(chats.map(c => obj(obj(c).agent).id).filter((id): id is string => typeof id === 'string'));
+          const runs = readLocal(path.join(this.d.userData, 'agent-runs.json'));
+          if (runs !== undefined) {
+            const records = obj(runs);
+            if (!Array.isArray(records.runs) || records.rollups !== undefined && !Array.isArray(records.rollups)) used = null;
+            else for (const run of [...records.runs, ...(records.rollups as unknown[] | undefined ?? [])]) {
+              const id = obj(run).agentId;
+              if (typeof id === 'string') used.add(id);
+            }
+          }
+        }
+      } catch { used = null; /* Unknown usage: retain every legacy definition. */ }
+      if (used) next = next.map(p => {
+        const replacement = LEGACY_ROLE_REPLACEMENTS[p.id];
+        const seed = ROLES.find(([id]) => p.id === `default-${id}`);
+        if (!replacement || !seed || !next.some(n => n.id === replacement && n.status === 'active') || p.status !== 'active' || p.userLocked || p.trial || used.has(p.id)
+          || p.name !== seed[1] || p.purpose !== seed[2] || p.instructions !== seed[3] || p.role !== seed[2]
+          || p.model !== null || p.effort !== undefined || p.avatar.kind !== 'symbol' || p.avatar.value !== seed[4] || p.avatar.tone !== undefined
+          || p.manifest !== undefined && ![DEFAULT_MANIFESTS[seed[0]], DEFAULT_MANIFESTS_EN[seed[0]]].some(m => sameBehaviour({ ...p, manifest: m }, p))
+          || p.tools !== null || p.permissionCeiling !== null || p.version !== 1 || p.createdAt !== p.updatedAt) return p;
+        events.push(`${p.name}: sostituito dai nuovi preset`);
+        return { ...p, status: 'archived', archivedAt: this.now() };
+      });
+      if (versions.length || events.length) {
+        this.commit(next, versions, states);
+        // A new catalog retires seeds Brother never saw: no notice about agents he never had.
+        if (!this.fresh) for (const event of events) this.d.presetEvent?.(event);
+      }
+    } catch (e) { this.problem = `Aggiornamento preset sospeso: ${errText(e)}`; }
+  }
+  private presetUpdates(): NonNullable<AgentCatalog['presetUpdates']> {
+    return this.profiles.flatMap(p => {
+      if (p.status !== 'active' || p.origin.kind !== 'preset') return [];
+      const origin = p.origin;
+      const preset = roleAgentPresets().find(s => s.id === origin.presetId && s.presetRevision > origin.presetRevision);
+      if (!preset) return [];
+      const draft = presetDraft(preset, this.d.models(), [], p)!;
+      const before = behaviourOf(p), after = behaviourOf(draft);
+      const differences = (Object.keys(after) as (keyof typeof after)[]).filter(field => JSON.stringify(before[field]) !== JSON.stringify(after[field])).map(field => ({ field, before: before[field] ?? null, after: after[field] ?? null }));
+      return differences.length ? [{ agentId: p.id, presetRevision: preset.presetRevision, draft, differences }] : [];
+    });
+  }
+  /** No catalog file existed at startup: the legacy seeds were created in this same load. */
+  private fresh = false;
   /** readV2 renamed the pristine seed "Assistente" to "Generale" in memory: written once, with no version or lock. */
   private renamed = false;
   /**
@@ -246,7 +320,7 @@ export class AgentCatalogService {
       return { ...draft, ...(p.id === 'default-pulse' ? { routable: false } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
         ...(probation ? { probation: { since: probation.since as number, requestItemId: probation.requestItemId as string, ...(probation.keptBy ? { keptBy: 'brother' as const } : {}) } } : {}),
-        lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
+        lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(typeof p.presetHash === 'string' && /^[a-f0-9]{64}$/.test(p.presetHash) ? { presetHash: p.presetHash } : {}), ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
     });
     if (profiles.filter(p => p.status === 'active').length > MAX_ACTIVE_AGENTS) throw new Error('Troppi Agenti attivi.');
     return profiles;
@@ -285,27 +359,33 @@ export class AgentCatalogService {
   }
   list(): AgentCatalog {
     this.refreshDefaults();
-    return structuredClone({ profiles: this.profiles.filter(p => p.status === 'active'), archived: this.profiles.filter(p => p.status === 'archived'), models: this.d.models(), problem: this.problem ?? this.store.problem, legacyRouting: this.legacyRouting,
+    return structuredClone({ presetUpdates: this.presetUpdates(), profiles: this.profiles.filter(p => p.status === 'active'), archived: this.profiles.filter(p => p.status === 'archived'), models: this.d.models(), problem: this.problem ?? this.store.problem, legacyRouting: this.legacyRouting,
       builder: this.d.builder?.() ?? { available: false, engine: null, models: [], reason: 'La guida AI richiede un servizio testuale configurato. La creazione manuale funziona offline.' },
       imageGeneration: { available: false as const, reason: 'Nessun servizio di generazione immagini è collegato. Scegli un simbolo o carica un’immagine.' } });
   }
-  /** Rebind only pristine, never-edited seeds after asynchronous login discovery. Customized versions stay pinned. */
+  /** Rebind only pristine, never-edited seeds and presets after asynchronous login discovery. Customized versions stay pinned. */
   private refreshDefaults(): void {
     if (this.problem || this.store.problem) return;
     const seeds = this.defaults();
     if (!seeds.length) return;
-    const models = this.d.models();
+    const models = this.d.models(), routes = this.d.legacyRoutes?.() ?? [];
     const changed: AgentProfile[] = [];
     const next = this.profiles.map(p => {
       const current = models.find(e => e.engine === p.engine);
       const seed = seeds.find(s => s.id === p.id);
-      if (!seed || seed.engine === p.engine) return p;
-      const preferred = models.find(e => e.engine === seed.engine);
+      const origin = p.origin;
+      // A preset is rebound only while it is exactly the packaged revision (its fingerprint still matches).
+      const preset = !seed && origin.kind === 'preset' && !p.trial && p.presetHash === presetHash(p)
+        ? roleAgentPresets().find(r => r.id === origin.presetId && r.presetRevision === origin.presetRevision) : undefined;
+      const target = seed ?? (preset ? presetDraft(preset, models, routes) : null);
+      if (!target || target.engine === p.engine) return p;
+      const preferred = models.find(e => e.engine === target.engine);
       const readyAlternative = preferred?.installed === true && preferred.authenticated === true;
       if (current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false
         && (current.authenticated === true || !readyAlternative)) return p;
       if (p.origin.kind !== 'preset' || p.userLocked || p.lastEditedBy !== 'preset' || p.status !== 'active') return p;
-      const updated = { ...p, engine: seed.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      const updated: AgentProfile = { ...p, engine: target.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      if (preset) { updated.model = target.model; updated.effort = target.effort; updated.presetHash = presetHash(updated); }
       changed.push(updated); return updated;
     });
     // Seed the starters only into a catalog born without any (no engine was usable then). A catalog that already holds a
@@ -319,7 +399,9 @@ export class AgentCatalogService {
           parentVersion: this.profiles.find(old => old.id === p.id)?.activeVersion ?? null })),
         changed.flatMap(p => { const old = this.profiles.find(x => x.id === p.id); return old ? [{ agentId: old.id, version: old.activeVersion, state: 'superseded' as const }] : []; }));
       }
-      catch (e) { log.warn('agents', 'starter engine refresh failed', { cause: errText(e), hint: 'check the local catalog is writable' }); }
+      catch (e) { log.warn('agents', 'starter engine refresh failed', { cause: errText(e), hint: 'check the local catalog is writable' }); return; }
+      // A catalog seeded only now gets its presets now, and retires the starters it never showed silently.
+      if (unseeded) { this.fresh = true; this.installPresets(); }
     }
   }
   private validate(value: unknown, current: boolean, partial = false): CheckedDraft {

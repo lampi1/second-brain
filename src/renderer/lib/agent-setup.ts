@@ -2,6 +2,7 @@
 // Also the interview ⇄ me.md mapping: what the owner already told the brain is prefilled, never asked again, and on
 // confirm only the answers that add something are written (a custom reply style or a locked field is never touched).
 import type { AgentProfile, SetupDraft, SetupProfile } from '@shared/agents';
+import { LEGACY_ROLE_REPLACEMENTS } from '@shared/agent-presets';
 import type { OwnerProfile, ProfileFields } from '@shared/profile';
 import { PROFILE_FORBIDDEN, PROFILE_LIMITS, PROFILE_PLACEHOLDERS, REPLY_PRESETS } from '@shared/profile';
 import { workAreas } from './profile';
@@ -70,6 +71,10 @@ export function recommendedAgents(draft: SetupDraft, catalog: readonly AgentProf
   if (/anal|dat[oi]|confront|report|numer/i.test(draft.goals)) ids.add('default-analysis');
   if (/ricerc|font|informaz|stud/i.test(draft.goals)) ids.add('default-research');
   if (/svilupp|software|codice|programmaz/i.test(draft.goals)) ids.add('default-development');
-  return catalog.filter(p => ids.has(p.id)).map(p => p.id);
+  const resolved = new Set([...ids].map(id => {
+    const replacement = LEGACY_ROLE_REPLACEMENTS[id];
+    return replacement && catalog.some(p => p.id === replacement) ? replacement : id;
+  }));
+  return catalog.filter(p => resolved.has(p.id)).map(p => p.id);
 }
 export function validSetupStep(step: number): number { return Math.max(0, Math.min(INTERVIEW_STEPS.length - 1, Number.isInteger(step) ? step : 0)); }

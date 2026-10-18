@@ -17,6 +17,7 @@ describe('Agent catalog and local setup', () => {
   it.each(['codex', 'cursor'])('seeds and repairs untouched agents using the only ready engine: %s', engine => {
     let models = choices();
     const c = new AgentCatalogService({ userData: tmp(), models: () => models });
+    c.restore('default-development'); // a new catalog retires this starter in favour of the role presets
     c.save({ ...draft(), name: 'Personalizzato' }, 'default-development');
     models = [{ ...choices()[0]!, installed: true, authenticated: false }, { ...choices()[0]!, engine, installed: true, authenticated: true }];
     const profiles = c.list().profiles;
@@ -54,11 +55,12 @@ describe('Agent catalog and local setup', () => {
   });
   it('adds concrete duties only to fresh seeds and preserves customized default identities on reload', () => {
     const dir = tmp(), service = new AgentCatalogService({ userData: dir, models: choices });
-    const profiles = service.list().profiles;
+    const profiles = [...service.list().profiles, ...service.list().archived];
     for (const [id, word] of [['research', 'CI'], ['writing', 'criteri'], ['analysis', 'copertura'], ['planning', 'backlog'], ['development', 'ADR']]) {
       expect(profiles.find(p => p.id === `default-${id}`)?.instructions).toContain(word);
     }
     expect(profiles.find(p => p.id === 'default-general')?.instructions).toBe('Chiarisci il risultato atteso. Distingui fatti, ipotesi e proposte. Rispetta permessi e dati personali.');
+    service.restore('default-development');
     service.save({ ...draft(), instructions: 'My customized workflow' }, 'default-development');
     const file = path.join(dir, 'agents.v2.json'), before = fs.readFileSync(file, 'utf8');
     expect(new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === 'default-development')?.instructions).toBe('My customized workflow');
@@ -66,21 +68,22 @@ describe('Agent catalog and local setup', () => {
   });
   it('offers professional defaults without inventing installed models or login', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices }).list();
-    expect(c.profiles).toHaveLength(6);
-    expect(c.profiles.every(p => p.model === null && p.engine === 'claude')).toBe(true);
+    expect(c.profiles).toHaveLength(11);
+    expect(c.archived).toHaveLength(5);
+    expect(c.profiles.every(p => p.model === (p.id === 'default-general' ? null : 'known-model') && p.engine === 'claude')).toBe(true);
     expect(c.models[0]).toMatchObject({ installed: null, authenticated: null });
     expect(c.imageGeneration.available).toBe(false);
     expect(c.builder.available).toBe(false);
   });
   it('persists validated profiles and duplicates with a new identity', () => {
     const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices });
-    const saved = c.save({ ...draft(), permissionMode: 'bypassPermissions', cwd: 'private' });
+    const saved = c.save({ ...draft(), permissionMode: 'bypassPermissions', cwd: 'private-cwd-sentinel' });
     const copy = c.duplicate(saved.id);
     expect(copy.id).not.toBe(saved.id);
     const restored = new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === saved.id)!;
     expect(restored).toEqual(saved);
     expect(restored).not.toHaveProperty('permissionMode');
-    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).not.toContain('private');
+    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).not.toContain('private-cwd-sentinel');
   });
   it('freezes owner choices and instructions; profile edits never change an old snapshot', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices });

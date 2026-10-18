@@ -4,7 +4,7 @@ export const catalogIt = {
   'catalog.intro': 'Gli agenti sono assistenti riutilizzabili con un ruolo, istruzioni e un motore: parti da un preset o creane uno con l’Orchestratore.',
   'catalog.subtitle': 'La tua squadra, le sue specialità e i risultati osservati.',
   'catalog.role': 'Ruolo', 'catalog.engine': 'Motore', 'catalog.all': 'Tutti', 'catalog.sort': 'Ordina per', 'catalog.name': 'Nome',
-  'catalog.empty': 'Nessun agente corrisponde ai filtri.', 'catalog.active': 'Attivo', 'catalog.probation': 'In prova',
+  'catalog.empty': 'Nessun agente corrisponde ai filtri.', 'catalog.active': 'Attivo', 'catalog.presetUpdate': 'Aggiornamento preset disponibile', 'catalog.probation': 'In prova',
   'catalog.runs': 'Esecuzioni concluse', 'catalog.open': 'In corso', 'catalog.success': 'Successi verificati',
   'catalog.cost': 'Costo mediano / esecuzione', 'catalog.last': 'Ultimo avvio osservato', 'catalog.unknown': 'Non disponibile',
   'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} esecuzioni`,

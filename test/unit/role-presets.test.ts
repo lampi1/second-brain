@@ -5,7 +5,7 @@ import { initialRolePreset, initialRolePresets } from '../../src/shared/role-pre
 import { previewRoleChange, resolveRole, restoreRole, RoleValidationError, selectRole, validateOverrides, validatePreset, validateSelection } from '../../src/shared/role-presets';
 
 const refs = {
-  agentIds: ['general', 'research', 'writing', 'analysis', 'planning', 'development'].map(id => `default-${id}`),
+  agentIds: ['general', 'researcher', 'writer', 'reviewer', 'day-planner', 'implementer'].map(id => `default-${id}`),
   pageIds: ['agenti', 'devops', 'fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'miglioramento', 'skill', 'impostazioni', 'migliora'],
 };
 const dev = () => initialRolePreset('dev', refs);
@@ -20,10 +20,10 @@ describe('packaged references and schema', () => {
   });
   it('pins the reference fixture to the read-only baseline declarations', () => {
     const base = '../../src/';
-    const agents = readFileSync(new URL(`${base}main/agents/catalog.ts`, import.meta.url), 'utf8');
+    const agents = readFileSync(new URL(`${base}shared/agent-presets.ts`, import.meta.url), 'utf8');
     const pages = readFileSync(new URL(`${base}renderer/brain/index.tsx`, import.meta.url), 'utf8');
     expect(agents).toContain('id: `default-${id}`');
-    for (const id of refs.agentIds) expect(agents).toContain(`['${id.slice(8)}',`);
+    for (const id of refs.agentIds.filter(id => id !== 'default-general')) expect(agents).toContain(`role('${id.slice(8)}',`);
     for (const id of refs.pageIds) expect(pages).toContain(`page('${id}',`);
   });
   it('does not leak mutable catalog arrays', () => {
@@ -31,7 +31,7 @@ describe('packaged references and schema', () => {
     expect(dev().agentIds).toHaveLength(3);
   });
   it('reports the missing profile with role and index', () => {
-    expect(() => validatePreset(dev(), { ...refs, agentIds: [] })).toThrow('preset[dev].agentIds[0]: reference "default-development" does not exist');
+    expect(() => validatePreset(dev(), { ...refs, agentIds: [] })).toThrow('preset[dev].agentIds[0]: reference "default-implementer" does not exist');
   });
   it('reports an absent page without silently dropping it', () => {
     expect(() => validatePreset({ ...dev(), pageIds: ['absent'] }, refs)).toThrow('preset[dev].pageIds[0]');
@@ -42,7 +42,7 @@ describe('packaged references and schema', () => {
   it.each([0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])('rejects invalid revision %s', revision => {
     expect(() => validatePreset({ ...dev(), revision }, refs)).toThrow('revision');
   });
-  it.each([null, [], {}, { ...dev(), schemaVersion: 2 }, { ...dev(), agentIds: ['default-development', 'default-development'] }])('rejects malformed preset %#', value => {
+  it.each([null, [], {}, { ...dev(), schemaVersion: 2 }, { ...dev(), agentIds: ['default-implementer', 'default-implementer'] }])('rejects malformed preset %#', value => {
     expect(() => validatePreset(value, refs)).toThrow(RoleValidationError);
   });
   it('rejects sparse arrays, oversized lists and blank IDs', () => {
@@ -56,20 +56,20 @@ describe('packaged references and schema', () => {
 describe('personal overrides and preferences', () => {
   it('composes stable deltas and partial defaults without modifying its inputs', () => {
     const p = dev();
-    const o = { addAgentIds: ['default-writing'], removeAgentIds: ['default-research'], addPageIds: ['idee'], removePageIds: ['devops'], defaults: { homePageId: 'idee' } };
+    const o = { addAgentIds: ['default-writer'], removeAgentIds: ['default-researcher'], addPageIds: ['idee'], removePageIds: ['devops'], defaults: { homePageId: 'idee' } };
     const original = structuredClone({ p, o });
     const result = resolveRole(p, selectRole(p, o, refs), refs);
-    expect(result.agentIds).toEqual(['default-development', 'default-planning', 'default-writing']);
+    expect(result.agentIds).toEqual(['default-implementer', 'default-day-planner', 'default-writer']);
     expect(result.pageIds).toEqual(['agenti', 'procedure', 'fatto', 'idee']);
-    expect(result.defaults).toEqual({ homePageId: 'idee', primaryAgentId: 'default-development' });
+    expect(result.defaults).toEqual({ homePageId: 'idee', primaryAgentId: 'default-implementer' });
     expect({ p, o }).toEqual(original);
   });
   it('rejects conflicting add/remove instructions', () => {
     expect(() => validateOverrides({ addPageIds: ['idee'], removePageIds: ['idee'] }, refs)).toThrow('also added');
   });
   it('rejects removal of the default until a replacement is supplied', () => {
-    expect(() => selectRole(dev(), { removeAgentIds: ['default-development'] }, refs)).toThrow('role[dev].defaults.primaryAgentId');
-    expect(selectRole(dev(), { removeAgentIds: ['default-development'], defaults: { primaryAgentId: 'default-planning' } }, refs).overrides.defaults?.primaryAgentId).toBe('default-planning');
+    expect(() => selectRole(dev(), { removeAgentIds: ['default-implementer'] }, refs)).toThrow('role[dev].defaults.primaryAgentId');
+    expect(selectRole(dev(), { removeAgentIds: ['default-implementer'], defaults: { primaryAgentId: 'default-day-planner' } }, refs).overrides.defaults?.primaryAgentId).toBe('default-day-planner');
   });
   it('validates all added, removed and default references', () => {
     for (const key of ['addAgentIds', 'removeAgentIds', 'addPageIds', 'removePageIds']) {

@@ -3,8 +3,8 @@ import { inProbation, type AgentMetrics, type AgentProfile } from '@shared/agent
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen }: {
-  profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void;
+export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, updateAvailable }: {
+  profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void; updateAvailable?: boolean;
 }) {
   const stats = metrics?.all;
   const ended = loaded ? stats?.ended ?? 0 : null;
@@ -15,6 +15,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     <div className="catalog-card-top"><AgentAvatar avatar={profile.avatar} name={profile.name} size={48} />
       <span className="catalog-badge" data-probation={inProbation(profile)}>{inProbation(profile) ? t('catalog.probation') : t('catalog.active')}</span></div>
     <h3><button type="button" onClick={onOpen}>{profile.name}</button></h3>
+    {updateAvailable && <button type="button" className="catalog-badge" onClick={onOpen}>{t('catalog.presetUpdate')}</button>}
     <p className="catalog-role">{profile.role || profile.purpose}</p>
     <p className="catalog-purpose">{profile.purpose}</p>
     <p className="catalog-engine">{engine} · {profile.model ?? t('studio.defaultEngine')}</p>
