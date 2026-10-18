@@ -30,6 +30,18 @@ describe('Agent catalog and local setup', () => {
       expect(new AgentCatalogService({ userData: tmp(), models: () => [{ ...choices()[0]!, ...patch }] }).list().profiles).toEqual([]);
     }
   });
+  it('seeds a catalog born without a usable engine once one logs in, never re-adding starters to a seeded catalog', () => {
+    let models: AgentModelChoice[] = [{ ...choices()[0]!, authenticated: false }];
+    const c = new AgentCatalogService({ userData: tmp(), models: () => models });
+    expect(c.list().profiles).toEqual([]);
+    models = [{ ...choices()[0]!, engine: 'codex', installed: true, authenticated: true }];
+    // an agentless chat may recreate Generale before anything lists the catalog: the other starters still arrive
+    c.resolve({ harness: 'codex', cwd: '/synthetic', permissionMode: 'default' });
+    const seeded = c.list().profiles;
+    expect(seeded.length).toBeGreaterThan(1);
+    expect(seeded.every(p => p.engine === 'codex' && p.origin.kind === 'preset')).toBe(true);
+    expect(c.list().profiles.map(p => p.id)).toEqual(seeded.map(p => p.id));
+  });
   it('rebinds unknown-login pristine seeds to a ready engine without rewriting their history', () => {
     let models = choices();
     const c = new AgentCatalogService({ userData: tmp(), models: () => models });

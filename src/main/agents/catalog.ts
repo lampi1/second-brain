@@ -308,7 +308,11 @@ export class AgentCatalogService {
       const updated = { ...p, engine: seed.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
       changed.push(updated); return updated;
     });
-    for (const seed of seeds) if (!next.some(p => p.id === seed.id) && next.length < MAX_AGENTS && next.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) { next.push(seed); changed.push(seed); }
+    // Seed the starters only into a catalog born without any (no engine was usable then). A catalog that already holds a
+    // starter keeps the user's choice: a starter they never had or removed is not brought back. Generale does not count:
+    // ensureGeneral recreates it on its own (an agentless chat), possibly before this first seeding.
+    const unseeded = !next.some(p => p.id !== GENERAL_AGENT_ID && seeds.some(s => s.id === p.id));
+    if (unseeded) for (const seed of seeds) if (!next.some(p => p.id === seed.id) && next.length < MAX_AGENTS && next.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) { next.push(seed); changed.push(seed); }
     if (changed.length) {
       try {
         this.commit(next, changed.map(p => ({ ...firstVersion(p, 'preset', 'Motore iniziale disponibile', this.now()), version: p.version,
