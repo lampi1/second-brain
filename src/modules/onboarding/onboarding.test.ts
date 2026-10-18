@@ -42,7 +42,9 @@ async function fixture(local = new LocalFiles(async () => 0)) {
     protect: text => Buffer.from('fake-vault:' + text), unprotect: b => b.toString().slice(11) };
   return { root, project, host, service: new OnboardingService(host, local) };
 }
-describe('project connector transaction', () => {
+// Each case does dozens of small real journal, backup and publish writes: 0.2 s idle, 15 s+ when the full suite
+// contends for the CPU and the libuv file pool. An explicit block budget, not the 15 s default.
+describe('project connector transaction', { timeout: 60_000 }, () => {
   it('previews all three exact formats, waits for confirmation, persists a private journal and undoes exact existence/bytes', async () => {
     const { project, service, host } = await fixture();
     const existing = '{"other":{"visible":true}}\n';
