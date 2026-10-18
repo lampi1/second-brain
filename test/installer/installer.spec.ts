@@ -116,8 +116,8 @@ test('offline per-user installer starts and reopens its stable copy without syst
         expect(path.isAbsolute(relative)).toBe(false);
         expect(relative.split(path.sep)[0]).not.toBe('..');
       }
-      await expect(page.getByTestId('ai-first-modal')).toBeVisible();
-      await expect(page.getByTestId('ai-setup-fallback')).toBeVisible();
+      await expect(page.getByTestId('first-interview')).toBeVisible();
+      await expect(page.getByTestId('setup-later')).toBeVisible();
       await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('app:info', undefined)).health?.jobGuard), { timeout: 60000 }).toBe('ready');
       const shots = path.join(repo, 'test-results/shots');
       fs.mkdirSync(shots, { recursive: true });
