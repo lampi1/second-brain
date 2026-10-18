@@ -525,13 +525,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
+  const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
+  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
+  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
+  const suggestionBudget = new SuggestionBudget(ctx.userData);
+  const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
+    suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
+    send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
+  });
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md): the "Da approvare" queue and the local daily suggestions
-  // ($0, no model, at most once a day after 18:00 while nothing works; off in the test suites). Left out on purpose until
-  // their inputs exist on main: the Orchestrator wake asking for run feedback (no agent_feedback tool records it yet,
-  // so each wake would spend the user's tokens on a request it cannot answer) and the trial evaluation (no classifier
-  // routing snapshot: unknown routing turns every open trial into a "revert" proposal after five runs).
-  const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false });
-  mountLifecycleApi(brain, createLifecycleApi(lifecycle, id => manager.runs.get(id)));
+  // ($0, no model, at most once a day after 18:00 while nothing works; off in the test suites). One feedback store: the
+  // authoring store (agent-authoring.json) behind agent_feedback; the lifecycle reads it, and its facade is the tool's
+  // entry point (the shared AgentFeedbackArgs), so a gap named on two runs becomes a proposal. Left out on purpose:
+  // the run-end Orchestrator wake asking for feedback (it would spend the user's tokens on every run end; it needs the
+  // mailbox's engine and user-wait gates first) and the trial evaluation (no classifier routing snapshot of the parent
+  // version: unknown routing turns every open trial into a "revert" proposal after five runs).
+  const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false, feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } });
+  const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id), (args, caller) => agentAuthoring.recordFeedback(args, caller));
+  mountLifecycleApi(brain, lifecycleApi);
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
   const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => {
@@ -543,14 +554,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     } catch (e) { log.warn('agents', 'daily agent suggestions failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
   }, 10_000);
   lifecycleTimer?.unref();
-  const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
-  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  const suggestionBudget = new SuggestionBudget(ctx.userData);
-  const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
-    suggestionSpend: () => suggestionBudget.spent(),
-    send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
-  });
   attachAppTools(mcp, { agentAuthoring, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on

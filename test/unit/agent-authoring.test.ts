@@ -10,18 +10,21 @@ import { SuggestionBudget } from '../../src/main/agents/suggestion-budget';
 import { checkAgentCwd, checkAuthorPolicy, checkCreationRequest } from '../../src/main/agents/author-policy';
 import type { AgentDraft, AgentModelChoice } from '../../src/shared/agents';
 import type { ChatItem } from '../../src/shared/contract';
+import { AGENT_FEEDBACK_SCHEMA } from '../../src/shared/agent-lifecycle';
+import { AgentLifecycle } from '../../src/main/agents/lifecycle';
+import { createLifecycleApi } from '../../src/main/agents/lifecycle-api';
 
 const folders: string[] = [];
 const tmp = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-author-')); folders.push(p); return p; };
 afterEach(() => { for (const p of folders.splice(0)) fs.rmSync(p, { recursive: true, force: true }); });
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }];
 const draft = (): AgentDraft => ({ name: 'Reader', purpose: 'Read files', instructions: 'Report observations.', engine: 'claude', model: null, avatar: { kind: 'symbol', value: 'eye' }, tools: { allow: ['read'] }, permissionCeiling: 'default' });
-function fixture() {
+function fixture(extra: Partial<ConstructorParameters<typeof AgentAuthoring>[0]> = {}) {
   const userData = tmp(), now = Date.now(), items: ChatItem[] = [{ kind: 'user', id: 'task', text: 'Create a reader', at: now }];
   const catalog = new AgentCatalogService({ userData, models, now: () => now, approvedRoots: () => [userData] });
   const runs = new AgentRunStore(userData), publish = vi.fn(), send = vi.fn(async () => undefined);
   const deps = { userData, catalog, runs, items: () => items, now: () => now, suggestionSpend: () => 0, publish, send };
-  const service = new AgentAuthoring(deps);
+  const service = new AgentAuthoring({ ...deps, ...extra });
   service.rememberHumanMessage('orch', 'Create a reader');
   const create = () => service.call('agent_create', { draft: draft(), presetId: 'default-research', requestItemId: 'task', reason: 'User task' }, 'orch');
   return { ...deps, chatItems: items, service, create };
@@ -169,5 +172,35 @@ describe('MCP authoring boundary', () => {
     expect(tools.map(t => t.name)).not.toContain('agent_decide');
     expect(tools).toHaveLength(12);
     for (const t of tools) await expect(t.run({})).rejects.toThrow(/Authenticated/);
+  });
+});
+
+describe('agent_feedback: one shape, one store', () => {
+  const start = (f: ReturnType<typeof fixture>, id: string) => f.runs.start({ agentId: id, version: 1, chatId: 'work', goal: 'Read', startedBy: 'orchestrator', startedAt: f.now(), costKnown: true });
+  it('exposes the shared schema and refuses caller-chosen agent, version or basis', async () => {
+    const f = fixture(), p = await f.create() as { id: string }, run = start(f, p.id);
+    const tool = authoringTools(f.service, 'orch', () => true).find(t => t.name === 'agent_feedback')!;
+    expect(tool.inputSchema).toBe(AGENT_FEEDBACK_SCHEMA);
+    const a = { runId: run.runId, notes: 'Checked', verdict: 'partial', evidence: [] };
+    for (const extra of [{ agentId: 'other' }, { version: 9 }, { basis: 'human' }, { reason: 'alias' }])
+      await expect(tool.run({ ...a, ...extra })).rejects.toThrow(/unknown argument/);
+    await expect(tool.run({ ...a, verdict: 'failure' })).rejects.toThrow(/verdict/);
+    const saved = await tool.run({ ...a, worked: 'Read', failed: 'Tests', gap: 'instructions', gapKey: 'tests' }) as Record<string, unknown>;
+    expect(saved).toMatchObject({ agentId: p.id, runId: run.runId, version: 1, worked: 'Read', failed: 'Tests', gap: 'instructions', gapKey: 'tests', outcome: { basis: 'orchestrator-opinion', note: 'Checked', by: 'orch' } });
+    // the store reloads its own records with the optional detail
+    expect(new AgentAuthoring({ ...f, items: () => f.chatItems }).feedbackOf(p.id)).toHaveLength(1);
+  });
+  it('goes through the lifecycle facade when wired: same store, repeated gap proposed', async () => {
+    let api: ReturnType<typeof createLifecycleApi> | null = null;
+    const f = fixture({ feedback: (a, caller) => api!.feedback(a, caller) });
+    const lifecycle = new AgentLifecycle({ userData: f.userData, wake: () => false, feedback: { list: id => f.service.feedbackOf(id), get problem() { return f.service.storeProblem; } } });
+    api = createLifecycleApi(lifecycle, id => f.runs.get(id), (a, caller) => f.service.recordFeedback(a, caller));
+    const p = await f.create() as { id: string };
+    for (const run of [start(f, p.id), start(f, p.id)])
+      await f.service.call('agent_feedback', { runId: run.runId, notes: 'Missed tests', verdict: 'partial', evidence: [], gap: 'instructions', gapKey: 'tests' }, 'orch');
+    expect(f.service.feedbackOf(p.id)).toHaveLength(2);
+    expect(lifecycle.proposals().map(x => x.kind)).toEqual(['update']);
+    expect(api.read({ agentId: p.id }).feedback).toHaveLength(2);
+    expect(fs.existsSync(path.join(f.userData, 'agent-feedback.json'))).toBe(false);
   });
 });

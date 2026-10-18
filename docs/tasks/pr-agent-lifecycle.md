@@ -6,15 +6,19 @@ Agent runs now expose an `onRunEnded` hook. New main-process modules provide a d
 
 The trial evaluator uses the parent's last ten pre-trial ended runs, excludes legacy versions, accepts only human/reviewed outcomes, and separates parent-compatible, other and unknown-routing work. It checks sample size, coverage, primary improvement, cost, elapsed time and question guardrails. Findings are compared only across the same reviewer version. The lifecycle coordinator persists evaluations, proposals and batched run-end wakes. The local suggestion pass costs $0 and runs at most once per local day after 18:00 while idle.
 
-This is an integration handoff, **not completion of AD-36/37/39/41/42/43/44/48**. The following adapters remain outstanding:
+This is an integration handoff, **not completion of AD-36/37/39/41/42/43/44/48**.
 
-- Instantiate `AgentLifecycle` in integrator-owned `wiring.ts`; connect the manager hook, heartbeat, labelled Orchestrator mailbox wake and shutdown.
-- Connect authenticated `agent_feedback` to `createLifecycleApi(...).feedback(args)` after verifying caller scope. The facade rejects caller-supplied agent/version/basis and reads the authoritative run. No dismiss/apply action is supplied here.
-- Supply classifier-derived `parentWins` from the parent's routing snapshot. Unknown classifications are excluded, never assumed compatible.
-- Additional journal/now/error evidence remains outstanding. `lifecycleInput` now supplies Generale work, distinct retired roles and model cohorts from durable runs, tags, chat metadata, immutable version snapshots and actual costs, using the existing `estimates.classify`. It skips unknown areas/models/costs. It does not draft complete definitions.
-- Persist accepted trial decisions on catalog version history and implement explicit user approval actions in the API/UI owner branch. Evaluations here are persisted in `agent-lifecycle.json` only.
-- Run the new `test/e2e/agent-lifecycle.spec.ts` on main after mounting the real/demo API, and obtain a visible fresh-context reviewer. The app was not launched, as required by the brief.
+Wired during integration (after #49):
 
+- One `agent_feedback` shape: `AgentFeedbackArgs`, `AGENT_FEEDBACK_SCHEMA` and `parseAgentFeedbackArgs` in `src/shared/agent-lifecycle.ts`. #49's required args stay (`runId`, `verdict`, `notes`, `evidence`); `worked`, `failed`, `gap`, `gapKey` and `sendToRun` are optional. `notes` is the opinion text (the outcome note); there is no `reason` alias. Any other key (agentId, version, basis, outcome…) is refused.
+- One record type (`AgentFeedback`, re-exported by `shared/agent-authoring.ts`) and one store: #49's `agent-authoring.json` feedback list. The branch's own `agent-feedback.json` store is gone (it never shipped). Records gain optional `version` and gap detail, and older records stay valid.
+- The authenticated `agent_feedback` tool calls the lifecycle facade (`createLifecycleApi(...).feedback(args, callerId)`). The facade parses the shared shape and writes through `AgentAuthoring.recordFeedback`, which keeps #49's basis rules and the run outcome update. It then turns a gap named on two runs into a pending proposal. The lifecycle reads the same store via `FeedbackSource`.
+- `AgentLifecycle` is instantiated in `wiring.ts` with the read API mounted, the 10 s heartbeat for the local daily pass (off under `SB_TEST`, cleared in shutdown) and the demo read API.
+
+Still outstanding:
+
+- The run-end Orchestrator wake (`onRunEnded` + `flushWake`): it would spend the user's tokens on every run end and needs the mailbox's engine and user-wait gates. `wake` stays `() => false` and `onRunEnded` is not passed to the manager.
+- Trial evaluation: the classifier on main (#40) matches request text to agents but keeps no routing snapshot of the parent version per run, so `parentWins` cannot be supplied. `evaluate` is not called (unknown routing would turn every open trial into a "revert" proposal).
 API and UI now implemented:
 
 - `AgentCatalogPage` includes Da approvare, evidence references as plain text, per-agent feedback, and version comparisons with n/coverage and a separate excluded cohort. `Esamina proposta` opens the relevant editor or a new-agent editor, without applying changes.
@@ -27,7 +31,7 @@ Exact integration points in reserved wiring (assigned to the Integration chat):
 2. Pass `onRunEnded: run => lifecycle.onRunEnded(run)` in manager options. After constructing manager, call `const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id)); mountLifecycleApi(brain, lifecycleApi);` (both exports from `./agents/lifecycle-api`). Mount the same read API in demo wiring for the e2e fixture, with scheduling/wakes disabled there.
 3. Manage a heartbeat (10 seconds is sufficient) calling `flushWake()` and `daily(idle, readInput)`. Idle must include pending requests, queued/running work and background children. Catch/log failures with cause/hint and clear the timer in shutdown. The local daily pass costs $0.
 4. For readInput use `lifecycleInput([...agents.list().profiles, ...agents.list().archived], manager.runs.list(), manager.list(), (id, v) => agents.history(id).find(x => x.version === v))`, imported from `./agents/lifecycle-input`. Cohorts share role/engine/kind/area/skills, require confirmed outcomes and never infer missing cost.
-5. The MCP tool owner calls `lifecycleApi.feedback(args)` only after authenticating the Orchestrator caller. Arguments: runId, verdict, worked, failed, gap, gapKey, evidence. Do not duplicate the store or expose this write as a user renderer action.
+5. Done: the authenticated `agent_feedback` tool → `lifecycleApi.feedback(args, callerId)` → `AgentAuthoring.recordFeedback` (one store). Arguments: the shared `AgentFeedbackArgs`.
 6. At run end and daily, call `lifecycle.evaluate(agent, manager.runs.list(), parentWins)` for open trials. Classifier integration supplies `parentWins(run, parentVersion): boolean | null` from the parent's routing snapshot. Unknown routing stays excluded; do not use a constant-true callback in production.
 
 Remaining source/UX gaps, explicitly not claimed complete:
@@ -36,13 +40,4 @@ Remaining source/UX gaps, explicitly not claimed complete:
 - `estimates.ts` JobRecord has kind/model/cost but lacks durable agent/version/area provenance. Durable runs and version snapshots are used instead. Pruned runs cannot be reconstructed for routing replay.
 - Complete definition drafts, queue dismissal, approve/apply mutations, feedback strip footers and catalog-history decision writes remain outstanding. Evaluations persist in `agent-lifecycle.json`. The UI button explicitly opens the editor and never claims approval/application.
 
-Validation:
-
-- ESLint passed for all changed/new TypeScript files, including the final validation/test additions.
-- `git diff --check` passed.
-- Typecheck was attempted; blocked by missing existing `diff`, `highlight.js` and `pdfjs-dist` dependencies outside the changed files.
-- Vitest attempted `test/unit/agents/lifecycle.test.ts`; no tests executed because the sandbox refused creation of its temporary `ssr` directory (`EPERM`). Tests were not weakened and temporary paths were not redirected to evade the restriction.
-- `npm run check:branch` failed at typecheck on those missing dependencies; the checkout also cannot write its Git check ledger.
-- Updating from `origin/main` failed on the Git worktree's `ORIG_HEAD.lock` (permission denied). Staging the explicit product-file list failed on `index.lock`, so no commit or commit guard was possible. No push, PR or app launch was performed.
-
-The new unit fixtures cover feedback retention/restart/corruption, distinct-run gaps, comparable trial cohorts, guardrail failures, repeated-work and overlap/model/split suggestions, batched retryable wakes, idle daily deduplication, API validation and rendering. They still need execution in an authorized environment. Typecheck after the API/UI additions reported the same dependency failures and no errors in the added modules.
+Validation (integration): `npx tsc --noEmit`, `npm run lint`, `npm run check:branch` and the guard on the branch commits. The new e2e spec `test/e2e/agent-lifecycle.spec.ts` first runs on main.
