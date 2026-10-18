@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import type { Effort, Harness, JobActual, JobKind, JobRecordInput } from '../../shared/contract';
 import { log } from '../log';
 import { runNode, type NodeRunner } from './node';
+import { brainScript } from '../rules/tools';
 import { engineOf, engines } from '../engines/registry';
 
 export const KIND_LABELS: Record<JobKind, string> = {
@@ -160,7 +161,7 @@ export class Ledger {
   /** Imports past Claude chats from cost.mjs (at most once every 20 h). Never overwrites a job recorded by the app. */
   async backfill(root: string | null, node: NodeRunner, now = Date.now()): Promise<{ added: number; skipped: string | null }> {
     if (this.backfilling) return { added: 0, skipped: 'già in corso' };
-    const script = root ? path.join(root, 'ops', 'tools', 'cost.mjs') : null;
+    const script = root ? brainScript(root, 'ops/tools/cost.mjs') : null;
     if (!script || !fs.existsSync(script)) return { added: 0, skipped: 'il cervello non ha ops/tools/cost.mjs' };
     let meta: { backfillAt?: number } = {};
     if (this.metaFile) try { meta = JSON.parse(fs.readFileSync(this.metaFile, 'utf8')) as typeof meta; } catch { /* first time */ }

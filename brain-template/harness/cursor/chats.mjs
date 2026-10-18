@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { mask } from '../../ops/tools/mask.mjs';
+import { brainRoot } from '../../ops/tools/brain-root.mjs';
 
 process.removeAllListeners('warning'); // node:sqlite is "experimental" in Node 22: keep its warning out of the output
 const argv = process.argv.slice(2);
@@ -94,7 +95,7 @@ const jstr = s => { try { return JSON.parse(`"${s}"`); } catch { return s; } };
 // 370 MB a run on 15/10 (99 files, 396 MB). A cache keeps each file's title and folder with the offset scanned so far:
 // a run scans only the bytes added since, and the state comes from the tail. A file rewritten (shorter, or longer: a
 // compaction that grew back) is scanned again: the 64 bytes before the offset (the end of a row with its uuid) must match.
-const CACHE = process.env.BRAIN_CHATS_CACHE || path.join(import.meta.dirname, '..', '..', 'ops', 'state', 'chats-cache.json');
+const CACHE = process.env.BRAIN_CHATS_CACHE || path.join(brainRoot(import.meta.url), 'ops', 'state', 'chats-cache.json');
 const CACHE_DAYS = 31; // `read` looks back 30 days by title
 function loadCache() { try { return JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch { return {}; } }
 function saveCache(c) {

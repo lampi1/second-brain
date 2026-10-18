@@ -1,3 +1,6 @@
+---
+when: {"prompt":["routine","esegui ora","manutenzione","primo giorno"],"tools":[],"paths":["**/routines.md"]}
+---
 # Routines
 
 Recurring procedures, run only when {{OWNER}} asks ("esegui ora"): nothing here runs on a schedule by itself.

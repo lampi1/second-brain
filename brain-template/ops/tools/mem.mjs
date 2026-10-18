@@ -33,8 +33,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { eventContext, originField } from './event-origin.mjs';
+import { brainRoot } from './brain-root.mjs';
 // Automatic work attribution belongs to the optional improve analytics package; ordinary memory never requires it.
-const analyticsFile = new URL('../improve/work-keys.mjs', import.meta.url);
+const analyticsFile = pathToFileURL(path.join(brainRoot(import.meta.url), 'ops', 'improve', 'work-keys.mjs'));
 const analytics = fs.existsSync(analyticsFile) ? await import(analyticsFile.href) : null;
 
 const argv = process.argv.slice(2);

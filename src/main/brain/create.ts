@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import type { Harness } from '../../shared/contract';
 import { runNode, type NodeRunner } from './node';
+import { prepareNewBrain } from '../rules/new-brain';
 
 export interface CreateBrainFields { name: string; role: string; language: 'it' | 'en'; harness: Harness }
 export interface BrainCreationCapability { available: boolean; reason?: string }
@@ -101,10 +102,12 @@ export class BrainCreator {
       const result = await (this.options.run ?? runNode)(node, path.join(template, 'install.mjs'), args, template, 60000);
       if (result.code !== 0) throw new Error('Creazione della memoria non riuscita. La cartella parziale viene conservata.');
       if (!owned()) throw new Error('La destinazione è cambiata durante la creazione.');
-      for (const file of ['AGENTS.md', 'me.md', 'ops/tools/brain-site.mjs']) {
+      for (const file of ['AGENTS.md', 'me.md', 'ops/tools/brain-site.mjs']) { // before prepareNewBrain moves the tools out
         const target = path.join(stage, file);
         if (!samePath(fs.realpathSync(target), target) || !fs.lstatSync(target).isFile()) throw new Error('La memoria creata è incompleta.');
       }
+      const harnesses: Record<string, string> = { claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex', kimi: 'Kimi' };
+      prepareNewBrain(stage, root, { OWNER: fields.name.trim(), ROLE: fields.role.trim() || 'professional', LANG: fields.language === 'it' ? 'italiano' : 'English', REPOS: parent, HARNESSES: harnesses[fields.harness] ?? fields.harness, TODAY: new Date().toISOString().slice(0, 10) });
       this.verifiedTemplate(); // do not report success if the source changed while the installer was copying
       regularTree(stage); // never publish links or special files created by an installer
       if (fs.existsSync(root)) throw new Error('La destinazione ora esiste: la memoria preparata viene conservata separatamente.');

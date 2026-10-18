@@ -12,6 +12,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../../log';
+import { enabled, installHooks, productSignature } from '../../rules/delivery';
+import { productInstructions } from '../../rules/instructions';
+import { configOf } from '../../rules/storage';
+import { ensureTools, isProduct, templateHooks } from '../../rules/tools';
+import { memoryInstructions } from '../../rules/new-brain';
 import { isDir, launchRules, readText, resolvePlaceholders, instructionsOf, type BrainDomain } from './domains';
 
 export const PLUGIN_NAME = 'second-brain';
@@ -27,30 +32,38 @@ const MAX_FILE = 2_000_000;
 
 export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null }
 
-/** The plugin + rules arguments for one Claude launch (empty when switched off or the brain holds nothing). Never
- *  throws: a brain that cannot be packed is logged and the chat starts without it. */
-export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on: boolean }): ClaudeLaunch {
+/** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
+export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on?: boolean }): ClaudeLaunch {
   const none: ClaudeLaunch = { args: [], pluginDir: null, rulesFile: null };
   const rules = input ? null : launchRules();
-  const on = input?.on ?? rules?.claude ?? false;
   const domains = input?.domains ?? rules?.domains ?? [];
-  if (!on || !domains.length) return none;
+  const root = domains[0]?.root;
+  // A product brain (made by BrainCreator, no ~/.claude wiring to duplicate) is delivered unless it opted out in
+  // brain.json rules.claudeLaunch; legacy brains follow the app-wide switch, off by default.
+  const product = !!root && isProduct(root);
+  const on = input?.on ?? (rules?.claude || (product && configOf(root!).claudeLaunch)) ?? false;
+  if (!on || !domains.length || !root) return none;
   try {
     const base = path.join(userData, 'claude-plugin');
     const files = collect(domains);
-    const instructions = instructionsOf(domains);
-    const sig = signature(files, instructions);
-    const dir = path.join(base, PLUGIN_NAME);
-    const rulesFile = path.join(base, 'rules.md');
-    if (readText(path.join(dir, '.signature')) !== sig) build(base, dir, files, domains, sig);
+    const tools = product ? ensureTools(root) : null;
+    const productText = productInstructions(root, false, tools ? tools.replace(/\\/g, '/') : undefined);
+    let instructions = productText === null ? instructionsOf(domains) : [productText, instructionsOf(domains.slice(1))].filter(Boolean).join('\n\n');
+    const sig = signature(files, (instructions ?? '') + productSignature(root));
+    // A running chat keeps its exact product/root binding when another brain is selected or a release changes.
+    const dir = path.join(base, product ? `${PLUGIN_NAME}-${sig}` : PLUGIN_NAME);
+    const rulesFile = product ? path.join(dir, 'rules.md') : path.join(base, 'rules.md');
+    if (product) instructions += '\n\n' + memoryInstructions(path.join(dir, 'product-rules'), root, tools ?? undefined);
+    if (readText(path.join(dir, '.signature')) !== sig) build(base, dir, files, domains, sig, tools);
     if (instructions) { if (readText(rulesFile) !== instructions) fs.writeFileSync(rulesFile, instructions); }
     else fs.rmSync(rulesFile, { force: true });
-    const hasParts = files.length > 0;
+    const hasParts = files.length > 0 || product;
     return {
       args: [...(hasParts ? ['--plugin-dir', dir] : []), ...(instructions ? ['--append-system-prompt-file', rulesFile] : [])],
       pluginDir: hasParts ? dir : null, rulesFile: instructions ? rulesFile : null,
     };
   } catch (e) {
+    if (product) throw e; // a migrated brain must never silently lose its safety hooks
     log.warn('brain', 'the brain\'s rules could not be packed for Claude', { cause: errText(e), hint: 'the chat starts with the user\'s own ~/.claude only; check the userData folder is writable', data: { userData } });
     return none;
   }
@@ -97,7 +110,7 @@ function signature(files: readonly Src[], instructions: string | null): string {
 }
 
 /** Writes the plugin into a fresh folder, then swaps it in (rename), so a chat starting meanwhile sees the old or the new. */
-function build(base: string, dir: string, files: readonly Src[], domains: readonly BrainDomain[], sig: string): void {
+function build(base: string, dir: string, files: readonly Src[], domains: readonly BrainDomain[], sig: string, tools: string | null): void {
   fs.mkdirSync(base, { recursive: true });
   const tmp = path.join(base, `.${PLUGIN_NAME}-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.join(tmp, '.claude-plugin'), { recursive: true });
@@ -108,6 +121,10 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
     if (TEXT.test(f.rel)) fs.writeFileSync(to, resolvePlaceholders(fs.readFileSync(f.abs, 'utf8'), domains));
     else fs.copyFileSync(f.abs, to);
   }
+  const root = domains[0]!.root;
+  const fwdTools = tools?.replace(/\\/g, '/');
+  installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {});
+  if (fwdTools && enabled(root)) addHooks(tmp, templateHooks(root, fwdTools));
   fs.writeFileSync(path.join(tmp, '.signature'), sig);
   const old = `${dir}.old-${Date.now()}`;
   if (fs.existsSync(dir)) fs.renameSync(dir, old);
@@ -116,4 +133,12 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   fs.rm(old, { recursive: true, force: true }, () => {});
   for (const n of fs.readdirSync(base)) if (n.startsWith(`${PLUGIN_NAME}.old-`) && path.join(base, n) !== old) fs.rm(path.join(base, n), { recursive: true, force: true }, () => {});
   log.info('brain', 'claude plugin rebuilt from the brain', { data: { files: files.length, domains: domains.map(d => d.name) } });
+}
+
+/** Appends the template's kept hooks (rules/tools.ts templateHooks) after the product runner of each event. */
+function addHooks(plugin: string, add: Record<string, unknown[]>): void {
+  const file = path.join(plugin, 'hooks', 'hooks.json');
+  const cur = JSON.parse(fs.readFileSync(file, 'utf8')) as { hooks: Record<string, unknown[]> };
+  for (const [event, groups] of Object.entries(add)) cur.hooks[event] = [...(cur.hooks[event] ?? []), ...groups];
+  fs.writeFileSync(file, JSON.stringify(cur));
 }

@@ -18,10 +18,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brainRoot } from '../../ops/tools/brain-root.mjs';
 
 const argv = process.argv.slice(2);
 const opt = n => argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined;
-const root = path.resolve(opt('--root') ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..'));
+const root = path.resolve(opt('--root') ?? brainRoot(import.meta.url));
 const home = path.resolve(opt('--home') ?? os.homedir());
 const check = argv.includes('--check');
 const src = path.join(root, '.claude', 'agents');

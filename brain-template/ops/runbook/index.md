@@ -1,3 +1,6 @@
+---
+when: {"prompt":["non funziona","errore","error","problema","runbook"],"tools":[],"paths":["**/ops/runbook/**"]}
+---
 # Runbook index
 
 One file per topic. Format of each entry: **symptom / request → where to look → command or query → expected outcome

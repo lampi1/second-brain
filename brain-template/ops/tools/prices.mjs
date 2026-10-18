@@ -7,9 +7,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { brainRoot } from './brain-root.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const TABLE_FILE = path.join(HERE, '..', '..', 'harness', 'models.json');
+export const TABLE_FILE = path.join(brainRoot(import.meta.url), 'harness', 'models.json');
 
 let cached = null;
 /** The registry (harness/models.json); `file` only for tests. */

@@ -1,3 +1,6 @@
+---
+when: {"prompt":["pagina vuota","hook","cervello non","brain page"],"tools":[],"paths":["**/ops/runbook/brain.md"]}
+---
 # Runbook: il cervello stesso
 
 Problemi del cervello e dei suoi strumenti (pagine dell'app, memoria, hook, git), uno per voce. È anche l'esempio del

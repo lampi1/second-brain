@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { CORRECTION, CONFUSION, positiveKind } from './signals-regex.mjs';
 import { areaOf } from './feedback-log.mjs';
+import { brainRoot } from './brain-root.mjs';
 
 const argv = process.argv.slice(2);
 const arg = n => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined);
@@ -30,7 +31,7 @@ const since = romeMidnight(arg('--since') ?? day(Date.now() - 7 * 864e5));
 const until = arg('--until') ? romeMidnight(arg('--until')) : Date.now() + 1;
 const inWin = t => t >= since && t < until;
 const N = Number(arg('--n') ?? 2);
-const ROOT = arg('--root') ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = arg('--root') ?? brainRoot(import.meta.url);
 const CLAUDE = process.env.BRAIN_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
 const CURSOR = process.env.BRAIN_CURSOR_PROJECTS || path.join(os.homedir(), '.cursor', 'projects');
 const DELIVERY = /\b(fatto|fatta|pronto|pronta|completat|funziona|corrett[oa]|sistemat|aggiornat|creat[oa]|aggiunt[oa]|pushat|mergiat|pubblicat|committat|implementat|done|ready)\b/i;

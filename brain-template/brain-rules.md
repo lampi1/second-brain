@@ -1,3 +1,6 @@
+---
+when: {"prompt":["d'ora in poi","non fare più","regola","rule","skill","agente specialista"],"tools":[],"paths":["**/brain-rules.md","**/rules/**","**/.claude/agents/**","**/.claude/skills/**"]}
+---
 # Brain rules: how the brain itself is changed
 
 The rules every agent follows when it changes the brain (rules, preferences, skills, agents, tests), above all the

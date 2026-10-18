@@ -10,6 +10,7 @@ import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
 import { claudeLaunch } from '../brain/adapters/claude-plugin';
 import { codexLaunch } from '../brain/adapters/codex';
+import { acpRules } from '../brain/adapters/acp-rules';
 import { codexPolicyFor } from '../brain/adapters/codex-policy';
 import { ClaudeSession } from '../chats/claude';
 import { CodexSession } from '../chats/codex';
@@ -66,6 +67,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
       return new AcpSession({
+        brainInstructions: acpRules(opts.readOnly),
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),

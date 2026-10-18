@@ -8,6 +8,10 @@
 // A Codex chat that starts with the brain switched on but no domain (no brain folder, or it is gone) logs it at info,
 // so "Codex does not follow my rules" is visible in `npm run logs`. Used by engines/sessions.ts.
 import { log } from '../../log';
+import { productInstructions } from '../../rules/instructions';
+import { assets, enabled } from '../../rules/delivery';
+import { memoryInstructions } from '../../rules/new-brain';
+import { toolsRef } from '../../rules/tools';
 import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './domains';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
@@ -66,7 +70,11 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   return {
     configArgs: c.flatMap(v => ['-c', v]),
     approvalPolicy: approval, sandbox,
-    developerInstructions: brain ? instructionsOf(domains) : null,
+    developerInstructions: brain ? domains.map(d => {
+      if (!enabled(d.root) || i.readOnly) return productInstructions(d.root, true) ?? instructionsOf([d]);
+      const tools = toolsRef(d.root);
+      return `${productInstructions(d.root, true, tools)}\n\n${memoryInstructions(assets(), d.root, tools)}`;
+    }).filter(Boolean).join('\n\n') || null : null,
     skillRoots: brain && !i.readOnly ? skillDirs(domains, ['.agents/skills', '.claude/skills']) : [],
   };
 }

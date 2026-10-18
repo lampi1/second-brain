@@ -15,8 +15,9 @@ import { fileURLToPath } from 'node:url';
 import { parseHookJson } from './hook-input.mjs';
 import { CORRECTION, CONFUSION, isPositive } from '../../ops/tools/signals-regex.mjs';
 import { logPositive } from '../../ops/tools/feedback-log.mjs';
+import { brainRoot } from '../../ops/tools/brain-root.mjs';
 
-const OPS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const OPS = brainRoot(import.meta.url);
 const STATE = process.env.BRAIN_CORRECTIONS_FILE || path.join(OPS, 'ops', 'state', 'cursor-corrections.json');
 const MEM = 'node "{{BRAIN}}/ops/tools/mem.mjs" error --text "<line>"';
 
