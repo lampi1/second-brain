@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import type { BrainService } from '../../services';
 import type { AgentCatalogService } from '../catalog';
 import { AgentPackFlows } from './flows';
-import { readPackSource } from './read';
+import { presetSkills } from './read';
 import { AgentPackLearning } from './learning';
 import { discoverDomains, domainsOfConfig } from '../../brain/domains';
 import { appScanner, findGuard, scanTree } from '../../brain/guard';
@@ -27,11 +27,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     return guard ? { ...guard, allow: path.join(path.dirname(guard.deny), 'allow-agentpacks.txt') } : null;
   });
   const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, version: app.getVersion(), guards, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
-    presetSkills: id => {
-      if (!/^default-[a-z]+$/.test(id)) return null;
-      const folder = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'agent-presets', id);
-      return fs.existsSync(folder) ? readPackSource(folder) : null;
-    },
+    presetSkills: id => presetSkills(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'agent-presets'), id),
     scan: folder => scanTree(folder, guards(), electronNode()),
     openFile: file => new Promise<void>((resolve, reject) => {
       // Never invoke a script through its shell association: this action is an editor, not an execution grant.

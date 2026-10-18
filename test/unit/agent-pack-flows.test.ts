@@ -9,7 +9,7 @@ import { AgentPackLearning, agentLearnTool } from '../../src/main/agents/pack/le
 import { emitPack } from '../../src/main/agents/pack/emit';
 import { readPackSource } from '../../src/main/agents/pack/read';
 import { readZip, writeZip } from '../../src/main/agents/pack/zip';
-import type { AgentDraft, AgentModelChoice } from '../../src/shared/agents';
+import { ORCHESTRATOR_AGENT_ID, type AgentDraft, type AgentModelChoice } from '../../src/shared/agents';
 import type { GuardResult } from '../../src/main/brain/guard';
 
 const roots: string[] = [];
@@ -179,6 +179,13 @@ describe('async learning and brain forks', () => {
     const fork = f.flows.profile(preset.id); expect(fork.origin).toEqual(preset.origin); expect(fork.knowhow).toBeDefined(); expect(fork.trial).toMatchObject({ baseline: 1, version: 2 }); expect(fork.probation).toBeUndefined();
     expect(learning.list(preset.id).text).toContain('Cite evidence.'); expect(learning.list(preset.id).proposals).toEqual([]);
     expect(agentLearnTool(learning).name).toBe('agent_learn_propose');
+  });
+  it('keeps the Orchestrator out of routing when a learned rule starts its trial', () => {
+    const f = setup(), coordinator = f.catalog.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
+    expect(coordinator.routable).toBe(false);
+    const learning = new AgentPackLearning(f.flows, f.data);
+    learning.decide(coordinator.id, learning.propose(coordinator.id, 'Cite evidence.', 'run:example').id, 'approve');
+    expect(f.catalog.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)).toMatchObject({ routable: false, trial: { version: 2 } });
   });
   it('does not save a catalog edit if the brain is unavailable', () => {
     const f = setup(), before = f.catalog.list().profiles;

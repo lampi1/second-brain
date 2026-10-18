@@ -25,6 +25,12 @@ const textOf = (data: Buffer): string => {
 const executable = (name: string): boolean => /\.(exe|dll|com|so|dylib)$/i.test(name);
 const script = (name: string): boolean => name.split('/').includes('scripts') || /\.(sh|ps1|py|js|mjs|cjs|cmd|bat)$/i.test(name);
 
+/** The shipped know-how of a packaged preset (`<presets>/<presetId>/skills/<presetId>/`), or null for any other id. */
+export function presetSkills(presets: string, id: string): PackFiles | null {
+  if (!/^default-[a-z]+(?:-[a-z]+)*$/.test(id)) return null;
+  const folder = path.join(presets, id);
+  return fs.existsSync(folder) ? readPackSource(folder) : null;
+}
 /** Folder imports use the same limits as archives and refuse symlinks, even when their targets are inside the folder. */
 export function readPackSource(source: string): PackFiles {
   const stat = fs.lstatSync(source);

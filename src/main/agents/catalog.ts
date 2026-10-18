@@ -582,7 +582,7 @@ export class AgentCatalogService {
     const probation = old ? old.probation : source.kind === 'import' ? this.checkedProbation({ since: at, source }) : undefined;
     const profile: AgentProfile = { ...draft, id, role: draft.role, category: draft.category, tools: draft.tools, permissionCeiling: draft.permissionCeiling,
       createdAt: old?.createdAt ?? at, updatedAt: at, origin: origin ?? old?.origin ?? { kind: 'user' }, version, activeVersion: version,
-      lastEditedBy: 'orchestrator', userLocked: old?.userLocked ?? false, status: 'active', ...(probation ? { probation } : {}),
+      lastEditedBy: 'orchestrator', userLocked: old?.userLocked ?? false, status: 'active', ...(old?.routable === false ? { routable: false } : {}), ...(probation ? { probation } : {}),
       ...(old ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
     const entry: AgentVersion = { agentId: id, version, parentVersion: old?.activeVersion ?? null, behaviour: behaviourOf(draft), author: 'orchestrator', reason: source.kind === 'import' ? 'Imported agent pack' : 'Approved learned rule', at, state: old ? 'trial' : 'active' };
     if (old) profiles[profiles.findIndex(p => p.id === id)] = profile; else profiles.push(profile);
