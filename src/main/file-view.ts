@@ -90,7 +90,10 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
    const size=rasterSize(all,mime!);if(!magicMatches(mime!,all)||!size||size.width<1||size.height<1||size.width>4096||size.height>4096||size.width*size.height>8_000_000)return{kind:'unsupported',reason:'image'};
    return{kind:'image',path:real,size:all.length,dataUrl:`data:${mime};base64,${all.toString('base64')}`};
   }
-  const head=await readAt(fd,0,2),utf16=head[0]===0xff&&head[1]===0xfe;
+  // binary or not is decided once, from the head of the file (as V1 did), so every page of a text file stays readable:
+  // a NUL further on (a log padded by a crash) is shown as a replacement character, never as a "binary" page
+  const head=await readAt(fd,0,CHUNK),utf16=head[0]===0xff&&head[1]===0xfe;
+  if(!utf16&&head.includes(0))return{kind:'unsupported',reason:'binary'};
   // a UTF-16 file is shown from the top only (its pages would need two-byte alignment and their own line counting)
   const whole=(n:number|undefined)=>n!==undefined&&Number.isSafeInteger(n)&&n>0?Math.min(n,opened.size):0;
   const line=!utf16&&Number.isSafeInteger(options.line)&&options.line!>0?options.line!:0,before=utf16?0:whole(options.before),offset=utf16?0:whole(options.offset);
@@ -112,13 +115,12 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
   const page=await readAt(fd,start,end===null?FILE_PAGE_BYTES+1:end-start);
   const final=await fd.stat();if(!same(final,opened))return{kind:'refused',reason:'changed'};
   const read=page.subarray(0,Math.min(page.length,FILE_PAGE_BYTES)),more=page.length>FILE_PAGE_BYTES||final.size>start+read.length;
-  if(!utf16&&read.includes(0))return{kind:'unsupported',reason:'binary'};
   // a page that does not reach the end of the file stops at its last line end (or at the last whole character);
   // a page asked to end at `before` already ends at a page boundary; a cited line too long to end on the page is cut
   // at its last whole character instead, so the page still shows it
   const nl=more&&end===null&&!utf16?read.lastIndexOf(NL):-1;
   const bytes=utf16?read.subarray(2,read.length-read.length%2):more&&end===null?read.subarray(0,nl>=Math.max(0,cited-start)?nl+1:utf8End(read)):read;
-  const decoded=utf16?bytes.toString('utf16le'):bytes.toString('utf8'),text=start===0&&decoded.charCodeAt(0)===0xfeff?decoded.slice(1):decoded;
+  const decoded=(utf16?bytes.toString('utf16le'):bytes.toString('utf8')).replace(/\0/g,'�'),text=start===0&&decoded.charCodeAt(0)===0xfeff?decoded.slice(1):decoded;
   return{kind:'text',path:real,size:final.size,offset:start,shown:utf16?read.length:bytes.length,text,more,...(firstLine!==null?{firstLine}:{}),...(utf16?{paged:false as const}:{})};
  }catch{return{kind:'missing',reason:'missing'};}finally{await fd?.close();}
 }

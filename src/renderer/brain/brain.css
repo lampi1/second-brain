@@ -400,7 +400,7 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-viewer { display: grid; gap: 12px; min-width: 0; }
 .bx-viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bx-viewer-head h2 { font: 600 var(--bx-fs-l) var(--bx-mono); min-width: 0; overflow-wrap: anywhere; }
-.bx-pdf { display: grid; justify-items: center; gap: 12px; max-height: 75vh; padding: 12px; background: var(--bx-surface-2); border: 1px solid var(--bx-border); border-radius: 8px; }
+.bx-pdf { display: grid; justify-items: center; gap: 12px; max-height: 75vh; overflow: auto; padding: 12px; background: var(--bx-surface-2); border: 1px solid var(--bx-border); border-radius: 8px; }
 .bx-pdf-page { display: block; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
 /* the viewer's Compare (FileDiff.tsx): old and new line numbers, then the line, added green and removed red */
 .bx-diff-panel { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--bx-border); border-radius: var(--bx-r-l); background: var(--bx-surface-2); }

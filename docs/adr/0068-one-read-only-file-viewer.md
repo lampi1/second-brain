@@ -31,12 +31,19 @@ line start nearest the last 1 MB). A cited line opens the page that starts up to
 long, so it stays on the page (from the top when it is in the first half page). Line numbers are counted up to 64 MB
 into the file; a page past that shows none, and a cited line past it opens the top. Main reads asynchronously, so a long
 count never holds the app up. A UTF-16 file is shown from the top only (no pager). A page other than the first is shown
-as source (a table or a document cut from the middle would mislead).
+as source (a table or a document cut from the middle would mislead). A file is binary when its first 1 MB has a NUL
+byte; a NUL further on shows as a replacement character, and a page that fails to load keeps the page shown so far and
+its pager. Main and the viewer number lines by one rule (`lineCount`): a line ends at `\n` only, a lone `\r` (a
+progress redraw in a captured log) stays inside its line.
 
 **PDF (V2).** Up to 32 MB with a `%PDF-` header, read whole by main and handed as bytes to pdf.js (pdfjs-dist, pinned,
-loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near, with no
-text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
+loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near and
+released (canvas emptied, `page.cleanup()`) when they scroll away: at most 8 pages, those near the viewport and 2 on
+each side, keep a bitmap (`lib/pdf-window.ts`), so memory stays bounded however far a long PDF is read. There is
+no text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
 them with WebAssembly files the app does not ship) and fonts neither embedded nor on the system may not show.
+pdfjs-dist's optional native `@napi-rs/canvas` (used by pdf.js only under Node, never in the renderer) is pinned to
+1.0.10 by `overrides` in package.json, so it too meets the 14-day rule.
 
 **Compare (V3).** On request ("Confronta", text files only) the viewer shows the file's diff against git HEAD, a commit
 or branch the user types, or another local file. Main (`file-diff.ts`) reads both sides, each up to 2 MB of text. Any
