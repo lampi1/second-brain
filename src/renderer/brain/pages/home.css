@@ -6,6 +6,8 @@
 .home-eyebrow { font-size: 10px; letter-spacing: .16em; color: var(--text-3); font-weight: 600; }
 .home-heading h1 { font-size: clamp(24px, 2.4vw, 34px); letter-spacing: -1.1px; font-weight: 600; margin: 12px 0 8px; }
 .home-heading p { color: var(--text-3); font-size: 13px; margin: 0; }
+/* the headline (HomeHeadline.tsx): its place is kept while it loads, so nothing below moves when it arrives */
+.home-heading .home-headline { color: var(--text-2); font-size: 15px; font-style: italic; line-height: 1.45; min-height: 1.45em; margin: 0 0 10px; max-width: 72ch; }
 .home-overview { display: flex; gap: 18px; margin-top: 24px; color: var(--text-2); font-size: 12px; }
 .home-overview span { display: inline-flex; align-items: center; gap: 8px; }
 .home-live-dot { width: 6px; height: 6px; background: var(--blue); border-radius: 50%; animation: status-breathe 1.8s ease-in-out infinite; }
