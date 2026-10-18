@@ -35,6 +35,7 @@ import { electronNode } from './node';
 import { discoverDomains } from './domains';
 import { findGuard } from './guard';
 import { DomainSync } from './sync';
+import { isProduct } from '../rules/tools';
 
 export interface BrainCtx {
   emitter: Emitter; window: () => BrowserWindow | null; userData: string; env?: NodeJS.ProcessEnv;
@@ -244,7 +245,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
     info: () => {
       const root = cfg.get().brainRoot;
-      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del cervello scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) ? `la cartella ${root} non ha il server dati del cervello (ops/tools/brain-site.mjs)` : null);
+      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del cervello scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) && !isProduct(root) ? `la cartella ${root} non ha il server dati del cervello (ops/tools/brain-site.mjs)` : null);
       return { brainRoot: root, brainProblem: problem };
     },
     settings: () => cfg.get(),

@@ -53,7 +53,8 @@ const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) 
   if (e.isDirectory()) { if (!/^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor|playbooks)$/.test(e.name)) walk(p); }
   else if (e.name.endsWith('.md')) brainFiles.push(p);
 } };
-if (!fs.existsSync(path.join(root, 'AGENTS.md'))) { console.error(`Not a brain folder (no AGENTS.md): ${root}`); process.exit(1); }
+// a fresh brain (ADR 0072) has only brain.json: its rules are the app's
+if (!fs.existsSync(path.join(root, 'AGENTS.md')) && !fs.existsSync(path.join(root, 'brain.json'))) { console.error(`Not a brain folder (no AGENTS.md): ${root}`); process.exit(1); }
 // gitignored files (credentials, logs) exist only in the live checkout: a worktree may reference them
 const ignoredLive = r => fs.existsSync(path.join(live, r)) && spawnSync('git', ['-C', root, 'check-ignore', '-q', r]).status === 0;
 walk(root);

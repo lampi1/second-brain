@@ -60,7 +60,10 @@ export function pack({ match, root = ROOT, footer = true } = {}) {
     if (!within(realFile, realRoot)) return fail('ctx: now.md punta fuori dalla cartella brain');
     if (fs.statSync(realFile).size > 256 * 1024) return fail('ctx: now.md supera il limite di lettura (256 KiB)');
     text = fs.readFileSync(realFile, 'utf8');
-  } catch (e) { return fail(`ctx: impossibile leggere now.md: ${e.message}`); }
+  } catch (e) {
+    if (e.code !== 'ENOENT') return fail(`ctx: impossibile leggere now.md: ${e.message}`);
+    text = ''; // a fresh brain has no now.md yet (ADR 0072): no thread matches
+  }
   const hits = text.split(/\r?\n/).map((line, i) => ({ line, number: i + 1 }))
     .filter(({ line }) => line.startsWith('- ') && words.every(word => line.toLocaleLowerCase().includes(word)));
   if (hits.length !== 1) return fail(`ctx: il filtro "${match}" trova ${hits.length} righe in now.md; serve un solo filo`);

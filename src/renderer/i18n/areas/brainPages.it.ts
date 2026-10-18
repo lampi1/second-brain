@@ -160,8 +160,8 @@ export const brainPagesIt = {
   'brainPages.miglioramento.leadNoPending': 'nessuna proposta da decidere',
   'brainPages.miglioramento.emptyTitle': 'Nessuna politica',
   'brainPages.miglioramento.emptyDesc': 'Il ciclo di miglioramento del cervello non ha ancora politiche: appena ne avrà una, la vedrai qui.',
-  'brainPages.miglioramento.loopMissingTitle': 'Il cervello non ha ancora il ciclo di miglioramento',
-  'brainPages.miglioramento.loopMissingDesc': 'Questa pagina legge le regole imparate dal programma ops/improve/improve.mjs del cervello, che nella cartella scelta non c’è. Non è un errore: quando il cervello lo avrà, qui vedrai ogni politica con la sua versione, l’errore tipico e le proposte da decidere.',
+  'brainPages.miglioramento.loopMissingTitle': 'Nessuna regola imparata ancora',
+  'brainPages.miglioramento.loopMissingDesc': 'Il cervello parte vuoto e impara usandolo: quando il ciclo di miglioramento avrà risultati da cui imparare (stime di tempo e costo, scelta del modello, avvisi), qui vedrai ogni regola con la sua versione, l’errore tipico e le proposte da decidere. Non è un errore.',
 
   // Procedure.tsx
   'brainPages.procedure.pageTitle': 'Procedure',
@@ -179,8 +179,8 @@ export const brainPagesIt = {
   'brainPages.procedure.tagQueryHelp': 'ha query SQL',
   'brainPages.procedure.tagProd': 'Produzione',
   'brainPages.procedure.tagProdHelp': 'parla di produzione',
-  'brainPages.procedure.emptyTitle': 'Nessuna procedura trovata',
-  'brainPages.procedure.emptyDesc': "Scrivile in una cartella runbook, procedure o rules, oppure in un file routines.md: ogni sezione ## o ### diventa una procedura.",
+  'brainPages.procedure.emptyTitle': 'Nessuna procedura ancora',
+  'brainPages.procedure.emptyDesc': "Il cervello parte vuoto: le procedure compaiono qui quando tu o un agente ne scrivete una, in una cartella runbook, procedure o rules oppure in un file routines.md (ogni sezione ## o ### diventa una procedura).",
   'brainPages.procedure.listLabel': 'Elenco delle procedure',
   'brainPages.procedure.listEmpty': 'Nessuna procedura con questi filtri.',
   'brainPages.procedure.detailNotFound': 'Procedura non trovata',

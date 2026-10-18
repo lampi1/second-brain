@@ -124,7 +124,7 @@ if (isMain) {
   const argv = process.argv.slice(2);
   const arg = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
   const file = arg('--file') ?? '{{BRAIN}}/ai-errors.md';
-  const text = fs.readFileSync(file, 'utf8');
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''; // a fresh brain has no ai-errors.md yet
   const rows = parse(text).filter(r => r.date >= (arg('--since') ?? ''));
   const skipped = text.split(/\r?\n/).filter(l => /^- \d{4}-\d{2}-\d{2}/.test(l) && l.slice(2, 12) >= (arg('--since') ?? '') && !rows.some(r => r.line === l));
   const noClaim = skipped.filter(l => !/ · (detto|fatto)[^:·]{0,20}:| · vero\s*:/i.test(l));

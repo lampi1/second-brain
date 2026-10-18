@@ -162,8 +162,8 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.miglioramento.leadNoPending': 'no proposals to decide',
   'brainPages.miglioramento.emptyTitle': 'No policies',
   'brainPages.miglioramento.emptyDesc': 'The brain’s improvement loop has no policies yet: as soon as it has one, it shows up here.',
-  'brainPages.miglioramento.loopMissingTitle': 'The brain does not have the improvement loop yet',
-  'brainPages.miglioramento.loopMissingDesc': 'This page reads the learned rules from the brain’s ops/improve/improve.mjs program, which the chosen folder does not have. Not an error: once the brain has it, you will see every policy here with its version, its typical error and the proposals to decide.',
+  'brainPages.miglioramento.loopMissingTitle': 'No learned rules yet',
+  'brainPages.miglioramento.loopMissingDesc': 'The brain starts empty and learns as you use it: once the improvement loop has results to learn from (time and cost estimates, model choice, alerts), you will see every rule here with its version, its typical error and the proposals to decide. Not an error.',
 
   // Procedure.tsx
   'brainPages.procedure.pageTitle': 'Procedures',
@@ -181,8 +181,8 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.procedure.tagQueryHelp': 'has SQL queries',
   'brainPages.procedure.tagProd': 'Production',
   'brainPages.procedure.tagProdHelp': 'talks about production',
-  'brainPages.procedure.emptyTitle': 'No procedures found',
-  'brainPages.procedure.emptyDesc': 'Write them in a runbook, procedures or rules folder, or in a routines.md file: each ## or ### section becomes a procedure.',
+  'brainPages.procedure.emptyTitle': 'No procedures yet',
+  'brainPages.procedure.emptyDesc': 'The brain starts empty: procedures appear here when you or an agent write one, in a runbook, procedures or rules folder or in a routines.md file (each ## or ### section becomes a procedure).',
   'brainPages.procedure.listLabel': 'Procedures list',
   'brainPages.procedure.listEmpty': 'No procedures match these filters.',
   'brainPages.procedure.detailNotFound': 'Procedure not found',

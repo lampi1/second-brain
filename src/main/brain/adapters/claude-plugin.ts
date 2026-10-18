@@ -7,7 +7,9 @@
 // ({"hooks": …}); components show namespaced `second-brain:<name>`. UNVERIFIED on a real run: both flags with this
 // Claude Code version, hooks.json's `${CLAUDE_PLUGIN_ROOT}`, output styles from a plugin. The folder is rebuilt only
 // when the brain's files changed (a signature of paths, sizes and times), into a fresh copy swapped in at once, so a
-// chat starting meanwhile never sees half a folder. Used by engines/sessions.ts.
+// chat starting meanwhile never sees half a folder. A fresh brain (rules.appRules, ADR 0072) holds no agents or skills
+// of the product: the plugin takes them from the app-owned copy (rules/tools.ts APP_PLUGIN_PARTS) after the brain's own,
+// so a file the owner wrote with the same name wins. Used by engines/sessions.ts.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +17,7 @@ import { errText, log } from '../../log';
 import { enabled, installHooks, productSignature } from '../../rules/delivery';
 import { productInstructions } from '../../rules/instructions';
 import { configOf } from '../../rules/storage';
-import { ensureTools, isProduct, templateHooks } from '../../rules/tools';
+import { APP_PLUGIN_PARTS, ensureTools, isProduct, templateHooks } from '../../rules/tools';
 import { memoryInstructions } from '../../rules/new-brain';
 import { isDir, launchRules, readText, resolvePlaceholders, instructionsOf, type BrainDomain } from './domains';
 
@@ -45,8 +47,8 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
   if (!on || !domains.length || !root) return none;
   try {
     const base = path.join(userData, 'claude-plugin');
-    const files = collect(domains);
     const tools = product ? ensureTools(root) : null;
+    const files = collect(domains, tools && configOf(root).appRules ? tools : null);
     const productText = productInstructions(root, false, tools ? tools.replace(/\\/g, '/') : undefined);
     let instructions = productText === null ? instructionsOf(domains) : [productText, instructionsOf(domains.slice(1))].filter(Boolean).join('\n\n');
     const sig = signature(files, (instructions ?? '') + productSignature(root));
@@ -71,8 +73,9 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
 
 interface Src { abs: string; rel: string; size: number; mtime: number; domain: string }
 
-/** Every file the plugin takes from the domains: a later domain never overwrites an earlier one's file. */
-function collect(domains: readonly BrainDomain[]): Src[] {
+/** Every file the plugin takes from the domains, then the app's own parts (`app`, the tools copy of a fresh brain): a
+ * later source never overwrites an earlier one's file. */
+function collect(domains: readonly BrainDomain[], app: string | null = null): Src[] {
   const out: Src[] = [];
   const seen = new Set<string>();
   const add = (abs: string, rel: string, domain: string): void => {
@@ -87,6 +90,7 @@ function collect(domains: readonly BrainDomain[]): Src[] {
   for (const d of domains) {
     for (const p of PARTS) walk(path.join(d.root, p.from), (abs, rel) => add(abs, path.join(p.to, rel), d.name));
   }
+  if (app) for (const p of APP_PLUGIN_PARTS) walk(path.join(app, p.from), (abs, rel) => add(abs, path.join(p.to, rel), 'app'));
   return out;
 }
 

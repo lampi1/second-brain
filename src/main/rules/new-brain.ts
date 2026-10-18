@@ -1,92 +1,70 @@
-// Activate product machinery only in the unpublished fresh brain prepared by BrainCreator, never an existing brain.
-// The brain keeps personal content only: the template's code moves to the app-owned copy (tools.ts), references to it
-// become `{tools}/…`, its hook wiring is delivered per launch, and no global CLI hook files are changed.
+// A fresh brain starts empty (the owner, 2026-10-18: "a installazione pulita ... mi aspetto pulito ... tutto quello che
+// riguarda l'app deve essere invisibile nel brain dell'utente"; ADR 0072). Both creators (BrainCreator, the automatic
+// memory of modules/ai-first) end here: the brain gets only the owner's profile (me.md, their own data), brain.json (the
+// machinery marker, the values the owner typed, the rules settings) and a credentials .gitignore. Rules, procedures,
+// skills, agents, tools, hooks and the model table come from the app's own copy (rules/tools.ts, rules.appRules) at
+// each launch; files like now.md or ideas.md appear only when the owner or an agent first writes them. Never run on an
+// existing brain: a legacy brain keeps all its files (migration.ts is its separate, reviewed path).
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { atomicWrite, configOf, read } from './storage';
+import { atomicWrite, read } from './storage';
 import { assets } from './delivery';
 import { productInstructions } from './instructions';
-import { topics } from './topics';
-import { isTemplateCode, shipped, templateRoot, STORED_VALUES, type TemplateValues } from './tools';
+import { templateRoot, STORED_VALUES, type TemplateValues } from './tools';
+export { toolReferences } from './tools';
 
 /** Template wiring files a product brain must not keep: they point global CLI settings at code it no longer holds. */
 export const MACHINERY_FILES = ['harness/claude/settings.hooks.json', 'harness/cursor/hooks.json', '.claude/settings.json'];
-const fwd = (p: string) => p.replace(/\\/g, '/');
+/** Everything a fresh brain holds (the unit test pins it): the rest is the app's. */
+export const FRESH_FILES = ['.gitignore', 'brain.json', 'me.md'] as const;
+/** The "Main work" placeholder brain/profile.ts recognises as empty. */
+const MAIN_WORK = '- **Main work**: (one line per area; the agents learn the rest from `now.md` and the journal)';
 
-function files(dir: string, base = dir): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
-    if (e.name === '.git') return [];
-    const file = path.join(dir, e.name);
-    if (e.isSymbolicLink()) throw new Error('Fresh brain contains a link.');
-    return e.isDirectory() ? files(file, base) : e.isFile() ? [fwd(path.relative(base, file))] : [];
-  });
-}
-/** Rewrites references to template code (absolute under the brain, or brain-relative) as `{tools}/<rel>`; references to
- * personal scripts the owner adds later (e.g. ops/tools/devops-me.mjs) stay brain paths. */
-export function toolReferences(text: string, brain: string): string {
-  const B = fwd(brain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const W = brain.replace(/\//g, '\\').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const code = String.raw`((?:ops/tools|harness/(?:claude|cursor|compare)|\.claude/hooks)/[\w./-]+\.m?js)`;
-  const anySep = String.raw`((?:ops[/\\]tools|harness[/\\](?:claude|cursor|compare)|\.claude[/\\]hooks)[/\\][\w./\\-]+\.m?js)`;
-  return text
-    .replace(new RegExp(`(?:${B}|${W})[/\\\\]${anySep}`, 'g'), (m, rel: string) => shipped(rel) ? `{tools}/${fwd(rel)}` : m)
-    .replace(new RegExp(`(?<![\\w/{}.\\\\-])${code}`, 'g'), (m, rel: string) => shipped(rel) ? `{tools}/${rel}` : m);
+/** The owner's profile with only what they typed: the sections Settings → Il mio profilo reads and patches
+ * (brain/profile.ts), no preset rules. The working style and safety rules the template's me.md carried are product
+ * rules now (rules/instructions.ts). */
+export function freshProfile(v: TemplateValues): string {
+  const owner = v.OWNER?.trim() || 'Owner', role = v.ROLE?.trim() || 'professional', lang = v.LANG?.trim() || 'italiano';
+  if (/[\x00-\x1f\x7f]/.test(owner + role + lang)) throw new Error('Invalid profile value.');
+  return [`# ${owner}`, '', '## Who', '', `${owner}, ${role}. Language: ${lang} in chat.`, '', MAIN_WORK, '', `## How to work with ${owner}`, ''].join('\n');
 }
 /** Day-one commit of the prepared brain, isolated from the user's git config and hooks (same as install.mjs). */
 function commit(root: string, owner: string): void {
-  if (!fs.existsSync(path.join(root, '.git'))) return;
   const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))), GIT_CONFIG_GLOBAL: path.join(root, '.git', 'no-global-config'), GIT_CONFIG_NOSYSTEM: '1' };
   const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', `core.hooksPath=${path.join(root, '.git', 'no-hooks')}`, '-c', 'commit.gpgSign=false', ...args], { env, windowsHide: true, timeout: 20000, stdio: 'ignore' });
+  git('init', '-q', '--initial-branch=main', '--template=');
+  git('config', 'core.autocrlf', 'false');
   git('add', '-A');
-  git('-c', `user.name=${owner}`, '-c', 'user.email=brain@localhost', 'commit', '-q', '-m', 'brain: product machinery (tools and hooks owned by the app)');
+  git('-c', `user.name=${owner}`, '-c', 'user.email=brain@localhost', 'commit', '-q', '-m', 'brain: day one (empty; the app owns its machinery)');
 }
 
-/** `root` = the staged brain; `brain` = where it is published (the installer rendered that path into the files). */
-export function prepareNewBrain(root: string, brain: string = root, stored: TemplateValues = {}): void {
+/** Writes the fresh brain's few files into `root`, an empty folder the caller reserved. Fails before writing when this
+ * release could not deliver the machinery the brain will depend on (hook runtime, template utilities). */
+export function writeFreshBrain(root: string, stored: TemplateValues = {}): void {
   assets(); // a release without its built hooks must not create a brain that depends on them
-  templateRoot(); // nor one whose utilities the app cannot render
-  const old = read(root, 'brain.json');
-  const json = old ? JSON.parse(old) as Record<string, unknown> : {};
-  if ('machinery' in json) throw new Error('Fresh brain already has a machinery owner.');
-  const all = files(root);
-  for (const rel of all) {
-    if (isTemplateCode(rel) || MACHINERY_FILES.includes(rel)) fs.unlinkSync(path.join(root, rel));
-    else if (rel.endsWith('.md')) {
-      const text = read(root, rel);
-      const next = toolReferences(text, brain);
-      if (next !== text) atomicWrite(root, rel, next);
-    }
-  }
-  for (const dir of ['ops/tools/brain-site', 'ops/tools', '.claude/hooks', 'harness/compare', 'harness/cursor']) {
-    try { fs.rmdirSync(path.join(root, dir)); } catch { /* not empty (personal files) or absent */ }
-  }
-  const topicFiles = all.filter(rel => rel.endsWith('.md') && /^---\nwhen: /.test(read(root, rel))).sort();
-  if (!['code.md', 'brain-rules.md', 'hub.md'].every(f => topicFiles.includes(f))) throw new Error('New brain template is missing its topic frontmatter.');
-  const rules = { ...configOf(root), topicFiles };
-  atomicWrite(root, 'CLAUDE.md', ['# Claude Code entry point', '', 'The canonical context is AGENTS.md (imported below). Hooks and tools are delivered by the app at',
-    'each launch; `{tools}` in these files is the folder the launch instructions name.', '', '@AGENTS.md', ''].join('\n'));
-  // Product instructions are authoritative; the old script pointers are not part of the always-loaded context.
-  atomicWrite(root, 'AGENTS.md', [
-    '<!-- Brain boot index: personal content for app-launched agents; enforcement is shipped by the application. -->',
-    '# Personal brain', '',
-    'Read me.md for identity and safety. No secrets in this folder. Production actions are proposed; the owner runs them.',
-    'Use the product memory command supplied at launch for now.md and ai-errors.md; never edit their lines directly.',
-    'Keep your thread current (where, state, next step). Log verified errors immediately. Keep all other threads intact.',
-    'Use map.md for memory locations. Topic rules are injected by the app or included in launch instructions.',
-    'Code changes require tests and a fresh reviewer before completion. A failed or blocked check stays visible.',
-    'Do not recursively search the home directory. Credentials stay outside the brain and must not be read.',
-    'Do not change global CLI settings. Only the app owns machinery; personal rules remain editable content.',
-    '`{tools}/…` in brain files is an app-owned utility: run it with node from the folder the launch names.',
-    '',
-  ].join('\n'));
+  templateRoot(); // nor one whose utilities, rules and agents the app cannot render
+  if (fs.readdirSync(root).length) throw new Error('A fresh brain starts in an empty folder.');
   const template = Object.fromEntries(STORED_VALUES.flatMap(k => typeof stored[k] === 'string' ? [[k, stored[k]]] : []));
-  atomicWrite(root, 'brain.json', JSON.stringify({ ...json, machinery: 'product-v1', template, rules }, null, 2) + '\n');
-  const ctx = { root, state: '', config: rules };
-  atomicWrite(root, 'topic-map.md', '<!-- Generated topic routing; regenerate from brain.json and frontmatter. -->\n' +
-    topics(ctx).map(t => `- ${t.file}: ${[...t.when.prompt, ...t.when.tools, ...t.when.paths].join(', ')}`).join('\n') + '\n');
-  productInstructions(root, false); // enforce the launch budget before the staged brain can be published
-  try { commit(root, stored.OWNER ?? 'Owner'); } catch { /* git stays optional, as in install.mjs */ }
+  atomicWrite(root, 'me.md', freshProfile(stored));
+  atomicWrite(root, '.gitignore', '# Never commit credentials\n.env\n*.env\n*credentials*\n# Local state of the tools\nops/state/\n*.log\n');
+  atomicWrite(root, 'brain.json', JSON.stringify({ machinery: 'product-v1', template, rules: { topicFiles: [], appRules: true } }, null, 2) + '\n');
+  productInstructions(root, false); // the launch text must build before the brain is handed over
+  try { commit(root, stored.OWNER ?? 'Owner'); } catch { fs.rmSync(path.join(root, '.git'), { recursive: true, force: true }); /* git stays optional */ }
+}
+
+/** BrainCreator: `root` = the staged brain the verified installer filled (this release's template, rendered for the
+ * destination); it becomes a fresh brain. The stage is the creator's own new folder, never published yet, so its
+ * template copy is removed whole; the owner's typed values survive in brain.json and me.md. */
+export function prepareNewBrain(root: string, _brain: string = root, stored: TemplateValues = {}): void {
+  assets(); templateRoot();
+  const old = read(root, 'brain.json');
+  if (old && 'machinery' in (JSON.parse(old) as Record<string, unknown>)) throw new Error('Fresh brain already has a machinery owner.');
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw new Error('Fresh brain contains a link.');
+    fs.rmSync(path.join(root, entry.name), { recursive: true, force: true });
+  }
+  writeFreshBrain(root, stored);
 }
 
 export function memoryInstructions(runtime: string, root: string, tools?: string): string {
