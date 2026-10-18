@@ -2,7 +2,7 @@
 // typical error, the 80% range's coverage with its n, a proposal's gain from its 90% interval (a revert's in the right
 // direction), the after-check of the last change.
 import { describe, expect, it } from 'vitest';
-import { HELP, checkLine, coverageLine, errorLine, factor, gainLine, normLearn, policyLabel } from '../../../src/renderer/brain/lib/learn';
+import { HELP, checkLine, coverageLine, errorLine, factor, gainLine, normLearn, normLearnData, policyLabel } from '../../../src/renderer/brain/lib/learn';
 
 const row = {
   domain: 'estimates', version: 2, appliedAt: '2026-10-04T10:00:00Z', by: 'app (clic)', name: 'per tipo', previous: 1,
@@ -24,6 +24,14 @@ describe('learn page data', () => {
     expect(p!.lastCheck).toMatchObject({ state: 'migliorata', n: 24 });
     // a check of an older version is not this version's
     expect(normLearn({ policies: [{ ...row, version: 3 }] })[0]!.lastCheck).toBeNull();
+  });
+
+  it('tells a brain without the loop (main\'s "loop missing" answer) from a loop with no policies', () => {
+    expect(normLearnData({ policies: [], loop: 'missing' })).toEqual({ policies: [], loop: 'missing' });
+    expect(normLearnData({ policies: [row] })).toMatchObject({ loop: 'ok', policies: [{ domain: 'estimates' }] });
+    expect(normLearnData({ policies: [] })).toEqual({ policies: [], loop: 'ok' });
+    expect(normLearnData(null)).toEqual({ policies: [], loop: 'ok' });
+    expect(normLearnData({ loop: 'yes' }).loop).toBe('ok'); // only the exact word
   });
 
   it('says the error with its n, or "senza dati" with how many are missing', () => {

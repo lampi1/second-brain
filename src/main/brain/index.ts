@@ -30,7 +30,7 @@ import { Routing, routeChat } from './routing';
 import { BrainApi, type LocalApi } from './api';
 import { Compare } from './compare';
 import { Procedures, touchesProcedures } from './procedures';
-import { Learn } from './learn';
+import { Learn, learnStatusWithoutCli } from './learn';
 import { ModelsSeenStore } from './models-seen';
 import { electronNode } from './node';
 import { discoverDomains } from './domains';
@@ -133,6 +133,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const localApi: LocalApi = new Map(); // paths main answers itself (serveApi), kept across brain folder changes
   const compare = new Compare(() => cfg.get().brainRoot, node);
   const learn = new Learn(() => cfg.get().brainRoot, node);
+  // the Miglioramento page of a brain without the loop's CLI: an empty status from main, never the server's stack
+  localApi.set('/api/improve', () => learnStatusWithoutCli(cfg.get().brainRoot));
   // the brain's estimates table (ops/state/estimates.json); tests only read it, never rescan transcripts
   const estNode = { exe: node.exe, get env() { return { ...node.env, ...(ctx.scriptEnv?.() ?? {}) }; } };
   const brainEst = new BrainEstimates(() => cfg.get().brainRoot, estNode);

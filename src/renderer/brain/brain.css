@@ -218,6 +218,9 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-error .t { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .bx-error b { color: var(--bx-red); }
 .bx-error .cause { color: var(--bx-text-2); font-size: var(--bx-fs-s); overflow-wrap: anywhere; }
+.bx-error-details { margin-top: 4px; font-size: var(--bx-fs-s); color: var(--bx-text-3); }
+.bx-error-details summary { cursor: pointer; color: var(--bx-text-2); }
+.bx-error-details pre { margin: 4px 0 0; max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--bx-fs-xs, 11px); user-select: text; }
 .bx-warnline { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: var(--bx-r-s); background: var(--bx-amber-bg); color: var(--bx-amber); font-size: var(--bx-fs-s); border: 1px solid color-mix(in srgb, var(--bx-amber) 30%, transparent); }
 .bx-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2000; padding: 9px 14px; border-radius: 10px; background: var(--tooltip-bg, #232731); color: #fff; font-size: var(--bx-fs-m); box-shadow: var(--bx-shadow); animation: bx-up var(--bx-dur) var(--bx-ease); }
 @keyframes bx-up { from { opacity: 0; transform: translate(-50%, 6px); } }

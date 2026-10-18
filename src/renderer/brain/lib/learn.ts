@@ -48,6 +48,15 @@ const diffOf = (v: unknown): Diff | null => {
   return mean != null && lo != null && hi != null ? { mean, lo, hi } : null;
 };
 
+/** What the page reads: the policies, and whether the brain has the loop at all. `loop: 'missing'` is main's answer
+ *  for a brain without ops/improve/improve.mjs (src/main/brain/learn.ts learnStatusWithoutCli): the page then explains
+ *  what it needs instead of showing an error. */
+export interface LearnData { policies: LearnPolicy[]; loop: 'ok' | 'missing' }
+
+export function normLearnData(v: unknown): LearnData {
+  return { policies: normLearn(v), loop: obj(v).loop === 'missing' ? 'missing' : 'ok' };
+}
+
 export function normLearn(v: unknown): LearnPolicy[] {
   const list = Array.isArray(obj(v).policies) ? (obj(v).policies as unknown[]) : [];
   return list.filter(isObj).filter(p => typeof p.domain === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(p.domain)).map(p => {

@@ -159,7 +159,9 @@ export const brainPagesIt = {
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposta" : "proposte"} da decidere`,
   'brainPages.miglioramento.leadNoPending': 'nessuna proposta da decidere',
   'brainPages.miglioramento.emptyTitle': 'Nessuna politica',
-  'brainPages.miglioramento.emptyDesc': 'Il cervello non ha ancora il ciclo di miglioramento (ops/improve).',
+  'brainPages.miglioramento.emptyDesc': 'Il ciclo di miglioramento del cervello non ha ancora politiche: appena ne avrà una, la vedrai qui.',
+  'brainPages.miglioramento.loopMissingTitle': 'Il cervello non ha ancora il ciclo di miglioramento',
+  'brainPages.miglioramento.loopMissingDesc': 'Questa pagina legge le regole imparate dal programma ops/improve/improve.mjs del cervello, che nella cartella scelta non c’è. Non è un errore: quando il cervello lo avrà, qui vedrai ogni politica con la sua versione, l’errore tipico e le proposte da decidere.',
 
   // Procedure.tsx
   'brainPages.procedure.pageTitle': 'Procedure',

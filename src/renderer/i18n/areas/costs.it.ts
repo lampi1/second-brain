@@ -77,6 +77,8 @@ export const costsIt = {
   'costs.serverHint': "Il cervello scelto non ha il suo server dati, o non parte: guarda in Impostazioni la cartella del cervello.",
   'costs.slowHint': "Il calcolo è lento (fino a un minuto la prima volta): riprova tra poco.",
   'costs.devopsHint': "DevOps non risponde: rifai \"az login\" nel terminale, poi riprova.",
+  'costs.toolHint': "Al cervello manca uno strumento che questa pagina usa: aggiorna il cervello, o aspetta che lo abbia.",
+  'costs.errorDetails': "Dettagli",
   'costs.now': "adesso",
   'costs.yesterday': "ieri",
   'costs.days': (p:{days:number}) => `${p.days} giorni`,
