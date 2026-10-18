@@ -1,7 +1,7 @@
 // Service interfaces of the main process. index.ts wires them to the IPC handlers; each module implements one.
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
-  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
+  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics } from '../shared/agents';
@@ -31,7 +31,7 @@ export interface ChatService {
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
   resumedByUser?(chatId: string, text?: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */
-  runMetrics?(opts?: { aiErrors?: string; since?: number }): AgentMetrics[];
+  runMetrics?(opts?: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */
   commandAsked?(chatId: string, requestId: string): void;
   /** that request left (run, dismissed, the chat went on) */
@@ -85,7 +85,7 @@ export interface BrowserService {
 }
 
 /** A feed event before the brain module stamps it (id, time, Italian label and priority come from its kind). */
-export interface FeedInput { kind: string; title: string; detail?: string; who?: string; chatId?: string; file?: string }
+export interface FeedInput { kind: string; title: string; detail?: string; who?: string; chatId?: string; file?: string; action?: FeedAction }
 
 export interface BrainService {
   feed(): FeedEvent[];

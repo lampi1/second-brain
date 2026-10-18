@@ -3,9 +3,9 @@
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns.
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTokens } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
 import { SUMMARY_MAX } from './run-report';
-import { rollUp, SAMPLE_MAX, type RunTally } from './run-metrics';
+import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { readLocal, writeLocal } from './local-store';
 
 export const RUNS_MAX = 5000;
@@ -27,6 +27,31 @@ const time = (n: unknown): n is number => typeof n === 'number' && Number.isFini
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && !!v && v.length <= max;
 
 export const newRunId = (): string => `r_${crypto.randomBytes(6).toString('hex')}`;
+
+// Run tags (AGENTS-DESIGN §4.8)
+export const SKILL_ID = /^[a-z0-9][a-z0-9_-]{0,79}$/;
+export const SKILLS_MAX = 16;
+export const APP_MAX = 40;
+export const REPO_MAX = 120;
+const CONTROL = /[\u0000-\u001f\u007f]/;
+/** An app or repo name: a non-empty single line, bounded. */
+export const tagName = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim() === v && !!v && v.length <= max && !CONTROL.test(v);
+/** Stored or given skills: valid ids, unique, at most SKILLS_MAX. */
+export const skillList = (v: unknown): v is string[] => Array.isArray(v) && v.length <= SKILLS_MAX && v.every(x => typeof x === 'string' && SKILL_ID.test(x)) && new Set(v).size === v.length;
+function readTags(v: unknown): AgentRunTags | null {
+  const t = v as Record<string, unknown> | null;
+  if (!t || typeof t !== 'object' || !skillList(t.skills) || !(t.app === null || tagName(t.app, APP_MAX)) || !(t.repo === null || tagName(t.repo, REPO_MAX))) return null;
+  return { skills: [...t.skills], app: t.app as string | null, repo: t.repo as string | null };
+}
+/** A skill the run's engine loaded while it was open (Claude's Skill tool): added once, up to SKILLS_MAX; frozen at the end.
+ *  `name` may be a plugin-qualified `plugin:skill`: the part after the last colon is the id. */
+export function addSkill(run: AgentRun, name: unknown): boolean {
+  if (run.endedAt !== undefined || !run.tags || typeof name !== 'string') return false;
+  const id = name.slice(name.lastIndexOf(':') + 1).trim().toLowerCase();
+  if (!SKILL_ID.test(id) || run.tags.skills.includes(id) || run.tags.skills.length >= SKILLS_MAX) return false;
+  run.tags.skills.push(id);
+  return true;
+}
 
 function readOutcome(v: unknown): AgentRunOutcome | null {
   const o = v as Partial<AgentRunOutcome> | null;
@@ -68,7 +93,8 @@ export function readRun(v: unknown): AgentRun | null {
   if (r.tokens !== null && !tokens) return null;
   const report = r.report === undefined ? undefined : readReport(r.report);
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
-  if (report === null || corrections === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const tags = r.tags === undefined ? undefined : readTags(r.tags);
+  if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
   return {
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy, startedAt: r.startedAt,
     ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}), ...(r.spawnedBy ? { spawnedBy: r.spawnedBy as string } : {}),
@@ -79,6 +105,7 @@ export function readRun(v: unknown): AgentRun | null {
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
+    ...(tags ? { tags } : {}),
   };
 }
 
@@ -107,10 +134,29 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
 
 /** Links a new run may carry (set by the Orchestrator tools, A7): each must name a run the store knows. */
 export interface RunLinks { parentRunId?: string; spawnedBy?: string; reviewOf?: string; reworkOf?: string }
-export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean }
+export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags }
 
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time); };
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
+const counts = (v: unknown): v is TagTally => {
+  const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null, a = t?.aiErrors as Record<string, unknown> | null;
+  return !!t && typeof t === 'object' && count(t.ended) && verdicts(t.verdicts) && verdicts(t.opinion) && verdicts(t.selfReport) && count(t.reworked) && count(t.questions) && count(t.permissions) && count(t.commands)
+    && !!c && count(c.runs) && count(c.tagged) && count(c.afterReport) && !!a && count(a.runs) && count(a.lines);
+};
+const bucket = (v: unknown, key: (k: string) => boolean): boolean => !!v && typeof v === 'object' && !Array.isArray(v) && Object.entries(v).every(([k, t]) => key(k) && counts(t));
+const tagTallies = (v: unknown): boolean => {
+  const t = v as Record<string, unknown> | null;
+  const combinedKey = (k: string): boolean => {
+    try {
+      const a: unknown = JSON.parse(k);
+      return Array.isArray(a) && a.length === 3 && a.filter(x => x !== null).length >= 2
+        && (a[0] === null || typeof a[0] === 'string' && SKILL_ID.test(a[0]))
+        && (a[1] === null || tagName(a[1], APP_MAX)) && (a[2] === null || tagName(a[2], REPO_MAX)) && JSON.stringify(a) === k;
+    } catch { return false; }
+  };
+  return !!t && typeof t === 'object' && bucket(t.skills, k => SKILL_ID.test(k)) && bucket(t.apps, k => tagName(k, APP_MAX)) && bucket(t.repos, k => tagName(k, REPO_MAX))
+    && (t.combined === undefined || bucket(t.combined, combinedKey));
+};
 /** A stored rollup, or null when out of shape (the store then refuses the file, like a bad run). */
 export function readTally(v: unknown): RunTally | null {
   const t = v as Record<string, unknown> | null;
@@ -121,6 +167,7 @@ export function readTally(v: unknown): RunTally | null {
     || ![t.cost, t.contextPeak, t.elapsed, t.execution].every(sample)) return null;
   const reviews = t.reviews as Record<string, Record<string, unknown>> | null;
   if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
+  if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   return structuredClone(t) as unknown as RunTally;
 }
 
@@ -175,7 +222,7 @@ export class AgentRunStore {
   /** save = false: the caller writes once after several starts (the backfill). */
   start(s: RunStart, save = true): AgentRun {
     if (this.problem) throw new Error(this.problem);
-    if (!AGENT_ID.test(s.agentId) || !str(s.chatId, 80) || !count(s.version)) throw new Error('Esecuzione non valida.');
+    if (!AGENT_ID.test(s.agentId) || !str(s.chatId, 80) || !count(s.version) || (s.tags !== undefined && !readTags(s.tags))) throw new Error('Esecuzione non valida.');
     this.checkLinks(s);
     const run: AgentRun = {
       runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: s.goal.trim().slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
@@ -184,6 +231,7 @@ export class AgentRunStore {
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
       costUsd: s.costKnown ? 0 : null, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
       corrections: { tagged: 0, afterReport: 0 }, executionMs: 0,
+      ...(s.tags ? { tags: readTags(s.tags)! } : {}),
     };
     this.runs.set(run.runId, run);
     if (!save) { this.dirty = true; return run; }
@@ -236,9 +284,16 @@ export class AgentRunStore {
   }
 }
 
-/** Past ROLLUP_BYTES, halves the samples of the largest rollup until they fit: medians then rest on fewer, newest values. */
+/** Past ROLLUP_BYTES, first drops the per-tag counts of the rollup with the most tags (filters then leave it out), then
+ *  halves the samples of the largest rollup until they fit: medians then rest on fewer, newest values. */
 export function fitRollups(rollups: RunTally[]): RunTally[] {
   const out = structuredClone(rollups);
+  const tagCount = (t: RunTally) => t.tags ? Object.keys(t.tags.skills).length + Object.keys(t.tags.apps).length + Object.keys(t.tags.repos).length + Object.keys(t.tags.combined ?? {}).length + 1 : 0;
+  while (Buffer.byteLength(JSON.stringify(out, null, 2), 'utf8') > ROLLUP_BYTES) {
+    const big = out.reduce((a, b) => tagCount(b) > tagCount(a) ? b : a, out[0]!);
+    if (!big || tagCount(big) === 0) break;
+    delete big.tags; big.tagsLost = true;
+  }
   const samples = (t: RunTally) => [t.cost, t.contextPeak, t.elapsed, t.execution, ...Object.values(t.tokens)];
   const size = (t: RunTally) => samples(t).reduce((n, s) => n + s.values.length, 0);
   while (Buffer.byteLength(JSON.stringify(out, null, 2), 'utf8') > ROLLUP_BYTES) {
