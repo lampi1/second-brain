@@ -1160,8 +1160,9 @@ export interface InvokeMap {
   'app:showInFolder': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
-  /** A user-opened file link: any local file, never a network share, read-only and bounded. Main renderer only. */
-  'app:readFile': [{ path:string; chatId?:string }, FileViewResult];
+  /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
+   *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
+  'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];
   /** an image named in a question (main/ask-image.ts) */
   'app:askImage': [{ path: string }, AskImageResult];
   'chat:list': [void, ChatSummary[]];

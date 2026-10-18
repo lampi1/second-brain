@@ -15,7 +15,7 @@ allow-list are removed, so an agent's link can put a credential file on screen. 
 - network shares are not local files: a UNC path, `file://host/…`, or a link (symlink, junction) to a share is refused
   before anything would connect to it (it would send the Windows login to that host, ADR 0054);
 - a relative path resolves only inside the chat's folder (or the brain), never with `..`;
-- the read is bounded: 1 MB of text (the viewer says "showing the first N of M"), 4 MB for an image (magic bytes and
+- the read is bounded: text one 1 MB page at a time (below), 4 MB for an image (magic bytes and
   dimensions checked, shown as a data URL); a file with NUL bytes is binary and not shown; the file is re-checked
   (device, inode, realpath) around the read;
 - the content is inert: markdown goes through marked + DOMPurify without images, highlighted code is highlight.js's
@@ -24,5 +24,18 @@ allow-list are removed, so an agent's link can put a credential file on screen. 
 Formats: markdown rendered, code and config highlighted with highlight.js (the core and one lazy chunk per language,
 bundled, offline), CSV/TSV and JSONL as tables, JSON pretty-printed, each formatted view with its source a click away.
 
-Next: PDF (pdfjs-dist) and real paging of big text files by line/byte range; then a diff on request (vs HEAD, vs a ref,
-two files) with read-only git (argument allow-list, no shell) and jsdiff.
+**Paging (V2).** A text file comes one page of at most 1 MB at a time, cut at its last line end (at its last whole
+character when one line fills the page). Next starts exactly where the page ended and Previous ends exactly where it
+started, so pages join with nothing lost or repeated, a line longer than a page included; Start and End jump (End to the
+line start nearest the last 1 MB). A cited line opens the page that starts up to 100 lines above it, fewer when they are
+long, so it stays on the page (from the top when it is in the first half page). Line numbers are counted up to 64 MB
+into the file; a page past that shows none, and a cited line past it opens the top. Main reads asynchronously, so a long
+count never holds the app up. A UTF-16 file is shown from the top only (no pager). A page other than the first is shown
+as source (a table or a document cut from the middle would mislead).
+
+**PDF (V2).** Up to 32 MB with a `%PDF-` header, read whole by main and handed as bytes to pdf.js (pdfjs-dist, pinned,
+loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near, with no
+text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
+them with WebAssembly files the app does not ship) and fonts neither embedded nor on the system may not show.
+
+Next: a diff on request (vs HEAD, vs a ref, two files) with read-only git (argument allow-list, no shell) and jsdiff.
