@@ -71,7 +71,9 @@ test('the 3D map: fast first frame, nothing drawn while idle, fluid while dragge
   const closedCpu = await cpu(); // the app with the map closed, as a baseline
 
   const t0 = Date.now();
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await expect.poll(frames, { timeout: 30_000, intervals: [16] }).toBeGreaterThan(0);
   const firstFrameMs = Date.now() - t0;
@@ -109,7 +111,9 @@ test('the 3D map: fast first frame, nothing drawn while idle, fluid while dragge
   await pause(1000);
   const before = await frames();
   const t1 = Date.now();
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect.poll(async () => (await frames()) > before, { timeout: 30_000, intervals: [16] }).toBe(true);
   const reopenFirstFrameMs = Date.now() - t1;
   await pause(2500);

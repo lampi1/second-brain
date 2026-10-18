@@ -8,11 +8,14 @@ import { launchDemo, shot } from './helpers';
 test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
-    // the gear: theme (no "Windows" in it), density, shortcuts, every setting; nothing about DevOps or the engines
+    // The gear links to shortcuts and Settings; appearance and connectors have one home in Settings.
     await page.getByTestId('settings').click();
     const gear = page.getByTestId('settings-pop');
     await expect(gear).toBeVisible();
-    await expect(page.getByTestId('theme-system')).toHaveText(/Come il sistema/);
+    await expect(page.getByTestId('theme-system')).toHaveCount(0);
+    await expect(page.getByTestId('settings-all')).toBeVisible();
+    await expect(page.getByTestId('topbar-connectors')).toHaveCount(0);
+    await expect(page.getByTestId('nav-map')).toHaveCount(0);
     await expect(gear).not.toContainText('Windows');
     await expect(gear).not.toContainText('DevOps');
     await expect(gear).not.toContainText('motori');

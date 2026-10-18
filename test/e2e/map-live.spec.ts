@@ -49,7 +49,9 @@ async function rate(ms: number): Promise<number> {
   return Math.round(((await frames()) - a) / (ms / 1000) * 10) / 10;
 }
 const openMap = async () => {
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.getByTestId('bx-map-live').locator('summary').click();
 };

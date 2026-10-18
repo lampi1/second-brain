@@ -241,6 +241,7 @@ export function collapseRegia(): void {
 /** Ctrl+R: the Regia overlay from anywhere. Closed → it opens with its input focused; open but the keyboard is
  *  elsewhere → its input; open with the keyboard inside → it closes to its pill. */
 export function toggleRegia(): void {
+  if (ui.get().map || ui.get().page === 'dashboard') go({ page: 'home' });
   setRegiaOpen(true);
   const r = regiaId();
   if (r) requestFocus(r);
@@ -293,7 +294,10 @@ export function focusChat(chatId: string): void {
   const c = s.chats[chatId];
   if (!c) return;
   const u = ui.get();
-  if (chatId === orchestratorIdOf(s)) { setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return; }
+  if (chatId === orchestratorIdOf(s)) {
+    if (u.map || u.page === 'dashboard') go({ page: 'home' });
+    setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return;
+  }
   // a chat of "Migliora l'app" lives in its section: open it there (its Regia is always shown)
   if (c.space === 'app') {
     if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });

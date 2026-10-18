@@ -45,7 +45,7 @@
 .dash-node{cursor:pointer;outline:none}
 .dash-node-in{animation:dash-pop 480ms cubic-bezier(.2,.9,.3,1.2) both;transform-box:fill-box;transform-origin:center}
 .dash-node-halo{fill:var(--surface-2);stroke:var(--border-2);stroke-width:1;transition:fill 180ms,stroke 180ms}
-.dash-node-dot{fill:var(--text-3);stroke:var(--surface);stroke-width:3;transition:fill 180ms}
+.dash-node-dot{fill:var(--node-color,var(--text-3));stroke:var(--surface);stroke-width:2;transition:fill 180ms}
 .dash-node-label{font-size:11px;fill:var(--text-2);text-anchor:middle;paint-order:stroke;stroke:var(--bg);stroke-width:3px;stroke-linejoin:round}
 .dash-node.central .dash-node-dot{fill:var(--blue);stroke:var(--blue-line);stroke-width:6;filter:drop-shadow(0 0 10px var(--blue))}
 .dash-node.central .dash-node-halo{stroke:var(--blue-line);animation:dash-breathe 4s ease-in-out infinite}
@@ -63,7 +63,7 @@
 .dash-labels{pointer-events:none}
 .dash-label{animation:dash-enter 320ms ease-out both}
 .dash-label rect{fill:var(--surface);fill-opacity:.92;stroke:var(--border-2);stroke-width:1}
-.dash-label text{font-size:11px;fill:var(--text-2)}
+.dash-label text{font-size:14px;fill:var(--text-2)}
 .dash-graph.dense .dash-label text{font-size:14px}
 .dash-label.selected rect{stroke:var(--blue);fill-opacity:1}
 .dash-label.selected text{fill:var(--text);font-weight:600}
@@ -132,3 +132,9 @@
 @container(max-width:850px){.dash-network{grid-template-columns:minmax(0,1fr) 190px}.dash-columns,.dash-tip-grid{grid-template-columns:1fr}.dash-live-label{display:none}.dash-stats{gap:8px}.dash-stat{padding:15px}.dash-stat>strong{font-size:25px}}
 @container(max-width:560px){.dash-network{grid-template-columns:1fr}.dash-inspector{border-left:0;border-top:1px solid var(--border);padding:20px}.dash-stats{grid-template-columns:1fr}.dash-stat>small{min-height:0}.dash-row{flex-wrap:wrap}.dash-row>div:first-child{flex-basis:100%}.dash-tabs>button{padding:12px 9px}.dash-graph svg{min-height:340px}}
 @media(prefers-reduced-motion:reduce){.dashboard *{animation:none!important;transition:none!important}.dash-stat:hover,.dash-tip-grid .dash-panel:hover{transform:none}.dash-edge.flow{stroke-dasharray:none}}
+
+.dashboard-map .dash-header{display:none}
+.dashboard-map .dash-tabs{margin-bottom:12px}
+.dash-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0;padding:8px 20px;font-size:12px;color:var(--text-2)}
+.dash-legend span{display:flex;align-items:center;gap:6px}.dash-legend i{display:inline-block;border-radius:50%}
+.dash-inspector h2,.dash-inspector code{overflow-wrap:anywhere}
