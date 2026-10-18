@@ -1,15 +1,21 @@
 // SVG network with searchable, keyboard-accessible nodes and a focused inspector supplied by Dashboard.
 // Data coordinates are stable between live updates; the CSS pulse represents observed recent messages only.
-import { useMemo, useState, type CSSProperties } from 'react';
+// The map's own commands live inside its frame (owner, 18/10: «i comandi devono stare dentro la mappa»): an optional
+// floating toolbar on top (search, overview, 3D: supplied by Dashboard) and a footer with the legend and the zoom group.
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { lang } from '../i18n';
 import { layout, placeLabels } from './data';
 import { labelCandidates, nodeStyle } from './graph-style';
 
 export interface GraphNode { id: string; label: string; detail: string; kind?: string; layer?: string; active?: boolean; central?: boolean }
 export interface GraphEdge { from: string; to: string; active?: boolean }
-export function Graph({ nodes, edges, selected, onSelect, label }: {
+export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend, empty, testId }: {
   nodes: GraphNode[]; edges: GraphEdge[]; selected: string | null; onSelect: (id: string) => void; label: string;
+  /** commands drawn on the map's top edge, inside its frame */ toolbar?: ReactNode;
+  /** the key drawn on the map's bottom-left corner */ legend?: ReactNode;
+  /** shown in place of the drawing when there are no nodes (the toolbar stays, e.g. to clear a search) */ empty?: ReactNode; testId?: string;
 }) {
+  const en = lang() === 'en';
   const [zoom, setZoom] = useState(1);
   const select = (id: string) => { setZoom(1); onSelect(id); };
   const identity = nodes.map(n => n.id).join('|');
@@ -30,6 +36,7 @@ export function Graph({ nodes, edges, selected, onSelect, label }: {
   const box = useMemo(() => {
     // Sparse maps always show every label, so their pills count too (a long name on the edge must not be clipped).
     const extents = [...points.values()].map(p => ({ x0: p.x, x1: p.x, y0: p.y, y1: p.y }));
+    if (!extents.length) return { x: 0, y: 0, w: 800, h: 520 };
     for (const s of spots.values()) { const left = s.anchor === 'start' ? s.x : s.anchor === 'end' ? s.x - s.w : s.x - s.w / 2; extents.push({ x0: left, x1: left + s.w, y0: s.y - s.h / 2, y1: s.y + s.h / 2 }); }
     const x0 = Math.min(...extents.map(e => e.x0)) - 70, x1 = Math.max(...extents.map(e => e.x1)) + 70, y0 = Math.min(...extents.map(e => e.y0)) - 55, y1 = Math.max(...extents.map(e => e.y1)) + 65;
     const w = Math.max(360, x1 - x0, (y1 - y0) * 800 / 520), h = w * 520 / 800;
@@ -38,8 +45,9 @@ export function Graph({ nodes, edges, selected, onSelect, label }: {
   const width = box.w / zoom, height = box.h / zoom;
   const x = Math.max(box.x, Math.min(box.x + box.w - width, (focus?.x ?? box.x + box.w / 2) - width / 2));
   const y = Math.max(box.y, Math.min(box.y + box.h - height, (focus?.y ?? box.y + box.h / 2) - height / 2));
-  return <div className={`dash-graph ${dense ? 'dense' : ''} ${selected ? 'focused' : ''}`}>
-    <svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label}>
+  return <div className={`dash-graph ${dense ? 'dense' : ''} ${selected ? 'focused' : ''}`} data-testid={testId}>
+    {toolbar && <div className="dash-map-toolbar" data-testid="dash-map-toolbar" role="toolbar" aria-label={en ? 'Map commands' : 'Comandi della mappa'}>{toolbar}</div>}
+    {nodes.length ? <svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label}>
       <defs><radialGradient id="dash-aura"><stop stopColor="var(--blue)" stopOpacity=".13" /><stop offset="1" stopColor="var(--blue)" stopOpacity="0" /></radialGradient></defs>
       <circle cx="400" cy="260" r="250" fill="url(#dash-aura)" />
       <g aria-hidden="true">{edges.map((edge, i) => {
@@ -69,7 +77,15 @@ export function Graph({ nodes, edges, selected, onSelect, label }: {
           <text x={spot.anchor === 'start' ? spot.x + 6 : spot.anchor === 'end' ? spot.x - 6 : spot.x} y={spot.y} textAnchor={spot.anchor} dominantBaseline="central">{node.label}</text>
         </g>;
       })}</g>
-    </svg>
-    <div className="dash-graph-controls"><button type="button" className="btn btn-ghost btn-s" onClick={() => { setZoom(1); onSelect(''); }}>{lang() === 'en' ? 'Fit' : 'Adatta'}</button><button className="btn btn-ghost btn-s" type="button" aria-label={lang() === 'en' ? 'Zoom out' : 'Riduci'} onClick={() => setZoom(z => Math.max(1, z - .5))} disabled={zoom === 1}>−</button><span>{Math.round(zoom * 100)}%</span><button className="btn btn-ghost btn-s" type="button" aria-label={lang() === 'en' ? 'Zoom in' : 'Ingrandisci'} onClick={() => setZoom(z => Math.min(3, z + .5))} disabled={zoom === 3}>+</button></div>
+    </svg> : <div className="dash-graph-empty">{empty}</div>}
+    <div className="dash-graph-foot">
+      {legend ?? <span />}
+      <div className="dash-zoom" role="group" aria-label="Zoom">
+        <button type="button" className="dash-zoom-fit" title={en ? 'Show the whole map' : 'Mostra tutta la mappa'} onClick={() => { setZoom(1); onSelect(''); }}><span aria-hidden="true">⤢</span>{en ? 'Fit' : 'Adatta'}</button>
+        <button type="button" aria-label={en ? 'Zoom out' : 'Riduci'} title={en ? 'Zoom out' : 'Riduci'} onClick={() => setZoom(z => Math.max(1, z - .5))} disabled={zoom === 1}>−</button>
+        <output aria-live="polite">{Math.round(zoom * 100)}%</output>
+        <button type="button" aria-label={en ? 'Zoom in' : 'Ingrandisci'} title={en ? 'Zoom in' : 'Ingrandisci'} onClick={() => setZoom(z => Math.min(3, z + .5))} disabled={zoom === 3}>+</button>
+      </div>
+    </div>
   </div>;
 }

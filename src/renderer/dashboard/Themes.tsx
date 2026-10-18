@@ -25,7 +25,7 @@ function ThemeCard({ theme }: { theme: Theme }) {
     <header><h4>{theme.label}</h4><span className="dash-tag">{theme.entries.length}</span>
       {theme.growing && <span className="dash-tag dash-theme-up" title={copy('Ultimi 7 giorni contro i 7 prima', 'Last 7 days vs the 7 before')}>↑ {copy('in crescita', 'growing')} · {theme.recent} / {theme.before}</span>}</header>
     <ul>{shown.map(e => <li key={e.line}><small>{e.day ?? '—'}</small><span>{e.text}</span></li>)}</ul>
-    {theme.entries.length > SHOWN && <button type="button" className="btn btn-ghost btn-s" onClick={() => setAll(!all)}>{all ? copy('Mostra meno', 'Show less') : `${copy('Mostra tutte', 'Show all')} (${theme.entries.length})`}</button>}
+    {theme.entries.length > SHOWN && <button type="button" className="btn btn-subtle btn-s dash-more" aria-expanded={all} onClick={() => setAll(!all)}><span aria-hidden="true">{all ? '▴' : '▾'}</span>{all ? copy('Mostra meno', 'Show less') : `${copy('Mostra tutte', 'Show all')} (${theme.entries.length})`}</button>}
   </article>;
 }
 
