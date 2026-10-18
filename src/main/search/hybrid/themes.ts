@@ -30,7 +30,7 @@ const STOP = new Set(('alla alle allo anche ancora come con cosa dal dalla dalle
   + 'invece lui nei nel nella nelle non per perché più poi prima quando quella quelle quello questa queste questo senza '
   + 'sono sta stato sua sue sul sulla tra una uno vero visto regola dopo fatto fare solo ogni dove ora altro trovato second brain errore errori '
   + 'about after also and are but can for from had has have into its not now only that the then there this was were '
-  + 'what when which while will with without').split(' '));
+  + 'what when which while will with without').normalize('NFD').replace(/\p{M}/gu, '').split(' '));
 
 const fold = (s: string): string[] => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').split(/[^\p{L}\p{N}]+/u)
   .filter(w => w.length >= 4 && !/^\d+$/.test(w) && !STOP.has(w));
