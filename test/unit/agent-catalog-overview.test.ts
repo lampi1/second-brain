@@ -46,7 +46,8 @@ it('renders verified successes and cost sample coverage without using self-repor
   const p = { ...profile('Reviewer', 'Review'), probation: { since: 1, requestItemId: 'request' } };
   const html = renderToStaticMarkup(createElement(AgentCatalogCard, { profile: p, metrics, loaded: true, engine: 'Claude', lastStart: 1, onOpen: () => {} }));
   expect(html).toContain('100%');
-  expect(html.match(/1 of 2 runs/g)).toHaveLength(2);
+  // the card's details panel states each sample size once (the metric tiles repeat it in their tooltips)
+  expect(html.slice(html.indexOf('catalog-details')).match(/1 of 2 runs/g)).toHaveLength(2);
   expect(html).toContain('On probation');
   expect(html).toContain('0.25');
 });

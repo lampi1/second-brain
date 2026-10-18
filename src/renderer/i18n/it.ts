@@ -19,6 +19,7 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {lifecycleIt}from'./areas/lifecycle.it';
+import { agentsGridIt } from './areas/agents-grid.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
@@ -55,6 +56,7 @@ export const it = {
   ...studioIt,
   ...productIt,
   ...lifecycleIt,
+  ...agentsGridIt,
   ...settingsIt,
   ...profileIt,
   ...chatIt,
