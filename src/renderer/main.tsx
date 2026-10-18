@@ -42,7 +42,11 @@ if (isBrainTestRoute()) {
 } else if (isBrainTestRoute()) {
   root.render(<StrictMode><BrainTestRoute /></StrictMode>);
 } else {
-  // subscribe before the first render: events sent while React mounts (ui:command from tests/tools) are not lost
+  // subscribe at once, before any await: a ui:command sent while the update recovery is read or React mounts (the
+  // demo's frozen clock at did-finish-load, tests, tools) waits here and runs, in order, once the store has started
+  const early: Parameters<typeof uiCommand>[0][] = [];
+  let started = false;
+  sb.on('ui:command', cmd => { if (started) uiCommand(cmd); else early.push(cmd); });
   root.render(<div role="status">{auditText('cmp.main.restoring')}</div>);
   void startUpdateCheckpoint().catch(()=>toast(auditText('cmp.main.restoreUnavailable'),'err')).then(()=>{
   startStore();
@@ -53,7 +57,8 @@ if (isBrainTestRoute()) {
   startFocusKeeper();
   startTypingWatch();
   setInterval(() => checkDnd(now()), 60_000);
-  sb.on('ui:command', uiCommand);
+  started = true;
+  for (const cmd of early.splice(0)) uiCommand(cmd);
   sb.on('focus:next', () => nextThing());
   // the language first (ADR 0057): the first render is already in the right one
   void startLang().then(() => root.render(<StrictMode><LangRoot><App /></LangRoot></StrictMode>));
