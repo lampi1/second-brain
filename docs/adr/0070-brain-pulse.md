@@ -1,3 +1,4 @@
+<!-- Design for implementers: define Battito's jobs, budgets and approval surface across engines. -->
 # 0070 — Battito (brain pulse): a preset agent that fills the Bacheca, on any engine, through one job scheduler
 
 Date: 2026-10-18. Status: proposed (design only, no product code). Builds on AGENTS-DESIGN (branch `docs/agent-first`:
@@ -9,7 +10,7 @@ UI spec items 12, 18, 22, 24 (same branch), ADR 0069 (`docs/agent-pack`: know-ho
 
 Brother (18/10): bring the brain to life with a scheduled agent that posts useful cards (ideas, tips, reminders,
 connections, small facts about his own stats) on a board and around the app; off globally and per type; low tokens;
-3 runs a day (morning, midday, evening) only while the app is open. Hard rules: it is an **agent** like every task
+3 card runs a day (morning, midday, evening), plus an hourly headline, only while visible. Hard rules: it is an **agent** like every task
 (editable model, engine, effort, instructions, versions, metrics); **nothing Claude-specific** (a user may have only
 Codex, only Cursor or only an API key). Same day, via the coordinator: agents are per user except the shipped presets;
 whatever needs his approval is **never a popup** but an async "Da approvare" section; the scheduler must also carry
@@ -46,7 +47,7 @@ What exists on main (2279008):
 
 Seed `default-pulse` "Battito" (preset, shipped in code like the §3 presets; Brother's edits, know-how and metrics
 stay in his `agents.json`, never shipped back). Role "tiene vivo il cervello: idee, consigli, promemoria,
-collegamenti"; category `personal`; avatar `eye`; tools `{allow: []}` (it needs only the digest), ceiling `plan`;
+collegamenti e frase della Dashboard"; category `personal`; avatar `eye`; tools `{allow: []}` (digest only), ceiling `plan`;
 own skill `battito` (card rules, types, learned rules; ADR 0069 §2 layout). Engine: the seed rule (first
 enabled+trusted engine); model: that engine's registry row with `tier: 'mid'` (Sonnet-class; the template's
 `models.json` tiers only Claude and Cursor rows, so the API engine uses Claude's rows via `priceEnginesOf` and Codex
@@ -61,9 +62,10 @@ probation (preset).
 `runOnce({agentId, system, prompt, maxOutputTokens, timeoutMs, purpose}) → {ok, text, engine, model, effort,
 costUsd|null, costBasis: 'reported'|'estimated'|'unknown', tokens|null, durationMs} | {ok:false, reason, noEngine?}`.
 - **Engine pick**: the agent version's engine if usable (`engineOn`, `agentsMayOpen`, key present when the engine
-  needs one); else, with `jobs.fallback = auto`, the first usable of: API engines → Codex → Claude Code → Cursor →
-  other ACP (order = how well the run is capped and metered, not a vendor preference); model on fallback = that
-  engine's row with the same `tier`, else `null`; none usable → `noEngine` (§5 built-in cards, no model).
+  needs one); else, with `jobs.fallback = auto` (default), the first usable of: API engines → Codex → Claude Code →
+  Cursor. Only engines the user turned on and trusted for agents qualify; never enable one automatically.
+  Model on fallback = that engine's row with the same `tier`, else `null`; none usable → `noEngine` (§5).
+  Each card shows the engine actually used; built-in cards show "App". Codex-only and Cursor-only must work.
 - **Transport**: an Anthropic-protocol API engine → `TextModel.complete` (hard `max_tokens`, exact list cost; its
   `MODEL` check stays for the MCP route only). Everything else → `HeadlessRunner.run` with: an empty folder
   `<userData>/oneshot` as cwd, `denyRead` = brain root + home, new `HeadlessRequest.timeoutMs` (120 s) and
@@ -91,8 +93,8 @@ input tokens); PR 1 measures it per engine and shows it in Costi.
 
 ### 3. One job scheduler (`src/main/jobs/`)
 
-`Job {id, agentId, schedule: {slots: 'HH:MM'[]} | {everyMin}, visibleOnly, budgetKey, run(ctx)}`. Battito is job 1
-(`pulse`); the headline (§9) and maintenance jobs register the same way: the §4.4/§4.7 daily evaluator, the §4.5
+`Job {id, agentId, schedule: {slots: 'HH:MM'[]} | {everyMin}, visibleOnly, budgetKey, run(ctx)}`. Battito owns two
+jobs (`pulse`, `headline`, §9), both `agentId: 'default-pulse'`; maintenance registers the same way: the §4.4/§4.7 evaluator, §4.5
 suggestions, rollups and prune, brain lint. **Each job is owned by an agent** (preset "Manutentore" for maintenance),
 so its cost, runs and on/off live on an agent page; a step with no model costs 0 and records no engine. A job's
 output that would change anything (a file, an agent, a rule) is never applied: it becomes a "Da approvare" item (§7).
@@ -136,9 +138,14 @@ the last 15 chat titles + state (no message text); brain files changed in 7 days
 files, never chat bodies, never `.brain.env` or anything outside the brain. Total ≤ 6000 chars (~1.5 k tokens).
 - **Skip when unchanged**: `digestHash` (without the clock) equal to the last run's → no model call, slot recorded
   `skipped-unchanged`.
-- **Budget**: output ≤ 1200 tokens per run; a run starts only if today's spend + the median of the engine's last 5
-  runs (default $0.02) ≤ `pulse.dailyUsd` (default $0.10) and runs today < number of slots (+1 for "Aggiorna ora").
-  Engines with unknown cost: run cap only, flagged in Costi.
+- **Budget**: `pulse.dailyUsd` defaults to **$0.25 for the whole Battito agent**, shared by both jobs. Proposed
+  allocation: 80% cards ($0.20), 20% headline ($0.05), separate `budgetKey`s; no borrowing between jobs.
+  Card output ≤ 1200 tokens/run; ≤ 3 scheduled runs + 1 "Aggiorna ora"/day (≤ 16 generated cards, still ≤ 6 live).
+  Start only if job spend + estimated next run fits its allocation AND total agent spend + estimate fits $0.25
+  (or the configured total). Estimate = median of that engine+job's last 5 runs; card cold start $0.02.
+  At that estimate four card runs use $0.08; $0.25 does not buy extra slots or guarantee a run count.
+  These are admission estimates, not hard billing ceilings; CLI overhead may reduce runs or cause overshoot.
+  Unknown cost: enforce each job's run/output limits, mark cost unknown in Costi, never claim the dollar cap held.
 - **No engine**: built-in cards computed from the same data with no model (ideas due, today's cost vs the week,
   an agent with 3 runs and no outcome, a chat near its context limit), `source: 'builtin'`; the status says why
   ("Nessun motore disponibile: Battito usa le carte dell'app", link to Motori).
@@ -177,9 +184,10 @@ Battito", `agent:<id>`); the search empty state (≤ 2 `collegamento`/`curiosita
 ### 8. Settings, IPC, PRs
 
 **Settings** (dot keys, Settings → Battito): `pulse.on` (default on), `pulse.types.<type>`, `pulse.places.<place>`,
-`pulse.slots` (1-3 × `HH:MM`, default 08:30 · 13:00 · 18:30), `pulse.dailyUsd` (0.01-2, default 0.10),
-`jobs.fallback` (`auto` | `off`). Engine, model, effort only on the agent page (a link from Settings). Costi: Battito
-under per-agent costs with the cost basis; API spend also lands in `ApiSpend` with purpose `pulse`.
+`pulse.slots` (1-3 × `HH:MM`, default 08:30 · 13:00 · 18:30), `pulse.dailyUsd` (0.01-2, default 0.25, both jobs),
+`jobs.fallback` (`auto` default | `off`), `pulse.headline.on` (default on). `pulse.on` stops both jobs.
+Engine/model/effort live on the agent page. Costi totals both jobs under Battito, with job breakdown and cost basis;
+API spend also lands in `ApiSpend` with purpose `pulse` or `headline`. Persist both job ledgers across restarts.
 
 **IPC** (`contract.ts` map + `INVOKE_CHANNELS`, `test/unit/contract.test.ts`, demo wiring): `pulse:list {place}` →
 `{cards, status}`; `pulse:status` → `{on, engine|null, reason?, nextSlot, today {runs, usd, basis}, lastRun?}`;
@@ -201,14 +209,24 @@ The renderer never sends a path: `file:` places are brain-relative and resolved 
 - **PR 3 · UI**: Bacheca band and Da approvare, agent page panel and metrics, search empty state, file viewer panel,
   Settings rows, it/en. Fast e2e: demo shows canned cards; Non mi serve removes one; Salva shows the confirmation;
   a type off hides it; "nessun motore" shows built-in cards; an approval decided leaves the count.
+- **PR 4 · Battito headline job (after PRs 1–2)**: replace the API-only timer with §9 on the same agent;
+  migrate settings, retain cached fallback, split job budgets/metrics. Tests: Codex-only and Cursor-only fakes;
+  hourly visibility gate, no catch-up burst, independent caps plus shared total, global off stops both jobs;
+  headline runs do not change card usefulness. Dashboard screenshot e2e runs on main after merge.
 
-### 9. The headline, later (PR 4, after PR 1)
+### 9. The headline is another Battito job (PR 4)
 
-Today it is API-only and outside the agent model. Proposal: its own preset agent **"Battuta"** (humor needs a strong
-model, hourly; Battito wants a mid model 3 times a day: one agent has one model per version), registered as a job
-(`everyMin: 60`, visibleOnly) on `runOnce`. `get()` still never waits; `headlineModel/Effort` migrate once into the
-agent and are removed; its spend moves under the agent in Costi; on engines with unknown cost the cadence drops to
-every 3 h by default.
+The **same `default-pulse` Battito agent** writes the Dashboard headline through `runOnce`, on any enabled engine;
+there is no separate headline agent. Both jobs use its version's engine/model/effort, with job-specific prompts.
+`pulse` keeps its three slots/day; `headline` uses `everyMin: 60`, visibleOnly, ≤ 24 runs/day, at least 60 min
+between starts across restarts, no hidden-time catch-up burst. Budget exhaustion keeps the cached/built-in line.
+Proposed tiny headline envelope: scrubbed input ≤ 2000 chars, one line ≤ 160 chars, output ≤ 150 tokens; API hard
+cap, CLI soft cap + timeout (§2). Its own $0.05/day allocation (§5) uses an engine+job median (cold start $0.005):
+ten runs at that estimate, up to 24 only if cheaper. Unknown cost keeps the hourly/run limits, visibly unpriced.
+Both jobs record runs/tokens/cost under Battito, tagged by job; card usefulness and trial comparisons stay
+job-specific. Headline outcomes remain unknown without human feedback. `get()` never waits.
+Retire `headlineModel/Effort`: Battito's version is authoritative (preserve user edits); retain the cached line
+and historical spend without double-counting. Headline style joins the existing `battito` skill.
 
 ## Consequences
 
@@ -219,17 +237,12 @@ validated, no tools, actions only on Brother's click; Codex's read-only sandbox 
 asking (UNVERIFIED that `denyRead` covers it) — nothing leaves the machine but the prompt, and the answer is only shown
 locally; ideas.md format drift → only through `mem.mjs`.
 
-## Open questions for Brother
+## Decided 2026-10-18
 
-1. Se il motore di Battito non è disponibile, ne usa un altro? **Consigliato: sì, in automatico tra quelli che hai
-   acceso** (API → Codex → Claude Code → Cursor), mostrando il motore sulla carta; alternativa: solo il suo motore,
-   altrimenti carte dell'app senza modello.
-2. Budget giornaliero di partenza? **Consigliato: 0,10 $ al giorno** (circa 3 giri su un modello medio a sforzo
-   basso via API; sui motori CLI può bastare per meno giri); alternativa: 0,25 $.
-3. La frase della Dashboard (headline): **Consigliato: un suo agente "Battuta"** sullo stesso percorso, in una PR
-   successiva (modello e ritmo diversi da Battito); alternativa: un lavoro dello stesso Battito.
-4. Carte e approvazioni nello stesso posto? **Consigliato: sì, una Bacheca con due sezioni, "Per te" e "Da
-   approvare"**, in cima alla Dashboard, senza popup; alternativa: "Da approvare" come pagina a sé nel menu.
+1. Automatic fallback among enabled engines: API → Codex → Claude Code → Cursor; show the engine on each card.
+2. Starting daily budget: **$0.25**, with three scheduled card slots; job allocations above are implementation proposals.
+3. The **same Battito agent** writes the headline: two jobs, separate rhythms/caps/budgets, one agent's metrics.
+4. One Bacheca at the top of the Dashboard, with **Per te** and **Da approvare**; no popups.
 
 ## Sources (read 2026-10-18)
 
