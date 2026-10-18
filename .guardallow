@@ -41,6 +41,10 @@ docs/screenshots/mosaic.webp binary-media sha256:2a6c7ab702f263fb64556cc1f706bfb
 docs/screenshots/quality.webp binary-media sha256:30a801b0dcc8b617854a6623bd165b580567f07b4baae1ef772df54055cd61a7
 docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42eb3e06e72439883bc4b6af75c872421c
 test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4adbcde2e77beea32d931cdb55459e803194f1c0476b8248da327f
+# The Guida page's screenshots (test/shots/concept-guide.spec.ts: frozen demo, fictional data), looked at 2026-10-18.
+docs/screenshots/concept-guide/guida-collapsed.png binary-media sha256:e6d9faf0b613edc40adddd6c539754031fa6b055ab007567615060e8f293a08c
+docs/screenshots/concept-guide/guida-expanded.png binary-media sha256:9fdfe1d5072ea2bd41a0b475b873f9a7a4faffa39eef22e067b1023bb9d5c072
+docs/screenshots/concept-guide/guida-search-coming.png binary-media sha256:55333f63fc48bf2a4c9f1be5fd7faa73e7063004e959302313c43f59521724e6
 # Public GitHub SSH clone syntax in the publication-boundary fixture, not an email address or private identity.
 test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8a73384493e1663bd8f8b1fafc
 # Same two public GitHub SSH clone literals after reviewed publication regression additions; no private email.
