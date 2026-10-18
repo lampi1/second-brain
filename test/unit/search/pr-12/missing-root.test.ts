@@ -37,7 +37,7 @@ describe('a brain folder that is briefly missing', () => {
       expect(emb.passages).toBe(2);
 
       fs.renameSync(root, `${root}-away`); // offline for a moment
-      await e.sync(root);
+      await expect(e.sync(root)).rejects.toThrow();
       await e.embedPending(8); // the worker's pump after a sync that changed something
       fs.renameSync(`${root}-away`, root); // back
       await e.sync(root);

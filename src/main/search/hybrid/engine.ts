@@ -73,11 +73,9 @@ export class Engine {
 
   /** Brings the brain's documents up to date; returns how many were (re)indexed or removed. */
   async sync(root: string): Promise<number> {
-    let files: string[];
-    try {
-      if (!fs.statSync(root).isDirectory()) return 0;
-      files = await this.listFiles(root);
-    } catch { return 0; } // an unavailable folder is not an empty brain
+    // Reject before mutation: the service must not label the retained index as a newly selected unavailable root.
+    if (!fs.statSync(root).isDirectory()) throw new Error('brain root is not a directory');
+    const files = await this.listFiles(root);
     const known = this.store.docs(BRAIN);
     let changed = 0;
     for (const rel of files) {

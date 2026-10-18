@@ -38,7 +38,7 @@ describe('brainFiles when git fails', () => {
       await engine.sync(root);
       expect(engine.status().docs).toBe(1);
       process.env.PATH = '';
-      expect(await engine.sync(root)).toBe(0);
+      await expect(engine.sync(root)).rejects.toThrow();
       expect(engine.status().docs).toBe(1);
       expect((await engine.query('today')).map(h => h.path)).toEqual(['now.md']);
       expect(await engine.query('abc123')).toEqual([]);
