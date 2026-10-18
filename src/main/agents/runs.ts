@@ -20,7 +20,7 @@ export const ROLLUP_BYTES = 1_000_000;
 const ENDS: readonly AgentRunEnd[] = ['completed', 'closed', 'stale'];
 const VERDICTS: readonly AgentRunOutcome['verdict'][] = ['success', 'partial', 'fail', 'unknown'];
 const BASES: readonly AgentRunOutcome['basis'][] = ['human', 'reviewed-evidence', 'orchestrator-opinion', 'self-report', 'unknown'];
-const RUN_ID = /^r_[a-f0-9]{12}$/;
+export const RUN_ID = /^r_[a-f0-9]{12}$/;
 const AGENT_ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 const time = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;

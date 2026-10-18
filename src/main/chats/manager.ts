@@ -277,6 +277,8 @@ interface Rec {
   runningSince?: number;
   /** when the current turn started running: a run ended during it (completed by its Regia) still takes its report */
   turnAt?: number;
+  /** its run (this id) was pruned into the rollups: counted there only, never backfilled again (kept in chats.json) */
+  runPruned?: string;
 }
 
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
@@ -366,7 +368,7 @@ export class ChatManager implements ChatService {
     // a pruned run lives on in the rollups only: a chat mirror of it would be adopted back and counted twice
     this.runs.onPrune = ids => {
       let any = false;
-      for (const r of this.chats.values()) if (r.s.run && ids.has(r.s.run.runId)) { delete r.s.run; delete r.runningSince; any = true; this.updated(r); }
+      for (const r of this.chats.values()) if (r.s.run && ids.has(r.s.run.runId)) { r.runPruned = r.s.run.runId; delete r.s.run; delete r.runningSince; any = true; this.updated(r); }
       if (any) this.persist();
     };
     this.store = new ChatStore(opts.userData);
@@ -881,7 +883,8 @@ export class ChatManager implements ChatService {
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
    *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
   runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
-    this.runs.flush();
+    // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
+    try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
     return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
   }
@@ -1482,7 +1485,8 @@ export class ChatManager implements ChatService {
     // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
     // ended during this turn (its Regia marked it completed) still takes it
     const run = r.s.run, turnAt = r.turnAt;
-    delete r.turnAt;
+    // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
+    if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
     if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
       const report = reportOf(turnReply(r.items), item.at);
       if (report) { run.report = report; this.runSave(); }
@@ -1647,7 +1651,8 @@ export class ChatManager implements ChatService {
     let added = false;
     for (const r of this.chats.values()) {
       const owner = r.s.agent;
-      if (r.s.run || owner?.source !== 'catalog') continue;
+      // a chat whose run was pruned has it in the rollups: a new v0 run would count it again on every start
+      if (r.s.run || r.runPruned || owner?.source !== 'catalog') continue;
       try {
         const run = this.runs.start({ chatId: r.s.id, agentId: owner.id, version: 0, goal: r.s.title, startedBy: r.s.work || r.s.regiaOf ? 'orchestrator' : 'user', startedAt: r.createdAt, costKnown: false }, false);
         run.tokens = null;
@@ -1671,12 +1676,15 @@ export class ChatManager implements ChatService {
     restored.end();
     const children = new AgentChildrenReducer(restored.snapshot());
     if (engineOf(c.harness)?.kind === 'api') children.coverage('complete');
+    // agent-runs.json is the source of truth; a mirror it does not know (a lost or reset file) is taken back
+    // (not one already pruned into the rollups: that mirror is dropped, and the chat remembers it was pruned)
+    const run = c.run && (this.runs.get(c.run.runId) ?? (this.runs.problem ? c.run : this.runs.adopt(c.run)));
+    const runPruned = run ? undefined : c.run ? c.run.runId : c.runPruned;
     return {
+      ...(runPruned ? { runPruned } : {}),
       s: {
         agent: c.agent ?? compatibleOwner(c.harness, c.model, true),
-        // agent-runs.json is the source of truth; a mirror it does not know (a lost or reset file) is taken back
-        // (not one already pruned into the rollups: that mirror is dropped)
-        ...(() => { const run = c.run && (this.runs.get(c.run.runId) ?? (this.runs.problem ? c.run : this.runs.adopt(c.run))); return run ? { run } : {}; })(),
+        ...(run ? { run } : {}),
         ...(c.work ? {work:c.work} : c.regiaOf ? {work:{status:'assigned' as const,updatedAt:c.createdAt}} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
@@ -1719,7 +1727,7 @@ export class ChatManager implements ChatService {
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.policy ? { agentPolicy: r.policy } : {}),
-      ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : {}),
+      ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : r.runPruned ? { runPruned: r.runPruned } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
@@ -2081,6 +2089,7 @@ export class ChatManager implements ChatService {
         if (r.children) r.s.agentChildren = r.children.snapshot();
         // gone mid-turn (crash, close, kill): no result will settle the estimate, which stays as spent (no "≈")
         delete r.s.costLiveUsd;
+        delete r.turnAt; // its turn is over, result or not
         r.handoffTurn?.done(null);
         delete r.s.background; // its background tasks died with it
         // died mid-turn with an error while the app runs: no result will come, so no onDone either; tell the brain now
@@ -2148,7 +2157,11 @@ export class ChatManager implements ChatService {
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     const run = r.s.run;
+    // A fresh submission also starts a turn while Claude is still running after its previous result (delayed idle).
+    if ('effortSubmitted' in p && !r.handoffTurn) r.turnAt = Date.now();
     if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
+    // out of the turn with no result (a crash, a clean exit mid-turn): the next turn starts its own clock
+    else if (p.state === 'idle' || p.state === 'error' || p.state === 'closed') delete r.turnAt;
     // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
     if (p.state && run && run.endedAt === undefined) {
       if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
