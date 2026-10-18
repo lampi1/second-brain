@@ -1440,7 +1440,8 @@ export class ChatManager implements ChatService {
     // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
     // ended during this turn (its Regia marked it completed) still takes it
     const run = r.s.run, turnAt = r.turnAt;
-    delete r.turnAt;
+    // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
+    if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
     if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
       const report = reportOf(turnReply(r.items), item.at);
       if (report) { run.report = report; this.runSave(); }
@@ -2012,6 +2013,7 @@ export class ChatManager implements ChatService {
         if (r.children) r.s.agentChildren = r.children.snapshot();
         // gone mid-turn (crash, close, kill): no result will settle the estimate, which stays as spent (no "≈")
         delete r.s.costLiveUsd;
+        delete r.turnAt; // its turn is over, result or not
         r.handoffTurn?.done(null);
         delete r.s.background; // its background tasks died with it
         // died mid-turn with an error while the app runs: no result will come, so no onDone either; tell the brain now
@@ -2080,6 +2082,8 @@ export class ChatManager implements ChatService {
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     const run = r.s.run;
     if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
+    // out of the turn with no result (a crash, a clean exit mid-turn): the next turn starts its own clock
+    else if (p.state === 'idle' || p.state === 'error' || p.state === 'closed') delete r.turnAt;
     // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
     if (p.state && run && run.endedAt === undefined) {
       if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();

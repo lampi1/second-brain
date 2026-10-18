@@ -39,6 +39,11 @@ function fixture(extra: Partial<ChatManagerOptions> = {}, idleOnStart = true) {
   const run = (id: string) => m.list().find(x => x.id === id)?.run;
   return { m, dir, create, run, sink: (id: string) => sinks.get(id)!, latest: () => last };
 }
+const report = (o: object) => `Fatto.\n\n\`\`\`run-report\n${JSON.stringify(o)}\n\`\`\``;
+const reply = (sink: SessionSink, text: string, at: number) => {
+  sink.item({ kind: 'assistant', id: `a${at}`, at, text }, false);
+  sink.item({ kind: 'result', id: `r${at}`, at, costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+};
 const storedChat = (dir: string, id: string) =>
   (JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: { id: string; run?: unknown; runPruned?: string }[] }).chats.find(x => x.id === id);
 
@@ -112,5 +117,69 @@ describe('a pruned run is never counted again', () => {
     ] }));
     const loaded = new ChatStore(dir).load();
     expect(loaded.map(c => c.runPruned)).toEqual(['r_0123456789ab', undefined, undefined]);
+  });
+});
+
+describe('a run report goes to its own turn', () => {
+  it('a turn that died without a result does not let a later post-end turn overwrite the ended run’s report', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const s = f.sink(c.id);
+    reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
+    s.changed({ state: 'running' }); // a turn starts...
+    s.changed({ state: 'error' }); // ...and the CLI dies: no result, r.turnAt stays set
+    await f.m.set(c.id, { workStatus: 'completed' }); // its Regia completes the run while idle
+    const ended = f.run(c.id)!.endedAt!;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(ended + 60_000);
+    s.changed({ state: 'running' }); // the Regia writes to the chat later: a turn after the end (no reopen)
+    reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
+    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' }); // an ended run takes nothing
+  });
+
+  it('a queued turn during which the run is completed still takes its report', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const s = f.sink(c.id);
+    s.changed({ state: 'running' });
+    reply(s, 'primo turno, nessun report', Date.now()); // the CLI had a queued message: the chat stays running
+    await f.m.set(c.id, { workStatus: 'completed' }); // the Regia completes the run during the queued turn
+    reply(s, report({ outcome: 'done', verified: 'yes', summary: 'turno in coda' }), Date.now() + 1);
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, summary: 'turno in coda' } });
+  });
+
+  it('a session that exits mid-turn ends that turn: a later post-end turn in a new session takes nothing', async () => {
+    const f = fixture({}, false);
+    const c = await f.create();
+    const s = f.sink(c.id);
+    reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
+    s.changed({ state: 'running' }); // a turn starts...
+    s.exit({ code: 1, error: 'crash' }); // ...and the engine is gone with no result and no state change of its own
+    await f.m.set(c.id, { workStatus: 'completed' });
+    const ended = f.run(c.id)!.endedAt!;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(ended + 60_000);
+    await f.m.send(c.id, 'continua', undefined, false, 'regia'); // a new session (no reopen: not the user)
+    const t = f.latest();
+    expect(t).not.toBe(s);
+    t.changed({ state: 'running' });
+    reply(t, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, summary: 'prima' } });
+  });
+
+  it('a turn that ends with a result and goes idle does not lend its start to the next turn', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const s = f.sink(c.id);
+    s.changed({ state: 'running' });
+    reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
+    s.changed({ state: 'idle' });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    const ended = f.run(c.id)!.endedAt!;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(ended + 60_000);
+    s.changed({ state: 'running' });
+    reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
+    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' });
   });
 });
