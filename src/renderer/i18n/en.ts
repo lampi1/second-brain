@@ -15,6 +15,7 @@ import {productEn}from'./areas/product.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
+import { guideEn } from './areas/guide.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 
 export const en: Dict = {
@@ -22,6 +23,7 @@ export const en: Dict = {
   ...connectorsEn,
   ...reviewedContextEn,
   ...homeEn,
+  ...guideEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
