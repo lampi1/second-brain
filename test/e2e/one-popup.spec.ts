@@ -6,7 +6,7 @@
 // stay); the queue window is then the one popup; a card goes the moment its request leaves (the chat stopped).
 // Screenshot: test-results/shots/one-popup-regia.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerState, shot } from './helpers';
+import { launchDemo, layerState, shot, goPage } from './helpers';
 
 type Demo = { __sbDemo: { ask(id: string, r: object): void; stop(id: string): Promise<void>; answers(): unknown[] } };
 const answers = (app: ElectronApplication) => app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.answers().length);
@@ -22,7 +22,7 @@ const askRegia = (app: ElectronApplication, q: string, a: string, b: string) => 
 
 test('one popup at a time: the Regia shows one card of her own, Esc puts it in the queue, a request that leaves takes its card away', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click(); // a page: the work chats' requests are on no tile, they would float
+  await goPage(page, 'costi'); // a page: the work chats' requests are on no tile, they would float
   await page.keyboard.press('Control+R'); // the Regia overlay
   const regia = page.getByTestId('tile-regia');
   const cards = page.locator('[data-request-key]');
@@ -79,7 +79,7 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
 
 test('Ctrl+J to a work chat\'s request moves the popup to the layer; the Regia asking meanwhile waits on "Poi:"', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await page.keyboard.press('Control+R');
   const regia = page.getByTestId('tile-regia');
   const cards = page.locator('[data-request-key]');

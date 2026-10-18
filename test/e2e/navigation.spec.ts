@@ -3,7 +3,7 @@
 // section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the Regia overlay on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot } from './helpers';
+import { launchDemo, layerPage, shot, windowShot, goPage } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
@@ -13,7 +13,7 @@ const SENTINEL = { kind: 'sync-blocked', title: 'Segnale di fine' };
 
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await event(app, { kind: 'chat-failed', title: 'Test e2e rossi', detail: 'il turno è finito con un errore', chatId: 'mappa' });
   const layer = await layerPage(app);
@@ -71,9 +71,9 @@ test('section badges count new events and clear when the section is visited', as
   const { app, page } = await launchDemo({ freeze: false });
   // Costi's badge is a warning mark, not a number (WARN_SECTIONS): it shows with a new budget event
   const badge = page.getByTestId('nav-badge-costi');
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect(badge).toHaveText('');
-  await page.getByTestId('nav-idee').click();
+  await goPage(page, 'idee');
   // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was; the budget event after it
   // shows Costi's mark, so the idea was handled by then
   const ideas = page.getByTestId('nav-badge-idee');
@@ -82,7 +82,7 @@ test('section badges count new events and clear when the section is visited', as
   await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
   await expect(badge).toHaveText('!');
   await expect(ideas).toHaveText(ideasBefore ?? '');
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await expect(badge).toHaveText('');
   await app.close();
@@ -127,8 +127,8 @@ test('the bell counts only what needs the user; the center keeps everything else
 
 test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
-  await page.getByTestId('nav-idee').click();
+  await goPage(page, 'costi');
+  await goPage(page, 'idee');
   await expect(page.getByTestId('page-idee')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-costi')).toBeVisible();
@@ -174,7 +174,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await page.getByTestId('chat-link-qa').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://home/chat-qa');
   const link = 'sb://workspace/chat-qa'; // a link copied before SPEC 19 still lands on the chat, in the Grindhouse
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(link);
@@ -183,7 +183,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
   // a page link from its frame
-  await page.getByTestId('nav-idee').click();
+  await goPage(page, 'idee');
   await page.getByTestId('page-copy-link').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://idee');
   await app.close();

@@ -58,7 +58,8 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
     expect(ix('nav-group-brain')).toBeLessThan(ix('nav-miglioramento'));
     expect(ix('nav-miglioramento')).toBeLessThan(ix('nav-group-app'));
-    expect(ix('nav-group-app')).toBeLessThan(ix('nav-migliora'));
+    expect(ix('nav-group-app')).toBeLessThan(ix('nav-skill'));
+    expect(ix('nav-migliora')).toBe(-1); // "Migliora l'app" lives in the top bar's "…" menu (more-improve) and G U
     await shot(page, 'menus-sidebar');
   } finally {
     await app.close();

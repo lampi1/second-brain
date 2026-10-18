@@ -3,7 +3,7 @@
 // pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
 // palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { demoLayout, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { demoLayout, expandChats, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
@@ -54,6 +54,7 @@ test('answering a tile panel with "1" resolves the request without opening the c
 
 test('a tile input: Enter sends, Shift+Enter is a new line, a busy chat queues the message', async () => {
   const { page, app } = await launchDemo();
+  await expandChats(page, 'mappa', 'fix'); // strips are collapsed (ADR 0068): the input shows once expanded
   const input = page.getByTestId('chat-input-mappa');
   await input.click();
   await expect(input).toBeFocused();
@@ -80,6 +81,7 @@ test('Ferma tutto asks to confirm when more than one chat runs, then stops them'
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('chat-state-fix')).toHaveAttribute('data-state', 'idle');
   await expect(page.getByTestId('chat-state-sms')).toHaveAttribute('data-state', 'idle');
+  await expandChats(page, 'fix');
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Interrotto da te');
   await expect(page.getByTestId('topbar-stopall')).toBeDisabled();
   await app.close();
@@ -172,6 +174,7 @@ test('Ctrl+N creates a chat: its tile appears with the first message and gets th
 
 test('the live demo streams text and finishes running tools', async () => {
   const { page, app } = await launchDemo({ freeze: false });
+  await expandChats(page, 'fix', 'sms');
   // the fix's running test finishes, then its next message streams in
   await expect(page.getByTestId('tool-fix-t4')).toHaveAttribute('data-status', 'ok', { timeout: 15_000 });
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Tutti verdi', { timeout: 10_000 });

@@ -5,7 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { demoLayout, launchDemo } from './helpers';
+import { demoLayout, expandChats, launchDemo } from './helpers';
 
 const OUT = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'usability');
 interface Step { what: string; kind: 'key' | 'type' | 'click' | 'check'; atMs: number }
@@ -98,7 +98,9 @@ test('Seguo un browser a schermo intero e torno', async () => {
   const s = new Scenario('Seguo un browser a schermo intero', page);
   await s.click('browser-max-tab-qa', '⤢ sul browser della QA');
   await s.check('il browser riempie lo spazio di lavoro', async () => {
-    await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(1000);
+    // ADR 0068: the Orchestrator column stays, so "full" is the agents' column, not the window
+    const col = await page.getByTestId('maximized').evaluate(e => e.getBoundingClientRect().width);
+    await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(col * 0.9);
   });
   await s.press('Escape', 'Esc: torno alla colonna degli agenti');
   await s.check('di nuovo la colonna degli agenti', async () => { await expect(page.getByTestId('tile-chat-qa')).toBeVisible(); });
@@ -108,6 +110,7 @@ test('Seguo un browser a schermo intero e torno', async () => {
 
 test('Torno alla Regia da qualsiasi punto', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'fix');
   await page.getByTestId('chat-input-fix').click();
   const s = new Scenario('Torno alla Regia', page);
   await s.press('Control+0', 'Ctrl+0: Regia');

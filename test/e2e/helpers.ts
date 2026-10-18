@@ -125,6 +125,15 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
+/** Opens a page by its G-letter shortcut (brain/index.tsx BRAIN_PAGES): the detail pages (Costi, Qualità, Idee…) have
+ *  no sidebar entry since the Grindhouse (ADR 0068), the shortcut and Ctrl+K still reach them. */
+const GO_KEY = { home: 'h', agenti: 'a', devops: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', procedure: 'l', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', migliora: 'u' } as const;
+export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press(GO_KEY[id]);
+}
+
 /** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
 export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
   await page.getByTestId('topbar-more').click();

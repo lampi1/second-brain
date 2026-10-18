@@ -11,7 +11,7 @@
 // on (no off button in the window: the user, 2026-10-16).
 // Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { __sbDemo: { answers(): { chatId: string }[]; stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: Demo['__sbDemo'], ...a: A) => void, ...a: A) =>
@@ -25,6 +25,7 @@ const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis
 test('a question carries its context: the turn\'s prose, the reasoning before it, web and file links', async () => {
   const { app, page } = await launchDemo();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip
+  await expandChats(page, 'qa'); // the transcript of a Grindhouse strip shows once open
   await demo(app, (d, id) => {
     d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md). La PR è https://dev.azure.com/o/proj/_git/app/pullrequest/27.');
     d.toolDone(id, 'Write', { file_path: 'C:\\progetti\\report\\tc16-screen.png' });
@@ -77,6 +78,7 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(page.getByTestId('qwin')).toHaveCount(0);
 
   // typing in a chat: a new question waits as a pill, the field keeps the keyboard and the text
+  await expandChats(page, 'fix');
   const field = page.getByTestId('chat-input-fix');
   await field.click();
   await page.keyboard.type('sto scri');
@@ -129,6 +131,7 @@ test('the questions window stays on: a question from the chat the user is in goe
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   const inline = page.locator('.tile-requests [data-request-key]');
   // the user is in the chat: its field has the keyboard
+  await expandChats(page, 'fix');
   await page.getByTestId('chat-input-fix').click();
   await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo con il commit?', ['Sì', 'No']));
   await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
@@ -142,6 +145,7 @@ test('the questions window stays on: a question from the chat the user is in goe
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   // the next question from the same chat goes to the window again: the switch is still on
+  await expandChats(page, 'fix');
   await page.getByTestId('chat-input-fix').click();
   await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Apro la PR?', ['Sì', 'No']));
   await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
@@ -160,6 +164,7 @@ test('the questions window: the first click on an option answers, even when the 
   await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await expandChats(page, 'fix');
   await page.getByTestId('chat-input-fix').click();
   await page.keyboard.type('una nota');
   await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo con il commit?', ['Sì, procedi', 'No, aspetta', 'Fammi vedere il diff']));
