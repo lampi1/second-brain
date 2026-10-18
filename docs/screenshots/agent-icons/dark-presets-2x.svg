@@ -1,0 +1,193 @@
+<!-- Approval artwork only; presets retain legacy symbols until approved. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1560" viewBox="0 0 590 780">
+<rect width="100%" height="100%" fill="#191a1f"/>
+<g font-family="Segoe UI, sans-serif" font-size="15" fill="#eceef3">
+<text x="24" y="30">Preset proposals · awaiting Brother approval</text>
+<g transform="translate(24 70)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g0" x2="1" y2="1">
+<stop stop-color="#a8caff"/>
+<stop offset="1" stop-color="#83b5f4"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g0)"/>
+<g color="#15202b">
+<path d="M11 9v11l3-3 3 1Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 5 3 10l5 5M16 5l5 5-3 3M11 9v11l3-3 3 1Z"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Implementer</text>
+</g>
+<g transform="translate(24 138)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g1" x2="1" y2="1">
+<stop stop-color="#d2baff"/>
+<stop offset="1" stop-color="#b89aee"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g1)"/>
+<g color="#15202b">
+<path d="M7 10l3 3 4-5-4 1Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M18 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0ZM16 16l5 5M7 10l3 3 4-5"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Reviewer</text>
+</g>
+<g transform="translate(24 206)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g2" x2="1" y2="1">
+<stop stop-color="#f6d18a"/>
+<stop offset="1" stop-color="#e9b65d"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g2)"/>
+<g color="#15202b">
+<path d="M8 9h8v7H8Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 9h8v7a4 4 0 0 1-8 0ZM9 9V7a3 3 0 0 1 6 0v2M4 12h4m8 0h4M4 17h4m8 0h4"/>
+<path d="M12 10v8M6 5l2 2m8 0 2-2M3 14h3m12 0h3"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Bug investigator</text>
+</g>
+<g transform="translate(24 274)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g3" x2="1" y2="1">
+<stop stop-color="#91dbca"/>
+<stop offset="1" stop-color="#68c5b2"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g3)"/>
+<g color="#15202b">
+<path d="M4 4h16v4H4ZM13 11v10l3-3 4-1Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M10 19H4V4h16v9M4 8h16M13 11v10l3-3 4-1Z"/>
+<path d="M7 6h1m3 0h1"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Browser tester</text>
+</g>
+<g transform="translate(24 342)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g4" x2="1" y2="1">
+<stop stop-color="#ffb5b4"/>
+<stop offset="1" stop-color="#ed9494"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g4)"/>
+<g color="#15202b">
+<path d="M4 4h16v4H4Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 4h16v16H4ZM4 12h4l2-4 3 8 2-4h5"/>
+<path d="M7 18h3"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Ops investigator</text>
+</g>
+<g transform="translate(24 410)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g5" x2="1" y2="1">
+<stop stop-color="#c6ceda"/>
+<stop offset="1" stop-color="#a8b6c8"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g5)"/>
+<g color="#15202b">
+<path d="M12 4v8l2-2 2 2V4Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M5 4h14v16H7a2 2 0 0 1-2-2ZM5 17h14M12 4v8l2-2 2 2V4"/>
+<path d="M8 7h1m-1 3h1"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Runbook keeper</text>
+</g>
+<g transform="translate(24 478)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g6" x2="1" y2="1">
+<stop stop-color="#91dbea"/>
+<stop offset="1" stop-color="#67c3d8"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g6)"/>
+<g color="#15202b">
+<path d="m16 7-2 7-4-4Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM16 7l-2 7-7 3 3-7Z"/>
+<path d="M12 3v2m0 14v2M3 12h2m14 0h2"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Researcher</text>
+</g>
+<g transform="translate(24 546)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g7" x2="1" y2="1">
+<stop stop-color="#f0b8dc"/>
+<stop offset="1" stop-color="#dd98c6"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g7)"/>
+<g color="#15202b">
+<path d="m8 8 9-4 3 3-4 9-1-7Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="m5 20 3-12 9-4 3 3-4 9ZM5 20l7-7M13 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Writer</text>
+</g>
+<g transform="translate(24 614)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g8" x2="1" y2="1">
+<stop stop-color="#c3c3ff"/>
+<stop offset="1" stop-color="#a7acef"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g8)"/>
+<g color="#15202b">
+<path d="M3 5l9 8 9-8ZM13 20l1-4 3 3Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M11 19H3V5h18v5M3 5l9 8 9-8M13 20l1-4 4-5 3 3-4 5Z"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Mail &amp; journal</text>
+</g>
+<g transform="translate(24 682)">
+<svg width="40" height="40" viewBox="0 0 24 24">
+<defs>
+<linearGradient id="g9" x2="1" y2="1">
+<stop stop-color="#b6dda2"/>
+<stop offset="1" stop-color="#91c57c"/>
+</linearGradient>
+</defs>
+<circle cx="12" cy="12" r="12" fill="url(#g9)"/>
+<g color="#15202b">
+<path d="M4 6h16v4H4ZM15 15a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="currentColor" opacity=".3"/>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 6h16v15H4ZM8 3v5m8-5v5M4 10h16M15 15a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+<path d="M12 11v1m0 6v1M8 15h1m6 0h1"/>
+</g>
+</g>
+</svg>
+<text x="64" y="26">Day planner</text>
+</g>
+</g>
+</svg>

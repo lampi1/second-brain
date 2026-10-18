@@ -1,5 +1,6 @@
 // Agent catalog and session identity contracts, shared by main, renderer and read-only discovery.
 import type { Effort, Harness } from './contract';
+import { ROLE_GLYPHS } from './agent-glyphs';
 
 /** Untrusted routing declarations. Never authorization, verified capability or executable configuration. */
 export interface AgentManifest {
@@ -12,7 +13,7 @@ export interface AgentManifest {
   successCriteria?: string[];
 }
 
-export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark', 'bug', 'eye', 'globe', 'server', 'mail', 'calendar', 'book', 'shield', 'wrench', 'check'] as const;
+export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark', 'bug', 'eye', 'globe', 'server', 'mail', 'calendar', 'book', 'shield', 'wrench', 'check', ...ROLE_GLYPHS] as const;
 export type AgentSymbol = (typeof AGENT_SYMBOLS)[number];
 export const AGENT_TONES = ['blue', 'violet', 'amber', 'teal', 'red', 'slate', 'cyan', 'pink', 'indigo', 'green'] as const;
 export type AgentTone = (typeof AGENT_TONES)[number];
