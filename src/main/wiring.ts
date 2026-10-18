@@ -19,13 +19,16 @@ import { SetupService } from './agents/setup';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
+import { AgentLifecycle } from './agents/lifecycle';
+import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
+import { lifecycleInput } from './agents/lifecycle-input';
 import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { EngineSweeper } from './chats/sweep';
-import { ChatManager } from './chats/manager';
+import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
@@ -522,6 +525,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
+  // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md): the "Da approvare" queue and the local daily suggestions
+  // ($0, no model, at most once a day after 18:00 while nothing works; off in the test suites). Left out on purpose until
+  // their inputs exist on main: the Orchestrator wake asking for run feedback (no agent_feedback tool records it yet,
+  // so each wake would spend the user's tokens on a request it cannot answer) and the trial evaluation (no classifier
+  // routing snapshot: unknown routing turns every open trial into a "revert" proposal after five runs).
+  const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false });
+  mountLifecycleApi(brain, createLifecycleApi(lifecycle, id => manager.runs.get(id)));
+  const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
+    && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
+  const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => {
+    try {
+      lifecycle.daily(lifecycleIdle(), () => {
+        const all = agents.list();
+        return lifecycleInput([...all.profiles, ...all.archived], manager.runs.list(), manager.list(), (id, v) => agents.history(id).find(x => x.version === v));
+      });
+    } catch (e) { log.warn('agents', 'daily agent suggestions failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
+  }, 10_000);
+  lifecycleTimer?.unref();
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
@@ -595,7 +616,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

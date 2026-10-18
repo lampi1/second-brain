@@ -33,6 +33,8 @@ import { AgentRunStore } from './agents/runs';
 import { aggregateAgentUsage } from './agents/analytics';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { ProgressService } from './agents/progress';
+import { AgentLifecycle } from './agents/lifecycle';
+import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
 import { ProposalBridge } from './improve/proposal-bridge';
 
 const demoCli = (version: string, account: string): CliStatus => ({ found: true, path: '(demo)', version, loggedIn: true, account });
@@ -65,6 +67,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.onSettingChange(c => { if (c.key.startsWith('devops.')) devops.schedule(); });
   devops.schedule();
   brain.serveApi('/api/quality', () => demoQuality());
+  // the agents' lifecycle queue, read only: no daily pass, no wake, no runs to give feedback on (e2e agent-lifecycle.spec.ts)
+  mountLifecycleApi(brain, createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, wake: () => false }), () => undefined));
   // the Procedure page: made-up procedure files read by the real scanner (masking included)
   const procDir = writeDemoProcedures(path.join(ctx.userData, 'demo-procedures'), now());
   const procedures = new Procedures(() => procDir);
