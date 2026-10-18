@@ -31,17 +31,33 @@ test('Settings connects, verifies, selects and disconnects projects with honest 
     await expect(github.getByRole('status')).toContainText('Accesso da completare'); await expect(project).toHaveCount(0);
   } finally { await app.close(); }
 });
-test('offline setup completion continues to connectors and can be skipped', async () => {
+test('the interview offers the connectors in place and a sign-in survives closing it', async () => {
   const { app, page } = await launchDemo();
   try {
-    await page.getByTestId('nav-agenti').click();
-    await page.getByTestId('agent-studio').getByRole('button', { name: 'Configura il tuo lavoro', exact: true }).click();
+    // a GitHub sign-in that stays open until the test ends it; a cancel would be recorded
+    await app.evaluate(({ ipcMain }) => {
+      const g = globalThis as unknown as { finishLogin?: () => void; cancelled?: boolean; loggedIn?: boolean };
+      const state = (): ConnectorState => ({ provider: 'github', status: g.loggedIn ? 'verified' : 'pending', account: g.loggedIn ? 'demo-user' : null, checkedAt: null, projects: [], selected: [], detail: '' });
+      for (const name of ['list', 'login', 'cancelLogin', 'probe']) ipcMain.removeHandler(`connectors:${name}`);
+      ipcMain.handle('connectors:probe', () => state());
+      ipcMain.handle('connectors:list', () => [state()]);
+      ipcMain.handle('connectors:login', () => new Promise<void>(resolve => { g.finishLogin = () => { g.loggedIn = true; resolve(); }; }));
+      ipcMain.handle('connectors:cancelLogin', () => { g.cancelled = true; });
+    });
+    await page.keyboard.press('Control+,');
+    await page.getByRole('button', { name: 'Configura il mio lavoro', exact: true }).click();
     const setup = page.getByTestId('first-interview');
-    for (let step = 0; step < 4; step++) await setup.getByRole('button', { name: 'Continua', exact: true }).click();
-    await page.getByTestId('setup-complete').click();
-    const connectors = page.getByTestId('connector-setup'); await expect(connectors).toBeVisible();
-    await expect(connectors.getByRole('heading', { name: 'Collega i tuoi strumenti', exact: true })).toBeVisible();
-    await shot(page, 'connectors-after-setup'); await connectors.getByRole('button', { name: 'Più tardi', exact: true }).click();
-    await expect(connectors).not.toBeVisible();
+    for (let step = 0; step < 2; step++) await setup.getByRole('button', { name: 'Continua', exact: true }).click();
+    const connectors = setup.getByTestId('app-connectors'); await expect(connectors).toBeVisible();
+    await shot(page, 'connectors-in-setup');
+    await connectors.getByRole('button', { name: 'Accedi a GitHub', exact: true }).click();
+    await setup.getByRole('button', { name: 'Salva e riprendi più tardi', exact: true }).click();
+    await expect(setup).not.toBeVisible();
+    expect(await app.evaluate(() => (globalThis as unknown as { cancelled?: boolean }).cancelled ?? false)).toBe(false);
+    await app.evaluate(() => (globalThis as unknown as { finishLogin?: () => void }).finishLogin?.());
+    // the sign-in ended in main on its own; Settings shows it at the next check
+    const github = page.getByTestId('app-connectors').getByRole('article', { name: 'GitHub', exact: true });
+    await github.getByRole('button', { name: 'Verifica accesso a GitHub', exact: true }).click();
+    await expect(github.getByRole('status')).toContainText('Collegato e verificato');
   } finally { await app.close(); }
 });

@@ -1,4 +1,5 @@
 // Explicit local first-run creation through the main-only picker/helper. Never configures hooks, accounts or trust.
+// Prefilled from the first interview's answers (initial), so name, role and language are not asked twice.
 import { Select } from './Select';
 import {useEffect,useRef,useState} from 'react';
 import type {BrainCreationCapability,CreatedBrain} from '@shared/brain-create';
@@ -8,10 +9,10 @@ import {toast} from '../store/ui';
 import {useAgents} from '../store/agents';
 import {memoryCreationMessage,validMemoryFolder} from '../lib/memory-creation';
 
-export function CreateMemory({onBusy}:{onBusy:(busy:boolean)=>void}){
+export function CreateMemory({onBusy,initial}:{onBusy:(busy:boolean)=>void;initial?:{name:string;role:string;language:string}}){
   const {catalog}=useAgents();
   const [capability,setCapability]=useState<BrainCreationCapability|null>(null),[problem,setProblem]=useState<string|null>(null);
-  const [name,setName]=useState(''),[role,setRole]=useState(''),[folderName,setFolderName]=useState('Il mio lavoro'),[language,setLanguage]=useState<'it'|'en'>('it'),[engine,setEngine]=useState('');
+  const [name,setName]=useState(initial?.name.trim()??''),[role,setRole]=useState(initial?.role.trim()??''),[folderName,setFolderName]=useState('Il mio lavoro'),[language,setLanguage]=useState<'it'|'en'>(/^en/i.test(initial?.language.trim()??'')?'en':'it'),[engine,setEngine]=useState('');
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState<string|null>(null),[created,setCreated]=useState<CreatedBrain|null>(null);
   const active=useRef(false),working=useRef(false),revision=useRef(0);
   const load=async()=>{
