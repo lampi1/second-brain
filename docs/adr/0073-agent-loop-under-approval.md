@@ -1,5 +1,5 @@
 <!-- Decision record for the agents' improvement loop: what runs by itself, what only proposes, and what costs tokens. -->
-# ADR 0072: The agents' improvement loop runs under the user's approval
+# ADR 0073: The agents' improvement loop runs under the user's approval
 
 Date: 2026-10-18
 

@@ -4,7 +4,7 @@ Title: feat(agents): the improvement loop runs end to end, always under the user
 
 ## What
 
-The agents' improvement loop now runs from run start to the user's decision (ADR 0072):
+The agents' improvement loop now runs from run start to the user's decision (ADR 0073):
 
 - **Run start**: `AgentRun.routing`, a routing snapshot taken by the local classifier (#40) just after start: score, rank,
   mode and, during a trial, whether the parent (baseline) version would also have ranked first (`parentWins`).
