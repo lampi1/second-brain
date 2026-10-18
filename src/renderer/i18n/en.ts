@@ -23,6 +23,7 @@ import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
+import { setupEn } from './areas/setup.en';
 
 export const en: Dict = {
   ...auditEn,
@@ -33,6 +34,7 @@ export const en: Dict = {
   ...costsEn,
   ...connectorsEn,
   ...reviewedContextEn,
+  ...setupEn,
   ...homeEn,
   ...guideEn,
   ...genuiRequestEn,

@@ -1,0 +1,134 @@
+/* The first-run setup wizard (components/FirstInterview.tsx, components/SetupEngines.tsx): one fixed-size modal with a
+   step rail on the left and the current step on the right, in the Dashboard's look (eyebrow, display titles, cards on
+   the shared tokens, light and dark). The modal keeps its size between steps so moving on never feels like a new
+   window; only the step body scrolls. Motion is off for reduced-motion users. Scoped under .sw / .modal-setup. */
+.modal.modal-setup { width: min(1000px, calc(100vw - 32px)); height: min(720px, calc(100vh - 48px)); max-height: none; }
+.modal.modal-setup-wait { height: auto; width: min(460px, calc(100vw - 32px)); }
+.sw-loading { padding: 26px 26px 22px; display: flex; flex-direction: column; gap: 16px; font-size: 13px; color: var(--text-2); }
+.sw-loading p { margin: 0; }
+.sw-loading-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.sw { display: grid; grid-template-columns: 236px minmax(0, 1fr); height: 100%; min-height: 0; }
+
+/* ---- step rail */
+.sw-rail { display: flex; flex-direction: column; gap: 22px; min-height: 0; overflow-y: auto; padding: 24px 16px 18px; background: linear-gradient(180deg, var(--surface-2), var(--surface)); border-right: 1px solid var(--border); }
+.sw-brand { padding: 0 8px; }
+.sw-eyebrow { font-size: 10px; letter-spacing: .16em; font-weight: 650; color: var(--text-3); }
+.sw-brand-title { margin: 8px 0 0; font: 600 17px/1.3 var(--font-display); letter-spacing: -.3px; color: var(--text); }
+.sw-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sw-steps li { position: relative; }
+.sw-steps li:not(:last-child)::after { content: ""; position: absolute; left: 21px; top: 31px; height: 10px; width: 1px; background: var(--border-2); pointer-events: none; }
+.sw-step { appearance: none; width: 100%; display: flex; align-items: center; gap: 11px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--r-s); background: transparent; color: var(--text-3); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.sw-step:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.sw-step:disabled { cursor: default; opacity: .55; }
+.sw-step:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sw-step-dot { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-3); background: var(--surface); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.sw-step.is-done { color: var(--text-2); }
+.sw-step.is-done .sw-step-dot { border-color: transparent; background: var(--green-bg); color: var(--green); }
+.sw-step.is-current { background: var(--blue-bg); border-color: var(--blue-line); color: var(--text); font-weight: 600; }
+.sw-step.is-current .sw-step-dot { border-color: transparent; background: var(--blue); color: var(--on-accent); }
+.sw-rail-note { margin: auto 0 0; padding: 0 8px; display: flex; gap: 8px; align-items: flex-start; font-size: 11px; line-height: 1.5; color: var(--text-3); }
+.sw-rail-note svg { flex: none; margin-top: 2px; }
+
+/* ---- current step */
+.sw-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.sw-head { display: flex; align-items: flex-start; gap: 16px; padding: 24px 28px 18px; border-bottom: 1px solid var(--border); }
+.sw-head-text { flex: 1; min-width: 0; }
+.sw-count { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 650; color: var(--blue); }
+.sw-head h2 { margin: 7px 0 6px; font: 600 24px/1.25 var(--font-display); letter-spacing: -.6px; color: var(--text); outline: none; }
+.sw-head h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+.sw-head p { margin: 0; max-width: 64ch; font-size: 13px; line-height: 1.6; color: var(--text-3); }
+.sw-later { flex: none; }
+.sw-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 26px; }
+.sw-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.sw-stack { display: flex; flex-direction: column; gap: 16px; animation: sw-in 220ms var(--ease) both; }
+.sw-foot { display: flex; align-items: center; gap: 8px; padding: 14px 28px; border-top: 1px solid var(--border); background: var(--bg-2); }
+.sw-saved { font-size: 11px; color: var(--text-3); }
+.sw :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---- shared pieces */
+.sw-card { margin: 0; display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); }
+.sw-card-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
+.sw-card-icon { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-s); background: var(--surface-3); color: var(--blue); }
+.sw-card-ok .sw-card-icon { background: var(--green-bg); color: var(--green); }
+.sw-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.sw-card-text p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+.sw code { font-family: var(--mono); font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.sw-group { display: flex; flex-direction: column; gap: 8px; }
+.sw-group h3 { margin: 0; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 650; color: var(--text-3); }
+.sw-row { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 12px; border: 1px solid var(--border); border-radius: var(--r-m); }
+.sw-row code { flex: 1; min-width: 0; }
+.sw-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.sw-known { margin: 0; padding: 12px 14px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); font-size: 13px; }
+.sw-choices { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sw-choices legend { padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 500; color: var(--text-2); }
+.sw-choice { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); cursor: pointer; font-size: 13px; transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
+.sw-choice:hover { border-color: var(--border-3); }
+.sw-choice:has(input:checked) { border-color: var(--blue-line); background: var(--blue-bg); }
+.sw-choice input { margin: 2px 0 0; accent-color: var(--blue); flex: none; }
+.sw-choice span { min-width: 0; }
+.sw-choice small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--text-3); }
+.sw-agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.sw-agent { align-items: center; }
+.sw-note { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sw-note svg { flex: none; margin-top: 1px; }
+.sw-hint { margin: 0; font-size: 12px; color: var(--text-3); }
+.sw-error { margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); border-radius: var(--r-m); background: var(--red-bg); color: var(--red); font-size: 12.5px; }
+.sw-field-error { color: var(--red); font-size: 12px; margin: 0; }
+
+/* ---- your AI */
+.sw-engine-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.sw-engine { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.sw-engine.is-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
+.sw-engine.is-waiting { border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
+.sw-engine-head { display: flex; align-items: center; gap: 10px; }
+.sw-engine-head .mark { flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--surface-3); }
+.sw-engine-name { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; font-size: 14px; }
+.sw-engine-account { margin: 0; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.sw-pill { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border-2); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.sw-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sw-pill-ok { color: var(--green); background: var(--green-bg); border-color: transparent; }
+.sw-pill-wait { color: var(--blue); background: var(--blue-bg); border-color: transparent; }
+.sw-pill-warn { color: var(--amber); background: var(--amber-bg); border-color: transparent; }
+.sw-pill-off { color: var(--text-3); }
+.sw-engine-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sw-callout { padding: 10px 12px; border: 1px solid var(--blue-line); border-radius: var(--r-m); background: var(--blue-bg); font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.sw-callout p { margin: 0; }
+.sw-callout p + p { margin-top: 6px; }
+.sw-callout-warn { display: flex; gap: 6px; align-items: flex-start; color: var(--amber) !important; }
+.sw-callout-warn svg { flex: none; margin-top: 2px; }
+.sw-engine-actions { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sw-check { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+.sw-check input { accent-color: var(--blue); margin: 0; }
+.sw-engines { display: flex; flex-direction: column; gap: 14px; animation: sw-in 220ms var(--ease) both; }
+.sw-engines-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* ---- tools: the shared connector screen, without its own title (the step has one); its look elsewhere is untouched */
+.sw-connectors .app-connectors > h2, .sw-connectors .app-connectors > h2 + p { display: none; }
+
+/* ---- summary */
+.sw-summary { margin: 0; border: 1px solid var(--border-2); border-radius: var(--r-l); overflow: hidden; background: var(--surface-2); }
+.sw-summary-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 10px 14px 10px 16px; border-bottom: 1px solid var(--border); }
+.sw-summary-row:last-child { border-bottom: 0; }
+.sw-summary dt { font-size: 12px; color: var(--text-3); }
+.sw-summary dd { margin: 0; font-size: 13px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sw-edit { appearance: none; border: 0; background: transparent; padding: 2px 6px; border-radius: var(--r-xs); color: var(--blue); font: inherit; font-size: 12px; cursor: pointer; }
+.sw-edit:hover:not(:disabled) { background: var(--blue-bg); }
+
+@keyframes sw-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sw-stack, .sw-engines { animation: none; } .sw-step, .sw-choice, .sw-engine { transition: none; } }
+
+/* ---- narrow windows: the rail becomes a row of numbered steps above the step */
+@media (max-width: 760px) {
+  .modal.modal-setup { height: calc(100vh - 24px); width: calc(100vw - 16px); }
+  .sw { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .sw-rail { flex-direction: row; align-items: center; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .sw-brand, .sw-rail-note { display: none; }
+  .sw-steps { flex-direction: row; }
+  .sw-steps li::after { display: none; }
+  .sw-step:not(.is-current) .sw-step-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .sw-head, .sw-body, .sw-foot { padding-left: 16px; padding-right: 16px; }
+  .sw-grid2, .sw-choices { grid-template-columns: 1fr; }
+  .sw-summary-row { grid-template-columns: 1fr auto; }
+  .sw-summary-row dd { grid-column: 1 / -1; grid-row: 2; }
+}

@@ -7,7 +7,6 @@ import type { OwnerProfile, ProfileFields } from '@shared/profile';
 import { PROFILE_FORBIDDEN, PROFILE_LIMITS, PROFILE_PLACEHOLDERS, REPLY_PRESETS } from '@shared/profile';
 import { workAreas } from './profile';
 
-export const INTERVIEW_STEPS = ['Chi sei', 'Il tuo lavoro', 'Come lavoriamo', 'I tuoi agenti', 'Riepilogo'] as const;
 const placeholder = (key: keyof typeof PROFILE_PLACEHOLDERS, value: string) => !value || (PROFILE_PLACEHOLDERS[key] as readonly string[]).includes(value);
 /** the owner's name is already known: the interview shows it instead of asking */
 export const knownName = (current: OwnerProfile | null) => !!current && !placeholder('name', current.name);
@@ -77,4 +76,3 @@ export function recommendedAgents(draft: SetupDraft, catalog: readonly AgentProf
   }));
   return catalog.filter(p => resolved.has(p.id)).map(p => p.id);
 }
-export function validSetupStep(step: number): number { return Math.max(0, Math.min(INTERVIEW_STEPS.length - 1, Number.isInteger(step) ? step : 0)); }

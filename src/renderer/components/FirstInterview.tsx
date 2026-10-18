@@ -1,44 +1,51 @@
-// First-run interview: offline, resumable, optional and private. Existing installations never get a forced wizard.
-// Only preference fields are saved; permission, trust, accounts and provider calls remain separate explicit actions.
-// Five steps, nothing asked twice: who you are (what me.md already knows is prefilled), your work areas, how we work
-// (reply style, GitHub/Jira sign-in in place), agents, summary. Confirm writes the answers into me.md through
-// 'profile:save' (lib/agent-setup.ts wizardProfile decides what); Settings → Il mio profilo edits them later.
-import { t as auditText } from '../i18n';
+// First-run setup: ONE modal wizard from start to finish (owner, 2026-10-18: "si rimanga sempre sulla stessa modale").
+// Seven steps, each with its own title: memory folder, your AI (sign-in in place: SetupEngines.tsx), tools (connectors),
+// about you, your work, starting agents, summary. Nothing inside it closes it or navigates away: a sign-in opens in its
+// own window and the step waits with a "Verifica"; the folder picker is the native dialog. It ends only through an
+// explicit button: "Più tardi" (or Esc: answers saved as a draft, it reopens on the same step), "Salta per ora", or the
+// confirmation; a click on the backdrop does nothing. Offline, resumable, optional and private: only preference fields are
+// saved (setup:save), the me.md answers through 'profile:save' on confirm (lib/agent-setup.ts wizardProfile decides
+// what), the brain is created on confirm only when none is connected (unchanged). Step flow: lib/setup-wizard.ts.
+// Mounted by App.tsx (FirstInterviewGate, modal 'setup'); opened by itself on a new or unfinished run, and from
+// Settings, the agent studio and the new-chat dialog.
+import { t } from '../i18n';
 import { Select } from './Select';
 import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import type { AgentCatalog, SetupDraft, SetupProfile, SetupState } from '@shared/agents';
 import type { OwnerProfile } from '@shared/profile';
 import { PROFILE_LIMITS } from '@shared/profile';
-import { INTERVIEW_STEPS, answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, recommendedAgents, validSetupStep, wizardLocked, wizardProfile } from '../lib/agent-setup';
+import { answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, recommendedAgents, wizardLocked, wizardProfile } from '../lib/agent-setup';
+import { LAST_STEP, SETUP_STEPS, canAdvance, canJump, clampStep, exitStatus, openingDraft, stepId, stepProblems, withEngine } from '../lib/setup-wizard';
+import type { SetupExit, SetupStepId } from '../lib/setup-wizard';
 import { profileError, workAreas } from '../lib/profile';
 import { refreshSetup, saveSetup, useAgents } from '../store/agents';
 import { closeModal, openModal, toast, ui } from '../store/ui';
 import { refreshInfo, useApp } from '../store/store';
 import { sb } from '../sb';
 import { AgentAvatar } from './AgentAvatar';
-import { AgentReadiness } from './AgentReadiness';
 import { CreateMemory } from './CreateMemory';
+import { SetupEngines } from './SetupEngines';
+import { IconArrowLeft, IconArrowRight, IconCheck, IconFolder, IconInfo, IconShield } from './Icons';
 import { Modal } from './ui';
-import '../styles/agent-studio.css';
-import { AiFirstGate } from '../../modules/ai-first/Gate';
-import { aiCopy } from '../../modules/ai-first/i18n';
-import { lang } from '../i18n';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
+import '../styles/setup-wizard.css';
+
+const ENGINE_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 
 export function FirstInterviewGate() {
   const { setup, catalog, error } = useAgents(), modal = ui.use(s => s.modal);
   const offered = useRef(false);
-  const [fallback, setFallback] = useState(false);
-  const [connectors, setConnectors] = useState(false);
   useEffect(() => {
     if (modal === 'setup') offered.current = true;
     if (!offered.current && setup && (setup.status === 'new' || setup.status === 'draft') && !modal) { offered.current = true; openModal('setup'); }
   }, [setup?.status, modal]);
   if (modal !== 'setup') return null;
-  if (connectors) return <Modal onClose={closeModal} label={auditText('audit.FirstInterview.connectYourTools')} testid="connector-setup"><div className="modal-body"><AppConnectorScreen onClose={() => { setConnectors(false); closeModal(); }}/></div></Modal>;
-  if (!setup) return <Modal onClose={closeModal} label={auditText('audit.FirstInterview.setUpYourWorkspace')} testid="first-interview"><div className="modal-body"><p role="status">{error ?? auditText('auditExpression.FirstInterview.text39')}</p>{error && <button type="button" className="btn" onClick={() => void refreshSetup()}>{auditText('audit.FirstInterview.retry')}</button>}<button type="button" className="btn btn-ghost" onClick={closeModal}>{auditText('audit.FirstInterview.close')}</button></div></Modal>;
-  if (!fallback && setup.preferences.guide && setup.preferences.guide.stage !== 'fallback') return <AiFirstGate setup={setup} onFallback={() => setFallback(true)} onConnected={() => setConnectors(true)}/>;
-  return <FirstInterview initial={setup} catalog={catalog} onConnectAi={async preferences => { await saveSetup({ ...preferences, guide: { stage: 'choosing' } }, 'draft'); setFallback(false); }}/>;
+  if (!setup) return <Modal onClose={closeModal} label={t('audit.FirstInterview.setUpYourWorkspace')} testid="first-interview" className="modal-setup modal-setup-wait">
+    <div className="sw-loading"><p role="status">{error ?? t('auditExpression.FirstInterview.text39')}</p>
+      <div className="sw-loading-actions">{error && <button type="button" className="btn btn-m btn-primary" onClick={() => void refreshSetup()}>{t('audit.FirstInterview.retry')}</button>}<button type="button" className="btn btn-m btn-ghost" onClick={closeModal}>{t('audit.FirstInterview.close')}</button></div></div>
+  </Modal>;
+  return <SetupWizard initial={setup} catalog={catalog}/>;
 }
 
 /** writes the interview's answers into me.md; a concurrent edit gets one retry on the fresh file. Returns whether it failed. */
@@ -54,12 +61,11 @@ async function saveProfile(draft: SetupDraft): Promise<boolean> {
   return true;
 }
 
-function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState; catalog: AgentCatalog | null; onConnectAi: (preferences: SetupDraft) => Promise<void> }) {
+function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: AgentCatalog | null }) {
   const enabledEngines = useApp(s => s.settings?.engineOn);
-  // a finished or skipped run starts over from what me.md says now: its old answers are never written again
-  const [draft, setDraft] = useState<SetupDraft>(() => { const resume = ['new', 'draft'].includes(initial.status); return { ...initial.preferences, engines: initial.preferences.engines ?? (resume ? [] : ['claude', 'codex', 'cursor'].filter(id => enabledEngines?.[id])), step: resume ? validSetupStep(initial.preferences.step) : 0, profile: resume ? initial.preferences.profile : undefined }; });
+  const [draft, setDraft] = useState<SetupDraft>(() => openingDraft(initial, enabledEngines));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
-  const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(initial.preferences.step >= 3);
+  const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(['new', 'draft'].includes(initial.status) && initial.preferences.step >= SETUP_STEPS.indexOf('agents'));
   const info = useApp(s => s.info);
   const [candidates, setCandidates] = useState<string[]>([]);
   useEffect(() => { void sb.invoke('app:brainCandidates', undefined).then(setCandidates, () => setCandidates([])); }, []);
@@ -75,82 +81,156 @@ function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState
   const answers = profileDraft(draft, current), inMeMd = profileDraft({ ...draft, profile: undefined }, current), problems = answerProblems(draft, current), locked = wizardLocked(current);
   const answer = (patch: Partial<SetupProfile>) => change({ profile: answerPatch(draft, patch) });
   const fixedStyle = !!current && (customReplyStyle(current) || locked.has('replyStyle'));
-  const blocked = (draft.step === 0 && !!(problems.name || problems.role || problems.language)) || (draft.step === 1 && !!problems.areas) || (draft.step === 4 && Object.keys(problems).length > 0);
-  const lockedNote = <small>{auditText('audit.FirstInterview.writtenManuallyInMeMdChange')}</small>;
-  const problem = (key: keyof typeof problems) => problems[key] && <small role="alert">{problems[key]}</small>;
+  const step = clampStep(draft.step), id = stepId(step), blocked = !canAdvance(step, problems);
+  const lockedNote = <small>{t('audit.FirstInterview.writtenManuallyInMeMdChange')}</small>;
+  const problem = (key: keyof typeof problems) => problems[key] && <small role="alert" className="sw-field-error">{problems[key]}</small>;
+  // autosave: every answer lands in the draft half a second later, so leaving in any way keeps it
   useEffect(() => {
     if (terminal.current || busy) return;
     let live = true;
-    const timer = setTimeout(() => { void saveSetup(draft, 'draft').then(() => { if (live) setSaved(true); }, () => { if (live) setError(auditText('cmp.interview.draftNotSaved')); }); }, 500);
+    const timer = setTimeout(() => { void saveSetup(draft, 'draft').then(() => { if (live) setSaved(true); }, () => { if (live) setError(t('cmp.interview.draftNotSaved')); }); }, 500);
     return () => { live = false; clearTimeout(timer); };
   }, [draft, busy]);
-  const saveAndClose = async (status: 'draft' | 'completed' | 'skipped') => {
+  // each step announces itself: focus moves to its title, on opening too (the Modal then leaves the focus where it is)
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [step]);
+  const exit = async (how: SetupExit) => {
     if (saving.current || busy) return;
     saving.current = true; terminal.current = true; setBusy(true); setError(null);
     try {
-      if (status === 'completed') {
+      if (how === 'finish') {
         const latest = await sb.invoke('app:info', undefined);
         if (!latest.brainRoot) {
           const created = await sb.invoke('app:createBrain', { automatic: true, name: answers.name, role: answers.role, language: /^en/i.test(answers.language) ? 'en' : 'it', harness: draft.engines?.[0] ?? 'none', folderName: 'memory' });
-          if (!created?.connected) throw new Error('Memoria non collegata');
+          if (!created?.connected) throw new Error('memory not connected');
           await refreshInfo();
         }
-        if (draft.engines) await sb.invoke('settings:set', { engineOn: Object.fromEntries(['claude', 'codex', 'cursor'].map(id => [id, draft.engines!.includes(id)])) });
+        if (draft.engines) await sb.invoke('settings:set', { engineOn: Object.fromEntries(['claude', 'codex', 'cursor'].map(e => [e, draft.engines!.includes(e)])) });
         if (await saveProfile(draft)) {
-          if (!latest.brainRoot) throw new Error('Profilo non salvato');
-          toast(auditText('cmp.interview.profileNotWritable'), 'info');
+          if (!latest.brainRoot) throw new Error('profile not saved');
+          toast(t('cmp.interview.profileNotWritable'), 'info');
         }
       }
-      await saveSetup(draft, status);
+      await saveSetup(draft, exitStatus(how));
       if (ui.get().modal === 'setup') closeModal();
     }
-    catch { terminal.current = false; setError(auditText('cmp.interview.saveFailed')); }
+    catch { terminal.current = false; setError(t('cmp.interview.saveFailed')); }
     finally { saving.current = false; setBusy(false); }
   };
-  const next = () => {
-    if (draft.step === 2 && !suggestionsMade.current) { suggestionsMade.current = true; change({ step: 3, agentIds: recommendedAgents(draft, catalog?.profiles ?? []) }); }
-    else change({ step: validSetupStep(draft.step + 1) });
+  const goTo = (target: number) => {
+    const to = clampStep(target);
+    if (busy || !canJump(step, to, problems)) return;
+    // the first time the agents step opens, it proposes a team from the answers (editable)
+    if (to >= SETUP_STEPS.indexOf('agents') && !suggestionsMade.current) { suggestionsMade.current = true; change({ step: to, agentIds: recommendedAgents(draft, catalog?.profiles ?? []) }); }
+    else change({ step: to });
   };
+  const submit = (e: FormEvent) => { e.preventDefault(); if (busy || blocked) return; if (step < LAST_STEP) goTo(step + 1); else void exit('finish'); };
   const pickBrain = async () => {
     setBusy(true); setError(null);
     try { await sb.invoke('app:pickBrain', undefined); await refreshInfo(); }
-    catch { setError(auditText('cmp.interview.pickFailed')); }
+    catch { setError(t('cmp.interview.pickFailed')); }
+    finally { setBusy(false); }
+  };
+  const useCandidate = async (root: string) => {
+    setBusy(true); setError(null);
+    try { await sb.invoke('settings:set', { brainRoot: root }); await refreshInfo(); }
+    catch { setError(t('cmp.interview.folderNotLinked')); }
     finally { setBusy(false); }
   };
   const selected = catalog?.profiles.filter(p => draft.agentIds.includes(p.id)) ?? [];
-  const connectAi = async () => {
-    if (busy) return;
-    terminal.current = true; setBusy(true);
-    try { await onConnectAi(draft); }
-    catch { terminal.current = false; setBusy(false); setError(auditText('cmp.interview.configNotSaved')); }
-  };
-  return <Modal onClose={() => void saveAndClose('draft')} label={auditText('audit.FirstInterview.setUpYourWorkspace')} testid="first-interview" className="modal-interview">
-    <div className="modal-head"><h2>{auditText('audit.FirstInterview.makeRoomForYourWork')}</h2><span className="sp" /><small>{auditText('audit.FirstInterview.step')}{' '}{draft.step + 1}{' '}{auditText('audit.FirstInterview.of')}{' '}{INTERVIEW_STEPS.length}</small></div>
-    <div className="modal-body"><fieldset disabled={busy} className="agent-editor-fields">
-      <button type="button" className="btn" onClick={() => void connectAi()}>{aiCopy[lang()].title}</button>
-      <p>{auditText('audit.FirstInterview.yourAnswersStayOnThisComputer')}</p>
-      <ol className="interview-steps" aria-label={auditText('audit.FirstInterview.setupSteps')}>{INTERVIEW_STEPS.map((step, i) => <li key={step} aria-current={i === draft.step ? 'step' : undefined}>{auditText(`cmp.interview.step.${step}` as const)}</li>)}</ol>
-      {draft.step === 0 && <>
-        {knownName(current) ? <p data-testid="setup-known-name">{auditText('audit.FirstInterview.hello')}{' '}<b>{current!.name}</b>{auditText('audit.FirstInterview.letSCompleteTheRest')}</p>
-          : <label className="field"><span>{auditText('audit.FirstInterview.whatIsYourName')}</span><input value={answers.name} maxLength={PROFILE_LIMITS.name} onChange={e => answer({ name: e.target.value })} disabled={locked.has('name')} data-testid="setup-name"/>{locked.has('name') ? lockedNote : <small>{auditText('audit.FirstInterview.agentsWillCallYouThis')}</small>}{problem('name')}</label>}
-        <label className="field"><span>{auditText('audit.FirstInterview.yourRoleInOneLine')}</span><input value={answers.role} maxLength={PROFILE_LIMITS.role} onChange={e => answer({ role: e.target.value })} disabled={locked.has('role')} placeholder={auditText('audit.FirstInterview.forExampleBackendDeveloperProductManager')} data-testid="setup-role"/>{locked.has('role') && lockedNote}{problem('role')}</label>
-        <label className="field"><span>{auditText('audit.FirstInterview.chatLanguage')}</span><input value={answers.language} maxLength={PROFILE_LIMITS.language} list="setup-languages" onChange={e => answer({ language: e.target.value })} disabled={locked.has('language')} data-testid="setup-language"/><datalist id="setup-languages"><option value="italiano"/><option value="English"/></datalist>{locked.has('language') && lockedNote}{problem('language')}</label>
-      </>}
-      {draft.step === 0 && <fieldset><legend>{auditText('audit.FirstInterview.howDoYouUsuallyWork')}</legend>{([
-        ['employee', auditText('cmp.interview.work.employee'), auditText('cmp.interview.work.employeeHint')], ['independent', auditText('cmp.interview.work.independent'), auditText('cmp.interview.work.independentHint')], ['other', auditText('cmp.interview.work.other'), auditText('cmp.interview.work.otherHint')], ['', auditText('cmp.interview.work.later'), auditText('cmp.interview.work.laterHint')],
-      ] as const).map(([work, name, hint]) => <label key={work} className="interview-choice"><input type="radio" name="work" checked={draft.work === work} onChange={() => change({ work })} /><span><b>{name}</b><small>{hint}</small></span></label>)}</fieldset>}
-      {draft.step === 1 && <label className="field"><span>{auditText('audit.FirstInterview.yourWorkAreas')}</span><textarea rows={4} value={answers.areas} maxLength={2000} onChange={e => answer({ areas: e.target.value })} disabled={locked.has('mainWork')} placeholder={auditText('auditExpression.FirstInterview.text40')} data-testid="setup-areas"/>{locked.has('mainWork') ? lockedNote : <small>{auditText('audit.FirstInterview.projectsClientsOrTopicsYouFollow')}</small>}{problem('areas')}</label>}
-      {draft.step === 1 && <label className="field"><span>{auditText('audit.FirstInterview.whatWouldHelpYouOverThe')}</span><textarea rows={5} maxLength={2000} value={draft.goals} onChange={e => change({ goals: e.target.value })} placeholder={draft.work === 'independent' ? auditText('auditExpression.FirstInterview.text41') : auditText('auditExpression.FirstInterview.text42')} data-testid="setup-goals" /><small>{auditText('audit.FirstInterview.describeUsefulOutcomesDetailsCanCome')}</small></label>}
-      {draft.step === 2 && <><label className="field"><span>{auditText('audit.FirstInterview.whichToolsAndMaterialsDoYou')}</span><textarea rows={4} maxLength={2000} value={draft.tools} onChange={e => change({ tools: e.target.value })} placeholder={auditText('audit.FirstInterview.documentsSpreadsheetsAppsSitesOrFolders')} data-testid="setup-tools" /><small>{auditText('audit.FirstInterview.optionalNoAccountsAreConnectedAnd')}</small></label><label className="field"><span>{auditText('audit.FirstInterview.howDoYouPreferResponses')}</span><Select value={answers.style} disabled={fixedStyle} onChange={e => { const style = e.target.value === 'concise' ? 'concise' : e.target.value === 'detailed' ? 'detailed' : 'balanced'; change({ style, profile: answerPatch(draft, { style }) }); }} data-testid="setup-style"><option value="balanced">{auditText('audit.FirstInterview.clearWithUsefulDetail')}</option><option value="concise">{auditText('audit.FirstInterview.shortAndDirect')}</option><option value="detailed">{auditText('audit.FirstInterview.thoroughAndExplained')}</option></Select>{fixedStyle && <small>{auditText('audit.FirstInterview.youAlreadyHaveYourOwnStyle')}</small>}</label><AppConnectorScreen/></>}
-      {draft.step === 3 && <><h3>{auditText('audit.FirstInterview.aStartingTeamYouCanChange')}</h3><p>{auditText('audit.FirstInterview.selectTheAgentsYouWantAs')}</p>{catalog?.profiles.map(p => <label key={p.id} className="interview-choice"><input type="checkbox" checked={draft.agentIds.includes(p.id)} onChange={e => change({ agentIds: e.target.checked ? [...draft.agentIds, p.id] : draft.agentIds.filter(id => id !== p.id) })} /><AgentAvatar avatar={p.avatar} name={p.name} /><span><b>{p.name}</b><small>{p.purpose}</small></span></label>)}{!catalog?.profiles.length && <p role="status">{auditText('audit.FirstInterview.theCatalogueIsNotAvailableYet')}</p>}</>}
-      {draft.step === 4 && <><h3>{auditText('audit.FirstInterview.yourConfiguration')}</h3><dl className="setup-summary"><dt>{auditText('audit.FirstInterview.name')}</dt><dd>{knownName(current) ? current!.name : answers.name.trim() || auditText('cmp.interview.toBeGiven')}</dd><dt>{auditText('audit.FirstInterview.role')}</dt><dd>{answers.role.trim() || inMeMd.role || auditText('auditExpression.FirstInterview.text46')}</dd><dt>{auditText('audit.FirstInterview.chatLanguage')}</dt><dd>{answers.language.trim() || inMeMd.language || auditText('auditExpression.FirstInterview.text46')}</dd><dt>{auditText('audit.FirstInterview.workAreas')}</dt><dd>{(workAreas(answers.areas).length ? workAreas(answers.areas) : workAreas(inMeMd.areas)).join(', ') || auditText('auditExpression.FirstInterview.text46')}</dd><dt>{auditText('audit.FirstInterview.context')}</dt><dd>{draft.work === 'employee' ? auditText('auditExpression.FirstInterview.text43') : draft.work === 'independent' ? auditText('auditExpression.FirstInterview.text44') : draft.work === 'other' ? auditText('auditExpression.FirstInterview.text45') : auditText('auditExpression.FirstInterview.text46')}</dd><dt>{auditText('audit.FirstInterview.goals')}</dt><dd>{draft.goals || auditText('cmp.interview.toDefine')}</dd><dt>{auditText('audit.FirstInterview.toolsAndMaterials')}</dt><dd>{draft.tools || auditText('cmp.interview.chooseWhenNeeded')}</dd><dt>{auditText('audit.FirstInterview.favouriteAgents')}</dt><dd>{selected.map(p => p.name).join(', ') || auditText('cmp.interview.chooseLater')}</dd><dt>{auditText('audit.FirstInterview.workMemory')}</dt><dd>{info?.brainRoot ? auditText('auditExpression.FirstInterview.text47') : auditText('auditExpression.FirstInterview.text48')}</dd></dl><button type="button" className="btn btn-ghost" onClick={() => void pickBrain()} disabled={busy}>{info?.brainRoot ? auditText('auditExpression.FirstInterview.text49') : auditText('auditExpression.FirstInterview.text50')}</button><h4>{auditText('audit.FirstInterview.detectedAvailability')}</h4>{catalog?.models.map(e => <AgentReadiness key={e.engine} choice={e} />)}<p>{auditText('audit.FirstInterview.setupDoesNotChangePermissionsOr')}</p></>}
-      {draft.step === 3 && <fieldset><legend>{auditText('audit.FirstInterview.whichEnginesDoYouWantTo')}</legend>{[['claude', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor']].map(([id, label]) => <label key={id} className="interview-choice"><input type="checkbox" checked={draft.engines?.includes(id!) ?? false} onChange={e => change({ engines: e.target.checked ? [...(draft.engines ?? []), id!] : (draft.engines ?? []).filter(engine => engine !== id) })}/><span>{label}</span></label>)}<small>{auditText('audit.FirstInterview.youCanChooseSeveralEnginesOr')}</small></fieldset>}
-      {draft.step === 4 && !info?.brainRoot && <section><h4>{auditText('audit.FirstInterview.yourWorkMemory')}</h4><p>{auditText('audit.FirstInterview.onConfirmationWeWillCreateA')}</p>{candidates.map(root => <button key={root} type="button" className="btn" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { await sb.invoke('settings:set', { brainRoot: root }); await refreshInfo(); } catch { setError(auditText('cmp.interview.folderNotLinked')); } finally { setBusy(false); } }}>{auditText('audit.FirstInterview.useTheOneFoundAt')}{' '}{root}</button>)}</section>}
-      {draft.step===4&&<CreateMemory onBusy={setBusy} initial={answers}/>}
-      {draft.step === 4 && Object.values(problems).map(message => <p key={message} role="alert">{message}{' '}{auditText('audit.FirstInterview.goBackToCorrectIt')}</p>)}
-      {draft.step === 4 && <p>{auditText('audit.FirstInterview.onConfirmationYourNameRoleLanguage')}</p>}
-      {error && <p role="alert">{error}</p>}<small role="status">{busy ? auditText('auditExpression.FirstInterview.text51') : saved ? auditText('auditExpression.FirstInterview.text52') : auditText('auditExpression.FirstInterview.text53')}</small>
-    </fieldset></div>
-    <div className="modal-foot"><button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void saveAndClose('skipped')}>{auditText('audit.FirstInterview.skipForNow')}</button><button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void saveAndClose('draft')}>{auditText('audit.FirstInterview.saveAndResumeLater')}</button><span className="sp" />{draft.step > 0 && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => change({ step: draft.step - 1 })}>{auditText('audit.FirstInterview.back')}</button>}{draft.step < 4 ? <button type="button" className="btn btn-primary" disabled={busy || blocked} onClick={next}>{auditText('audit.FirstInterview.continue')}</button> : <button type="button" className="btn btn-primary" disabled={busy || blocked} onClick={() => void saveAndClose('completed')} data-testid="setup-complete">{auditText('audit.FirstInterview.confirmMyWorkspace')}</button>}</div>
+  const brainReady = !!info?.brainRoot && !info.brainProblem;
+  const stepLabel = (s: SetupStepId) => t(`setup.step.${s}`);
+  const row = (label: string, value: ReactNode, at: SetupStepId) => <div className="sw-summary-row"><dt>{label}</dt><dd>{value}</dd><button type="button" className="sw-edit" aria-label={t('setup.done.editAria', { step: stepLabel(at) })} onClick={() => goTo(SETUP_STEPS.indexOf(at))}>{t('setup.done.edit')}</button></div>;
+
+  return <Modal onClose={() => void exit('later')} backdropCloses={false} label={t('audit.FirstInterview.setUpYourWorkspace')} testid="first-interview" className="modal-setup">
+    <div className="sw" data-step={id}>
+      <aside className="sw-rail">
+        <div className="sw-brand"><span className="sw-eyebrow">{t('setup.eyebrow')}</span><p className="sw-brand-title">{t('setup.title')}</p></div>
+        <ol className="sw-steps" aria-label={t('setup.steps')}>{SETUP_STEPS.map((s, i) => {
+          const done = i < step;
+          return <li key={s}><button type="button" className={`sw-step${done ? ' is-done' : ''}${i === step ? ' is-current' : ''}`} aria-current={i === step ? 'step' : undefined} disabled={busy || !canJump(step, i, problems)} onClick={() => goTo(i)} data-testid={`setup-step-${s}`}>
+            <span className="sw-step-dot" aria-hidden="true">{done ? <IconCheck size={12}/> : i + 1}</span><span className="sw-step-label">{stepLabel(s)}</span>
+          </button></li>;
+        })}</ol>
+        <p className="sw-rail-note"><IconShield size={14}/><span>{t('setup.privacy')}</span></p>
+      </aside>
+      <section className="sw-main">
+        <header className="sw-head">
+          <div className="sw-head-text">
+            <span className="sw-count">{t('setup.stepOf', { n: step + 1, total: SETUP_STEPS.length })}</span>
+            <h2 ref={heading} tabIndex={-1} id="sw-title">{t(`setup.head.${id}`)}</h2>
+            <p>{t(`setup.lead.${id}`)}</p>
+          </div>
+          <button type="button" className="btn btn-m btn-ghost sw-later" disabled={busy} data-tip={t('setup.laterTip')} onClick={() => void exit('later')} data-testid="setup-later">{t('setup.later')}</button>
+        </header>
+        <form className="sw-body" onSubmit={submit} aria-labelledby="sw-title" noValidate>
+          <fieldset disabled={busy} className="sw-fields">
+            {id === 'memory' && <div className="sw-stack" data-testid="setup-memory">
+              {brainReady
+                ? <div className="sw-card sw-card-ok"><span className="sw-card-icon"><IconCheck size={16}/></span><div className="sw-card-text"><b>{t('setup.memory.connected')}</b><code>{info!.brainRoot}</code></div><button type="button" className="btn btn-m btn-ghost" onClick={() => void pickBrain()}>{t('setup.memory.change')}</button></div>
+                : <div className="sw-card"><span className="sw-card-icon"><IconFolder size={16}/></span><div className="sw-card-text"><b>{t('setup.memory.none')}</b><p>{info?.brainProblem ? t('setup.memory.problem', { problem: info.brainProblem }) : t('setup.memory.noneHint')}</p></div><button type="button" className="btn btn-m btn-ghost" onClick={() => void pickBrain()}>{t('setup.memory.pick')}</button></div>}
+              {!brainReady && candidates.length > 0 && <div className="sw-group"><h3>{t('setup.memory.found')}</h3>{candidates.map(root => <div key={root} className="sw-row"><code>{root}</code><button type="button" className="btn btn-m btn-ghost" aria-label={`${t('audit.FirstInterview.useTheOneFoundAt')} ${root}`} onClick={() => void useCandidate(root)}>{t('setup.memory.use')}</button></div>)}</div>}
+              <CreateMemory onBusy={setBusy} initial={answers}/>
+            </div>}
+            {id === 'ai' && <SetupEngines engines={draft.engines ?? []} onUse={(engine, on) => { setDraft(d => ({ ...d, engines: withEngine(d.engines, engine, on) })); setSaved(false); }}/>}
+            {id === 'tools' && <div className="sw-stack">
+              <label className="field"><span>{t('audit.FirstInterview.whichToolsAndMaterialsDoYou')}</span><textarea rows={3} maxLength={2000} value={draft.tools} onChange={e => change({ tools: e.target.value })} placeholder={t('audit.FirstInterview.documentsSpreadsheetsAppsSitesOrFolders')} data-testid="setup-tools"/><small>{t('audit.FirstInterview.optionalNoAccountsAreConnectedAnd')}</small></label>
+              <div className="sw-connectors"><AppConnectorScreen/></div>
+            </div>}
+            {id === 'you' && <div className="sw-stack">
+              {knownName(current)
+                ? <p className="sw-known" data-testid="setup-known-name">{t('audit.FirstInterview.hello')}{' '}<b>{current!.name}</b>{t('audit.FirstInterview.letSCompleteTheRest')}</p>
+                : <label className="field"><span>{t('audit.FirstInterview.whatIsYourName')}</span><input value={answers.name} maxLength={PROFILE_LIMITS.name} onChange={e => answer({ name: e.target.value })} disabled={locked.has('name')} data-testid="setup-name" aria-invalid={!!problems.name}/>{locked.has('name') ? lockedNote : <small>{t('audit.FirstInterview.agentsWillCallYouThis')}</small>}{problem('name')}</label>}
+              <div className="sw-grid2">
+                <label className="field"><span>{t('audit.FirstInterview.yourRoleInOneLine')}</span><input value={answers.role} maxLength={PROFILE_LIMITS.role} onChange={e => answer({ role: e.target.value })} disabled={locked.has('role')} placeholder={t('audit.FirstInterview.forExampleBackendDeveloperProductManager')} data-testid="setup-role" aria-invalid={!!problems.role}/>{locked.has('role') && lockedNote}{problem('role')}</label>
+                <label className="field"><span>{t('audit.FirstInterview.chatLanguage')}</span><input value={answers.language} maxLength={PROFILE_LIMITS.language} list="setup-languages" onChange={e => answer({ language: e.target.value })} disabled={locked.has('language')} data-testid="setup-language" aria-invalid={!!problems.language}/><datalist id="setup-languages"><option value="italiano"/><option value="English"/></datalist>{locked.has('language') && lockedNote}{problem('language')}</label>
+              </div>
+              <fieldset className="sw-choices"><legend>{t('audit.FirstInterview.howDoYouUsuallyWork')}</legend>{([
+                ['employee', t('cmp.interview.work.employee'), t('cmp.interview.work.employeeHint')], ['independent', t('cmp.interview.work.independent'), t('cmp.interview.work.independentHint')], ['other', t('cmp.interview.work.other'), t('cmp.interview.work.otherHint')], ['', t('cmp.interview.work.later'), t('cmp.interview.work.laterHint')],
+              ] as const).map(([work, name, hint]) => <label key={work} className="sw-choice"><input type="radio" name="work" checked={draft.work === work} onChange={() => change({ work })}/><span><b>{name}</b><small>{hint}</small></span></label>)}</fieldset>
+            </div>}
+            {id === 'work' && <div className="sw-stack">
+              <label className="field"><span>{t('audit.FirstInterview.yourWorkAreas')}</span><textarea rows={4} value={answers.areas} maxLength={2000} onChange={e => answer({ areas: e.target.value })} disabled={locked.has('mainWork')} placeholder={t('auditExpression.FirstInterview.text40')} data-testid="setup-areas" aria-invalid={!!problems.areas}/>{locked.has('mainWork') ? lockedNote : <small>{t('audit.FirstInterview.projectsClientsOrTopicsYouFollow')}</small>}{problem('areas')}</label>
+              <label className="field"><span>{t('audit.FirstInterview.whatWouldHelpYouOverThe')}</span><textarea rows={3} maxLength={2000} value={draft.goals} onChange={e => change({ goals: e.target.value })} placeholder={draft.work === 'independent' ? t('auditExpression.FirstInterview.text41') : t('auditExpression.FirstInterview.text42')} data-testid="setup-goals"/><small>{t('audit.FirstInterview.describeUsefulOutcomesDetailsCanCome')}</small></label>
+              <label className="field"><span>{t('audit.FirstInterview.howDoYouPreferResponses')}</span><Select value={answers.style} disabled={fixedStyle} onChange={e => { const style = e.target.value === 'concise' ? 'concise' : e.target.value === 'detailed' ? 'detailed' : 'balanced'; change({ style, profile: answerPatch(draft, { style }) }); }} data-testid="setup-style"><option value="balanced">{t('audit.FirstInterview.clearWithUsefulDetail')}</option><option value="concise">{t('audit.FirstInterview.shortAndDirect')}</option><option value="detailed">{t('audit.FirstInterview.thoroughAndExplained')}</option></Select>{fixedStyle && <small>{t('audit.FirstInterview.youAlreadyHaveYourOwnStyle')}</small>}</label>
+            </div>}
+            {id === 'agents' && <div className="sw-stack">
+              {catalog?.profiles.length
+                ? <div className="sw-agent-grid">{catalog.profiles.map(p => <label key={p.id} className="sw-choice sw-agent"><input type="checkbox" checked={draft.agentIds.includes(p.id)} onChange={e => change({ agentIds: e.target.checked ? [...draft.agentIds, p.id] : draft.agentIds.filter(a => a !== p.id) })}/><AgentAvatar avatar={p.avatar} name={p.name}/><span><b>{p.name}</b><small>{p.purpose}</small></span></label>)}</div>
+                : <div className="sw-card" role="status"><span className="sw-card-icon"><IconInfo size={16}/></span><div className="sw-card-text"><p>{t('audit.FirstInterview.theCatalogueIsNotAvailableYet')}</p></div></div>}
+            </div>}
+            {id === 'done' && <div className="sw-stack">
+              <dl className="sw-summary">
+                {row(t('setup.step.memory'), brainReady ? <code>{info!.brainRoot}</code> : t('setup.done.memoryNew'), 'memory')}
+                {row(t('setup.done.engines'), (draft.engines ?? []).map(e => ENGINE_NAMES[e] ?? e).join(', ') || t('setup.done.noEngines'), 'ai')}
+                {row(t('audit.FirstInterview.toolsAndMaterials'), draft.tools || t('cmp.interview.chooseWhenNeeded'), 'tools')}
+                {row(t('audit.FirstInterview.name'), knownName(current) ? current!.name : answers.name.trim() || t('cmp.interview.toBeGiven'), 'you')}
+                {row(t('audit.FirstInterview.role'), answers.role.trim() || inMeMd.role || t('auditExpression.FirstInterview.text46'), 'you')}
+                {row(t('audit.FirstInterview.chatLanguage'), answers.language.trim() || inMeMd.language || t('auditExpression.FirstInterview.text46'), 'you')}
+                {row(t('audit.FirstInterview.context'), draft.work === 'employee' ? t('auditExpression.FirstInterview.text43') : draft.work === 'independent' ? t('auditExpression.FirstInterview.text44') : draft.work === 'other' ? t('auditExpression.FirstInterview.text45') : t('auditExpression.FirstInterview.text46'), 'you')}
+                {row(t('audit.FirstInterview.workAreas'), (workAreas(answers.areas).length ? workAreas(answers.areas) : workAreas(inMeMd.areas)).join(', ') || t('auditExpression.FirstInterview.text46'), 'work')}
+                {row(t('audit.FirstInterview.goals'), draft.goals || t('cmp.interview.toDefine'), 'work')}
+                {row(t('audit.FirstInterview.favouriteAgents'), selected.map(p => p.name).join(', ') || t('cmp.interview.chooseLater'), 'agents')}
+              </dl>
+              {stepProblems(step, problems).map(message => <p key={message} role="alert" className="sw-field-error">{message}{' '}{t('audit.FirstInterview.goBackToCorrectIt')}</p>)}
+              <p className="sw-note"><IconInfo size={15}/><span>{t('audit.FirstInterview.onConfirmationYourNameRoleLanguage')}</span></p>
+              <p className="sw-note"><IconShield size={15}/><span>{t('audit.FirstInterview.setupDoesNotChangePermissionsOr')}</span></p>
+            </div>}
+            {error && <p role="alert" className="sw-error">{error}</p>}
+          </fieldset>
+          {/* Enter in a one-line answer moves on, like Continua */}
+          <button type="submit" hidden tabIndex={-1}/>
+        </form>
+        <footer className="sw-foot">
+          <button type="button" className="btn btn-m btn-subtle" disabled={busy} onClick={() => void exit('skip')}>{t('audit.FirstInterview.skipForNow')}</button>
+          <small className="sw-saved" role="status">{busy ? t('auditExpression.FirstInterview.text51') : saved ? t('auditExpression.FirstInterview.text52') : ''}</small>
+          <span className="sp"/>
+          {step > 0 && <button type="button" className="btn btn-m btn-ghost" disabled={busy} onClick={() => goTo(step - 1)}><IconArrowLeft size={14}/>{t('audit.FirstInterview.back')}</button>}
+          {step < LAST_STEP
+            ? <button type="button" className="btn btn-m btn-primary" disabled={busy || blocked} onClick={() => goTo(step + 1)}>{t('audit.FirstInterview.continue')}<IconArrowRight size={14}/></button>
+            : <button type="button" className="btn btn-m btn-primary" disabled={busy || blocked} onClick={() => void exit('finish')} data-testid="setup-complete"><IconCheck size={14}/>{t('audit.FirstInterview.confirmMyWorkspace')}</button>}
+        </footer>
+      </section>
+    </div>
   </Modal>;
 }

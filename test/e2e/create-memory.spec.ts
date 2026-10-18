@@ -7,11 +7,11 @@ test('setup offers existing memory when new memory creation is unavailable',asyn
     await page.getByTestId('settings').click();await page.getByTestId('settings-all').click();
     await page.getByRole('button',{name:'Configura il mio lavoro',exact:true}).click();
     const setup=page.getByTestId('first-interview');
-    for(let step=0;step<4;step++)await setup.getByRole('button',{name:'Continua',exact:true}).click();
     const create=page.getByTestId('create-memory');await create.locator('summary').click();
     await expect(create).toHaveAttribute('data-capability','unavailable');
     await expect(create.getByRole('status')).toBeVisible();await expect(page.getByTestId('create-memory-start')).toHaveCount(0);
-    await expect(setup.getByRole('button',{name:/cartella della memoria/})).toBeEnabled();
-    await expect(page.getByTestId('setup-complete')).toBeEnabled();await shot(page,'setup-memory-unavailable-fallback');
+    await expect(setup.getByTestId('setup-memory').getByRole('button',{name:/cartella/})).toBeEnabled();await shot(page,'setup-memory-unavailable-fallback');
+    for(let step=0;step<6;step++)await setup.getByRole('button',{name:'Continua',exact:true}).click();
+    await expect(page.getByTestId('setup-complete')).toBeEnabled();
   }finally{await app.close();}
 });

@@ -138,7 +138,9 @@ export const MenuSep = () => <div className="menu-sep" role="separator" />;
 
 // ---------------------------------------------------------------- Modal
 
-export function Modal({ onClose, children, label, testid, className = '', top }: { onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean }) {
+/** A dialog: Esc and a click on the backdrop call onClose; `backdropCloses={false}` keeps it open on a stray click outside
+ *  (the setup wizard: coming back from a sign-in window, the first click must not end it). */
+export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true }: { onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean; backdropCloses?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
   // Local modals also cover native WebContentsViews, independently of the global ui.modal flag.
@@ -166,7 +168,7 @@ export function Modal({ onClose, children, label, testid, className = '', top }:
     return () => { clearTimeout(t); window.removeEventListener('keydown', key, true); if (prev?.isConnected) prev.focus(); };
   }, [onClose]);
   return createPortal(
-    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''}`} onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1}>
         {children}
       </div>

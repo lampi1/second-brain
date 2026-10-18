@@ -24,6 +24,7 @@ import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
+import { setupIt } from './areas/setup.it';
 
 export const it = {
   ...auditIt,
@@ -34,6 +35,7 @@ export const it = {
   ...costsIt,
   ...connectorsIt,
   ...reviewedContextIt,
+  ...setupIt,
   ...homeIt,
   ...guideIt,
   ...genuiRequestIt,

@@ -91,7 +91,7 @@ export async function openRegia(page: Page): Promise<void> {
 
 /** A fresh profile opens the first-run setup by itself (FirstInterview.tsx): closes it, as a user who skips it would. */
 export async function closeSetup(page: Page): Promise<void> {
-  const gate = page.locator('[data-testid="ai-first-modal"], [data-testid="first-interview"]');
+  const gate = page.getByTestId('first-interview');
   await expect(gate).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
   await expect(gate).toBeHidden();

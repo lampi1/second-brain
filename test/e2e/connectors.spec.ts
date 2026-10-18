@@ -51,7 +51,7 @@ test('the interview offers the connectors in place and a sign-in survives closin
     const connectors = setup.getByTestId('app-connectors'); await expect(connectors).toBeVisible();
     await shot(page, 'connectors-in-setup');
     await connectors.getByRole('button', { name: 'Accedi a GitHub', exact: true }).click();
-    await setup.getByRole('button', { name: 'Salva e riprendi più tardi', exact: true }).click();
+    await setup.getByRole('button', { name: 'Più tardi', exact: true }).click();
     await expect(setup).not.toBeVisible();
     expect(await app.evaluate(() => (globalThis as unknown as { cancelled?: boolean }).cancelled ?? false)).toBe(false);
     await app.evaluate(() => (globalThis as unknown as { finishLogin?: () => void }).finishLogin?.());

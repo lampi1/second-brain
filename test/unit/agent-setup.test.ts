@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import type { AgentProfile } from '@shared/agents';
 import type { OwnerProfile } from '@shared/profile';
 import { REPLY_PRESETS } from '@shared/profile';
-import { answerPatch, answerProblems, customReplyStyle, emptySetup, knownName, profileDraft, recommendedAgents, replyStyleOf, validSetupStep, wizardLocked, wizardProfile } from '../../src/renderer/lib/agent-setup';
+import { answerPatch, answerProblems, customReplyStyle, emptySetup, knownName, profileDraft, recommendedAgents, replyStyleOf, wizardLocked, wizardProfile } from '../../src/renderer/lib/agent-setup';
 import { checkSetup } from '../../src/main/agents/setup';
 const profile=(id:string):AgentProfile=>({id,name:id,purpose:'Useful work',instructions:'',engine:'claude',model:null,avatar:{kind:'symbol',value:'briefcase'},createdAt:1,updatedAt:1,role:'',category:'other',tools:null,permissionCeiling:null,origin:{kind:'user'},version:1,activeVersion:1,lastEditedBy:'user',userLocked:true,status:'active'});
 const catalog=['general','planning','writing','analysis','research','development'].map(role=>profile(`default-${role}`));
@@ -26,9 +26,6 @@ it('recommends everyday roles and adds development only for a stated goal',()=>{
 });
 it('never invents profiles absent from the real catalog',()=>{
   expect(recommendedAgents({...emptySetup(),goals:'ricerca e analisi dati'},[profile('custom-research')])).toEqual([]);
-});
-it('restores only a valid interview step from old or malformed state',()=>{
-  expect([NaN,-1,90,1.5,3].map(validSetupStep)).toEqual([0,0,4,0,3]);
 });
 
 // The interview ⇄ me.md mapping (lib/agent-setup.ts): prefill, nothing asked twice, only real answers written.
