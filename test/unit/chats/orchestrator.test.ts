@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager } from '../../../src/main/chats/manager';
+import { ChatManager, restoredOwner } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { StoredChat } from '../../../src/main/chats/store';
 import { migrateOrchestrator, ORCHESTRATOR_ROLE } from '../../../src/main/chats/orchestrator';
@@ -140,6 +140,11 @@ describe('ChatManager with the unified Orchestrator', () => {
     expect(by.kid!.regiaOf).toBe(n.id);
   });
 
+  it('gives a Regia saved with the old "Assistente" owner the Orchestrator\'s face back (#61)', () => {
+    const old = { id: 'routed-abc', name: 'Assistente', purpose: 'x', avatar: { kind: 'symbol' as const, value: 'briefcase' as const }, engine: 'claude', model: null, revision: 1, source: 'routed' as const };
+    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isRegia: true })).toMatchObject({ id: 'routed-abc', name: 'Orchestrator', avatar: { value: 'compass' }, source: 'routed' });
+    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isRegia: false }).name).toBe('Assistente');
+  });
   it('primes the first message with the Orchestrator role', async () => {
     const f = fixture();
     await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
@@ -151,6 +156,8 @@ describe('ChatManager with the unified Orchestrator', () => {
     f.agents.save({ ...seed, instructions: 'My custom coordination brief' }, seed.id);
     const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
     expect(chat.agent?.source).toBe('routed');
+    // the tile shows the Orchestrator's face, not the generic "Assistente" (#61)
+    expect(chat.agent).toMatchObject({ name: seed.name, purpose: seed.purpose, avatar: seed.avatar });
     expect(chat.run).toBeUndefined();
     expect(f.sent[0]!.split('My custom coordination brief')).toHaveLength(2);
     expect(f.sent[0]).toContain('Updater apply is disabled');

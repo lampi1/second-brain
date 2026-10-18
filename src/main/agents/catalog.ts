@@ -101,6 +101,12 @@ export function compatibleOwner(engine: string, model: string | null, legacy = f
   const key = createHash('sha256').update(`${engine}\n${model ?? ''}`).digest('hex').slice(0, 12);
   return { id: `${legacy ? 'legacy' : 'routed'}-${key}`, name: 'Assistente', purpose: legacy ? 'Sessione esistente, configurazione conservata' : 'Assistente per questa attività', avatar: { kind: 'symbol', value: 'briefcase' }, engine, model, revision: 1, source: legacy ? 'legacy' : 'routed' };
 }
+/** A Regia's owner: the session's engine/model with the Orchestrator profile's face (name, purpose, avatar); still no
+ *  catalog run. Without the profile, the preset's own face. Chats saved before this fix carry the "Assistente" one. */
+export function orchestratorOwner(base: AgentOwnerSnapshot, p?: Pick<AgentProfile, 'name' | 'purpose' | 'avatar'>): AgentOwnerSnapshot {
+  return { ...base, name: p?.name ?? 'Orchestrator', purpose: p?.purpose ?? ORCHESTRATOR_PURPOSE, avatar: p ? structuredClone(p.avatar) : { kind: 'symbol', value: 'compass' } };
+}
+const ORCHESTRATOR_PURPOSE = 'Coordinare gli agenti e restare disponibile per la persona';
 
 /** Bounded validation for snapshots read from chats.json; model/engine never replace the effective session facts. */
 export function readOwner(v: unknown): AgentOwnerSnapshot | null {
@@ -355,7 +361,7 @@ export class AgentCatalogService {
   private orchestratorSeed(base: AgentProfile | undefined): AgentProfile | null {
     if (!base) return null;
     const at = this.now();
-    const coordinator = upgradeProfile({ id: ORCHESTRATOR_AGENT_ID, name: 'Orchestrator', purpose: 'Coordinare gli agenti e restare disponibile per la persona',
+    const coordinator = upgradeProfile({ id: ORCHESTRATOR_AGENT_ID, name: 'Orchestrator', purpose: ORCHESTRATOR_PURPOSE,
       instructions: ORCHESTRATOR_INSTRUCTIONS, engine: base.engine, model: null, avatar: { kind: 'symbol', value: 'compass' }, createdAt: at, updatedAt: at }, true, 'preset');
     // Same origin shape as the packaged role presets: its own id, revision 1 (not a legacy-* seed).
     return { ...coordinator, origin: { kind: 'preset', presetId: ORCHESTRATOR_AGENT_ID, presetRevision: 1 }, routable: false };
@@ -743,8 +749,8 @@ export class AgentCatalogService {
       // preset's instructions and policy.
       if (req.regia || req.appRegia) {
         const p = this.profiles.find(x => x.id === ORCHESTRATOR_AGENT_ID && x.status === 'active');
-        if (!p) return { ...compatible, instructions: ORCHESTRATOR_INSTRUCTIONS };
-        return { ...compatible, instructions: p.instructions,
+        if (!p) return { ...compatible, owner: orchestratorOwner(compatible.owner), instructions: ORCHESTRATOR_INSTRUCTIONS };
+        return { ...compatible, owner: orchestratorOwner(compatible.owner, p), instructions: p.instructions,
           policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling ?? null } : null };
       }
       const g = this.ensureGeneral();

@@ -160,7 +160,10 @@ describe('the models of an HTTP engine', () => {
     setPriceTable(() => ({ models: [row('qwen3', 'local'), row('opus', 'claude')] }) as never);
     try {
       const cursor = { ids: [{ id: 'gpt-5', name: 'GPT-5' }], at: 1 };
-      expect(withApiModels({ cursor })).toEqual({ cursor, anthropic: { ids: [{ id: 'opus', name: 'opus' }], at: 0 }, local: { ids: [{ id: 'qwen3', name: 'qwen3' }], at: 0 } });
+      expect(withApiModels({ cursor })).toEqual({ cursor, claude: { ids: [{ id: 'opus', name: 'opus' }], at: 0 }, anthropic: { ids: [{ id: 'opus', name: 'opus' }], at: 0 }, local: { ids: [{ id: 'qwen3', name: 'qwen3' }], at: 0 } });
+      // Claude Code lists no models (#60): its table rows stand in, but a list it did report stays
+      const seen = { ids: [{ id: 'claude-sonnet-5-5', name: 'Sonnet' }], at: 2 };
+      expect(withApiModels({ claude: seen }).claude).toEqual(seen);
     } finally { setPriceTable(() => null); }
   });
 });

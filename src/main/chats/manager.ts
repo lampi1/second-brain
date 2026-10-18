@@ -50,7 +50,7 @@ import { cleanRegiaName, regieOf } from '../../shared/regia';
 import { waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
-import { compatibleOwner } from '../agents/catalog';
+import { compatibleOwner, orchestratorOwner } from '../agents/catalog';
 import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
 import { inProbation, type AgentOwnerSnapshot, type AgentProfile, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
@@ -315,6 +315,11 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
+/** A saved chat's owner; a Regia saved with the generic "Assistente" face gets the Orchestrator's back (issue #61). */
+export function restoredOwner(c: Pick<StoredChat, 'agent' | 'harness' | 'model' | 'isRegia'>): AgentOwnerSnapshot {
+  const owner = c.agent ?? compatibleOwner(c.harness, c.model, true);
+  return c.isRegia && owner.source !== 'catalog' && owner.name === 'Assistente' ? orchestratorOwner(owner) : owner;
+}
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 /** A model id as the CLIs take it; never starting with '-', which an ACP CLI would read as one of its flags. */
 const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
@@ -1719,7 +1724,7 @@ export class ChatManager implements ChatService {
     return {
       ...(runPruned ? { runPruned } : {}),
       s: {
-        agent: c.agent ?? compatibleOwner(c.harness, c.model, true),
+        agent: restoredOwner(c),
         ...(run ? { run } : {}),
         ...(c.work ? {work:c.work} : c.regiaOf ? {work:{status:'assigned' as const,updatedAt:c.createdAt}} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
