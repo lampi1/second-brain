@@ -205,7 +205,8 @@ export function validate(key: unknown, value: unknown): Checked {
     case 'usd': {
       // rounded to cents first: 0.004 would otherwise pass "> 0" and be saved as 0 (= no limit)
       const v = typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) / 100 : NaN;
-      if (!(v > 0) || v < (d.min ?? 0.01) || v > (d.max ?? 1e6)) return { ok: false, error: `${d.label}: importo fuori intervallo${d.nullable ? ', oppure vuoto' : ''}` };
+      const min = d.min ?? 0.01, max = d.max ?? 1e6, it = (n: number) => String(n).replace('.', ',');
+      if (!(v > 0) || v < min || v > max) return { ok: false, error: `${d.label}: un importo in $ da ${it(min)} a ${it(max)}${d.nullable ? ', oppure vuoto' : ''}` };
       return { ok: true, key: k, value: v };
     }
   }
