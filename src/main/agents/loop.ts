@@ -15,7 +15,7 @@ import { AgentLifecycle, type WakePolicy } from './lifecycle';
 import { createLifecycleApi } from './lifecycle-api';
 import { lifecycleInput } from './lifecycle-input';
 import { parentWins, routingSnapshot, type Classify } from './routing-snapshot';
-import { draftRequestMessage, feedbackGate, feedbackMessage } from './feedback-wake';
+import { draftRequestMessage, FEEDBACK_QUIET_MS, feedbackGate, feedbackMessage } from './feedback-wake';
 import { unknownRunError } from './runs';
 import { log, errText } from '../log';
 
@@ -42,23 +42,32 @@ export interface AgentLoopDeps {
 export function createAgentLoop(d: AgentLoopDeps) {
   const now = () => d.now?.() ?? Date.now();
   const everyAgent = (): AgentProfile[] => { const all = d.catalog.list(); return [...all.profiles, ...all.archived]; };
+  let snapshot: { agents: AgentProfile[]; judged: Map<string, Set<string>> } | null = null;
+  const pass = () => { if (!snapshot) { snapshot = { agents: everyAgent(), judged: new Map() }; queueMicrotask(() => { snapshot = null; }); } return snapshot; };
+  let failedAt = -Infinity;
   const lifecycle = new AgentLifecycle({ userData: d.userData, ...(d.now ? { now: d.now } : {}), ...(d.wakePolicy ? { wakePolicy: d.wakePolicy } : {}),
     feedback: { list: id => d.authoring.feedbackOf(id), get problem() { return d.authoring.storeProblem; } },
     changed: () => d.emitChanged?.(),
     // the human verdict and a verified review need no opinion; nor does a run that already has one, or a hidden agent's
+    // (the queue is pruned in one synchronous pass: one catalog and feedback read per pass, not one per queued run)
     needsFeedback: id => {
-      const r = d.runs.get(id), agent = r && everyAgent().find(a => a.id === r.agentId);
-      return !!r && !!agent && agent.routable !== false && r.outcome?.basis !== 'human' && r.outcome?.basis !== 'reviewed-evidence' && !d.authoring.feedbackOf(r.agentId).some(f => f.runId === id);
+      const r = d.runs.get(id), s = pass(), agent = r && s.agents.find(a => a.id === r.agentId);
+      if (!r || !agent || agent.routable === false || r.outcome?.basis === 'human' || r.outcome?.basis === 'reviewed-evidence') return false;
+      let judged = s.judged.get(r.agentId);
+      if (!judged) s.judged.set(r.agentId, judged = new Set(d.authoring.feedbackOf(r.agentId).map(f => f.runId)));
+      return !judged.has(id);
     },
     wake: async runIds => {
       if (!d.wakeEnabled()) return false;
+      // a delivery that failed waits as long as a busy Orchestrator would, never one try per heartbeat
+      if (now() - failedAt < FEEDBACK_QUIET_MS) return false;
       const gate = feedbackGate(d.chats.list(), now(), d.engineOn, d.userWaiting());
       if ('refused' in gate) { log.debug('agents', 'feedback wake held', { data: { reason: gate.refused, runs: runIds.length } }); return false; }
       const runs = runIds.map(id => d.runs.get(id)).filter((r): r is AgentRun => !!r);
       if (!runs.length) return true;
-      // liveOnly: never resumes or starts the Orchestrator for this
+      // liveOnly: never reopens a closed Orchestrator nor one that is not idle (an idle one whose engine was released resumes)
       try { await d.chats.send(gate.chat.id, feedbackMessage(runs, everyAgent()), undefined, false, undefined, true); return true; }
-      catch (e) { log.warn('agents', 'feedback wake not delivered', { cause: errText(e), hint: 'the runs stay queued; the next heartbeat tries again within the daily cap' }); return false; }
+      catch (e) { failedAt = now(); log.warn('agents', 'feedback wake not delivered', { cause: errText(e), hint: 'the runs stay queued; the next heartbeat tries again within the daily cap' }); return false; }
     } });
   const evaluate = (agentId?: string): void => {
     try {

@@ -318,3 +318,42 @@ describe('approval surfaces', () => {
     expect(new AgentRunStore(w.userData).problem).not.toBeNull();
   });
 });
+
+describe('review hardening', () => {
+  it('a double approval of a drafting entry sends the Orchestrator one request', async () => {
+    const w = world();
+    w.chats.push(orchestrator());
+    let release!: () => void;
+    w.send.mockImplementationOnce(() => new Promise<undefined>(r => { release = () => r(undefined); }));
+    w.loop.lifecycle.propose({ key: 'work:x', kind: 'create', agentIds: [], reason: '3 ricorrenze', evidence: [], at: w.t, state: 'pending' });
+    const first = w.loop.api.decide({ key: 'work:x', decision: 'approve' });
+    const second = w.loop.api.decide({ key: 'work:x', decision: 'approve' });
+    await expect(second).rejects.toThrow(/già/);
+    release(); await first;
+    expect(w.send).toHaveBeenCalledTimes(1);
+    expect(w.loop.api.read({}).proposals).toEqual([]);
+  });
+
+  it('a failed feedback delivery is not retried at every heartbeat', async () => {
+    const w = world();
+    const a = w.catalog.save(draft());
+    w.chats.push(orchestrator({ updatedAt: 0 }));
+    w.send.mockRejectedValue(new Error('engine refused'));
+    const r = await w.start(a.id, 'w-1'); w.end(r);
+    await w.loop.tick(); w.t += 10_000; await w.loop.tick(); w.t += 10_000; await w.loop.tick();
+    expect(w.send).toHaveBeenCalledTimes(1);
+    expect(w.loop.lifecycle.queuedRuns()).toEqual([r.runId]);
+    w.t += FEEDBACK_QUIET_MS; await w.loop.tick();
+    expect(w.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('pruning the feedback queue reads the catalog once per heartbeat, not once per queued run', async () => {
+    const w = world();
+    const a = w.catalog.save(draft());
+    for (let i = 0; i < 20; i++) { const r = await w.start(a.id, `q-${i}`); w.end(r); }
+    const list = vi.spyOn(w.catalog, 'list');
+    await w.loop.tick(); // no Orchestrator: the gate holds, the queue is only pruned
+    expect(w.loop.lifecycle.queuedRuns()).toHaveLength(20);
+    expect(list.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+});

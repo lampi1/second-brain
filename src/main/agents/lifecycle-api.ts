@@ -66,6 +66,9 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
     try { o.afterFeedback?.(record); } catch (e) { log.warn('agents', 'trial not evaluated after feedback', { cause: errText(e), hint: 'the next run end or the daily pass evaluates it again' }); }
     return record;
   };
+  // keys whose approval is still running (a drafting request awaits the Orchestrator's delivery): a second click or a
+  // second window must not send a second paid request nor apply the same entry twice
+  const deciding = new Set<string>();
   const api = {
     read(value: unknown): AgentLifecycleSnapshot {
       const { agentId } = lifecycleQuery(value);
@@ -110,26 +113,31 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
     /** The user's decision on one queue entry (agents:lifecycleDecide only). Returns the queue as it is after it. */
     async decide(value: unknown): Promise<AgentLifecycleSnapshot> {
       const { key, decision } = lifecycleDecideArgs(value);
-      const p = service.proposal(key);
-      if (!p) throw Error('Proposta non trovata: forse è già stata decisa.');
-      const agents = o.agents?.();
-      if (agents && !service.stillValid(p, agents)) { service.reconcile(agents); throw Error('La proposta non vale più: l’Agente è cambiato.'); }
-      if (decision === 'dismiss') { service.settle(key, true); return api.read({}); }
-      const a = o.actions;
-      if (!a) throw Error('Decisioni non disponibili.');
-      const id = p.agentIds[0];
-      if (key.startsWith('trial:') && (p.kind === 'keep' || p.kind === 'revert')) a.resolveTrial(id!, p.kind === 'keep' ? 'keep' : 'rollback');
-      else if (key.startsWith('probation:') && p.kind === 'keep') a.keep(id!);
-      else if (key.startsWith('probation:') && p.kind === 'retire') a.retire(id!, p.reason);
-      else if (p.kind === 'model-trial') {
-        if (!id || !p.model) throw Error('Proposta di modello incompleta.');
-        a.modelTrial(id, p.model, p.reason);
-      } else if (['update', 'create', 'merge', 'split'].includes(p.kind)) await a.requestDraft(p);
-      else throw Error('Proposta non applicabile.');
-      service.settle(key, false);
-      log.info('agents', 'lifecycle proposal approved by the user', { data: { key, kind: p.kind } });
-      return api.read({});
+      if (deciding.has(key)) throw Error('Decisione già in corso su questa proposta.');
+      deciding.add(key);
+      try { return await decideOne(key, decision); } finally { deciding.delete(key); }
     },
   };
+  async function decideOne(key: string, decision: AgentLifecycleDecide['decision']): Promise<AgentLifecycleSnapshot> {
+    const p = service.proposal(key);
+    if (!p) throw Error('Proposta non trovata: forse è già stata decisa.');
+    const agents = o.agents?.();
+    if (agents && !service.stillValid(p, agents)) { service.reconcile(agents); throw Error('La proposta non vale più: l’Agente è cambiato.'); }
+    if (decision === 'dismiss') { service.settle(key, true); return api.read({}); }
+    const a = o.actions;
+    if (!a) throw Error('Decisioni non disponibili.');
+    const id = p.agentIds[0];
+    if (key.startsWith('trial:') && (p.kind === 'keep' || p.kind === 'revert')) a.resolveTrial(id!, p.kind === 'keep' ? 'keep' : 'rollback');
+    else if (key.startsWith('probation:') && p.kind === 'keep') a.keep(id!);
+    else if (key.startsWith('probation:') && p.kind === 'retire') a.retire(id!, p.reason);
+    else if (p.kind === 'model-trial') {
+      if (!id || !p.model) throw Error('Proposta di modello incompleta.');
+      a.modelTrial(id, p.model, p.reason);
+    } else if (['update', 'create', 'merge', 'split'].includes(p.kind)) await a.requestDraft(p);
+    else throw Error('Proposta non applicabile.');
+    service.settle(key, false);
+    log.info('agents', 'lifecycle proposal approved by the user', { data: { key, kind: p.kind } });
+    return api.read({});
+  }
   return api;
 }
