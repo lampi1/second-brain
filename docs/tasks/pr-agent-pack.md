@@ -26,18 +26,32 @@ Merged with main (a2c5075 and later). Overlapping parts now reuse main's modules
 - Learned-rules maintenance job: removed. Pulse's JobScheduler is private to PulseService, and the job would start
   paid engine runs. The proposal tool `agent_learn_propose` and the review IPC work without it.
 
-What Integrazione 2 has to reconcile:
+Integration on main 34808a4 (after #43 role-presets, #46 agent-lifecycle, #49 authoring tools, #54 Battito, #55
+Orchestrator preset); the stack was squashed and rebased:
 
-1. agent-lifecycle (`../agent-lifecycle`, "Da approvare"): move the card buttons in `AgentPackDetails.tsx` into the
-   approval panel. That means probation keep/retire (main IPC) and trial keep/rollback (`agents:trialDecide`).
-   Lifecycle's `trials.ts` should read the trial that `AgentCatalogService.resolveTrial` closes; it must not add a
-   second trial store.
-2. role-presets (`../role-presets`): the pack exports shipped presets from its `agent-presets/default-*` skill
-   folders, and role-presets uses ids in `src/shared/agent-presets.ts`. Align the ids. A preset forked by an approved
-   learned rule must still appear in `presetUpdates`.
-3. Pulse: if a learned-rules maintenance job is wanted, register it through a public scheduler API, with a budget.
-   Today none exists.
-4. The trial and probation buttons on the agent card are a stopgap until step 1 lands.
+1. role-presets: `src/main/agents/presets/` now has one know-how folder per packaged preset id, the ten
+   `roleAgentPresets()` ids, `default-orchestrator`, `default-general` and the five legacy seeds still present in older
+   catalogs. `test/unit/agent-pack-presets.test.ts` asserts the folders equal those ids and load through the runtime
+   lookup (`presetSkills` in `pack/read.ts`), whose id check had refused hyphenated ids (`default-bug-investigator`).
+   A learned-rule or pack trial no longer drops `routable: false` from the Orchestrator.
+2. agent-lifecycle: the "Da approvare" panel is read-only (proposals plus "Esamina proposta", which opens the agent
+   page); it has no keep / retire / trial buttons, and its trial evaluation reads the same `trial` field that
+   `resolveTrial` closes. So the decisions stay on the agent page (`AgentPackDetails`), the one place with them, with
+   no duplicate controls. Learned-rule proposals (`agent-learn-proposals.json`) are not agent feedback; the one
+   `agent_feedback` store in `agent-authoring.json` is unchanged.
+3. Battito: not registered. Pulse's `JobScheduler` is private to `PulseService`; its budget (`admitRun`) knows only
+   the `pulse` and `headline` jobs (80/20 split), and its runs go through `OneShotService`, which runs a digest with
+   "Do not use tools". The learned-rules job must read run histories and call `agent_learn_propose`, so it would need
+   a tool-enabled paid run, a third budget share and a public registration API in pulse: not a small, safe change.
+   Battito's own `learned-rule` approvals (rules for `default-pulse` appended to its instructions) are unchanged.
+
+Fixes from the fresh-eyes review, each with a regression test seen red first:
+
+- `rejectTrial` (lifecycle) and `authorRollback` (Orchestrator tools) kept the newer know-how when going back to a
+  version without it, and did not refresh the editable brain copy, so the next save resurrected rolled-back rules.
+  The catalog now reports each know-how swap (`onKnowhowChange`) and the packs republish it once.
+- The authoring tools could pass `knowhow` / `pack` in a draft or patch: an automatic write could attach any brain
+  folder as an agent's skills or forge a pack identity. They are stripped (`withoutPackFields`).
 
 Validation on this branch (Brother's decision of 2026-10-18 16:09: branch checks only, full gate and e2e once on
 main):
