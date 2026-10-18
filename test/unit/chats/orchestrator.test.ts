@@ -150,7 +150,8 @@ describe('ChatManager with the unified Orchestrator', () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
     f.agents.save({ ...seed, instructions: 'My custom coordination brief' }, seed.id);
     const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
-    expect(chat.agent?.id).toBe(seed.id);
+    expect(chat.agent?.source).toBe('routed');
+    expect(chat.run).toBeUndefined();
     expect(f.sent[0]!.split('My custom coordination brief')).toHaveLength(2);
     expect(f.sent[0]).toContain('Updater apply is disabled');
     expect(f.file().chats.find(c => c.id === chat.id)?.agentInstructions).toBe('My custom coordination brief');

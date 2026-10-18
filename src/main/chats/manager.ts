@@ -690,7 +690,7 @@ export class ChatManager implements ChatService {
     const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
     try {
       const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
-      const role = r.s.orchestrator ? `${orchestratorRole(r.s.agent?.source === 'catalog' ? r.agentInstructions : undefined)}\n\n` : '';
+      const role = r.s.orchestrator ? `${orchestratorRole(r.agentInstructions || undefined)}\n\n` : '';
       r.session.send(`${role}${r.s.orchestrator ? '' : profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);

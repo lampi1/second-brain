@@ -21,7 +21,7 @@ describe('Orchestrator preset', () => {
   });
   it('seeds exactly once with history and preserves user versions on restart', () => {
     const dir = temp(), c = service(dir), seed = c.list().profiles.find(p => p.id === ID)!;
-    expect(seed).toMatchObject({ name: 'Orchestrator', userLocked: false, origin: { kind: 'preset' } });
+    expect(seed).toMatchObject({ name: 'Orchestrator', userLocked: false, origin: { kind: 'preset', presetId: ID, presetRevision: 1 } });
     const edited = c.save({ ...seed, instructions: 'My coordinator workflow' }, ID);
     expect(edited).toMatchObject({ userLocked: true, version: 2, lastEditedBy: 'user' });
     expect(c.history(ID).find(v => v.version === 1)?.behaviour.instructions).toBe(ORCHESTRATOR_INSTRUCTIONS);
@@ -36,9 +36,11 @@ describe('Orchestrator preset', () => {
     const dir = temp(), c = service(dir), req = { harness, cwd: dir, regia: true, model: 'selected', effort: 'medium' as const };
     const result = c.resolve(req);
     expect(result.request).toEqual(req);
-    expect(result.owner).toMatchObject({ id: ID, engine: harness, model: 'selected', source: 'catalog' });
+    // the Orchestrator is no agent's run: it stays unassigned and only takes the preset's instructions
+    expect(result.owner).toMatchObject({ engine: harness, model: 'selected', source: 'routed' });
+    expect(result.owner.id).not.toBe(ID);
     expect(result.instructions).toBe(ORCHESTRATOR_INSTRUCTIONS);
-    expect(c.resolve({ ...req, regia: false, appRegia: true }).owner.id).toBe(ID);
+    expect(c.resolve({ ...req, regia: false, appRegia: true })).toMatchObject({ owner: { source: 'routed' }, instructions: ORCHESTRATOR_INSTRUCTIONS });
   });
   it.each([1, 2])('adds the preset to v%s catalogs without losing existing agents', version => {
     const dir = temp(), c = service(dir), profiles = c.list().profiles.filter(p => p.id !== ID);
