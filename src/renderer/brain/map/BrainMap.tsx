@@ -1,4 +1,4 @@
-// Full-screen personal map: direct exploration, unobtrusive filters and real observed activity; no step player.
+// Personal map beside the persistent Orchestrator: exploration, filters and observed activity for the app shell.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import{t}from'../../i18n';
 import { normFiles, normMap, type MapEdge, type MapNode } from '../types';
@@ -162,7 +162,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   ) : null;
 
   return (
-    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
+    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
       <div className="bx-map-bar">
         <h2>Mappa del brain</h2>
         <form className="bx-search" onSubmit={e => { e.preventDefault(); search(); }} role="search">

@@ -2,6 +2,17 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, ChatItem } from '../../src/shared/contract';
 import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { columnSize } from '../../src/renderer/lib/regia-dock';
+
+it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
+  const viewport = { W, H: 900, top: 52, left: 196 };
+  for (const saved of [null, { w: 900, h: 848 }]) {
+    const column = columnSize(saved, viewport, false);
+    expect(column.w).toBeGreaterThanOrEqual(280);
+    expect(W - viewport.left - column.w).toBeGreaterThanOrEqual(360);
+    expect(column.h).toBe(848);
+  }
+});
 
 it('groups distinct brain diagnostics without inventing checks for a new brain', () => {
   expect(brainChecks(null)).toEqual([]);
