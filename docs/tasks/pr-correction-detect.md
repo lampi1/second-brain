@@ -9,8 +9,12 @@ explicit correction match always flags. A missing, busy, failed or slow service 
 Repeat-error recall remains independent. Detection has a 180 ms service / 200 ms hook deadline and never stores prompts.
 
 Validation:
-- `npx tsc --noEmit` clean; touched suites (hook, detector, search) 72/72; full `npm test` and the local Windows gate
-  results are in the integrator's message for this PR.
+- `npx tsc --noEmit` and `npm run lint` clean; touched suites (hook, detector, search) 72/72.
+- `npm run check:branch` NOT green: 2 tests of `test/unit/correction-catch-hook.test.ts` that main already has fail
+  under full-suite load ("warns with the similar errors…": the recall answer misses its 300 ms deadline; "gives no
+  warning when not ready, slow…": the hook took 2243 ms against 1400 ms). The file passes 5/5 alone, and the same file
+  also fails on a clean origin/main a120c8a. Open doubt for the final gate on main: this branch adds a second parallel
+  request from the hook (`detect_correction`, 200 ms), which could slow the recall answer under load.
 - New synthetic tests cover corpus parsing, positive/negative decisions, cold/warm behavior, refresh, brain changes,
   failures and bounded queries; hook-process tests cover semantic yes, fallback, agent-message exclusion, and that a
   warm semantic no never hides an explicit correction ("no, ti ho detto di aspettare") while it clears "spiegami".
