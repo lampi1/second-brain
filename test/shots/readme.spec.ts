@@ -72,6 +72,14 @@ test('README screenshots', async () => {
   await waitThumbs(page);
   await save('mosaic');
 
+  // 1b. Agenti: the agent catalog as cards, with the changes waiting for the user's approval
+  await page.getByTestId('nav-agenti').click();
+  await expect(page.getByTestId('agent-overview')).toBeVisible({ timeout: 30_000 });
+  await waitThumbs(page);
+  await save('agents');
+  await goPage(page, 'home');
+  await expect(page.getByTestId('view-agents')).toBeVisible();
+
   // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
   await openRegia(page);
   await waitThumbs(page);

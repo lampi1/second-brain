@@ -45,3 +45,10 @@ test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4a
 test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8a73384493e1663bd8f8b1fafc
 # Same two public GitHub SSH clone literals after reviewed publication regression additions; no private email.
 test/unit/proposals.test.ts email sha256:62c51e8ad51e3e2f4332a47438bf33467c5e194fa5c378f05f90f7e3103c6423
+docs/screenshots/mosaic.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
+docs/screenshots/agents.webp binary-media sha256:e577082fdfb6d904ba51e449f5f52fa7176c3d4ae642c5d09e8369604935fff3
+docs/screenshots/regia.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e
+docs/screenshots/browser.webp binary-media sha256:4bfacd4cbed7b501f48647d62cda84b458528d603bf0f0ad01c8615a902433ed
+docs/screenshots/brain-map.webp binary-media sha256:ed11d3435617898e34fb957685ee8b791e3ed4b38311cf37c8bb9ca5b4b19a1c
+docs/screenshots/devops.webp binary-media sha256:4d1542b862694104f8ab72df150849a88900206e450fc13589355c3f88dbeee8
+docs/screenshots/quality.webp binary-media sha256:b2825f78505187746926e722bc0e6ce72ed1951581f2485440467ee65393d29e

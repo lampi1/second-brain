@@ -17,7 +17,8 @@ in with your own account; the demo and every test except `test/live` need neithe
 
 Useful environment variables: `SB_DEMO=1` (fake services), `SB_DEMO_FREEZE=1` (fixed clock and data),
 `SB_HIDDEN=1` (window off screen and never focused: agents and tests), `SB_USER_DATA=<dir>` (an isolated profile),
-`SB_BRAIN=<dir>` (a brain folder), `SB_MCP_PORT=0` (a random MCP port).
+`SB_BRAIN=<dir>` (a brain folder), `SB_MCP_PORT=0` (a random MCP port). On a machine without a GPU (a Linux container)
+the 3D map in the e2e and `npm run shots` needs software WebGL: `SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader"`.
 
 Your own brain starts from the template in this repo: `node brain-template/install.mjs` (see the README).
 
