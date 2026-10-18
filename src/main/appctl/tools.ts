@@ -38,11 +38,13 @@ import type { ImproveService } from '../improve/service';
 import type { ImproveEvidenceSelection } from '../improve/evidence';
 import type { AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
+import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
+  agentAuthoring?: AgentAuthoring;
   agents?: () => AgentCatalog;
   classifyAgents?: ClassifyAgents;
   chats: ChatService; browser: BrowserService; brain: BrainService;
@@ -119,6 +121,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
+    ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified) : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',
@@ -332,6 +335,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do'),
         agentId: str('optional profile id from agent_catalog; uses its engine/model/effort and instructions under existing launch policy. Manifest never grants access.'),
+        agentVersion: { type: 'integer', description: 'Expected active definition version; refuse if it changed.' },
+        parentRunId: str('Parent run ID'), reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         harness: str(`optional engine id: ${engines().map(e => e.id).join(' | ')}; omit it to let the routing table decide`),
         model: str('optional model id; omit it to let the routing table decide'),
@@ -341,6 +346,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Regia (one at a time: a new one would take the role from the agent's own chat)
+        const links: { parentRunId?: string; reviewOf?: string; reworkOf?: string; goal?: string; agentVersion?: number } = {};
+        for (const key of ['parentRunId', 'reviewOf', 'reworkOf', 'goal'] as const) if (a[key] !== undefined) {
+          if (!unified() || typeof a[key] !== 'string' || !a[key].trim() || a[key].length > (key === 'goal' ? 2000 : 80)) throw new Error('Invalid or unauthorized run link/goal.');
+          links[key] = a[key];
+        }
+        if (a.agentVersion !== undefined) {
+          if (!unified() || !Number.isSafeInteger(a.agentVersion) || Number(a.agentVersion) < 1 || typeof a.agentId !== 'string') throw new Error('Invalid agent version.');
+          links.agentVersion = Number(a.agentVersion);
+        }
         if (a.space !== undefined && a.space !== 'work' && a.space !== 'app') throw new Error('Invalid chat space.');
         // Legacy app requests keep their source default and fail-closed folder check, never a UI partition.
         const sourceRequired = a.space === 'app' || d.sourceOnly;
@@ -397,7 +411,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (refused) throw new Error(`bloccato: ${refused}`);
         // a work chat answers to the Regia that opens it: its questions go to her tab, and it knows whom to write to
         const yours = regia ? `\n\nIl tuo Orchestrator è «${regia.title}»: scrivigli con send_to_chat.` : '';
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, ...links, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason } };

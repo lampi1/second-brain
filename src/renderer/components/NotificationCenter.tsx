@@ -14,6 +14,7 @@ import { t, locale } from '../i18n';
 import { copyLink, openLink } from '../actions';
 import { IconBell, IconCheck, IconLink, IconMoon, IconX } from './Icons';
 import { Keys } from './ui';
+import { AgentFeedAction } from './AgentFeedAction';
 
 const TONE: Record<string, string> = {
   idea: 'blue', error: 'red', win: 'green', 'chat-done': 'green', 'chat-failed': 'red', question: 'amber', 'chat-waiting': 'amber', reflection: 'violet', budget: 'amber', login: 'amber',
@@ -31,6 +32,7 @@ function Row({ e, unread, now }: { e: FeedEvent; unread: boolean; now: number })
         <span className="nc-age">{e.away ? t('dialogs.notifications.away') : ago(e.at, now)}</span>
       </button>
       <span className="nc-tools">
+        <AgentFeedAction action={e.action} />
         <button type="button" className="icon-btn" onClick={() => void copyLink(linkOfEvent(e))} aria-label={t('dialogs.notifications.copyLinkAriaLabel')} data-tip={t('dialogs.notifications.copyLinkTip')} data-testid={`nc-link-${e.id}`}><IconLink size={13} /></button>
         <button type="button" className="icon-btn" onClick={() => void muteKind(e.kind, e.label, !muted)} aria-label={muted ? t('dialogs.notifications.unmuteTooltip', { label: e.label }) : t('dialogs.notifications.muteTooltip', { label: e.label })}
           data-tip={muted ? t('dialogs.notifications.unmuteTip') : tierOf(e) === 'toast' ? t('dialogs.notifications.muteToast') : t('dialogs.notifications.muteOther')} data-testid={`nc-mute-${e.id}`}>

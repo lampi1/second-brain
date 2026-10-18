@@ -19,6 +19,14 @@ import { brainScript } from '../rules/tools';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
+  'agent-created': { label: 'Agente creato', priority: 'quiet' },
+  'agent-suggested': { label: 'Agente suggerito', priority: 'normal' },
+  'agent-proposal': { label: 'Modifica proposta', priority: 'normal' },
+  'agent-updated': { label: 'Agente aggiornato', priority: 'quiet' },
+  'agent-archived': { label: 'Agente archiviato', priority: 'quiet' },
+  'agent-restored': { label: 'Agente ripristinato', priority: 'quiet' },
+  'agent-rolledback': { label: 'Versione ripristinata', priority: 'quiet' },
+  'agent-feedback': { label: 'Feedback Agente', priority: 'quiet' },
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
   login: { label: 'Accesso da rifare', priority: 'urgent' },   // browser: an agent waits for the user to sign in to an environment
   question: { label: 'Domanda per te', priority: 'urgent' },
@@ -52,6 +60,12 @@ export interface RawEvent { kind: string; title: string; detail?: string; who?: 
 /** The only actions a card may carry, checked again here: an event from a script never names anything else. */
 export function feedAction(v: unknown): FeedAction | undefined {
   const a = v as Partial<FeedAction> | null;
+  if (a?.kind === 'agent-proposals') return { kind: 'agent-proposals' };
+  if (a?.kind === 'agent-undo') {
+    const u = a.undo;
+    if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && ['archive', 'restore', 'version'].includes(u.operation) && (u.operation !== 'version' || Number.isSafeInteger(u.version) && u.version! > 0)) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, operation: u.operation, ...(u.operation === 'version' ? { version: u.version } : {}) } };
+    return undefined;
+  }
   return a && typeof a === 'object' && a.kind === 'agent-restore' && typeof a.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId) ? { kind: 'agent-restore', agentId: a.agentId } : undefined;
 }
 
