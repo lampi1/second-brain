@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { errText, log } from '../../log';
 import type { Embedder, Mode } from './embedder';
 import { chunkText } from './chunk';
 import { cosine, type ChunkRow, type Store } from './store';
@@ -21,6 +22,7 @@ const FILE_BYTES = 1024 * 1024;
 const MAX_FILES = 6000;
 const RRF_K = 60;
 const POOL = 60; // candidates taken from each ranking
+const MIN_SIMILARITY = 0.8; // e5 unrelated passages often score around 0.7; rank alone is not relevance
 
 export interface Hit { doc: string; path: string; line: number; text: string; chunk: string; at: number; score: number; via: 'words' | 'meaning' | 'both' }
 
@@ -39,11 +41,15 @@ export async function brainFiles(root: string): Promise<string[]> {
   try {
     const { stdout } = await promisify(execFile)('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
     list = stdout.split('\0').filter(Boolean);
-  } catch {
+  } catch (e) {
+    // A worktree may use a .git file, and the brain may be a subfolder of a repository.
+    for (let dir = path.resolve(root); ; dir = path.dirname(dir)) {
+      if (fs.existsSync(path.join(dir, '.git'))) throw e;
+      if (path.dirname(dir) === dir) break;
+    }
     list = [];
     const walk = (dir: string, rel: string, depth: number) => {
-      let ents: fs.Dirent[] = [];
-      try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      const ents = fs.readdirSync(dir, { withFileTypes: true });
       for (const e of ents) {
         if (list.length >= MAX_FILES) return;
         const r = rel ? `${rel}/${e.name}` : e.name;
@@ -67,7 +73,11 @@ export class Engine {
 
   /** Brings the brain's documents up to date; returns how many were (re)indexed or removed. */
   async sync(root: string): Promise<number> {
-    const files = await this.listFiles(root);
+    let files: string[];
+    try {
+      if (!fs.statSync(root).isDirectory()) return 0;
+      files = await this.listFiles(root);
+    } catch { return 0; } // an unavailable folder is not an empty brain
     const known = this.store.docs(BRAIN);
     let changed = 0;
     for (const rel of files) {
@@ -132,8 +142,10 @@ export class Engine {
     const lexical = expr ? this.store.bm25(expr, POOL, prefix) : [];
     let semantic: { id: number; score: number }[] = [];
     if (this.embedder) {
-      const [v] = await this.embedder.embed([q], 'query');
-      if (v) semantic = this.store.nearest(this.embedder.id, v, POOL, prefix);
+      try {
+        const [v] = await this.embedder.embed([q], 'query');
+        if (v) semantic = this.store.nearest(this.embedder.id, v, POOL, prefix).filter(r => r.score >= MIN_SIMILARITY);
+      } catch (e) { log.warn('search', 'query embedding failed', { cause: errText(e), hint: 'answering with BM25 words only' }); }
     }
     const fused = new Map<number, { score: number; words: boolean; meaning: boolean }>();
     lexical.forEach((r, i) => fused.set(r.id, { score: 1 / (RRF_K + i + 1), words: true, meaning: false }));
@@ -169,7 +181,7 @@ function bestLine(r: ChunkRow, words: string[]): { line: number; text: string } 
     const n = words.filter(w => low.includes(w)).length;
     if (n > bestN) { best = i; bestN = n; }
   });
-  if (best < 0) best = Math.max(0, lines.findIndex(l => !/^#{1,6}\s/.test(l)));
+  if (best < 0) best = Math.max(0, lines.findIndex(l => l.trim() && !/^#{1,6}\s/.test(l)));
   return { line: r.line + best, text: (lines[best] ?? '').trim().slice(0, 240) };
 }
 
