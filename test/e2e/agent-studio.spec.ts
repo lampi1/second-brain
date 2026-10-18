@@ -1,22 +1,15 @@
-// Main-only UI acceptance for the local catalog editor and the first-run interview; no provider or image-generation
+// Main-only UI acceptance for an agent's page and its editor; no provider or image-generation
 // requests. New agents come from "Crea agente" (agent-create.spec.ts): here an existing agent or its duplicate is edited.
 import { expect,test } from '@playwright/test';
 import { launchDemo,openAgents, shot } from './helpers';
-test('offline interview is resumable and agent drafts survive page navigation',async()=>{
+test('an agent page opens its editor on Modifica and the draft survives page navigation',async()=>{
   const {app,page}=await launchDemo();
   try {
     await openAgents(page);
     const studio=page.getByTestId('agent-studio');await expect(studio).toBeVisible();
-    await studio.getByRole('button',{name:'Configura il tuo lavoro',exact:true}).click();
-    const setup=page.getByTestId('first-interview');await expect(setup).toBeVisible();
-    for(let step=0;step<4;step++)await setup.getByRole('button',{name:'Continua',exact:true}).click();
-    await page.getByTestId('setup-goals').fill('Preparare riunioni e documenti');
-    await setup.getByRole('button',{name:'Più tardi',exact:true}).click();
-    await expect(setup).not.toBeVisible();
-    await studio.getByRole('button',{name:'Configura il tuo lavoro',exact:true}).click();
-    await expect(page.getByTestId('setup-goals')).toHaveValue('Preparare riunioni e documenti');
-    await shot(page,'setup-offline-resume');
-    await setup.getByRole('button',{name:'Più tardi',exact:true}).click();
+    await expect(page.getByTestId('agent-prompt')).toBeVisible(); // the agent's prompt, in full
+    await expect(page.getByTestId('agent-name')).toHaveCount(0);   // the editor opens on request
+    await studio.getByTestId('agent-edit').click();
     await expect(page.getByTestId('agent-name')).toHaveValue('Generale');
     await page.getByTestId('agent-name').fill('Assistente offerte');
     await page.getByTestId('nav-devops').click();
@@ -53,7 +46,7 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
   } finally {await first.app.close();}
   const second=await launchDemo({userData:first.userData});
   try {
-    await openAgents(second.page);
+    await openAgents(second.page,'Manifest test');
     const card=second.page.getByTestId('agent-studio').locator('article').filter({has:second.page.getByRole('heading',{name:'Manifest test',exact:true})});
     await card.getByRole('button',{name:'Modifica',exact:true}).click();
     await expect(second.page.getByTestId('agent-manifest-input')).toHaveValue('Question and constraints');

@@ -17,22 +17,21 @@ const render = (children?: ChildObservation[]) => {
 };
 const row = (state: ChildObservation['state']): ChildObservation => ({ key: state, nativeId: state, toolCallId: null, parentNativeId: null, kind: 'agent', state, task: '<script>Review</script>', startedAt: 1000, observedAt: 2000, source: 'live' });
 describe('child strips', () => {
-  it('shows description, state and original start time; terminal rows remain visible', () => {
-    const html = render(['running', 'failed', 'stopped', 'completed'].map(s => row(s as ChildObservation['state'])));
+  it('shows description, state and original start time of the children at work; ended ones leave at once', () => {
+    const html = render(['running', 'waiting', 'failed', 'stopped', 'completed'].map(s => ({ ...row(s as ChildObservation['state']), key: s })));
     expect(html).toContain('Sottoagenti di Parent');
     expect(html).toContain('In attività');
-    expect(html).toContain('Errore');
-    expect(html).toContain('Fermato');
-    expect(html).toContain('Concluso');
+    expect(html).not.toContain('Errore');
+    expect(html).not.toContain('Fermato');
+    expect(html).not.toContain('Concluso');
     expect(html).toContain('1970-01-01T00:00:01.000Z');
     expect(html).toContain('&lt;script&gt;Review&lt;/script&gt;');
-    expect(html.match(/role="listitem"/g)).toHaveLength(4);
+    expect(html.match(/role="listitem"/g)).toHaveLength(2);
     setLang('en');
     expect(render([row('running')])).toContain('Subagents of Parent');
-    expect(render([row('completed')])).toContain('Completed');
   });
-  it('renders no empty group and labels folded terminal rows', () => {
+  it('renders no empty group, also when every child has ended', () => {
     expect(render()).toBe('');
-    expect(render(Array.from({ length: 5 }, (_, i) => ({ ...row('completed'), key: String(i) })))).toContain('altri 2 finiti');
+    expect(render(Array.from({ length: 5 }, (_, i) => ({ ...row('completed'), key: String(i) })))).toBe('');
   });
 });

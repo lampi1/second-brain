@@ -1,11 +1,10 @@
 // The sub-agents of a chat as indented strips under it (Brother, 18/10: «ogni sottoagente o agente che gira deve essere
 // visibile»): one short row per child the engine reported (Claude's Agent/Task tools and background tasks, Codex's
 // sub-agents, Cursor's task tool: main/chats/agent-children.ts collects them, the chat's agentChildren carries them),
-// with what it does, its state and when it started. A running child always shows; an ended one keeps its final state,
-// the older finished ones fold behind "altri N finiti" (lib/agent-children.ts). Mounted under each strip of the
+// with what it does, its state and when it started. A child at work always shows; an ended one leaves at once
+// (lib/agent-children.ts), so the strips stay short. Mounted under each strip of the
 // Grindhouse (AgentStrips.tsx) and under the Orchestrator's head (RegiaTile.tsx). The "Dettagli" popover
 // (AgentIdentity.tsx) keeps the full census with the parent links.
-import { useState } from 'react';
 import { childRows, childTone } from '../lib/agent-children';
 import { minutes } from '../lib/format';
 import { useNow } from '../lib/clock';
@@ -17,11 +16,9 @@ const timeOf = (at: number) => new Intl.DateTimeFormat(locale(), { timeStyle: 's
 export function ChildStrips({ chatId }: { chatId: string }) {
   const children = useApp(s => s.chats[chatId]?.agentChildren);
   const title = useApp(s => s.chats[chatId]?.agent?.name || s.chats[chatId]?.title || '');
-  const [all, setAll] = useState(false);
   const now = useNow(15_000); // a running child's duration grows on screen
   if (!children?.children.length) return null;
-  const folded = childRows(children, false);
-  const { rows, hiddenEnded } = all ? childRows(children, true) : folded;
+  const { rows } = childRows(children);
   if (!rows.length) return null;
   return <div className="child-strips" role="list" aria-label={t('product.childrenOf', { title })} data-testid={`child-strips-${chatId}`} data-active={rows.filter(r => r.active).length}>
     {rows.map(r => {
@@ -36,7 +33,5 @@ export function ChildStrips({ chatId }: { chatId: string }) {
         <span className="child-strip-time" data-testid="child-time"><time dateTime={new Date(r.startedAt).toISOString()}>{timeOf(r.startedAt)}</time>{since ? ` · ${since}` : ''}</span>
       </div>;
     })}
-    {hiddenEnded > 0 && <button type="button" className="link-btn child-strips-more" onClick={() => setAll(true)} data-testid={`child-strips-more-${chatId}`}>{t('product.childrenMoreEnded', { n: hiddenEnded })}</button>}
-    {all && folded.hiddenEnded > 0 && <button type="button" className="link-btn child-strips-more" onClick={() => setAll(false)} data-testid={`child-strips-less-${chatId}`}>{t('product.childrenHideEnded')}</button>}
   </div>;
 }

@@ -84,7 +84,6 @@
 .child-strip.is-ended .child-strip-task { color:var(--text-2); }
 .child-strip-state { flex:none; }
 .child-strip-time { flex:none; color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.child-strips-more { align-self:flex-start; font-size:var(--fs-s); }
 .regia-tile > .child-strips { margin:0 10px 6px 24px; flex-shrink:0; max-height:35vh; overflow:auto; }
 .regia-tile > .child-strips::before { top:-2px; }
 .agent-pane-wrap.owned-pane { position:relative; margin:-4px 0 0 18px; padding-left:12px; }
@@ -101,3 +100,17 @@
 .agent-strips.is-narrow .strip-pair > .agent-pane { height:auto; max-height:clamp(360px, 62vh, 720px); }
 .agent-strips.is-narrow .strip-pair-side { height:auto; }
 .agent-strips.is-narrow .strip-pair-side > .agent-pane.browser-pane { flex:none; height:clamp(320px, 55vh, 640px); }
+/* The globe of a strip that drives browsers (ChatTile.tsx): quiet until pressed, then on the strip's pair accent; its
+   browsers are folded until then (owner, 18/10). */
+.chat-browser-toggle { position:relative; width:auto; min-width:26px; padding:0 6px; gap:3px; color:var(--pair, var(--text-3)); opacity:.75; }
+.chat-browser-toggle:hover { opacity:1; }
+.chat-browser-toggle.on { opacity:1; color:var(--pair, var(--blue)); background:color-mix(in srgb, var(--pair, var(--blue)) 14%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--pair, var(--blue)) 45%, transparent); }
+.chat-browser-n { font-size:10px; font-weight:650; font-variant-numeric:tabular-nums; }
+/* A run's live estimate (ChatTile.tsx RunEstimateChip): dashed and labelled "stima", never mistaken for the run's own
+   time and cost beside it; amber once the run is past it. */
+.th-estimate { display:inline-flex; align-items:center; gap:6px; flex:0 3 auto; min-width:0; overflow:hidden; height:18px; padding:0 7px; border:1px dashed var(--border-3); border-radius:99px; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.th-estimate-label { font-size:9.5px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; color:var(--text-4); }
+.th-estimate-left { color:var(--text-2); }
+.th-estimate.over { border-color:var(--amber-line); color:var(--amber); }
+.th-estimate.over .th-estimate-left { color:var(--amber); }
+.strip-facts .run-chips { flex:none; flex-wrap:nowrap; }

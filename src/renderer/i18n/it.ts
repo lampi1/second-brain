@@ -21,6 +21,7 @@ import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import {lifecycleIt}from'./areas/lifecycle.it';
 import { agentsGridIt } from './areas/agents-grid.it';
+import { agentDetailIt } from './areas/agent-detail.it';
 import { approvalsIt } from './areas/approvals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
@@ -62,6 +63,7 @@ export const it = {
   ...productIt,
   ...lifecycleIt,
   ...agentsGridIt,
+  ...agentDetailIt,
   ...approvalsIt,
   ...settingsIt,
   ...profileIt,

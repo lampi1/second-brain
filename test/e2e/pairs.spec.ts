@@ -2,7 +2,7 @@
 // accent (class paired, same data-pair, different from the other pair), the browser says "di: <chat>" and a click
 // there goes to the chat, hovering one tile lights up the other; in the agents column, focus mode, dark and light. Screenshots in test-results/shots/pairs-*.png.
 import { expect, test, type Page } from '@playwright/test';
-import { expandChats, launchDemo, shot, waitThumbs } from './helpers';
+import { showBrowsers, launchDemo, shot, waitThumbs } from './helpers';
 
 const pairOf = (page: Page, testid: string) => page.getByTestId(testid).getAttribute('data-pair');
 
@@ -17,7 +17,7 @@ async function expectPaired(page: Page, chat: string, tab: string): Promise<stri
 
 test('a chat and its browser share a color, light up together and link to each other, in the column and in focus mode', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'sms'); // a strip's browser shows once the strip is open
+  await showBrowsers(page, 'qa', 'sms'); // a strip's browser shows once opened beside the open strip
   await waitThumbs(page);
 
   // the agents column

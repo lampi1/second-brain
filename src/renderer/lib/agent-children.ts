@@ -1,12 +1,12 @@
 // The child strips of a chat (components/ChildStrips.tsx), pure: which of the engine's observed children show as
-// indented strips under their parent chat and in which order. Every running or waiting child always shows (Brother,
-// 18/10: «ogni sottoagente o agente che gira deve essere visibile»); an ended one keeps its final state on screen, the
-// latest ENDED_SHOWN of them, the older ones behind "altri N finiti". Pinned by test/unit/agent-children-rows.test.ts.
+// indented strips under their parent chat and in which order. Every running, waiting or unresolved child shows (Brother,
+// 18/10: «ogni sottoagente o agente che gira deve essere visibile»); an ended one leaves at once (owner, 18/10: finished
+// rows piled up as "finito" and made the strips too tall); the full census stays in the strip's "Dettagli" popover
+// (AgentIdentity.tsx). Pinned by test/unit/agent-children-rows.test.ts.
 import type { AgentChildren, ChildObservation, ChildState } from '@shared/agents';
 
-/** Ended children shown by default (the older ones fold behind a count). */
-export const ENDED_SHOWN = 3;
 const ACTIVE = new Set<ChildState>(['running', 'waiting']);
+const TERMINAL = new Set<ChildState>(['completed', 'failed', 'stopped']);
 
 export interface ChildRow {
   key: string;
@@ -23,18 +23,14 @@ export interface ChildRow {
 export const isActiveChild = (c: Pick<ChildObservation, 'state'>): boolean => ACTIVE.has(c.state);
 export const startOf = (c: Pick<ChildObservation, 'startedAt' | 'observedAt'>): number => c.startedAt ?? c.observedAt;
 
-/** The strips, in start order; ended ones beyond the latest ENDED_SHOWN are left out unless `all`. */
-export function childRows(children: AgentChildren | undefined, all = false): { rows: ChildRow[]; hiddenEnded: number; ended: number } {
+/** The strips of the children still at work (unresolved included), in start order; `ended` counts the ones left out. */
+export function childRows(children: AgentChildren | undefined): { rows: ChildRow[]; ended: number } {
   const list = children?.children ?? [];
-  const terminal = new Set<ChildState>(['completed', 'failed', 'stopped']);
-  const ended = list.filter(c => terminal.has(c.state));
-  // the latest ended ones, by the time their last event came (not their start: an old child that ended now is news)
-  const keep = all ? new Set(ended.map(c => c.key)) : new Set([...ended].sort((a, b) => b.observedAt - a.observedAt).slice(0, ENDED_SHOWN).map(c => c.key));
   const rows = list
-    .filter(c => !terminal.has(c.state) || keep.has(c.key))
+    .filter(c => !TERMINAL.has(c.state))
     .map<ChildRow>(c => ({ key: c.key, kind: c.kind, task: c.task, state: c.state, startedAt: startOf(c), observedAt: c.observedAt, active: isActiveChild(c), source: c.source }))
     .sort((a, b) => a.startedAt - b.startedAt || a.key.localeCompare(b.key));
-  return { rows, hiddenEnded: ended.length - keep.size, ended: ended.length };
+  return { rows, ended: list.length - rows.length };
 }
 
 /** The pill tone of a child's state (styles/app.css .pill-*). */

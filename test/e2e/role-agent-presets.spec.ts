@@ -26,6 +26,7 @@ test('shows the ten presets and previews a customized upgrade without saving it'
     await second.page.keyboard.press('g'); await second.page.keyboard.press('a');
     const card = second.page.getByTestId('catalog-card-default-writer');
     await card.getByRole('button', { name: 'Aggiornamento preset disponibile' }).click();
+    await second.page.getByRole('button', { name: 'Rivedi aggiornamento', exact: true }).click();
     const update = second.page.getByTestId('preset-update');
     await update.locator('summary').click();
     await expect(update).toContainText(writer.instructions);

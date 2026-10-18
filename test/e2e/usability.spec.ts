@@ -5,7 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { demoLayout, expandChats, launchDemo } from './helpers';
+import { demoLayout, expandChats, launchDemo, showBrowsers } from './helpers';
 
 const OUT = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'usability');
 interface Step { what: string; kind: 'key' | 'type' | 'click' | 'check'; atMs: number }
@@ -96,7 +96,7 @@ test('Trovo una chat con la ricerca', async () => {
 
 test('Seguo un browser a schermo intero e torno', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'qa'); // its browser sits on the open strip
+  await showBrowsers(page, 'qa'); // its browser sits beside the open strip
   const s = new Scenario('Seguo un browser a schermo intero', page);
   await s.click('browser-max-tab-qa', '⤢ sul browser della QA');
   await s.check('il browser riempie lo spazio di lavoro', async () => {
