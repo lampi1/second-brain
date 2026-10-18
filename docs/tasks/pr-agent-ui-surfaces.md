@@ -12,12 +12,12 @@ Battito cards now appear on matching agent pages, empty search and a brain file'
 - The handler lives in `src/main/run/outcome.ts` and is registered in `src/main/index.ts`. It validates a bounded `chatId` (1-120 chars) and one of the three verdicts, rejects an unavailable `markRun`, a chat that is not a run, a starting/running/waiting or queued run, and open pending requests, then delegates to `ChatService.markRun`. The renderer cannot pass basis, author or time: `ChatManager.markRun` fixes the basis to `human`. `ChatManager.markRun` has no busy check of its own, so this handler is the guard.
 - `test/unit/run-outcome-ipc.test.ts` covers malformed payloads, the unavailable service, a non-run chat and busy/pending runs.
 - Fixed in integration: `FileViewer` imported `ContextPulse` statically, which pulled the app bridge (`window.sb`) and store into the brain pages; since `store/ui` imports the brain pages, five unit suites (`ui-lib`, `toast-lifecycle`, `regia-dock`, `appearance-prefs`, `role-preferences`) failed at import with `window is not defined`. The file card is now `FilePulse`, loaded with `lazy` like the other bridge readers of the brain pages.
-- Rebased on origin/main 292273c: the catalog card keeps both the preset update badge from #43 and this PR's run composer and row index.
+- Rebased on origin/main 4e01cee: the catalog card keeps both the preset update badge from #43 and this PR's run composer and row index.
 
-## Validation (integrator, on origin/main 292273c; per-branch checks decided by Brother on 2026-10-18)
+## Validation (integrator, on origin/main 4e01cee; per-branch checks decided by Brother on 2026-10-18)
 
 - `npx tsc --noEmit` and `npx eslint .` clean.
-- `npm run check:branch`: RESULT_PLACEHOLDER
+- `npm run check:branch`: unit 1260 passed; the publish-guard stage reports 88 findings, all in the local untracked `tmp/` (never committed).
 - Commit guard (`tools/guard/scan.mjs --commits`) clean.
 - E2E spec `test/e2e/agent-surfaces.spec.ts` is written, not run: e2e runs once on main at the end. It covers three outcomes, failed writes, launch failure/success, reduced motion, contextual placements and persistent Orchestrator visibility.
 - No app launched (forbidden by the brief): visual verification and screenshots remain to do on main.
