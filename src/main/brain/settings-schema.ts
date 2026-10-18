@@ -11,6 +11,7 @@ import path from 'node:path';
 import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shared/contract';
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
+import { PULSE_TYPES } from '../pulse/cards';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
@@ -32,6 +33,13 @@ const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
 ];
 
 const BASE: readonly SettingDef[] = [
+  { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase della Dashboard, soltanto mentre la finestra è aperta.' },
+  { key: 'pulse.dailyUsd', type: 'usd', min: 0.01, max: 2, default: 0.25, protected: true, label: 'Battito: budget giornaliero ($)', description: 'Stima di ammissione condivisa tra carte e frase. I costi non riportati restano sconosciuti.' },
+  { key: 'pulse.slots', type: 'slots', default: ['08:30', '13:00', '18:30'], protected: true, label: 'Battito: orari', description: 'Da uno a tre orari locali; nessun recupero dei giorni precedenti.' },
+  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al massimo ogni ora, nello stesso budget.' },
+  { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Battito: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
+  ...PULSE_TYPES.map((t): SettingDef => ({ key: `pulse.types.${t}`, type: 'boolean', default: true, protected: false, label: `Battito: ${t}`, description: 'Mostra questo tipo di carta.' })),
+  ...(['board', 'agent', 'search', 'file'] as const).map((p): SettingDef => ({ key: `pulse.places.${p}`, type: 'boolean', default: true, protected: false, label: `Battito: ${p}`, description: 'Mostra le carte in questa posizione.' })),
   { key: 'brainRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella del cervello',
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
@@ -169,6 +177,11 @@ export function validate(key: unknown, value: unknown): Checked {
   const k = key as SettingKey;
   if (value === null && d.nullable) return { ok: true, key: k, value: null };
   switch (d.type) {
+    case 'slots': {
+      if (!Array.isArray(value) || value.length < 1 || value.length > 3 || new Set(value).size !== value.length
+        || value.some(v => typeof v !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(v))) return { ok: false, error: 'Scegli da uno a tre orari HH:MM distinti.' };
+      return { ok: true, key: k, value: [...value].sort() };
+    }
     case 'repo-paths': {
       if (!Array.isArray(value) || value.length > 32) return { ok: false, error: `${d.label}: al massimo 32 cartelle repository o worktree` };
       try { return { ok: true, key: k, value: [...new Set(value.map(canonicalRepoRoot))] }; }
@@ -192,7 +205,8 @@ export function validate(key: unknown, value: unknown): Checked {
     case 'usd': {
       // rounded to cents first: 0.004 would otherwise pass "> 0" and be saved as 0 (= no limit)
       const v = typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) / 100 : NaN;
-      if (!(v > 0) || v > 1e6) return { ok: false, error: `${d.label}: un importo in $ da 0,01 a 1000000${d.nullable ? ', oppure vuoto' : ''}` };
+      const min = d.min ?? 0.01, max = d.max ?? 1e6, it = (n: number) => String(n).replace('.', ',');
+      if (!(v > 0) || v < min || v > max) return { ok: false, error: `${d.label}: un importo in $ da ${it(min)} a ${it(max)}${d.nullable ? ', oppure vuoto' : ''}` };
       return { ok: true, key: k, value: v };
     }
   }
@@ -200,6 +214,9 @@ export function validate(key: unknown, value: unknown): Checked {
 
 export function defaults(): Settings {
   return {
+    pulse: { on: true, dailyUsd: 0.25, slots: ['08:30', '13:00', '18:30'], headline: { on: true },
+      types: { idea: true, consiglio: true, promemoria: true, collegamento: true, curiosita: true, agente: true }, places: { board: true, agent: true, search: true, file: true } },
+    jobs: { fallback: 'auto' },
     brainRoot: null, mcpPort: 4319, autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
     contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
@@ -244,7 +261,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'devops' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
+      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'devops' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

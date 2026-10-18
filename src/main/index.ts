@@ -39,6 +39,9 @@ import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
+import { pulseStubHandlers } from './pulse/handlers';
+import { createPulse } from './pulse/wiring';
+import { pulseDemoHandlers } from './pulse/demo';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -132,6 +135,8 @@ app.whenReady().then(async () => {
     calls: !demo && !process.env.SB_TEST,
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
+  const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
+  const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
     const handlers: Handlers = {
@@ -309,7 +314,10 @@ app.whenReady().then(async () => {
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
-    'headline:get': () => headline.get(),
+    'headline:get': () => pulse?.headline() ?? headline.get(),
+    ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
+      settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
+    }) : pulseStubHandlers())),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
@@ -318,7 +326,7 @@ app.whenReady().then(async () => {
   // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
   const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
-  void windowReady.then(() => { const t = setTimeout(() => headline.start(), 15_000); t.unref(); });
+  void windowReady.then(() => { if (pulse) pulse.start(); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
@@ -340,6 +348,7 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     headline.stop();
+    pulse?.stop(); unsubscribePulse();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

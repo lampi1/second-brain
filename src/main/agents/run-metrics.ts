@@ -80,6 +80,9 @@ export function indexRuns(all: readonly AgentRun[]): RunIndex {
 /** Adds one ended run (an open one is ignored: the unit is the ended run). */
 export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: ReadonlyMap<string, number>): void {
   if (run.endedAt === undefined) return;
+  // Headline and fallback runs are not comparable with the agent version's card/task baseline.
+  // Their complete cost ledger remains available under Battito's job budgets.
+  if (run.oneshot?.fallback || run.oneshot?.job === 'headline') return;
   t.ended++;
   const o = run.outcome;
   if (o && (o.basis === 'human' || o.basis === 'reviewed-evidence')) addVerdict(t.verdicts, o.verdict);
