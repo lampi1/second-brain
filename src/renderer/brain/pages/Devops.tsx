@@ -1,8 +1,12 @@
 // DevOps: the brain's first page (it took the place of Oggi and Adesso on 2026-10-12). Everything the user needs from
-// Azure DevOps with the content shown in the app, so a link is opened only for a PR: four tiles (to read, my PRs,
-// reviews for me, work items not moving) that jump to their section; the news to read as cards with the whole comment
-// or mention; my PRs with who they wait for, build, votes, open discussions, the last comment and the linked work
-// items' test outcomes; "Test e QA" (DevopsQa.tsx: my PRs' test plans, who ran what, what is missing, QA bugs, a
+// Azure DevOps with the content shown in the app, so a link is opened only for a PR. Laid out like the Dashboard
+// (2026-10-18, "la sezione devops è brutta: più usabile, schematica e pulita"): a head with the eyebrow, the title and the
+// one-line state; one quiet bar for the automatic read and the sound; four tiles (to read, my PRs, reviews for me, work
+// items not moving) that jump to their section; a bar that stays on top with every section and its count, one click to
+// reach it (the page stays one scroll, as the user uses it every day: "non cambiarla troppo"). The news as cards
+// with the whole comment
+// or mention; my PRs with who they wait for, a four-step check strip (build, votes, discussions, auto-complete), the
+// voters, the last comment and the linked work items' test outcomes; "Test e QA" (DevopsQa.tsx: my PRs' test plans, who ran what, what is missing, QA bugs, a
 // stand-up text to copy); the reviews waiting for me and since when; my work items by state, each opening in place on its
 // description, last comments and test cases; the tickets I follow with their changes; the stand-up sentences. All of it
 // from the brain's read-only script devops-me.mjs --full, kept by main's DevopsService: zero tokens, no AI summary.
@@ -20,7 +24,7 @@ import { BUILD_WORDS, byState, daysSince, firstName, hue, initials, lastComment,
 import { normTables } from '../types';
 import { useBrain } from '../api';
 import { ownerOf } from '../lib/text';
-import { Empty, Loading, PageHead } from '../components/States';
+import { Empty, Loading } from '../components/States';
 import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, Seg, toast, type Navigate, type Tone } from '../components/ui';
 import { Standup } from './day';
 import { QaSection } from './DevopsQa';
@@ -36,8 +40,9 @@ const newsLine = (n: DevopsNews) => (n.who ? `${n.who} ${VERB[n.kind]}` : VERB[n
 /** "failed (20261011.4)" → "fallita (20261011.4)": the script's build result in Italian. */
 const buildDetail = (d: string) => d.replace(/^(\w+)/, w => BUILD_WORDS[w] ?? w);
 const ERROR_TITLE: Record<NonNullable<DevopsState['error']>['kind'], string> = { login: 'Accesso a DevOps scaduto', script: 'Script di DevOps non trovato', failed: 'Lettura di DevOps non riuscita' };
+type SecId = 'news' | 'prs' | 'qa' | 'reviews' | 'items' | 'followed' | 'standup';
 /** Scrolls to a section and moves the keyboard focus there (Tab goes on inside it, not back among the tiles). */
-const jump = (id: string) => { const el = document.getElementById(id); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); el?.focus({ preventScroll: true }); };
+const jump = (id: SecId) => { const el = document.getElementById(`dv-${id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); el?.focus({ preventScroll: true }); };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 // ---- small pieces ------------------------------------------------------------------------------------------------
@@ -229,27 +234,45 @@ function voteMark(vote: number): { mark: string; tone: Tone } {
   if (vote <= -10) return { mark: '✗', tone: 'bad' };
   return { mark: '·', tone: 'outline' };
 }
-function buildPill(b: DevopsPr['build']) {
-  if (!b) return <Pill tone="outline">nessuna build</Pill>;
+/** The build's result as a link to its run ("build ok", "build fallita", "build in corso"). */
+function buildLink(b: DevopsPr['build']) {
+  if (!b) return <span>nessuna build</span>;
   const word = b.result ?? b.status ?? '';
   const label = b.result === 'succeeded' ? 'build ok' : `build ${BUILD_WORDS[word] ?? word}`;
-  const tone: Tone = b.result === 'succeeded' ? 'good' : b.result === 'failed' ? 'bad' : 'warn';
-  return <ExtLink href={b.url} title={`Build ${b.number}${b.at ? `, ${fmt.ago(b.at)}` : ''}`}><Pill tone={tone}>{label}</Pill></ExtLink>;
+  return <ExtLink href={b.url} title={`Build ${b.number}${b.at ? `, ${fmt.ago(b.at)}` : ''}`}>{label}</ExtLink>;
+}
+/** The votes in one line: how many approved, and whether a required reviewer still says no or nothing. */
+function voteSummary(rs: DevopsPr['reviewers']): { text: string; tone: Tone } {
+  if (!rs.length) return { text: 'nessun revisore', tone: '' };
+  const ok = rs.filter(r => r.vote >= 5).length;
+  const no = rs.some(r => r.vote <= -10);
+  const missing = rs.some(r => r.required && r.vote < 5);
+  return { text: `${ok} su ${rs.length} ${ok === 1 ? 'approva' : 'approvano'}`, tone: no ? 'bad' : missing ? 'warn' : 'good' };
+}
+/** One step of a PR's check strip: a dot in its tone, its name, its state. */
+function Check({ k, tone, children }: { k: ReactNode; tone: Tone; children: ReactNode }) {
+  return (
+    <div className={`dv-check ${tone}`}>
+      <span className="k"><i aria-hidden="true" />{k}</span>
+      <span className="v">{children}</span>
+    </div>
+  );
 }
 
 function PrCard({ p, details, now }: { p: DevopsPr; details: DevopsState['details']; now: number }) {
   const wait = prWait(p);
   const age = daysSince(p.createdAt, now);
+  const votes = voteSummary(p.reviewers);
   return (
     <article className={`dv-pr t-${wait.tone || 'none'}`} data-testid={`devops-pr-${p.id}`}>
       <div className={`dv-wait ${wait.tone}`} data-testid={`devops-wait-${p.id}`}>{wait.text}</div>
       <div className="dv-pr-head"><h3><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title} <IconExternal /></ExtLink></h3><RecordChatButton rec={{ kind: 'pr', pr: p, mine: true }} /></div>
-      <div className="small muted">{p.repo}{p.target ? ` → ${p.target}` : ''}{age !== null ? ` · aperta ${age === 0 ? 'oggi' : `da ${plural(age, 'giorno', 'giorni')}`}` : ''}{p.activeThreads ? ` · ${plural(p.activeThreads, 'discussione aperta', 'discussioni aperte')}` : ''}</div>
-      <div className="bx-row">
-        {p.draft && <Pill tone="outline">bozza</Pill>}
-        {buildPill(p.build)}
-        <span className="dv-chip-help"><Pill tone={p.autoComplete ? 'good' : 'outline'}>{p.autoComplete ? 'auto-complete attivo' : 'senza auto-complete'}</Pill>
-          <HelpTip label="Auto-complete" title="Auto-complete">Acceso: la PR si unisce da sola appena build, voti obbligatori e controlli sono verdi. Spento: qualcuno deve premere «Complete» in DevOps.</HelpTip></span>
+      <div className="small muted">{p.draft && <Pill tone="outline">bozza</Pill>} {p.repo}{p.target ? ` → ${p.target}` : ''}{age !== null ? ` · aperta ${age === 0 ? 'oggi' : `da ${plural(age, 'giorno', 'giorni')}`}` : ''}</div>
+      <div className="dv-checks" data-testid={`devops-checks-${p.id}`}>
+        <Check k="Build" tone={!p.build ? '' : p.build.result === 'succeeded' ? 'good' : p.build.result === 'failed' ? 'bad' : 'warn'}>{buildLink(p.build)}</Check>
+        <Check k="Voti" tone={votes.tone}>{votes.text}</Check>
+        <Check k="Discussioni" tone={p.activeThreads ? 'warn' : 'good'}>{p.activeThreads ? plural(p.activeThreads, 'aperta', 'aperte') : 'nessuna aperta'}</Check>
+        <Check k={<>Auto-complete<HelpTip label="Auto-complete" title="Auto-complete">Acceso: la PR si unisce da sola appena build, voti obbligatori e controlli sono verdi. Spento: qualcuno deve premere «Complete» in DevOps.</HelpTip></>} tone={p.autoComplete ? 'good' : ''}>{p.autoComplete ? 'auto-complete attivo' : 'senza auto-complete'}</Check>
       </div>
       {p.reviewers.length > 0
         ? <div className="dv-voters">{p.reviewers.map(r => { const v = voteMark(r.vote); return <span key={r.name} className={`dv-voter ${v.tone}`} data-tip={`${r.required ? 'Revisore obbligatorio: senza il suo sì la PR non si unisce' : 'Revisore facoltativo: il suo voto non blocca'}. Voto: ${r.label || 'nessuno'}`}><span className="m">{v.mark}</span>{r.name}: {r.label || 'nessun voto'}{r.required ? <span className="muted"> · obbligatorio</span> : ''}</span>; })}</div>
@@ -290,34 +313,45 @@ function ErrorBanner({ e }: { e: NonNullable<DevopsState['error']> }) {
   );
 }
 
+/** The automatic read and the alerts' sound in one quiet bar under the head. */
 function AutoControls({ s }: { s: DevopsState }) {
   const sound = s.sound;
   const every = (EVERY_CHOICES as readonly number[]).includes(s.everyMin) ? s.everyMin : null;
   return (
-    <div className="bx-row dv-auto" data-testid="devops-auto">
-      <span className="small muted">Aggiornamento automatico</span>
-      <Seg label="Aggiornamento automatico" value={s.enabled ? 'on' : 'off'} onChange={v => { setDevops({ enabled: v === 'on' }); }}
-        items={[{ id: 'off', label: 'Spento' }, { id: 'on', label: 'Acceso' }]} />
-      <span className="small muted">ogni</span>
-      <Seg label="Ogni quanti minuti" value={every ?? -1} onChange={v => { setDevops({ everyMin: v }); }}
-        items={EVERY_CHOICES.map(m => ({ id: m as number, label: m < 60 ? `${m} min` : `${m / 60} h` }))} />
-      {every === null && <span className="small muted">({s.everyMin} min)</span>}
-      {s.enabled && s.nextAt && <span className="small muted">· prossima lettura {fmt.when(s.nextAt)}</span>}
-      <span className="small muted" data-tip="Un avviso a schermo quando qualcuno ti menziona o cambia le tue cose; il suono si può spegnere">· suono degli avvisi</span>
-      <Seg label="Suono degli avvisi" value={sound ? 'on' : 'off'} onChange={v => { setDevops({ sound: v === 'on' }); }}
-        items={[{ id: 'off', label: 'Spento' }, { id: 'on', label: 'Acceso' }]} />
+    <div className="dv-auto" data-testid="devops-auto">
+      <div className="dv-auto-group">
+        <span className="k">Lettura automatica</span>
+        <Seg label="Aggiornamento automatico" value={s.enabled ? 'on' : 'off'} onChange={v => { setDevops({ enabled: v === 'on' }); }}
+          items={[{ id: 'off', label: 'Spento' }, { id: 'on', label: 'Acceso' }]} />
+        <span className="k">ogni</span>
+        <Seg label="Ogni quanti minuti" value={every ?? -1} onChange={v => { setDevops({ everyMin: v }); }}
+          items={EVERY_CHOICES.map(m => ({ id: m as number, label: m < 60 ? `${m} min` : `${m / 60} h` }))} />
+        {every === null && <span className="k">({s.everyMin} min)</span>}
+        {s.enabled && s.nextAt && <span className="k">prossima {fmt.when(s.nextAt)}</span>}
+      </div>
+      <div className="dv-auto-group">
+        <span className="k" data-tip="Un avviso a schermo quando qualcuno ti menziona o cambia le tue cose; il suono si può spegnere">Suono degli avvisi</span>
+        <Seg label="Suono degli avvisi" value={sound ? 'on' : 'off'} onChange={v => { setDevops({ sound: v === 'on' }); }}
+          items={[{ id: 'off', label: 'Spento' }, { id: 'on', label: 'Acceso' }]} />
+      </div>
     </div>
   );
 }
 
-function Tile({ k, v, s, tone, to, testId }: { k: string; v: number; s: ReactNode; tone?: Tone; to: string; testId: string }) {
+/** A number at a glance; a click jumps to its section. */
+function Tile({ k, v, s, tone, to, testId }: { k: string; v: number; s: ReactNode; tone?: Tone; to: SecId; testId: string }) {
   return (
     <button type="button" className={`dv-tile ${tone ?? ''}`} onClick={() => jump(to)} data-testid={testId}>
-      <span className="bx-eyebrow">{k}</span>
-      <span className="bx-big">{v}</span>
+      <span className="k"><i aria-hidden="true" />{k}</span>
+      <span className="v">{v}</span>
       <span className="s">{s}</span>
     </button>
   );
+}
+
+/** A section's place on the page: the anchor the tiles and the section bar jump to. */
+function Anchor({ id, children }: { id: SecId; children: ReactNode }) {
+  return <div id={`dv-${id}`} className="dv-anchor" tabIndex={-1}>{children}</div>;
 }
 
 function Reviews({ list, now }: { list: DevopsPrRef[]; now: number }) {
@@ -338,13 +372,34 @@ function Reviews({ list, now }: { list: DevopsPrRef[]; now: number }) {
 
 // ---- page -------------------------------------------------------------------------------------------------------
 
+/** The page's head, as on the Dashboard: eyebrow, title with the read's state dot, the one-line state, the refresh. */
+function Head({ s, lead }: { s: DevopsState | null; lead?: ReactNode }) {
+  const dot = !s ? '' : s.running ? 'run' : s.error ? 'bad' : s.at ? 'good' : '';
+  return (
+    <header className="dv-head">
+      <div className="dv-head-main">
+        <span className="dv-eyebrow">AZURE DEVOPS · SOLA LETTURA, ZERO TOKEN</span>
+        <h1>DevOps{dot && <i className={`dv-dot ${dot}`} aria-hidden="true" />}</h1>
+        {lead && <p className="dv-lead" data-testid="bx-lead">{lead}</p>}
+        <p className="dv-what">Tutto da Azure DevOps con i contenuti qui dentro: commenti, descrizioni, test. Letto con lo script del cervello.</p>
+      </div>
+      {s && (
+        <div className="dv-head-side">
+          {s.at ? <span className="small muted" title={fmt.when(s.at)}>aggiornato {fmt.ago(s.at)}</span> : null}
+          <button type="button" className="bx-btn primary" disabled={s.running} onClick={refreshDevops} data-testid="devops-refresh">{s.running ? 'Leggo…' : 'Aggiorna ora'}</button>
+        </div>
+      )}
+    </header>
+  );
+}
+
 export function Devops({ nav }: { nav?: Navigate }) {
   const s = useDevops(x => x);
   const t = useBrain('/api/tables', normTables);
   // the news unread at the last read stay in "Da leggere" (marked "letta" once read) until the next read: a card
   // never jumps away under the pointer or takes the keyboard focus with it
   const top = useRef<{ at: number | null; keys: Set<string> }>({ at: null, keys: new Set() });
-  if (!s) return <><PageHead title="DevOps" /><Loading label="Leggo lo stato di DevOps…" /></>;
+  if (!s) return <><Head s={null} /><Loading label="Leggo lo stato di DevOps…" /></>;
   if (top.current.at !== s.at || top.current.keys.size === 0) top.current = { at: s.at, keys: new Set(s.news.filter(n => n.unread).map(n => n.key)) };
   const now = Date.now();
   const kept = (n: DevopsNews) => n.unread || top.current.keys.has(n.key);
@@ -361,7 +416,17 @@ export function Devops({ nav }: { nav?: Navigate }) {
   const unreadDirect = direct.filter(n => n.unread);
   const unreadFollowed = s.news.filter(n => n.unread && n.kind === 'followed').length;
   const never = s.at === null;
+  const hasQa = s.qa.length > 0 || !!s.qaError;
 
+  const secs: { id: SecId; label: string; n?: number; hot?: boolean }[] = [
+    { id: 'news', label: 'Da leggere', n: unreadDirect.length, hot: unreadDirect.length > 0 },
+    { id: 'prs', label: 'Le mie PR', n: s.prs.length, hot: waitMe.length > 0 },
+    ...(hasQa ? [{ id: 'qa' as const, label: 'Test e QA', n: s.qa.length }] : []),
+    { id: 'reviews', label: 'Review', n: reviews.length, hot: reviews.length > 0 },
+    { id: 'items', label: 'Work item', n: s.assigned.length, hot: hot.length > 0 },
+    ...(followed.size ? [{ id: 'followed' as const, label: 'Ticket che segui', n: followed.size, hot: unreadFollowed > 0 }] : []),
+    ...(t.data ? [{ id: 'standup' as const, label: 'Stand-up' }] : []),
+  ];
   const lead = s.error
     ? <><b>{ERROR_TITLE[s.error.kind]}</b>{s.at ? <>: qui sotto i dati dell'ultima lettura riuscita ({fmt.ago(s.at)}).</> : '.'}</>
     : never
@@ -376,27 +441,33 @@ export function Devops({ nav }: { nav?: Navigate }) {
         </>;
 
   return (
-    <>
-      <PageHead title="DevOps" at={s.at} refreshing={s.running} lead={lead}
-        what="Tutto da Azure DevOps con i contenuti qui dentro: commenti, descrizioni, test. Letto con lo script del cervello: zero token, sola lettura."
-        actions={<button type="button" className="bx-btn s primary" disabled={s.running} onClick={refreshDevops} data-testid="devops-refresh">{s.running ? 'Leggo…' : 'Aggiorna ora'}</button>} />
+    <div className="dv-page">
+      <Head s={s} lead={lead} />
       {s.error && <ErrorBanner e={s.error} />}
       <AutoControls s={s} />
 
       {never ? (s.running ? <Loading label="Leggo DevOps (la prima volta anche qualche minuto)…" lines={4} /> : <Empty title="DevOps non ancora letto">Premi «Aggiorna ora»: novità, PR e work item compaiono qui.</Empty>) : (
         <>
           <div className="dv-tiles" data-testid="devops-tiles">
-            <Tile k="Da leggere" v={unreadDirect.length} to="dv-news" testId="devops-tile-news" tone={mentions ? 'warn' : unreadDirect.length ? 'blue' : ''}
+            <Tile k="Da leggere" v={unreadDirect.length} to="news" testId="devops-tile-news" tone={mentions ? 'warn' : unreadDirect.length ? 'blue' : ''}
               s={unreadDirect.length ? (mentions ? `${plural(mentions, 'menzione', 'menzioni')} per te` : 'commenti e cambi') : unreadFollowed ? `+ ${unreadFollowed} sui ticket che segui` : 'tutto letto'} />
-            <Tile k="Le mie PR" v={s.prs.length} to="dv-prs" testId="devops-tile-prs" tone={s.prs.some(p => prWait(p).tone === 'bad') ? 'bad' : waitMe.length ? 'warn' : ''}
+            <Tile k="Le mie PR" v={s.prs.length} to="prs" testId="devops-tile-prs" tone={s.prs.some(p => prWait(p).tone === 'bad') ? 'bad' : waitMe.length ? 'warn' : ''}
               s={s.prs.length ? (waitMe.length ? `${waitMe.length} ${waitMe.length === 1 ? 'aspetta' : 'aspettano'} te` : 'aspettano gli altri') : 'nessuna attiva'} />
-            <Tile k="Review per te" v={reviews.length} to="dv-reviews" testId="devops-tile-reviews" tone={reviews.some(p => (daysSince(p.createdAt, now) ?? 0) >= 3) ? 'warn' : ''}
+            <Tile k="Review per te" v={reviews.length} to="reviews" testId="devops-tile-reviews" tone={reviews.some(p => (daysSince(p.createdAt, now) ?? 0) >= 3) ? 'warn' : reviews.length ? 'blue' : ''}
               s={reviews.length ? `la più vecchia aspetta ${sinceLabel(Math.max(...reviews.map(p => daysSince(p.createdAt, now) ?? 0)))}` : 'nessuna'} />
-            <Tile k="Work item" v={s.assigned.length} to="dv-items" testId="devops-tile-items" tone={hot.length ? 'bad' : stuck.length ? 'warn' : ''}
+            <Tile k="Work item" v={s.assigned.length} to="items" testId="devops-tile-items" tone={hot.length ? 'bad' : stuck.length ? 'warn' : ''}
               s={!s.assigned.length ? 'nessuno aperto' : stuck.length ? `${stuck.length} ferm${stuck.length === 1 ? 'o' : 'i'} da 3+ giorni${hot.length ? `, ${hot.length} P1/P2` : ''}` : 'tutti si muovono'} />
           </div>
 
-          <div id="dv-news" className="dv-anchor" tabIndex={-1}>
+          <nav className="dv-secbar" aria-label="Sezioni di DevOps" data-testid="devops-sections">
+            {secs.map(x => (
+              <button key={x.id} type="button" className={x.hot ? 'hot' : ''} onClick={() => jump(x.id)} data-testid={`devops-jump-${x.id}`}>
+                {x.label}{x.n !== undefined && <span className="n">{x.n}</span>}
+              </button>
+            ))}
+          </nav>
+
+          <Anchor id="news">
             <Section title="Da leggere" count={fresh.length} note="menzioni, commenti e voti sulle tue PR, cambi ai tuoi work item: il testo è qui" testId="devops-news"
               actions={unreadDirect.length > 0 ? <button type="button" className="bx-btn s" onClick={() => markDevopsRead(unreadDirect.map(n => n.key))} data-testid="devops-mark-all">Segna tutte come lette</button> : undefined}>
               {fresh.length > 0
@@ -409,49 +480,51 @@ export function Devops({ nav }: { nav?: Navigate }) {
                 </details>
               )}
             </Section>
-          </div>
+          </Anchor>
 
-          <div id="dv-prs" className="dv-anchor" tabIndex={-1}>
-            <Section title="Le mie PR" count={s.prs.length} note="chi aspetta chi, build, voti, ultimo commento e test dei work item" testId="devops-prs">
+          <Anchor id="prs">
+            <Section title="Le mie PR" count={s.prs.length} note="chi aspetta chi, build, voti, discussioni, ultimo commento e test dei work item" testId="devops-prs">
               {s.prs.length ? <div className="dv-prs">{[...s.prs].sort((a, b) => Number(prWait(b).who === 'me') - Number(prWait(a).who === 'me')).map(p => <PrCard key={p.id} p={p} details={s.details} now={now} />)}</div> : <Empty title="Nessuna PR attiva" />}
             </Section>
-          </div>
+          </Anchor>
 
-          {(s.qa.length > 0 || s.qaError) && (
-            <div id="dv-qa" className="dv-anchor" tabIndex={-1}><QaSection qa={s.qa} error={s.qaError} /></div>
-          )}
+          {hasQa && <Anchor id="qa"><QaSection qa={s.qa} error={s.qaError} /></Anchor>}
 
-          <div id="dv-reviews" className="dv-anchor" tabIndex={-1}>
-            <Section title="Review che aspettano te" count={reviews.length} testId="devops-reviews">
+          <Anchor id="reviews">
+            <Section title="Review che aspettano te" count={reviews.length} note="la più vecchia per prima conta di più" testId="devops-reviews">
               {reviews.length ? <Reviews list={reviews} now={now} /> : <Empty title="Nessuna review da fare" />}
             </Section>
-          </div>
+          </Anchor>
 
-          <div id="dv-items" className="dv-anchor" tabIndex={-1}>
+          <Anchor id="items">
             <Section title="I miei work item" count={s.assigned.length} note="clic su una riga: descrizione, commenti e test case" testId="devops-assigned">
-              {s.assigned.length ? byState(s.assigned).map(g => (
+              {s.assigned.length ? <div className="dv-groups">{byState(s.assigned).map(g => (
                 <div key={g.state} className="dv-group" data-testid={`devops-state-${g.state}`}>
                   <h3><Pill tone={stateTone(g.state)}>{g.state}</Pill><span className="count">{g.items.length}</span></h3>
                   <div className="dv-items">{g.items.map(w => <ItemRow key={w.id} w={w} d={s.details[String(w.id)]} now={now} state={false} />)}</div>
                 </div>
-              )) : <Empty title="Nessun work item aperto" />}
+              ))}</div> : <Empty title="Nessun work item aperto" />}
             </Section>
-          </div>
+          </Anchor>
 
           {followed.size > 0 && (
-            <Section title="Ticket che segui" count={followed.size} note="stato, assegnatario e commenti degli altri" testId="devops-followed">
-              <div className="dv-stack">{[...followed.values()].map(ns => <FollowedCard key={ns[0]!.key} news={ns} details={s.details} />)}</div>
-            </Section>
+            <Anchor id="followed">
+              <Section title="Ticket che segui" count={followed.size} note="stato, assegnatario e commenti degli altri" testId="devops-followed">
+                <div className="dv-stack">{[...followed.values()].map(ns => <FollowedCard key={ns[0]!.key} news={ns} details={s.details} />)}</div>
+              </Section>
+            </Anchor>
           )}
 
           {t.data && (
-            <div className="dv-standup">
-              <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />
-              {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>Tutto il fatto e il diario →</button>}
-            </div>
+            <Anchor id="standup">
+              <div className="dv-standup">
+                <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />
+                {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>Tutto il fatto e il diario →</button>}
+              </div>
+            </Anchor>
           )}
         </>
       )}
-    </>
+    </div>
   );
 }
