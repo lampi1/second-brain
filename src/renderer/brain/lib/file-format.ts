@@ -86,10 +86,30 @@ export function splitHighlighted(html: string): string[] {
   return lines;
 }
 
-/** CSV/TSV text → rows of cells (RFC 4180 quotes, the delimiter guessed from the first line: tab, `;` or `,`). */
+/** Tabs, semicolons and commas in the first record, outside quoted cells (a quoted cell may hold any of them). As in
+ *  parseCsv, a quote opens a quoted cell only at a cell's start (after any candidate delimiter), so `5" disk` is text. */
+function delimiterCounts(text: string): Record<string, number> {
+  const counts: Record<string, number> = { '\t': 0, ';': 0, ',': 0 };
+  let quoted = false, start = true;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c !== '"') continue;
+      if (text[i + 1] === '"') i++;
+      else quoted = false;
+    } else if (c === '"' && start) quoted = true;
+    else if (c === '\n' || c === '\r') break;
+    else if (c in counts) { counts[c]!++; start = true; continue; }
+    start = false;
+  }
+  return counts;
+}
+
+/** CSV/TSV text → rows of cells (RFC 4180 quotes, the delimiter guessed from the first record outside quotes: tab, `;`
+ *  or `,`). */
 export function parseCsv(text: string, p = ''): string[][] {
-  const head = text.slice(0, text.search(/\r?\n|$/));
-  const count = (c: string) => head.split(c).length - 1;
+  const counts = delimiterCounts(text);
+  const count = (c: string) => counts[c]!;
   const delim = extOf(p) === 'tsv' || count('\t') > Math.max(count(','), count(';')) ? '\t' : count(';') > count(',') ? ';' : ',';
   const rows: string[][] = [];
   let row: string[] = [], cell = '', quoted = false;
