@@ -206,6 +206,7 @@ export class ClaudeSession implements HarnessSession {
   private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
   private readonly childTelemetry: AgentChildrenReporter;
+  private readonly childTools = new Map<string, unknown>();
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
@@ -621,6 +622,24 @@ export class ClaudeSession implements HarnessSession {
     });
   }
 
+  /** Child tool telemetry is independent of transcript rendering, including nested assistant/user messages. */
+  private childMessage(m: Obj): void {
+    for (const raw of arr(o(m.message).content)) {
+      const b = o(raw);
+      if (m.type === 'assistant' && b.type === 'tool_use' && (b.name === 'Agent' || b.name === 'Task') && s(b.id)) {
+        this.childTools.set(s(b.id), b.input);
+        this.childTool(s(b.id), b.input, 'running');
+      } else if (m.type === 'user' && b.type === 'tool_result' && this.childTools.has(s(b.tool_use_id))) {
+        const id = s(b.tool_use_id), input = this.childTools.get(id);
+        this.childTools.delete(id);
+        // A background acknowledgment does not settle the child; native task events do.
+        if (b.is_error === true || o(input).run_in_background !== true) {
+          this.childTool(id, input, b.is_error === true ? 'failed' : o(input).run_in_background === false ? 'completed' : 'unknown');
+        }
+      }
+    }
+  }
+
   private sys(text: string, level: 'info' | 'warn' | 'error'): void {
     this.sink.item({ kind: 'system', id: nextId('s'), at: Date.now(), text, level }, false);
   }
@@ -646,10 +665,11 @@ export class ClaudeSession implements HarnessSession {
       }
       case 'stream_event': if (m.parent_tool_use_id == null) { this.activity(); this.onStreamEvent(o(m.event)); } return;
       case 'assistant':
+        this.childMessage(m);
         if (this.live.add(m)) this.sink.changed({ liveCostUsd: this.live.usd() });
         if (m.parent_tool_use_id == null) { this.countCall(m); this.activity(); this.onAssistant(m); }
         return;
-      case 'user': if (m.parent_tool_use_id == null) this.onUser(m); return;
+      case 'user': this.childMessage(m); if (m.parent_tool_use_id == null) this.onUser(m); return;
       case 'result': return this.onResult(m);
       case 'system': return this.onSystem(m);
       case 'rate_limit_event': this.sink.rateLimit?.(m); return;
@@ -808,7 +828,6 @@ export class ClaudeSession implements HarnessSession {
         const diff = diffFor(name, b.input, this.opts.cwd);
         const item: ToolItem = { kind: 'tool', id: `t-${id}`, at, name, summary: toolSummary(name, b.input, this.opts.cwd), input: trimInput(b.input), status: 'running', ...(diff ? { diff } : {}) };
         this.tools.set(id, { item, input: b.input });
-        if (name === 'Agent' || name === 'Task') this.childTool(id, b.input, 'running');
         this.sink.item(item, false);
       }
     }
@@ -840,11 +859,6 @@ export class ClaudeSession implements HarnessSession {
         if (t.item.name === 'SendMessage' && b.is_error !== true) {
           const id = resumedAgent(m.tool_use_result, item.output ?? '');
           if (id) { this.task(id, true); this.childTask({ task_id: id, task_type: 'local_agent' }, 'running'); }
-        }
-        // A tool result can acknowledge a background launch. Only an explicitly synchronous call proves the child
-        // completed here; native task events remain authoritative for background agents.
-        if ((t.item.name === 'Agent' || t.item.name === 'Task') && o(t.input).run_in_background !== true) {
-          this.childTool(tid, t.input, b.is_error === true ? 'failed' : o(t.input).run_in_background === false ? 'completed' : 'unknown');
         }
       } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sysCode('interrupted', undefined, 'info');
     }

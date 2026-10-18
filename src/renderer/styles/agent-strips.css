@@ -70,6 +70,23 @@
 .strip-wait-dot { width:6px; height:6px; border-radius:50%; background:var(--amber); }
 @media (prefers-reduced-motion: reduce) { .chat-expand svg { transition:none; } }
 .agent-strips-actions { display:flex; justify-content:flex-end; margin-bottom:6px; }
+/* The sub-agents of a chat (ChildStrips.tsx): short indented strips hanging under their parent on the same connector
+   as an owned browser (.owned-pane below); a running one carries the pulsing dot of a running chat. */
+.child-strips { position:relative; display:flex; flex-direction:column; gap:4px; margin:4px 0 0 18px; padding-left:12px; min-width:0; }
+.child-strips::before { content:''; position:absolute; left:0; top:-8px; bottom:12px; width:2px; border-radius:2px; background:var(--pair, var(--border-2)); }
+.child-strip { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; min-height:26px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:var(--fs-s); color:var(--text-2); }
+.child-strip::before { content:''; position:absolute; left:-12px; top:50%; width:10px; height:2px; background:var(--pair, var(--border-2)); }
+.child-strip.is-active { border-color:color-mix(in srgb, var(--blue) 30%, var(--border)); }
+.child-strip.is-ended { color:var(--text-3); }
+.child-strip-mark { flex:none; color:var(--text-4); }
+.child-strip-kind { flex:none; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
+.child-strip-task { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.child-strip.is-ended .child-strip-task { color:var(--text-2); }
+.child-strip-state { flex:none; }
+.child-strip-time { flex:none; color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.child-strips-more { align-self:flex-start; font-size:var(--fs-s); }
+.regia-tile > .child-strips { margin:0 10px 6px 24px; flex-shrink:0; max-height:35vh; overflow:auto; }
+.regia-tile > .child-strips::before { top:-2px; }
 .agent-pane-wrap.owned-pane { position:relative; margin:-4px 0 0 18px; padding-left:12px; }
 .agent-pane-wrap.owned-pane::before { content:''; position:absolute; left:0; top:-6px; bottom:12px; width:2px; border-radius:2px; background:var(--pair, var(--border-2)); }
 .agent-pane-wrap.owned-pane::after { content:''; position:absolute; left:0; top:22px; width:10px; height:2px; background:var(--pair, var(--border-2)); }

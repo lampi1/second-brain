@@ -7,8 +7,10 @@ type Coverage = AgentChildren['coverage'];
 const STATES = new Set<ChildState>(['running', 'waiting', 'completed', 'failed', 'stopped', 'unknown']);
 const TERMINAL = new Set<ChildState>(['completed', 'failed', 'stopped']);
 const MAX_CHILDREN = 500;
+/** Finished commands kept (a Codex turn runs dozens): older ones go, so they never crowd out sub-agents. */
+const MAX_ENDED_SHELL = 20;
 const object = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
-const stamp = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+const stamp = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 8.64e15 ? v : null;
 const identifier = (v: unknown, limit: number): string | null =>
   typeof v === 'string' && v.trim() && v.length <= limit && !/[\x00-\x1f\x7f]/.test(v) ? v : null;
 const text = (v: unknown, limit: number): string | null => {
@@ -21,11 +23,14 @@ const text = (v: unknown, limit: number): string | null => {
 export function sanitizeChildObservation(raw: unknown): ChildObservation | null {
   const o = object(raw), key = identifier(o.key, 512), observedAt = stamp(o.observedAt);
   if (!key || observedAt === null || (o.source !== 'live' && o.source !== 'replay')) return null;
+  const startedAt = stamp(o.startedAt);
   return {
     key, nativeId: identifier(o.nativeId, 300), toolCallId: identifier(o.toolCallId, 300), parentNativeId: identifier(o.parentNativeId, 300),
     kind: o.kind === 'agent' || o.kind === 'shell' ? o.kind : 'unknown',
     state: STATES.has(o.state as ChildState) ? o.state as ChildState : 'unknown',
     task: text(o.task, 1200), observedAt, source: o.source,
+    // a start time never later than the observation it comes with (a saved row from before it existed has none)
+    ...(startedAt !== null ? { startedAt: Math.min(startedAt, observedAt) } : {}),
   };
 }
 
@@ -68,16 +73,36 @@ export class AgentChildrenReducer {
         ...next, nativeId: next.nativeId ?? prev.nativeId, toolCallId: next.toolCallId ?? prev.toolCallId,
         parentNativeId: next.parentNativeId ?? prev.parentNativeId, kind: next.kind === 'unknown' ? prev.kind : next.kind,
         task: next.task ?? prev.task,
+        // the child started when the app first saw it: the earliest time any of its events carries
+        startedAt: Math.min(prev.startedAt ?? prev.observedAt, next.startedAt ?? next.observedAt),
         ...(historical ? { state: prev.state, source: prev.source, observedAt: prev.observedAt } : {}),
       };
       if (JSON.stringify(prev) === JSON.stringify(merged)) return false;
       this.rows.set(next.key, merged);
     } else {
-      if (this.rows.size >= MAX_CHILDREN) { this.completeness = 'unknown'; return false; }
-      this.rows.set(next.key, next);
+      // full: make room by dropping the oldest finished row (a command first); refuse only when all are unfinished
+      if (this.rows.size >= MAX_CHILDREN && !this.evictEnded()) { this.completeness = 'unknown'; return false; }
+      this.rows.set(next.key, { ...next, startedAt: next.startedAt ?? next.observedAt });
     }
+    this.pruneEndedShell();
     this.at = Math.max(this.at, next.observedAt);
     return true;
+  }
+
+  /** Drops the oldest finished row, a command before an agent (dropping an agent leaves the census incomplete). */
+  private evictEnded(): boolean {
+    const ended = [...this.rows.values()].filter(r => TERMINAL.has(r.state)).sort((a, b) => a.observedAt - b.observedAt);
+    const victim = ended.find(r => r.kind === 'shell') ?? ended[0];
+    if (!victim) return false;
+    this.rows.delete(victim.key);
+    if (victim.kind !== 'shell') this.completeness = 'unknown';
+    return true;
+  }
+
+  private pruneEndedShell(): void {
+    const ended = [...this.rows.values()].filter(r => r.kind === 'shell' && TERMINAL.has(r.state));
+    if (ended.length <= MAX_ENDED_SHELL) return;
+    for (const r of ended.sort((a, b) => a.observedAt - b.observedAt).slice(0, ended.length - MAX_ENDED_SHELL)) this.rows.delete(r.key);
   }
 
   coverage(value: Coverage, observedAt = Date.now()): boolean {

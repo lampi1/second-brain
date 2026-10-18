@@ -28,6 +28,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { EffortControl } from './EffortControl';
 import { AgentIdentity } from './AgentIdentity';
 import {AgentAvatar}from'./AgentAvatar';
+import { ChildStrips } from './ChildStrips';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -166,6 +167,8 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
           <span className="th-sub-text">{[!['Regia', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>
+      {/* the Orchestrator's own sub-agents (its background Agent tools): visible here, it sits outside the strips */}
+      <ChildStrips chatId={chat.id} />
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.regia.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-regia" /> : null} />
       {queued && reqs.length > 0 && <InWindowLine reqs={open} queued testid="regia-queued" />}
       {!queued && inWindow && reqs.length > 0 && <InWindowLine reqs={reqs} testid="regia-in-window" />}

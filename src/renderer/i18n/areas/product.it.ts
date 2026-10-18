@@ -26,6 +26,7 @@ export const productIt={
  'product.observed':'Attività osservata','product.replayed':'osservazione ripristinata','product.parent':'Padre','product.notReported':'Non riportato','product.parentMissing':'Non presente nelle osservazioni',
  'product.running':'In attività','product.waiting':'In attesa','product.completed':'Concluso','product.failed':'Errore','product.stopped':'Fermato','product.unknown':'Stato non riportato',
  'product.teamExplain':'Collaboratori interni osservati dal motore. I dati mancanti non indicano zero attività.','product.teamEmpty':'Nessuna attività interna osservata.','product.teamIncomplete':'Il motore non fornisce un elenco completo.',
+ 'product.child.agent':'sottoagente','product.child.shell':'comando','product.child.unknown':'attività','product.childrenOf':(p:{title:string})=>`Sottoagenti di ${p.title}`,'product.childStarted':(p:{time:string})=>`avviato alle ${p.time}`,'product.childFor':(p:{d:string})=>`da ${p.d}`,'product.childrenMoreEnded':(p:{n:number})=>p.n===1?'un altro finito':`altri ${p.n} finiti`,'product.childrenHideEnded':'nascondi i finiti',
  'product.coordinated':(p:{count:number})=>`Agenti nello spazio di lavoro (${p.count})`,'product.backRegia':(p:{name:string})=>`Torna a ${p.name}`,
  'product.restoreLayout':'Torna alla colonna','product.showBrowsers':'Mostra browser','product.hideBrowsers':'Nascondi browser','product.noArea':'Senza progetto',
  'product.advanced':'Dettagli avanzati',
