@@ -219,14 +219,14 @@ test('Motori: a new engine turns on by the user\'s click, its API key is saved e
   await eng.scrollIntoViewIfNeeded();
   const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
 
-  // Kimi ships off; how it starts is shown before the user turns it on, and only their click turns it on
-  const on = eng.getByTestId('st-engine-on-kimi-switch');
+  // Codex ships off; how it starts is shown before the user turns it on, and only their click turns it on
+  const on = eng.getByTestId('st-engine-on-codex-switch');
   await expect(on).toHaveAttribute('aria-checked', 'false');
-  await expect(eng.getByTestId('st-engine-on-kimi-runs')).toHaveText('Avvio: kimi acp · accesso: kimi login');
+  await expect(eng.getByTestId('st-engine-on-codex-runs')).toHaveText('Avvio: codex app-server · accesso: codex login');
   await on.click();
   await expect(on).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(async () => (await get()).engineOn.kimi).toBe(true);
-  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).kimi).toMatch(/^[0-9a-f]{16}$/);
+  await expect.poll(async () => (await get()).engineOn.codex).toBe(true);
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).codex).toMatch(/^[0-9a-f]{16}$/);
   // Gemini CLI was removed from the app (ADR 0046, 15/10): no row
   await expect(eng.getByTestId('st-engine-on-gemini-switch')).toHaveCount(0);
 

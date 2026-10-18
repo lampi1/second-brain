@@ -13,7 +13,9 @@ export function checkSetup(value: unknown): SetupDraft {
     if (!v.guide || typeof v.guide !== 'object' || Array.isArray(v.guide)) throw new Error('Guida non valida.');
     const g = v.guide as Record<string, unknown>;
     if (g.stage === 'fallback' || g.stage === 'choosing') guide = { stage: g.stage };
-    else if (['connecting', 'guided'].includes(String(g.stage)) && ['claude', 'codex', 'kimi', 'cursor'].includes(String(g.engine)) && typeof g.chatId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(g.chatId)) guide = { stage: g.stage as 'connecting' | 'guided', engine: g.engine as 'claude' | 'codex' | 'kimi' | 'cursor', chatId: g.chatId };
+    else if (['connecting', 'guided'].includes(String(g.stage)) && ['claude', 'codex', 'cursor'].includes(String(g.engine)) && typeof g.chatId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(g.chatId)) guide = { stage: g.stage as 'connecting' | 'guided', engine: g.engine as 'claude' | 'codex' | 'cursor', chatId: g.chatId };
+    // Retired engines must not make all saved setup preferences unreadable.
+    else if (['connecting', 'guided'].includes(String(g.stage)) && ['kimi', 'gemini'].includes(String(g.engine))) guide = { stage: 'choosing' };
     else throw new Error('Guida non valida.');
   }
   let profile: SetupProfile | undefined;

@@ -55,7 +55,7 @@ export interface EngineInfo {
   source: 'app' | 'brain';
   /** whether it takes the user's API key: required (api), optional (a CLI that also has its own login), none */
   key: 'required' | 'optional' | 'none';
-  /** how it starts, as Settings shows it ("kimi acp", an endpoint URL) */
+  /** how it starts, as Settings shows it ("agent acp", an endpoint URL) */
   runs: string;
   /** false: its start definition is not the one the user turned on (changed in the brain, or never on): it does not start */
   trusted: boolean;
@@ -665,26 +665,12 @@ export interface Usage {
   cursorUnpriced?: { chats: string[]; models: string[] };
   /** Italian: why Cursor's plan usage (included quota, on-demand spend) cannot be shown, and what does give its cost */
   cursorPlanNote?: string;
-  /** Kimi today from its own session files (brain/kimi-usage.ts); absent/null = no Kimi data folder on this machine */
-  kimi?: KimiUsage | null;
   at?: number;                // when this snapshot was computed
   /** when cost.mjs started reading the transcripts behind todayUsd (ms): the live total adds what the app's Claude
    *  chats spent after it (renderer lib/live-costs.ts); absent = no cost run yet */
   costAt?: number;
   /** today's Claude $ per session from cost.mjs (the app's chats and the ones outside it), most first */
   claudeChats?: { sessionId: string; title: string; usd: number }[];
-}
-/** Kimi's tokens today (every model call of every session, Rome day); no $ (subscription, no published price) */
-export interface KimiUsage {
-  tokens: number; input: number; cacheRead: number; cacheWrite: number; output: number;
-  /** model calls today */
-  calls: number;
-  /** the last call today (ms), null = none */
-  lastAt: number | null;
-  /** tokens per model, most first */
-  models: { model: string; tokens: number }[];
-  /** Italian: why the plan quota is not shown and where to see it */
-  planNote: string;
 }
 
 // ── Settings (userData/config.json; never secrets) ─────────────────────────────────────────────────────────────────
@@ -1184,6 +1170,7 @@ export interface InvokeMap {
   'app:pickBrain': [void, string | null];
   /** Suggestions only: discovering a folder never selects it. SB_HOME isolates discovery in local trials. */
   'app:brainCandidates': [void, string[]];
+  'app:pickRepo': [void, string | null];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
@@ -1433,7 +1420,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',

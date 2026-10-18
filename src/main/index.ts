@@ -46,6 +46,7 @@ import { pulseStubHandlers } from './pulse/handlers';
 import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
 import { markRunOutcome } from './run/outcome';
+import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -141,7 +142,7 @@ app.whenReady().then(async () => {
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
-    const connectors = createAppConnectors(app.getPath('userData'));
+    const connectors = createAppConnectors(app.getPath('userData'), () => s.devops.refreshFresh());
     await connectors.ready;
     const handlers: Handlers = {
       'connectors:list': () => connectors.service.list(),
@@ -195,6 +196,13 @@ app.whenReady().then(async () => {
     'profile:get': () => profile.get(),
     'profile:save': a => profile.save(a),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
+    'app:pickRepo': async () => {
+      const result = win ? await dialog.showOpenDialog(win, { title: 'Scegli un repository per Codex', properties: ['openDirectory'] }) : null;
+      const selected = result && !result.canceled ? result.filePaths[0] : null;
+      if (!selected) return null;
+      try { return canonicalRepoRoot(selected); }
+      catch { throw new Error('Scegli la cartella principale di un repository Git o worktree locale, senza collegamenti o condivisioni.'); }
+    },
     'app:pickBrain': async () => {
       const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella del cervello', properties: ['openDirectory'] }) : null;
       const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;

@@ -14,12 +14,14 @@ import{RolePreferences}from'./RolePreferences';
 import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
+import { CodexAutonomy } from './CodexAutonomy';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
 }
 function Row({title,children,description}:{title:string;children:ReactNode;description?:string}){return <div className="st-row"><div className="st-text"><label className="st-title">{title}</label>{description&&<p className="st-desc">{description}</p>}</div><div className="st-ctl">{children}</div></div>;}
 function ToolConnection({engine}:{engine:EngineInfo}){
+ const roots=useApp(s=>s.settings?.codexAutonomyRoots??[]);
  const enabled=useApp(s=>s.settings?.engineOn[engine.id]===true),policy=useApp(s=>s.settings?.engines[engine.id]===true);
  const[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[login,setLogin]=useState<CliStatus|null>(null),[keys,setKeys]=useState<SecretsStatus|null>(null),[key,setKey]=useState('');
  useEffect(()=>key?holdUpdate(t('essential.key')):undefined,[key]);
@@ -34,6 +36,7 @@ function ToolConnection({engine}:{engine:EngineInfo}){
    {engine.kind!=='api'&&<div className="st-inline"><button type="button" className="btn btn-ghost" disabled={busy||!enabled||!engine.trusted} onClick={()=>void check()}>{t('essential.check')}</button><button type="button" className="btn btn-ghost" disabled={busy||!enabled||!engine.trusted} onClick={()=>void run(()=>window.sb.invoke('cli:login',{harness:engine.id}))}>{t('essential.signIn')}</button>{login&&<span role="status">{!login.found?t('essential.notInstalled'):login.loggedIn===true?t('essential.signedIn'):login.loggedIn===false?t('essential.signInNeeded'):t('essential.unknown')}</span>}</div>}
    {engine.key!=='none'&&<div className="st-key"><label>{t('essential.key')}<input type="password" autoComplete="off" spellCheck={false} value={key} disabled={!keys?.available||busy} onChange={event=>setKey(event.target.value)}/></label><button type="button" className="btn btn-ghost" disabled={!keys?.available||busy||!key.trim()} onClick={()=>{const value=key.trim();setKey('');void run(async()=>{setKeys(await window.sb.invoke('secrets:set',{engine:engine.id,key:value}));});}}>{t('common.save')}</button>{keys?.keys[engine.id]&&<><small>{t('essential.keySaved')}</small><button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>void run(async()=>{setKeys(await window.sb.invoke('secrets:delete',{engine:engine.id}));})}>{t('essential.deleteKey')}</button></>}{keys&&!keys.available&&<p role="status">{t('essential.keyUnavailable')}</p>}</div>}
   </div>}
+  {engine.id==='codex'&&<CodexAutonomy roots={roots}/>}
  </article>;
 }
 export function SettingsPage(){
@@ -41,8 +44,8 @@ export function SettingsPage(){
  if(!settings)return null;
  const groups=[
   {id:'profile',title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
-  {id:'connectors',title:t('connector.group'),search:'GitHub Jira collegamenti connectors projects',body:<AppConnectorScreen/>},
-  {id:'accounts',title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' '),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
+  {id:'connectors',title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects',body:<AppConnectorScreen/>},
+  {id:'accounts',title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' ')+' '+t('autonomy.title'),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
   {id:'space',title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
    <RolePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>

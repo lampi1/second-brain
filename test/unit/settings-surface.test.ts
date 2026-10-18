@@ -17,7 +17,7 @@ it('inventories every current schema setting without changing protection or defa
  const definitions=schema(),before=JSON.stringify(definitions),inventory=definitions.map(def=>({key:def.key,protected:def.protected,...settingSurface(def.key)}));
  expect(inventory.length).toBeGreaterThan(20);expect(new Set(inventory.map(row=>row.key)).size).toBe(inventory.length);
  expect(inventory.every(row=>['essential','derived','retired','technical'].includes(row.surface))).toBe(true);
- expect(settingSurface('engines.claude').surface).toBe('derived');expect(settingSurface('codexAutonomyRoots').surface).toBe('technical');
+ expect(settingSurface('engines.claude').surface).toBe('derived');expect(settingSurface('codexAutonomyRoots').surface).toBe('essential');
  expect(JSON.stringify(schema())).toBe(before);
  if(process.env.SB_SETTINGS_INVENTORY)fs.writeFileSync(process.env.SB_SETTINGS_INVENTORY,JSON.stringify(inventory,null,2));
 });

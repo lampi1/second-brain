@@ -1,5 +1,5 @@
 // The usage strip in the top bar: today's spend, the Claude plan windows (5 hours and week, each with its reset time),
-// Cursor and Kimi's tokens today (when Kimi is on this machine), always visible, with a detail panel on click. Why: the user wants their subscriptions' usage in sight at
+// Cursor usage today, always visible, with a detail panel on click. Why: the user wants their subscriptions' usage in sight at
 // all times (2026-10-11), and an honest "n/d" with the reason where a number does not exist (Cursor's plan usage has no
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
 // own costs (live estimate included): today's total moves at each message and the popup lists every chat of the day by
@@ -7,7 +7,7 @@
 import { t as auditText } from '../i18n';
 import { useRef, useState } from 'react';
 import type { ChatSummary, Usage } from '@shared/contract';
-import { formatCost, tokensShort, until } from '../lib/format';
+import { formatCost, until } from '../lib/format';
 import { costRows, liveTotal } from '../lib/live-costs';
 import { go, focusChat } from '../actions';
 import { LiveCostList } from './LiveCosts';
@@ -37,9 +37,6 @@ const inTime = (t: number, now: number) => {
   return r ? `tra ${d} g ${r} h` : `tra ${d} g`;
 };
 const ago = (t: number, now: number) => { const m = Math.round((now - t) / 6e4); return m <= 1 ? 'adesso' : m < 60 ? `${m} min fa` : `${Math.round(m / 60)} h fa`; };
-
-/** Kimi's model id as a name: "k3-256k" → "K3-256k"; others as they are ("kimi-for-coding"). */
-const kimiModel = (m: string) => m.replace(/^k(\d)/, 'K$1');
 
 /** Cursor today as shown: "n/d", the exact $ of an export, or "≈ $" of the ledger estimate (with "±x%" when long). */
 export function cursorText(u: Usage | null, long = false): string {
@@ -109,19 +106,6 @@ function Details({ usage, chats, now, close }: { usage: Usage | null; chats: Cha
         <div className="ub-sec-head"><span><HarnessMark harness="cursor" size={16} />{' '}{auditText('audit.UsageBar.cursorPlan')}</span></div>
         <div className="ub-na" data-testid="usage-pop-cursor"><b>{auditText('audit.UsageBar.unavailable')}</b><span>{usage?.cursorPlanNote ?? auditText('auditExpression.UsageBar.text223')}</span></div>
       </section>
-      {usage?.kimi ? (
-        <section className="ub-sec" data-testid="usage-pop-kimi">
-          <div className="ub-sec-head"><span><HarnessMark harness="kimi" size={16} />{' '}{auditText('audit.UsageBar.kimiToday')}</span>{usage.kimi.lastAt ? <small>{auditText('audit.UsageBar.lastTurn')}{' '}{ago(usage.kimi.lastAt, now)}</small> : null}</div>
-          <div className="ub-total" data-testid="usage-pop-kimi-total">{usage.kimi.tokens ? `${tokensShort(usage.kimi.tokens)} token` : auditText('auditExpression.UsageBar.text225')}</div>
-          {usage.kimi.tokens ? (
-            <div className="ub-rows">
-              {usage.kimi.models.slice(0, 4).map(m => <div key={m.model} className="ub-row"><span className="ub-label">{kimiModel(m.model)}</span><b>{tokensShort(m.tokens)}</b></div>)}
-              <div className="ub-row"><span className="ub-label">{auditText('audit.UsageBar.ofWhichReadFromCache')}</span><b>{tokensShort(usage.kimi.cacheRead)}</b></div>
-            </div>
-          ) : null}
-          <div className="ub-na"><b>{auditText('audit.UsageBar.planQuotaUnavailable')}</b><span>{usage.kimi.planNote}</span></div>
-        </section>
-      ) : null}
       <section className="ub-sec" data-testid="usage-pop-chats">
         <div className="ub-sec-head"><span>{auditText('audit.UsageBar.todaySChatsMostExpensiveFirst')}</span><small>{auditText('audit.UsageBar.live')}</small></div>
         <LiveCostList rows={rows} limit={POP_ROWS} testid="usage-pop-list" unpricedModels={usage?.cursorUnpriced?.models}
@@ -145,7 +129,6 @@ export function UsageBar() {
     usage?.fiveHourPct != null ? auditText('cmp.usage.fiveHour', { pct: pctText(usage.fiveHourPct) }) : null,
     usage?.weekPct != null ? auditText('cmp.usage.week', { pct: pctText(usage.weekPct) }) : null,
     auditText('cmp.usage.cursorPlanUnavailable'),
-    usage?.kimi ? auditText('cmp.usage.kimiToday', { n: tokensShort(usage.kimi.tokens) }) : null,
   ].filter(Boolean).join(' · ');
   return (
     <>
@@ -162,15 +145,6 @@ export function UsageBar() {
           <HarnessMark harness="cursor" size={16} />
           <span className="ub-pill" data-testid="usage-cursor-value">{cursorText(usage)}</span>
         </span>
-        {usage?.kimi ? (
-          <>
-            <span className="ub-sep" />
-            <span className="ub-group" data-testid="usage-kimi">
-              <HarnessMark harness="kimi" size={16} />
-              <span className="ub-pill" data-testid="usage-kimi-value">{tokensShort(usage.kimi.tokens)} tok</span>
-            </span>
-          </>
-        ) : null}
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="usage-pop" width={360}>
         <Details usage={usage} chats={list} now={now} close={() => setOpen(false)} />

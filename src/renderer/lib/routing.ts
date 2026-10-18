@@ -18,7 +18,7 @@ export const getKindIt = (): Record<TaskKind | '*', string> => ({
  *  row already names stays listed. */
 export function pickable(reg: ModelRegistry | null, keep: string[] = []): RegistryModel[] {
   if (!reg) return [];
-  return reg.models.filter(m => (m.routing === 'auto' && reg.harnesses[m.harness]?.routing === 'auto' && !/fable/i.test(m.id)) || keep.includes(m.id));
+  return reg.models.filter(m => ['claude', 'codex', 'cursor'].includes(m.harness) && ((m.routing === 'auto' && reg.harnesses[m.harness]?.routing === 'auto' && !/fable/i.test(m.id)) || keep.includes(m.id)));
 }
 
 /** A model's efforts the table may set: max only on request (never from the table); none off Claude (the app passes an

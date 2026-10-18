@@ -1,8 +1,8 @@
 // Pure AI-first setup policy: only a real completed provider reply counts, never presence/login alone.
 import type { ChatItem, CliStatus, Harness } from '../../shared/contract';
-export const engines = ['claude', 'codex', 'kimi', 'cursor'] as const;
+export const engines = ['claude', 'codex', 'cursor'] as const;
 export type SetupEngine = typeof engines[number];
-export const engineNames: Record<SetupEngine, string> = { claude: 'Claude Code', codex: 'Codex', kimi: 'Kimi', cursor: 'Cursor' };
+export const engineNames: Record<SetupEngine, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 export type GuideProgress = { engine: SetupEngine; chatId: string; stage: 'connecting' | 'guided' | 'fallback' };
 export function setupEngine(value: Harness): value is SetupEngine { return (engines as readonly string[]).includes(value); }
 export function replyProof(items: ChatItem[]): 'pending' | 'verified' | 'failed' {

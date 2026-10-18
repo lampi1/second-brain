@@ -213,7 +213,7 @@ export interface AgentCatalog {
 export interface AgentDraftRequest { text: string; engine: Harness; model: string; base?: AgentDraft }
 export type AgentDraftResult = { ok: true; draft: AgentDraft } | { ok: false; reason: string };
 
-export type SetupGuide = { stage: 'choosing' | 'fallback' } | { stage: 'connecting' | 'guided'; engine: 'claude' | 'codex' | 'kimi' | 'cursor'; chatId: string };
+export type SetupGuide = { stage: 'choosing' | 'fallback' } | { stage: 'connecting' | 'guided'; engine: 'claude' | 'codex' | 'cursor'; chatId: string };
 export interface SetupDraft {
   step: number;
   work: '' | 'employee' | 'independent' | 'other';

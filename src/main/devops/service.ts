@@ -107,6 +107,13 @@ export class DevopsService {
     return out;
   }
 
+  /** Connector account verification starts its own read after any older read finishes. */
+  async refreshFresh(): Promise<DevopsState> {
+    // Connector verification must not inherit a read started before its account check.
+    while (this.running) await this.running;
+    return this.refresh();
+  }
+
   /** Reads DevOps now; a read already running is joined (one at a time). */
   refresh(): Promise<DevopsState> {
     if (this.running) return this.running;

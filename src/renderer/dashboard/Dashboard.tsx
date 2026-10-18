@@ -107,7 +107,6 @@ export function Dashboard() {
     const g = groups.get(row.harness) ?? { label: row.harness, value: 0 };
     groups.set(row.harness, { label: g.label, value: g.value + row.usd, approx: g.approx || row.approx, unpriced: g.unpriced || !!row.unpriced });
   }
-  const untracked = [...new Set(chats.map(c => c.harness))].filter(h => h !== 'kimi').sort();
   const cursor = costs.data?.cursor ?? null, cover = cursor && costs.data ? cursorCoverage(cursor, costs.data.to) : null;
   const when = (value?: string) => { const at = value ? new Date(value) : null; return !value ? copy('sconosciuto', 'unknown') : at && !Number.isNaN(at.getTime()) ? at.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : value; };
   const errorDays = new Map<string, number>();
@@ -142,8 +141,7 @@ export function Dashboard() {
         </Panel>
       </>}
       {tab === 'context' && <>
-        <div className="dash-stats"><Stat label={copy('Token consumati oggi · Kimi', 'Tokens used today · Kimi')} value={usage?.kimi ? number(usage.kimi.tokens) : '—'} n={usage?.kimi?.tokens} format={number} note={`${copy('Copertura: solo Kimi', 'Coverage: Kimi only')}${untracked.length ? ` · ${copy('nessun totale token da', 'no token totals from')} ${untracked.join(', ')}` : ''}`} /><Stat label={copy('Contesti sopra soglia', 'Contexts above threshold')} value={number(long.length)} n={long.length} format={number} note={copy('Soglie configurate, chat aperte', 'Configured thresholds, open chats')} /><Stat label={copy('Contesto riportato', 'Context reported')} value={`${live.filter(c => c.contextTokens !== undefined).length} / ${live.length}`} note={copy('Chat aperte con una misura disponibile', 'Open chats with an available measurement')} /></div>
-        {usage?.kimi && <Bars title={copy('Token Kimi per modello · oggi', 'Kimi tokens by model · today')} rows={usage.kimi.models.map(m => ({ label: m.model, value: m.tokens }))} format={number} source="app:usage.kimi · today, Rome" />}
+        <div className="dash-stats"><Stat label={copy('Contesti sopra soglia', 'Contexts above threshold')} value={number(long.length)} n={long.length} format={number} note={copy('Soglie configurate, chat aperte', 'Configured thresholds, open chats')} /><Stat label={copy('Contesto riportato', 'Context reported')} value={`${live.filter(c => c.contextTokens !== undefined).length} / ${live.length}`} note={copy('Chat aperte con una misura disponibile', 'Open chats with an available measurement')} /></div>
         <Panel title={copy('Spazio per ragionare', 'Room to think')} note={copy('Contesto attuale di ogni chat, non token cumulativi consumati. ≈ indica una stima.', 'Current context per chat, not cumulative tokens used. ≈ indicates an estimate.')}>
           {live.length ? [...live].sort((a, b) => (contextRatio(b) ?? -1) - (contextRatio(a) ?? -1)).map(c => {
             const ratio = contextRatio(c), level = contextLevel(c, warn), high = level === 'above';

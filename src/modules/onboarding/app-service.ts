@@ -6,6 +6,8 @@ export interface ConnectorVault { get(): Promise<JiraCredential | null>; set(val
 export type ConnectorSelections = Partial<Record<ConnectorId, { identity: string; projects: string[] }>>;
 export interface ConnectorProof { identity: string; account: string; projects: ConnectorProject[] }
 export interface ConnectorAdapters {
+  azureLogin?(): Promise<void>;
+  azureProbe?(): Promise<ConnectorProof>;
   githubLogin(): Promise<void>;
   githubProbe(): Promise<ConnectorProof>;
   jiraLogin(save: (value: JiraCredential) => Promise<void>, signal: AbortSignal): Promise<void>;
@@ -15,7 +17,7 @@ export interface ConnectorAdapters {
   saveSelections(value: ConnectorSelections): Promise<void>;
 }
 export function connectorId(value: unknown): ConnectorId {
-  if (value !== 'github' && value !== 'jira') throw new Error('Strumento non supportato');
+  if (value !== 'github' && value !== 'jira' && value !== 'azure') throw new Error('Strumento non supportato');
   return value;
 }
 export function jiraCredential(value: JiraCredential): JiraCredential {
@@ -26,7 +28,7 @@ export function jiraCredential(value: JiraCredential): JiraCredential {
 }
 const initial = (provider: ConnectorId): ConnectorState => ({ provider, status: 'pending', checkedAt: null, account: null, projects: [], selected: [], detail: 'Accesso e verifica da completare' });
 export class AppConnectorService implements ConnectorPort {
-  private states = { github: initial('github'), jira: initial('jira') };
+  private states = { github: initial('github'), jira: initial('jira'), azure: initial('azure') };
   private busy = false;
   private loginAbort: AbortController | null = null;
   private loginDone: Promise<void> | null = null;
@@ -47,6 +49,10 @@ export class AppConnectorService implements ConnectorPort {
       this.signingIn = provider;
       try {
         if (provider === 'github') await this.adapters.githubLogin();
+        else if (provider === 'azure') {
+          if (!this.adapters.azureLogin) throw new Error('Azure non disponibile');
+          await this.adapters.azureLogin();
+        }
         else {
           if (!this.adapters.vault.available()) throw new Error('Portachiavi cifrato di sistema non disponibile');
           this.loginAbort = abort;
@@ -64,9 +70,12 @@ export class AppConnectorService implements ConnectorPort {
     const provider = connectorId(raw);
     return this.exclusive(provider, async () => {
       try {
-        const value = provider === 'github' ? null : await this.adapters.vault.get();
+        const value = provider === 'jira' ? await this.adapters.vault.get() : null;
         if (provider === 'jira' && !value) throw new Error('missing');
-        const result = provider === 'github' ? await this.adapters.githubProbe() : await this.adapters.jiraProbe(jiraCredential(value!));
+        const result = provider === 'github' ? await this.adapters.githubProbe()
+          : provider === 'azure' ? await this.adapters.azureProbe?.()
+          : await this.adapters.jiraProbe(jiraCredential(value!));
+        if (!result) throw new Error('Azure non disponibile');
         if (!result.account || !result.identity || !Array.isArray(result.projects)) throw new Error('invalid');
         this.identities[provider] = result.identity;
         const selected = this.selections[provider]?.identity === result.identity ? this.selections[provider]!.projects.filter(id => result.projects.some(p => p.id === id)) : [];

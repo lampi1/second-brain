@@ -18,6 +18,12 @@ it('imports and server-renders the default panel in Node without a window or bri
 it('offers official access and an explicit read-only verification; no token/password renderer field', () => {
   const html = render(); expect(html).toContain('Accedi a Jira Cloud'); expect(html).toContain('Verifica accesso a Jira Cloud'); expect(html).toContain('role="status"'); expect(html).not.toContain('type="password"'); expect(html).not.toContain('Collegato e verificato');
 });
+it('gives Azure the same named actions and explains its existing DevOps integration', () => {
+  const html = render({ provider: 'azure' });
+  expect(html).toContain('Accedi a Azure DevOps'); expect(html).toContain('Verifica accesso a Azure DevOps');
+  expect(html).toContain('Azure CLI'); expect(html).toContain('devops-me.mjs');
+  expect(html).toContain('btn-primary'); expect(html).not.toContain('type="password"');
+});
 it('renders verified projects with keyboard-accessible named checkboxes and preserves failures as failures', () => {
   const html = render({ status: 'verified', projects: [{ id: '1', name: 'Project one' }], selected: ['1'], checkedAt: '2026-10-17T10:00:00Z' });
   expect(html).toContain('Collegato e verificato'); expect(html).toContain('type="checkbox"'); expect(html).toContain('checked=""'); expect(html).toContain('Project one'); expect(html).toContain('Ultima verifica');

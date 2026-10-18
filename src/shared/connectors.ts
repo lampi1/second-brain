@@ -1,5 +1,5 @@
 // Secret-free app connector boundary, used by setup, Settings and sender-checked IPC.
-export type ConnectorId = 'github' | 'jira';
+export type ConnectorId = 'github' | 'jira' | 'azure';
 export interface ConnectorProject { id: string; name: string }
 export interface ConnectorState {
   provider: ConnectorId;

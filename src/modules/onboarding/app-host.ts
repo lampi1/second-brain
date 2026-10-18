@@ -12,6 +12,8 @@ import type { ConnectorSelections } from './app-service';
 import { githubProbe, jiraProbe } from './app-providers';
 import { JiraVault } from './app-vault';
 import { credentialEntry } from './credential-entry';
+import { azureAccount, azureLogin, azureProof } from './app-azure';
+import type { DevopsState } from '../../shared/contract';
 function gh(): string {
   const exe = findCli('gh');
   if (!exe || /["\r\n%&|<>^!]/.test(exe) || (process.platform === 'win32' && !exe.toLowerCase().endsWith('.exe'))) throw new Error('Installa GitHub CLI dal sito ufficiale, poi riprova');
@@ -29,13 +31,15 @@ async function githubLogin() {
     child.once('error', () => reject(new Error('Accesso GitHub non avviato'))); child.once('spawn', () => { child.unref(); resolve(); });
   });
 }
-export function createAppConnectors(userData: string) {
+export function createAppConnectors(userData: string, refreshDevops: () => Promise<DevopsState>) {
   const file = path.join(userData, 'connector-projects.json');
   let selections: ConnectorSelections = {};
   const enabled = () => {
     if (process.env.SB_TEST || process.env.SB_DEMO || process.env.SB_HIDDEN === '1') throw new Error('Accesso reale disabilitato nelle sessioni di test');
   };
   const service = new AppConnectorService({
+    async azureLogin() { enabled(); await azureLogin(); },
+    async azureProbe() { enabled(); return azureProof(azureAccount, refreshDevops); },
     vault: new JiraVault(userData, safeStorageCipher(safeStorage)),
     loadSelections: () => selections,
     async saveSelections(value) {
@@ -57,7 +61,7 @@ export function createAppConnectors(userData: string) {
     try {
       const stat = await fs.stat(file); if (stat.size > 65536) return;
       const data = JSON.parse(await fs.readFile(file, 'utf8')) as ConnectorSelections;
-      for (const id of ['github', 'jira'] as const) {
+      for (const id of ['github', 'jira', 'azure'] as const) {
         const entry = data[id];
         if (entry && typeof entry.identity === 'string' && entry.identity.length <= 600 && Array.isArray(entry.projects) && entry.projects.length <= 100 && entry.projects.every(s => typeof s === 'string' && s.length <= 200)) selections[id] = entry;
       }

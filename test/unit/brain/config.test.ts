@@ -93,7 +93,7 @@ describe('engine switches (ADR 0046)', () => {
   it('every engine of the registry has its protected switches; a new one ships off; an id from a later brain survives a restart', () => {
     for (const k of ['engineOn.kimi', 'engines.anthropic', 'engineOn.qwen-2']) expect(defOf(k)?.protected, k).toBe(true);
     for (const k of ['engineOn.Kimi', 'engines.../x', 'engineOn.']) expect(defOf(k), k).toBeNull();
-    expect(DEFAULTS.engineOn).toMatchObject({ claude: true, cursor: true, kimi: false, anthropic: false });
+    expect(DEFAULTS.engineOn).toMatchObject({ claude: true, cursor: true, codex: true, anthropic: false });
     expect(DEFAULTS.engineOn).not.toHaveProperty('gemini');
     expect(validate('engineOn.kimi', 'yes').ok).toBe(false);
     // an engine the brain defines after the settings were loaded: its saved switch is kept
@@ -106,7 +106,7 @@ describe('engine switches (ADR 0046)', () => {
     const old = fromSaved({ engineOn: { gemini: true, kimi: true }, engines: { gemini: true }, regiaChats: { harness: 'gemini' } });
     expect(old.engineOn).not.toHaveProperty('gemini');
     expect(old.engines).not.toHaveProperty('gemini');
-    expect(old.engineOn.kimi).toBe(true);
+    expect(old.engineOn).not.toHaveProperty('kimi');
     expect(old.regiaChats.harness).toBe('claude');
   });
 });

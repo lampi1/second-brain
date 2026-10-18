@@ -1,7 +1,9 @@
 // App-owned connector UI: account evidence is distinct from agent permissions and native harness setup.
 export const connectorsIt = {
+ 'connector.azureHint':'Usa il tuo accesso Azure CLI e la lettura DevOps del brain.',
+ 'connector.azureDetails':'Serve Azure CLI (az) e lo script ops/tools/devops-me.mjs nel brain. La verifica mostra i progetti dei tuoi work item e pull request, non tutti i progetti dell’organizzazione. Le credenziali restano in Azure CLI.',
  'connector.group':'Strumenti e progetti',
- 'connector.title':'Collega i tuoi strumenti','connector.intro':'Scegli GitHub o Jira e i progetti che usi. Puoi tornare qui dalle Impostazioni.',
+ 'connector.title':'Collega i tuoi strumenti','connector.intro':'Account, repository e progetti in un unico posto. Scegli uno strumento, accedi e verifica il collegamento.',
  'connector.scope':'Il collegamento vale per questa app. Gli accessi dei singoli agenti restano separati.',
  'connector.githubHint':'Usa il tuo accesso GitHub CLI.','connector.jiraHint':'Collega il tuo sito Jira Cloud.',
  'connector.githubDetails':'Serve GitHub CLI (gh), disponibile dal sito ufficiale.','connector.jiraDetails':'Il token API classico si inserisce in una pagina locale dedicata e viene cifrato sul computer.',

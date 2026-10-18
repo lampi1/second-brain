@@ -67,7 +67,7 @@ describe('read-only answers (pure)', () => {
     const env = { VITEST: 'true' };
     expect(refusal('claude', ON, FAKE, env)).toBeNull();
     expect(refusal('claude', { ...ON, engineOn: { claude: false } }, FAKE, env)).toMatch(/Claude è spento/);
-    expect(refusal('kimi', { engineOn: { kimi: true }, engines: { kimi: true } }, FAKE_CURSOR, env)).toMatch(/Kimi è spento/); // on, but its definition never trusted
+    expect(refusal('anthropic', { engineOn: { anthropic: true }, engines: { anthropic: true } }, FAKE_CURSOR, env)).toMatch(/Anthropic API è spento/); // on, but its definition never trusted
     // on, but «Le Regie possono usare Claude» off: the run comes from files agents write
     expect(refusal('claude', { ...ON, engines: { claude: false } }, FAKE, env)).toMatch(/Gli Orchestrator possono usare Claude/);
     expect(refusal('nope', ON, undefined, env)).toBe('motore sconosciuto: nope');

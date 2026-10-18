@@ -23,7 +23,6 @@ import type { RouteRequest, RouteResult } from './brain/routing';
 import { electronNode } from './brain/node';
 import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
-import { KIMI_PLAN_NOTE } from './brain/kimi-usage';
 import { runResultMessage } from './run/results';
 import { cleanRegiaName, regieOf } from '../shared/regia';
 import { splitNewChat } from '../shared/newchat';
@@ -247,8 +246,7 @@ export function seed(E: number): Seed {
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
   ];
-  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE,
-    kimi: { tokens: 1_840_000, input: 310_000, cacheRead: 1_480_000, cacheWrite: 0, output: 50_000, calls: 37, lastAt: E - 6 * MIN, models: [{ model: 'k3', tokens: 1_520_000 }, { model: 'k3-256k', tokens: 320_000 }], planNote: KIMI_PLAN_NOTE } };
+  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
   return { chats, items, pending, tabs, feed, usage };
 }
 

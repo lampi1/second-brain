@@ -1,8 +1,10 @@
 // English counterpart of the app-only connector surface.
 import type { connectorsIt } from './connectors.it';
 export const connectorsEn: typeof connectorsIt = {
+ 'connector.azureHint':'Use your Azure CLI sign-in and the brain’s DevOps reader.',
+ 'connector.azureDetails':'Requires Azure CLI (az) and ops/tools/devops-me.mjs in the brain. Verification shows projects from your work items and pull requests, not every organization project. Credentials stay in Azure CLI.',
  'connector.group':'Tools and projects',
- 'connector.title':'Connect your tools','connector.intro':'Choose GitHub or Jira and the projects you use. You can return here from Settings.',
+ 'connector.title':'Connect your tools','connector.intro':'Accounts, repositories and projects in one place. Choose a tool, sign in and verify the connection.',
  'connector.scope':'This connection belongs to this app. Individual agents keep separate access.',
  'connector.githubHint':'Use your GitHub CLI sign-in.','connector.jiraHint':'Connect your Jira Cloud site.',
  'connector.githubDetails':'Requires GitHub CLI (gh), available from its official website.','connector.jiraDetails':'Enter the classic API token on a dedicated local page. It is encrypted on this computer.',

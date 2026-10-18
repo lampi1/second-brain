@@ -15,7 +15,7 @@ import { setPriceTable } from '../../../src/main/chats/live-cost';
 import { log } from '../../../src/main/log';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-trust-'));
-const on = { engineOn: { claude: true, cursor: true, kimi: true, local: true } };
+const on = { engineOn: { claude: true, cursor: true, codex: true, anthropic: true, local: true } };
 afterEach(() => { setBrainEngines([]); setTrust({}); });
 
 describe('brainEngine', () => {
@@ -27,7 +27,7 @@ describe('brainEngine', () => {
   });
 
   it('may change a preset, never a built-in', () => {
-    expect(brainEngine('kimi', { kind: 'acp', command: 'C:\\tools\\kimi.exe' })).toMatchObject({ label: 'Kimi', command: 'C:\\tools\\kimi.exe', args: ['acp'], login: ['login', '--region', 'global'] });
+    expect(brainEngine('kimi', { kind: 'acp', command: 'kimi' })).toMatch(/ignorata/);
     expect(brainEngine('claude', { kind: 'acp', label: 'X', command: 'x' })).toMatch(/incorporato/);
     expect(brainEngine('cursor', { kind: 'acp', label: 'X', command: 'x' })).toMatch(/incorporato/);
   });
@@ -55,24 +55,16 @@ describe('brainEngine', () => {
 });
 
 describe('trust', () => {
-  it('preserves the bundled Kimi login-region migration without trusting a brain replacement', () => {
-    const kimi = engineOf('kimi')!;
-    expect(kimi).toMatchObject({ args: ['acp'], login: ['login', '--region', 'global'] });
-    setTrust({ kimi: fingerprint({ ...kimi, login: ['login'] }) });
-    expect(engineOn(on, 'kimi')).toBe(true);
-    setBrainEngines([kimi]);
-    expect(engineOf('kimi')).toMatchObject({ source: 'brain', trusted: false });
-  });
 
   it('a preset is off until the user turns it on; built-ins never need it', () => {
     expect(engineOn(on, 'claude')).toBe(true);
-    expect(engineOn(on, 'kimi')).toBe(false);
-    expect(engineOf('kimi')?.trusted).toBe(false);
+    expect(engineOn(on, 'anthropic')).toBe(false);
+    expect(engineOf('anthropic')?.trusted).toBe(false);
     const t = new EngineTrust(tmp());
-    t.onSetting({ key: 'engineOn.kimi', after: true, by: 'agent' });
-    expect(engineOn(on, 'kimi')).toBe(false);
-    t.onSetting({ key: 'engineOn.kimi', after: true, by: 'user' });
-    expect(engineOn(on, 'kimi')).toBe(true);
+    t.onSetting({ key: 'engineOn.anthropic', after: true, by: 'agent' });
+    expect(engineOn(on, 'anthropic')).toBe(false);
+    t.onSetting({ key: 'engineOn.anthropic', after: true, by: 'user' });
+    expect(engineOn(on, 'anthropic')).toBe(true);
   });
 
   it('a changed definition stops the engine until the user turns it on again; the trust survives a restart', () => {
@@ -104,12 +96,12 @@ describe('trust', () => {
 
   it('an unreadable or tampered trust file trusts nothing', () => {
     const d = tmp();
-    fs.writeFileSync(path.join(d, 'engine-trust.json'), JSON.stringify({ kimi: 'not-a-fingerprint', '../x': '0123456789abcdef' }));
+    fs.writeFileSync(path.join(d, 'engine-trust.json'), JSON.stringify({ anthropic: 'not-a-fingerprint', '../x': '0123456789abcdef' }));
     new EngineTrust(d);
-    expect(engineOf('kimi')?.trusted).toBe(false);
+    expect(engineOf('anthropic')?.trusted).toBe(false);
     fs.writeFileSync(path.join(d, 'engine-trust.json'), '{');
     new EngineTrust(d);
-    expect(engineOn(on, 'kimi')).toBe(false);
+    expect(engineOn(on, 'anthropic')).toBe(false);
   });
 });
 
@@ -121,7 +113,7 @@ describe('BrainEngines', () => {
     fs.writeFileSync(f, JSON.stringify({ harnesses: {}, engines: { qwen: { kind: 'acp', label: 'Qwen', command: 'qwen', args: ['--acp'] }, bad: { kind: 'acp', label: 'B', command: 'a|b' } } }));
     const b = new BrainEngines(() => root);
     b.refresh();
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'kimi', 'anthropic', 'qwen']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'anthropic', 'qwen']);
     expect(engineOf('qwen')).toMatchObject({ source: 'brain', runs: 'qwen --acp', key: 'none', trusted: false });
     fs.writeFileSync(f, JSON.stringify({ engines: {} }));
     fs.utimesSync(f, new Date(), new Date(Date.now() + 5000));
@@ -150,12 +142,12 @@ describe('BrainEngines', () => {
 
   it('no brain, no file or bad JSON: only the app engines', () => {
     new BrainEngines(() => null).refresh();
-    expect(engines()).toHaveLength(5);
+    expect(engines()).toHaveLength(4);
     const root = tmp();
     fs.mkdirSync(path.join(root, 'harness'));
     fs.writeFileSync(path.join(root, 'harness', 'models.json'), '{');
     new BrainEngines(() => root).refresh();
-    expect(engines()).toHaveLength(5);
+    expect(engines()).toHaveLength(4);
   });
 });
 
