@@ -6,16 +6,18 @@ Models are pinned from area-independent routing at installation; without a route
 
 Legacy seeds are archived only when untouched, unused in chat/run records, and replaced by an active preset. General remains available. Corrupt usage data prevents retirement. Role composition revisions remap membership overrides and primary-agent references; offline setup recommendations use the new IDs when available. Running chats keep their existing snapshots.
 
-Validation:
-- ESLint passed on the changed source and test files; git diff --check passed.
-- npm run typecheck and npm run check:branch were attempted. Both stop on missing diff, highlight.js and pdfjs-dist dependencies in existing renderer modules. The branch check also cannot record its start under the read-only Git worktree metadata.
-- Vitest was attempted for catalog/version suites. No tests executed: EPERM creating its SSR temporary directory outside the sandbox.
-- Added migration, pinned routing, pristine upgrade, customized diff, unavailable route and role-remapping unit coverage; updated the existing composition/catalog expectations.
-- Added test/e2e/role-agent-presets.spec.ts with screenshot acceptance. Not run: e2e is main-only and the brief forbids launching the app.
+Integration (this PR also contains the designed glyphs of #42 until that merges):
+- The ten presets use their designed role glyphs (`role-implementer` ... `role-planner`) and distinct tones; a unit test checks each preset has its own glyph and tone. Brother's approval of the glyph sheets (#42) still gates the release.
+- A brand-new catalog retires the legacy seeds silently: before this, a new user received five "sostituito dai nuovi preset" notices for agents they never had. An existing catalog still announces each retirement. Unit test added.
+- The preset update badge and comparison texts moved to i18n (it/en) instead of hard-coded Italian.
+- Tests that asserted an exact archived list or the absence of the word "private" now account for the retired seeds and the preset texts: the archived assertions compare against the list just before the action, the history check includes archived definitions, the secret-field check uses a unique sentinel.
 
-Integration gates still required:
-- HEAD and the local origin/main ref both resolve to 2e34ff7; no merge is needed now. The attempted merge was denied at ORIG_HEAD.lock. The Regia handles integration when the parallel branches land.
-- Reconcile catalog installation with the parallel default-orchestrator preset and .sbagent fork-on-edit changes. This patch does not change coordinator selection; default-orchestrator is absent from this base.
-- The additional ui-agents-revision specification makes approved designed icons a release dependency. Presets currently store the specified symbol/tone pairs and reuse AgentAvatar; this base still maps them to generic existing glyphs. Integrate the designed icon set and confirm its owner approval before release.
-- Obtain the requested visible fresh-context reviewer, restore dependencies, run the unit/branch gates, then execute e2e/visual acceptance on main.
-- Run the publish guard, commit reviewed product files only (never tmp/), and have the authorized integrator push/open the PR. No commit, push, PR or merge was performed here.
+Validation (integrator, on origin/main 2e34ff7 + #42):
+- `npx tsc --noEmit` and `npx eslint .` clean.
+- `npx vitest run`: 2628 passed; `file-diff.test.ts` timed out under load and passes alone; the publish-guard test sees only the local untracked `tmp/`.
+- Commit guard (`tools/guard/scan.mjs --commits`) clean.
+- `test/e2e/role-agent-presets.spec.ts` adds screenshot acceptance; e2e runs only on main (ADR 0027).
+
+Still open:
+- Reconcile with the default-orchestrator preset and `.sbagent` fork-on-edit branches when they land (they adapt to this PR).
+- Fresh installs show the five retired seeds under Archived; they are recoverable by design.

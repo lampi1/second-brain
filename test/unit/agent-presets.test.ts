@@ -9,6 +9,7 @@ import { PRESET_PREAMBLE, roleAgentPresets } from '../../src/shared/agent-preset
 import { migrateExplorerRole } from '../../src/shared/role-preset-catalog';
 import type { AgentModelChoice, AgentProfile } from '../../src/shared/agents';
 import { emptySetup, recommendedAgents } from '../../src/renderer/lib/agent-setup';
+import { isRoleGlyph } from '../../src/shared/agent-glyphs';
 
 const dirs: string[] = [];
 const tmp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-presets-')); dirs.push(dir); return dir; };
@@ -20,6 +21,12 @@ function rewrite(dir: string, change: (profiles: AgentProfile[]) => void) {
   const value = JSON.parse(fs.readFileSync(file, 'utf8')) as { profiles: AgentProfile[] };
   change(value.profiles); fs.writeFileSync(file, JSON.stringify(value));
 }
+it('gives every preset its own designed glyph and tone', () => {
+  const presets = roleAgentPresets();
+  expect(presets.every(p => p.avatar.kind === 'symbol' && isRoleGlyph(p.avatar.value))).toBe(true);
+  expect(new Set(presets.map(p => p.avatar.kind === 'symbol' ? p.avatar.value : '')).size).toBe(presets.length);
+  expect(new Set(presets.map(p => p.avatar.kind === 'symbol' ? p.avatar.tone : '')).size).toBe(presets.length);
+});
 it('installs ten full policies with the shared report contract and pins routing across reloads', () => {
   const dir = tmp(), catalog = open(dir).list();
   expect(catalog.problem).toBeNull();
@@ -37,6 +44,14 @@ it('installs ten full policies with the shared report contract and pins routing 
   expect(catalog.archived).toHaveLength(5);
   expect(catalog.profiles.some(p => p.id === 'default-general')).toBe(true);
   expect(recommendedAgents({ ...emptySetup(), goals: 'sviluppo software' }, catalog.profiles)).toContain('default-implementer');
+});
+it('retires the seeds of a brand-new catalog silently, and announces a retirement in an existing one', () => {
+  const dir = tmp(), events: string[] = [], legacyRoutes = () => [];
+  expect(new AgentCatalogService({ userData: dir, models, legacyRoutes, presetEvent: e => events.push(e) }).list().archived).toHaveLength(5);
+  expect(events).toEqual([]);
+  rewrite(dir, profiles => { const p = profiles.find(p => p.id === 'default-research')!; p.status = 'active'; delete p.archivedAt; });
+  new AgentCatalogService({ userData: dir, models, legacyRoutes, presetEvent: e => events.push(e) });
+  expect(events).toEqual(['Ricerca: sostituito dai nuovi preset']);
 });
 it('does not replace an unavailable explicit route with an arbitrary available model', () => {
   const reviewer = roleAgentPresets().find(p => p.id === 'default-reviewer')!;

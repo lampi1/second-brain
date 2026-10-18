@@ -15,7 +15,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     <div className="catalog-card-top"><AgentAvatar avatar={profile.avatar} name={profile.name} size={48} />
       <span className="catalog-badge" data-probation={inProbation(profile)}>{inProbation(profile) ? t('catalog.probation') : t('catalog.active')}</span></div>
     <h3><button type="button" onClick={onOpen}>{profile.name}</button></h3>
-    {updateAvailable && <button type="button" className="catalog-badge" onClick={onOpen}>Aggiornamento preset disponibile</button>}
+    {updateAvailable && <button type="button" className="catalog-badge" onClick={onOpen}>{t('catalog.presetUpdate')}</button>}
     <p className="catalog-role">{profile.role || profile.purpose}</p>
     <p className="catalog-purpose">{profile.purpose}</p>
     <p className="catalog-engine">{engine} · {profile.model ?? t('studio.defaultEngine')}</p>

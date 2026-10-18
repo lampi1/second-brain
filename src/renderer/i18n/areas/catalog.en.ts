@@ -5,7 +5,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.intro': 'Agents are reusable assistants with a role, instructions and an engine: start with a preset or create one with the Orchestrator.',
   'catalog.subtitle': 'Your team, its specialties and observed results.',
   'catalog.role': 'Role', 'catalog.engine': 'Engine', 'catalog.all': 'All', 'catalog.sort': 'Sort by', 'catalog.name': 'Name',
-  'catalog.empty': 'No agents match these filters.', 'catalog.active': 'Active', 'catalog.probation': 'On probation',
+  'catalog.empty': 'No agents match these filters.', 'catalog.active': 'Active', 'catalog.presetUpdate': 'Preset update available', 'catalog.probation': 'On probation',
   'catalog.runs': 'Ended runs', 'catalog.open': 'Open runs', 'catalog.success': 'Verified success',
   'catalog.cost': 'Median cost / run', 'catalog.last': 'Last observed start', 'catalog.unknown': 'Unavailable',
   'catalog.samples': ({ n, total }) => `${n} of ${total} runs`,

@@ -83,11 +83,12 @@ describe('probation field in the catalog', () => {
 
   it('retire archives at once, keeps the probation for the no-recreate check and records the decision; a restore keeps it', () => {
     const { dir, id, c } = withProbation();
+    const before = c.list().archived.map(p => p.id);
     const retired = c.retire(id, 'Non serve più');
     expect(retired).toMatchObject({ status: 'archived', probation: { since: 1000, requestItemId: 'u_task1' } });
     expect(retired.probation!.keptBy).toBeUndefined();
     expect(history(dir, id)[0]!.probation).toMatchObject({ decision: 'retired', by: 'brother', reason: 'Non serve più' });
-    expect(c.list().archived.map(p => p.id)).toEqual([id]);
+    expect(c.list().archived.map(p => p.id)).toEqual([...before, id]);
     const back = c.restore(id);
     expect(back).toMatchObject({ status: 'active', probation: { keptBy: 'brother' } });
     expect(history(dir, id)[0]!.probation).toMatchObject({ decision: 'kept', by: 'brother', reason: 'Ripristinato da Brother' });

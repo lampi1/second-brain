@@ -48,6 +48,8 @@ export const studioEn:typeof studioIt={
   "studio.createAgent": "Create agent",
   "studio.newAgent": "New agent",
   "studio.newSessions": "Changes apply to new conversations.",
+  "studio.presetUpdate": "Preset update available", "studio.presetCompare": "Compare the preset with your customizations. The draft is saved only with Save.",
+  "studio.presetCurrent": "Current", "studio.presetNext": "Preset", "studio.presetApply": "Use the update in the draft",
   "studio.saved": "Agent saved for new conversations",
   "studio.saveError": "Could not save. Check the name, model and engine availability. Your draft is preserved.",
   "studio.uploadError": "Choose a PNG, JPEG or WebP image from 16 to 1024 pixels, up to 256 KB.",

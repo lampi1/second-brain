@@ -104,10 +104,10 @@ describe('Agent definitions v2', () => {
 
   it('archives out of the launch list and the active limit, and restores within it', () => {
     const c = service(tmp());
-    const p = c.save(draft());
+    const p = c.save(draft()), before = c.list().archived.map(x => x.id);
     c.archive(p.id);
     expect(c.list().profiles.some(x => x.id === p.id)).toBe(false);
-    expect(c.list().archived.map(x => x.id)).toEqual([p.id]);
+    expect(c.list().archived.map(x => x.id)).toEqual([...before, p.id]);
     expect(() => c.resolve({ harness: 'claude', cwd: '/unused', agentId: p.id })).toThrow(/archiviato/);
     expect(() => c.save(draft(), p.id)).toThrow(/Ripristina/);
     while (c.list().profiles.length < MAX_ACTIVE_AGENTS) c.save(draft());
@@ -219,7 +219,8 @@ describe('Agent definitions v2', () => {
     let refused = false;
     for (let i = 0; i < 40 && !refused; i++) { try { c.save(draft({ avatar })); } catch { refused = true; } }
     expect(refused).toBe(true);
-    const ids = new Set(c.list().profiles.map(x => x.id));
+    // Seeds retired by the role presets stay in the catalog as archived definitions, with their history.
+    const ids = new Set([...c.list().profiles, ...c.list().archived].map(x => x.id));
     const history = json(dir, 'agent-history.json') as { entries: AgentVersion[] };
     expect(history.entries.every(e => ids.has(e.agentId))).toBe(true);
     // agents.v2.json lost: seeds come back as v1 and their stale later versions are dropped.

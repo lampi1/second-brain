@@ -134,8 +134,9 @@ describe('probation on run end', () => {
     const f = fixture();
     const id = probationAgent(f);
     const c = await f.create({ agentId: id });
+    const before = f.catalog.list().archived.map(p => p.id);
     f.m.markRun(c.id, 'fail');
-    expect(f.catalog.list().archived.map(p => p.id)).toEqual([id]);
+    expect(f.catalog.list().archived.map(p => p.id)).toEqual([...before, id]);
     expect(f.feed).toEqual([expect.objectContaining({ kind: 'agent-retired', action: { kind: 'agent-restore', agentId: id } })]);
     // already retired: a second pass does nothing
     f.m.probationTick();

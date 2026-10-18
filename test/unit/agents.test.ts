@@ -76,13 +76,13 @@ describe('Agent catalog and local setup', () => {
   });
   it('persists validated profiles and duplicates with a new identity', () => {
     const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices });
-    const saved = c.save({ ...draft(), permissionMode: 'bypassPermissions', cwd: 'private' });
+    const saved = c.save({ ...draft(), permissionMode: 'bypassPermissions', cwd: 'private-cwd-sentinel' });
     const copy = c.duplicate(saved.id);
     expect(copy.id).not.toBe(saved.id);
     const restored = new AgentCatalogService({ userData: dir, models: choices }).list().profiles.find(p => p.id === saved.id)!;
     expect(restored).toEqual(saved);
     expect(restored).not.toHaveProperty('permissionMode');
-    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).not.toContain('private');
+    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).not.toContain('private-cwd-sentinel');
   });
   it('freezes owner choices and instructions; profile edits never change an old snapshot', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices });

@@ -47,6 +47,8 @@ export const studioIt={
   "studio.createAgent": "Crea agente",
   "studio.newAgent": "Nuovo agente",
   "studio.newSessions": "Le modifiche valgono per le prossime conversazioni.",
+  "studio.presetUpdate": "Aggiornamento preset disponibile", "studio.presetCompare": "Confronta il preset con le tue personalizzazioni. La bozza viene salvata solo con Salva.",
+  "studio.presetCurrent": "Attuale", "studio.presetNext": "Preset", "studio.presetApply": "Usa aggiornamento nella bozza",
   "studio.saved": "Agente salvato per le nuove conversazioni",
   "studio.saveError": "Non è stato possibile salvare. Controlla nome, modello e disponibilità del motore. La bozza è qui.",
   "studio.uploadError": "Scegli un’immagine PNG, JPEG o WebP da 16 a 1024 pixel e non oltre 256 KB.",

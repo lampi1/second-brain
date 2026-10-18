@@ -149,6 +149,7 @@ export class AgentCatalogService {
         const migration = obj(a.legacyRouting);
         if (Number.isSafeInteger(migration.imported) && Number(migration.imported) >= 0 && Number.isSafeInteger(migration.remaining) && Number(migration.remaining) >= 0) this.legacyRouting = { preserved: true, imported: Number(migration.imported), remaining: Number(migration.remaining) };
       } else {
+        this.fresh = true;
         const defaults = this.defaults(), legacy = legacyAgentProfiles(d.legacyRoutes?.() ?? [], this.now(), { apiEngine: d.legacyApiEngine?.() ?? null });
         const imported = legacy.profiles.slice(0, Math.max(0, MAX_ACTIVE_AGENTS - defaults.length)).map(p => upgradeProfile(p, false));
         this.profiles = [...defaults, ...imported];
@@ -227,7 +228,8 @@ export class AgentCatalogService {
       });
       if (versions.length || events.length) {
         this.commit(next, versions, states);
-        for (const event of events) this.d.presetEvent?.(event);
+        // A new catalog retires seeds Brother never saw: no notice about agents he never had.
+        if (!this.fresh) for (const event of events) this.d.presetEvent?.(event);
       }
     } catch (e) { this.problem = `Aggiornamento preset sospeso: ${errText(e)}`; }
   }
@@ -243,6 +245,8 @@ export class AgentCatalogService {
       return differences.length ? [{ agentId: p.id, presetRevision: preset.presetRevision, draft, differences }] : [];
     });
   }
+  /** No catalog file existed at startup: the legacy seeds were created in this same load. */
+  private fresh = false;
   /** readV2 renamed the pristine seed "Assistente" to "Generale" in memory: written once, with no version or lock. */
   private renamed = false;
   /**
