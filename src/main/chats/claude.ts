@@ -31,6 +31,7 @@ import { drift, record } from './drift';
 import { ownProcessGroup, sharedDir } from '../platform';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
+import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -252,6 +253,10 @@ export class ClaudeSession implements HarnessSession {
     // a read-only run: only the read tools exist (--tools is variadic: a flag follows it), no MCP server, no transcript
     // (it never shows up among the external chats)
     if (op.readOnly) a.push('--tools', READ_ONLY_TOOLS.join(','), '--strict-mcp-config', '--no-session-persistence');
+    // an agent's tool policy (A2): only its built-in tools exist; without 'mcp' only the app's own servers load
+    const agentMcp = !op.readOnly && op.toolPolicy ? claudeMcp(op.toolPolicy) : null;
+    if (!op.readOnly && op.toolPolicy) a.push(`--tools=${claudeTools(op.toolPolicy).join(',')}`); // `=`: the variadic flag takes only this list
+    if (agentMcp?.strict) a.push('--strict-mcp-config');
     // `--flag=<id>`: an id can never be read as another flag (ids are UUIDs, checked by the manager)
     if (op.resume && op.sessionId) { a.push(`--resume=${op.sessionId}`); if (op.fork) a.push('--fork-session'); }
     else if (op.sessionId) a.push(`--session-id=${op.sessionId}`);
@@ -260,7 +265,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];
@@ -665,7 +670,9 @@ export class ClaudeSession implements HarnessSession {
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
     const noAlways = r.suppress_always_allow_rule === true;
-    const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions: arr(r.permission_suggestions), question, noAlways };
+    // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
+    const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
+    const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions, question, noAlways };
     this.calls.set(id, call);
     const sub = s(r.agent_id) ? '(subagente) ' : '';
     if (s(r.agent_id)) this.childTask({ task_id: r.agent_id, task_type: 'local_agent' }, 'waiting');
