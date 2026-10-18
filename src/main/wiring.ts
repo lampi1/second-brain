@@ -65,9 +65,13 @@ import { HeadlessRunner } from './compare/headless';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
+import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
+import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
+  hybrid?: HybridSearch;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -289,8 +293,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});
   let apiRoute: () => Harness | null = () => null;
+  // the hybrid brain search (SPEC 23): its worker starts after the window (index.ts); a brain file change re-syncs it
+  const hybrid = new HybridSearch({
+    dir: path.join(ctx.userData, 'search'), brainRoot: () => brain.info().brainRoot, workerFile: workerFileNextTo(path.dirname(fileURLToPath(import.meta.url))),
+    download: !process.env.SB_TEST, onStatus: st => ctx.emitter.emit('search:status', st),
+  });
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
-    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute() });
+    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: () => hybrid.fileChanged() });
+  // undefined when the hybrid search fails: the brain's own server answers (substring search)
+  brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
   // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
   // brain folder counts from the next chat
   setCodexAutonomyRoots(() => brain.settings().codexAutonomyRoots ?? []);
@@ -306,7 +317,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
   const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false, () => progressService.award('first-agent'));
-  addChatTools([agentCatalogTool(() => agents.list())]);
+  addChatTools([agentCatalogTool(() => agents.list()), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -531,7 +542,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService, hybrid,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -540,7 +551,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
-    shutdown: async () => { clearInterval(autoCloseTimer); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

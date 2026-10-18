@@ -26,7 +26,7 @@ import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
 import { clipReader, readClipboardImage } from './clipboard-image';
 import { gitBranches } from './chats/branch';
-import { SearchService, demoBranchOf } from './search/service';
+import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
@@ -85,6 +85,8 @@ app.whenReady().then(async () => {
     transcriptOf: c => (!demo && c.harness === 'claude' && c.sessionId ? findTranscript(c.sessionId, c.cwd) : null),
     brainRoot: () => (demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot),
     branchOf: demo ? demoBranchOf : gitBranch,
+    // brain files ranked by the hybrid search (words + meaning, SPEC 23) when it answers; else by the palette's own index
+    ...(s.hybrid ? { brainHits: brainHitsFrom(s.hybrid) } : {}),
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   let brainChoiceRevision = 0;
@@ -300,6 +302,8 @@ app.whenReady().then(async () => {
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
+    'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
+    'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'later:get': () => s.later.get(),
     'later:set': a => s.later.set(a?.on === true),
     'sync:get': () => s.brain.syncState(),
@@ -311,6 +315,8 @@ app.whenReady().then(async () => {
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
+  // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
+  const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
   void windowReady.then(() => { const t = setTimeout(() => headline.start(), 15_000); t.unref(); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,

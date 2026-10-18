@@ -18,7 +18,7 @@ import type { NodeRunner } from './node';
 
 export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve', '/api/agents/analytics']);
 
-/** Paths answered by main itself instead of the brain's server (brain.serveApi). */
+/** Paths answered by main itself instead of the brain's server (brain.serveApi); undefined = not now, ask the server. */
 export type LocalApi = Map<string, (query: URLSearchParams) => unknown | Promise<unknown>>;
 
 /** A renderer path → the path to forward, or an Italian error. Only known read-only endpoints; drops `raw`. */
@@ -89,7 +89,9 @@ export class BrainApi {
     if (!c.ok) return c;
     const u = new URL(c.path, 'http://localhost');
     const own = this.local.get(u.pathname);
-    if (own) { try { return { ok: true, data: await own(u.searchParams) }; } catch (e) { return { ok: false, error: errText(e) }; } }
+    if (own) {
+      try { const data = await own(u.searchParams); if (data !== undefined) return { ok: true, data }; } catch (e) { return { ok: false, error: errText(e) }; }
+    }
     let port: number;
     try { port = await this.start(); } catch (e) { return { ok: false, error: errText(e) }; }
     return new Promise<BrainApiResult>(resolve => {

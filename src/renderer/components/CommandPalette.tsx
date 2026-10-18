@@ -7,7 +7,7 @@
 // reopens), the chats' git branches and the brain's markdown files, grouped by kind with snippet and date, after the
 // quick matches above. Used by App.tsx.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { SearchHit, SearchResult } from '@shared/contract';
+import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { t } from '../i18n';
 import { chatName } from '@shared/regia';
@@ -191,6 +191,30 @@ function useFound(q: string): { result: SearchResult | null; busy: boolean } {
   return { result, busy };
 }
 
+/** The brain search's model (hybrid search, SPEC 23): downloaded once in the background; while it is missing or failed
+ *  the brain is searched by words only, and the footer says so with a retry. */
+function useSearchModel(): SearchIndexStatus['model'] | null {
+  const [model, setModel] = useState<SearchIndexStatus['model'] | null>(null);
+  useEffect(() => {
+    let live = true;
+    sb.invoke('search:status', undefined).then(s => { if (live) setModel(s.model); }).catch(() => { /* no search service (demo) */ });
+    const off = sb.on('search:status', s => setModel(s.model));
+    return () => { live = false; off(); };
+  }, []);
+  return model;
+}
+
+function ModelNote({ model }: { model: SearchIndexStatus['model'] | null }) {
+  if (model?.state === 'downloading') {
+    return <span className="palette-model" data-testid="palette-model">{t('tools.search.modelDownloading', { pct: Math.floor((model.done / Math.max(1, model.total)) * 100) })}</span>;
+  }
+  if (model?.state === 'failed') {
+    return <span className="palette-model" data-testid="palette-model" title={model.error}>{t('tools.search.wordsOnly')}
+      <button type="button" className="palette-retry" onClick={() => { void sb.invoke('search:retryModel', undefined).catch(() => undefined); }}>{t('tools.search.retry')}</button></span>;
+  }
+  return null;
+}
+
 const GROUP_ORDER = ['Ti aspettano', 'Recenti', 'Chat', 'Chiuse', 'Vai a', 'Azioni', 'Browser'];
 const GROUP_BONUS: Record<string, number> = { 'Ti aspettano': 260, Chat: 300, Chiuse: 240, 'Vai a': 220, Recenti: 120, Azioni: 160, Browser: 120, Novità: 0 };
 
@@ -200,6 +224,7 @@ export function CommandPalette() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const all = useMemo(buildCommands, []);
   const found = useFound(q);
+  const model = useSearchModel();
   const quick = useMemo(() => {
     const link = parseLink(q);
     if (link) return [{ id: 'link', group: 'Link', title: `Vai a ${q.trim()}`, sub: `${pageLabel(link.page)}${link.element ? ` · ${link.element}` : ''}`, icon: <IconLink />, run: () => { openLink(q); } } as Cmd];
@@ -274,7 +299,8 @@ export function CommandPalette() {
         })}
       </div>
       <div className="palette-foot"><span><Keys combo="↑ ↓" /> scegli</span><span><Keys combo="Invio" /> apri</span><span><Keys combo="Esc" /> chiudi</span>
-        {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">cerco nei messaggi e nel brain…</span>}</div>
+        {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">cerco nei messaggi e nel brain…</span>}
+        <ModelNote model={model} /></div>
     </Modal>
   );
 }

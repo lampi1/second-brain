@@ -49,6 +49,8 @@ export interface BrainCtx {
   scriptEnv?: () => Record<string, string>;
   /** the Anthropic API engine when the writing rows «Sui crediti API» may use it now (on, with a key), else null (ADR 0052) */
   apiRoute?: () => Harness | null;
+  /** a brain file changed (relative path, '/'): the hybrid search re-syncs (SPEC 23) */
+  onFile?: (f: string) => void;
 }
 
 const FEED_MAX = 500;
@@ -149,6 +151,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   localApi.set('/api/procedure', q => procedures.get(q.get('id') ?? ''));
   let procTimer: NodeJS.Timeout | null = null;
   const onBrainFile = (f: string) => {
+    ctx.onFile?.(f);
     if (!touchesProcedures(f)) return;
     procedures.invalidate();
     if (procTimer) clearTimeout(procTimer);
