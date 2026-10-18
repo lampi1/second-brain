@@ -42,7 +42,7 @@ login, and it never touches their settings. Keep Claude desktop and Cursor open 
 
 | Version | Date | Windows installer | Source code |
 | --- | --- | --- | --- |
-| **0.1.0** (latest) | 2026-10-13 | [Release page](https://github.com/lampi1/second-brain/releases/tag/v0.1.0) | [zip](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.zip) · [tar.gz](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.tar.gz) |
+| **0.1.0** (latest) | 2026-10-13 | coming with the published release | [zip](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.zip) · [tar.gz](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.tar.gz) |
 
 Every version, with its notes and checksums: **[all releases](https://github.com/lampi1/second-brain/releases)** ·
 what changed: [CHANGELOG.md](CHANGELOG.md).

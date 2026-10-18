@@ -15,8 +15,8 @@ by the manual "Windows release draft" workflow, but GitHub Actions are off on pu
    merge, rebase, reset or push), run `npm ci` plus the Electron binary only when `package.json`, `package-lock.json`
    or `.npmrc` changed, then build. It refuses another branch, uncommitted changes and diverged history, with the
    way out in Italian. It never promotes, restarts or touches the stable release.
-2. **Asking the app**: the Orchestrator gets the app-control tool `app_update_code` (tokenized Orchestrator mount and
-   `/mcp/improve` only, never the plain `/mcp/app`), which runs that script in the code folder through
+2. **Asking the app**: the Orchestrator gets the app-control tool `app_update_code` (only on the tokenized Orchestrator mount
+   `/mcp/app/r/<id>/<token>`, never on the plain `/mcp/app` or `/mcp/improve`, which local processes can reach), which runs that script in the code folder through
    `ImproveService.pull()` (one at a time, not while a promotion runs). It is refused unless the user wrote to the
    Orchestrator in the last 10 minutes (agent-labelled messages do not count). The Orchestrator then reports the
    result and the step left to the user: restart the dev app; a stable copy changes only when the user promotes it.

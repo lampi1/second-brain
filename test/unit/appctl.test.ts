@@ -439,16 +439,19 @@ describe('app control tools', () => {
     expect(app.map(x => x.name).some(n => /promot|restart|merge|release/i.test(n))).toBe(false);
   });
 
-  it('app_update_code (ADR 0074): only the Orchestrator, only right after the user wrote to it, never on the plain mount', async () => {
+  it('app_update_code (ADR 0074): only the authenticated Orchestrator, only right after the user wrote to it', async () => {
     const now = Date.now();
     let items: unknown[] = [];
-    const list = [{ id: 'ar', harness: 'claude', state: 'idle', appRegia: true, title: 'Orchestrator', lastText: '' }];
+    const list = [{ id: 'or', harness: 'claude', state: 'idle', isRegia: true, orchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'idle', title: 'Lavoro', lastText: '' }];
     const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
     let pulls = 0;
     const improve = { repo: () => 'C:/code/app', state: async () => ({}) as never, pull: async () => { pulls++; return { ok: true, message: 'Aggiornata' }; } };
     const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
+    // never on the plain mounts, never for a work chat on the token mount
     expect(appControlTools({ ...base, improve }).some(x => x.name === 'app_update_code')).toBe(false);
-    const tool = appControlTools({ ...base, sourceOnly: true, improve }).find(x => x.name === 'app_update_code')!;
+    expect(appControlTools({ ...base, sourceOnly: true, improve }).some(x => x.name === 'app_update_code')).toBe(false);
+    expect(appControlTools({ ...base, unified: true, improve }, 'w').some(x => x.name === 'app_update_code')).toBe(false);
+    const tool = appControlTools({ ...base, unified: true, improve }, 'or').find(x => x.name === 'app_update_code')!;
     // nothing from the user, an agent-labelled message, or an old one: refused
     await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/non ha chiesto/);
     items = [{ kind: 'user', id: 'u', at: now - (PULL_ASK_MIN + 1) * 60_000, text: 'aggiornati' }, { kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} aggiornati` }];

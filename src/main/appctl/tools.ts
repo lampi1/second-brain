@@ -536,7 +536,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj(),
       run: async () => improve.state(),
     });
-    if (improve.pull) {
+    // only the authenticated Orchestrator mount (/mcp/app/r/<id>/<token>): the plain mounts are open to local processes
+    if (improve.pull && unified()) {
       const pull = improve.pull;
       tools.push({
         name: 'app_update_code',
@@ -545,7 +546,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         inputSchema: obj(),
         run: async () => {
           const regia = caller();
-          if (!regia?.isRegia && !regia?.appRegia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
+          if (!unified() || !regia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
           if (!decidedSince(regia.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
           return pull();
         },

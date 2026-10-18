@@ -156,7 +156,7 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   mcp.mount('/mcp/improve', {
     name: 'app',
     instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, all chats in the Grindhouse; creation requires the app source repository; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
-    tools: appControlTools({ ...deps, sourceOnly: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir), pull: () => improve.pull() } }).map(as),
+    tools: appControlTools({ ...deps, sourceOnly: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
   });
 }
 
