@@ -110,6 +110,18 @@ export function releaseLockInfo(root) {
   } catch { return { blocked: true, reason: 'incomplete release lock; preserve it for maintenance' }; }
 }
 export const hashFile = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+/** Atomic rename that waits out Windows sharing locks: open handles on files inside the source (antivirus scanning
+ *  just-copied files) fail it with EPERM/EBUSY; retried for a bounded time, then the last error (EACCES may be a real ACL). */
+function renameRetry(from, to, ms = 5000) {
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  for (const until = Date.now() + ms; ;) {
+    try { fs.renameSync(from, to); return; } catch (e) {
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(e.code) || Date.now() > until) throw e;
+      Atomics.wait(pause, 0, 0, 20);
+    }
+  }
+}
 const idOk = id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(id);
 const inside = (root, file) => { const p = path.relative(root, file); return p !== '' && !p.startsWith('..') && !path.isAbsolute(p); };
 const equalPath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
@@ -204,7 +216,7 @@ function stageUpdateLocked(root, payload, expectedSha256, lease, installer = fal
     }
     const target = safePayloadPath(root, group);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.renameSync(work, target);
+    renameRetry(work, target); // freshly copied runtime files are what antivirus scans first
   }
   for (const name of ROOT_FILES) {
     const dest = locate(name);

@@ -71,18 +71,31 @@ export interface AgentProfile extends AgentDraft {
   activeVersion: number;
   /** At most one open trial per agent; no other behavioural change while it is open. */
   trial?: { version: number; baseline: number; startedAt: number };
+  /** Created on the fly for a task (AGENTS-DESIGN §4.7): on trial until its runs keep or retire it. A retired agent keeps
+   *  it while archived (the 14-day no-recreate check); one kept by the evaluator loses it; one kept by Brother (Tieni, an
+   *  edit, a restore) keeps it with `keptBy: 'brother'`, which ends the probation. */
+  probation?: AgentProbation;
   lastEditedBy: AgentAuthor;
   /** Brother edited it: the Orchestrator may only propose changes. */
   userLocked: boolean;
   status: 'active' | 'archived';
   archivedAt?: number;
 }
+/** since = when the probation began; requestItemId = the task message that asked for the agent (A7 sets it). */
+export interface AgentProbation { since: number; requestItemId: string; keptBy?: 'brother' }
+/** Still being judged: a probation Brother has not ended. */
+export const inProbation = (p: Pick<AgentProfile, 'probation'>): boolean => p.probation !== undefined && p.probation.keptBy === undefined;
+/** How a probation ended, written on the version that was active then. */
+export interface AgentProbationDecision { decision: 'kept' | 'retired'; by: 'brother' | 'evaluator'; reason: string; at: number }
 export type AgentVersionState = 'active' | 'trial' | 'kept' | 'rejected' | 'superseded';
 /** Immutable behaviour snapshot of one version (no avatar or images: history stays small). */
 export interface AgentVersion {
   agentId: string; version: number; parentVersion: number | null;
   behaviour: AgentBehaviour; author: AgentAuthor; reason: string; at: number; state: AgentVersionState;
+  probation?: AgentProbationDecision;
 }
+/** The built-in agent a chat started without an agent runs as (AGENTS-DESIGN §4.7): it can never be archived. */
+export const GENERAL_AGENT_ID = 'default-general';
 /** Frozen when a chat starts; editing the catalog never relabels existing sessions. */
 export interface AgentOwnerSnapshot {
   id: string; name: string; purpose: string; avatar: AgentAvatar;
@@ -101,6 +114,36 @@ export interface AgentRunOutcome {
 }
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
 export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
+/** The fenced `run-report` block an agent ends its run with (AGENTS-DESIGN §3 preamble): the latest one of the run.
+ *  `ok: false` = a block was there but did not parse; no block at all leaves the field out. */
+export type AgentRunReport =
+  | { ok: true; at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number }
+  | { ok: false; at: number };
+/** Brother's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) his reopen of a run whose agent had
+ *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
+export interface AgentRunCorrections { tagged: number; afterReport: number }
+// Agent metrics (AGENTS-DESIGN §5), computed in main (agents/run-metrics.ts) from agent-runs.json.
+/** One §5 metric: n = the runs it rests on, coverage = n / ended runs (null: no ended run). */
+export interface Metric { value: number | null; n: number; coverage: number | null }
+export interface VersionMetrics {
+  agentId: string;
+  /** null = all versions from 1 up (v0 left out) */
+  version: number | null;
+  legacy: boolean;
+  ended: number;
+  successRate: Metric;
+  opinion: { value: number | null; n: number }; selfReport: { value: number | null; n: number };
+  correctionsPerRun: Metric;
+  aiErrorsPerRun: Metric;
+  reworkRate: Metric;
+  costPerRun: { median: Metric; p90: number | null };
+  tokensPerRun: Record<keyof AgentRunTokens, Metric>;
+  contextPeak: { median: Metric; max: number | null; ofWindow: number | null };
+  timeToDone: { elapsed: Metric; execution: Metric };
+  questionsPerRun: Metric; permissionsPerRun: Metric; commandsPerRun: Metric;
+  reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
+}
+export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number }
 /** One run = a chat started from an agent definition (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {
   runId: string; chatId: string; agentId: string;
@@ -112,6 +155,8 @@ export interface AgentRun {
   /** the parent run that spawned it: it ends when the parent ends */
   spawnedBy?: string;
   reviewOf?: string; reworkOf?: string;
+  /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): counts as rework of it */
+  continuedFrom?: string;
   endedAt?: number; endReason?: AgentRunEnd;
   outcome?: AgentRunOutcome;
   counters: AgentRunCounters;
@@ -119,7 +164,20 @@ export interface AgentRun {
   costUsd: number | null;
   /** null = a turn reported no token usage (or a backfilled run): unknown, never a partial sum */
   tokens: AgentRunTokens | null;
+  report?: AgentRunReport;
+  corrections?: AgentRunCorrections;
+  /** time the chat spent running (not waiting on Brother, a permission or the queue) while the run was open; missing on
+   *  runs recorded before it was measured */
+  executionMs?: number;
+  /** what the run was about (AGENTS-DESIGN §4.8), set at start and frozen at its end; missing on runs recorded before tags
+   *  existed: unknown in every filter, never a match */
+  tags?: AgentRunTags;
 }
+/** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
+ *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
+export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }
+/** Metric filters (all optional; together they must all match). */
+export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
 export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
   models: { id: string; name: string }[];

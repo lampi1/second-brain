@@ -78,11 +78,14 @@ try {
 } finally { if ($null -ne $archive) { $archive.Dispose() } }
 `;
 
+// Upper bound for one PowerShell 5.1 extraction, cold start included; a healthy small archive takes seconds.
+export const EXTRACT_TIMEOUT_MS = 120_000;
+
 export async function extractUpdateZip(archive: string, destination: string, signal?: AbortSignal): Promise<void> {
   if (process.platform !== 'win32') throw new Error('Update acquisition currently supports Windows only.');
   const exe = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   await new Promise<void>((resolve, reject) => execFile(exe, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', EXTRACT], {
     env: { ...process.env, SB_UPDATE_ARCHIVE: archive, SB_UPDATE_DESTINATION: destination },
-    shell: false, windowsHide: true, timeout: 120000, signal, maxBuffer: 1024 * 1024,
+    shell: false, windowsHide: true, timeout: EXTRACT_TIMEOUT_MS, signal, maxBuffer: 1024 * 1024,
   }, error => error ? reject(new Error('Update archive is invalid, unsafe, cancelled or could not be extracted.', { cause: error })) : resolve()));
 }

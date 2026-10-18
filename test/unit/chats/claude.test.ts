@@ -102,7 +102,9 @@ describe('ClaudeSession', () => {
     expect(versions.length).toBeGreaterThanOrEqual(2);
     expect(versions[0]).toMatchObject({ replace: false, item: { streaming: true } });
     expect(versions.at(-1)?.replace).toBe(true);
-    expect(s.state).toBe('idle');
+    // the CLI reports idle on its own line after the result: wait for it, as the unsolicited-turn test does (no short
+    // deadline: under load that would be the next flake; the state event itself is covered by the session-state tests)
+    await waitFor(() => s.state === 'idle', 'idle after result');
     expect(s.sessionId).toBe('11111111-2222-4333-8444-555555555555');
     // A requested UUID is not a provider observation until native init confirms it, even when unchanged.
     expect(sink.patch.sessionId).toBe('11111111-2222-4333-8444-555555555555');

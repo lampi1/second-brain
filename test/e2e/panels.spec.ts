@@ -29,7 +29,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await page.getByTestId('chat-max-qa').click();
     const qa = page.getByTestId('request-qa-qa-q1');
     await expect(qa.getByText('Consigliata')).toBeVisible();
-    await expect(qa.locator('.ask-opt.rec')).toHaveCount(1);
+    await expect(qa.locator('.gu-choice.rec')).toHaveCount(1);
     await expect(page.getByTestId('request-qa-qa-q1-other')).toContainText('Altro…');
     await shot(page, `panels-question-${scheme}`);
     // "Altro…" by its digit (3 options → 4): a box, Esc goes back to the choices, the text is kept out

@@ -5,10 +5,11 @@
 // nothing (feat/lag-app: the app under 0.1 core). Read-only everywhere. Used by main/index.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ChatItem, ChatSummary, SearchResult } from '../../shared/contract';
+import type { ChatItem, ChatSummary, SearchHit, SearchResult } from '../../shared/contract';
+import type { HybridSearch } from './hybrid/service';
 import { errText, log } from '../log';
 import { listMarkdown, readAppended, transcriptParts, type TailState } from './sources';
-import { fold, part, searchDocs, type Doc, type Part } from './text-index';
+import { fold, part, searchDocs, snippet, terms, type Doc, type Part } from './text-index';
 
 export interface SearchDeps {
   chats: () => ChatSummary[];
@@ -22,6 +23,8 @@ export interface SearchDeps {
   now?: () => number;
   /** ms for the pauses between refreshes (default performance.now: never frozen) */
   clock?: () => number;
+  /** brain files from the hybrid search (SPEC 23); null or a failure = the palette's own file index */
+  brainHits?: (q: string) => Promise<SearchHit[] | null>;
 }
 
 const DAY = 86_400_000;
@@ -57,8 +60,9 @@ export class SearchService {
     const t0 = performance.now();
     const text = typeof q === 'string' ? q.slice(0, 200) : '';
     if (fold(text).trim().length < 2) return { q: text, hits: [], ms: 0, indexed: { chats: this.chatRecs.size, files: this.files.size } };
-    await this.refresh();
-    const hits = searchDocs([...this.chatDocs, ...this.branchDocs, ...[...this.files.values()].map(f => f.doc)], text, { now: this.now() });
+    const [, brain] = await Promise.all([this.refresh(), this.deps.brainHits?.(text).catch(() => null) ?? Promise.resolve(null)]);
+    const own = searchDocs([...this.chatDocs, ...this.branchDocs, ...(brain ? [] : [...this.files.values()].map(f => f.doc))], text, { now: this.now() });
+    const hits = brain ? [...own, ...brain] : own;
     const ms = Math.round(performance.now() - t0);
     return { q: text, hits, ms, indexed: { chats: this.chatRecs.size, files: this.files.size } };
   }
@@ -178,6 +182,25 @@ export class SearchService {
     }
     for (const k of [...this.files.keys()]) if (!seen.has(k)) this.files.delete(k);
   }
+}
+
+/** Ctrl+K's brain hits from the hybrid search: the best place of each file (at most 6), the query word marked. Null
+ *  (= the palette's own file index) when it fails or is slow (the first search, while the worker starts). */
+export function brainHitsFrom(h: Pick<HybridSearch, 'query'>, waitMs = 1500): (q: string) => Promise<SearchHit[] | null> {
+  return async q => {
+    const seen = new Set<string>();
+    const { words } = terms(q);
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<null>(r => { timer = setTimeout(() => r(null), waitMs); });
+    const hits = await Promise.race([h.query(q, { limit: 30 }).catch(() => null), late]).finally(() => clearTimeout(timer));
+    if (!hits) return null;
+    return hits.filter(x => !seen.has(x.path) && seen.add(x.path)).slice(0, 6).map(x => {
+      const low = fold(x.text);
+      const w = words.find(t => low.includes(t));
+      const sn = snippet(x.text, w ? low.indexOf(w) : 0, w?.length ?? 0);
+      return { kind: 'brain' as const, key: `brain:${x.path}`, title: x.path, snippet: sn.snippet, mark: w ? sn.mark : null, at: x.at, path: x.path, line: x.line };
+    });
+  };
 }
 
 /** Demo (SB_DEMO): fixed branches for the demo's folders, so the palette shows the kind without a repository. */

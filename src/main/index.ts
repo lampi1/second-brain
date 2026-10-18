@@ -26,7 +26,7 @@ import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
 import { clipReader, readClipboardImage } from './clipboard-image';
 import { gitBranches } from './chats/branch';
-import { SearchService, demoBranchOf } from './search/service';
+import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
@@ -85,6 +85,8 @@ app.whenReady().then(async () => {
     transcriptOf: c => (!demo && c.harness === 'claude' && c.sessionId ? findTranscript(c.sessionId, c.cwd) : null),
     brainRoot: () => (demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot),
     branchOf: demo ? demoBranchOf : gitBranch,
+    // brain files ranked by the hybrid search (words + meaning, SPEC 23) when it answers; else by the palette's own index
+    ...(s.hybrid ? { brainHits: brainHitsFrom(s.hybrid) } : {}),
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   let brainChoiceRevision = 0;
@@ -164,6 +166,17 @@ app.whenReady().then(async () => {
     'agents:archive': a => s.agents.archive(a.id),
     'agents:restore': a => s.agents.restore(a.id),
     'agents:history': a => s.agents.history(a.id),
+    'agents:keep': a => s.agents.keep(a?.id, 'brother'),
+    'agents:retire': a => s.agents.retire(a?.id, typeof a?.reason === 'string' ? a.reason.slice(0, 600) : '', 'brother'),
+    'agents:metrics': a => {
+      const root = demo ? null : s.brain.info().brainRoot;
+      let aiErrors: string | undefined;
+      try { if (root) aiErrors = fs.readFileSync(path.join(root, 'ai-errors.md'), 'utf8'); } catch { aiErrors = undefined; }
+      const tag = (v: unknown) => typeof v === 'string' && v.length <= 120 ? v : undefined;
+      const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
+      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
+        ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
+    },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
@@ -200,7 +213,7 @@ app.whenReady().then(async () => {
     // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId); },
+    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
@@ -290,6 +303,8 @@ app.whenReady().then(async () => {
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
+    'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
+    'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'later:get': () => s.later.get(),
     'later:set': a => s.later.set(a?.on === true),
     'sync:get': () => s.brain.syncState(),
@@ -301,6 +316,8 @@ app.whenReady().then(async () => {
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
+  // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
+  const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
   void windowReady.then(() => { const t = setTimeout(() => headline.start(), 15_000); t.unref(); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,

@@ -99,3 +99,36 @@ it('retains missing earlier usage and a prior explicit costKnown false', () => {
   c.patch(chat(), { turnCostUsd: 0 });
   expect(c.readModel().agents[0]!.costs.listPriceUsd.total).toBeNull();
 });
+
+it('when full, evicts only the oldest row already rolled up into its ended run, never a live one', () => {
+  const s = setup(), c = s.create();
+  c.patch(chat(), { sessionId: 'one', turnCostUsd: 1 });
+  c.rolledUp(chat('nope'));
+  c.rolledUp(chat());
+  c.rolledUp({ ...chat(), agent: { id: 'other', revision: 1, name: 'Other' } } as ChatSummary);
+  const file = path.join(s.dir, 'agent-analytics.json');
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  expect(saved.rows[0].rolledUp).toBe(true);
+  const row = (key: string, rolledUp: boolean) => ({ ...saved.rows[0], observation: { ...saved.rows[0].observation, sessionKey: `claude:${key}`, provenance: { ...saved.rows[0].observation.provenance, sessionId: `claude:${key}` } }, ...(rolledUp ? { rolledUp } : { rolledUp: undefined }) });
+  const fill = (rolled: number[]) => fs.writeFileSync(file, JSON.stringify({ version: 1, rows: Array.from({ length: 1000 }, (_, i) => row(`s${i}`, rolled.includes(i))) }));
+  const sessions = (x: AgentAnalyticsCollector) => x.readModel().agents[0]!.sessions;
+
+  fill([]);
+  const none = s.create();
+  none.patch(chat('new'), { sessionId: 'new', turnCostUsd: 1 });
+  expect(sessions(none)).toBe(1000);
+  expect(none.readModel().agents[0]!.evidence.some(e => e.sessionKey === 'claude:new')).toBe(false);
+
+  fill([5, 7]);
+  const live = s.create();
+  live.patch(chat('s5'), { sessionId: 's5', state: 'running' }); // s5 is live again: not evictable
+  live.patch(chat('new'), { sessionId: 'new', turnCostUsd: 1 });
+  const keys = live.readModel().agents[0]!.evidence.map(e => e.sessionKey);
+  expect(keys).toContain('claude:new');
+  expect(keys).toContain('claude:s5');
+  expect(keys).not.toContain('claude:s7');
+  expect(sessions(live)).toBe(1000);
+
+  fs.writeFileSync(file, JSON.stringify({ version: 1, rows: [{ ...saved.rows[0], rolledUp: 'yes' }] }));
+  expect(() => s.create().readModel()).toThrow();
+});

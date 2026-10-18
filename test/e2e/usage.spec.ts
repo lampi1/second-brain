@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import os from 'node:os';
-import { launch, launchDemo, setSize, shot } from './helpers';
+import { launch, launchDemo, setSize, shot, goPage } from './helpers';
 
 const SHOTS = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots');
 async function clip(page: Page, name: string, testid: string): Promise<void> {
@@ -100,7 +100,7 @@ test('Cursor today: estimated from the ledger (≈, margin), exact once a usage 
   await expect(page.getByTestId('usage-pop')).toContainText('dal CSV delle');
   await expect(page.getByTestId('usage-pop-cursor-est')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect(page.getByTestId('bx-cursor-today')).toContainText('1,70', { timeout: 30_000 });
   await expect(page.getByTestId('bx-cursor-today')).toContainText('esatto');
   await shot(page, 'usage-cursor-costi');

@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
-import { extractUpdateZip } from '../../src/main/update/extract';
+import { EXTRACT_TIMEOUT_MS, extractUpdateZip } from '../../src/main/update/extract';
 import { fixtureZip } from './zip-fixture';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -14,7 +14,10 @@ function fixture(bytes: Buffer) {
   fs.writeFileSync(archive, bytes); fs.mkdirSync(payload);
   return { root, archive, payload };
 }
-describe.skipIf(process.platform !== 'win32')('native bounded ZIP extraction', () => {
+// Every case spawns a real PowerShell 5.1, so each test gets the product's extraction budget, not the 15 s default.
+// Test-only bound for the producer, a PowerShell 5.1 Compress-Archive job like extraction: the same budget.
+const PRODUCER_MS = EXTRACT_TIMEOUT_MS;
+describe.skipIf(process.platform !== 'win32')('native bounded ZIP extraction', { timeout: EXTRACT_TIMEOUT_MS + 15_000 }, () => {
   it('extracts regular stored/deflated files and dotfiles literally', async () => {
     const f = fixture(fixtureZip([{ name: 'release.mjs', data: 'stored' }, { name: 'releases/a/.claude/AGENTS.md', data: 'deflated '.repeat(20), deflate: true }]));
     await extractUpdateZip(f.archive, f.payload);
@@ -49,10 +52,10 @@ describe.skipIf(process.platform !== 'win32')('native bounded ZIP extraction', (
     fs.unlinkSync(f.archive);
     // The trusted producer script itself, not a second archive implementation. Only the two literal env paths vary.
     const script = fs.readFileSync(path.resolve(import.meta.dirname, '../../scripts/zip-payload.ps1'), 'utf8');
-    execFileSync(path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `& {\n${script}\n} -PayloadRoot $env:SB_ZIP_SOURCE -Output $env:SB_ZIP_OUTPUT`], { shell: false, windowsHide: true, timeout: 15000, env: { ...process.env, SB_ZIP_SOURCE: source, SB_ZIP_OUTPUT: f.archive } });
+    execFileSync(path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `& {\n${script}\n} -PayloadRoot $env:SB_ZIP_SOURCE -Output $env:SB_ZIP_OUTPUT`], { shell: false, windowsHide: true, timeout: PRODUCER_MS, env: { ...process.env, SB_ZIP_SOURCE: source, SB_ZIP_OUTPUT: f.archive } });
     await extractUpdateZip(f.archive, f.payload);
     for (const name of names) expect(fs.readFileSync(path.join(f.payload, name), 'utf8')).toBe(`fixture ${name}`);
-  });
+  }, PRODUCER_MS + EXTRACT_TIMEOUT_MS + 15_000);
   it('cancels before extraction without writing entries', async () => {
     const f = fixture(fixtureZip([{ name: 'entry.txt', data: 'fixture' }])), controller = new AbortController(); controller.abort();
     await expect(extractUpdateZip(f.archive, f.payload, controller.signal)).rejects.toThrow();

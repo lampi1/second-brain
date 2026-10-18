@@ -89,6 +89,14 @@ export async function openRegia(page: Page): Promise<void> {
   await expect(page.getByTestId('tile-regia')).toBeVisible();
 }
 
+/** A fresh profile opens the first-run setup by itself (FirstInterview.tsx): closes it, as a user who skips it would. */
+export async function closeSetup(page: Page): Promise<void> {
+  const gate = page.locator('[data-testid="ai-first-modal"], [data-testid="first-interview"]');
+  await expect(gate).toBeVisible({ timeout: 15000 });
+  await page.keyboard.press('Escape');
+  await expect(gate).toBeHidden();
+}
+
 /** Opens the strips of these chats in the Grindhouse (collapsed by default: their transcript and input are hidden). */
 export async function expandChats(page: Page, ...ids: string[]): Promise<void> {
   for (const id of ids) {
@@ -110,9 +118,14 @@ export async function choose(select: Locator, value: string): Promise<void> {
 /** Wait until the browser placeholders on screen show their snapshot (so screenshots show the pages). */
 export async function waitThumbs(page: Page): Promise<void> {
   await expect.poll(async () => page.evaluate(() => {
-    const ph = [...document.querySelectorAll<HTMLElement>('[data-testid^="browser-view-"], [data-testid^="thumb-"]')];
+    // only the ones in the window: a view scrolled out of it keeps its last snapshot until it comes back
+    const ph = [...document.querySelectorAll<HTMLElement>('[data-testid^="browser-view-"], [data-testid^="thumb-"]')].filter(p => {
+      const r = p.getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight && r.width > 0;
+    });
     // a tile's snapshot must be the one taken at the tile's own size (not an earlier one at another size)
-    return ph.length > 0 && ph.every(p => {
+    // none on screen (every strip collapsed) is fine too
+    return ph.every(p => {
       const img = p.querySelector('img');
       if (!img || !img.complete || img.naturalWidth === 0) return false;
       return !p.dataset.testid?.startsWith('browser-view-') || Math.abs(img.naturalWidth - p.clientWidth * devicePixelRatio) <= 3;
@@ -125,11 +138,21 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
-/** Opens the agent studio from where it lives since the Grindhouse (ADR 0068): the Home footer's "Gestisci agenti"
- *  (the sidebar shows "Agenti" only when the chosen role lists it). */
+/** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
+const GO_KEY = { home: 'h', agenti: 'a', devops: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', procedure: 'l', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', migliora: 'u' } as const;
+export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press(GO_KEY[id]);
+}
+
+/** Opens the agent studio with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
+ *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. */
 export async function openAgents(page: Page): Promise<void> {
   await page.getByTestId('nav-home').click();
-  await page.getByTestId('home-manage-agents').click();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press('a');
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 

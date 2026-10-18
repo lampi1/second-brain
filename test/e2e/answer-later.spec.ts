@@ -5,7 +5,7 @@
 // muted); the queue survives a restart; Ctrl+J opens it as the questions window, any of them can go first, and quiet
 // mode ends. Screenshots: test-results/shots/answer-later-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchDemo, layerState, shot, windowShot } from './helpers';
+import { expandChats, launchDemo, layerState, shot, windowShot } from './helpers';
 
 type Demo = { __sbDemo: { ask(id: string, r: object): void; answers(): unknown[] } };
 const ask = (app: ElectronApplication, chatId: string, q: string) => app.evaluate((_e, [c, q]) => (globalThis as unknown as Demo).__sbDemo.ask(c, {
@@ -19,6 +19,7 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   const first = await launchDemo();
   let { app, page } = first;
   const { userData } = first;
+  await expandChats(page, 'qa', 'feedback'); // a request's card is on its expanded strip
   await page.getByTestId('request-qa-qa-q1-later').click(); // "Rispondi dopo" on QA's card, in its tile
   await expect(page.getByTestId('chat-queued-qa')).toContainText('Da rispondere: una richiesta');
   await expect(page.getByTestId('chat-queued-feedback')).toBeVisible(); // every open request, not only that one

@@ -1,0 +1,27 @@
+// English counterparts of the "guide" area (the Guida page's frame; the cards are in src/shared/concept-guide.ts).
+import type { guideIt } from './guide.it';
+export const guideEn: typeof guideIt = {
+  'guide.eyebrow': 'GUIDE',
+  'guide.title': 'How the app works',
+  'guide.lead': 'The core concepts, one per card: a plain line, then how it works, an analogy and the technical details with the files they come from.',
+  'guide.filter': 'Filter the concepts',
+  'guide.filterPlaceholder': 'Find a concept: runs, permissions, brain…',
+  'guide.none': 'No concept matches the filter.',
+  'guide.count': (p: { count: number }) => `${p.count} concepts`,
+  'guide.howItWorks': 'How it works',
+  'guide.hide': 'Hide',
+  'guide.analogy': 'In practice it is like…',
+  'guide.technical': 'Technical details',
+  'guide.sources': 'Sources in the code',
+  'guide.target': 'Target, not today’s behaviour',
+  'guide.targetBadge': 'partly a target',
+  'guide.coming': 'Coming, not on main yet',
+  'guide.comingBadge': (p: { pr: number }) => `coming (PR #${p.pr})`,
+  'guide.diagram': (p: { title: string }) => `Diagram: ${p.title}`,
+  'guide.back': 'starts again',
+  'guide.discuss': 'Discuss',
+  'guide.discussTip': 'Opens a chat about this concept with the card already in the input: it starts when you press Enter.',
+  'guide.toAgent': (p: { name: string }) => `Chat opened with ${p.name}: the card is in the input, press Enter to start.`,
+  'guide.toRegia': 'Draft in the Orchestrator: the card and the request for an explainer agent. Press Enter to send it.',
+  'guide.noRegia': 'No explainer agent and no Orchestrator open: start the Orchestrator (Ctrl+R) and try again.',
+};

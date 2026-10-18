@@ -942,6 +942,10 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .palette-snippet { color: var(--text-2); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-snippet mark { background: rgba(250, 204, 21, 0.28); color: var(--text); border-radius: 3px; padding: 0 1px; }
 .palette-busy { margin-left: auto; color: var(--text-4); }
+.palette-model { margin-left: auto; color: var(--text-4); }
+.palette-busy + .palette-model { margin-left: 0; }
+.palette-retry { border: 0; background: none; padding: 0; color: var(--blue); font: inherit; cursor: pointer; }
+.palette-retry:hover { text-decoration: underline; }
 .modal-shortcuts { width: min(520px, calc(100vw - 32px)); }
 .keymap { margin: 0; display: flex; flex-direction: column; }
 .keymap-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--border); }
