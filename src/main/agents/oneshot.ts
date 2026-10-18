@@ -74,7 +74,7 @@ export class OneShotService {
     const run = this.d.runs.start({ chatId: `os_${crypto.randomBytes(6).toString('hex')}`,
       agentId: agent.id, version: agent.activeVersion, goal: req.purpose, startedBy: 'orchestrator', startedAt, costKnown: false });
     run.source = 'oneshot';
-    run.tags = { engine: engine.id, job: req.purpose, fallback: engine.id !== agent.engine, costBasis: 'unknown' };
+    run.oneshot = { engine: engine.id, job: req.purpose, fallback: engine.id !== agent.engine, costBasis: 'unknown' };
     this.d.runs.save();
     let result: OneShotResult = { ...failed('Esecuzione non completata'), runId: run.runId, engine: engine.id, model };
     let cwd: string | undefined;
@@ -112,7 +112,7 @@ export class OneShotService {
       if (cwd) { try { fs.rmdirSync(cwd); } catch { /* preserve unexpected content */ } }
       result.durationMs = now() - startedAt;
       run.costUsd = result.costUsd; run.tokens = result.tokens; run.executionMs = result.durationMs;
-      run.tags.costBasis = result.costBasis;
+      run.oneshot.costBasis = result.costBasis;
       run.outcome = { verdict: 'unknown', basis: 'unknown', at: now(), by: 'Battito' };
       endRun(run, 'completed', now()); this.d.runs.save();
     }

@@ -32,7 +32,7 @@ export interface Prefs {
   /** Validate against the loaded agent/page catalogs before use; preserve invalid saved data for explicit recovery. */
   role?: RoleSelection;
   appearance:AppearancePreference;
-  chatPanelsV:0|1;
+  chatPanelsV:0|1|2;
   chatExpanded:Record<string,boolean>;
   density: Density;
   theme: Theme;
@@ -100,7 +100,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:1,chatExpanded:{},
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},
   density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42, feedOpen: false,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
   browsersHidden: false,
@@ -126,7 +126,7 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
-      chatPanelsV:p.chatPanelsV===1?1:0,
+      chatPanelsV:p.chatPanelsV===2?2:p.chatPanelsV===1?1:0,
       chatExpanded:p.chatExpanded&&typeof p.chatExpanded==='object'&&!Array.isArray(p.chatExpanded)?Object.fromEntries(Object.entries(p.chatExpanded).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{},
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',

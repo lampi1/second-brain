@@ -1,7 +1,7 @@
 // The left navigation, always visible and always expanded (labels shown, no collapse toggle), in three groups (2026-10-15, before one flat list of
 // 13), under the Grindhouse (the agents, Ctrl+1; SPEC 19 retired the separate Chat entry): Lavoro = DevOps (only while the brain has its script: the app is generic) and Fatto;
 // Brain = what the brain holds (Idee, Procedure, Regole imparate, Esplora, the "Mappa 3D" button); App = how the app
-// itself is doing and is shaped (the Dashboard, Skill e agenti). Impostazioni is
+// itself is doing and is shaped (the Dashboard, the Guida to its concepts, Skill e agenti). Impostazioni is
 // not listed: the gear menu, Ctrl+, and Ctrl+K reach it. Each entry keeps its G-letter shortcut and carries the unread
 // badge of the feed kinds it owns (lib/notify.ts sectionOf; Costi as a warning), cleared when the section is visited;
 // DevOps shows its unread news (store/devops.ts), cleared by marking them read. Pointing at "Mappa" gets the map's data
@@ -14,7 +14,7 @@ import { useDevops } from '../store/devops';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconBrain, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconMap, IconSettings, IconSparkle, IconTarget, IconTicket,
+  IconBook, IconBrain, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {useAgents} from '../store/agents';
@@ -25,7 +25,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
-  dashboard: <IconChart />,
+  dashboard: <IconChart />, guida: <IconQuestion />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: DevOps can hide; the Dashboard shows under any role). */
@@ -41,7 +41,7 @@ export function Sidebar() {
   const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
   const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','devops','fatto','impostazioni'].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','devops','fatto','impostazioni'].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -80,6 +80,7 @@ export function Sidebar() {
         {item('mappa', t('dialogs.sidebar.map'), <IconMap />, map, () => go({ page: 'mappa' }), { key: t('dialogs.sidebar.mapShortcut'), testid: 'nav-map', onHover: () => preloadMap(true) })}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('dashboard')}
+        {page1('guida')}
         {!composition&&APP_GROUP.map(page1)}
       </div>
     </nav>

@@ -31,7 +31,7 @@ it('falls back from Cursor to tool-free Claude in a fresh folder and persists pr
   expect(r).toMatchObject({ ok: true, engine: 'claude', costBasis: 'reported' });
   expect(f.run).toHaveBeenCalledWith(expect.objectContaining({ noTools: true, maxTokens: 1200, timeoutMs: 120000 }));
   const saved = new AgentRunStore(f.userData).list()[0]!;
-  expect(saved).toMatchObject({ source: 'oneshot', tags: { engine: 'claude', fallback: true, job: 'pulse' }, endReason: 'completed' });
+  expect(saved).toMatchObject({ source: 'oneshot', oneshot: { engine: 'claude', fallback: true, job: 'pulse' }, endReason: 'completed' });
   expect(saved.chatId).toMatch(/^os_[a-f0-9]{12}$/);
   expect(fs.readdirSync(path.join(f.userData, 'oneshot'))).toEqual([]);
 });

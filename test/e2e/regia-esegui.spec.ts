@@ -4,7 +4,7 @@
 // inside a block never answer the card), production blocks still asking a second click; a permission never gets them.
 // A work chat's request never shows in the Regia (2026-10-13). Screenshots: test-results/shots/regia-esegui-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { say(c: string, t: string): void };
 const say = (app: ElectronApplication, chatId: string, text: string) =>
@@ -29,6 +29,7 @@ test('the questions window: a work chat\'s question brings the commands of its t
   await say(app, 'qa', "Prima di rispondere lancia:\n```powershell\nWrite-Output 'qa ok'\n```\nE questo lo lanci tu:\n```bash\naz webapp restart -n app-prod -g rg-prod\n```");
   await expect(page.getByTestId('qwin')).toBeVisible(); // the demo's requests, the Regia's first
   await page.keyboard.press('Escape'); // set aside, then QA's question called from its tile's line
+  await expandChats(page, 'qa'); // the line is on the open strip
   await page.getByTestId('chat-queued-qa-open').click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('QA · Rimborsi');
   const card = page.getByTestId('qwin-card');
@@ -60,6 +61,7 @@ test('the questions window: a work chat\'s question brings the commands of its t
   // a permission: its command is the agent's own, approved, never offered to run
   await say(app, 'feedback', "Lancio i test:\n```bash\nnpm run test:e2e\n```");
   await page.keyboard.press('Escape');
+  await expandChats(page, 'feedback'); // the line is on the open strip
   await page.getByTestId('chat-queued-feedback-open').click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
   await expect(page.getByTestId('qwin-card-cmds')).toHaveCount(0);

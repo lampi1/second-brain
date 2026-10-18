@@ -16,6 +16,7 @@ import {productIt}from'./areas/product.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
+import { guideIt } from './areas/guide.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 
 export const it = {
@@ -23,6 +24,7 @@ export const it = {
   ...connectorsIt,
   ...reviewedContextIt,
   ...homeIt,
+  ...guideIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',

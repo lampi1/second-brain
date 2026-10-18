@@ -6,7 +6,7 @@ import type { SysCode, SysParams } from './sys';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
-import type { AgentCatalog, AgentMetrics, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -351,6 +351,10 @@ export interface NewChat {
   space?: ChatSpace;          // 'app': a chat of the "Migliora l'app" section
   appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
+  /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
+  skills?: string[];
+  /** run tags: the product the work is about, up to 40 characters */
+  app?: string;
 }
 
 /** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Regia
@@ -479,7 +483,10 @@ export interface FeedEvent {
   chatId?: string;
   file?: string;
   away?: boolean;             // happened while the app was closed
+  /** the card's one action (agent-retired: Ripristina) */
+  action?: FeedAction;
 }
+export type FeedAction = { kind: 'agent-restore'; agentId: string };
 
 // ---- DevOps (src/main/devops): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
@@ -1110,6 +1117,14 @@ export interface SyncState { domains: DomainSyncStatus[]; at: number }
 export type SyncChoice = 'mine' | 'theirs' | 'both';
 
 export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexed: { chats: number; files: number } }
+/** The hybrid brain search (SPEC 23): its local embedding model and index. Without the model, words only (BM25). */
+export type SearchModelState =
+  | { state: 'missing' }                                   // not downloaded (tests, or not started yet)
+  | { state: 'downloading'; done: number; total: number }  // bytes
+  | { state: 'loading' }
+  | { state: 'ready' }
+  | { state: 'failed'; error: string };                    // download or load failed: retry from the palette
+export interface SearchIndexStatus { model: SearchModelState; docs: number; chunks: number; vectors: number; vec: boolean }
 
 /** renderer → main. Each entry: [argument, result]. */
 /** Key → letter on screen in the app page over one window (ms): keydown to the first frame after its input event. */
@@ -1145,8 +1160,12 @@ export interface InvokeMap {
   'agents:archive': [{ id: string }, AgentProfile];
   'agents:restore': [{ id: string }, AgentProfile];
   'agents:history': [{ id: string }, AgentVersion[]];
-  /** the §5 metrics per agent and version (A6); since = only runs ended from then on */
-  'agents:metrics': [{ since?: number } | undefined, AgentMetrics[]];
+  /** the §5 metrics per agent and version (A6); since = only runs ended from then on; skill/app/repo = only runs with that
+   *  tag (untagged runs never match) */
+  'agents:metrics': [AgentMetricsFilter | undefined, AgentMetrics[]];
+  /** Brother's Tieni / Ritira on an agent in probation (AGENTS-DESIGN §4.7) */
+  'agents:keep': [{ id: string }, AgentProfile];
+  'agents:retire': [{ id: string; reason?: string }, AgentProfile];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
   'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
@@ -1299,6 +1318,9 @@ export interface InvokeMap {
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
   'search:query': [{ q: string }, SearchResult];
+  /** the hybrid search's model and index; retryModel starts the model download again after a failure */
+  'search:status': [void, SearchIndexStatus];
+  'search:retryModel': [void, SearchIndexStatus];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:get': [void, AnswerLater];
   'later:set': [{ on: boolean }, AnswerLater];
@@ -1378,6 +1400,7 @@ export interface EventMap {
   'run:updated': RunInfo;
   'improve:state': ImproveState;
   'later:changed': AnswerLater;
+  'search:status': SearchIndexStatus;
   /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
   'procedures:changed': void;
   /** a domain's sync status changed (ADR 0059) */
@@ -1402,7 +1425,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
@@ -1413,7 +1436,7 @@ export const INVOKE_CHANNELS = [
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
-  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
+  'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
@@ -1424,7 +1447,7 @@ export const EVENT_CHANNELS = [
   'chat:autoCloseStatus',
   'agents:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

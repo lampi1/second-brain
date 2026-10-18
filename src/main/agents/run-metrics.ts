@@ -30,7 +30,18 @@ export interface RunTally {
   cost: Sample; tokens: Record<TokenKind, Sample>; contextPeak: Sample; elapsed: Sample; execution: Sample;
   /** findings on this key's runs, per Reviewer `agentId/version`: the first parsed review of each run */
   reviews: Record<string, ReviewTally>;
+  /** the same counts per run tag (AGENTS-DESIGN §4.8), for filtered metrics over pruned runs; untagged runs are in none */
+  tags?: TagTallies;
+  /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
+  tagsLost?: true;
 }
+/** Counts only (no samples): what a filtered metric can still say about pruned runs. */
+export type TagTally = Pick<RunTally, 'ended' | 'verdicts' | 'opinion' | 'selfReport' | 'corrections' | 'aiErrors' | 'reworked' | 'questions' | 'permissions' | 'commands'>;
+export interface TagTallies { skills: Record<string, TagTally>; apps: Record<string, TagTally>; repos: Record<string, TagTally>; combined?: Record<string, TagTally> }
+/** JSON tuple avoids collisions between arbitrary app/repo names and absent dimensions. */
+export const tagFilterKey = (f: TagFilter): string => JSON.stringify([f.skill ?? null, f.app ?? null, f.repo ?? null]);
+/** One tag filter per dimension; together they must all match. */
+export interface TagFilter { skill?: string; app?: string; repo?: string }
 export interface MetricsInput {
   rollups?: readonly RunTally[];
   /** ai-errors.md lines per runId (aiErrorRuns); missing = the file was not read: the column stays unknown */
@@ -39,6 +50,8 @@ export interface MetricsInput {
   since?: number;
   /** the model window of an agent version, for context peak ÷ window */
   windowOf?: (agentId: string, version: number) => number | null;
+  /** Only runs whose tags match; untagged runs never match. Rollups retain counts for combined filters too. */
+  filter?: TagFilter;
 }
 
 const emptySample = (): Sample => ({ n: 0, values: [] });
@@ -69,7 +82,7 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
   // Their complete cost ledger remains available under Battito's job budgets.
-  if (run.tags?.fallback || run.tags?.job === 'headline') return;
+  if (run.oneshot?.fallback || run.oneshot?.job === 'headline') return;
   t.ended++;
   const o = run.outcome;
   if (o && (o.basis === 'human' || o.basis === 'reviewed-evidence')) addVerdict(t.verdicts, o.verdict);
@@ -113,18 +126,81 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     reworked: a.reworked + b.reworked, questions: a.questions + b.questions, permissions: a.permissions + b.permissions, commands: a.commands + b.commands,
     cost: mergeSample(a.cost, b.cost), tokens: Object.fromEntries(TOKEN_KINDS.map(k => [k, mergeSample(a.tokens[k], b.tokens[k])])) as Record<TokenKind, Sample>,
     contextPeak: mergeSample(a.contextPeak, b.contextPeak), elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
+    ...(a.tagsLost || b.tagsLost ? { tagsLost: true as const } : (() => { const tags = mergeTags(a.tags, b.tags); return tags ? { tags } : {}; })()),
   };
 }
 
-/** Pruned runs into the rollups: `all` = every run known before the prune (their reworks and reviews). */
+const TAG_FIELDS = ['ended', 'reworked', 'questions', 'permissions', 'commands'] as const;
+export function countsOf(t: TagTally): TagTally {
+  return { ended: t.ended, verdicts: { ...t.verdicts }, opinion: { ...t.opinion }, selfReport: { ...t.selfReport }, corrections: { ...t.corrections }, aiErrors: { ...t.aiErrors },
+    reworked: t.reworked, questions: t.questions, permissions: t.permissions, commands: t.commands };
+}
+function addCounts(a: TagTally, b: TagTally): void {
+  for (const k of TAG_FIELDS) a[k] += b[k];
+  for (const k of ['verdicts', 'opinion', 'selfReport'] as const) { a[k].success += b[k].success; a[k].partial += b[k].partial; a[k].fail += b[k].fail; }
+  a.corrections.runs += b.corrections.runs; a.corrections.tagged += b.corrections.tagged; a.corrections.afterReport += b.corrections.afterReport;
+  a.aiErrors.runs += b.aiErrors.runs; a.aiErrors.lines += b.aiErrors.lines;
+}
+/** Own keys only: a tag named like an Object.prototype member never reaches the prototype. */
+export const tagOf = (rec: Record<string, TagTally>, key: string): TagTally | undefined => Object.hasOwn(rec, key) ? rec[key] : undefined;
+function addTag(rec: Record<string, TagTally>, key: string, counts: TagTally): void {
+  const known = tagOf(rec, key);
+  if (known) addCounts(known, counts);
+  else Object.defineProperty(rec, key, { value: countsOf(counts), enumerable: true, writable: true, configurable: true });
+}
+function mergeTags(a: TagTallies | undefined, b: TagTallies | undefined): TagTallies | undefined {
+  if (!a && !b) return undefined;
+  const out: TagTallies = { skills: {}, apps: {}, repos: {} };
+  for (const t of [a, b]) if (t) for (const d of ['skills', 'apps', 'repos'] as const) for (const [k, v] of Object.entries(t[d])) addTag(out[d], k, v);
+  for (const t of [a, b]) if (t?.combined) for (const [k, v] of Object.entries(t.combined)) addTag(out.combined ??= {}, k, v);
+  return out;
+}
+
+/** Pruned runs into the rollups: `all` = every run known before the prune (their reworks and reviews). Each pruned run is
+ *  folded once, into its tally and into one bucket per tag it carries. */
 export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[], all: readonly AgentRun[]): RunTally[] {
   const index = indexRuns(all), out = new Map(rollups.map(t => [keyOf(t.agentId, t.version), structuredClone(t)]));
   for (const run of [...pruned].sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))) {
     const k = keyOf(run.agentId, run.version);
     if (!out.has(k)) out.set(k, emptyTally(run.agentId, run.version));
-    foldRun(out.get(k)!, run, index);
+    const t = out.get(k)!;
+    foldRun(t, run, index);
+    if (!run.tags || run.endedAt === undefined || t.tagsLost) continue;
+    const one = emptyTally(run.agentId, run.version);
+    foldRun(one, run, index);
+    const tags = t.tags ??= { skills: {}, apps: {}, repos: {} };
+    for (const skill of new Set(run.tags.skills)) addTag(tags.skills, skill, one);
+    if (run.tags.app !== null) addTag(tags.apps, run.tags.app, one);
+    if (run.tags.repo !== null) addTag(tags.repos, run.tags.repo, one);
+    const { app, repo } = run.tags;
+    const combined = tags.combined ??= {};
+    if (app !== null && repo !== null) addTag(combined, tagFilterKey({ app, repo }), one);
+    for (const skill of new Set(run.tags.skills)) {
+      if (app !== null) addTag(combined, tagFilterKey({ skill, app }), one);
+      if (repo !== null) addTag(combined, tagFilterKey({ skill, repo }), one);
+      if (app !== null && repo !== null) addTag(combined, tagFilterKey({ skill, app, repo }), one);
+    }
   }
   return [...out.values()];
+}
+/** A run matches when it carries every tag asked for; an untagged run (recorded before tags) never matches. */
+export function matchesTags(run: AgentRun, f: TagFilter): boolean {
+  if (f.skill === undefined && f.app === undefined && f.repo === undefined) return true;
+  if (!run.tags) return false;
+  return (f.skill === undefined || run.tags.skills.includes(f.skill)) && (f.app === undefined || run.tags.app === f.app) && (f.repo === undefined || run.tags.repo === f.repo);
+}
+/** The rollup restricted to matching tags (counts only, no samples); null when tag counts were dropped. */
+function filteredRollup(t: RunTally, f: TagFilter): RunTally | null {
+  const asked = (['skill', 'app', 'repo'] as const).filter(k => f[k] !== undefined);
+  if (asked.length === 0) return structuredClone(t);
+  if (t.tagsLost) return null;
+  if (asked.length > 1) {
+    const counts = t.tags?.combined ? tagOf(t.tags.combined, tagFilterKey(f)) : undefined;
+    return counts ? { ...emptyTally(t.agentId, t.version), ...countsOf(counts) } : null;
+  }
+  const d = asked[0]!, key = f[d]!;
+  const counts = t.tags ? tagOf(t.tags[d === 'skill' ? 'skills' : d === 'app' ? 'apps' : 'repos'], key) : undefined;
+  return counts ? { ...emptyTally(t.agentId, t.version), ...countsOf(counts) } : null;
 }
 
 export function median(values: readonly number[]): number | null {
@@ -165,9 +241,13 @@ export function finalize(t: RunTally, version: number | null, window: number | n
 /** The §5 read model: per agent, one row per version (v0 flagged legacy) and an all-versions row without v0. */
 export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}): AgentMetrics[] {
   const index = indexRuns(runs), tallies = new Map<string, RunTally>(), open = new Map<string, number>();
-  const rollupsIn = input.since === undefined;
-  if (rollupsIn) for (const t of input.rollups ?? []) tallies.set(keyOf(t.agentId, t.version), structuredClone(t));
+  const rollupsIn = input.since === undefined, filter = input.filter ?? {};
+  if (rollupsIn) for (const t of input.rollups ?? []) {
+    const own = filteredRollup(t, filter);
+    if (own) tallies.set(keyOf(t.agentId, t.version), own);
+  }
   for (const run of runs) {
+    if (!matchesTags(run, filter)) continue;
     if (run.endedAt === undefined) { open.set(run.agentId, (open.get(run.agentId) ?? 0) + 1); continue; }
     if (input.since !== undefined && run.endedAt < input.since) continue;
     const k = keyOf(run.agentId, run.version);

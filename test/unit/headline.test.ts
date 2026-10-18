@@ -163,7 +163,7 @@ describe('the digest', () => {
 describe('HeadlineLine', () => {
   it('keeps its place empty while the headline loads, then shows it', () => {
     const loading = renderToStaticMarkup(createElement(HeadlineLine, { state: null }));
-    expect(loading).toContain('data-testid="home-headline"');
+    expect(loading).toContain('data-testid="dash-headline"');
     expect(loading).toContain('data-source="loading"');
     const shown = renderToStaticMarkup(createElement(HeadlineLine, { state: { text: 'Una battuta', source: 'model', at: T0, model: 'claude-opus-5-5', monthUsd: 0, monthCalls: 1 } }));
     expect(shown).toContain('Una battuta');

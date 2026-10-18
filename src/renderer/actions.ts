@@ -26,7 +26,7 @@ import { showAppChat } from './store/improve';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, type Place,type BrainPageId,
+  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setChatExpanded, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -312,6 +312,7 @@ export function focusChat(chatId: string): void {
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode && u.focusMode !== chatId) setFocusMode(chatId);
   if (u.maximized && u.maximized !== `chat:${chatId}`) setMaximized(null);
+  setChatExpanded(chatId, true); // a collapsed strip opens: its input mounts and takes the keyboard
   flashTile(`chat:${chatId}`);
   requestFocus(chatId);
 }
@@ -445,6 +446,7 @@ export function focusRequest(req: PendingRequest): void {
   if (c?.space === 'app' && !regiaOwn) {
     // a chat of "Migliora l'app": its tile in the section shows the request
     if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
+    setChatExpanded(req.chatId, true); // collapsed, it shows only its pill: open it so the panel mounts
     showAppChat(req.chatId);
     flashTile(`chat:${req.chatId}`);
     let n = 0;
@@ -461,6 +463,8 @@ export function focusRequest(req: PendingRequest): void {
   // her tab, over anything, with this request as the card shown (the widget shows one at a time)
   if (inRegia) { const r = regiaOfIn(app.get(), req.chatId); if (r) setRegiaTab(r); setRegiaFirst(reqKey(req)); setRegiaOpen(true); }
   else if (u.page !== 'home' || u.map) go({ page: 'home' });
+  // a collapsed Grindhouse strip shows only its pill: it opens, so its panel mounts and takes the keyboard
+  if (!inRegia && c && !c.isRegia) setChatExpanded(req.chatId, true);
   if (c?.isRegia && !inRegia) setFocusMode(c.id);
   if (u.focusMode && u.focusMode !== req.chatId && !inRegia) setLanePeek(true);
   flashTile(inRegia ? 'regia' : `chat:${req.chatId}`);
