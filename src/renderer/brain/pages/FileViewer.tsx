@@ -164,7 +164,7 @@ function TextBody({result,line,go}:{result:TextResult;line?:number;go:(page:Requ
     {shown==='formatted'&&view==='markdown'&&/!\[|<img\b/i.test(result.text)&&<p className="small muted">{t('viewer.documentImages')}</p>}
     {missing&&<p role="status">{t('viewer.lineUnavailable')}</p>}
     {shown==='source'?<Code text={result.text} path={result.path} line={line} base={base}/>
-      :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" images={false} name={name}/>
+      :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" images={false} name={name} copyBlocks testId="viewer-markdown"/>
       :view==='jsonl'?<Jsonl text={result.text} name={name}/>
       :view==='csv'?<Csv text={result.text} path={result.path} name={name}/>
       :<Code text={pretty??result.text} path={result.path}/>}

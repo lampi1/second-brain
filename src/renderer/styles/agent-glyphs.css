@@ -1,0 +1,9 @@
+/* Designed role badges retain readable theme colors everywhere AgentAvatar is used, independently of Studio. */
+.agent-avatar.role-glyph[data-tone]{display:inline-flex;flex:none;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(145deg,var(--glyph-dark-a),var(--glyph-dark-b));color:var(--glyph-dark-ink);box-shadow:inset 0 0 0 1px #ffffff40}
+.agent-avatar.role-glyph[data-shadow=true]{box-shadow:inset 0 0 0 1px #ffffff40,0 2px 5px #0003}
+:root[data-theme=light] .agent-avatar.role-glyph{background:linear-gradient(145deg,var(--glyph-light-a),var(--glyph-light-b));color:var(--glyph-light-ink)}
+.agent-avatar.role-glyph svg{display:block;flex:none}
+.avatar-tones{display:flex;flex-wrap:wrap;gap:8px}
+.avatar-tones button{border:2px solid transparent;border-radius:50%;padding:3px;background:transparent}
+.avatar-tones button[aria-pressed=true]{border-color:var(--text)}
+.avatar-options button:focus-visible,.avatar-tones button:focus-visible{outline:2px solid var(--text);outline-offset:2px}

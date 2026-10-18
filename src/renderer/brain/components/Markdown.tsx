@@ -2,13 +2,15 @@
 // → HTML. After sanitizing: http(s) links open outside the app (target=_blank, main opens the system browser); every
 // other link is neutralized (a relative href would navigate the app window) and, when it names a brain file, opens it
 // in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. With `copy` (Procedure)
-// every code block gets a "Copia" button and a click on inline code copies it: copy only, nothing here ever runs.
-// Used by Fatto, Idee, Confronto, Esplora, Procedure.
+// every code block gets a "Copia" button and a click on inline code copies it; with `copyBlocks` (the file viewer) only
+// the blocks get it: copy only, nothing here ever runs. Code blocks wrap their long lines (brain.css .bx-md pre), so
+// nothing is cut off on the right. Used by Fatto, Idee, Confronto, Esplora, Procedure, FileViewer.
 import { useMemo, type MouseEvent } from 'react';
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { copyText, download, toast } from './ui';
 import { toCsv, fileSafe } from '../lib/table';
+import { t as tr } from '../../i18n';
 
 const marked = new Marked({ gfm: true, breaks: false });
 let purify: ReturnType<typeof DOMPurify> | null = null;
@@ -41,27 +43,37 @@ export function renderMarkdown(text: string, files?: Set<string>, root = '', ima
     return files.has(p) ? `<a class="file" data-file="${p.replace(/"/g, '&quot;')}" role="link" tabindex="0"><code>${t}</code></a>` : m;
   }));
 }
-/** Copy marks, added after sanitizing (our own markup): a "Copia" button on each code block, inline code clickable. */
-export function withCopy(html: string): string {
+/** Copy marks, added after sanitizing (our own markup): a "Copia" button on each code block, inline code clickable
+ *  (`inline` false: the blocks only). */
+export function withCopy(html: string, inline = true): string {
   return html.split(/(<pre>[\s\S]*?<\/pre>)/).map(part => (part.startsWith('<pre>')
-    ? `<div class="bx-pre">${part}<button type="button" class="bx-btn s bx-pre-copy" data-copy="block" title="Copia il blocco negli appunti">Copia</button></div>`
-    : part.replace(/<code>/g, '<code class="bx-copy" data-copy="inline" role="button" tabindex="0" title="Clic per copiare">'))).join('');
+    ? `<div class="bx-pre">${part}<button type="button" class="bx-btn s bx-pre-copy" data-copy="block" title="${tr('brainLib.markdown.copyBlockTitle')}" aria-live="polite">${tr('brainLib.markdown.copyBlock')}</button></div>`
+    : inline ? part.replace(/<code>/g, '<code class="bx-copy" data-copy="inline" role="button" tabindex="0" title="Clic per copiare">') : part)).join('');
 }
+/** What Copia puts on the clipboard for a block: its text as shown, without the one line end marked adds at the end. */
+export const blockText = (text: string): string => text.replace(/\n$/, '');
 
 const wrapTables = (html: string) => {
   let i = 0;
   return html.replace(/<table>/g, () => `<div class="bx-mdtable"><table data-i="${i++}">`).replace(/<\/table>/g, '</table></div>');
 };
 
-export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, images = true }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; images?:boolean }) {
-  const html = useMemo(() => { const h = renderMarkdown(text, files, root,images); return copy ? withCopy(h) : h; }, [text, files, root, copy,images]);
+export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, copyBlocks = false, images = true }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; copyBlocks?: boolean; images?:boolean }) {
+  const html = useMemo(() => { const h = renderMarkdown(text, files, root,images); return copy || copyBlocks ? withCopy(h, copy) : h; }, [text, files, root, copy, copyBlocks, images]);
   const act = (e: MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
-    const c = copy ? t.closest<HTMLElement>('[data-copy]') : null;
+    const c = copy || copyBlocks ? t.closest<HTMLElement>('[data-copy]') : null;
     if (c) {
       e.preventDefault();
-      const value = c.dataset.copy === 'block' ? c.parentElement?.querySelector('pre')?.textContent ?? '' : c.textContent ?? '';
-      void copyText(value.replace(/\n$/, '')).then(ok => toast(ok ? (c.dataset.copy === 'block' ? 'Blocco copiato' : 'Copiato') : 'Copia non riuscita'));
+      const block = c.dataset.copy === 'block';
+      const value = block ? c.parentElement?.querySelector('pre')?.textContent ?? '' : c.textContent ?? '';
+      void copyText(blockText(value)).then(ok => {
+        toast(ok ? (block ? tr('brainLib.markdown.blockCopiedToast') : 'Copiato') : tr('brainLib.markdown.copyFailed'));
+        // the button says it too, for a moment (the HTML is ours: React leaves it alone until the text changes)
+        if (!ok || !block) return;
+        c.textContent = tr('brainLib.markdown.blockCopied'); c.dataset.copied = 'true';
+        setTimeout(() => { c.textContent = tr('brainLib.markdown.copyBlock'); delete c.dataset.copied; }, 1600);
+      });
       return;
     }
     const a = t.closest('a');

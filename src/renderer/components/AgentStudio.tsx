@@ -2,7 +2,10 @@
 // editing never changes the identity/model of running sessions, and provider responses never save themselves.
 import { Select } from './Select';
 import { useEffect, useRef, useState } from 'react';
-import { AGENT_SYMBOLS, type AgentDraft, type AgentProfile } from '@shared/agents';
+import { AGENT_CATEGORIES, AGENT_TONES, type AgentDraft, type AgentProfile } from '@shared/agents';
+import { ROLE_GLYPHS } from '@shared/agent-glyphs';
+import { duplicateAgentAvatars, unusedAgentTone } from '../lib/agent-avatar-choice';
+import { GLYPH_ART, GLYPH_LABELS_IT } from '../lib/agent-glyph-art';
 import { duplicateAgent, draftAgent, refreshAgents, saveAgent, useAgents } from '../store/agents';
 import { openModal, toast,ui } from '../store/ui';
 import { EFFORTS, effortLabel } from '../lib/format';
@@ -10,7 +13,7 @@ import { forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/
 import { validateAvatarImage } from '../lib/avatar-raster';
 import {holdUpdate} from '../lib/update-barrier';
 import { AppearancePreview } from './AppearancePreview';
-import {t}from'../i18n';
+import {lang,t}from'../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentManifestPanel } from './AgentManifestPanel';
@@ -39,11 +42,12 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
     const cached=readAgentEditor(profile?.id);
     revision.current++; setUploading(false); setSuggestion(cached?.suggestion ?? null); setGuideHistory(cached?.history ?? []); setGuideText(cached?.message ?? ''); setProblem(null); setId(profile?.id);
     const engine = catalog?.models.find(e => e.enabled && e.trusted && e.defaultModel)?.engine ?? catalog?.models[0]?.engine ?? 'claude';
-    setEditing(cached?.draft ?? (profile ? { ...profile } : { name: '', purpose: '', instructions: '', engine, model: null, avatar: { kind: 'symbol', value: 'briefcase' } }));
+    setEditing(cached?.draft ?? (profile ? { ...profile } : { name: '', purpose: '', instructions: '', engine, model: null, avatar: { kind: 'symbol', value: 'role-spark', tone: unusedAgentTone(catalog?.profiles ?? []) } }));
     requestAnimationFrame(()=>{ nameInput.current?.scrollIntoView({block:'nearest'}); nameInput.current?.focus(); });
   };
   const change = (patch: Partial<AgentDraft>) => { revision.current++; setUploading(false); setEditing(p => p ? { ...p, ...patch } : p); setSuggestion(null); };
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
+  const avatarDuplicates = editing ? duplicateAgentAvatars(editing.avatar, catalog?.profiles ?? [], id) : [];
   const knownModel = !!choice && (editing?.model === null ? choice.defaultModel : choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   let validManifest = true;
   try { checkedManifest(editing?.manifest); } catch { validManifest = false; }
@@ -99,6 +103,10 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
       <fieldset disabled={busy} className="agent-editor-fields"><legend>{id ? t('studio.editAgent') : t('studio.newAgent')}</legend><p>{t('studio.newSessions')}</p>
       <label className="field"><span>{t('studio.name')}</span><input ref={nameInput} maxLength={80} value={editing.name} onChange={e => change({ name: e.target.value })} required data-testid="agent-name" /></label>
       <label className="field"><span>{t('studio.purpose')}</span><textarea maxLength={400} rows={2} value={editing.purpose} onChange={e => change({ purpose: e.target.value })} required data-testid="agent-purpose" /></label>
+      <label className="field"><span>{t('studio.category')}</span><Select value={editing.category ?? 'other'} onChange={e => {
+        const category = AGENT_CATEGORIES.find(c => c === e.target.value) ?? 'other';
+        change({ category, ...(editing.avatar.kind === 'symbol' ? { avatar: { ...editing.avatar, tone: unusedAgentTone(catalog.profiles, category, id) } } : {}) });
+      }}>{AGENT_CATEGORIES.map(category => <option key={category} value={category}>{t(`studio.category.${category}`)}</option>)}</Select></label>
       <AgentManifestPanel manifest={editing.manifest} onChange={manifest => change({ manifest })} />
       {!validManifest && <p role="alert">{t('studio.manifestInvalid')}</p>}
       <details className="agent-advanced"><summary>{t('product.advanced')}</summary>
@@ -113,7 +121,14 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
       {!choice?.modelSelectable && choice?.modelReason && <p role="status">{choice.modelReason}</p>}
       {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={editing.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
       </details>
-      <fieldset><legend>{t('studio.avatar')}</legend><div className="avatar-options">{AGENT_SYMBOLS.map(value => <button key={value} type="button" aria-label={`${t('studio.avatar')} ${value}`} aria-pressed={editing.avatar.kind === 'symbol' && editing.avatar.value === value} onClick={() => change({ avatar: { kind: 'symbol', value } })}><AgentAvatar avatar={{ kind: 'symbol', value }} name={value} /></button>)}<AgentAvatar avatar={editing.avatar} name={editing.name || t('studio.newAgent')} size={44} /></div><label className="field"><span>{t('studio.upload')}</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => void upload(e.target.files?.[0])} /></label><small>{catalog.imageGeneration.reason} {t('studio.uploadHint')}</small></fieldset>
+      <fieldset><legend>{t('studio.avatar')}</legend><div className="avatar-options">{ROLE_GLYPHS.map(value => {
+        const tone = editing.avatar.kind === 'symbol' ? editing.avatar.tone ?? 'blue' : unusedAgentTone(catalog.profiles, editing.category, id);
+        const label = lang() === 'it' ? GLYPH_LABELS_IT[value] : GLYPH_ART[value].label;
+        return <button key={value} type="button" title={label} aria-label={`${t('studio.avatar')} ${label}`} aria-pressed={editing.avatar.kind === 'symbol' && editing.avatar.value === value} onClick={() => change({ avatar: { kind: 'symbol', value, tone } })}><AgentAvatar avatar={{ kind: 'symbol', value, tone }} name={label} /></button>;
+      })}<AgentAvatar avatar={editing.avatar} name={editing.name || t('studio.newAgent')} size={40} /></div>
+      {editing.avatar.kind === 'symbol' && <fieldset><legend>{t('studio.tone')}</legend><div className="avatar-tones">{AGENT_TONES.map(tone => <button key={tone} type="button" aria-label={t(`studio.tone.${tone}`)} title={t(`studio.tone.${tone}`)} aria-pressed={editing.avatar.kind === 'symbol' && (editing.avatar.tone ?? 'blue') === tone} onClick={() => { if (editing.avatar.kind === 'symbol') change({ avatar: { ...editing.avatar, tone } }); }}><AgentAvatar avatar={{ kind: 'symbol', value: 'role-spark', tone }} name={t(`studio.tone.${tone}`)} size={20} /></button>)}</div></fieldset>}
+      {avatarDuplicates.length > 0 && <p role="status" data-testid="agent-avatar-duplicate">{t('studio.avatarDuplicate', { names: avatarDuplicates.map(p => p.name).join(', ') })}</p>}
+      <label className="field"><span>{t('studio.upload')}</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => void upload(e.target.files?.[0])} /></label><small>{catalog.imageGeneration.reason} {t('studio.uploadHint')}</small></fieldset>
       <details className="agent-guide"><summary>{t('studio.guide')}</summary><p>{t('studio.guideExplain')}</p>
         <div role="log" aria-label={t('studio.guideLog')} aria-live="polite">{guideHistory.map((message,index)=><p key={index}><b>{message.role === 'user' ? t('studio.you') : t('studio.assistant')}: </b>{message.text}</p>)}</div>
         <textarea rows={3} value={guideText} onChange={e => setGuideText(e.target.value)} maxLength={6000} placeholder={t('studio.guideExample')} aria-label={t('studio.guideMessage')} />
