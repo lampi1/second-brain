@@ -58,4 +58,10 @@ export const brainLibIt = {
   'brainLib.stats.trendDown': 'in calo',
   'brainLib.stats.trendNoData': (p: { value: string; before: string }) => `${p.value}; ${p.before} nessun dato per confrontare`,
   'brainLib.stats.trendWithData': (p: { word: string; cur: string; prev: string }) => `${p.word}: ${p.cur} contro ${p.prev}`,
+  // Markdown.tsx
+  'brainLib.markdown.copyBlock': 'Copia',
+  'brainLib.markdown.copyBlockTitle': 'Copia il blocco negli appunti',
+  'brainLib.markdown.blockCopied': 'Copiato',
+  'brainLib.markdown.blockCopiedToast': 'Blocco copiato',
+  'brainLib.markdown.copyFailed': 'Copia non riuscita',
 };
