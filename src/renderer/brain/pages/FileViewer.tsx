@@ -3,7 +3,7 @@
 // a big text file comes one page at a time (main cuts it at line ends; a cited line opens its own page). Main reads any
 // local file, bounded (never a network share); nothing here edits, runs or hands the file to another app: "Show in
 // folder" only selects it in Explorer, on the user's click.
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
@@ -11,7 +11,8 @@ import {Empty} from '../components/States';
 import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
 import {baseName} from '../lib/text';
 import {fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
-import type {PDFDocumentProxy} from '../lib/pdf';
+import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
+import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
 import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
@@ -72,23 +73,38 @@ function Csv({ text, path, name }: { text: string; path: string; name: string })
   return <DataTable name={name} label={name} rows={rows} cols={cols} testId="viewer-csv" />;
 }
 
-/** One PDF page, drawn when it scrolls near (the width moves in 40 px steps, so a resize redraws it only now and then). */
-function PdfPage({doc,n,width,root}:{doc:PDFDocumentProxy;n:number;width:number;root:HTMLElement|null}){
-  const ref=useRef<HTMLCanvasElement>(null),busy=useRef<Promise<void>>(Promise.resolve());const[ratio,setRatio]=useState(1.414);
+/**
+ * One PDF page: it reports whether it is near the viewport (`onNear`, the observer stays connected) and is drawn while
+ * `drawn` (pdfPagesToDraw); otherwise its canvas is emptied and the page's pdf.js resources freed, so memory stays
+ * bounded on a long PDF. Its box keeps its size, so the scroll does not jump. The width moves in 40 px steps, so a resize
+ * redraws it only now and then.
+ */
+function PdfPage({doc,n,width,root,drawn,onNear}:{doc:PDFDocumentProxy;n:number;width:number;root:HTMLElement|null;drawn:boolean;onNear:(n:number,near:boolean)=>void}){
+  const ref=useRef<HTMLCanvasElement>(null),busy=useRef<Promise<void>>(Promise.resolve()),proxy=useRef<PDFPageProxy|null>(null);const[ratio,setRatio]=useState(1.414);
   useEffect(()=>{
-    const canvas=ref.current;if(!canvas||!width)return;let live=true,task:{cancel():void}|null=null;
+    const canvas=ref.current;if(!canvas)return;
+    const observer=new IntersectionObserver(entries=>{const last=entries[entries.length-1];if(last)onNear(n,last.isIntersecting);},{root,rootMargin:'800px 0px'});
+    observer.observe(canvas);
+    return()=>{observer.disconnect();onNear(n,false);};
+  },[n,root,onNear]);
+  useEffect(()=>{
+    const canvas=ref.current;if(!canvas)return;let live=true,task:{cancel():void}|null=null;
+    if(!drawn||!width){
+      // released once a cancelled render lets go of the canvas: an empty bitmap and the page's resources freed
+      void busy.current.then(()=>{if(!live)return;canvas.width=0;canvas.height=0;delete canvas.dataset.rendered;proxy.current?.cleanup();proxy.current=null;});
+      return()=>{live=false;};
+    }
     const draw=async()=>{
       // a cancelled render still holds the canvas until its promise settles
-      const page=await doc.getPage(n);await busy.current;if(!live)return;
+      const page=await doc.getPage(n);await busy.current;if(!live)return;proxy.current=page;
       const plain=page.getViewport({scale:1}),scale=width/plain.width,dpr=window.devicePixelRatio||1,view=page.getViewport({scale:scale*dpr});
       setRatio(plain.height/plain.width);canvas.width=Math.floor(view.width);canvas.height=Math.floor(view.height);
       const render=page.render({canvas,viewport:view});task=render;busy.current=render.promise.catch(()=>{});await busy.current;
       if(live)canvas.dataset.rendered='true';
     };
-    const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();void draw();}},{root,rootMargin:'800px 0px'});
-    observer.observe(canvas);
-    return()=>{live=false;observer.disconnect();task?.cancel();};
-  },[doc,n,width,root]);
+    void draw();
+    return()=>{live=false;task?.cancel();};
+  },[doc,n,width,drawn]);
   return <canvas ref={ref} className="bx-pdf-page" aria-label={t('viewer.pdfPage',{n})} style={{width,height:width*ratio}} data-testid="viewer-pdf-page"/>;
 }
 
@@ -102,10 +118,16 @@ function Pdf({data,name}:{data:Uint8Array;name:string}){
     return()=>{live=false;destroy?.();};
   },[data]);
   useEffect(()=>{const el=host.current;if(!el)return;const fit=()=>setWidth(Math.min(1100,Math.floor((el.clientWidth-24)/40)*40));fit();const observer=new ResizeObserver(fit);observer.observe(el);return()=>observer.disconnect();},[]);
-  const doc=state&&state!=='error'?state.doc:null;
+  const doc=state&&state!=='error'?state.doc:null,total=doc?.numPages??0;
+  // the pages near the viewport (from each page's observer) decide which few pages keep a drawn canvas
+  const near=useRef(new Set<number>()),[drawn,setDrawn]=useState<ReadonlySet<number>>(()=>new Set());
+  const onNear=useCallback((n:number,on:boolean)=>{
+    const pages=near.current;if(on===pages.has(n))return;if(on)pages.add(n);else pages.delete(n);
+    setDrawn(prev=>{const next=pdfPagesToDraw(pages,total);return samePages(prev,next)?prev:next;});
+  },[total]);
   return <div ref={host} className="bx-pdf bx-scroll" aria-label={name} data-testid="viewer-pdf" data-pages={doc?.numPages}>
     {state==='error'?<Empty title={t('viewer.pdf')}/>:!doc?<p role="status">{t('viewer.loading')}</p>
-      :<>{Array.from({length:doc.numPages},(_,i)=><PdfPage key={i} doc={doc} n={i+1} width={width} root={host.current}/>)}</>}
+      :<>{Array.from({length:total},(_,i)=><PdfPage key={i} doc={doc} n={i+1} width={width} root={host.current} drawn={drawn.has(i+1)} onNear={onNear}/>)}</>}
   </div>;
 }
 

@@ -37,8 +37,10 @@ its pager. Main and the viewer number lines by one rule (`lineCount`): a line en
 progress redraw in a captured log) stays inside its line.
 
 **PDF (V2).** Up to 32 MB with a `%PDF-` header, read whole by main and handed as bytes to pdf.js (pdfjs-dist, pinned,
-loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near, with no
-text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
+loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near and
+released (canvas emptied, `page.cleanup()`) when they scroll away: at most 8 pages, those near the viewport and 2 on
+each side, keep a bitmap (`lib/pdf-window.ts`), so memory stays bounded however far a long PDF is read. There is
+no text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
 them with WebAssembly files the app does not ship) and fonts neither embedded nor on the system may not show.
 pdfjs-dist's optional native `@napi-rs/canvas` (used by pdf.js only under Node, never in the renderer) is pinned to
 1.0.10 by `overrides` in package.json, so it too meets the 14-day rule.
