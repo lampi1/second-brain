@@ -55,3 +55,25 @@ ChatManager calls the same HybridSearch.recall before delivering initial prompts
 It prepends up to three short, labelled quotations, keeping the original user message in the UI. The lookup has
 a 300 ms deadline and failures, unavailable vectors or no matching errors leave delivery unchanged. Internal
 handoff-note turns do not need task recall. No CLI login or external engine tokens are used for the lookup.
+
+## Correction intent (2026-10-18, SPEC 23 c)
+
+The same authenticated loopback endpoint also exposes `detect_correction {text}` -> `{ready, correction}`.
+It is independent of `recall`: similarity to an error's topic alone is not evidence that the user is correcting us.
+The detector embeds said/true pairs from the newest 300 indexed ai-errors.md entries as contrast statements,
+alongside ordinary requests about the same true field and generic IT/EN explanation/praise requests. Metadata,
+reviewer names and rule fields are excluded; each said/true field is bounded to 500 characters.
+
+Passage vectors are warmed asynchronously using the existing local model and text cache. The prompt performs one
+query embedding and cosine comparisons; a correction needs cosine >= 0.86 and a margin >= 0.025 above the nearest
+ordinary request. These are initial conservative policy values, **not measured precision or recall**. Synthetic
+vector tests verify the decision mechanics; evaluation on real user messages still requires owner permission.
+This does not add transcript indexing, cloud classification, persistent prompt storage or automatic error logging.
+
+The service returns unavailable after 180 ms and admits at most one outstanding correction query, including work
+still finishing after a timeout. Missing model/corpus, failures, cold start and brain changes use the hook's existing
+regex. A warm semantic `true` flags even without a regex match; a warm `false` clears only a CONFUSION-only match
+(spiegami, non capisco: the regex's known false positive). An explicit CORRECTION match always flags: the positives
+are logged said/true pairs, so a correction on a topic not yet in ai-errors.md scores low. The hook sends
+detection and recall concurrently (200 ms detection / existing 300 ms recall budgets), and never classifies agent mail.
+Only the shipped template hook changes; updating an installed brain's hook remains a separate owner/hub action.

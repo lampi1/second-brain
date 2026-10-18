@@ -1,6 +1,6 @@
-// Error recall (SPEC 23 c/d): the past errors of ai-errors.md most similar to a prompt, so a chat sees them before it
+// Error recall (SPEC 23 d): the past errors of ai-errors.md most similar to a prompt, so a chat sees them before it
 // acts. Served on the local MCP server at /mcp/recall/<token> (127.0.0.1 only, Host/Origin checks: mcp/server.ts) with
-// one tool, `recall`. The token is random for each app run and lives only in memory; the app hands the URL to the chats
+// tools `recall` and `detect_correction` (SPEC 23 c). The token is random per app run; the app hands the URL to the chats
 // it starts (RECALL_ENV in their environment), so the brain's UserPromptSubmit hook (correction-catch.mjs) can ask
 // without loading a model per prompt. A chat started outside the app has no URL and keeps the hook's regex. The tool
 // answers fast or not at all: while the error vectors are not embedded yet it says ready:false (the hook then skips).
@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import type { McpServer } from '../../mcp/server';
 import type { ThemeEntry } from '@shared/themes';
+import { CORRECTION_UNAVAILABLE, type Correction } from './corrections';
 
 /** The environment variable that carries the endpoint's URL (token included) to the chats the app starts. */
 export const RECALL_ENV = 'SB_APP_RECALL';
@@ -74,7 +75,7 @@ function dot(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
-export function mountRecallTool(mcp: Pick<McpServer, 'mount' | 'url'>, recall: (text: string, k: number) => Promise<Recall>): { url: () => string } {
+export function mountRecallTool(mcp: Pick<McpServer, 'mount' | 'url'>, recall: (text: string, k: number) => Promise<Recall>, detect?: (text: string) => Promise<Correction>): { url: () => string } {
   const token = crypto.randomBytes(24).toString('base64url');
   const want = Buffer.from(token);
   const authorize = (p: Record<string, string>): boolean => {
@@ -97,6 +98,15 @@ export function mountRecallTool(mcp: Pick<McpServer, 'mount' | 'url'>, recall: (
         const k = Number.isInteger(args.k) ? Math.min(5, Math.max(1, args.k as number)) : RECALL_K;
         if (!text) return JSON.stringify({ ready: true, errors: [] } satisfies Recall);
         return JSON.stringify(await recall(text, k));
+      },
+    }, {
+      name: 'detect_correction',
+      description: 'Detect a user correction by meaning, separate from topic recall. JSON {ready, correction}; use regex only when not ready.',
+      inputSchema: { type: 'object', additionalProperties: false, required: ['text'], properties: { text: { type: 'string', maxLength: MAX_TEXT } } },
+      annotations: { readOnlyHint: true, title: 'Rileva correzione' },
+      run: async args => {
+        const text = typeof args.text === 'string' ? args.text.trim().slice(0, MAX_TEXT) : '';
+        return JSON.stringify(text && detect ? await detect(text) : CORRECTION_UNAVAILABLE);
       },
     }],
   });

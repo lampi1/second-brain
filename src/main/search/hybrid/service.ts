@@ -13,6 +13,7 @@ import { errText, log } from '../../log';
 import { cosine, type Hit } from './engine';
 import { errorEntries, THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
 import { RECALL_K, recallIndex, similarErrors, type Recall, type RecallIndex } from './recall';
+import { CorrectionDetector, type Correction } from './corrections';
 import type { HybridStatus, WorkerReq } from './protocol';
 
 export interface HybridDeps {
@@ -46,7 +47,18 @@ export class HybridSearch {
   private warming: Promise<void> | null = null;
   private restartAfter = 0;
 
-  constructor(private deps: HybridDeps) {}
+  private corrections: CorrectionDetector;
+  constructor(private deps: HybridDeps) {
+    this.corrections = new CorrectionDetector({
+      root: deps.brainRoot,
+      ready: () => !!this.syncedRoot && this.syncedRoot === deps.brainRoot() && this.last.model.state === 'ready',
+      entries: async () => errorEntries((await this.vectors(`brain:${THEME_FILES.errors}`)).map(r => ({ ...r, at: 0 }))),
+      passages: texts => this.embedCached(texts),
+      query: text => this.embed([text], 'query'),
+    });
+  }
+
+  detectCorrection(text: string): Promise<Correction> { return this.corrections.detect(text); }
 
   /** Starts the worker and the first sync (call soon after boot). */
   start(): void { void this.ensure().then(() => this.sync()).catch(() => { /* logged by call */ }); }
@@ -57,7 +69,13 @@ export class HybridSearch {
     this.worker = w;
     w.unref();
     w.on('message', (m: { id?: number; ok?: boolean; result?: unknown; error?: string; event?: string; status?: HybridStatus }) => {
-      if (m.event === 'status' && m.status) { this.last = m.status; this.deps.onStatus?.(m.status); return; }
+      if (m.event === 'status' && m.status) {
+        const wasReady = this.last.model.state === 'ready';
+        this.last = m.status; this.deps.onStatus?.(m.status);
+        // warm once when the model becomes ready (indexing pushes a status every ~200 passages); syncs warm too
+        if (!wasReady && m.status.model.state === 'ready') this.corrections.warm();
+        return;
+      }
       const p = m.id !== undefined ? this.waiting.get(m.id) : undefined;
       if (!p) return;
       this.waiting.delete(m.id!); clearTimeout(p.timer);
@@ -98,6 +116,7 @@ export class HybridSearch {
       const n = await this.call<number>({ op: 'sync', root });
       if (root !== this.syncedRoot) log.info('search', 'brain indexed', { data: { changed: n, ...this.last } });
       this.syncedRoot = root;
+      this.corrections.warm();
       return true;
     } catch (e) { log.warn('search', 'brain index not updated', { cause: errText(e), hint: 'retried on the next file change or search' }); return false; }
   }
