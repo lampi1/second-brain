@@ -9,7 +9,7 @@ import {Markdown} from '../components/Markdown';
 import {Empty} from '../components/States';
 import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
 import {baseName} from '../lib/text';
-import {fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
+import {fmtBytes,highlightLines,parseCsv,prettyJson,textLines,viewOf,type FileView} from '../lib/file-format';
 import {t} from '../../i18n';
 import {readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 const WINDOW=4000;
@@ -80,7 +80,7 @@ function TextBody({result,reference}:{result:Extract<FileViewResult,{kind:'text'
     {formattable&&<div className="bx-row"><Seg label={t('viewer.mode')} value={mode} onChange={setMode} items={[{id:'formatted',label:formattedLabel(view)},{id:'source',label:t('viewer.source')}]}/></div>}
     {result.more&&<p role="status" data-testid="viewer-truncated">{t('viewer.truncated',{shown:fmtBytes(result.shown),total:fmtBytes(result.size)})}</p>}
     {shown==='formatted'&&view==='markdown'&&/!\[|<img\b/i.test(result.text)&&<p className="small muted">{t('viewer.documentImages')}</p>}
-    {reference.line&&reference.line>result.text.split(/\r?\n/).length&&<p role="status">{t('viewer.lineUnavailable')}</p>}
+    {reference.line&&reference.line>textLines(result.text).length&&<p role="status">{t('viewer.lineUnavailable')}</p>}
     {shown==='source'?<Code text={result.text} path={result.path} line={reference.line}/>
       :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" images={false} name={name}/>
       :view==='jsonl'?<Jsonl text={result.text} name={name}/>

@@ -86,6 +86,9 @@ export function splitHighlighted(html: string): string[] {
   return lines;
 }
 
+/** The text's lines as the viewer numbers them: `\r\n`, a lone `\r` (classic Mac) and `\n` each end a line. */
+export const textLines = (text: string): string[] => text.split(/\r\n?|\n/);
+
 /** Tabs, semicolons and commas in the first record, outside quoted cells (a quoted cell may hold any of them). As in
  *  parseCsv, a quote opens a quoted cell only at a cell's start (after any candidate delimiter), so `5" disk` is text. */
 function delimiterCounts(text: string): Record<string, number> {
