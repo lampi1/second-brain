@@ -34,7 +34,7 @@ it('rejects extra query fields and feedback identity/basis injection', async () 
   expect(() => api.read({ agentId: '../other' })).toThrow();
   for (const extra of [{ basis: 'human' }, { agentId: 'other' }, { version: 3 }, { outcome: { basis: 'human' } }, { reason: 'x' }])
     await expect(api.feedback(args(extra), 'regia')).rejects.toThrow(/unknown argument/);
-  await expect(api.feedback(args({ runId: 'r_000000000999' }), 'regia')).rejects.toThrow('Unknown run.');
+  await expect(api.feedback(args({ runId: 'r_000000000999' }), 'regia')).rejects.toThrow(/no agent run with id r_000000000999/);
   await expect(api.feedback({ runId: 'r_000000000001', verdict: 'partial' }, 'regia')).rejects.toThrow();
   await expect(make(false).api.feedback(args(), 'regia')).rejects.toThrow('Feedback store unavailable.');
   expect(calls).toHaveLength(0);

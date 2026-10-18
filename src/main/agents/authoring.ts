@@ -3,12 +3,12 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { AgentEvidenceRef, AgentProfile, AgentRunOutcome } from '../../shared/agents';
 import type { AgentProposal, AgentUndo } from '../../shared/agent-authoring';
-import { AGENT_FEEDBACK_SCHEMA, DEFINITION_GAPS, parseAgentFeedbackArgs, parseEvidence, type AgentFeedback, type AgentFeedbackArgs } from '../../shared/agent-lifecycle';
+import { AGENT_FEEDBACK_SCHEMA, DEFINITION_GAPS, RUN_ID_DESCRIPTION, parseAgentFeedbackArgs, parseEvidence, type AgentFeedback, type AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatItem, FeedAction } from '../../shared/contract';
 import type { ToolDef } from '../appctl/tools';
 import type { RawEvent } from '../brain/live';
 import type { AgentCatalogService } from './catalog';
-import type { AgentRunStore } from './runs';
+import { unknownRunError, type AgentRunStore } from './runs';
 import { runMetrics } from './run-metrics';
 import { checkCreationRequest, checkPermissionInstructions, protectedAgent, withoutPackFields } from './author-policy';
 import { readLocal, writeLocal } from './local-store';
@@ -25,6 +25,8 @@ interface Deps {
   /** agent_feedback's entry point once the lifecycle is wired (createLifecycleApi(...).feedback): it parses the shared
    *  shape, calls recordFeedback (this store, the only one) and turns repeated gaps into proposals. Absent: recordFeedback. */
   feedback?: (args: Record<string, unknown>, callerId: string) => Promise<AgentFeedback>;
+  /** the chat with this id and its run mirror (undefined = no such chat): turns a chat id passed as runId into the run to use */
+  chat?: (id: string) => { run?: { runId: string } } | undefined;
   now?: () => number;
 }
 const object = (v: unknown): Record<string, unknown> => {
@@ -141,8 +143,8 @@ export class AgentAuthoring {
       return { definition: p, selectedVersion: selected, history, feedback: this.state.feedback.filter(f => f.agentId === p.id), metrics: this.metrics({ agentId: p.id }) };
     }
     if (name === 'agent_run_report') {
-      const run = this.d.runs.get(text(a.runId, 80));
-      if (!run) throw new Error('Unknown run.');
+      const id = text(a.runId, 80), run = this.d.runs.get(id);
+      if (!run) throw this.unknownRun(id);
       return structuredClone({ run, reviews: this.d.runs.list().filter(r => r.reviewOf === run.runId), feedback: this.state.feedback.filter(f => f.runId === run.runId) });
     }
     // the shared AgentFeedbackArgs shape (parseAgentFeedbackArgs) is the only validation: no `reason` alias here
@@ -197,6 +199,7 @@ export class AgentAuthoring {
     const result = runMetrics(this.d.runs.list(), { ...(since !== undefined ? { since: since as number } : {}), rollups: this.d.runs.rolledUp(), filter });
     return result.filter(m => a.agentId === undefined || m.agentId === a.agentId).map(m => a.version === undefined ? m : { ...m, all: null, versions: m.versions.filter(v => v.version === a.version) });
   }
+  private unknownRun(id: string): Error { return unknownRunError(id, this.d.runs.list(), this.d.chat); }
   /** The one feedback store's reader (the lifecycle's FeedbackSource): an agent's records, oldest first. */
   feedbackOf(agentId: string): AgentFeedback[] { return structuredClone(this.state.feedback.filter(f => f.agentId === agentId)); }
   get storeProblem(): string | null { return this.problem; }
@@ -205,7 +208,7 @@ export class AgentAuthoring {
   async recordFeedback(a: AgentFeedbackArgs, callerId: string): Promise<AgentFeedback> {
     if (this.problem) throw new Error(this.problem);
     const run = this.d.runs.get(a.runId), notes = a.notes;
-    if (!run) throw new Error('Unknown run.');
+    if (!run) throw this.unknownRun(a.runId);
     if (a.sendToRun && run.endedAt !== undefined) throw new Error('Ended runs cannot receive feedback messages.');
     const refs = a.evidence;
     const verified = refs.some(e => {
@@ -251,7 +254,7 @@ export function authoringTools(service: AgentAuthoring, callerId: string, authen
     name, description: `${name}: bounded agent management. Definitions never grant permissions. Protected changes require the user's decision in Agenti. Creation requires an active presetId, full draft with explicit tools/permissionCeiling, and a fresh human requestItemId.`,
     inputSchema: { type: 'object', required: required[name] ?? [], properties: {
       agentId: string, presetId: string, draft: record, patch: record, requestItemId: string, reason: string, expectedEffect: string,
-      evidence: { type: 'array', items: record }, runId: string, verdict: { type: 'string', enum: ['success', 'partial', 'fail', 'unknown'] },
+      evidence: { type: 'array', items: record }, runId: { type: 'string', description: RUN_ID_DESCRIPTION }, verdict: { type: 'string', enum: ['success', 'partial', 'fail', 'unknown'] },
       notes: string, toVersion: integer, version: integer, trial: boolean, probation: boolean, sendToRun: boolean,
       filter: record, period: record, skill: string, app: string, repo: string,
     } },

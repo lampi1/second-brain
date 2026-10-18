@@ -17,11 +17,13 @@ export interface AgentFeedbackArgs {
   sendToRun?: boolean;
 }
 export const AGENT_FEEDBACK_REQUIRED = ['runId', 'verdict', 'notes', 'evidence'] as const;
+/** Where a runId comes from: the Orchestrator reads it in app_chats (each agent chat's run.runId), never a chat id. */
+export const RUN_ID_DESCRIPTION = 'The agent run id (runId) from app_chats, not the chat id: each agent chat lists it as run.runId (r_ followed by 12 hex digits).';
 /** JSON schema of the tool's input, derived from the same limits parseAgentFeedbackArgs enforces. */
 export const AGENT_FEEDBACK_SCHEMA = {
   type: 'object', additionalProperties: false, required: [...AGENT_FEEDBACK_REQUIRED],
   properties: {
-    runId: { type: 'string', maxLength: 80 }, verdict: { type: 'string', enum: [...VERDICTS] },
+    runId: { type: 'string', maxLength: 80, description: RUN_ID_DESCRIPTION }, verdict: { type: 'string', enum: [...VERDICTS] },
     notes: { type: 'string', maxLength: 600, description: 'Your opinion of the run: an opinion, never the user\'s confirmation.' },
     evidence: { type: 'array', maxItems: 20, items: { type: 'object', required: ['kind', 'ref', 'at'], properties: { kind: { type: 'string', enum: [...EVIDENCE_KINDS] }, ref: { type: 'string', maxLength: 200 }, at: { type: 'number' } } } },
     worked: { type: 'string', maxLength: 1200 }, failed: { type: 'string', maxLength: 1200 },

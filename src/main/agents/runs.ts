@@ -28,6 +28,18 @@ const str = (v: unknown, max: number): v is string => typeof v === 'string' && !
 
 export const newRunId = (): string => `r_${crypto.randomBytes(6).toString('hex')}`;
 
+/** The one answer to a runId that names no run (agent_feedback, agent_run_report): what the caller passed, and the id to
+ *  use. A chat id is never taken as a run id (one shape): its run, when it has one, is named so the caller retries with
+ *  it. chat = the chat with that id (its run mirror) or undefined; runs = the store, which outlives chats.json. */
+export function unknownRunError(id: string, runs: readonly AgentRun[], chat?: (id: string) => { run?: Pick<AgentRun, 'runId'> } | undefined): Error {
+  const c = chat?.(id);
+  const own = runs.filter(r => r.chatId === id).sort((a, b) => b.startedAt - a.startedAt)[0];
+  const runId = c?.run?.runId ?? own?.runId;
+  if (runId) return new Error(`${id} is a chat id, not a run id: pass runId "${runId}" (the agent run of that chat, listed by app_chats as run.runId).`);
+  if (c) return new Error(`chat ${id} is not an agent run (plain chat or Orchestrator): feedback only applies to runs of catalog agents.`);
+  return new Error(`no agent run with id ${id} (it may have been pruned): use the runId listed by app_chats.`);
+}
+
 // Run tags (AGENTS-DESIGN §4.8)
 export const SKILL_ID = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 export const SKILLS_MAX = 16;
