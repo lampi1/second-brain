@@ -130,15 +130,20 @@ export class AgentRunStore {
   private readonly file: string;
   private runs = new Map<string, AgentRun>();
   private rollups: RunTally[] = [];
+  /** the latest end among the pruned runs: a chat mirror of an ended run up to it is already in the rollups, never adopted */
+  private prunedThrough = 0;
   private dirty = false;
+  /** the runs just pruned (folded into the rollups): ChatManager drops their chat mirrors */
+  onPrune?: (runIds: Set<string>) => void;
   /** set when the file cannot be read: it is kept as it is and no run is recorded until Brother fixes or moves it */
   problem: string | null = null;
   constructor(userData: string) {
     this.file = path.join(userData, 'agent-runs.json');
     try {
-      const raw = readLocal(this.file) as { version?: unknown; runs?: unknown; rollups?: unknown } | undefined;
+      const raw = readLocal(this.file) as { version?: unknown; runs?: unknown; rollups?: unknown; prunedThrough?: unknown } | undefined;
       if (raw === undefined) return;
-      if (raw.version !== 1 || !Array.isArray(raw.runs) || raw.runs.length > RUNS_MAX || (raw.rollups !== undefined && !Array.isArray(raw.rollups))) throw new Error('Invalid agent runs');
+      if (raw.version !== 1 || !Array.isArray(raw.runs) || raw.runs.length > RUNS_MAX || (raw.rollups !== undefined && !Array.isArray(raw.rollups)) || (raw.prunedThrough !== undefined && !time(raw.prunedThrough))) throw new Error('Invalid agent runs');
+      this.prunedThrough = (raw.prunedThrough as number | undefined) ?? 0;
       const keys = new Set<string>();
       for (const v of (raw.rollups ?? []) as unknown[]) {
         const t = readTally(v);
@@ -150,7 +155,7 @@ export class AgentRunStore {
         if (!run || this.runs.has(run.runId)) throw new Error('Invalid agent run');
         this.runs.set(run.runId, run);
       }
-    } catch { this.runs.clear(); this.rollups = []; this.problem = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.'; }
+    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.problem = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.'; }
   }
 
   /** The live record (the chat's mirror is this same object). */
@@ -185,11 +190,13 @@ export class AgentRunStore {
     try { this.save(); } catch (e) { this.runs.delete(run.runId); throw e; }
     return run;
   }
-  /** A run known only from a chat's mirror (written before a lost or reset store): taken back as it is. */
-  adopt(run: AgentRun): AgentRun {
+  /** A run known only from a chat's mirror (written before a lost or reset store): taken back as it is; undefined = an
+   *  ended run already pruned into the rollups (adopting it would count it twice). */
+  adopt(run: AgentRun): AgentRun | undefined {
     if (this.problem) throw new Error(this.problem);
     const known = this.runs.get(run.runId);
     if (known) return known;
+    if (run.endedAt !== undefined && run.endedAt <= this.prunedThrough) return undefined;
     this.runs.set(run.runId, run); this.dirty = true;
     return run;
   }
@@ -212,17 +219,20 @@ export class AgentRunStore {
     for (const r of ended) {
       if (!over()) break;
       if (r.reviewOf && this.runs.has(r.reviewOf)) continue;
+      if (all.some(v => v.reviewOf === r.runId && v.endedAt === undefined)) continue; // its review is still being written
       take(r);
       for (const v of ended) if (v.reviewOf === r.runId) take(v);
     }
     for (const r of ended) { if (!over()) break; take(r); }
     const rollups = drop.size ? fitRollups(rollUp(this.rollups, [...drop], all)) : this.rollups;
     const next = all.filter(r => !drop.has(r));
+    const prunedThrough = Math.max(this.prunedThrough, ...[...drop].map(r => r.endedAt!));
     this.dirty = true; // stays set when the write fails: the next flush tries again
-    writeLocal(this.file, { version: 1, runs: next, ...(rollups.length ? { rollups } : {}) });
+    writeLocal(this.file, { version: 1, runs: next, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}) });
     for (const r of drop) this.runs.delete(r.runId);
-    this.rollups = rollups;
+    this.rollups = rollups; this.prunedThrough = prunedThrough;
     this.dirty = false;
+    if (drop.size) this.onPrune?.(new Set([...drop].map(r => r.runId)));
   }
 }
 

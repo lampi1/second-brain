@@ -154,6 +154,37 @@ describe('agent run store: A6 fields and rollups', () => {
     expect(rolled[0]).toMatchObject({ agentId: 'coder', version: 2, ended: 1, cost: { n: 1, values: [0.25] }, corrections: { runs: 1, tagged: 0, afterReport: 0 } });
   });
 
+  it('a pruned run is never adopted back from a chat mirror, and its mirror owner is told', () => {
+    const dir = tmp();
+    const s = new AgentRunStore(dir);
+    const pruned: string[][] = [];
+    s.onPrune = ids => pruned.push([...ids]);
+    const old = s.start(start({ agentId: 'coder' }), false);
+    endRun(old, 'completed', 1);
+    const mirror = structuredClone(old);
+    for (let i = 0; i < RUNS_MAX; i++) endRun(s.start(start({ startedAt: 10 }), false), 'closed', 1000 + i);
+    s.save();
+    expect(pruned).toEqual([[old.runId]]);
+    const again = new AgentRunStore(dir);
+    expect(again.adopt(mirror)).toBeUndefined();
+    expect(again.get(old.runId)).toBeUndefined();
+    const lost = { ...structuredClone(old), runId: 'r_00000000beef', endedAt: 5000 };
+    expect(again.adopt(lost)).toBe(lost); // ended after the pruned ones: a lost run, taken back
+  });
+
+  it('a target whose review is still open is not pruned first', () => {
+    const s = new AgentRunStore(tmp());
+    const target = s.start(start({ agentId: 'coder' }), false);
+    endRun(target, 'completed', 1);
+    s.start(start({ agentId: 'reviewer', reviewOf: target.runId }), false); // open
+    const next = s.start(start({ agentId: 'coder' }), false);
+    endRun(next, 'completed', 2);
+    for (let i = 0; i < RUNS_MAX - 2; i++) endRun(s.start(start({ startedAt: 10 }), false), 'closed', 1000 + i);
+    s.save();
+    expect(s.get(target.runId)).toBeDefined();
+    expect(s.get(next.runId)).toBeUndefined();
+  });
+
   it('a pruned target takes its reviews along, their findings counted on it', () => {
     const s = new AgentRunStore(tmp());
     const target = s.start(start({ agentId: 'coder' }), false);

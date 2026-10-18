@@ -255,6 +255,16 @@ describe('agent run evidence (A6)', () => {
     expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
   });
 
+  it('a run ended during the turn (its Regia marked it completed) still takes that turn’s report', async () => {
+    const f = fixture();
+    const c = await f.create();
+    f.sink(c.id).changed({ state: 'running' });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'chiuso a metà turno', findings: 3 }), Date.now() + 1);
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, findings: 3 } });
+    expect(f.file().runs[0]).toMatchObject({ report: { findings: 3 } });
+  });
+
   it('counts the user’s corrections: a tagged message, else a reopen after a report; the reopen drops the report', async () => {
     const f = fixture();
     const c = await f.create();
@@ -301,6 +311,19 @@ describe('agent run evidence (A6)', () => {
     vi.setSystemTime(t0 + 99_000);
     f.sink(c.id).changed({ state: 'idle' });
     expect(f.run(c.id)?.executionMs).toBe(8000);
+  });
+
+  it('the turn that reopens a run counts from the reopen (chat:send starts it first)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    const c = await f.create();
+    await f.m.set(c.id, { workStatus: 'completed' });
+    const t0 = Date.now();
+    f.sink(c.id).changed({ state: 'running' }); // the ended run takes nothing yet
+    f.m.resumedByUser(c.id, 'correggi X');
+    vi.setSystemTime(t0 + 3000);
+    f.sink(c.id).changed({ state: 'idle' });
+    expect(f.run(c.id)?.executionMs).toBe(3000);
   });
 
   it('a hand-off continuation links the new run to the old one', async () => {

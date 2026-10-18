@@ -269,6 +269,8 @@ interface Rec {
   commandsOpen?: Set<string>;
   /** since when the chat runs a turn of its open agent run (its execution time; not persisted: a quit cuts the turn) */
   runningSince?: number;
+  /** when the current turn started running: a run ended during it (completed by its Regia) still takes its report */
+  turnAt?: number;
 }
 
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
@@ -327,6 +329,12 @@ export class ChatManager implements ChatService {
     this.analytics = new AgentAnalyticsCollector(opts.userData);
     this.runs = new AgentRunStore(opts.userData);
     if (this.runs.problem) log.warn('chats', 'agent runs file unreadable', { cause: this.runs.problem, hint: 'move agent-runs.json aside to record runs again' });
+    // a pruned run lives on in the rollups only: a chat mirror of it would be adopted back and counted twice
+    this.runs.onPrune = ids => {
+      let any = false;
+      for (const r of this.chats.values()) if (r.s.run && ids.has(r.s.run.runId)) { delete r.s.run; delete r.runningSince; any = true; this.updated(r); }
+      if (any) this.persist();
+    };
     this.store = new ChatStore(opts.userData);
     this.admission = opts.admission ? new AdmissionQueue({ ...opts.admission, onChange: () => this.refreshQueued() }) : null;
     this.handoffs = new HandoffStore(opts.userData);
@@ -821,6 +829,8 @@ export class ChatManager implements ChatService {
     if (!reopened && !tagged) return;
     if (reopened) {
       delete run.report; // it reported on the work before the reopen
+      // chat:send started the turn before this reopen: its running time counts from now
+      if (r.s.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
       r.idleSince = Date.now(); // persisted below
       log.info('chats', 'agent run reopened by the user', { chat: chatId, data: { runId: run.runId, reopened: run.counters.reopened } });
     }
@@ -1425,9 +1435,11 @@ export class ChatManager implements ChatService {
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
-    // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last)
-    const run = r.s.run;
-    if (run && run.endedAt === undefined) {
+    // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
+    // ended during this turn (its Regia marked it completed) still takes it
+    const run = r.s.run, turnAt = r.turnAt;
+    delete r.turnAt;
+    if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
       const report = reportOf(turnReply(r.items), item.at);
       if (report) { run.report = report; this.runSave(); }
     }
@@ -1593,7 +1605,8 @@ export class ChatManager implements ChatService {
       s: {
         agent: c.agent ?? compatibleOwner(c.harness, c.model, true),
         // agent-runs.json is the source of truth; a mirror it does not know (a lost or reset file) is taken back
-        ...(c.run ? { run: this.runs.get(c.run.runId) ?? (this.runs.problem ? c.run : this.runs.adopt(c.run)) } : {}),
+        // (not one already pruned into the rollups: that mirror is dropped)
+        ...(() => { const run = c.run && (this.runs.get(c.run.runId) ?? (this.runs.problem ? c.run : this.runs.adopt(c.run))); return run ? { run } : {}; })(),
         ...(c.work ? {work:c.work} : c.regiaOf ? {work:{status:'assigned' as const,updatedAt:c.createdAt}} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
@@ -2060,6 +2073,7 @@ export class ChatManager implements ChatService {
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     const run = r.s.run;
+    if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
     // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
     if (p.state && run && run.endedAt === undefined) {
       if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
