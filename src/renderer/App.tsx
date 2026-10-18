@@ -31,6 +31,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
 import { AgentStartDialog as NewChatDialog } from './components/AgentStartDialog';
+import { AgentPackHost } from './components/AgentPackHost';
 import { AgentCatalogPage } from './components/AgentCatalogPage';
 import { FirstInterviewGate } from './components/FirstInterview';
 import { RegiaRenewDialog } from './components/RegiaRenewDialog';
@@ -221,6 +222,7 @@ export function App() {
     <div className="app" data-testid="app" style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
+      <AgentPackHost />
       <BrainSetupBanner />
       <HealthBanner />
       <LaunchBanner />

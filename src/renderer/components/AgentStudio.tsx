@@ -17,6 +17,8 @@ import {lang,t}from'../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentManifestPanel } from './AgentManifestPanel';
+import { AgentPackDetails } from './AgentPackDetails';
+import { requestPack } from '../lib/agent-pack-ui';
 import { ProgressPanel } from './ProgressPanel';
 import { AgentProposals } from './AgentProposals';
 import { checkedManifest } from '@shared/agent-manifest';
@@ -28,6 +30,7 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   const restored = useRef(initialProfile ? readAgentEditor(initialProfile.id) : readAgentEditor(undefined,true));
   const [editing, setEditing] = useState<AgentDraft | null>(restored.current?.draft ?? initialProfile ?? null);
   const [id, setId] = useState<string | undefined>(restored.current?.id ?? initialProfile?.id);
+  const [editorRevision, setEditorRevision] = useState<number | null>(restored.current ? restored.current.baseRevision ?? null : initialProfile?.updatedAt ?? null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
   const [guideText, setGuideText] = useState(restored.current?.message ?? ''), [guideModel, setGuideModel] = useState('');
@@ -36,11 +39,12 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   useEffect(()=>{if(busy||uploading)return holdUpdate(t('studio.hold'));},[busy,uploading]);
   const nameInput = useRef<HTMLInputElement>(null);
   const revision = useRef(0), working = useRef(false);
-  const remember = () => { if(editing) rememberAgentEditor({id,draft:editing,message:guideText,history:guideHistory,suggestion}); };
-  useEffect(remember,[editing,id,guideText,guideHistory,suggestion]);
+  const remember = () => { if(editing) rememberAgentEditor({id,...(editorRevision === null ? {} : { baseRevision: editorRevision }),draft:editing,message:guideText,history:guideHistory,suggestion}); };
+  useEffect(remember,[editing,id,editorRevision,guideText,guideHistory,suggestion]);
   const pick = (profile?: AgentProfile, saved=false) => {
     if(saved) { forgetAgentEditor(id); forgetAgentEditor(profile?.id); } else remember();
     const cached=readAgentEditor(profile?.id);
+    setEditorRevision(cached ? cached.baseRevision ?? null : profile?.updatedAt ?? null);
     revision.current++; setUploading(false); setSuggestion(cached?.suggestion ?? null); setGuideHistory(cached?.history ?? []); setGuideText(cached?.message ?? ''); setProblem(null); setId(profile?.id);
     const engine = catalog?.models.find(e => e.enabled && e.trusted && e.defaultModel)?.engine ?? catalog?.models[0]?.engine ?? 'claude';
     setEditing(cached?.draft ?? (profile ? { ...profile } : { name: '', purpose: '', instructions: '', engine, model: null, avatar: { kind: 'symbol', value: 'role-spark', tone: unusedAgentTone(catalog?.profiles ?? []) } }));
@@ -53,7 +57,9 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   const knownModel = !!choice && (editing?.model === null ? choice.defaultModel : choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   let validManifest = true;
   try { checkedManifest(editing?.manifest); } catch { validManifest = false; }
-  const canSave = !!editing?.name.trim() && !!editing.purpose.trim() && validManifest && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !uploading && !catalog?.problem;
+  const currentProfile = catalog?.profiles.find(profile => profile.id === id);
+  const staleEditor = !!id && (editorRevision === null || currentProfile?.updatedAt !== editorRevision);
+  const canSave = !staleEditor && !!editing?.name.trim() && !!editing.purpose.trim() && validManifest && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !uploading && !catalog?.problem;
   const save = async () => {
     if (!editing || !canSave || working.current) return;
     working.current = true;
@@ -88,10 +94,12 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   };
   return <section className="agent-studio" aria-label={t('home.manageAgents')} data-testid="agent-studio">
     <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
+    <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })}>{t('pack.import')}</button>
     <AppearancePreview />
     <ProgressPanel />
     <AgentProposals />
     {problem && <p role="alert">{problem}</p>}
+    {staleEditor && <div role="alert"><p>{t('pack.staleEditor')}</p><button type="button" disabled={busy} onClick={() => { setId(undefined); setEditorRevision(null); }}>{t('pack.copyDraft')}</button><button type="button" disabled={busy || !currentProfile} onClick={() => currentProfile && pick(currentProfile, true)}>{t('pack.reloadDraft')}</button></div>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}
     <div className={`studio-columns${editing?'':' no-editor'}`}><div className="agent-catalog" data-agent-template={presentation} aria-label={t('product.catalog')}>
@@ -100,6 +108,7 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => pick(profile)}>{t('studio.edit')}</button>
         <button type="button" className="link-btn" disabled={busy} onClick={() => { setBusy(true); void duplicateAgent(profile.id).then(profile => pick(profile), () => setProblem(t('studio.duplicateError'))).finally(() => setBusy(false)); }}>{t('studio.duplicate')}</button>
         <AgentManifestPanel manifest={profile.manifest} />
+        <AgentPackDetails profile={profile} />
       </article>)}
       {catalog?.profiles.length === 0 && <p>{t('studio.empty')}</p>}
     </div>{editing && catalog && <form className="agent-editor" onSubmit={e => { e.preventDefault(); void save(); }} aria-label={id ? t('studio.editAgent') : t('studio.createAgent')}>

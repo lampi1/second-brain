@@ -1,0 +1,12 @@
+/* Pack review surfaces stay within the app's modal and agent-card layout, including narrow windows. */
+.agent-pack-modal { width: min(760px, calc(100vw - 32px)); }
+.agent-pack-modal fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.agent-pack-modal pre, .pack-details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; padding: 12px; background: var(--bg-raised, #171b23); border-radius: 6px; }
+.pack-check { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; overflow-wrap: anywhere; }
+.pack-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.pack-details { width: 100%; grid-column: 1 / -1; min-width: 0; }
+.pack-details summary { cursor: pointer; padding: 8px 0; }
+.pack-badge { border: 1px solid currentColor; border-radius: 12px; padding: 2px 8px; font-size: 11px; }
+.pack-proposal { padding: 12px 0; border-top: 1px solid var(--border, #444); }
+.pack-proposal textarea { display: block; width: 100%; margin: 10px 0; }
+.pack-drop { position: fixed; inset: 16px; z-index: 10000; display: grid; place-items: center; border: 3px dashed currentColor; border-radius: 16px; background: var(--bg-raised, #171b23); font-size: 24px; pointer-events: none; }

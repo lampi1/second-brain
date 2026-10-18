@@ -1,3 +1,4 @@
+import { agentPackIt } from './areas/agent-pack.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -28,6 +29,7 @@ export const it = {
   ...auditIt,
   ...auditExpressionsIt,
   ...componentsIt,
+  ...agentPackIt,
   ...catalogIt,
   ...costsIt,
   ...connectorsIt,

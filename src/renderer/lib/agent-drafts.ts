@@ -3,7 +3,7 @@
 import {validateRecoveryRaster} from './recovery-raster';
 import {checkedManifest} from '@shared/agent-manifest';
 import {AGENT_SYMBOLS,type AgentDraft} from '@shared/agents';
-export interface AgentEditorDraft { id?:string; draft:AgentDraft; message:string; history:{role:'user'|'assistant';text:string}[]; suggestion:AgentDraft|null }
+export interface AgentEditorDraft { id?:string; baseRevision?:number; draft:AgentDraft; message:string; history:{role:'user'|'assistant';text:string}[]; suggestion:AgentDraft|null }
 const drafts=new Map<string,AgentEditorDraft>();
 let active:string|null=null;
 const key=(id?:string)=>id ?? '__new';
@@ -33,6 +33,7 @@ export function validateAgentDraftCopy(value:unknown):ReturnType<typeof agentDra
   for(const entry of copy.entries){
     if(!Array.isArray(entry)||entry.length!==2)throw Error('Copia delle bozze Agenti non valida.');
     const [id,state]=entry;
+    if (state?.baseRevision !== undefined && (!Number.isFinite(state.baseRevision) || state.baseRevision < 0)) throw Error('Revisione della bozza Agente non valida.');
     if(typeof id!=='string'||id.length>160||keys.has(id)||!state||state.id!==undefined&&typeof state.id!=='string'||key(state.id)!==id||!validDraft(state.draft)||typeof state.message!=='string'||state.message.length>6000||!Array.isArray(state.history)||state.history.length>1000||state.history.some(line=>!line||!['user','assistant'].includes(line.role)||typeof line.text!=='string'||line.text.length>20000)||state.suggestion!==null&&!validDraft(state.suggestion))throw Error('Copia delle bozze Agenti non valida.');keys.add(id);
   }
   for(const [,state]of copy.entries)for(const draft of [state.draft,state.suggestion])if(draft?.avatar.kind==='image')validateRecoveryRaster(draft.avatar.dataUrl,1024,16,256000);

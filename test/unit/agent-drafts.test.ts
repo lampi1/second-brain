@@ -11,3 +11,10 @@ it('retains separate unsaved edits and guide messages when switching profiles',(
   const copy=readAgentEditor('one')!;copy.draft.name='Changed';
   expect(readAgentEditor('one')?.draft.name).toBe('Assistant');
 });
+it('retains the edited catalog revision across navigation without adopting a newer revision', () => {
+  rememberAgentEditor({ id: 'revision', baseRevision: 123, draft, message: '', history: [], suggestion: null });
+  const restored = readAgentEditor('revision')!;
+  expect(restored.baseRevision).toBe(123);
+  restored.baseRevision = 456;
+  expect(readAgentEditor('revision')?.baseRevision).toBe(123);
+});

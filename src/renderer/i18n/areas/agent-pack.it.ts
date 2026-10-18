@@ -1,0 +1,21 @@
+// Portable agent review and asynchronous learned-rule UI labels (ADR 0069).
+export const agentPackIt = {
+  'pack.staleEditor': 'L’agente è cambiato mentre modificavi la bozza. Il salvataggio è sospeso per proteggere la nuova versione.',
+  'pack.copyDraft': 'Conserva la bozza come nuovo agente', 'pack.reloadDraft': 'Scarta la bozza e ricarica l’agente',
+  'pack.import': 'Importa…', 'pack.export': 'Esporta…', 'pack.drop': 'Rilascia per importare',
+  'pack.target': 'Formato', 'pack.prepare': 'Prepara esportazione', 'pack.save': 'Salva pacchetto',
+  'pack.close': 'Chiudi', 'pack.stats': 'Includi riepilogo anonimo dei risultati', 'pack.statsHint': 'Solo conteggi, senza conversazioni, nomi di progetti o feedback.',
+  'pack.include': 'Contenuti inclusi', 'pack.warnings': 'Note', 'pack.findings': 'Elementi da controllare',
+  'pack.exclude': 'Escludi', 'pack.open': 'Apri', 'pack.rescan': 'Controlla di nuovo', 'pack.allow': 'È un falso positivo',
+  'pack.review': 'Controlla importazione', 'pack.scripts': 'Script da approvare', 'pack.approveScripts': 'Approvo questi script',
+  'pack.scriptHint': 'Senza approvazione saranno rimossi. L’app non li esegue.', 'pack.ignored': 'Ignorati',
+  'pack.permissions': 'Permessi', 'pack.personal': 'Ho controllato i dati personali e approvo l’importazione',
+  'pack.apply': 'Importa in prova', 'pack.collision': 'Come importare', 'pack.update': 'Aggiorna con una versione in prova',
+  'pack.copy': 'Importa come copia', 'pack.rename': 'Importa con un nome disponibile', 'pack.present': 'Pacchetto già presente',
+  'pack.error': 'Operazione non riuscita. Controlla i dettagli e riprova.', 'pack.saved': 'Pacchetto esportato', 'pack.imported': 'Importato in prova',
+  'pack.learned': 'Regole imparate', 'pack.pending': 'Da approvare', 'pack.none': 'Nessuna proposta da approvare.',
+  'pack.approve': 'Approva', 'pack.edit': 'Modifica', 'pack.discard': 'Scarta', 'pack.applyEdit': 'Approva modifica',
+  'pack.preset': 'Preset', 'pack.mine': 'Mio · da preset',
+  'pack.trial': 'Versione in prova', 'pack.rollback': 'Torna alla versione precedente', 'pack.retireReason': 'Ritirato da Brother dalla scheda',
+  'pack.probation': 'In prova', 'pack.keepTrial': 'Tieni', 'pack.retire': 'Ritira', 'pack.working': 'Controllo in corso…',
+};

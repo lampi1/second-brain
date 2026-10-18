@@ -1,5 +1,6 @@
 // Agent catalog and session identity contracts, shared by main, renderer and read-only discovery.
 import type { Effort, Harness } from './contract';
+import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 import { ROLE_GLYPHS } from './agent-glyphs';
 
 /** Untrusted routing declarations. Never authorization, verified capability or executable configuration. */
@@ -37,6 +38,8 @@ export type AgentOrigin =
 export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration';
 
 export interface AgentDraft {
+  knowhow?: AgentKnowhow;
+  pack?: AgentPackIdentity;
   name: string;
   purpose: string;
   instructions: string;
@@ -57,8 +60,8 @@ export interface AgentDraft {
 /** The agents.json v1 record, still produced by the legacy routing import and read by the v1 → v2 migration. */
 export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updatedAt: number };
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling'] as const;
-export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling'>;
+export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow'] as const;
+export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow'>;
 export interface AgentProfile extends AgentDraft {
   /** Canonical behaviour digest at the last packaged install/update; absent on legacy/user definitions. */
   presetHash?: string;
@@ -86,8 +89,10 @@ export interface AgentProfile extends AgentDraft {
   status: 'active' | 'archived';
   archivedAt?: number;
 }
-/** since = when the probation began; requestItemId = the task message that asked for the agent (A7 sets it). */
-export interface AgentProbation { since: number; requestItemId: string; keptBy?: 'brother' }
+/** since = when the probation began. It names its cause: requestItemId = the task message that asked for the agent (A7
+ *  sets it), or source = the reviewed agent pack it was imported from. */
+export interface AgentProbation { since: number; requestItemId?: string; source?: AgentProbationSource; keptBy?: 'brother' }
+export interface AgentProbationSource { kind: 'import'; packId: string; revision: number }
 /** Still being judged: a probation Brother has not ended. */
 export const inProbation = (p: Pick<AgentProfile, 'probation'>): boolean => p.probation !== undefined && p.probation.keptBy === undefined;
 /** How a probation ended, written on the version that was active then. */

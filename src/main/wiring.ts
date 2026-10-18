@@ -13,6 +13,8 @@ import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { AgentAuthoring } from './agents/authoring';
 import { SuggestionBudget } from './agents/suggestion-budget';
+import { createAgentPacks } from './agents/pack/wiring';
+import { agentLearnTool } from './agents/pack/learning';
 import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
 import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
@@ -94,6 +96,7 @@ export interface Wired {
   progress: ProgressService;
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
+  agentPacks: ReturnType<typeof createAgentPacks>;
   setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
@@ -353,7 +356,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // The search's own HybridSearch: one worker and one model for search, recall, corrections and agent matching.
   const classifier = new AgentClassifier(hybrid);
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), brainSearchTool((q, o) => hybrid.query(q, o))]);
+  const agentPacks = createAgentPacks(ctx.userData, brain, agents);
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -372,7 +376,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const manager = new ChatManager({
     unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
-    resolveAgent: req => agents.resolve(req),
+    resolveAgent: req => {
+      const resolved = agents.resolve(req);
+      if (!req.agentId) return resolved;
+      const runtime = agentPacks.packs.runtime(req.agentId);
+      return { ...resolved, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
+        instructions: req.harness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
+    },
     // probation agents are judged at each run end and once a day; the daily pass stays off in the test suites
     probation: { catalog: agents, publish: events => brain.publish(events) },
     ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
@@ -554,7 +564,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     } catch (e) { log.warn('agents', 'daily agent suggestions failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
   }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -610,7 +620,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

@@ -14,13 +14,13 @@ const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as numb
 
 export function behaviourOf(p: AgentBehaviour): AgentBehaviour {
   return structuredClone({ instructions: p.instructions, ...(p.manifest !== undefined ? { manifest: p.manifest } : {}), engine: p.engine, model: p.model,
-    ...(p.effort !== undefined ? { effort: p.effort } : {}), tools: p.tools ?? null, permissionCeiling: p.permissionCeiling ?? null });
+    ...(p.effort !== undefined ? { effort: p.effort } : {}), ...(p.knowhow !== undefined ? { knowhow: p.knowhow } : {}), tools: p.tools ?? null, permissionCeiling: p.permissionCeiling ?? null });
 }
 /** Field-order independent: two saves of the same behaviour never create a version. */
 export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {
   const norm = (v: unknown): unknown => Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, norm((v as Record<string, unknown>)[k])])) : v;
   const x = behaviourOf(a), y = behaviourOf(b);
-  return BEHAVIOUR_FIELDS.every(k => JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
+  return BEHAVIOUR_FIELDS.every(k => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash : JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
 }
 
 const SEED_CATEGORY: Record<string, AgentCategory> = { development: 'development', research: 'personal', writing: 'personal', planning: 'personal', analysis: 'other', general: 'other' };

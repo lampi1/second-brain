@@ -24,6 +24,29 @@ export interface GuardPaths { scan: string; deny: string; /** private allow list
 export interface GuardFinding { file: string; line: number | null; rule: string; commit?: string }
 export type GuardResult = { ok: true } | { ok: false; findings: GuardFinding[] } | { ok: false; missing: string } | { ok: false; error: string };
 
+/** Agent-pack staging is scanned before a zip leaves the app. No package-supplied allow list is ever trusted. */
+export async function scanTree(root: string, guards: (GuardPaths | null)[], node: NodeRunner): Promise<GuardResult> {
+  if (!guards.length || guards.some(g => !g)) return { ok: false, missing: noGuardHint() };
+  const findings: GuardFinding[] = [];
+  try {
+    for (const guard of guards) {
+      if (!guard) return { ok: false, missing: noGuardHint() };
+      const r = await runNode(node, guard.scan, [root, '--deny', guard.deny, '--json', '--no-skip', '--allow', guard.allow ?? noAllow()], root, 120_000);
+      if (r.code !== 0 && r.code !== 2) return { ok: false, error: 'Agent pack guard failed' };
+      const parsed = JSON.parse(r.stdout) as { findings?: unknown };
+      if (!Array.isArray(parsed.findings) || r.code === 2 && !parsed.findings.length) return { ok: false, error: 'Invalid agent pack guard response' };
+      for (const value of parsed.findings) {
+        if (!value || typeof value !== 'object') return { ok: false, error: 'Invalid agent pack finding' };
+        const f = value as Record<string, unknown>;
+        if (typeof f.where !== 'string' || typeof f.rule !== 'string') return { ok: false, error: 'Invalid agent pack finding' };
+        const finding = { file: f.where.replace(/\\/g, '/'), line: typeof f.line === 'number' && f.line > 0 ? f.line : null, rule: f.rule };
+        if (!findings.some(x => x.file === finding.file && x.line === finding.line && x.rule === finding.rule)) findings.push(finding);
+      }
+    }
+    return findings.length ? { ok: false, findings } : { ok: true };
+  } catch { return { ok: false, error: 'Agent pack guard failed' }; }
+}
+
 /** Why the push is blocked when the guard is missing (Italian, shown in the sync status), naming the folder this PC
  *  really reads (it differs per OS). */
 export const noGuardHint = (denyList = 'deny-work.txt', env: NodeJS.ProcessEnv = process.env): string =>
