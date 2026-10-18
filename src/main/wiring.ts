@@ -338,6 +338,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
+    // probation agents are judged at each run end and once a day; the daily pass stays off in the test suites
+    probation: { catalog: agents, publish: events => brain.publish(events) },
+    ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
     userData: ctx.userData,

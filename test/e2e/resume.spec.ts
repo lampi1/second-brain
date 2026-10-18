@@ -2,7 +2,7 @@
 // its tile until the user writes to it. The resume itself (saved turn, automatic message, --resume) is covered by
 // test/unit/chats/resume.test.ts against the fake CLI. Screenshot: test-results/shots/resume-1-mark.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 test('a chat resumed after a restart carries its mark until the user writes', async () => {
   const { app, page } = await launchDemo();
@@ -16,6 +16,7 @@ test('a chat resumed after a restart carries its mark until the user writes', as
   const mark = page.getByTestId('chat-resumed-fix');
   await expect(mark).toHaveText('ripresa dopo il riavvio');
   await shot(page, 'resume-1-mark');
+  await expandChats(page, 'fix'); // the input is on the open strip
   const input = page.getByTestId('chat-input-fix');
   await input.fill('ok, continua');
   await input.press('Enter');

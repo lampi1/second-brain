@@ -166,11 +166,16 @@ app.whenReady().then(async () => {
     'agents:archive': a => s.agents.archive(a.id),
     'agents:restore': a => s.agents.restore(a.id),
     'agents:history': a => s.agents.history(a.id),
+    'agents:keep': a => s.agents.keep(a?.id, 'brother'),
+    'agents:retire': a => s.agents.retire(a?.id, typeof a?.reason === 'string' ? a.reason.slice(0, 600) : '', 'brother'),
     'agents:metrics': a => {
       const root = demo ? null : s.brain.info().brainRoot;
       let aiErrors: string | undefined;
       try { if (root) aiErrors = fs.readFileSync(path.join(root, 'ai-errors.md'), 'utf8'); } catch { aiErrors = undefined; }
-      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}) }) ?? [];
+      const tag = (v: unknown) => typeof v === 'string' && v.length <= 120 ? v : undefined;
+      const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
+      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
+        ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'agents:draft': a => s.agents.draft(a),

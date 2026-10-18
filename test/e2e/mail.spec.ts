@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
-import { launch, setSize, shot } from './helpers';
+import { expandChats, launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 
@@ -34,6 +34,7 @@ test('a message from another chat reaches a working chat at once, its sender sho
   expect((await page.evaluate(() => window.sb.invoke('chat:list', undefined)) as ChatSummary[]).find(c => c.id === chat.id)?.state).not.toBe('closed');
   // folded as mail from another chat (lib/foreign.ts, collapsed agent messages): sender + first words, never a bubble
   // of the user's and never the label line meant for the model; opened, it says it was not written by the user
+  await expandChats(page, chat.id); // the transcript is on the open strip
   const item = page.getByTestId(`item-${got.id}`);
   await expect(item).toHaveAttribute('data-foreign', 'mail');
   await expect(item.locator('.foreign-who')).toHaveText('Messaggio · «Esegui nella Regia (non verificato)»');
