@@ -11,6 +11,8 @@ import type { HarnessSession, SessionSink } from '../../../src/main/chats/sessio
 import type { StoredChat } from '../../../src/main/chats/store';
 import { migrateOrchestrator, ORCHESTRATOR_ROLE } from '../../../src/main/chats/orchestrator';
 import { OrchestratorService } from '../../../src/main/chats/orchestrator-service';
+import { AgentCatalogService } from '../../../src/main/agents/catalog';
+import { ORCHESTRATOR_AGENT_ID } from '../../../src/main/agents/orchestrator-preset';
 import { RegiaWake } from '../../../src/main/chats/regia-wake';
 import { ChatMail, inboxDir, mailTools } from '../../../src/main/chats/mail';
 import { appControlTools } from '../../../src/main/appctl/tools';
@@ -88,7 +90,8 @@ function fixture(stored?: StoredChat[]) {
   const dir = tmp();
   if (stored) fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 2, chats: stored }));
   const sent: string[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, unifiedOrchestrator: true, sessionFactory: (_h, _o, s: SessionSink) => {
+  const agents = new AgentCatalogService({ userData: dir, models: () => [{ engine: 'anthropic', label: 'API', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }] });
+  const m = new ChatManager({ userData: dir, resolveAgent: req => agents.resolve(req), emitter: { emit() {} }, coldEveryMs: 0, unifiedOrchestrator: true, sessionFactory: (_h, _o, s: SessionSink) => {
     let state = 'idle';
     return { harness: 'anthropic', sessionId: null, pid: null, root: null, alive: true, get busy() { return state === 'running'; },
       start() { s.changed({ state: 'idle' }); },
@@ -97,7 +100,7 @@ function fixture(stored?: StoredChat[]) {
     } as unknown as HarnessSession;
   } });
   managers.push(m);
-  return { m, dir, sent, file: () => JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] } };
+  return { m, dir, sent, agents, file: () => JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] } };
 }
 
 describe('ChatManager with the unified Orchestrator', () => {
@@ -142,6 +145,15 @@ describe('ChatManager with the unified Orchestrator', () => {
     await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
     expect(f.sent[0]!.startsWith(ORCHESTRATOR_ROLE)).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
+  });
+  it('starts from the edited catalog preset and composes its instructions once', async () => {
+    const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
+    f.agents.save({ ...seed, instructions: 'My custom coordination brief' }, seed.id);
+    const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
+    expect(chat.agent?.id).toBe(seed.id);
+    expect(f.sent[0]!.split('My custom coordination brief')).toHaveLength(2);
+    expect(f.sent[0]).toContain('Updater apply is disabled');
+    expect(f.file().chats.find(c => c.id === chat.id)?.agentInstructions).toBe('My custom coordination brief');
   });
 });
 

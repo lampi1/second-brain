@@ -64,7 +64,7 @@ import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
-import { migrateOrchestrator, ORCHESTRATOR_ROLE } from './orchestrator';
+import { migrateOrchestrator, orchestratorRole } from './orchestrator';
 import { slug as slugTitle } from './mail';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
@@ -690,8 +690,8 @@ export class ChatManager implements ChatService {
     const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
     try {
       const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
-      const role = r.s.orchestrator ? `${ORCHESTRATOR_ROLE}\n\n` : '';
-      r.session.send(`${role}${profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
+      const role = r.s.orchestrator ? `${orchestratorRole(r.s.agent?.source === 'catalog' ? r.agentInstructions : undefined)}\n\n` : '';
+      r.session.send(`${role}${r.s.orchestrator ? '' : profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }

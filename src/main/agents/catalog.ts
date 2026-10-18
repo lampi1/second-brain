@@ -12,6 +12,7 @@ import { DEFAULT_MANIFESTS, DEFAULT_MANIFESTS_EN } from './manifest-defaults';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { engineOf } from '../engines/registry';
+import { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_INSTRUCTIONS } from './orchestrator-preset';
 import { log, errText } from '../log';
 import { LEGACY_ROLE_REPLACEMENTS, roleAgentPresets } from '../../shared/agent-presets';
 import { presetDraft, presetHash } from './preset-support';
@@ -165,6 +166,14 @@ export class AgentCatalogService {
         avatar: { kind: 'symbol', value: 'eye' }, ...d.pulsePreset(), createdAt: at, updatedAt: at }, true, 'preset');
       pulse.routable = false;
       this.profiles.push(pulse); pending = [...(pending ?? []), firstVersion(pulse, 'preset', 'Battito iniziale', at)];
+    }
+    // Additive seed migration: retain every existing definition, including customized presets.
+    if (!this.profiles.some(p => p.id === ORCHESTRATOR_AGENT_ID) && this.profiles.length < MAX_AGENTS && this.profiles.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) {
+      const coordinator = this.orchestratorSeed(this.defaults()[0]);
+      if (coordinator) {
+        this.profiles.push(coordinator);
+        pending = [...(pending ?? []), firstVersion(coordinator, 'preset', 'Orchestrator iniziale', coordinator.createdAt)];
+      }
     }
     if (pending) {
       // History, then catalog: a retry after any failure redoes the same steps (history replaces same versions).
@@ -334,6 +343,13 @@ export class AgentCatalogService {
     const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
     return ROLES.map(([id, name, purpose, instructions, icon]) => upgradeProfile({ id: `default-${id}`, name, purpose, instructions, manifest: checkedManifest(manifests[id]), engine: e.engine, model: null, avatar: { kind: 'symbol', value: icon }, createdAt: at, updatedAt: at }, true, 'preset'));
   }
+  /** The coordinator seed follows the starters' engine, so login discovery rebinds and seeds it like them. */
+  private orchestratorSeed(base: AgentProfile | undefined): AgentProfile | null {
+    if (!base) return null;
+    const at = this.now();
+    return upgradeProfile({ id: ORCHESTRATOR_AGENT_ID, name: 'Orchestrator', purpose: 'Coordinare gli agenti e restare disponibile per la persona',
+      instructions: ORCHESTRATOR_INSTRUCTIONS, engine: base.engine, model: null, avatar: { kind: 'symbol', value: 'compass' }, createdAt: at, updatedAt: at }, true, 'preset');
+  }
   /** Size-checked before any history write, so a refused save leaves no version behind. */
   private body(next: AgentProfile[]) {
     const body = { version: 2, profiles: next, legacyRouting: this.legacyRouting };
@@ -366,8 +382,9 @@ export class AgentCatalogService {
   /** Rebind only pristine, never-edited seeds and presets after asynchronous login discovery. Customized versions stay pinned. */
   private refreshDefaults(): void {
     if (this.problem || this.store.problem) return;
-    const seeds = this.defaults();
-    if (!seeds.length) return;
+    const starters = this.defaults(), coordinator = this.orchestratorSeed(starters[0]);
+    if (!coordinator) return;
+    const seeds = [...starters, coordinator];
     const models = this.d.models(), routes = this.d.legacyRoutes?.() ?? [];
     const changed: AgentProfile[] = [];
     const next = this.profiles.map(p => {
@@ -391,8 +408,9 @@ export class AgentCatalogService {
     // Seed the starters only into a catalog born without any (no engine was usable then). A catalog that already holds a
     // starter keeps the user's choice: a starter they never had or removed is not brought back. Generale does not count:
     // ensureGeneral recreates it on its own (an agentless chat), possibly before this first seeding.
-    const unseeded = !next.some(p => p.id !== GENERAL_AGENT_ID && seeds.some(s => s.id === p.id));
-    if (unseeded) for (const seed of seeds) if (!next.some(p => p.id === seed.id) && next.length < MAX_AGENTS && next.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) { next.push(seed); changed.push(seed); }
+    const unseeded = !next.some(p => p.id !== GENERAL_AGENT_ID && starters.some(s => s.id === p.id));
+    // The Orchestrator is an additive seed: it arrives whenever it is missing and an engine is usable.
+    for (const seed of unseeded ? seeds : [coordinator]) if (!next.some(p => p.id === seed.id) && next.length < MAX_AGENTS && next.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) { next.push(seed); changed.push(seed); }
     if (changed.length) {
       try {
         this.commit(next, changed.map(p => ({ ...firstVersion(p, 'preset', 'Motore iniziale disponibile', this.now()), version: p.version,
@@ -557,10 +575,16 @@ export class AgentCatalogService {
     return structuredClone(profile);
   }
   resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null } {
+    if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.regia && !req.appRegia) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
     if (req.agentId === undefined) {
       const compatible = { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
-      // the Orchestrator is no agent's run; any other chat started without an agent runs as Generale (AGENTS-DESIGN §4.7)
-      if (req.regia || req.appRegia) return compatible;
+      // A coordinator uses the portable preset while retaining the selected harness/model.
+      if (req.regia || req.appRegia) {
+        const p = this.profiles.find(x => x.id === ORCHESTRATOR_AGENT_ID && x.status === 'active');
+        if (!p) return { ...compatible, instructions: ORCHESTRATOR_INSTRUCTIONS };
+        return { request: req, owner: { ...ownerOf(p), engine: req.harness, model: req.model ?? null }, instructions: p.instructions,
+          policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling ?? null } : null };
+      }
       const g = this.ensureGeneral();
       if (!g) {
         log.warn('agents', 'Generale is unavailable: the chat starts without an agent run', { hint: this.problem ?? this.store.problem ?? 'no default engine to recreate it from' });

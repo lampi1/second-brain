@@ -43,8 +43,8 @@ describe('Agent definitions v2', () => {
     expect(history.entries.filter(e => e.author === 'migration').map(e => [e.agentId, e.version, e.parentVersion, e.author, e.state])).toEqual([
       ['default-general', 1, null, 'migration', 'active'], ['default-development', 1, null, 'migration', 'active'], ['agent-mine', 1, null, 'migration', 'active']]);
     const after = fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8');
-    expect(history.entries.filter(e => e.author === 'preset')).toHaveLength(10);
-    expect(service(dir).list().profiles).toHaveLength(13);
+    expect(history.entries.filter(e => e.author === 'preset')).toHaveLength(11);
+    expect(service(dir).list().profiles).toHaveLength(14);
     expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).toBe(after);
     // A rolled-back build reads agents.json: it must still be the v1 catalog it wrote.
     expect(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')).toBe(original);
