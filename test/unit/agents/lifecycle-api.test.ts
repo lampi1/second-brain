@@ -1,6 +1,7 @@
 // Main lifecycle API and read-only transport tests: identity is authoritative and main routes never proxy to brain code.
 import { afterEach, expect, it } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { AgentLifecycle } from '../../../src/main/agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from '../../../src/main/agents/lifecycle-api';
@@ -11,7 +12,7 @@ import { AGENT_LIFECYCLE_PATH } from '../../../src/shared/agent-lifecycle';
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const make = () => {
-  const dir = fs.mkdtempSync(path.join(process.cwd(), 'tmp/lifecycle-api-')); dirs.push(dir);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-lifecycle-api-')); dirs.push(dir);
   const service = new AgentLifecycle({ userData: dir, wake: () => false });
   const run = { runId: 'r_000000000001', agentId: 'reviewer', version: 1 } as AgentRun;
   return { service, api: createLifecycleApi(service, id => id === run.runId ? run : undefined) };

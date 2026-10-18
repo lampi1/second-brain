@@ -1,6 +1,7 @@
 // Lifecycle acceptance: feedback persistence, approval-only suggestions, comparable trials and batched idle work.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../../src/shared/agents';
 import { AgentFeedbackStore, repeatedGap, type FeedbackInput } from '../../../src/main/agents/feedback';
@@ -10,7 +11,7 @@ import { suggestAgents, instructionOverlap, type SuggestionInput } from '../../.
 import { lifecycleInput } from '../../../src/main/agents/lifecycle-input';
 
 const dirs: string[] = [];
-const tmp = () => { const p = fs.mkdtempSync(path.join(process.cwd(), 'tmp/lifecycle-test-')); dirs.push(p); return p; };
+const tmp = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-lifecycle-test-')); dirs.push(p); return p; };
 afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const agent = (over: Partial<AgentProfile> = {}): AgentProfile => ({ id: 'reviewer', name: 'Reviewer', role: 'Review', purpose: 'Review', category: 'development',
   instructions: 'Review changes for errors', engine: 'claude', model: 'large', avatar: { kind: 'symbol', value: 'eye' }, tools: null, permissionCeiling: null,
