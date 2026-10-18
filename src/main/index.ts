@@ -188,6 +188,8 @@ app.whenReady().then(async () => {
     'agents:learnList': a => s.agentPacks.learning.list(a.id),
     'agents:learnDecide': a => s.agentPacks.learning.decide(a.id, a.proposalId, a.decision, a.text),
     'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
+    // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
+    'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:archive': a => s.agents.archive(a.id),
     'agents:restore': a => s.agents.restore(a.id),

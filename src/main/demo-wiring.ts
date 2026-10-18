@@ -69,9 +69,19 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.onSettingChange(c => { if (c.key.startsWith('devops.')) devops.schedule(); });
   devops.schedule();
   brain.serveApi('/api/quality', () => demoQuality());
-  // the agents' lifecycle queue, read only: no daily pass, no wake, no feedback writer (e2e agent-lifecycle.spec.ts); it reads
-  // the demo authoring store's feedback, the same single store as in the real app
-  mountLifecycleApi(brain, createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, wake: () => false, feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } }), () => undefined));
+  // the agents' lifecycle queue: no daily pass, no wake, no feedback writer (e2e agent-lifecycle.spec.ts); it reads the demo
+  // authoring store's feedback, the same single store as in the real app. The user's decisions work on the demo catalog;
+  // a drafting request needs an Orchestrator, which the demo has not.
+  const everyAgent = () => { const all = agents.list(); return [...all.profiles, ...all.archived]; };
+  const agentLifecycle = createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, wake: () => false, changed: () => ctx.emitter.emit('agents:lifecycleChanged', null),
+    feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } }), () => undefined, undefined, undefined, {
+    agents: everyAgent, learned: () => agentPacks.learning.pending(), drafts: () => { try { return agentAuthoring.proposals(); } catch { return []; } },
+    actions: {
+      resolveTrial: (id, decision) => agents.resolveTrial(id, decision), keep: id => agents.keep(id, 'brother'), retire: (id, reason) => agents.retire(id, reason.slice(0, 600), 'brother'),
+      modelTrial: (id, model, reason) => { const p = agents.list().profiles.find(x => x.id === id); if (!p) throw new Error('Agente non trovato.'); return agents.approveTrial(id, { ...p, model }, reason); },
+      requestDraft: async () => { throw new Error('Nessun Orchestrator nella demo.'); },
+    } });
+  mountLifecycleApi(brain, agentLifecycle);
   // the Procedure page: made-up procedure files read by the real scanner (masking included)
   const procDir = writeDemoProcedures(path.join(ctx.userData, 'demo-procedures'), now());
   const procedures = new Procedures(() => procDir);
@@ -152,7 +162,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, engines, later: createLater(ctx),
-    agents, agentAuthoring, agentPacks,
+    agents, agentAuthoring, agentLifecycle, agentPacks,
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => null, brain, chats, emit: () => {}, focus: () => {}, disabled: true }),
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

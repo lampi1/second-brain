@@ -2,7 +2,7 @@
 import type{lifecycleIt}from'./lifecycle.it';
 export const lifecycleEn:typeof lifecycleIt={
  'lifecycle.kind.update':'Update','lifecycle.kind.create':'New agent','lifecycle.kind.merge':'Merge of roles','lifecycle.kind.model-trial':'Model trial',
- 'lifecycle.kind.split':'Split of a role','lifecycle.kind.keep':'Keep version','lifecycle.kind.revert':'Restore version',
+ 'lifecycle.kind.split':'Split of a role','lifecycle.kind.keep':'Keep version','lifecycle.kind.revert':'Restore version','lifecycle.kind.retire':'Retire agent',
  'lifecycle.metricMissing':'Data not available','lifecycle.coverageMissing':'not available',
  'lifecycle.metric':(p:{value:string;n:number;coverage:string})=>`${p.value} · n=${p.n} · coverage ${p.coverage}`,
  'lifecycle.compare':'Run comparison','lifecycle.metricCol':'Metric','lifecycle.baseline':'Baseline','lifecycle.evaluated':'Evaluated group',

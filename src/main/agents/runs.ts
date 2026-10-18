@@ -3,7 +3,7 @@
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns.
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunRouting, AgentRunTags, AgentRunTokens } from '../../shared/agents';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { readLocal, writeLocal } from './local-store';
@@ -89,6 +89,19 @@ function readCorrections(v: unknown): AgentRunCorrections | null {
   return c && typeof c === 'object' && count(c.tagged) && count(c.afterReport) ? { tagged: c.tagged, afterReport: c.afterReport } : null;
 }
 
+/** A routing snapshot (agents/routing-snapshot.ts), or null when out of shape. */
+export function readRouting(v: unknown): AgentRunRouting | null {
+  const r = v as Record<string, unknown> | null;
+  const nullable = (x: unknown, ok: (x: unknown) => boolean) => x === null || ok(x);
+  if (!r || typeof r !== 'object' || !time(r.at) || !str(r.agentId, 80) || !AGENT_ID.test(r.agentId) || !count(r.version)
+    || !nullable(r.mode, x => x === 'hybrid' || x === 'words') || !nullable(r.score, x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100)
+    || !nullable(r.rank, x => count(x) && (x as number) >= 1)) return null;
+  const t = r.trial as Record<string, unknown> | undefined | null;
+  if (t !== undefined && (!t || typeof t !== 'object' || !count(t.baseline) || (t.baseline as number) < 1 || !(t.parentWins === null || typeof t.parentWins === 'boolean'))) return null;
+  return { at: r.at, agentId: r.agentId, version: r.version, mode: r.mode as AgentRunRouting['mode'], score: r.score as number | null, rank: r.rank as number | null,
+    ...(t ? { trial: { baseline: t.baseline as number, parentWins: t.parentWins as boolean | null } } : {}) };
+}
+
 /** A stored run, or null when any field is out of shape (the store refuses the file; chats.json drops the mirror). */
 export function readRun(v: unknown): AgentRun | null {
   const r = v as Record<string, unknown> | null;
@@ -111,7 +124,8 @@ export function readRun(v: unknown): AgentRun | null {
   const report = r.report === undefined ? undefined : readReport(r.report);
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
-  if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const routing = r.routing === undefined ? undefined : readRouting(r.routing);
+  if (report === null || corrections === null || tags === null || routing === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
   return {
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy, startedAt: r.startedAt,
     ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}), ...(r.spawnedBy ? { spawnedBy: r.spawnedBy as string } : {}),
@@ -124,7 +138,7 @@ export function readRun(v: unknown): AgentRun | null {
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
-    ...(tags ? { tags } : {}),
+    ...(tags ? { tags } : {}), ...(routing ? { routing } : {}),
   };
 }
 
@@ -266,6 +280,13 @@ export class AgentRunStore {
     if (run.endedAt !== undefined && run.endedAt <= this.prunedThrough) return undefined;
     this.runs.set(run.runId, run); this.dirty = true;
     return run;
+  }
+  /** The routing snapshot of a known run, set once (its agent and version must match the run's); false = refused. */
+  setRouting(runId: string, routing: AgentRunRouting): boolean {
+    const run = this.runs.get(runId), checked = readRouting(routing);
+    if (this.problem || !run || run.routing || !checked || checked.agentId !== run.agentId || checked.version !== run.version) return false;
+    run.routing = checked; this.dirty = true;
+    return true;
   }
   /** Something changed in a record that is worth a write on the next flush (cost, tokens, context peak). */
   touch(): void { this.dirty = true; }

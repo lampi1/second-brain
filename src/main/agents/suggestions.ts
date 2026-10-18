@@ -44,7 +44,7 @@ export function suggestAgents(input: SuggestionInput, now: number): AgentLifecyc
       && m.known >= 5 && m.known <= m.ended && m.known / m.ended >= 0.6 && m.success >= expensive.success
       && m.costPerSuccess !== null && m.costPerSuccess < expensive.costPerSuccess!).sort((a, b) => a.costPerSuccess! - b.costPerSuccess!)[0];
     if (cheaper) propose({ key: `model:${expensive.agentId}:${cheaper.model}`, kind: 'model-trial', agentIds: [expensive.agentId],
-      reason: `Prova del modello ${cheaper.model}: minor costo per successo nello stesso gruppo`, evidence: [...expensive.evidence, ...cheaper.evidence].slice(-16) });
+      model: cheaper.model, reason: `Prova del modello ${cheaper.model}: minor costo per successo nello stesso gruppo`, evidence: [...expensive.evidence, ...cheaper.evidence].slice(-16) });
   }
   for (const agent of active) {
     const own = input.runs.filter(r => r.agentId === agent.id && r.version > 0 && r.endedAt !== undefined && r.endedAt <= now);

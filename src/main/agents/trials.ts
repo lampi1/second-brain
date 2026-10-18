@@ -29,10 +29,14 @@ export function evaluateTrial(agent: AgentProfile, runs: readonly AgentRun[], no
   const before = cohortMetrics(baseline, runs), after = cohortMetrics(matched, runs);
   const result = { ...empty, before, after, other: cohortMetrics(other, runs), comparable: matched.length,
     otherRuns: other.length, unknownRouting: classified.filter(r => r.match === null).length };
-  if (candidates.length < 5 && now - trial.startedAt < TRIAL_DAYS) return { ...result, reason: 'Campione ancora insufficiente' };
+  // Inside the trial window missing evidence means "wait": verdicts arrive after a run ends (the user rates it later) and
+  // comparable work accumulates; only at the end of the window does an inconclusive trial propose going back.
+  const open = now - trial.startedAt < TRIAL_DAYS;
+  if (candidates.length < 5 && open) return { ...result, reason: 'Campione ancora insufficiente' };
   const revert = (reason: string): TrialEvaluation => ({ ...result, decision: 'revert', reason });
-  if (baseline.length < 5 || matched.length < 5 || !before || !after) return revert('Campione comparabile insufficiente');
-  if ((before.successRate.coverage ?? 0) < 0.6 || (after.successRate.coverage ?? 0) < 0.6) return revert('Copertura degli esiti inferiore al 60%');
+  const short = (reason: string): TrialEvaluation => open ? { ...result, reason: `${reason}: in attesa` } : revert(reason);
+  if (baseline.length < 5 || matched.length < 5 || !before || !after) return short('Campione comparabile insufficiente');
+  if ((before.successRate.coverage ?? 0) < 0.6 || (after.successRate.coverage ?? 0) < 0.6) return short('Copertura degli esiti inferiore al 60%');
   const b = before.successRate.value!, a = after.successRate.value!;
   const findings = before.reviews.some(old => after.reviews.some(next => old.reviewer.agentId === next.reviewer.agentId
     && old.reviewer.version === next.reviewer.version && lower(old.findingsPerRun, next.findingsPerRun, 0.8)));

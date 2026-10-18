@@ -105,37 +105,45 @@ describe('MCP authoring boundary', () => {
     expect(() => f.catalog.resolve({ agentId: p.id, harness: 'claude', cwd: f.userData })).not.toThrow();
     expect(() => f.catalog.resolve({ agentId: p.id, harness: 'claude', cwd: tmp() })).toThrow(/approved/);
   });
-  it('refuses locked writes, foreign archive and unsupported trials', async () => {
+  it('agent_update / agent_archive / agent_restore / agent_rollback only queue a proposal: nothing changes before the user', async () => {
     const f = fixture(), user = f.catalog.save(draft());
-    for (const name of ['agent_update', 'agent_archive', 'agent_restore', 'agent_rollback']) await expect(f.service.call(name, { agentId: user.id, patch: { instructions: 'Other' }, reason: 'Change' }, 'orch')).rejects.toThrow(/Protected/);
-    await expect(f.service.call('agent_archive', { agentId: 'default-research', reason: 'Remove' }, 'orch')).rejects.toThrow(/owned/);
-    const p = await f.create() as { id: string };
-    await expect(f.service.call('agent_update', { agentId: p.id, patch: { instructions: 'New' }, reason: 'Change', trial: false }, 'orch')).rejects.toThrow(/trial/);
-    await expect(f.service.call('agent_update', { agentId: p.id, patch: { instructions: 'New' }, reason: 'Change' }, 'orch')).rejects.toThrow(/one behavioural/);
+    const before = JSON.stringify(f.catalog.list());
+    const update = await f.service.call('agent_update', { agentId: user.id, patch: { instructions: 'Other' }, reason: 'Change' }, 'orch') as { id: string; op: string; state: string };
+    expect(update).toMatchObject({ op: 'update', state: 'pending' });
+    const archive = await f.service.call('agent_archive', { agentId: user.id, reason: 'Remove' }, 'orch') as { op: string };
+    expect(archive.op).toBe('archive');
+    await expect(f.service.call('agent_restore', { agentId: user.id, reason: 'Back' }, 'orch')).rejects.toThrow(/not archived/);
+    await expect(f.service.call('agent_rollback', { agentId: user.id, toVersion: 1, reason: 'Back' }, 'orch')).rejects.toThrow(/earlier version/);
+    await expect(f.service.call('agent_update', { agentId: user.id, patch: { instructions: 'Again' }, reason: 'Change' }, 'orch')).rejects.toThrow(/already waiting/);
+    expect(JSON.stringify(f.catalog.list())).toBe(before);
+    expect(f.publish.mock.calls.map(c => c[0][0].kind)).toEqual(['agent-proposal', 'agent-proposal']);
+    // the user's click: the update opens a trial against v1, the archive applies
+    const tried = f.service.decide(update.id, true)!;
+    expect(tried).toMatchObject({ activeVersion: 2, instructions: 'Other', trial: { version: 2, baseline: 1 } });
+    expect(f.catalog.history(user.id).find(v => v.version === 2)).toMatchObject({ state: 'trial', author: 'orchestrator', reason: 'Change' });
+    // the archive proposal was made on the older revision: refused, a fresh one is needed
+    expect(() => f.service.decide((archive as unknown as { id: string }).id, true)).toThrow(/changed/);
   });
-  it('undoes an automatic behavioural change from the feed card by rejecting its trial', async () => {
+  it('an accepted rollback proposal during a trial rolls the trial back to its baseline; a refused application stays pending', async () => {
     let t = Date.now();
-    const userData = tmp(), items: ChatItem[] = [{ kind: 'user', id: 'task', text: 'Create a reader', at: t }];
-    const catalog = new AgentCatalogService({ userData, models, now: () => t, approvedRoots: () => [userData] });
-    const runs = new AgentRunStore(userData), publish = vi.fn();
-    const service = new AgentAuthoring({ userData, catalog, runs, items: () => items, now: () => t, suggestionSpend: () => 0, publish, send: vi.fn(async () => undefined) });
-    service.rememberHumanMessage('orch', 'Create a reader');
-    const created = await service.call('agent_create', { draft: draft(), presetId: 'default-research', requestItemId: 'task', reason: 'User task' }, 'orch') as { id: string };
-    for (let i = 0; i < 5; i++) {
-      const run = runs.start({ agentId: created.id, version: 1, chatId: `work-${i}`, goal: 'Read', startedBy: 'orchestrator', startedAt: t, costKnown: true });
-      run.endedAt = t; run.endReason = 'completed'; run.outcome = { verdict: 'success', basis: 'human', by: 'user', at: t };
-    }
-    t += 86_400_000;
-    const updated = await service.call('agent_update', { agentId: created.id, patch: { instructions: 'Report observations briefly.' }, reason: 'Shorter reports' }, 'orch') as { activeVersion: number; trial?: unknown };
-    expect(updated).toMatchObject({ activeVersion: 2, trial: { version: 2, baseline: 1 } });
-    const card = publish.mock.calls.map(c => c[0][0]).find(e => e.kind === 'agent-updated');
-    expect(card.action).toMatchObject({ kind: 'agent-undo', undo: { operation: 'version', version: 1 } });
+    const userData = tmp(), catalog = new AgentCatalogService({ userData, models, now: () => t, approvedRoots: () => [userData] });
+    const runs = new AgentRunStore(userData);
+    const service = new AgentAuthoring({ userData, catalog, runs, items: () => [], now: () => t, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
+    const p = catalog.save(draft());
     t += 1000;
-    const undone = service.undo(card.action.undo);
-    expect(undone).toMatchObject({ activeVersion: 1, instructions: 'Report observations.', lastEditedBy: 'user', userLocked: true });
-    expect(undone.trial).toBeUndefined();
-    expect(catalog.history(created.id).find(v => v.version === 2)?.state).toBe('rejected');
-    expect(() => service.undo(card.action.undo)).toThrow(/changed/);
+    const trial = catalog.approveTrial(p.id, { ...p, instructions: 'Report observations briefly.' }, 'Shorter reports');
+    expect(trial).toMatchObject({ activeVersion: 2, trial: { version: 2, baseline: 1 }, lastEditedBy: 'user' });
+    t += 1000;
+    const save = await service.call('agent_update', { agentId: p.id, patch: { instructions: 'Third' }, reason: 'More' }, 'orch') as { id: string };
+    // a behavioural change while a trial is open is refused at the user's click and the proposal stays pending
+    expect(() => service.decide(save.id, true)).toThrow(/prova/);
+    expect(service.proposals().find(x => x.id === save.id)?.state).toBe('pending');
+    const back = await service.call('agent_rollback', { agentId: p.id, toVersion: 1, reason: 'Worse' }, 'orch') as { id: string };
+    expect(catalog.list().profiles.find(x => x.id === p.id)?.activeVersion).toBe(2);
+    const rolled = service.decide(back.id, true)!;
+    expect(rolled).toMatchObject({ activeVersion: 1, instructions: 'Report observations.' });
+    expect(rolled.trial).toBeUndefined();
+    expect(catalog.history(p.id).find(v => v.version === 2)?.state).toBe('rejected');
   });
   it('checks suggestion budget including unknown cost and persists proposals for human decisions only', async () => {
     const f = fixture(), args = { draft: draft(), reason: 'Potential task', expectedEffect: 'Fewer questions' };

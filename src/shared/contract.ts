@@ -5,6 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { AgentClassification } from './agent-classifier';
 import type { AgentProposal, AgentUndo } from './agent-authoring';
+import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
 import type { PackTarget, PackExportPlan, PackFinding, PackImportReview, LearnedRules } from './agent-pack';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
@@ -1164,6 +1165,9 @@ export interface InvokeMap {
   'agents:learnDecide': [{ id: string; proposalId: string; decision: 'approve' | 'edit' | 'discard'; text?: string }, LearnedRules];
   /** ends the open trial of a pack update or an approved learned rule; a new agent's probation uses agents:keep/agents:retire */
   'agents:trialDecide': [{ id: string; decision: 'keep' | 'rollback' }, AgentProfile];
+  /** the user's decision on one "Da approvare" entry (AgentLifecycleProposal, read at /api/agents/lifecycle): approve does
+   *  what its kind says (agent-lifecycle.ts), dismiss drops it for a while; returns the queue after the decision */
+  'agents:lifecycleDecide': [AgentLifecycleDecide, AgentLifecycleSnapshot];
   'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
   'agents:duplicate': [{ id: string }, AgentProfile];
   'agents:archive': [{ id: string }, AgentProfile];
@@ -1384,6 +1388,8 @@ export interface EventMap {
   'progress:changed': ProgressState;
   'chat:autoCloseStatus': AutoCloseStatus[];
   'agents:changed': AgentCatalog;
+  /** the "Da approvare" queue changed (a proposal, an evaluation, a decision): read /api/agents/lifecycle again */
+  'agents:lifecycleChanged': null;
   'chat:updated': ChatSummary;
   'chat:removed': { chatId: string };
   'chat:item': { chatId: string; item: ChatItem; replace?: boolean };
@@ -1443,7 +1449,7 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1462,7 +1468,7 @@ export const EVENT_CHANNELS = [
   'improve:proposals',
   'progress:changed',
   'chat:autoCloseStatus',
-  'agents:changed',
+  'agents:changed', 'agents:lifecycleChanged',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
 ] as const satisfies readonly EventChannel[];

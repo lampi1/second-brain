@@ -1,6 +1,6 @@
 // A7b on chats: an agentless chat runs as Generale with its tags (skills, app, repo), Claude's Skill tool joins the skills
 // while the run is open, a run end judges its agent's probation (keep/retire + feed), and metrics filter by tag.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,7 +27,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const sinks = new Map<string, SessionSink>();
   let last!: SessionSink;
   const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, probationEveryMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home') },
-    resolveAgent: req => box.catalog.resolve(req), probation: { catalog, publish: events => feed.push(...events) }, ...extra, sessionFactory: (_h, _o, s) => {
+    resolveAgent: req => box.catalog.resolve(req), ...extra, probation: { catalog, publish: events => feed.push(...events), ...(extra.probation?.propose ? { propose: extra.probation.propose } : {}) }, sessionFactory: (_h, _o, s) => {
       last = s;
       return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
         start() { s.changed({ state: 'idle' }); }, send() {},
@@ -155,6 +155,28 @@ describe('probation on run end', () => {
     // already retired: a second pass does nothing
     f.m.probationTick();
     expect(f.feed).toHaveLength(1);
+  });
+
+  it('tells the improvement loop each run start, its one end and every verdict of the user', async () => {
+    const started = vi.fn(), ended = vi.fn(), outcome = vi.fn();
+    const f = fixture({ onRunStarted: started, onRunEnded: ended, onRunOutcome: outcome });
+    const id = probationAgent(f);
+    const c = await f.create({ agentId: id });
+    const runId = f.run(c.id)!.runId;
+    expect(started).toHaveBeenCalledWith(expect.objectContaining({ runId, agentId: id, version: 1 }));
+    f.m.markRun(c.id, 'partial'); f.m.markRun(c.id, 'success');
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(outcome.mock.calls.map(c => c[0].outcome.verdict)).toEqual(['partial', 'success']);
+  });
+  it('with an approval queue the verdict is only proposed: the agent stays in probation until the user decides', async () => {
+    const propose = vi.fn();
+    const f = fixture({ probation: { catalog: undefined as never, propose } });
+    const id = probationAgent(f);
+    const c = await f.create({ agentId: id });
+    f.m.markRun(c.id, 'fail');
+    expect(propose).toHaveBeenCalledWith(expect.objectContaining({ id }), expect.objectContaining({ decision: 'retire' }));
+    expect(f.catalog.list().profiles.find(p => p.id === id)).toMatchObject({ status: 'active', probation: expect.anything() });
+    expect(f.feed).toEqual([]);
   });
 
   it('a run of another agent does not judge it, and an agent kept by Brother is never judged', async () => {
