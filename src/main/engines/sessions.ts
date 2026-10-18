@@ -93,11 +93,12 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
 }
 
 /** The models each engine offers (models:seen): what its CLI listed, and for an HTTP engine, which lists none, its
- *  rows in the brain's table (the user picks one: an API chat has no default model). */
+ *  rows in the brain's table (the user picks one: an API chat has no default model). Claude Code never reports its
+ *  models, so it gets its table rows too: without them a profile with an explicit Claude model could not start (#60). */
 export function withApiModels(seen: ModelsSeen): ModelsSeen {
   const out: ModelsSeen = { ...seen };
   for (const e of engines()) {
-    if (e.kind !== 'api' || out[e.id]?.ids.length) continue;
+    if (e.kind !== 'api' && e.kind !== 'claude' || out[e.id]?.ids.length) continue;
     const ids = registryModels(priceEnginesOf(e));
     if (ids.length) out[e.id] = { ids, at: 0 };
   }
