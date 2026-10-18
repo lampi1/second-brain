@@ -1,12 +1,11 @@
 // "Migliora l'app" in the renderer (ADR 0020): main's ImproveService pushes its state on 'improve:state' (after each
 // read of git, every step of a promotion, the restart notice); this store starts itself on first use (the section or
 // the restart banner), loads 'improve:get' and keeps the last value. Actions: refresh, "Aggiorna" (after the user's
-// confirm), create the section's Regia, dismiss the restart notice; plus which app chat the section shows open.
+// confirm), dismiss the restart notice (the Orchestrator handles app improvements: orchestrator:ensure, store.ts); plus which app chat the section shows open.
 // Used by components/ImprovePage.tsx, components/LaunchBanner.tsx and actions.ts.
-import type { ChatSummary, Harness, ImproveState } from '@shared/contract';
+import type { ImproveState } from '@shared/contract';
 import { createStore } from './createStore';
 import { askConfirm, toast } from './ui';
-import { engineLabel } from '../lib/engines';
 
 export const improve = createStore<ImproveState | null>(null);
 /** the app chat open next to the section's Regia (null = none) */
@@ -55,18 +54,6 @@ export function askPromote(s: ImproveState): void {
       void window.sb.invoke('improve:promote', undefined).then(st => improve.set(st), e => toast(`Aggiornamento non partito: ${errText(e)}`, 'err'));
     },
   });
-}
-
-/** A new app Regia for "Pulisci" in the Regia overlay's "App" tab: main moves the role from the old one; null = failed (told). */
-export async function newAppRegia(harness: Harness): Promise<ChatSummary | null> {
-  try { return await window.sb.invoke('improve:regia', { harness }); } catch (e) { toast(`Regia dell'app non creata: ${errText(e)}`, 'err'); return null; }
-}
-
-export async function createAppRegia(harness: Harness): Promise<void> {
-  try {
-    const c = await window.sb.invoke('improve:regia', { harness });
-    toast(`Regia dell'app creata (${engineLabel(c.harness)})`, 'ok');
-  } catch (e) { toast(`Regia dell'app non creata: ${errText(e)}`, 'err'); }
 }
 
 export function dismissLaunch(): void {

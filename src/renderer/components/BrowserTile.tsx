@@ -4,8 +4,8 @@
 // (lib/viewports.ts), where the real page (a native WebContentsView) is drawn on top. Under the view, the tab's last
 // snapshot fills the placeholder, so overlays and screenshots show the page instead of a hole. An open hand-off (the
 // chat waits for the user: login, MFA) shows its banner between the header and the page (HandoffBanner.tsx).
-// Used by Mosaico, Corsie (the big browser next to its chat) and the focus view.
-import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+// Used by the agents' strips in the Grindhouse (AgentStrips.tsx) and the focus view.
+import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
 import { registerView } from '../lib/viewports';
 import { closeTab, goTab, navigateTab, useApp } from '../store/store';
@@ -25,7 +25,7 @@ function splitUrl(url: string): { host: string; rest: string } {
   } catch { return { host: url, rest: '' }; }
 }
 
-export const BrowserTile = memo(function BrowserTile({ tabId, maximized, grip }: { tabId: string; maximized?: boolean; grip?: ReactNode }) {
+export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tabId: string; maximized?: boolean }) {
   const tab = useApp(s => s.tabs.find(t => t.id === tabId));
   const owner = useApp(s => (tab?.ownerChatId ? s.chats[tab.ownerChatId] : undefined));
   const key = `browser:${tabId}`;
@@ -44,7 +44,6 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized, grip }:
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(tab.ownerChatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
-          {grip}
           <span className="bt-icon" aria-hidden="true">{tab.loading ? <IconSpinner size={14} /> : <IconGlobe size={14} />}</span>
           {editing ? (
             <input className="url-input" defaultValue={tab.url==='about:blank'?'':tab.url} placeholder={t('ui.browserAddress')} autoFocus aria-label={t('ui.browserAddress')} data-testid={`browser-url-input-${tabId}`}

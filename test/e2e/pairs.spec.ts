@@ -1,7 +1,6 @@
 // Chat ↔ browser pairs on the demo (two chats drive a browser each): the chat tile and its browser tile share one
 // accent (class paired, same data-pair, different from the other pair), the browser says "di: <chat>" and a click
-// there goes to the chat, hovering one tile lights up the other; in Mosaico, Corsie (pair view), focus mode, dark and
-// light. Screenshots in test-results/shots/pairs-*.png.
+// there goes to the chat, hovering one tile lights up the other; in the agents column, focus mode, dark and light. Screenshots in test-results/shots/pairs-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import { launchDemo, shot, waitThumbs } from './helpers';
 
@@ -16,11 +15,11 @@ async function expectPaired(page: Page, chat: string, tab: string): Promise<stri
   return p!;
 }
 
-test('a chat and its browser share a color, light up together and link to each other, in every view', async () => {
+test('a chat and its browser share a color, light up together and link to each other, in the column and in focus mode', async () => {
   const { app, page } = await launchDemo();
   await waitThumbs(page);
 
-  // Mosaico
+  // the agents column
   const qa = await expectPaired(page, 'qa', 'tab-qa');
   const sms = await expectPaired(page, 'sms', 'tab-sms');
   expect(qa).not.toBe(sms);
@@ -34,7 +33,7 @@ test('a chat and its browser share a color, light up together and link to each o
   await expect(page.getByTestId('tile-browser-tab-qa')).toHaveClass(/\bpair-hot\b/);
   await expect(page.getByTestId('tile-chat-qa')).toHaveClass(/\bpair-hot\b/);
   await expect(page.getByTestId('tile-browser-tab-sms')).not.toHaveClass(/\bpair-hot\b/);
-  await shot(page, 'pairs-mosaico-hover-dark');
+  await shot(page, 'pairs-agents-hover-dark');
   await page.getByTestId('tile-browser-tab-sms').locator('.tile-head').hover();
   await expect(page.getByTestId('tile-chat-sms')).toHaveClass(/\bpair-hot\b/);
   await expect(page.getByTestId('tile-chat-qa')).not.toHaveClass(/\bpair-hot\b/);
@@ -46,7 +45,7 @@ test('a chat and its browser share a color, light up together and link to each o
   await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
   await page.mouse.move(2, 2);
-  await shot(page, 'pairs-mosaico-light');
+  await shot(page, 'pairs-agents-light');
   await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
 
@@ -57,19 +56,5 @@ test('a chat and its browser share a color, light up together and link to each o
   expect(await expectPaired(page, 'qa', 'tab-qa')).toBe(qa);
   await shot(page, 'pairs-focus-dark');
   await page.getByTestId('focus-exit').click();
-
-  // Corsie: the strip marks the owner's color; a thumbnail opens the browser next to its chat, same color
-  await page.getByTestId('view-toggle-corsie').click();
-  await expect(page.getByTestId('thumb-tab-qa').locator('.pair-dot')).toHaveCount(1);
-  await page.getByTestId('thumb-tab-qa').click();
-  await expect(page.getByTestId('corsie-pair')).toBeVisible();
-  expect(await expectPaired(page, 'qa', 'tab-qa')).toBe(qa);
-  await shot(page, 'pairs-corsie-pair-dark');
-  // leaving the pair view with the mouse on the browser (it unmounts, no pointerleave): nothing stays lit
-  await page.getByTestId('corsie-pair').getByTestId('tile-browser-tab-qa').locator('.tile-head').hover();
-  await expect(page.locator('.pair-hot')).not.toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('corsie-pair')).toBeHidden();
-  await expect(page.locator('.pair-hot')).toHaveCount(0);
   await app.close();
 });

@@ -1,24 +1,23 @@
-/* Content-sized row-major mosaic. Native views are suspended during drag/snap by AgentsWorkspace. */
-.agents-workspace { display:flex; flex-direction:column; min-width:0; min-height:0; height:100%; gap:6px; }
-.workspace-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 8px; }
-.workspace-canvas { flex:1; min-height:0; min-width:0; overflow:auto; padding:2px; scrollbar-gutter:stable; }
-.workspace-grid { display:grid; align-items:stretch; min-width:0; padding-bottom:12px; }
-.agent-pane { display:flex; flex-direction:column; position:relative; min-width:0; min-height:0; }
+/* The agents' strips in the Grindhouse: one column in the Orchestrator's order (AgentStrips.tsx), an area heading before
+   each group, each browser right under its chat. A collapsed chat is a short strip; an expanded chat and a browser get
+   a fixed share of the window, so the transcript scrolls inside and the native page view has a stable rect. */
+.agent-strips { min-width:0; }
+.workspace-column { display:flex; flex-direction:column; gap:8px; min-width:0; padding-bottom:12px; }
+.agent-pane-wrap { min-width:0; animation:strip-enter 260ms var(--ease) both; animation-delay:calc(var(--row-index, 0) * 30ms); }
+@keyframes strip-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .agent-pane-wrap { animation:none; } }
+.workspace-area { margin:10px 2px 2px; font:600 var(--fs-s) var(--font-display); color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; }
+.agent-pane-wrap:first-child > .workspace-area { margin-top:2px; }
+.agent-pane { display:flex; flex-direction:column; position:relative; min-width:0; min-height:0; height:clamp(360px, 62vh, 720px); }
+.agent-pane.strip-pane { height:auto; }
+.agent-pane.browser-pane { height:clamp(320px, 55vh, 640px); }
 .agent-pane-content { flex:1; min-height:0; min-width:0; }
 .agent-pane-content > .tile { height:100%; width:100%; min-height:0; }
-/* Pair identity keeps its border/stripe; animating a large blur while the grip captures the pointer stalls raster. */
-.agents-workspace .tile.pair-hot { box-shadow:none; }
-.agents-workspace .tile { transition:none; }
-.workspace-grip { display:flex; align-items:center; padding:0 4px; min-width:28px; min-height:24px; font-size:16px; border:0; background:transparent; color:inherit; cursor:grab; touch-action:none; user-select:none; }
-.workspace-grip:active { cursor:grabbing; }
-.workspace-grip:focus-visible { outline:2px solid var(--accent,#7a8cff); outline-offset:1px; }
-.workspace-grip:disabled { visibility:hidden; }
-.pane-dragging > .agent-pane-content > .tile { outline:1px dashed var(--accent,#7a8cff); }
-.workspace-drag-preview { position:fixed; z-index:10000; pointer-events:none; will-change:transform; padding:8px 14px; max-width:300px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; background:var(--surface,#191922); color:var(--text,#eee); border:1px solid var(--accent,#7a8cff); border-radius:8px; box-shadow:0 4px 16px #0004; }
-.agent-pane[data-drop]::after { content:""; position:absolute; pointer-events:none; background:var(--accent,#7a8cff); width:4px; top:24px; bottom:0; border-radius:4px; z-index:6; }
-.agent-pane[data-drop="before"]::after { left:-8px; }
-.agent-pane[data-drop="after"]::after { right:-8px; }
-.workspace-max { min-height:calc(100vh - 190px - var(--regia-t,0px)); }
+/* Pair identity keeps its border/stripe; a large blur on hover costs raster time on long columns. */
+.agent-strips .tile.pair-hot { box-shadow:none; }
+.agent-strips .tile { transition:none; }
+.workspace-max { min-height:calc(100vh - 190px - var(--regia-t,0px)); max-width:none; }
+.workspace-max .agent-pane { height:calc(100vh - 190px - var(--regia-t,0px)); }
 .chat-tile .tile-head { padding:8px 10px; }
 .chat-tile .th-row { min-width:0; gap:6px; flex-wrap:wrap; }
 .chat-topic-row { display:flex; align-items:center; gap:8px; min-width:0; justify-content:space-between; min-height:18px; flex-wrap:wrap; row-gap:4px; }
@@ -34,10 +33,6 @@
 .chat-expand { white-space:nowrap; }
 .chat-tile.is-strip .tile-requests { max-height:180px; overflow:auto; }
 .workspace,.workspace.no-regia { padding-top:calc(var(--gap) + var(--regia-t,0px)); }
-.regia-dock[data-placement="top"] { max-width:calc(100vw - 24px); }
-.regia-dock[data-placement="top"] .regia-dock-bar { width:100%; justify-content:flex-start; }
-.regia-dock[data-placement="top"] .regia-resize { top:auto; left:0; right:0; bottom:-4px; width:100%; height:9px; cursor:row-resize; z-index:2; background:none; border-radius:0; }
-.regia-dock[data-placement="top"] .regia-resize:hover { background:linear-gradient(transparent 4px,var(--regia-line-2) 4px,var(--regia-line-2) 5px,transparent 5px); }
 .regia-resize:focus-visible { outline:2px solid var(--focus); }
 .regia-tile .tile-head { padding:8px 10px; }
 .regia-tile .th-row { flex-wrap:wrap; gap:6px; }

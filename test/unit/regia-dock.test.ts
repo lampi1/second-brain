@@ -53,10 +53,10 @@ describe('unread replies', () => {
 });
 
 describe('the widget state across restarts', () => {
-  it('remembers existing choices; a first start opens the full-width top coordinator', () => {
+  it('remembers legacy choices; a first start opens the coordinator column', () => {
     const first = loadPrefs(null, 5000);
-    expect(first).toMatchObject({ regiaOpen: true,regiaPlacement:'top', regiaSize: null, regiaTab: null, regiaSeenAt: 5000 });
-    expect(loadPrefs(JSON.stringify({regiaOpen:false}),5000)).toMatchObject({regiaOpen:false,regiaPlacement:'corner'});
+    expect(first).toMatchObject({ regiaOpen: true, regiaSize: null, regiaTab: null, regiaSeenAt: 5000 });
+    expect(loadPrefs(JSON.stringify({regiaOpen:false}),5000)).toMatchObject({regiaOpen:false});
     const saved = loadPrefs(JSON.stringify({ regiaOpen: true, regiaSize: { w: 500, h: 420 }, regiaSizeV: DEFAULT_V, regiaTab: 'r2', regiaSeenAt: 1234 }), 5000);
     expect(saved).toMatchObject({ regiaOpen: true, regiaSize: { w: 500, h: 420 }, regiaTab: 'r2', regiaSeenAt: 1234 });
   });

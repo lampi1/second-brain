@@ -58,7 +58,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
   // the frames the map draws (a burst of WebGL draw calls = one frame), as in map-perf.spec.ts
   await page.evaluate(() => {
     const w = window as unknown as W;

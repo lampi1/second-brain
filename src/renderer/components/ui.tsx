@@ -3,6 +3,7 @@
 // and the global TooltipLayer (any element with data-tip gets a tooltip; it avoids covering browser views, which are
 // native and draw above the page). Used by every component.
 import { createPortal } from 'react-dom';
+import { inSelectList } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode, type RefObject } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { stateInfo } from '../lib/format';
@@ -84,10 +85,11 @@ export function Popover({ anchor, open, onClose, children, align = 'end', testid
   useEffect(() => {
     if (!open) return;
     const down = (e: PointerEvent) => {
-      if (ref.current?.contains(e.target as Node) || anchor.current?.contains(e.target as Node)) return;
+      if (ref.current?.contains(e.target as Node) || anchor.current?.contains(e.target as Node) || inSelectList(e.target)) return;
       onClose();
     };
     const key = (e: KeyboardEvent) => {
+      if (inSelectList(e.target)) return;
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); anchor.current?.focus(); }
       if(kind==='dialog'){
         if(e.key==='Tab'){
@@ -150,7 +152,7 @@ export function Modal({ onClose, children, label, testid, className = '', top }:
       if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled]), [autofocus]:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])') ?? el).focus();
     }, 0);
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Escape') { if (inSelectList(e.target)) return; e.preventDefault(); e.stopPropagation(); onClose(); return; }
       if (e.key !== 'Tab' || !el) return;
       const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.hasAttribute('disabled') && x.offsetParent !== null);
       if (!f.length) return;

@@ -2,7 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { prepareUpdateRestart } from '../../src/main/update/restart';
+import { prepareUpdateRestart, RESTART_CANCEL_MS, RESTART_READY_MS } from '../../src/main/update/restart';
+
+// Worst case = the product's ready window plus its cancel window, with margin for a loaded PC.
+const BUDGET = RESTART_READY_MS + RESTART_CANCEL_MS + 15_000;
 
 const fixtures = path.resolve(import.meta.dirname, '../../test-results/restart-fixtures');
 function fixture(tampered = false) {
@@ -25,11 +28,11 @@ describe.skipIf(process.platform !== 'win32')('update restart native preparation
       expect(process.kill(process.pid, 0)).toBe(true);
     } finally { await handoff.cancel(); }
     await expect(handoff.cancel()).resolves.toBeUndefined();
-  }, 12000);
+  }, BUDGET);
 
   it('rejects any extra launcher code before reporting ready', async () => {
     await expect(prepareUpdateRestart({ base: fixture(true), pid: process.pid })).rejects.toThrow('prima della conferma');
-  }, 12000);
+  }, BUDGET);
 
   it('rejects a different PID without spawning any waiter', async () => {
     await expect(prepareUpdateRestart({ base: fixture(), pid: process.pid + 1 })).rejects.toThrow('processo Windows corrente');

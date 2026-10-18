@@ -151,14 +151,20 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): Co
 
 /** "Comando da eseguire" requests (run/asks.ts): they watch every event main sends to the page (the emitter is tapped
  *  here, for the real app and the demo alike) and notify through the feed like a question ("Domanda per te"). */
-export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number): CommandAsks {
+export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
     // through the emitter as it is when called: the taps added later (the Regia's news) hear it too
-    emit: (ch, p) => ctx.emitter.emit(ch, p),
+    emit: (ch, p) => {
+      ctx.emitter.emit(ch, p);
+      if (ch === 'pending:resolved') { const x = p as { chatId: string; requestId: string }; chats?.commandDone?.(x.chatId, x.requestId); }
+    },
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
     ...(now ? { now } : {}),
-    onAsk: (req, title) => brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]),
+    onAsk: (req, title) => {
+      chats?.commandAsked?.(req.chatId, req.id);
+      brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]);
+    },
   });
   ctx.emitter.emit = (ch, p) => { send(ch, p); asks.observe(ch, p); };
   return asks;
@@ -278,7 +284,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAllowed } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
@@ -307,7 +313,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
-  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false);
+  // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
+  // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
+  const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
+  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false, () => progressService.award('first-agent'));
   addChatTools([agentCatalogTool(() => agents.list()), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
@@ -412,6 +421,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
+  setBrowserAllowed(id => manager.browserAllowed(id));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
   manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
@@ -425,8 +435,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // brain domains (ADR 0059): a new chat reads the brain, so the remote's changes land first (bounded, throttled)
   syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
-  // Retired milestones remain readable for compatibility; no new awards or content deletion.
-  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
   if (!process.env.SB_TEST) sweeper.start();
@@ -452,7 +460,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([showUiTool(artifacts)]);
 
   const runner = commandRunner(ctx, chats);
-  const asks = attachCommandAsks(ctx, runner, brain);
+  const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
   try {
@@ -537,7 +545,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       checkpoint: () => manager.checkpointForUpdate(),
     },
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
-    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
+    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
     shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },

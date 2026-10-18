@@ -60,7 +60,7 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
   // the queue (Ctrl+J): the questions window is the one popup, the Regia shows no card beside it
   await page.keyboard.press('Control+J');
   await expect(page.getByTestId('qwin')).toBeVisible();
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   await expect(regia.locator('[data-request-key]')).toHaveCount(0);
   await expect(regia.getByTestId('regia-next')).toContainText('Quale tema?');
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);

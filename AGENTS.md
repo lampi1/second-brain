@@ -6,7 +6,8 @@ questions and permissions as panels, watches internal browsers that agents drive
 `docs/adr/`. Human contributors: `CONTRIBUTING.md`. UI language Italian; code, comments, commits and docs English.
 
 Words used everywhere: **Regia** = the coordinating chat (it plans, opens work chats, answers their mail; one or more,
-docked bottom-right); **Mosaico / Corsie** = the two views of the chats (free tiles / columns by state); **brain** = the
+docked bottom-right); **Grindhouse** = the home page, the one place for the agents (a strip each, the browsers they drive under them; the
+old Mosaico / Corsie views are retired, ADR 0068); **brain** = the
 user's folder of notes, rules and tools the agents read and write (a template ships in the product); **stable / dev** =
 the user's frozen release vs. anything run from this repo; **Aggiorna** (the button) = promote a tested main to the stable release.
 

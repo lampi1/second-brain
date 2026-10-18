@@ -1,0 +1,52 @@
+/* Shared shell, control and motion treatment. Imported last to keep one visual system
+   across the existing app and embedded brain pages without changing their data flows. */
+.regia-column.regia-ov { border-radius: 0; border: 0; border-left: 1px solid var(--border-2); box-shadow: -12px 0 40px #00000012; background: var(--regia-bg); opacity: 1; animation: panel-enter var(--dur-slow) var(--ease); }
+.regia-column .regia-bar { min-height: 48px; padding: 0 20px; background: transparent; border-bottom: 1px solid var(--border); gap: 10px; }
+.regia-column-mark { color: var(--blue); font-size: 20px; }
+.regia-column-hint { color: var(--text-3); font-size: 11px; }
+.regia-column .regia-tile { border: 0; border-radius: 0; box-shadow: none; }
+.regia-column .tile-head { padding: 16px 20px 10px; }
+.regia-column .chat-input { margin: 12px; border-radius: 12px; }
+.regia-column-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 2; transition: background var(--dur-fast); }
+.regia-column-resize:hover, .regia-column-resize:focus-visible { background: var(--blue-line); outline: none; }
+.regia-setup { display: flex; flex-direction: column; gap: 16px; padding: 32px 24px; margin: auto 0; }
+.regia-setup h2 { font-size: 26px; letter-spacing: -.8px; margin: 0; }
+.regia-setup p { color: var(--text-3); line-height: 1.7; margin: 0; }
+.regia-setup label { display: grid; gap: 8px; color: var(--text-2); }
+.page-body { animation: panel-enter var(--dur-slow) var(--ease); }
+/* the Grindhouse holds native browser views, placed from the layout: a fade only, no slide under them */
+[data-testid="page-home"] > .page-body { animation-name: fadeIn; }
+/* progress that moves, never jumps: the context bar and the usage meters */
+.th-ctx-bar b { transition: width var(--dur-slow) var(--ease), background var(--dur-fast); }
+.btn, .bx-btn, .icon-btn { transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast); }
+.btn:hover:not(:disabled), .bx-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled), .bx-btn:active:not(:disabled) { transform: translateY(0); }
+.btn-primary { box-shadow: inset 0 1px 0 #ffffff20, 0 3px 8px #00000025; }
+.popover { border-color: var(--border-2); background: var(--surface-2); border-radius: 10px; padding: 5px; box-shadow: var(--shadow-pop); animation: picker-enter var(--dur-fast) var(--ease); }
+.menu-item { border-radius: 6px; min-height: 32px; }
+.ui-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; max-width: 100%; min-width: 0; border: 1px solid var(--border-2); border-radius: 7px; padding: 6px 9px 6px 10px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast), box-shadow var(--dur-fast); }
+.ui-select:hover:not(:disabled), .ui-select.open { border-color: var(--border-3); background: var(--surface-3); }
+.ui-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ui-select:disabled { opacity: .45; cursor: default; }
+.ui-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select-chevron { flex: none; color: var(--text-3); transition: rotate var(--dur-fast) var(--ease); }
+.ui-select.open .ui-select-chevron { rotate: 180deg; }
+.ui-select-list { position: fixed; z-index: 3000; box-sizing: border-box; max-width: calc(100vw - 16px); max-height: min(360px, 60vh); overflow: auto; padding: 5px; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface-2); color: var(--text); font-size: var(--fs-s); box-shadow: var(--shadow-pop); transform-origin: top center; animation: picker-enter var(--dur-fast) var(--ease); }
+.ui-select-list.up { transform-origin: bottom center; animation-name: picker-enter-up; }
+.ui-select-group { padding: 8px 10px 4px; color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.ui-select-option { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 6px 8px 6px 10px; border-radius: 6px; cursor: pointer; outline: none; white-space: nowrap; }
+.ui-select-option.active { background: var(--surface-4); }
+.ui-select-option[aria-selected="true"] { color: var(--blue-strong); }
+.ui-select-option[aria-disabled] { opacity: .4; cursor: default; }
+.ui-select-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-select-check { flex: none; display: inline-flex; width: 13px; color: var(--blue); }
+@keyframes panel-enter { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes picker-enter { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes picker-enter-up { from { opacity: 0; transform: translateY(4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes status-breathe { 0%, 100% { opacity: .5; box-shadow: 0 0 0 0 var(--blue-bg); } 50% { opacity: 1; box-shadow: 0 0 0 4px var(--blue-bg); } }
+.pill-run .pill-dot { animation: status-breathe 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .regia-column.regia-ov, .page-body, .popover, .ui-select-list, .pill-run .pill-dot { animation: none; }
+  .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .regia-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }
+  .btn:hover:not(:disabled), .bx-btn:hover:not(:disabled) { transform: none; }
+}

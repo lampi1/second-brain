@@ -1,6 +1,6 @@
 // End-to-end: "Comando da eseguire" (main/run/asks.ts, shared/command-ask.ts) on the demo. A chat ends its turn with a
-// shell block for the user: the block becomes a request card in the asking chat's own tile (the Mosaico has no "Ti
-// aspettano" strip any more, ADR 0019): the command, Esegui / Copia / Non serve, the chat's name in its label, and the
+// shell block for the user: the block becomes a request card in the asking chat's own tile (the agents workspace has no
+// "Ti aspettano" strip, ADR 0019): the command, Esegui / Copia / Non serve, the chat's name in its label, and the
 // open requests on screen go up by one; Esegui there runs it in the chat that proposed it (output under the block) and
 // the card leaves; the chat's explanation before the block is on the card, in sight. An example in the middle of an explanation asks for nothing. A work chat's command never shows in
 // the Regia, its open overlay included (the user, 2026-10-13); "Non serve" on the tile card takes it away. On a page (DevOps) it
@@ -8,7 +8,7 @@
 // its result by itself (run/results.ts). Screenshots: test-results/shots/command-ask-lane.png (the tile card),
 // command-ask-not-regia.png, command-ask-layer.png, command-run-result.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerPage, layerState, shot, windowShot } from './helpers';
+import { expandChats, launchDemo, layerPage, layerState, shot, windowShot } from './helpers';
 
 type Demo = { turn(c: string, t: string): void; asks(): { reads: number; pending: string[] } };
 const turn = (app: ElectronApplication, chatId: string, text: string) =>
@@ -26,11 +26,12 @@ const ASK = "Fatto: il fix è in main. Ora lancia il controllo:\n\n```powershell
 
 test('a command left by a chat waits in its tile and runs from there; an example asks for nothing', async () => {
   const { app, page } = await launchDemo();
-  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the Mosaico has no "Ti aspettano" strip (ADR 0019)
-  // the open requests: the demo's three (Regia, QA, Feedback); the Regia is reduced (ADR 0021): its one counted on its
-  // button, the other two in their tiles
-  await expect(page.getByTestId('regia-pill-count')).toHaveText('1');
-  const asks = page.locator('[data-request-key]');
+  await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
+  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip (ADR 0019)
+  // the open requests: the demo's three (Regia, QA, Feedback); the Orchestrator column (ADR 0068) shows its own, the
+  // strips the other two in their tiles
+  await expect(page.getByTestId('tile-regia').locator('[data-request-key]')).toHaveCount(1);
+  const asks = page.getByTestId('view-agents').locator('[data-request-key]');
   await expect(asks).toHaveCount(2);
 
   // an example in the middle of an explanation: no request (the turn's end was read, nothing asked)
@@ -72,6 +73,7 @@ test('a command left by a chat waits in its tile and runs from there; an example
 
   // a production block: the card asks a second click and says why (never clicked twice here)
   await page.evaluate(() => window.sb.invoke('chat:reopen', { chatId: 'review' })); // closed in the demo
+  await expandChats(page, 'review');
   await turn(app, 'review', 'Questo lo lanci tu:\n```bash\naz webapp restart -n app-prod -g rg-prod\n```');
   const prod = page.getByTestId('tile-chat-review').locator('[data-kind="command"]');
   await expect(prod).toHaveCount(1);
@@ -88,6 +90,7 @@ test('a command left by a chat waits in its tile and runs from there; an example
 
 test('a work chat\'s command never shows in the Regia: it is a card in its own tile; "Non serve" takes it away', async () => {
   const { app, page } = await launchDemo({ regia: true });
+  await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
   const regia = page.getByTestId('tile-regia');
   await turn(app, 'mappa', ASK);
   const card = page.getByTestId('tile-chat-mappa').locator('[data-kind="command"]');
@@ -113,6 +116,7 @@ test('a work chat\'s command never shows in the Regia: it is a card in its own t
 
 test('on a page the command floats in the request layer and Esegui there runs it in its chat', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
   // the demo's own requests answered first, so the command is the card shown in full
   for (const p of await page.evaluate(() => window.sb.invoke('chat:pending', undefined))) {
     const answer = p.type === 'permission' ? { kind: 'permission' as const, allow: false } : { kind: 'question' as const, answers: { [p.questions![0]!.question]: p.questions![0]!.options[0]!.label } };
@@ -140,6 +144,7 @@ test('on a page the command floats in the request layer and Esegui there runs it
 
 test('when a run of Esegui ends, the chat that proposed it gets the exit code and the output by itself', async () => {
   const { app, page } = await launchDemo({ env: { SB_RUN_RESULTS: '1', SB_RUN_RESULTS_MS: '200' } });
+  await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
   await turn(app, 'mappa', ASK);
   const card = page.getByTestId('tile-chat-mappa').locator('[data-kind="command"]');
   await expect(card).toHaveCount(1);

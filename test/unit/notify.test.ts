@@ -40,7 +40,7 @@ describe('notify', () => {
     expect(sectionOf('reflection')).toBe('idee');
     expect(sectionOf('playbook')).toBe('qualita');
     expect(sectionOf('budget')).toBe('costi');
-    expect(sectionOf('chat-done')).toBe('workspace');
+    expect(sectionOf('chat-done')).toBe('home');
     expect(sectionOf('mail-blocked')).toBeNull(); // Comunicazione is gone: center (and bell) only
     expect(sectionOf('sync-error')).toBeNull(); // Oggi (its badge) is gone: toast + center only
     expect(sectionOf('now')).toBeNull();
@@ -48,9 +48,9 @@ describe('notify', () => {
 
   it('badges count unread events after the last visit; reading or visiting clears them', () => {
     const feed = [ev('a', 'budget', 30), ev('b', 'budget', 20), ev('c', 'chat-failed', 10), ev('d', 'budget', 5, { away: true }), ev('e', 'mail-blocked', 40)];
-    expect(badges(feed, emptyRead)).toEqual({ costi: 2, workspace: 1 });
-    expect(badges(feed, visitSection(emptyRead, 'costi', 25))).toEqual({ costi: 1, workspace: 1 });
-    expect(badges(feed, markRead(emptyRead, ['a', 'b']))).toEqual({ workspace: 1 });
+    expect(badges(feed, emptyRead)).toEqual({ costi: 2, home: 1 });
+    expect(badges(feed, visitSection(emptyRead, 'costi', 25))).toEqual({ costi: 1, home: 1 });
+    expect(badges(feed, markRead(emptyRead, ['a', 'b']))).toEqual({ home: 1 });
     const all = markAllRead(emptyRead, 100);
     expect(feed.some(e => isUnread(e, all))).toBe(false);
   });
@@ -70,7 +70,7 @@ describe('notify', () => {
   });
 
   it('internal links', () => {
-    expect(linkOfEvent(ev('1', 'error', 1, { chatId: 'qa' }))).toBe('sb://workspace/chat-qa');
+    expect(linkOfEvent(ev('1', 'error', 1, { chatId: 'qa' }))).toBe('sb://home/chat-qa');
     // ideas and reflections open Idee filtered by author (the AI's: "Dall'IA"), not the raw file
     expect(linkOfEvent(ev('7', 'idea', 1, { file: 'ideas.md', who: "dell'IA" }))).toBe('sb://idee/ia');
     expect(linkOfEvent(ev('8', 'idea', 1, { file: 'ideas.md', who: 'tua' }))).toBe('sb://idee/mie');

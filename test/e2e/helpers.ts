@@ -2,8 +2,8 @@
 // too), optionally in the demo (SB_DEMO=1, frozen = SB_DEMO_FREEZE=1) at a fixed window size and color scheme, wait
 // until it is settled (data loaded, clock frozen, browser snapshots in), read what the UI reported to main for the
 // browser views (globalThis.__sbDemo, demo only) and save screenshots in test-results/shots/. A spec may seed the
-// fresh profile's settings (`config`, e.g. questionsModal). The Regia starts reduced to its top-bar button (ADR 0021); `regia: true` opens its overlay.
-import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
+// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `regia: true` waits for its chat.
+import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -76,23 +76,35 @@ export async function launchDemo(opts: { freeze?: boolean; width?: number; heigh
   const l = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: freeze ? '1' : '0', ...opts.env }, userData);
   await setSize(l.app, width, height);
   await l.page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-  await expect(l.page.locator('[data-regia-overlay]')).toBeVisible(); // the Regia widget: collapsed or, as left, expanded
+  await expect(l.page.locator('[data-regia-overlay]')).toBeVisible(); // the persistent Orchestrator column
   if (opts.regia) await openRegia(l.page);
   if (freeze) await expect(l.page.locator('html[data-clock="frozen"]')).toHaveCount(1);
   await l.page.mouse.move(2, 2);
   return l;
 }
 
-/** Expands the Regia widget (its collapsed bar, bottom-right) unless it is expanded already. */
+/** The Orchestrator column is always open (ADR 0068): waits until it shows its chat. */
 export async function openRegia(page: Page): Promise<void> {
-  if (!(await page.getByTestId('regia-overlay').isVisible())) await page.getByTestId('regia-pill').click();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('tile-regia')).toBeVisible();
 }
 
-/** Collapses the Regia widget to its bar unless it is collapsed already. */
-export async function closeRegia(page: Page): Promise<void> {
-  if (await page.getByTestId('regia-overlay').isVisible()) await page.getByTestId('regia-collapse').click();
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+/** Opens the strips of these chats in the Grindhouse (collapsed by default: their transcript and input are hidden). */
+export async function expandChats(page: Page, ...ids: string[]): Promise<void> {
+  for (const id of ids) {
+    const toggle = page.getByTestId(`chat-expand-${id}`);
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  }
+}
+
+/** Picks `value` in a custom Select (components/Select.tsx: a trigger button and a portalled listbox, no native
+ *  <select>, so no selectOption); its value is the trigger's data-value. */
+export async function choose(select: Locator, value: string): Promise<void> {
+  await select.click();
+  const testid = await select.getAttribute('data-testid');
+  await select.page().getByTestId(`${testid}-list`).locator(`[role="option"][data-value="${value}"]`).click();
+  await expect(select).toHaveAttribute('data-value', value);
 }
 
 /** Wait until the browser placeholders on screen show their snapshot (so screenshots show the pages). */
@@ -113,8 +125,16 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
-/** Runs an action of the top bar's "…" menu (browsers, questions window, Credenziali, Migliora: TopBar.tsx MoreButton). */
-export async function moreAction(page: Page, item: 'more-browsers' | 'more-qwin' | 'more-credentials' | 'more-improve'): Promise<void> {
+/** Opens the agent studio from where it lives since the Grindhouse (ADR 0068): the Home footer's "Gestisci agenti"
+ *  (the sidebar shows "Agenti" only when the chosen role lists it). */
+export async function openAgents(page: Page): Promise<void> {
+  await page.getByTestId('nav-home').click();
+  await page.getByTestId('home-manage-agents').click();
+  await expect(page.getByTestId('agent-studio')).toBeVisible();
+}
+
+/** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
+export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
   await page.getByTestId('topbar-more').click();
   await page.getByTestId(item).click();
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);

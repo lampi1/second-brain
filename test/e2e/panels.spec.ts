@@ -3,7 +3,7 @@
 // multi-select as checkboxes with a counted "Conferma", several questions as "1 di 2", the same panel in the lane and
 // in the Regia; Cursor questions get "Altro…" too, with a note on how Cursor receives it. Screenshots in test-results/shots/panels-*.png (looked at for every change of RequestPanel.tsx).
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { closeRegia, launchDemo, openRegia, shot } from './helpers';
+import { launchDemo, openRegia, shot } from './helpers';
 
 type Demo = { ask(c: string, r: object): void };
 const ask = (app: ElectronApplication, chatId: string, req: object) =>
@@ -70,7 +70,6 @@ for (const scheme of ['dark', 'light'] as const) {
     await openRegia(page);
     await expect(page.getByTestId('request-regia-regia-q1-other')).toBeVisible();
     await shot(page, `panels-lane-regia-${scheme}`);
-    await closeRegia(page); // reduced again
     await page.getByTestId('request-qa-qa-q1-other').click();
     await expect(page.getByTestId('request-qa-qa-q1-other-input')).toBeFocused();
     await page.getByTestId('request-qa-qa-q1-other-input').fill('scrivo io');

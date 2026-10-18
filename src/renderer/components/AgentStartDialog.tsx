@@ -15,6 +15,7 @@ import { AgentReadiness } from './AgentReadiness';
 import { Keys, Modal } from './ui';
 import {roleAgents,profileCanStart} from '../lib/role-consumers';
 import {t} from '../i18n';
+import { Select } from './Select';
 
 export function AgentStartDialog() {
   const { catalog, setup, error: catalogError } = useAgents();
@@ -59,11 +60,11 @@ export function AgentStartDialog() {
     <form onSubmit={e => { e.preventDefault(); void create(); }} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (!e.repeat) void create(); } }}>
       <div className="modal-head"><h2>{t(asRegia?'start.regiaTitle':'start.agentTitle')}</h2><span className="sp" /><Keys combo={t('start.shortcut')} /></div>
       <div className="modal-body">
-        <label className="field"><span>{t('roleFlow.agent')}</span><select value={chosen??profile?.id??''} onChange={e => choose(e.target.value)} disabled={busy} data-testid="newchat-agent">
+        <label className="field"><span>{t('roleFlow.agent')}</span><Select value={chosen??profile?.id??''} onChange={e => choose(e.target.value)} disabled={busy} data-testid="newchat-agent">
           {chosen&&!profile&&<option value={chosen}>{t('roleFlow.unavailable')}</option>}
           {suggested.length>0&&<optgroup label={t('roleFlow.suggested')}>{suggested.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
           <optgroup label={t('roleFlow.catalog')}>{profiles.filter(p=>!suggested.some(item=>item.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
-        </select></label>
+        </Select></label>
         {unavailable&&<p role="status">{t('roleFlow.unavailable')}</p>}
         {profile && <div className="agent-start-owner"><AgentAvatar avatar={profile.avatar} name={profile.name} /><p>{profile.purpose}</p></div>}
         <button type="button" className="link-btn" onClick={() => { closeModal(); go({ page: 'agenti' }); }}>{t('start.editAgent')}</button>
@@ -76,7 +77,7 @@ export function AgentStartDialog() {
         <details className="advanced" data-testid="newchat-advanced"><summary>{t('start.details')}</summary>
           <label className="field"><span>{t('start.conversationName')}</span><input value={title} onChange={e => setTitle(e.target.value)} data-testid="newchat-title" /></label>
           <label className="field"><span>{t('start.folder')}</span><input value={cwd} onChange={e => setCwd(e.target.value)} data-testid="newchat-cwd" /></label>
-          {profile && engineCan(profile.engine, 'permissionMode') && <label className="field"><span>{t('start.permissions')}</span><select value={permissionMode} onChange={e => setPermissionMode(e.target.value as PermissionMode | '')} data-testid="newchat-perm"><option value="">{t('start.defaultPermissions')}</option>{PERMISSION_MODES.map(p => <option key={p} value={p}>{permissionLabel(p)}</option>)}</select></label>}
+          {profile && engineCan(profile.engine, 'permissionMode') && <label className="field"><span>{t('start.permissions')}</span><Select value={permissionMode} onChange={e => setPermissionMode(e.target.value as PermissionMode | '')} data-testid="newchat-perm"><option value="">{t('start.defaultPermissions')}</option>{PERMISSION_MODES.map(p => <option key={p} value={p}>{permissionLabel(p)}</option>)}</Select></label>}
           {profile && engineCan(profile.engine, 'worktree') && <label className="check"><input type="checkbox" checked={worktree} onChange={e => setWorktree(e.target.checked)} data-testid="newchat-worktree" />{t('start.worktree')}</label>}
         </details>
         {!info?.brainRoot && !cwd && <button type="button" className="btn btn-ghost" onClick={() => { closeModal(); openModal('setup'); }}>{t('start.connectMemory')}</button>}

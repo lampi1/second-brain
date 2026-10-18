@@ -31,9 +31,9 @@ describe('renewRegia', () => {
   it('the handoff carries the last exchanges (text only), a link to the old Regia and now.md', () => {
     const h = regiaHandoff('r');
     expect(h).toContain('Utente: che si fa adesso?');
-    expect(h).toContain('Regia: Prima la QA bloccata.');
+    expect(h).toContain('Orchestrator: Prima la QA bloccata.');
     expect(h).not.toContain('Bash');
-    expect(h).toContain('sb://workspace/chat-r');
+    expect(h).toContain('sb://home/chat-r');
     expect(h).toContain('C:/brain/now.md');
   });
 

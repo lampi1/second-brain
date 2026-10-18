@@ -144,6 +144,20 @@ describe('Agent definitions v2', () => {
     expect(() => c.save(draft({ avatar: { kind: 'symbol', value: 'bug', tone: 'gold' as never } }))).toThrow(/Colore/);
   });
 
+  it('refuses tools beyond reading on the API engine and hands the policy to the chat it starts', () => {
+    const api: AgentModelChoice = { ...choices()[0]!, engine: 'anthropic', label: 'Anthropic API', models: [{ id: 'api-model', name: 'API model' }] };
+    const c = new AgentCatalogService({ userData: tmp(), models: () => [...choices(), api] });
+    expect(() => c.save(draft({ engine: 'anthropic', model: 'api-model', tools: { allow: ['read', 'edit'] } }))).toThrow(/motore API/);
+    expect(c.save(draft({ engine: 'anthropic', model: 'api-model', tools: { allow: ['read'] } })).tools).toEqual({ allow: ['read'] });
+    const p = c.save(draft({ tools: { allow: ['read', 'edit'] }, permissionCeiling: 'default' }));
+    expect(c.resolve({ harness: 'claude', cwd: '.', agentId: p.id }).policy).toEqual({ tools: { allow: ['read', 'edit'] }, ceiling: 'default' });
+    const ceilingOnly = c.save(draft({ name: 'Solo limite', permissionCeiling: 'plan' }));
+    expect(c.resolve({ harness: 'claude', cwd: '.', agentId: ceilingOnly.id }).policy).toEqual({ tools: null, ceiling: 'plan' });
+    const free = c.save(draft({ name: 'Libero' }));
+    expect(c.resolve({ harness: 'claude', cwd: '.', agentId: free.id }).policy).toBeNull();
+    expect(c.resolve({ harness: 'claude', cwd: '.' }).policy).toBeNull();
+  });
+
   it('keeps a corrupt history file and suspends edits with a visible problem', () => {
     const dir = tmp();
     service(dir).save(draft());

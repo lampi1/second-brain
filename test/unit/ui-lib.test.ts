@@ -1,10 +1,10 @@
 // Unit tests of the renderer's pure helpers: Italian formatting (lib/format.ts), fuzzy search (lib/fuzzy.ts),
-// Mosaico geometry (lib/grid.ts) and the remembered preferences parser (store/ui.ts loadPrefs).
+// workspace tiles (lib/grid.ts) and the remembered preferences parser (store/ui.ts loadPrefs).
 import { describe, expect, it } from 'vitest';
 import type { BrowserTab, ChatSummary } from '@shared/contract';
 import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
 import { fuzzyFilter, fuzzyScore } from '../../src/renderer/lib/fuzzy';
-import { cellsFor, dragSplit, fractions, gridFor, mosaicTiles, pairIndex, pairSlots, PAIR_COLORS, splitZones, tileKey } from '../../src/renderer/lib/grid';
+import { pairIndex, pairSlots, PAIR_COLORS, tileKey, workspaceTiles } from '../../src/renderer/lib/grid';
 import { defaultPrefs, loadPrefs } from '../../src/renderer/store/ui';
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
@@ -119,41 +119,8 @@ describe('grid', () => {
       r: chat('r', { isRegia: true }), a: chat('a'), b: chat('b', { state: 'idle', updatedAt: 0 }), c: chat('c'),
       d: chat('d', { state: 'closed', closedAt: 1 }),
     };
-    const tiles = mosaicTiles(['r', 'a', 'b', 'c', 'd'], chats, [tab('t1', 'c'), tab('t2', 'a'), tab('t3', null), tab('t4', 'r')]);
+    const tiles = workspaceTiles(['r', 'a', 'b', 'c', 'd'], chats, [tab('t1', 'c'), tab('t2', 'a'), tab('t3', null), tab('t4', 'r')]);
     expect(tiles.map(tileKey)).toEqual(['browser:t4', 'chat:a', 'browser:t2', 'chat:b', 'chat:c', 'browser:t1', 'browser:t3']);
-  });
-
-  it('splits chats and browsers into two zones; hidden browsers leave only the ones waiting for the user', () => {
-    const tiles = [{ kind: 'browser', id: 't4' }, { kind: 'chat', id: 'a' }, { kind: 'browser', id: 't2' }, { kind: 'chat', id: 'c' }, { kind: 'browser', id: 't1' }] as const;
-    const shown = splitZones([...tiles], false);
-    expect(shown.chats.map(tileKey)).toEqual(['chat:a', 'chat:c']);
-    expect(shown.browsers.map(tileKey)).toEqual(['browser:t4', 'browser:t2', 'browser:t1']);
-    expect(splitZones([...tiles], true).browsers).toEqual([]);
-    expect(splitZones([...tiles], true, ['t2']).browsers.map(tileKey)).toEqual(['browser:t2']);
-    expect(splitZones([...tiles], true).chats).toHaveLength(2);
-  });
-
-  it('chooses a balanced grid', () => {
-    expect(gridFor(5, 830, 740, 1.05, 250)).toEqual({ cols: 3, rows: 2 }); // the chat zone avoids compact (short) tiles
-    expect(gridFor(1, 1200, 800)).toEqual({ cols: 1, rows: 1 });
-    expect(gridFor(4, 1200, 800)).toEqual({ cols: 2, rows: 2 });
-    expect(gridFor(6, 1240, 800)).toEqual({ cols: 3, rows: 2 });
-  });
-
-  it('the last row stretches so there are no holes', () => {
-    expect(cellsFor(5, 3)).toEqual([
-      { col: 0, row: 0, span: 1 }, { col: 1, row: 0, span: 1 }, { col: 2, row: 0, span: 1 },
-      { col: 0, row: 1, span: 1 }, { col: 1, row: 1, span: 2 },
-    ]);
-    expect(cellsFor(7, 3)[6]).toEqual({ col: 0, row: 2, span: 3 });
-  });
-
-  it('fractions and splitter drags stay valid', () => {
-    expect(fractions([1, 1], 3)).toEqual([1 / 3, 1 / 3, 1 / 3]);
-    expect(fractions([2, 2], 2)).toEqual([0.5, 0.5]);
-    const fr = dragSplit([0.5, 0.5], 0, 0.6);
-    expect(fr[0]).toBeCloseTo(0.88);
-    expect(fr[1]).toBeCloseTo(0.12);
   });
 });
 
@@ -161,18 +128,13 @@ describe('prefs', () => {
   it('parses stored prefs defensively', () => {
     expect(loadPrefs(null, 0)).toEqual(defaultPrefs);
     expect(loadPrefs('not json', 0)).toEqual(defaultPrefs);
-    const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] } }));
-    expect(p.view).toBe('mosaico'); // Legacy Corsie migrates while other customization survives.
+    // the retired views (Mosaico, Corsie), the icon-only sidebar and the top Orchestrator leave nothing behind
+    const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] }, rows: {}, browserZone: 0.5, navCollapsed: true, regiaPlacement: 'top', regiaTopHeight: 300 }));
     expect(p.density).toBe('compact');
     expect(p.theme).toBe('system');
-    expect(p.cols['3']).toEqual([1, 2, 1]);
+    for (const key of ['view', 'cols', 'rows', 'browserZone', 'navCollapsed', 'regiaPlacement', 'regiaTopHeight']) expect(p).not.toHaveProperty(key);
     expect(p.browsersHidden).toBe(false);
-    expect(p.browserZone).toBe(defaultPrefs.browserZone);
-    const h = loadPrefs(JSON.stringify({ browsersHidden: true, browserZone: 0.5 }));
-    expect(h.browsersHidden).toBe(true);
-    expect(h.browserZone).toBe(0.5);
-    const bad = loadPrefs(JSON.stringify({ browsersHidden: 'yes', browserZone: 3 }));
-    expect(bad.browsersHidden).toBe(false);
-    expect(bad.browserZone).toBe(defaultPrefs.browserZone);
+    expect(loadPrefs(JSON.stringify({ browsersHidden: true })).browsersHidden).toBe(true);
+    expect(loadPrefs(JSON.stringify({ browsersHidden: 'yes' })).browsersHidden).toBe(false);
   });
 });

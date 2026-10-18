@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn: mock.spawn }));
-import { prepareUpdateRestart } from '../../src/main/update/restart';
+import { prepareUpdateRestart, RESTART_CANCEL_MS } from '../../src/main/update/restart';
 const resolveWindows = path.win32.resolve;
 
 beforeEach(() => {
@@ -80,7 +80,7 @@ it('keeps cancellation blocked when supervisor never confirms close', async () =
   p.emit('message', { type: 'ready', workerPid: 45678 });
   const handoff = await preparing;
   const cancelled = expect(handoff.cancel()).rejects.toThrow('aggiornamento bloccato');
-  await vi.advanceTimersByTimeAsync(5000);
+  await vi.advanceTimersByTimeAsync(RESTART_CANCEL_MS);
   await cancelled;
 });
 

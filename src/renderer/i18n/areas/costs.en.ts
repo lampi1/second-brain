@@ -43,6 +43,7 @@ export const costsEn: typeof costsIt = {
   'costs.spendDay': "Spend by day",
   'costs.todayHighlight': "today in orange",
   'costs.byKind': "By type of work",
+  'costs.headline': (p: { usd: string; calls: number; model: string }) => `Grindhouse joke: $${p.usd} this month, ${p.calls} ${p.calls === 1 ? 'request' : 'requests'} to ${p.model} (API credits).`,
   'costs.kindSays': "where tokens go: reading, writing, commands, browsing…",
   'costs.kindWhy': "the largest category is the first place to look for savings.",
   'costs.spendKind': "spend by type of work",

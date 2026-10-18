@@ -24,7 +24,7 @@ test('Nuova chat: the table picks the model, the line says why, a hand pick wins
     await page.getByTestId('newchat-title').fill('App · Login');
     await expect(line).toContainText('Opus 5.5 · ragionamento media');
     await expect(line).toContainText('dalla tabella (Fix di bug · App): chat sull’app');
-    await expect(page.getByTestId('newchat-model')).toHaveValue('claude-opus-5-5');
+    await expect(page.getByTestId('newchat-model')).toHaveAttribute('data-value', 'claude-opus-5-5');
     await expect(page.getByTestId('newchat-effort-default')).toHaveAttribute('aria-checked', 'true');
     await page.mouse.move(2, 2);
     await shot(page, 'newchat-route-table');

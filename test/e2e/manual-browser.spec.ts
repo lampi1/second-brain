@@ -5,7 +5,7 @@ for(const lang of['it','en'])test(`manual browser has no agent owner (${lang})`,
  try{
   const count=()=>page.evaluate(async()=> (await window.sb.invoke('browser:list',undefined)).filter(tab=>tab.ownerChatId===null&&tab.url==='about:blank').length);
   const before=await count();await page.getByTestId('topbar-new-browser').click();await expect.poll(count).toBe(before+1);
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   const id=await page.evaluate(async()=> (await window.sb.invoke('browser:list',undefined)).filter(tab=>tab.ownerChatId===null&&tab.url==='about:blank').at(-1)!.id);
   await page.getByTestId(`browser-url-${id}`).click();await expect(page.getByTestId(`browser-url-input-${id}`)).toBeFocused();
   await page.getByTestId(`browser-url-input-${id}`).fill('about:blank');await page.getByTestId(`browser-url-input-${id}`).press('Enter');

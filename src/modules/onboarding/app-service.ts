@@ -33,7 +33,8 @@ export class AppConnectorService implements ConnectorPort {
   private identities: Partial<Record<ConnectorId, string>> = {};
   private selections: ConnectorSelections;
   constructor(private readonly adapters: ConnectorAdapters) { this.selections = adapters.loadSelections(); }
-  async list() { return structuredClone(Object.values(this.states)); }
+  private signingIn: ConnectorId | null = null;
+  async list() { return structuredClone(Object.values(this.states)).map(s => s.provider === this.signingIn ? { ...s, signingIn: true } : s); }
   private async exclusive<T>(_provider: ConnectorId, action: () => Promise<T>): Promise<T> {
     if (this.busy) throw new Error('Operazione già in corso');
     this.busy = true;
@@ -43,13 +44,16 @@ export class AppConnectorService implements ConnectorPort {
     const provider = connectorId(raw);
     const abort = new AbortController();
     const task = this.exclusive(provider, async () => {
-      if (provider === 'github') await this.adapters.githubLogin();
-      else {
-        if (!this.adapters.vault.available()) throw new Error('Portachiavi cifrato di sistema non disponibile');
-        this.loginAbort = abort;
-        try { await this.adapters.jiraLogin(async value => { await this.adapters.vault.set(jiraCredential(value)); }, abort.signal); }
-        finally { if (this.loginAbort === abort) this.loginAbort = null; }
-      }
+      this.signingIn = provider;
+      try {
+        if (provider === 'github') await this.adapters.githubLogin();
+        else {
+          if (!this.adapters.vault.available()) throw new Error('Portachiavi cifrato di sistema non disponibile');
+          this.loginAbort = abort;
+          try { await this.adapters.jiraLogin(async value => { await this.adapters.vault.set(jiraCredential(value)); }, abort.signal); }
+          finally { if (this.loginAbort === abort) this.loginAbort = null; }
+        }
+      } finally { this.signingIn = null; }
       this.states[provider] = initial(provider);
     });
     if (this.loginAbort === abort) this.loginDone = task.catch(() => {});

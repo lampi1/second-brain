@@ -21,7 +21,7 @@ test('an important event shows a toast above everything; its action opens the pl
   await expect(layer.getByTestId('ev-toast-open-chat-failed')).toHaveText('Apri');
   await windowShot(app, 'event-toast');
   await layer.getByTestId('ev-toast-open-chat-failed').click();
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-mappa"][data-highlighted="true"]')).toBeVisible(); // the chat is highlighted
   await expect(layer.getByTestId('ev-toast-chat-failed')).toHaveCount(0);
   // quiet kinds (an idea, a finished chat, a logged error) never toast: only the center
@@ -50,7 +50,7 @@ test('notification center: filter by kind, mark all read (remembered after a rel
   await expect(page.locator('[data-testid="nc-list"] [data-unread]')).toHaveCount(0);
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   // mute a kind from its row (settings mute.<kind>): its toasts stop
   await page.keyboard.press('Control+Shift+N');
@@ -133,14 +133,14 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page'
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await page.keyboard.press('Alt+ArrowRight');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.getByTestId('nav-recent').click();
   await expect(page.getByTestId('nav-recent-pop')).toContainText('Idee');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+1');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   // G then a letter, outside text fields
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
@@ -172,15 +172,15 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   const { app, page } = await launchDemo();
   await page.getByTestId('chat-menu-qa').click();
   await page.getByTestId('chat-link-qa').click();
-  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://workspace/chat-qa');
-  const link = 'sb://workspace/chat-qa';
+  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://home/chat-qa');
+  const link = 'sb://workspace/chat-qa'; // a link copied before SPEC 19 still lands on the chat, in the Grindhouse
   await page.getByTestId('nav-costi').click();
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(link);
   await expect(page.getByTestId('palette-item-link')).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
   // a page link from its frame
   await page.getByTestId('nav-idee').click();
