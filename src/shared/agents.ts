@@ -212,11 +212,8 @@ export interface AgentCatalog {
   models: AgentModelChoice[];
   problem: string | null;
   legacyRouting: { preserved: true; imported: number; remaining: number };
-  builder: { available: boolean; engine: string | null; models: string[]; reason: string | null };
   imageGeneration: { available: false; reason: string };
 }
-export interface AgentDraftRequest { text: string; engine: Harness; model: string; base?: AgentDraft }
-export type AgentDraftResult = { ok: true; draft: AgentDraft } | { ok: false; reason: string };
 
 export type SetupGuide = { stage: 'choosing' | 'fallback' } | { stage: 'connecting' | 'guided'; engine: 'claude' | 'codex' | 'cursor'; chatId: string };
 export interface SetupDraft {

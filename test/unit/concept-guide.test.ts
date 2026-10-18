@@ -89,7 +89,7 @@ const profile = (id: string, name: string, over: Partial<AgentProfile> = {}): Ag
 } as AgentProfile);
 const catalog = (profiles: AgentProfile[], models = [choice()]): AgentCatalog => ({
   profiles, archived: [], models, problem: null, legacyRouting: { preserved: true, imported: 0, remaining: 0 },
-  builder: { available: false, engine: null, models: [], reason: null }, imageGeneration: { available: false, reason: '' },
+  imageGeneration: { available: false, reason: '' },
 } as AgentCatalog);
 
 describe('«Discutine» plan', () => {

@@ -4,6 +4,7 @@ import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
 import { componentsIt } from './areas/components.it';
 import { catalogIt } from './areas/catalog.it';
+import { agentCreateIt } from './areas/agent-create.it';
 import { connectorsIt } from './areas/connectors.it';
 // The Italian UI texts (ADR 0057): the source dictionary. Every key the UI shows lives here; en.ts must have the same
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
@@ -32,6 +33,7 @@ export const it = {
   ...componentsIt,
   ...agentPackIt,
   ...catalogIt,
+  ...agentCreateIt,
   ...costsIt,
   ...connectorsIt,
   ...reviewedContextIt,

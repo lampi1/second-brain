@@ -74,7 +74,6 @@ describe('Agent catalog and local setup', () => {
     expect(c.profiles.every(p => p.model === (['default-general', 'default-orchestrator'].includes(p.id) ? null : 'known-model') && p.engine === 'claude')).toBe(true);
     expect(c.models[0]).toMatchObject({ installed: null, authenticated: null });
     expect(c.imageGeneration.available).toBe(false);
-    expect(c.builder.available).toBe(false);
   });
   it('persists validated profiles and duplicates with a new identity', () => {
     const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices });
@@ -141,17 +140,6 @@ describe('Agent catalog and local setup', () => {
     expect(readOwner({ ...compatibleOwner('claude', null), avatar: extendedAvatar })).toBeNull();
     expect(decode).not.toHaveBeenCalled();
   });
-  it('uses a real tool-free builder only on explicit request, validates output and never saves a draft', async () => {
-    const complete = vi.fn(async () => ({ ok: true as const, text: JSON.stringify({ ...draft(), permissionMode: 'bypassPermissions' }) }));
-    const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices, builder: () => ({ available: true, engine: 'api', models: ['known-api'], reason: null }), complete });
-    expect(complete).not.toHaveBeenCalled();
-    const before = fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8');
-    const result = await c.draft({ text: 'Prepara ricerca', engine: 'api', model: 'known-api' });
-    expect(result).toEqual({ ok: true, draft: draft() });
-    expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).toBe(before);
-    expect(await c.draft({ text: 'Hi', engine: 'other', model: 'known-api' })).toMatchObject({ ok: false });
-    expect(complete).toHaveBeenCalledTimes(1);
-  });
   it('preserves legacy effective choices in a recognizable owner', () => {
     const owner = compatibleOwner('codex', null, true);
     expect(readOwner(owner)).toEqual(owner);
@@ -167,17 +155,6 @@ describe('Agent catalog and local setup', () => {
     const valid = { ...owner, avatar: { kind: 'image', dataUrl: `data:image/png;base64,${bytes.toString('base64')}` } };
     expect(readOwner(valid)).toEqual(valid);
     expect(readOwner({ ...owner, avatar: { kind: 'image', dataUrl: 'data:image/png;base64,PHN2Zy8+' } })).toBeNull();
-  });
-  it('lets the explicit AI guide start from empty fields or repair an unavailable saved model', async () => {
-    const complete = vi.fn(async (_req: { prompt: string }) => ({ ok: true as const, text: JSON.stringify(draft()) }));
-    const dir = tmp(), c = new AgentCatalogService({ userData: dir, models: choices, builder: () => ({ available: true, engine: 'api', models: ['known-api'], reason: null }), complete });
-    const empty = { ...draft(), name: '', purpose: '', instructions: '', model: null };
-    expect(await c.draft({ text: 'Mi aiuta con le fonti', engine: 'api', model: 'known-api', base: empty })).toEqual({ ok: true, draft: draft() });
-    expect(await c.draft({ text: 'Aggiorna il modello', engine: 'api', model: 'known-api', base: { ...draft(), engine: 'removed', model: 'old-model' } })).toEqual({ ok: true, draft: draft() });
-    expect(complete).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(complete.mock.calls[1]![0]!.prompt).base).toMatchObject({ engine: 'removed', model: 'old-model' });
-    await expect(c.draft({ text: 'Bad', engine: 'api', model: 'known-api', base: { ...empty, instructions: 'x'.repeat(8001) } })).rejects.toThrow(/Istruzioni/);
-    expect(complete).toHaveBeenCalledTimes(2);
   });
   it('resumes a local interview draft and never applies arbitrary protected fields', () => {
     const dir = tmp(), setup = new SetupService(dir, false);

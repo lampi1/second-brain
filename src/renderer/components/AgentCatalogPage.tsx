@@ -1,17 +1,20 @@
-// Dedicated agent overview and guided Orchestrator entry; profile editing stays in the existing Studio.
-import { useEffect, useRef, useState } from 'react';
+// Dedicated agent overview. "Crea agente" opens the questionnaire (AgentCreateDialog) that sends the user's request to
+// the Orchestrator; an existing profile opens in the Studio editor (AgentStudio). Rendered by App.tsx for page 'agenti'.
+import { useEffect, useState } from 'react';
 import { inProbation, type AgentMetrics } from '@shared/agents';
 import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
 import { AgentLifecyclePanel } from './AgentLifecyclePanel';
 import { lifecycleClient } from '../lib/agent-lifecycle';
-import { go, focusChat } from '../actions';
+import { go } from '../actions';
 import { t } from '../i18n';
-import { agentCreationBrief, selectCatalog, type CatalogSort } from '../lib/agent-catalog';
+import { selectCatalog, type CatalogSort } from '../lib/agent-catalog';
+import { requestPack } from '../lib/agent-pack-ui';
 import { sb } from '../sb';
 import { refreshAgents, useAgents } from '../store/agents';
-import { createRoutedChat, useApp } from '../store/store';
+import { useApp } from '../store/store';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
+import { AgentCreateDialog } from './AgentCreateDialog';
 import { AgentStudio } from './AgentStudio';
 import { Select } from './Select';
 import { ContextPulse } from './ContextPulse';
@@ -23,13 +26,9 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
   const { catalog, error } = useAgents();
   const arg = ui.use(s => s.pageArg);
   const chats = useApp(s => s.chats);
-  const root = useApp(s => s.info?.brainRoot);
   const [role, setRole] = useState(''), [engine, setEngine] = useState(''), [sort, setSort] = useState<CatalogSort>('name');
   const [metrics, setMetrics] = useState<AgentMetrics[] | null>(null), [metricsError, setMetricsError] = useState(false);
   const [refresh, setRefresh] = useState(0), [creating, setCreating] = useState(false);
-  const [task, setTask] = useState(''), [area, setArea] = useState(''), [guideEngine, setGuideEngine] = useState('');
-  const [busy, setBusy] = useState(false), [problem, setProblem] = useState(false);
-  const working = useRef(false);
   useEffect(() => {
     let alive = true, pending = false;
     setMetrics(null); setMetricsError(false);
@@ -47,35 +46,14 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
   const profile = catalog?.profiles.find(p => p.id === arg);
   if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} />{profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}{lifecycleApi && profile && <AgentLifecyclePanel api={lifecycleApi} agentId={profile.id} onReview={() => go({ page: 'agenti', arg: profile.id })} />}</>;
   const profiles = catalog?.profiles ?? [];
-  const choices = catalog?.models.filter(m => m.enabled && m.trusted && (m.defaultModel || m.modelSelectable && m.models.length > 0)) ?? [];
-  const chosen = choices.find(m => m.engine === guideEngine) ?? choices[0];
-  const create = async () => {
-    if (working.current || !root || !chosen || !task.trim() || !area.trim()) return;
-    working.current = true; setBusy(true); setProblem(false);
-    try {
-      const model = chosen.defaultModel ? undefined : chosen.models[0]?.id;
-      const chat = await createRoutedChat({ title: t('catalog.create'), regia: true, regiaName: t('catalog.title'), cwd: root,
-        prompt: agentCreationBrief(task, area, chosen.engine), defaults: { harness: chosen.engine, ...(model ? { model } : {}) },
-        ask: { harness: chosen.engine, ...(model ? { model } : {}), reason: 'User chose the agent creation guide engine' } });
-      if (chat) { setCreating(false); focusChat(chat.id); } else setProblem(true);
-    } finally { working.current = false; setBusy(false); }
-  };
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>
-      <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={!catalog || !!catalog.problem}>{t('catalog.create')}</button>
-      <button type="button" className="btn btn-ghost" onClick={() => go({ page: 'agenti', arg: 'studio' })}>{t('catalog.studio')}</button></header>
+      <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })} data-testid="agent-import">{t('pack.import')}</button>
+      <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={!catalog || !!catalog.problem} data-testid="agent-create-open">{t('catalog.create')}</button></header>
     {!profiles.some(p => p.origin.kind !== 'preset') && <p className="catalog-intro">{t('catalog.intro')}</p>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}
-    {creating && <form className="catalog-create" onSubmit={e => { e.preventDefault(); void create(); }}>
-      <h3>{t('catalog.create')}</h3><p>{t('catalog.guideNote')}</p>
-      <label className="field"><span>{t('catalog.task')}</span><textarea required maxLength={2000} value={task} onChange={e => setTask(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>{t('catalog.area')}</span><input required maxLength={500} value={area} onChange={e => setArea(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>{t('catalog.engine')}</span><Select value={chosen?.engine ?? ''} onChange={e => setGuideEngine(e.target.value)} disabled={busy}>{choices.map(m => <option key={m.engine} value={m.engine}>{m.label}</option>)}</Select></label>
-      {!root && <p role="status">{t('catalog.noRoot')}</p>}
-      {problem && <p role="alert">{t('catalog.createError')}</p>}
-      <div><button type="submit" className="btn btn-primary" disabled={busy || !root || !chosen || !task.trim() || !area.trim()}>{t('catalog.guide')}</button> <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setCreating(false)}>{t('catalog.cancel')}</button></div>
-    </form>}
+    {creating && <AgentCreateDialog onClose={() => setCreating(false)} />}
     <div className="catalog-filters">
       <label className="field"><span>{t('catalog.role')}</span><Select value={role} onChange={e => setRole(e.target.value)}><option value="">{t('catalog.all')}</option>{[...new Set(profiles.map(p => p.role).filter(Boolean))].sort().map(r => <option key={r} value={r}>{r}</option>)}</Select></label>
       <label className="field"><span>{t('catalog.engine')}</span><Select value={engine} onChange={e => setEngine(e.target.value)}><option value="">{t('catalog.all')}</option>{[...new Set(profiles.map(p => p.engine))].sort().map(id => <option key={id} value={id}>{catalog?.models.find(m => m.engine === id)?.label ?? id}</option>)}</Select></label>

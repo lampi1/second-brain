@@ -62,12 +62,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
       b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. La Regia e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
         'Catalog chats, including Generale, have a "run" with counters and cost. Regia and the compatible fallback when Generale is missing have no catalog run.'),
-      // src/main/agents/catalog.ts save(): origin user, userLocked; draft() for the AI guide in Agent Studio
-      b('Un agente nuovo oggi lo salvi tu in «Gestisci agenti» (anche partendo da una bozza scritta dall’AI): resta nel catalogo per la prossima volta.',
-        'Today you save a new agent in "Manage agents" (also starting from a draft the AI wrote): it stays in the catalog for next time.'),
-      // src/main/agents/discovery.ts CATALOG_GUIDANCE ("…or proposing a new agent")
-      b('L’Orchestrator può solo proporre un agente nuovo nel testo: non scrive il catalogo.',
-        'The Orchestrator can only propose a new agent in its reply: it does not write the catalog.'),
+      // src/renderer/components/AgentCreateDialog.tsx; src/main/agents/authoring.ts agent_create, author-policy.ts checkCreationRequest
+      b('Un agente nuovo nasce da «Crea agente» in Agenti: un breve questionario diventa un tuo messaggio all’Orchestrator, che lo crea con agent_create.',
+        'A new agent starts from "Create agent" in Agents: a short questionnaire becomes your message to the Orchestrator, which creates it with agent_create.'),
+      // src/main/agents/authoring.ts agent_suggest; rememberHumanMessage (only the UI's chat:create/chat:send)
+      b('L’Orchestrator crea un agente solo da un messaggio scritto da te nell’app negli ultimi 30 minuti; altrimenti può solo proporlo, e decidi tu in Agenti.',
+        'The Orchestrator creates an agent only from a message you wrote in the app in the last 30 minutes; otherwise it can only suggest one, and you decide in Agents.'),
       // src/main/agents/probation.ts; src/main/chats/manager.ts evaluateProbation
       b('Per i profili già in prova, il servizio valuta risultati confermati, correzioni, rifacimenti e inattività per tenerli o ritirarli.',
         'For profiles already on probation, the service evaluates confirmed results, corrections, rework and inactivity to keep or retire them.'),
@@ -352,9 +352,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro.'),
       tech(LIMITS, 'Prompt letto per i primi 2000 caratteri; al massimo 3 comandi per risposta; blocco eseguibile ≤ 8000 caratteri.',
         'Prompt read for its first 2000 chars; at most 3 commands per reply; runnable block ≤ 8000 chars.'),
-      // src/main/headline.ts; src/main/agents/catalog.ts draft()
-      tech(WHERE, 'Questi classificatori usano regole; altre funzioni chiamano un modello, tra cui la battuta della Dashboard e la guida AI per creare agenti.',
-        'These classifiers use rules; other features call a model, including the Dashboard headline and the AI agent builder.'),
+      // src/main/headline.ts
+      tech(WHERE, 'Questi classificatori usano regole; altre funzioni chiamano un modello, come la battuta della Dashboard.',
+        'These classifiers use rules; other features call a model, such as the Dashboard headline.'),
     ],
     sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts', 'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/main/headline.ts', 'src/main/agents/catalog.ts', 'src/main/wiring.ts'],
   },

@@ -1,12 +1,13 @@
-// User-owned agent catalog/editor with optional explicit AI draft assistance. Uses only typed catalog capabilities;
-// editing never changes the identity/model of running sessions, and provider responses never save themselves.
+// User-owned agent catalog/editor: edit, duplicate, export or import a profile by hand. New agents are not made here:
+// "Crea agente" (AgentCreateDialog) asks the Orchestrator. Uses only typed catalog capabilities; editing never changes
+// the identity/model of running sessions. Rendered by AgentCatalogPage.tsx for an agent's page (and 'studio').
 import { Select } from './Select';
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_CATEGORIES, AGENT_TONES, type AgentDraft, type AgentProfile } from '@shared/agents';
 import { ROLE_GLYPHS } from '@shared/agent-glyphs';
 import { duplicateAgentAvatars, unusedAgentTone } from '../lib/agent-avatar-choice';
 import { GLYPH_ART, GLYPH_LABELS_IT } from '../lib/agent-glyph-art';
-import { duplicateAgent, draftAgent, refreshAgents, saveAgent, useAgents } from '../store/agents';
+import { duplicateAgent, refreshAgents, saveAgent, useAgents } from '../store/agents';
 import { openModal, toast,ui } from '../store/ui';
 import { EFFORTS, effortLabel } from '../lib/format';
 import { forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
@@ -33,24 +34,21 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   const [editorRevision, setEditorRevision] = useState<number | null>(restored.current ? restored.current.baseRevision ?? null : initialProfile?.updatedAt ?? null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
-  const [guideText, setGuideText] = useState(restored.current?.message ?? ''), [guideModel, setGuideModel] = useState('');
-  const [suggestion, setSuggestion] = useState<AgentDraft | null>(restored.current?.suggestion ?? null);
-  const [guideHistory, setGuideHistory] = useState<{role:'user'|'assistant';text:string}[]>(restored.current?.history ?? []);
   useEffect(()=>{if(busy||uploading)return holdUpdate(t('studio.hold'));},[busy,uploading]);
   const nameInput = useRef<HTMLInputElement>(null);
   const revision = useRef(0), working = useRef(false);
-  const remember = () => { if(editing) rememberAgentEditor({id,...(editorRevision === null ? {} : { baseRevision: editorRevision }),draft:editing,message:guideText,history:guideHistory,suggestion}); };
-  useEffect(remember,[editing,id,editorRevision,guideText,guideHistory,suggestion]);
-  const pick = (profile?: AgentProfile, saved=false) => {
-    if(saved) { forgetAgentEditor(id); forgetAgentEditor(profile?.id); } else remember();
-    const cached=readAgentEditor(profile?.id);
-    setEditorRevision(cached ? cached.baseRevision ?? null : profile?.updatedAt ?? null);
-    revision.current++; setUploading(false); setSuggestion(cached?.suggestion ?? null); setGuideHistory(cached?.history ?? []); setGuideText(cached?.message ?? ''); setProblem(null); setId(profile?.id);
-    const engine = catalog?.models.find(e => e.enabled && e.trusted && e.defaultModel)?.engine ?? catalog?.models[0]?.engine ?? 'claude';
-    setEditing(cached?.draft ?? (profile ? { ...profile } : { name: '', purpose: '', instructions: '', engine, model: null, avatar: { kind: 'symbol', value: 'role-spark', tone: unusedAgentTone(catalog?.profiles ?? []) } }));
+  // message/history/suggestion stay empty: the update checkpoint keeps the shape the removed AI guide used
+  const remember = () => { if(editing) rememberAgentEditor({id,...(editorRevision === null ? {} : { baseRevision: editorRevision }),draft:editing,message:'',history:[],suggestion:null}); };
+  useEffect(remember,[editing,id,editorRevision]);
+  const pick = (profile: AgentProfile, saved=false) => {
+    if(saved) { forgetAgentEditor(id); forgetAgentEditor(profile.id); } else remember();
+    const cached=readAgentEditor(profile.id);
+    setEditorRevision(cached ? cached.baseRevision ?? null : profile.updatedAt);
+    revision.current++; setUploading(false); setProblem(null); setId(profile.id);
+    setEditing(cached?.draft ?? { ...profile });
     requestAnimationFrame(()=>{ nameInput.current?.scrollIntoView({block:'nearest'}); nameInput.current?.focus(); });
   };
-  const change = (patch: Partial<AgentDraft>) => { revision.current++; setUploading(false); setEditing(p => p ? { ...p, ...patch } : p); setSuggestion(null); };
+  const change = (patch: Partial<AgentDraft>) => { revision.current++; setUploading(false); setEditing(p => p ? { ...p, ...patch } : p); };
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
   const avatarDuplicates = editing ? duplicateAgentAvatars(editing.avatar, catalog?.profiles ?? [], id) : [];
   const presetUpdate = catalog?.presetUpdates?.find(update => update.agentId === id);
@@ -78,22 +76,8 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
       if (version === revision.current) change({ avatar: { kind: 'image', dataUrl } });
     } catch { if(version === revision.current) setProblem(t('studio.uploadError')); } finally { if(version === revision.current) setUploading(false); }
   };
-  const askGuide = async () => {
-    const builder = catalog?.builder, engine = catalog?.models.find(e => e.engine === builder?.engine)?.engine;
-    const model = guideModel || builder?.models[0];
-    if (!editing || !builder?.available || !engine || !model || !guideText.trim() || working.current) return;
-    working.current = true;
-    const message = guideText.trim();
-    setGuideHistory(history => [...history, {role:'user',text:message}]); setGuideText('');
-    setBusy(true); setProblem(null); const version = revision.current;
-    try {
-      const result = await draftAgent({ text: message, engine, model, base: suggestion ?? editing });
-      if (version === revision.current) { if (result.ok) { setSuggestion(result.draft); setGuideHistory(history => [...history, {role:'assistant',text:`${result.draft.name}: ${result.draft.purpose}`}]); } else setProblem(result.reason); }
-    } catch { setProblem(t('studio.guideError')); }
-    finally { working.current = false; setBusy(false); }
-  };
   return <section className="agent-studio" aria-label={t('home.manageAgents')} data-testid="agent-studio">
-    <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
+    <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
     <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })}>{t('pack.import')}</button>
     <AppearancePreview />
     <ProgressPanel />
@@ -146,13 +130,6 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
       {editing.avatar.kind === 'symbol' && <fieldset><legend>{t('studio.tone')}</legend><div className="avatar-tones">{AGENT_TONES.map(tone => <button key={tone} type="button" aria-label={t(`studio.tone.${tone}`)} title={t(`studio.tone.${tone}`)} aria-pressed={editing.avatar.kind === 'symbol' && (editing.avatar.tone ?? 'blue') === tone} onClick={() => { if (editing.avatar.kind === 'symbol') change({ avatar: { ...editing.avatar, tone } }); }}><AgentAvatar avatar={{ kind: 'symbol', value: 'role-spark', tone }} name={t(`studio.tone.${tone}`)} size={20} /></button>)}</div></fieldset>}
       {avatarDuplicates.length > 0 && <p role="status" data-testid="agent-avatar-duplicate">{t('studio.avatarDuplicate', { names: avatarDuplicates.map(p => p.name).join(', ') })}</p>}
       <label className="field"><span>{t('studio.upload')}</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => void upload(e.target.files?.[0])} /></label><small>{catalog.imageGeneration.reason} {t('studio.uploadHint')}</small></fieldset>
-      <details className="agent-guide"><summary>{t('studio.guide')}</summary><p>{t('studio.guideExplain')}</p>
-        <div role="log" aria-label={t('studio.guideLog')} aria-live="polite">{guideHistory.map((message,index)=><p key={index}><b>{message.role === 'user' ? t('studio.you') : t('studio.assistant')}: </b>{message.text}</p>)}</div>
-        <textarea rows={3} value={guideText} onChange={e => setGuideText(e.target.value)} maxLength={6000} placeholder={t('studio.guideExample')} aria-label={t('studio.guideMessage')} />
-        {catalog.builder.available ? <label className="field"><span>{t('studio.guideModel')}</span><Select value={guideModel || catalog.builder.models[0] || ''} onChange={e => setGuideModel(e.target.value)}>{catalog.builder.models.map(m => <option key={m}>{m}</option>)}</Select></label> : <p role="status">{catalog.builder.reason || t('studio.guideUnavailable')}</p>}
-        <button type="button" className="btn btn-ghost" disabled={busy || !catalog.builder.available || !guideText.trim()} onClick={() => void askGuide()}>{t('studio.sendGuide')}</button>
-        {suggestion && <section aria-label={t('studio.suggestion')}><h4>{suggestion.name}</h4><p>{suggestion.purpose}</p><pre>{suggestion.instructions}</pre><AgentManifestPanel manifest={suggestion.manifest} /><p>{t('studio.engine')}: {suggestion.engine} · {suggestion.model || t('studio.defaultEngine')}</p><button type="button" className="btn btn-ghost" onClick={() => { change(suggestion); setSuggestion(null); }}>{t('studio.useDraft')}</button></section>}
-      </details>
       <button type="submit" className="btn btn-primary" disabled={!canSave} data-testid="agent-save">{busy ? t('studio.busy') : t('studio.save')}</button>
       </fieldset>
     </form>}</div>
