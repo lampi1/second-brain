@@ -99,6 +99,8 @@ export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unkno
 
 /** Options common to every harness. */
 export interface SessionOptions {
+  /** Main-generated immutable agent skill package, never supplied by the renderer. */
+  agentAssets?: { pluginDir: string; skillRoot: string };
   chatId: string;
   cwd: string;
   model?: string | null;

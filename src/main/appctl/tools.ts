@@ -39,12 +39,14 @@ import type { ImproveEvidenceSelection } from '../improve/evidence';
 import type { AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
+import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
   agentAuthoring?: AgentAuthoring;
+  agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
   classifyAgents?: ClassifyAgents;
   chats: ChatService; browser: BrowserService; brain: BrainService;
@@ -122,6 +124,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
     ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified) : []),
+    ...(d.agentLearning ? [{ name: 'agent_learn_propose', description: agentLearnTool(d.agentLearning).description, inputSchema: agentLearnTool(d.agentLearning).inputSchema,
+      run: (a: Record<string, unknown>) => {
+        if (Object.keys(a).some(k => !['agentId', 'rule', 'evidence'].includes(k)) || typeof a.agentId !== 'string' || typeof a.rule !== 'string' || typeof a.evidence !== 'string') throw new Error('Invalid learned-rule proposal');
+        return d.agentLearning!.propose(a.agentId, a.rule, a.evidence);
+      } }] : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',

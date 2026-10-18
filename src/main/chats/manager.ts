@@ -207,6 +207,7 @@ interface Rec {
   s: ChatSummary;
   createdAt: number;
   agentInstructions?: string;
+  agentAssets?: { pluginDir: string; skillRoot: string };
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
   agentPrimed?: boolean;
@@ -437,7 +438,7 @@ export class ChatManager implements ChatService {
   }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
-  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null }, links: RunLinks = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string } }, links: RunLinks = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
@@ -515,6 +516,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: now,
       agentInstructions: agent.instructions,
+      ...('assets' in agent && agent.assets ? { agentAssets: agent.assets } : {}),
       ...(policy ? { policy } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
@@ -1105,7 +1107,7 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null });
+    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -1727,6 +1729,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
+      ...(c.agentAssets ? { agentAssets: c.agentAssets } : {}),
       ...(c.agentPolicy ? { policy: c.agentPolicy } : {}),
       children,
       choice: { model: c.model, effort: c.effort, permissionMode: c.permissionMode },
@@ -1750,6 +1753,7 @@ export class ChatManager implements ChatService {
     const rows: StoredChat[] = [...this.chats.values()].map(r => ({
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
+      ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       ...(r.policy ? { agentPolicy: r.policy } : {}),
       ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : r.runPruned ? { runPruned: r.runPruned } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
@@ -1943,6 +1947,7 @@ export class ChatManager implements ChatService {
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
+      ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.

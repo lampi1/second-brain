@@ -1,3 +1,4 @@
+import { agentPackEn } from './areas/agent-pack.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
@@ -27,6 +28,7 @@ export const en: Dict = {
   ...auditEn,
   ...auditExpressionsEn,
   ...componentsEn,
+  ...agentPackEn,
   ...catalogEn,
   ...costsEn,
   ...connectorsEn,

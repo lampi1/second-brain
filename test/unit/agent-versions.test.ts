@@ -29,6 +29,25 @@ function v1Catalog(dir: string) {
 }
 
 describe('Agent definitions v2', () => {
+  it('drops know-how when restoring a version from before it was added', () => {
+    const dir = tmp(), catalog = service(dir), first = catalog.save(draft());
+    catalog.save(draft({ knowhow: { folder: 'personal/agents/reviewer', linked: [], hash: 'a'.repeat(64) } }), first.id);
+    expect(catalog.restoreVersion(first.id, first.version)).not.toHaveProperty('knowhow');
+    expect(service(dir).list().profiles.find(p => p.id === first.id)).not.toHaveProperty('knowhow');
+  });
+  it('persists pack identity and versions know-how content across restarts and legacy saves', () => {
+    const dir = tmp(), catalog = service(dir);
+    const knowhow = { folder: 'personal/agents/reviewer', linked: ['shared-review'], hash: 'a'.repeat(64) };
+    const pack = { id: 'reviewer-0123456789abcdef', revision: 1 };
+    const first = catalog.save(draft({ knowhow, pack }));
+    const reloaded = service(dir);
+    expect(reloaded.list().profiles.find(p => p.id === first.id)).toMatchObject({ knowhow, pack });
+    const legacy = reloaded.save(draft(), first.id);
+    expect(legacy).toMatchObject({ knowhow, pack, version: first.version });
+    const changed = reloaded.save(draft({ knowhow: { ...knowhow, hash: 'b'.repeat(64) } }), first.id);
+    expect(changed.version).toBe(first.version + 1);
+    expect(service(dir).list().profiles.find(p => p.id === first.id)?.knowhow?.hash).toBe('b'.repeat(64));
+  });
   it('migrates a v1 catalog once into agents.v2.json, leaves the v1 file untouched and records every agent as version 1', () => {
     const dir = tmp(), original = v1Catalog(dir);
     const c = service(dir).list();

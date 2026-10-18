@@ -20,6 +20,13 @@ export function checkPermissionInstructions(draft: AgentDraft): void {
   if (/auto[\s-]*approv|bypass\s*permissions|skip\s+(?:all\s+)?permissions|you\s+(?:may|can|are allowed to)\s+(?:deploy|approve)|(?:permesso|autorizzat[oa])\s+(?:di|a)\s+(?:deploy|distribuire|approvare)|approv[ae]\s+(?:automaticamente|tutto)/i.test(text)) throw new Error('Instructions cannot grant permissions.');
 }
 
+/** Know-how and pack identity come only from reviewed pack flows: an automatic author can neither attach brain files as
+ *  an agent's skills nor forge a pack identity. Their stored values stay (save and author keep omitted fields). */
+export function withoutPackFields(v: unknown): Record<string, unknown> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const { knowhow: _k, pack: _p, ...rest } = v as Record<string, unknown>; void _k; void _p;
+  return rest;
+}
 export function protectedAgent(p: AgentProfile): boolean {
   return p.userLocked || p.permissionCeiling === 'acceptEdits' || /(?:^|[-_])reviewer(?:$|[-_])/.test(p.id) || p.origin.kind === 'preset' && /reviewer/i.test(p.origin.presetId);
 }

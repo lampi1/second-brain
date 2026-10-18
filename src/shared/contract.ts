@@ -5,6 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { AgentClassification } from './agent-classifier';
 import type { AgentProposal, AgentUndo } from './agent-authoring';
+import type { PackTarget, PackExportPlan, PackFinding, PackImportReview, LearnedRules } from './agent-pack';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
@@ -1153,6 +1154,16 @@ export interface InvokeMap {
   'agents:proposals': [void, AgentProposal[]];
   'agents:proposalDecide': [{ id: string; accept: boolean }, AgentProfile | null];
   'agents:undo': [AgentUndo, AgentProfile];
+  'agents:exportPlan': [{ id: string; target: PackTarget }, PackExportPlan];
+  'agents:exportFix': [{ token: string; item: string; action: 'exclude' | 'rescan' | 'allow' | 'open' }, PackExportPlan];
+  'agents:export': [{ token: string; includeStats: boolean }, { ok: true; path: string } | { ok: false; findings: PackFinding[] }];
+  'agents:importInspect': [{ pick: true } | { dropped: string }, PackImportReview | null];
+  'agents:importApply': [{ token: string; approveScripts: boolean; approvePersonalData?: boolean; collision: 'update' | 'copy' | 'rename' }, AgentProfile[]];
+  'agents:importCancel': [{ token: string }, void];
+  'agents:learnList': [{ id: string }, LearnedRules];
+  'agents:learnDecide': [{ id: string; proposalId: string; decision: 'approve' | 'edit' | 'discard'; text?: string }, LearnedRules];
+  /** ends the open trial of a pack update or an approved learned rule; a new agent's probation uses agents:keep/agents:retire */
+  'agents:trialDecide': [{ id: string; decision: 'keep' | 'rollback' }, AgentProfile];
   'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
   'agents:duplicate': [{ id: string }, AgentProfile];
   'agents:archive': [{ id: string }, AgentProfile];
@@ -1433,6 +1444,7 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1464,6 +1476,7 @@ void _invokeComplete; void _eventComplete;
 
 /** What the preload exposes as window.sb. */
 export interface Bridge {
+  pathForFile?: (file: File) => string;
   invoke<K extends InvokeChannel>(channel: K, arg: InvokeArg<K>): Promise<InvokeResult<K>>;
   on<K extends EventChannel>(channel: K, fn: (payload: EventMap[K]) => void): () => void;
 }

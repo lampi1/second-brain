@@ -5,6 +5,7 @@
 // (keyEnv: ACP, Codex's CODEX_API_KEY) or an API session's request header. The chat manager calls sessionFor and never names an engine; tests pass
 // their own factory to the manager instead.
 import path from 'node:path';
+import fs from 'node:fs';
 import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
 import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
@@ -36,6 +37,11 @@ export interface EngineContext {
 }
 
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
+  if (opts.agentAssets) {
+    const { pluginDir, skillRoot } = opts.agentAssets, base = path.join(ctx.userData, 'agent-pack-runtime');
+    if (!/^[a-f0-9]{64}$/.test(path.basename(pluginDir)) || path.resolve(path.dirname(pluginDir)) !== path.resolve(base)
+      || path.resolve(skillRoot) !== path.resolve(pluginDir, 'skills') || fs.lstatSync(pluginDir).isSymbolicLink() || fs.lstatSync(skillRoot).isSymbolicLink()) throw new Error('Invalid agent skill snapshot');
+  }
   // A running session retains its endpoint/command. A key for a replacement definition must never reach it.
   const binding = fingerprint(engine);
   const boundKey = (): string | null => {
@@ -45,7 +51,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
   switch (engine.kind) {
     case 'claude': {
       // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act
-      const brain = opts.readOnly ? [] : claudeLaunch(ctx.userData).args;
+      const brain = opts.readOnly ? [] : [...claudeLaunch(ctx.userData).args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])];
       return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
     }
     case 'codex': {
@@ -55,7 +61,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
       return new CodexSession({
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
-        configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: launch.skillRoots,
+        configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: [...launch.skillRoots, ...(!opts.readOnly && opts.agentAssets ? [opts.agentAssets.skillRoot] : [])],
         approvalPolicy: launch.approvalPolicy, sandbox: launch.sandbox,
         executionPolicy: () => codexPolicyFor(opts.cwd, opts.readOnly, agentPolicy),
         showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,

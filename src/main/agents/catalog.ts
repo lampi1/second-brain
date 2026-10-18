@@ -1,8 +1,9 @@
 // Validated local agent profiles, seeds and launch resolution, used by UI and chat creation.
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { checkedKnowhow, checkedPackIdentity } from '../../shared/agent-pack';
 import type { Effort, NewChat, RoutingRow } from '../../shared/contract';
-import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, GENERAL_AGENT_ID, inProbation, type AgentProbationDecision } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentDraftRequest, type AgentDraftResult, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, GENERAL_AGENT_ID, inProbation, type AgentProbation, type AgentProbationDecision, type AgentProbationSource } from '../../shared/agents';
 import { checkImages } from '../chats/images';
 import { readLocal, writeLocal } from './local-store';
 import { boundedRaster } from './raster';
@@ -16,7 +17,8 @@ import { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_INSTRUCTIONS } from './orchestrator
 import { log, errText } from '../log';
 import { LEGACY_ROLE_REPLACEMENTS, roleAgentPresets } from '../../shared/agent-presets';
 import { presetDraft, presetHash } from './preset-support';
-import { checkAuthorPolicy, checkAgentCwd, protectedAgent } from './author-policy';
+import { checkAuthorPolicy, checkAgentCwd, protectedAgent, withoutPackFields } from './author-policy';
+import { PROBATION_CAP } from './probation';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
@@ -53,6 +55,7 @@ export interface AgentCatalogDeps {
   legacyRoutes?: () => readonly RoutingRow[];
   legacyApiEngine?: () => string | null;
 }
+export interface PackInstall { value: AgentDraft; id: string; source: AgentProbationSource | { kind: 'learned-rule' }; update?: boolean; origin?: AgentOrigin }
 
 /** Pure byte/header checks also protect chat snapshots before any renderer image allocation. */
 function checkedImage(value: unknown): { avatar: AgentAvatar; data: Buffer; header: { width: number; height: number } } {
@@ -133,6 +136,12 @@ export class AgentCatalogService {
   private profiles: AgentProfile[] = [];
   private problem: string | null = null;
   private legacyRouting: AgentCatalog['legacyRouting'] = { preserved: true, imported: 0, remaining: 0 };
+  /** Set by the agent packs: a version change that swaps the know-how republishes its editable brain copy. */
+  private knowhowListener: ((profile: AgentProfile, previousHash: string | undefined) => void) | null = null;
+  onKnowhowChange(listener: (profile: AgentProfile, previousHash: string | undefined) => void): void { this.knowhowListener = listener; }
+  private knowhowChanged(before: AgentProfile, after: AgentProfile): void {
+    if (before.knowhow?.hash !== after.knowhow?.hash) this.knowhowListener?.(structuredClone(after), before.knowhow?.hash);
+  }
   constructor(private readonly d: AgentCatalogDeps) {
     // v2 lives in its own file: agents.json (v1) stays as it was, so a rolled-back build still reads its catalog.
     this.file = path.join(d.userData, 'agents.v2.json');
@@ -322,8 +331,6 @@ export class AgentCatalogService {
       const draft = this.validate(p, false);
       const trial = p.trial === undefined ? undefined : obj(p.trial);
       const probation = p.probation === undefined ? undefined : obj(p.probation);
-      if (probation && (typeof probation.since !== 'number' || !Number.isFinite(probation.since) || typeof probation.requestItemId !== 'string' || !probation.requestItemId.trim()
-        || probation.requestItemId.length > 200 || !(probation.keptBy === undefined || probation.keptBy === 'brother'))) throw new Error('Prova dell’Agente non valida.');
       // the pristine seed renamed "Generale" (AGENTS-DESIGN §4.7): not Brother's edit, so no version and no lock
       if (p.id === GENERAL_AGENT_ID && p.userLocked === false && draft.name === LEGACY_GENERAL_NAME) { draft.name = ROLES[0][1]; this.renamed = true; }
       if (!count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean' || !has(['active', 'archived'] as const, p.status)
@@ -331,7 +338,7 @@ export class AgentCatalogService {
         || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number' || !Number.isFinite(trial.startedAt)))) throw new Error('Versione Agente non valida.');
       return { ...draft, ...(p.id === 'default-pulse' || p.id === ORCHESTRATOR_AGENT_ID ? { routable: false } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
-        ...(probation ? { probation: { since: probation.since as number, requestItemId: probation.requestItemId as string, ...(probation.keptBy ? { keptBy: 'brother' as const } : {}) } } : {}),
+        ...(probation ? { probation: this.checkedProbation(probation) } : {}),
         lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(typeof p.presetHash === 'string' && /^[a-f0-9]{64}$/.test(p.presetHash) ? { presetHash: p.presetHash } : {}), ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
     });
     if (profiles.filter(p => p.status === 'active').length > MAX_ACTIVE_AGENTS) throw new Error('Troppi Agenti attivi.');
@@ -449,26 +456,29 @@ export class AgentCatalogService {
     if (!(p.permissionCeiling === undefined || p.permissionCeiling === null || has(PERMISSION_CEILINGS, p.permissionCeiling))) throw new Error('Limite dei permessi non valido.');
     return { name: text(p.name, 80, 'Nome', partial), purpose, instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model: p.model as string | null,
       ...(manifest !== undefined ? { manifest } : {}),
+      ...(p.knowhow !== undefined ? { knowhow: checkedKnowhow(p.knowhow) } : {}),
+      ...(p.pack !== undefined ? { pack: checkedPackIdentity(p.pack) } : {}),
       ...(p.effort !== undefined ? { effort: p.effort as Effort } : {}), avatar: checkedAvatar(p.avatar, this.d.imageSize),
       role: p.role === undefined || p.role === '' ? purpose : text(p.role, 160, 'Ruolo'), category: (p.category ?? 'other') as AgentCategory,
       tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null };
   }
   /** Brother's edit. A behaviour change becomes a new active version; a cosmetic one (name, avatar, role…) saves in place. */
-  validateDraft(value: unknown): AgentDraft { return this.validate(value, true); }
-  save(value: unknown, id?: string): AgentProfile {
+  validateDraft(value: unknown): AgentDraft { this.writable(); return this.validate(value, true); }
+  save(value: unknown, id?: string, createdId?: string): AgentProfile {
     this.writable();
     const old = id === undefined ? undefined : this.find(id);
     if (old?.status === 'archived') throw new Error('Ripristina l’Agente prima di modificarlo.');
     const input = obj(value);
     // Old clients omit additive fields: keep the stored ones. An explicit empty manifest or null policy clears them.
-    const kept = old ? Object.fromEntries((['manifest', 'role', 'category', 'tools', 'permissionCeiling'] as const).filter(k => input[k] === undefined && old[k] !== undefined).map(k => [k, old[k]])) : {};
+    const kept = old ? Object.fromEntries((['manifest', 'role', 'category', 'tools', 'permissionCeiling', 'knowhow', 'pack'] as const).filter(k => input[k] === undefined && old[k] !== undefined).map(k => [k, old[k]])) : {};
     const draft = this.validate({ ...input, ...kept }, true);
+    if (createdId !== undefined && (!ID.test(createdId) || this.profiles.some(p => p.id === createdId))) throw new Error('Agent id already exists');
     if (!old && this.profiles.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error(`Il catalogo contiene già ${MAX_ACTIVE_AGENTS} Agenti attivi. Archiviane uno prima di crearne un altro.`);
     if (!old && this.profiles.length >= MAX_AGENTS) throw new Error(`Il catalogo ha raggiunto ${MAX_AGENTS} Agenti, archiviati compresi.`);
     const at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1);
     let profile: AgentProfile, versions: AgentVersion[] = [], states: Parameters<AgentHistory['commit']>[1] = [];
     if (!old) {
-      profile = { ...draft, id: `agent-${randomUUID()}`, createdAt: at, updatedAt: at, origin: { kind: 'user' }, version: 1, activeVersion: 1, lastEditedBy: 'user', userLocked: true, status: 'active' };
+      profile = { ...draft, id: createdId ?? `agent-${randomUUID()}`, createdAt: at, updatedAt: at, origin: { kind: 'user' }, version: 1, activeVersion: 1, lastEditedBy: 'user', userLocked: true, status: 'active' };
       versions = [firstVersion(profile, 'user', 'Creato da Brother', at)];
     } else {
       const { manifest: _m, effort: _e, ...rest } = old;
@@ -500,7 +510,7 @@ export class AgentCatalogService {
     this.writable();
     const old = options.id ? this.find(options.id) : undefined;
     if (old && (protectedAgent(old) || old.status !== 'active')) throw new Error('Protected or archived agent: propose the change instead.');
-    const draft = this.validate(old ? { ...old, ...obj(value) } : value, true);
+    const draft = this.validate(old ? { ...old, ...withoutPackFields(value) } : withoutPackFields(value), true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
     const base = old ?? (options.presetId ? this.find(options.presetId) : undefined);
     if (!old && (!base || base.origin.kind !== 'preset' || base.status !== 'active')) throw new Error('Choose an active base preset.');
@@ -531,12 +541,80 @@ export class AgentCatalogService {
     const old = this.find(id), entry = this.store.get(id, version);
     if (old.origin.kind !== 'orchestrator' || protectedAgent(old) || old.status !== 'active') throw new Error('Only owned, unlocked active agents may be rolled back.');
     if (!entry || !count(version) || version >= old.activeVersion) throw new Error('Choose an earlier version.');
-    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, ...entry.behaviour }, true);
+    // A version without know-how restores none: the newer skill files must not survive the rollback.
+    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, knowhow: undefined, ...entry.behaviour }, true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
-    const { trial: _trial, ...rest } = old; void _trial;
+    const { trial: _trial, knowhow: _k, ...rest } = old; void _trial; void _k;
     const p: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: Math.max(this.now(), old.updatedAt + 1), lastEditedBy: 'orchestrator' };
     this.commit(this.profiles.map(x => x.id === id ? p : x), [], [{ agentId: id, version: old.activeVersion, state: old.trial ? 'rejected' : 'superseded' }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(old, p);
     return structuredClone(p);
+  }
+
+  /** Persisted probation: one cause, either the task message that asked for the agent or the reviewed pack it came from. */
+  private checkedProbation(value: unknown): AgentProbation {
+    const p = obj(value), source = p.source === undefined ? undefined : obj(p.source), request = p.requestItemId;
+    if (typeof p.since !== 'number' || !Number.isFinite(p.since) || !(p.keptBy === undefined || p.keptBy === 'brother')
+      || !(request === undefined || typeof request === 'string' && !!request.trim() && request.length <= 200)
+      || (request === undefined) === (source === undefined) || (source && source.kind !== 'import')) throw new Error('Prova dell’Agente non valida.');
+    const pack = source ? checkedPackIdentity({ id: source.packId, revision: source.revision }) : undefined;
+    return { since: p.since, ...(typeof request === 'string' ? { requestItemId: request } : {}),
+      ...(pack ? { source: { kind: 'import' as const, packId: pack.id, revision: pack.revision } } : {}), ...(p.keptBy ? { keptBy: 'brother' as const } : {}) };
+  }
+  /** Main-only pack metadata update; never accepts a renderer-authored provenance object. */
+  packIdentity(id: string, pack: AgentProfile['pack']): void {
+    this.writable(); const old = this.find(id);
+    const profile = { ...old, pack: checkedPackIdentity(pack) };
+    this.commit(this.profiles.map(p => p.id === id ? profile : p), []);
+  }
+  /** Reviewed import/learning: untrusted author. A new agent starts the shared probation (keep/retire, AGENTS-DESIGN §4.7);
+   *  a change to an existing one becomes a trial. */
+  applyPack(value: AgentDraft, id: string, source: PackInstall['source'], update = false, origin?: AgentOrigin): AgentProfile {
+    return this.applyPacks([{ value, id, source, update, origin }])[0]!;
+  }
+  validatePacks(items: PackInstall[]): void { this.preparePacks(items); }
+  applyPacks(items: PackInstall[]): AgentProfile[] {
+    const { profiles, entries, installed } = this.preparePacks(items);
+    this.commit(profiles, entries); return structuredClone(installed);
+  }
+  private preparePacks(items: PackInstall[]) {
+    const profiles = [...this.profiles], entries: AgentVersion[] = [], installed: AgentProfile[] = [];
+    for (const { value, id, source, update = false, origin } of items) {
+    this.writable();
+    if (!ID.test(id)) throw new Error('Invalid imported identity');
+    const old = profiles.find(p => p.id === id);
+    if (update !== !!old || old?.trial || old?.status === 'archived' || (!old && source.kind !== 'import')) throw new Error('Import collision changed; inspect again');
+    if (!old && profiles.filter(p => p.status === 'active' && inProbation(p)).length >= PROBATION_CAP) throw new Error('PROBATION_CAP');
+    if (!old && (profiles.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS || profiles.length >= MAX_AGENTS)) throw new Error('Agent catalog full');
+    const draft = this.validate(value, true), at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1), version = (old?.version ?? 0) + 1;
+    const probation = old ? old.probation : source.kind === 'import' ? this.checkedProbation({ since: at, source }) : undefined;
+    const profile: AgentProfile = { ...draft, id, role: draft.role, category: draft.category, tools: draft.tools, permissionCeiling: draft.permissionCeiling,
+      createdAt: old?.createdAt ?? at, updatedAt: at, origin: origin ?? old?.origin ?? { kind: 'user' }, version, activeVersion: version,
+      lastEditedBy: 'orchestrator', userLocked: old?.userLocked ?? false, status: 'active', ...(old?.routable === false ? { routable: false } : {}), ...(probation ? { probation } : {}),
+      ...(old ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
+    const entry: AgentVersion = { agentId: id, version, parentVersion: old?.activeVersion ?? null, behaviour: behaviourOf(draft), author: 'orchestrator', reason: source.kind === 'import' ? 'Imported agent pack' : 'Approved learned rule', at, state: old ? 'trial' : 'active' };
+    if (old) profiles[profiles.findIndex(p => p.id === id)] = profile; else profiles.push(profile);
+    entries.push(entry); installed.push(profile);
+    }
+    this.body(profiles);
+    return { profiles, entries, installed };
+  }
+  /** Ends the open trial of a pack update or an approved learned rule: keep its version, or roll back to the baseline. */
+  resolveTrial(id: string, decision: 'keep' | 'rollback'): AgentProfile {
+    this.writable(); const p = this.find(id);
+    if (!['keep', 'rollback'].includes(decision) || !p.trial) throw new Error('No agent trial to resolve');
+    const { trial, knowhow: _k, manifest: _m, effort: _e, ...rest } = p;
+    void _k; void _m; void _e;
+    const baseline = decision === 'rollback' ? this.store.get(id, trial.baseline) : undefined;
+    if (decision === 'rollback' && !baseline) throw new Error('Missing trial baseline');
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...this.validate({ ...rest, ...behaviourOf(baseline?.behaviour ?? p) }, true),
+      activeVersion: baseline?.version ?? p.activeVersion, updatedAt: at };
+    const states: Parameters<AgentHistory['commit']>[1] = [{ agentId: id, version: p.activeVersion, state: decision === 'keep' ? 'kept' : 'rejected' }];
+    if (baseline) states.push({ agentId: id, version: baseline.version, state: 'active' });
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], states);
+    this.knowhowChanged(p, profile);
+    return structuredClone(profile);
   }
   /** Out of the launch list and the active limit; definition and history stay. */
   archive(id: string): AgentProfile {
@@ -609,12 +687,13 @@ export class AgentCatalogService {
     if (!p.trial || p.trial.version !== p.activeVersion || p.trial.baseline !== baseline) throw new Error('Nessuna prova da annullare su questa versione.');
     const entry = this.store.get(id, baseline);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
-    const { manifest: _m, effort: _e, trial: _t, ...rest } = p;
-    void _m; void _e; void _t;
+    const { manifest: _m, effort: _e, trial: _t, knowhow: _k, ...rest } = p;
+    void _m; void _e; void _t; void _k;
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
     const profile: AgentProfile = { ...rest, ...draft, activeVersion: baseline, updatedAt: at, lastEditedBy: 'user', userLocked: true };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
@@ -628,18 +707,19 @@ export class AgentCatalogService {
     if (version === p.activeVersion) return structuredClone(p);
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
-    const { manifest: _m, effort: _e, ...rest } = p;
-    void _m; void _e;
+    const { manifest: _m, effort: _e, knowhow: _k, ...rest } = p;
+    void _m; void _e; void _k;
     // Same availability checks as a save: an engine or model that is gone is refused, never replaced.
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
     const judged = inProbation(p);
     const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'user', userLocked: true, ...(judged ? { probation: { ...p.probation!, keptBy: 'brother' as const } } : {}) };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded', ...(judged ? { probation: this.decision('kept', 'brother', 'Versione cambiata da Brother', at) } : {}) }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
-  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null } {
+  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string } } {
     if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.regia && !req.appRegia) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
     if (req.agentId === undefined) {
       const compatible = { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };

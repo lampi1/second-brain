@@ -17,11 +17,20 @@ import { readOwner } from '../agents/catalog';
 import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 
+function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as Record<string, unknown>;
+  return typeof a.pluginDir === 'string' && a.pluginDir.length <= 4096 && typeof a.skillRoot === 'string'
+    && /^[a-f0-9]{64}$/.test(path.basename(a.pluginDir)) && path.basename(path.dirname(a.pluginDir)) === 'agent-pack-runtime'
+    && path.resolve(a.skillRoot) === path.resolve(a.pluginDir, 'skills');
+}
+
 export interface StoredChat {
   id: string;
   agent?: AgentOwnerSnapshot;
   work?: NonNullable<ChatSummary['work']>;
   agentInstructions?: string;
+  agentAssets?: { pluginDir: string; skillRoot: string };
   agentChildren?: AgentChildren;
   /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
   agentPolicy?: AgentPolicy;
@@ -107,7 +116,9 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route), run = readRun(c.run);
   return {
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
-    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= 8000 ? { agentInstructions: c.agentInstructions } : {}),
+    // Cursor carries two bounded skill documents in addition to the 8000-character profile.
+    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : 8000) ? { agentInstructions: c.agentInstructions } : {}),
+    ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
     ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
