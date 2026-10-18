@@ -42,7 +42,9 @@ function fastClose(app: ElectronApplication, userData: string): void {
 export async function launch(env: Record<string, string> = {}, userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'))): Promise<Launched> {
   await exiting.get(userData); // the previous app on this profile is still ending
   const app = await electron.launch({
-    args: ['.'],
+    // SB_E2E_ELECTRON_ARGS: extra Chromium switches for a machine without a GPU, e.g. a Linux container where the 3D
+    // map needs software WebGL: "--use-angle=swiftshader --enable-unsafe-swiftshader"
+    args: [...(process.env.SB_E2E_ELECTRON_ARGS ?? '').split(/\s+/).filter(a => /^--[\w-]+(=[\w.-]+)?$/.test(a)), '.'],
     cwd: path.resolve(import.meta.dirname, '..', '..'),
     // SB_HIDDEN: the app runs off screen and never takes focus (the user keeps working while tests run)
     env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', SB_HIDDEN: '1', SB_LANG: 'it', ...env } as Record<string, string>,

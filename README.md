@@ -140,8 +140,15 @@ and the browser an agent drives sits right under it.
 ![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/regia.webp)
 
 The Orchestrator is the chat you talk to first. It knows every agent, starts new ones from your agent catalog, routes
-mail between them and tells you what needs you. Agents learn from cost, time and outcome, and every change to an agent
-waits for your approval in the **Agenti** section.
+mail between them and tells you what needs you.
+
+### Agents that improve, under your approval
+
+![The Agenti page: the catalog of agents as cards, with runs, success and cost](docs/screenshots/agents.webp)
+
+Each agent is a card with its role, engine, model and observed results (runs, success, cost); its details show the
+whole prompt that makes it that agent. Agents learn from cost, time and outcome, and every proposed change to an agent
+waits in **Agenti** until you approve it.
 
 ### Browsers your agents drive
 
