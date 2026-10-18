@@ -1,0 +1,14 @@
+/* Agent overview cards use the app's theme tokens; the page remains readable at narrow widths. */
+.agent-overview{max-width:1400px;margin:auto;padding:24px;overflow-wrap:anywhere}
+.catalog-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}.catalog-head>div{flex:1;min-width:220px}.catalog-head h2{margin:0 0 6px}.catalog-head p,.catalog-note{color:var(--text-2)}
+.catalog-intro,.catalog-create{padding:20px;border:1px solid var(--border-2);border-radius:var(--r-m);background:var(--surface);margin-bottom:20px}
+.catalog-create{display:grid;gap:12px;max-width:700px}.catalog-create textarea,.catalog-create input{width:100%}
+.catalog-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:20px 0}.catalog-filters .field{flex:1;min-width:140px;max-width:320px}
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr));gap:16px;margin-top:20px}
+.catalog-card{position:relative;min-width:0;display:flex;flex-direction:column;border:1px solid var(--border-2);border-top:3px solid var(--accent);border-radius:var(--r-m);padding:20px;background:var(--surface)}
+.catalog-card:hover,.catalog-card:focus-within{border-color:var(--accent)}.catalog-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.catalog-badge{font-size:var(--fs-s);border:1px solid var(--border-2);border-radius:20px;padding:4px 8px}.catalog-badge[data-probation=true]{color:var(--accent)}
+.catalog-card h3{margin:16px 0 5px}.catalog-card h3 button{font:inherit;color:inherit;text-align:left;background:none;border:0;padding:0;cursor:pointer}.catalog-card h3 button:after{content:"";position:absolute;inset:0;border-radius:var(--r-m)}
+.catalog-role{font-weight:600;margin:0 0 8px}.catalog-purpose{color:var(--text-2);margin:0 0 12px;flex:1}.catalog-engine{font-size:var(--fs-s);color:var(--text-2);margin:0 0 16px}
+.catalog-stats{display:grid;grid-template-columns:1fr 1fr;gap:16px 12px;border-top:1px solid var(--border);padding-top:16px;margin:0 0 16px}.catalog-stats dt,.catalog-stats small{font-size:var(--fs-s);color:var(--text-2)}.catalog-stats dd{font-weight:600;margin:4px 0;font-variant-numeric:tabular-nums}
+.catalog-card footer{display:grid;gap:6px;font-size:var(--fs-s);color:var(--text-2);border-top:1px solid var(--border);padding-top:12px}.catalog-back{margin:16px 20px 0}
+@media(max-width:600px){.agent-overview{padding:16px}.catalog-grid{grid-template-columns:1fr}}

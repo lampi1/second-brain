@@ -1,4 +1,5 @@
 import { costsIt } from './areas/costs.it';
+import { catalogIt } from './areas/catalog.it';
 import { connectorsIt } from './areas/connectors.it';
 // The Italian UI texts (ADR 0057): the source dictionary. Every key the UI shows lives here; en.ts must have the same
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
@@ -19,6 +20,7 @@ import { homeIt } from './areas/home.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 
 export const it = {
+  ...catalogIt,
   ...costsIt,
   ...connectorsIt,
   ...reviewedContextIt,

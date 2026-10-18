@@ -41,7 +41,7 @@ export function Sidebar() {
   const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
   const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','devops','fatto','impostazioni'].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','agenti','dashboard','devops','fatto','impostazioni'].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -63,7 +63,7 @@ export function Sidebar() {
   const waitingBadge = <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span>;
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
-    return item(p.id, p.id==='agenti'?t('product.profiles'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
+    return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
       key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
@@ -72,6 +72,7 @@ export function Sidebar() {
     <nav className="sidebar" aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
         {page1('home')}
+        {page1('agenti')}
         {title(t('dialogs.sidebar.work'), 'work')}
         {devopsOn && show('devops') && page1('devops')}
         {show('fatto')&&page1('fatto')}
