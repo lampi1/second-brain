@@ -21,9 +21,11 @@ import { SetupService } from './agents/setup';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
-import { AgentLifecycle } from './agents/lifecycle';
-import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
-import { lifecycleInput } from './agents/lifecycle-input';
+import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
+import { createAgentLoop } from './agents/loop';
+import { childFeedbackTools } from './agents/child-feedback';
+import type { ProbationJudgement } from './agents/probation';
+import type { AgentProfile, AgentRun } from '../shared/agents';
 import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
@@ -71,7 +73,7 @@ import { releaseId } from './release';
 import { launcherName, restartWaiter, sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { unknownRunError, type AgentRunStore } from './agents/runs';
+import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
@@ -86,6 +88,8 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
   agentAuthoring?: AgentAuthoring;
+  /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
+  agentLifecycle?: LifecycleApi;
   oneShot?: OneShotService;
   agentRuns?: AgentRunStore;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
@@ -373,6 +377,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const autoCloseRef: { current?: AutoCloseService } = {};
+  // the agents' improvement loop (set below, once the lifecycle exists): run start → routing snapshot, run end → feedback
+  // queue + trial evaluation, the user's verdict → evaluation, the probation verdict → a proposal for the user
+  const loopRef: { current?: { started(run: AgentRun): void; ended(run: AgentRun): void; outcome(run: AgentRun): void; probation(agent: AgentProfile, j: ProbationJudgement): void } } = {};
   const manager = new ChatManager({
     unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
@@ -384,7 +391,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         instructions: req.harness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
     },
     // probation agents are judged at each run end and once a day; the daily pass stays off in the test suites
-    probation: { catalog: agents, publish: events => brain.publish(events) },
+    // the verdict is never applied by itself: it becomes a probation:<id> entry of "Da approvare" (agents/lifecycle.ts)
+    probation: { catalog: agents, publish: events => brain.publish(events), propose: (agent, j) => loopRef.current?.probation(agent, j) },
+    onRunStarted: run => loopRef.current?.started(run),
+    onRunEnded: run => loopRef.current?.ended(run),
+    onRunOutcome: run => loopRef.current?.outcome(run),
     ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
@@ -546,26 +557,28 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
   });
-  // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md): the "Da approvare" queue and the local daily suggestions
-  // ($0, no model, at most once a day after 18:00 while nothing works; off in the test suites). One feedback store: the
-  // authoring store (agent-authoring.json) behind agent_feedback; the lifecycle reads it, and its facade is the tool's
-  // entry point (the shared AgentFeedbackArgs), so a gap named on two runs becomes a proposal. Left out on purpose:
-  // the run-end Orchestrator wake asking for feedback (it would spend the user's tokens on every run end; it needs the
-  // mailbox's engine and user-wait gates first) and the trial evaluation (no classifier routing snapshot of the parent
-  // version: unknown routing turns every open trial into a "revert" proposal after five runs).
-  const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false, feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } });
-  const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id), (args, caller) => agentAuthoring.recordFeedback(args, caller), id => unknownRunError(id, manager.runs.list(), chatOf));
-  mountLifecycleApi(brain, lifecycleApi);
+  // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
+  // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
+  // works). One feedback store: the authoring store (agent-authoring.json) behind agent_feedback and agent_child_feedback;
+  // the lifecycle reads it, and its facade is the tools' entry point, so a gap named on two runs becomes a proposal.
+  // Every entry is applied only by the user's click (agents:lifecycleDecide, sender-checked IPC).
+  // The feedback wake: ended runs without the user's verdict wait in agent-lifecycle.json; one batched request goes to the
+  // Orchestrator at most 3 times a day, 2 h apart, once 5 runs wait or the oldest waited 3 h (WAKE_POLICY), and only
+  // while the gate holds (feedback-wake.ts: an open, idle Orchestrator on an engine the user left on, quiet for 5 min,
+  // nothing waiting for the user; off with the setting regiaEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
-  const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => {
-    try {
-      lifecycle.daily(lifecycleIdle(), () => {
-        const all = agents.list();
-        return lifecycleInput([...all.profiles, ...all.archived], manager.runs.list(), manager.list(), (id, v) => agents.history(id).find(x => x.version === v));
-      });
-    } catch (e) { log.warn('agents', 'daily agent suggestions failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
-  }, 10_000);
+  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring, learning: agentPacks.learning,
+    classify: (q, profiles, runs) => classifier.classify(q, profiles, runs), chats,
+    engineOn: h => engineOn(brain.settings(), h), userWaiting: () => manager.pending().length > 0 || asks.pending().length > 0,
+    wakeEnabled: () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
+    idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null) });
+  const lifecycleApi = loop.api;
+  mountLifecycleApi(brain, lifecycleApi);
+  // a parent agent's own sub-agent runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
+  addChatTools(childFeedbackTools(lifecycleApi, () => manager.runs.list()));
+  loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
+  const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
   attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
@@ -623,7 +636,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

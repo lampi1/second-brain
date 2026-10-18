@@ -616,6 +616,25 @@ export class AgentCatalogService {
     this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
+  /** The user's approval of a proposed behavioural change (an Orchestrator draft, a cheaper-model trial): a new version on
+   *  trial against the active one, measured by the lifecycle (trials.ts) until the user keeps it or rolls it back. Only
+   *  sender-checked UI decisions reach it (AgentAuthoring.decide, the lifecycle's decide); know-how and pack identity are
+   *  never taken from the proposal. */
+  approveTrial(id: string, value: unknown, reason: string): AgentProfile {
+    this.writable();
+    const old = this.find(id);
+    if (old.status !== 'active') throw new Error('Ripristina l’Agente prima di modificarlo.');
+    if (old.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di cambiarne il comportamento.');
+    const { knowhow: _k, pack: _p, ...input } = obj(value); void _k; void _p;
+    const draft = this.validate({ ...old, ...withoutPackFields(input) }, true);
+    if (sameBehaviour(old, draft)) throw new Error('La proposta non cambia il comportamento dell’Agente.');
+    const at = Math.max(this.now(), old.updatedAt + 1), version = old.version + 1;
+    const p: AgentProfile = { ...old, ...draft, knowhow: old.knowhow, updatedAt: at, lastEditedBy: 'user', version, activeVersion: version, trial: { version, baseline: old.activeVersion, startedAt: at } };
+    if (p.knowhow === undefined) delete p.knowhow;
+    this.commit(this.profiles.map(x => x.id === id ? p : x), [{ agentId: id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(p), author: 'orchestrator', reason: text(reason, 600, 'Reason'), at, state: 'trial' }]);
+    this.d.onCustomized?.();
+    return structuredClone(p);
+  }
   /** Out of the launch list and the active limit; definition and history stay. */
   archive(id: string): AgentProfile {
     if (id === 'default-pulse') throw new Error('Battito si spegne nelle Impostazioni, non si archivia.');

@@ -186,6 +186,17 @@ export interface AgentRun {
   /** what the run was about (AGENTS-DESIGN §4.8), set at start and frozen at its end; missing on runs recorded before tags
    *  existed: unknown in every filter, never a match */
   tags?: AgentRunTags;
+  /** how the run was routed, captured just after its start (agents/routing-snapshot.ts): the local classifier's view of
+   *  this request, and during a trial whether the parent (baseline) version would also have won it; missing = unknown */
+  routing?: AgentRunRouting;
+}
+/** The local classifier (#40) on the run's goal at its start. score/rank/mode null = nothing scored (empty goal, no
+ *  classifier). trial.parentWins: the agent with its baseline definition still ranks first for this request (true),
+ *  another agent ranks above it (false), unknown (null). Only parentWins true runs are compared with the baseline. */
+export interface AgentRunRouting {
+  at: number; agentId: string; version: number;
+  mode: 'hybrid' | 'words' | null; score: number | null; rank: number | null;
+  trial?: { baseline: number; parentWins: boolean | null };
 }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */

@@ -52,9 +52,9 @@ import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
 import { compatibleOwner } from '../agents/catalog';
 import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
-import { inProbation, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
+import { inProbation, type AgentOwnerSnapshot, type AgentProfile, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
-import { judge } from '../agents/probation';
+import { judge, type ProbationJudgement } from '../agents/probation';
 import type { FeedInput } from '../services';
 import { reportOf } from '../agents/run-report';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
@@ -116,6 +116,10 @@ export interface ChatManagerOptions {
   onTurnEnd?: (info: TurnEndInfo) => void;
   /** Once per actual run end (not per turn); the lifecycle service batches Orchestrator feedback requests. */
   onRunEnded?: (run: AgentRun) => void;
+  /** Once per recorded run start (a copy): wiring.ts takes its routing snapshot (agents/routing-snapshot.ts). */
+  onRunStarted?: (run: AgentRun) => void;
+  /** The user's verdict landed on a run (run:outcome), also on one that had already ended: its trial is evaluated again. */
+  onRunOutcome?: (run: AgentRun) => void;
   /** a question or permission opened in an app chat (→ feed "chat waiting") */
   onWaiting?: (chatId: string, pending: PendingRequest) => void;
   /** a turn ended with nothing pending: the chat is idle again (→ feed "chat done") */
@@ -143,8 +147,10 @@ export interface ChatManagerOptions {
   coldEveryMs?: number;
   /** ms between two checks for stale agent runs (default 10 min; 0 = no timer, tests call staleRuns) */
   runEveryMs?: number;
-  /** probation agents (AGENTS-DESIGN §4.7): judged at each run end and once a day; the catalog applies keep/retire */
-  probation?: { catalog: Pick<AgentCatalogService, 'list' | 'keep' | 'retire'>; publish?: (events: FeedInput[]) => void };
+  /** probation agents (AGENTS-DESIGN §4.7): judged at each run end and once a day. With `propose` the verdict only goes
+   *  to the user's approval queue (wiring.ts: the lifecycle's probation:<id> entry; the owner, 2026-10-18: "sempre sotto
+   *  approvazione"); without it (embedders with no queue, older tests) the catalog applies keep/retire. */
+  probation?: { catalog: Pick<AgentCatalogService, 'list' | 'keep' | 'retire'>; publish?: (events: FeedInput[]) => void; propose?: (agent: AgentProfile, judgement: ProbationJudgement) => void };
   /** ms between two daily probation passes (default 24 h, first one a minute after start; 0 = no timer, tests call probationTick) */
   probationEveryMs?: number;
   /** absolute path of the brain's mem.mjs, when it has one: the hand-off request asks to update the now.md line too */
@@ -927,6 +933,7 @@ export class ChatManager implements ChatService {
     this.finishRun(run, 'completed');
     this.probationTick(run.agentId);
     this.runSave(); this.persist(); this.updated(r);
+    this.hook('agent lifecycle', () => this.opts.onRunOutcome?.(structuredClone(run)));
     return { ...r.s };
   }
 
@@ -1593,6 +1600,8 @@ export class ChatManager implements ChatService {
     try {
       r.s.run = this.runs.start({ ...s, chatId: r.s.id, startedAt: r.createdAt });
       r.idleSince = r.createdAt;
+      const started = r.s.run;
+      this.hook('agent lifecycle', () => this.opts.onRunStarted?.(structuredClone(started)));
     } catch (e) { log.warn('chats', 'agent run not recorded', { chat: r.s.id, cause: errText(e), hint: 'the chat works; this run is missing from the agent metrics' }); }
   }
 
@@ -1642,6 +1651,7 @@ export class ChatManager implements ChatService {
         if ((agentId !== undefined && agent.id !== agentId) || !inProbation(agent)) continue;
         const j = judge(agent, runs, now);
         if (j.decision === 'wait') continue;
+        if (p.propose) { const propose = p.propose; this.hook('probation proposal', () => propose(structuredClone(agent), j)); continue; }
         try {
           if (j.decision === 'keep') p.catalog.keep(agent.id, 'evaluator', j.reason);
           else p.catalog.retire(agent.id, j.reason, 'evaluator');

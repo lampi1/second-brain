@@ -2,7 +2,7 @@
 // components/AgentLifecyclePanel.tsx through t(). English counterpart in lifecycle.en.ts (ADR 0057).
 export const lifecycleIt={
  'lifecycle.kind.update':'Aggiornamento','lifecycle.kind.create':'Nuovo agente','lifecycle.kind.merge':'Unione di ruoli','lifecycle.kind.model-trial':'Prova di modello',
- 'lifecycle.kind.split':'Separazione di un ruolo','lifecycle.kind.keep':'Mantieni versione','lifecycle.kind.revert':'Ripristina versione',
+ 'lifecycle.kind.split':'Separazione di un ruolo','lifecycle.kind.keep':'Mantieni versione','lifecycle.kind.revert':'Ripristina versione','lifecycle.kind.retire':'Ritira Agente',
  'lifecycle.metricMissing':'Dato non disponibile','lifecycle.coverageMissing':'non disponibile',
  'lifecycle.metric':(p:{value:string;n:number;coverage:string})=>`${p.value} · n=${p.n} · copertura ${p.coverage}`,
  'lifecycle.compare':'Confronto delle esecuzioni','lifecycle.metricCol':'Metrica','lifecycle.baseline':'Riferimento','lifecycle.evaluated':'Gruppo valutato',

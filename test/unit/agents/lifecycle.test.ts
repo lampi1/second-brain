@@ -70,7 +70,9 @@ describe('trials', () => {
     expect(evaluateTrial(agent(), baseline(), 1000 + TRIAL_DAYS, () => true).decision).toBe('revert');
   });
   it('separates new work and unknown routing, never counts either in improvement', () => {
-    const result = evaluateTrial(agent(), [...baseline(), ...trial()], 2000, r => r.runId === run(20).runId ? null : false);
+    const route = (r: AgentRun) => r.runId === run(20).runId ? null : false;
+    expect(evaluateTrial(agent(), [...baseline(), ...trial()], 2000, route).decision).toBe('wait');
+    const result = evaluateTrial(agent(), [...baseline(), ...trial()], 1000 + TRIAL_DAYS, route);
     expect(result.decision).toBe('revert'); expect(result.comparable).toBe(0); expect(result.otherRuns).toBe(4); expect(result.unknownRouting).toBe(1);
   });
   it.each(['cost', 'time', 'questions', 'unknown', 'no-improvement'] as const)('reverts failing %s guard', kind => {
@@ -80,7 +82,16 @@ describe('trials', () => {
       ...(kind === 'unknown' ? { outcome: { ...r.outcome!, basis: 'self-report' as const } } : {}),
       ...(kind === 'no-improvement' ? { corrections: { tagged: 2, afterReport: 0 } } : {}),
     }));
-    expect(evaluateTrial(agent(), [...baseline(), ...runs], 2000, () => true).decision).toBe('revert');
+    // missing confirmed verdicts wait inside the window; at its end they revert like a failed guard
+    expect(evaluateTrial(agent(), [...baseline(), ...runs], kind === 'unknown' ? 1000 + TRIAL_DAYS : 2000, () => true).decision).toBe('revert');
+  });
+  it('waits while the trial runs have no confirmed verdict yet or too few comparable runs, inside the 21 days', () => {
+    // the user rates a run after its end: five ended trial runs without verdicts are no evidence of a worse version
+    const pending = trial().map(r => { const { outcome: _o, ...rest } = r; void _o; return rest as AgentRun; });
+    expect(evaluateTrial(agent(), [...baseline(), ...pending], 2000, () => true)).toMatchObject({ decision: 'wait' });
+    expect(evaluateTrial(agent(), [...baseline(), ...pending], 1000 + TRIAL_DAYS, () => true)).toMatchObject({ decision: 'revert', reason: 'Copertura degli esiti inferiore al 60%' });
+    expect(evaluateTrial(agent(), [...baseline(), ...trial()], 2000, () => null)).toMatchObject({ decision: 'wait', unknownRouting: 5 });
+    expect(evaluateTrial(agent(), [...baseline(), ...trial()], 1000 + TRIAL_DAYS, () => null)).toMatchObject({ decision: 'revert', reason: 'Campione comparabile insufficiente' });
   });
   it('excludes post-start baseline outcomes and v0', () => {
     const b = baseline().map(r => ({ ...r, endedAt: 2000 }));
@@ -120,15 +131,17 @@ describe('suggestions and scheduling', () => {
     const p = suggestAgents({ ...empty(), agents: [agent()], runs }, 2000)[0]!;
     expect(p.kind).toBe('split'); expect(p.metrics?.after?.successRate).toEqual({ value: 0, n: 10, coverage: 1 });
   });
-  it('batches actual run ends durably, retries failed delivery and excludes oneshots', async () => {
+  it('batches actual run ends durably, retries failed delivery and excludes oneshots and runs the user judged', async () => {
     let now = 1000; const dir = tmp(), wake = vi.fn().mockResolvedValue(false);
-    let service = new AgentLifecycle({ userData: dir, wake, now: () => now });
-    service.onRunEnded(run(1)); service.onRunEnded(run(2)); service.onRunEnded(run(1));
-    service.onRunEnded(run(3, { source: 'oneshot' }));
+    const policy = { minBatch: 1 };
+    const opinion = { outcome: { verdict: 'success' as const, basis: 'self-report' as const, by: 'agent', at: 200 } };
+    let service = new AgentLifecycle({ userData: dir, wake, now: () => now, wakePolicy: policy });
+    service.onRunEnded(run(1, opinion)); service.onRunEnded(run(2, { outcome: undefined })); service.onRunEnded(run(1, opinion));
+    service.onRunEnded(run(3, { source: 'oneshot' })); service.onRunEnded(run(4)); // run(4): the user's verdict, no opinion needed
     await service.flushWake(); expect(wake).not.toHaveBeenCalled(); now += 30_000;
-    service = new AgentLifecycle({ userData: dir, wake, now: () => now });
-    await service.flushWake(); expect(wake).toHaveBeenCalledWith([run(1).runId, run(2).runId]);
-    wake.mockResolvedValue(true); await service.flushWake(); await service.flushWake(); expect(wake).toHaveBeenCalledTimes(2);
+    service = new AgentLifecycle({ userData: dir, wake, now: () => now, wakePolicy: policy });
+    expect(await service.flushWake()).toBe('refused'); expect(wake).toHaveBeenCalledWith([run(1).runId, run(2).runId]);
+    wake.mockResolvedValue(true); expect(await service.flushWake()).toBe('sent'); expect(await service.flushWake()).toBe('none'); expect(wake).toHaveBeenCalledTimes(2);
   });
   it('reads daily evidence only after 18:00 while idle, once across restarts, without model calls', () => {
     let now = new Date(2026, 9, 18, 17, 59).getTime(); const dir = tmp(), read = vi.fn(empty);

@@ -1,5 +1,7 @@
 // Feedback and approval-only lifecycle records, shared by agent services and their UI/API adapters.
 import type { AgentEvidenceRef, AgentRunOutcome, VersionMetrics } from './agents';
+import type { AgentProposal } from './agent-authoring';
+import type { LearnedRuleProposal } from './agent-pack';
 
 export const DEFINITION_GAPS = ['instructions', 'tools', 'model-effort', 'unclear-goal', 'none'] as const;
 export type DefinitionGap = typeof DEFINITION_GAPS[number];
@@ -79,17 +81,34 @@ export interface TrialEvaluation {
   before: VersionMetrics | null; after: VersionMetrics | null; other: VersionMetrics | null;
   comparable: number; otherRuns: number; unknownRouting: number;
 }
+/**
+ * One entry of the "Da approvare" queue. Nothing in it is applied before the user's agents:lifecycleDecide:
+ * - key `trial:<agentId>:<version>`, kind keep | revert: approve = end the trial that way (resolveTrial keep | rollback);
+ * - key `probation:<agentId>`, kind keep | retire: approve = keep or retire the agent created for a task, as the user;
+ * - kind model-trial: approve = a trial version of the agent on the cheaper model (`model`);
+ * - kind update (a gap named on two runs) | create | merge | split: approve = ask the Orchestrator for a concrete draft,
+ *   which comes back in agents:proposals for a second, final approval (nothing changes before that);
+ * - dismiss (any) = drop it; the same key is not proposed again for a while (trial/probation 7 days, the rest 14).
+ */
 export interface AgentLifecycleProposal {
-  key: string; kind: 'update' | 'create' | 'merge' | 'model-trial' | 'split' | 'keep' | 'revert';
+  key: string; kind: 'update' | 'create' | 'merge' | 'model-trial' | 'split' | 'keep' | 'revert' | 'retire';
   agentIds: string[]; reason: string; evidence: AgentEvidenceRef[]; at: number;
   state: 'pending'; metrics?: { before: VersionMetrics | null; after: VersionMetrics | null };
+  /** model-trial: the model the trial would use */
+  model?: string;
 }
+export type AgentLifecycleDecision = 'approve' | 'dismiss';
+export interface AgentLifecycleDecide { key: string; decision: AgentLifecycleDecision }
 /** Read model for the approval panel. Transport is supplied by the typed IPC integration. */
 export interface AgentLifecycleSnapshot {
   proposals: AgentLifecycleProposal[];
   evaluations: { agentId: string; version: number; result: TrialEvaluation }[];
   feedback: AgentFeedback[];
   problem: string | null;
+  /** pending learned rules of every agent (decided with agents:learnDecide); always set by main (optional for older fixtures) */
+  learned?: LearnedRuleProposal[];
+  /** pending Orchestrator drafts (agents:proposals, decided with agents:proposalDecide) */
+  drafts?: AgentProposal[];
 }
 export interface AgentLifecycleQuery { agentId?: string }
 export interface AgentLifecycleClient {

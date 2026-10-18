@@ -26,6 +26,8 @@ export class AgentPackLearning {
     const proposal: LearnedRuleProposal = { id: randomBytes(8).toString('hex'), agentId, rule: rule.trim(), evidence: evidence.trim(), createdAt: Date.now(), status: 'pending' };
     this.proposals = [...this.proposals, proposal]; this.persist(); return structuredClone(proposal);
   }
+  /** Every agent's pending learned rules, oldest first (the "Da approvare" queue reads them; decided with decide()). */
+  pending(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending')); }
   list(id: string): LearnedRules {
     const profile = this.flows.profile(id), files = this.flows.ownSkills(profile, true);
     const file = `skills/${portableId(id)}/learned-rules.md`;
