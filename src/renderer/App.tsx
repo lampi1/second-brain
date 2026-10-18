@@ -164,9 +164,9 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
         {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
-          ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
+          ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
-            ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>
+            ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>
             : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
       </div>
     </div>

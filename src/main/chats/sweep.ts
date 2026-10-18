@@ -7,6 +7,8 @@
 //   escaped them: children born before the engine joined its job, engines of a run that crashed, a failed reap.
 //   One log line per sweep with the counts, and the machine's process counts for the names that pile up.
 // Kills use TerminateProcess (process.kill), never taskkill. Used by wiring.ts.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('chats/sweep');
 import fs from 'node:fs';
 import path from 'node:path';
 import { log } from '../log';

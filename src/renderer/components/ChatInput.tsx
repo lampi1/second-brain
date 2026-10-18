@@ -12,6 +12,7 @@
 // list opens. A Regia's input also has "Nuova chat" (ADR 0034): on, the message goes with the line that asks her to
 // open a new work chat for it (shared/newchat.ts); Ctrl+Shift+Invio sends that way at once; it resets after a send.
 // Used by ChatTile and RegiaTile (also the Regia docked with Ctrl+R).
+import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { splitNewChat, withNewChat } from '@shared/newchat';
 import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachment } from '@shared/contract';
@@ -309,7 +310,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={asNew ? (busy ? t('chat.input.sendAsNew') : t('chat.input.sendAsNewDirect')) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={asNew ? (busy ? t('chat.input.sendAsNewOnBusy') : t('chat.input.sendAsNewDirectOnBusy')) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : (
-            <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !regia ? t('chat.input.queuedInQueue') : ''} <Kbd>Invio</Kbd></span>
+            <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !regia ? t('chat.input.queuedInQueue') : ''} <Kbd>{auditText('audit.ChatInput.enter')}</Kbd></span>
           )}
         </div>
       </div>
@@ -320,9 +321,9 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
 interface ChatDraftCopy{version:1;entries:{id:string;text:string;images:ImageAttachment[];newChat:boolean}[]}
 const CHAT_RECOVERY_KEY='sb.update.chat-drafts.v1';
 export function chatDraftCheckpointProblem():string|null{
-  if(readingN.size)return 'Attendi la lettura degli allegati prima di aggiornare.';
-  if(onSentHooks.size)return 'Completa o svuota le bozze collegate ad azioni prima di aggiornare.';
-  if(draftStorageProblem)return 'La copia locale delle bozze non è stata salvata. Libera spazio e riapri l’app prima di aggiornare.';
+  if(readingN.size)return auditText('cmp.chatInput.waitAttachments');
+  if(onSentHooks.size)return auditText('cmp.chatInput.pendingDrafts');
+  if(draftStorageProblem)return auditText('cmp.chatInput.draftCopyFailed');
   return null;
 }
 export function chatDraftCheckpoint():ChatDraftCopy{
@@ -331,12 +332,12 @@ export function chatDraftCheckpoint():ChatDraftCopy{
 }
 export function validateChatDraftCopy(value:unknown):ChatDraftCopy{
   const copy=value as ChatDraftCopy;
-  if(!copy||copy.version!==1||!Array.isArray(copy.entries)||copy.entries.length>1000)throw Error('Copia delle bozze non valida.');
+  if(!copy||copy.version!==1||!Array.isArray(copy.entries)||copy.entries.length>1000)throw Error(auditText('cmp.chatInput.invalidCopy'));
   const ids=new Set<string>();
   for(const entry of copy.entries){
-    if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>160||ids.has(entry.id)||typeof entry.text!=='string'||entry.text.length>1000000||typeof entry.newChat!=='boolean'||!Array.isArray(entry.images)||entry.images.length>10)throw Error('Copia delle bozze non valida.');
+    if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>160||ids.has(entry.id)||typeof entry.text!=='string'||entry.text.length>1000000||typeof entry.newChat!=='boolean'||!Array.isArray(entry.images)||entry.images.length>10)throw Error(auditText('cmp.chatInput.invalidCopy'));
     ids.add(entry.id);
-    for(const image of entry.images){if(!image||!['image/png','image/jpeg','image/gif','image/webp'].includes(image.mimeType)||typeof image.data!=='string'||image.data.length>5000000||!/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)||image.thumb!==undefined&&(typeof image.thumb!=='string'||image.thumb.length>120000||!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(image.thumb)))throw Error('Allegato della copia non valido.');}
+    for(const image of entry.images){if(!image||!['image/png','image/jpeg','image/gif','image/webp'].includes(image.mimeType)||typeof image.data!=='string'||image.data.length>5000000||!/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)||image.thumb!==undefined&&(typeof image.thumb!=='string'||image.thumb.length>120000||!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(image.thumb)))throw Error(auditText('cmp.chatInput.invalidAttachment'));}
     for(const image of entry.images){validateRecoveryRaster(`data:${image.mimeType};base64,${image.data}`,1920,1,3750000);if(image.thumb)validateRecoveryRaster(image.thumb,240,1,90000);}
   }
   return copy;

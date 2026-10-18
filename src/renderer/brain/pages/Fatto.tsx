@@ -3,7 +3,7 @@
 // day as a table and the full technical report folded. The app's own work is left out (lib/appwork.ts: it has its
 // place in "Migliora l'app"). Data: /api/day?kind=report&date=…, /api/tables.
 import { normTables, type JournalRow } from '../types';
-import { useBrain } from '../api';
+import { useAppRepo, useBrain } from '../api';
 import { dayName, fmt, isDay, shiftDay } from '../lib/format';
 import { ownerOf } from '../lib/text';
 import { normWorkReport, workJournal } from '../lib/appwork';
@@ -13,14 +13,17 @@ import { Markdown } from '../components/Markdown';
 import { IconChevL, IconChevR, Pill, type Navigate, type Tone } from '../components/ui';
 import { DoneView, DONE_TAGS, Standup } from './day';
 import { t as tr } from '../../i18n';
+import { useCallback } from 'react';
 
 const tagTone = (tag: string): Tone => (/fatto|verificato/.test(tag) ? 'good' : /decisione/.test(tag) ? 'violet' : /attrito/.test(tag) ? 'warn' : /lezione/.test(tag) ? 'blue' : '');
 
 export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
+  const appRepo = useAppRepo();
+  const normalizeReport = useCallback((v: unknown) => normWorkReport(v, appRepo), [appRepo]);
   const t = useBrain('/api/tables', normTables);
   const today = t.data?.today ?? '';
   const day = isDay(arg) ? arg : today;
-  const rep = useBrain(day ? `/api/day?kind=report&date=${day}` : null, normWorkReport);
+  const rep = useBrain(day ? `/api/day?kind=report&date=${day}` : null, normalizeReport);
   const owner = t.data ? ownerOf(t.data.ideas) : '';
   const journal = workJournal((t.data?.journal ?? []).filter(r => r.data === day));
   const outcomes = rep.data ? rep.data.rows.filter(r => r.kind !== 'diario' || DONE_TAGS.test(r.tag ?? '')) : [];

@@ -11,6 +11,7 @@
 // the «Peso del costo» (0-10, the λ the daily loop weighs cost against quality with). A writing row on an Anthropic model
 // also has «Sui crediti API» (ADR 0052, off until the user turns it on): its chats run on the Anthropic API engine, paid
 // by the API credits of the user's Max plan. Rendered by SettingsPage.tsx.
+import { t as auditText } from '../i18n';
 import { Select } from './Select';
 import { useEffect, useState } from 'react';
 import type { RoutingInfo, TaskKind } from '@shared/contract';
@@ -54,7 +55,7 @@ export function RoutingGroup() {
     try {
       const r = await window.sb.invoke('routing:restore', { version });
       load(r);
-      toast(`Ripristinata la versione ${version}: ora è la ${r.table?.version ?? '?'}`, 'ok');
+      toast(auditText('cmp.routing.restored', { version, now: r.table?.version ?? '?' }), 'ok');
     } catch (err) { setError(mainError(err)); } finally { setBusy(false); }
   };
   const save = async () => {
@@ -70,70 +71,66 @@ export function RoutingGroup() {
   };
   const t = info?.table;
   return (
-    <section className="st-group" aria-label="Instradamento modelli" data-testid="st-group-routing">
+    <section className="st-group" aria-label={auditText('audit.RoutingGroup.modelRouting')} data-testid="st-group-routing">
       <header>
-        <div className="st-group-h"><h2>Instradamento modelli</h2>
-          <HelpTip label="Instradamento modelli" title="Una tabella di regole" testid="st-help-routing"
-            example="«Review» in qualsiasi area → Opus con sforzo alto; «Log e ops» → un modello più economico.">
-            Per ogni tipo di lavoro, ed eventualmente area, dice con quale modello e quanto sforzo l’Orchestrator apre la chat. Se più righe valgono, vince la più precisa: tipo e area, poi solo area, poi solo tipo, poi «qualsiasi». Così una riga d'area (per esempio App) vale per tutte le sue chat.
-          </HelpTip>
+        <div className="st-group-h"><h2>{auditText('audit.RoutingGroup.modelRouting')}</h2>
+          <HelpTip label={auditText('audit.RoutingGroup.modelRouting')} title={auditText('audit.RoutingGroup.aTableOfRules')} testid="st-help-routing"
+            example={auditText('cmp.routing.exampleRules')}>{auditText('audit.RoutingGroup.forEachKindOfWorkOptionally')}</HelpTip>
         </div>
-        <p>Con quale modello e sforzo l’Orchestrator apre una chat di lavoro, per tipo di lavoro e area. Vince la riga più precisa; nessuna riga = «Chat aperte dall’Orchestrator». L’Orchestrator può cambiare la tabella da solo, con motivo e dati: lo vedi nella Cronologia e puoi ripristinare qualsiasi versione.</p>
+        <p>{auditText('audit.RoutingGroup.theModelAndEffortTheOrchestrator')}</p>
       </header>
       <div className="st-card">
-        {!info ? <div className="st-row"><div className="st-desc">{error ?? 'Leggo la tabella…'}</div></div> : (
+        {!info ? <div className="st-row"><div className="st-desc">{error ?? auditText('auditExpression.RoutingGroup.text139')}</div></div> : (
           <>
             <div className="st-row" data-testid="st-routing-version">
               <div className="st-text">
-                <div className="st-title">{t ? `Versione ${t.version}` : 'Nessuna tabella ancora'}</div>
-                <div className="st-desc">{info.error ?? (t?.appliedAt ? `Salvata il ${when(t.appliedAt)}${t.by ? ` da ${t.by}` : ''}. Ogni salvataggio è una versione nuova: le vecchie restano nel cervello.` : 'Al primo salvataggio nasce la versione 1.')}</div>
+                <div className="st-title">{t ? auditText('auditExpression.RoutingGroup.text140', { v0: t.version }) : auditText('auditExpression.RoutingGroup.text141')}</div>
+                <div className="st-desc">{info.error ?? (t?.appliedAt ? auditText('auditExpression.RoutingGroup.text142', { v0: when(t.appliedAt), v1: t.by ? auditText('auditExpression.RoutingGroup.text143', { v0: t.by }) : '' }) : auditText('auditExpression.RoutingGroup.text144'))}</div>
               </div>
             </div>
             <div className="st-rt-wrap">
               <table className="st-rt" data-testid="st-routing-table">
-                <thead><tr><th>Tipo di lavoro</th><th aria-label="Area">Area<HelpTip label="Area" example="«App, Pers · App»">Le etichette all'inizio del titolo della chat, separate da virgole. Vuota = qualsiasi area.</HelpTip></th><th>Modello</th><th aria-label="Sforzo">Sforzo<HelpTip label="Sforzo">Quanto il modello ragiona prima di rispondere. «predefinito» = quello del modello; più alto costa di più.</HelpTip></th><th>Perché</th><th aria-label="L'AI può cambiarla">AI<HelpTip label="L'AI può cambiarla" testid="st-help-routing-ai">Acceso: l’Orchestrator e il loop giornaliero possono cambiare questa riga da soli, con motivo e dati. Spento: la riga resta come l'hai messa tu, e nemmeno l'esplorazione prova altri modelli per quelle chat.</HelpTip></th><th><span className="sr-only">Togli</span></th></tr></thead>
+                <thead><tr><th>{auditText('audit.RoutingGroup.workKind')}</th><th aria-label={auditText('audit.RoutingGroup.area')}>{auditText('audit.RoutingGroup.area')}<HelpTip label={auditText('audit.RoutingGroup.area')} example="«App, Pers · App»">{auditText('audit.RoutingGroup.labelsAtTheBeginningOfThe')}</HelpTip></th><th>{auditText('audit.RoutingGroup.model')}</th><th aria-label={auditText('audit.RoutingGroup.effort')}>{auditText('audit.RoutingGroup.effort')}<HelpTip label={auditText('audit.RoutingGroup.effort')}>{auditText('audit.RoutingGroup.howMuchTheModelReasonsBefore')}</HelpTip></th><th>{auditText('audit.RoutingGroup.why')}</th><th aria-label={auditText('audit.RoutingGroup.aiCanChangeIt')}>AI<HelpTip label={auditText('audit.RoutingGroup.aiCanChangeIt')} testid="st-help-routing-ai">{auditText('audit.RoutingGroup.onTheOrchestratorAndDailyLoop')}</HelpTip></th><th><span className="sr-only">{auditText('audit.RoutingGroup.remove')}</span></th></tr></thead>
                 <tbody>
                   {rows.map((r, i) => {
                     const m = reg?.models.find(x => x.id === r.model);
                     return (
                       <tr key={i} data-testid={`st-routing-row-${i}`}>
                         <td>
-                          <Select className="st-select st-rt-s" value={r.kind} aria-label={`Riga ${i + 1}: tipo di lavoro`} onChange={e => put(i, { kind: e.target.value as TaskKind | '*' })}>
+                          <Select className="st-select st-rt-s" value={r.kind} aria-label={auditText('auditExpression.RoutingGroup.text145', { v0: i + 1 })} onChange={e => put(i, { kind: e.target.value as TaskKind | '*' })}>
                             {(['*', ...info.kinds] as const).map(k => <option key={k} value={k}>{getKindIt()[k] ?? k}</option>)}
                           </Select>
                         </td>
                         <td>
-                          <input className="st-input st-rt-area" value={r.area} placeholder="qualsiasi" aria-label={`Riga ${i + 1}: area`} onChange={e => put(i, { area: e.target.value })} />
+                          <input className="st-input st-rt-area" value={r.area} placeholder={auditText('audit.RoutingGroup.any')} aria-label={auditText('auditExpression.RoutingGroup.text146', { v0: i + 1 })} onChange={e => put(i, { area: e.target.value })} />
                         </td>
                         <td>
-                          <Select className="st-select st-rt-s" value={r.model} aria-label={`Riga ${i + 1}: modello`}
+                          <Select className="st-select st-rt-s" value={r.model} aria-label={auditText('auditExpression.RoutingGroup.text147', { v0: i + 1 })}
                             onChange={e => { const nm = reg?.models.find(x => x.id === e.target.value); put(i, { model: e.target.value, effort: r.effort && tableEfforts(nm, takes).includes(r.effort) ? r.effort : startEffort(nm, takes) }); }}>
                             {models.map(x => <option key={x.id} value={x.id}>{x.id.replace(/^claude-/, '')}</option>)}
                           </Select>
                           {apiCapable(r, m) && (
                             <label className="st-rt-api" data-testid={`st-routing-api-${i}`}>
-                              <input type="checkbox" checked={r.onApi} aria-label={`Riga ${i + 1}: sui crediti API`} onChange={e => put(i, { onApi: e.target.checked })} data-testid={`st-routing-api-${i}-check`} />
-                              <span>sui crediti API</span>
-                              <HelpTip label="Sui crediti API" title="Crediti API del piano Max" testid={`st-help-routing-api-${i}`}>
-                                Acceso: queste chat girano su Anthropic API con lo stesso modello e le pagano i crediti API del piano, non i limiti di Claude Code. Solo testo: niente file né strumenti. Servono, in «Motori»: Anthropic API acceso con la chiave e «Le Regie possono usare Anthropic API»; per le chat aperte da un Orchestrator anche «Chat tra motori diversi». Se ne manca uno restano su Claude. Lo cambi solo tu.
-                              </HelpTip>
+                              <input type="checkbox" checked={r.onApi} aria-label={auditText('auditExpression.RoutingGroup.text148', { v0: i + 1 })} onChange={e => put(i, { onApi: e.target.checked })} data-testid={`st-routing-api-${i}-check`} />
+                              <span>{auditText('audit.RoutingGroup.usingApiCredits')}</span>
+                              <HelpTip label={auditText('audit.RoutingGroup.usingApiCredits194')} title={auditText('audit.RoutingGroup.maxPlanApiCredits')} testid={`st-help-routing-api-${i}`}>{auditText('audit.RoutingGroup.onTheseChatsRunOnAnthropic')}</HelpTip>
                             </label>
                           )}
                         </td>
                         <td>
-                          <Select className="st-select st-rt-e" value={r.effort} aria-label={`Riga ${i + 1}: sforzo`} onChange={e => put(i, { effort: e.target.value as EditRow['effort'] })}>
-                            <option value="">predefinito</option>
+                          <Select className="st-select st-rt-e" value={r.effort} aria-label={auditText('auditExpression.RoutingGroup.text149', { v0: i + 1 })} onChange={e => put(i, { effort: e.target.value as EditRow['effort'] })}>
+                            <option value="">{auditText('audit.RoutingGroup.default')}</option>
                             {tableEfforts(m, takes).map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}
                           </Select>
                         </td>
                         <td>
-                          <input className="st-input st-rt-why" value={r.why} placeholder="perché (facoltativo: lo scrive l’AI)" aria-label={`Riga ${i + 1}: perché`} onChange={e => put(i, { why: e.target.value })} />
-                          {r.evidence && <div className="st-meta" title={r.evidence}>{r.evidence}{r.since ? ` · dal ${r.since}` : ''}</div>}
+                          <input className="st-input st-rt-why" value={r.why} placeholder={auditText('audit.RoutingGroup.reasonOptionalSuppliedByAi')} aria-label={auditText('auditExpression.RoutingGroup.text150', { v0: i + 1 })} onChange={e => put(i, { why: e.target.value })} />
+                          {r.evidence && <div className="st-meta" title={r.evidence}>{r.evidence}{r.since ? auditText('auditExpression.RoutingGroup.text151', { v0: r.since }) : ''}</div>}
                         </td>
                         <td className="st-rt-ai">
-                          <input type="checkbox" checked={r.ai} aria-label={`Riga ${i + 1}: l'AI può cambiarla`} onChange={e => put(i, { ai: e.target.checked })} data-testid={`st-routing-ai-${i}`} />
+                          <input type="checkbox" checked={r.ai} aria-label={auditText('auditExpression.RoutingGroup.text152', { v0: i + 1 })} onChange={e => put(i, { ai: e.target.checked })} data-testid={`st-routing-ai-${i}`} />
                         </td>
-                        <td><button type="button" className="btn btn-ghost btn-s" aria-label={`Togli la riga ${i + 1}`} onClick={() => { setRows(rs => rs.filter((_, j) => j !== i)); setDirty(true); }}>✕</button></td>
+                        <td><button type="button" className="btn btn-ghost btn-s" aria-label={auditText('auditExpression.RoutingGroup.text153', { v0: i + 1 })} onClick={() => { setRows(rs => rs.filter((_, j) => j !== i)); setDirty(true); }}>✕</button></td>
                       </tr>
                     );
                   })}
@@ -142,62 +139,53 @@ export function RoutingGroup() {
             </div>
             <div className="st-row" data-testid="st-routing-explore">
               <div className="st-text">
-                <div className="st-title">Esplorazione
-                  <HelpTip label="Esplorazione" title="Provare anche altri modelli" testid="st-help-explore"
-                    example="10% → circa 1 chat su 10 prova un modello che ha ancora pochi dati per quel tipo di lavoro.">
-                    La parte delle chat che, invece della riga della tabella, prova un altro modello dello stesso motore (Claude resta Claude, Cursor resta Cursor), quello con meno dati per quel tipo di lavoro. Serve a raccogliere esiti da confrontare. Mai sulle Regie, mai sforzo massimo, mai quando l’Orchestrator sceglie lui il modello. 0% = sempre la tabella.
-                  </HelpTip>
+                <div className="st-title">{auditText('audit.RoutingGroup.exploration')}<HelpTip label={auditText('audit.RoutingGroup.exploration')} title={auditText('audit.RoutingGroup.tryOtherModelsToo')} testid="st-help-explore"
+                    example={auditText('cmp.routing.exampleExplore')}>{auditText('audit.RoutingGroup.theShareOfChatsThatTry')}</HelpTip>
                 </div>
-                <div className="st-desc">Quante chat provano un modello diverso per raccogliere dati: da 0 a 50%.</div>
+                <div className="st-desc">{auditText('audit.RoutingGroup.howManyChatsTryAnotherModel')}</div>
               </div>
               <label className="st-rt-pct">
-                <input type="number" className="st-input" min={0} max={50} step={1} value={pct} aria-label="Esplorazione, in percentuale"
+                <input type="number" className="st-input" min={0} max={50} step={1} value={pct} aria-label={auditText('audit.RoutingGroup.explorationPercentage')}
                   onChange={e => { setPct(e.target.value); setDirty(true); }} data-testid="st-routing-explore-input" />
                 <span aria-hidden="true">%</span>
               </label>
             </div>
             <div className="st-row" data-testid="st-routing-weight">
               <div className="st-text">
-                <div className="st-title">Peso del costo
-                  <HelpTip label="Peso del costo" title="Qualità contro costo" testid="st-help-weight"
-                    example="7 → un modello che costa la metà vince se sbaglia poco di più; con 0 vince sempre il più bravo.">
-                    Quanto conta il costo quando il loop giornaliero confronta i modelli per un tipo di lavoro: 0 = solo la qualità, 10 = solo il costo. Come il «cost_quality_tradeoff» di OpenRouter. Lo cambi solo tu: la Regia non lo tocca.
-                  </HelpTip>
+                <div className="st-title">{auditText('audit.RoutingGroup.costWeight')}<HelpTip label={auditText('audit.RoutingGroup.costWeight')} title={auditText('audit.RoutingGroup.qualityVersusCost')} testid="st-help-weight"
+                    example={auditText('cmp.routing.exampleWeight')}>{auditText('audit.RoutingGroup.howMuchCostMattersWhenThe')}</HelpTip>
                 </div>
-                <div className="st-desc">Da 0 (solo qualità) a 10 (solo costo).</div>
+                <div className="st-desc">{auditText('audit.RoutingGroup.from0QualityOnlyTo10')}</div>
               </div>
               <label className="st-rt-pct">
-                <input type="number" className="st-input" min={0} max={10} step={1} value={weight} aria-label="Peso del costo, da 0 a 10"
+                <input type="number" className="st-input" min={0} max={10} step={1} value={weight} aria-label={auditText('audit.RoutingGroup.costWeight0To10')}
                   onChange={e => { setWeight(e.target.value); setDirty(true); }} data-testid="st-routing-weight-input" />
               </label>
             </div>
             <div className="st-row st-rt-foot">
-              <button type="button" className="btn btn-ghost btn-s" disabled={!reg} onClick={() => { setRows(rs => [...rs, blankRow(reg, today(), takes)]); setDirty(true); }} data-testid="st-routing-add">+ Riga</button>
-              <input className="st-input st-rt-reason" value={reason} placeholder="motivo della modifica (facoltativo)" aria-label="Motivo della modifica" onChange={e => setReason(e.target.value)} data-testid="st-routing-reason" />
-              <button type="button" className="btn btn-ghost btn-s" disabled={!dirty || busy} onClick={() => { if (info) load(info); }} data-testid="st-routing-undo">Annulla</button>
-              <button type="button" className="btn btn-primary btn-s" disabled={!dirty || busy || !reg} onClick={() => void save()} data-testid="st-routing-save">Salva</button>
+              <button type="button" className="btn btn-ghost btn-s" disabled={!reg} onClick={() => { setRows(rs => [...rs, blankRow(reg, today(), takes)]); setDirty(true); }} data-testid="st-routing-add">{auditText('audit.RoutingGroup.row')}</button>
+              <input className="st-input st-rt-reason" value={reason} placeholder={auditText('audit.RoutingGroup.reasonForTheChangeOptional')} aria-label={auditText('audit.RoutingGroup.reasonForTheChange')} onChange={e => setReason(e.target.value)} data-testid="st-routing-reason" />
+              <button type="button" className="btn btn-ghost btn-s" disabled={!dirty || busy} onClick={() => { if (info) load(info); }} data-testid="st-routing-undo">{auditText('audit.RoutingGroup.cancel')}</button>
+              <button type="button" className="btn btn-primary btn-s" disabled={!dirty || busy || !reg} onClick={() => void save()} data-testid="st-routing-save">{auditText('audit.RoutingGroup.save')}</button>
             </div>
             {error && <div className="st-row st-rt-err" role="alert" data-testid="st-routing-error"><div className="st-desc">{error}</div></div>}
             {info.history.length > 0 && (
               <div className="st-rt-hist" data-testid="st-routing-history">
-                <div className="st-title">Cronologia
-                  <HelpTip label="Cronologia" testid="st-help-routing-history">
-                    Ogni modifica della tabella, tua o dell’Orchestrator, con il motivo e i dati. «Ripristina» rimette in vigore quella versione come versione nuova: niente si perde.
-                  </HelpTip>
+                <div className="st-title">{auditText('audit.RoutingGroup.history')}<HelpTip label={auditText('audit.RoutingGroup.history')} testid="st-help-routing-history">{auditText('audit.RoutingGroup.everyTableChangeYoursOrThe')}</HelpTip>
                 </div>
                 <ul>
                   {info.history.map(h => (
                     <li key={`${h.to}-${h.at}`} data-testid={`st-routing-change-${h.to}`}>
                       <div className="st-rt-hist-text">
-                        <div><b>Versione {h.to}</b> · {when(h.at)} · {h.by}</div>
+                        <div><b>{auditText('audit.RoutingGroup.version')}{' '}{h.to}</b> · {when(h.at)} · {h.by}</div>
                         <div className="st-desc">
-                          {h.reason ?? 'senza motivo'}{h.exploration ? ` · esplorazione ${Math.round(h.exploration.from * 100)}% → ${Math.round(h.exploration.to * 100)}%` : ''}{h.costWeight ? ` · peso del costo ${h.costWeight.from} → ${h.costWeight.to}` : ''}
-                          {h.evidence && <span className="st-meta"> · dati: {h.evidence}</span>}
+                          {h.reason ?? auditText('auditExpression.RoutingGroup.text154')}{h.exploration ? auditText('auditExpression.RoutingGroup.text155', { v0: Math.round(h.exploration.from * 100), v1: Math.round(h.exploration.to * 100) }) : ''}{h.costWeight ? auditText('auditExpression.RoutingGroup.text156', { v0: h.costWeight.from, v1: h.costWeight.to }) : ''}
+                          {h.evidence && <span className="st-meta">{' '}{auditText('audit.RoutingGroup.evidence')}{' '}{h.evidence}</span>}
                         </div>
                       </div>
-                      {h.to === t?.version ? <span className="st-meta">in vigore</span>
-                        : h.stored && <button type="button" className="btn btn-ghost btn-s" disabled={busy || dirty} title={dirty ? 'Salva o annulla prima le modifiche' : undefined}
-                          onClick={() => void restore(h.to)} data-testid={`st-routing-restore-${h.to}`}>Ripristina</button>}
+                      {h.to === t?.version ? <span className="st-meta">{auditText('audit.RoutingGroup.active')}</span>
+                        : h.stored && <button type="button" className="btn btn-ghost btn-s" disabled={busy || dirty} title={dirty ? auditText('auditExpression.RoutingGroup.text157') : undefined}
+                          onClick={() => void restore(h.to)} data-testid={`st-routing-restore-${h.to}`}>{auditText('audit.RoutingGroup.restore')}</button>}
                     </li>
                   ))}
                 </ul>

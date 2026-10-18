@@ -8,6 +8,8 @@ import { launchDemo, shot } from './helpers';
 test('Lingua: English from Windows, switched live in Settings and saved', async () => {
   const { app, page } = await launchDemo({ env: { SB_LANG: 'en' } });
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('[data-testid^="chat-menu-"]').first()).toHaveAttribute('aria-label', 'Rename, model, permissions and more');
+  await shot(page, 'language-chat-controls-en');
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
   const row = page.getByTestId('st-language');

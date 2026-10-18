@@ -2,6 +2,7 @@
 // keeper (lib/focusKeeper.ts) and the main→UI command listeners, then mounts App.tsx. The same bundle with #overlay is the global request layer page
 // (main/overlay.ts): it mounts OverlayApp.tsx only; with #brain-test/<page> it shows a brain page alone (the test
 // route of brain/testRoute.tsx).
+import { t as auditText } from './i18n';
 import {startUpdateCheckpoint} from './lib/update-checkpoint';
 import {toast} from './store/ui';
 import { StrictMode } from 'react';
@@ -42,8 +43,8 @@ if (isBrainTestRoute()) {
   root.render(<StrictMode><BrainTestRoute /></StrictMode>);
 } else {
   // subscribe before the first render: events sent while React mounts (ui:command from tests/tools) are not lost
-  root.render(<div role="status">Ripristino dello spazio di lavoro…</div>);
-  void startUpdateCheckpoint().catch(()=>toast('Il ripristino non è disponibile. Le copie locali vengono conservate.','err')).then(()=>{
+  root.render(<div role="status">{auditText('cmp.main.restoring')}</div>);
+  void startUpdateCheckpoint().catch(()=>toast(auditText('cmp.main.restoreUnavailable'),'err')).then(()=>{
   startStore();
   startViewports();
   startLater(); // "Rispondi dopo": main's flag, before the first popup can show

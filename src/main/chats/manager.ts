@@ -17,6 +17,8 @@
 // 0031), counted with the other context numbers (context-stats.ts, contextStats()). Brain hooks
 // (options onRateLimit, onTurnEnd, onWaiting, onDone; method isOwnSession) let wiring.ts feed the brain
 // without this module knowing it. Wired in src/main/wiring.ts.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

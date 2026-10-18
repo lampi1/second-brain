@@ -15,6 +15,7 @@ import { testedVersions } from './cli-fixtures.mjs';
 import { guardStatus, statusLines } from './guard-lib.mjs';
 import { cursorInstall, discoverClaude, findCli } from '../src/main/chats/discovery.mjs';
 import { claudeLogin, doctorContext, packageVersion } from './doctor-lib.mjs';
+import { readTimers, timerCheck } from './doctor-timers.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const context = doctorContext({ root, dev: process.argv.includes('--dev') });
@@ -108,6 +109,8 @@ const ping = await new Promise(res => {
   req.end(body);
 });
 add('mcp', true, ping.up ? `port ${port}: ${ping.name} answering` : `port ${port}: nothing listening (app not running)`, ping.up ? '' : 'start the app: npm start', ping.up ? 'ok' : 'info');
+
+checks.push(timerCheck(ping.up ? await readTimers(port) : null));
 
 // 6. recent errors in the logs
 const logs = path.join(userData, 'logs');

@@ -4,6 +4,7 @@
 // «Tieni la loro», «Apri entrambe» (the two versions open, sync still stopped); never resolved by itself. «Sincronizza
 // ora» runs a sync at once. Reads sync:get and the sync:state event; acts through sync:now / sync:resolve. Used by
 // TopBar.tsx; words in lib/sync.ts.
+import { t as auditText } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { SyncChoice, SyncState } from '@shared/contract';
 import { sb } from '../sb';
@@ -36,10 +37,10 @@ export function SyncStatus() {
     <>
       <button ref={ref} type="button" className={`cli-btn sync-btn ${sum.tone}`} onClick={() => setOpen(o => !o)} aria-label={sum.label} data-tip={sum.label} aria-expanded={open} data-testid="sync-status" data-tone={sum.tone}>
         <span className={`sync-dot ${sum.tone}`} aria-hidden="true" />
-        <span className="sync-label">{sum.tone === 'bad' ? 'Sync ferma' : sum.tone === 'busy' ? 'Sync…' : 'Sync'}</span>
+        <span className="sync-label">{sum.tone === 'bad' ? auditText('auditExpression.SyncStatus.text172') : sum.tone === 'busy' ? auditText('auditExpression.SyncStatus.text173') : auditText('auditExpression.SyncStatus.text174')}</span>
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="sync-pop" width={360}>
-        <MenuLabel>Domini del cervello</MenuLabel>
+        <MenuLabel>{auditText('audit.SyncStatus.brainDomains')}</MenuLabel>
         {st!.domains.map(d => (
           <div key={d.name} className="sync-domain" data-testid={`sync-domain-${d.name}`} data-state={d.state}>
             <div className="sync-head">
@@ -53,23 +54,22 @@ export function SyncStatus() {
                 <ul>{blockLines(d.blocked).map((l, i) => <li key={i}>{l}</li>)}</ul>
                 {d.blocked.kind === 'conflict' && (
                   <div className="sync-actions">
-                    <button type="button" className="btn btn-primary btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'mine')} data-testid={`sync-mine-${d.name}`}>Tieni la mia</button>
-                    <button type="button" className="btn btn-ghost btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'theirs')} data-testid={`sync-theirs-${d.name}`}>Tieni la loro</button>
-                    <button type="button" className="btn btn-ghost btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'both')} data-testid={`sync-both-${d.name}`}>Apri entrambe</button>
+                    <button type="button" className="btn btn-primary btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'mine')} data-testid={`sync-mine-${d.name}`}>{auditText('audit.SyncStatus.keepMine')}</button>
+                    <button type="button" className="btn btn-ghost btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'theirs')} data-testid={`sync-theirs-${d.name}`}>{auditText('audit.SyncStatus.keepTheirs')}</button>
+                    <button type="button" className="btn btn-ghost btn-s" disabled={!!busy} onClick={() => void choose(d.name, 'both')} data-testid={`sync-both-${d.name}`}>{auditText('audit.SyncStatus.openBoth')}</button>
                   </div>
                 )}
-                {d.blocked.kind === 'conflict' && d.blocked.copies?.length ? <small className="sync-line">Aperte {d.blocked.copies.length} copie: scegli poi quale tenere.</small> : null}
+                {d.blocked.kind === 'conflict' && d.blocked.copies?.length ? <small className="sync-line">{auditText('audit.SyncStatus.opened')}{' '}{d.blocked.copies.length}{' '}{auditText('audit.SyncStatus.copiesChooseWhichOneToKeep')}</small> : null}
               </div>
             )}
             {d.state !== 'off' && (
               <button type="button" className="btn btn-ghost btn-s sync-now" disabled={!!busy || d.state === 'syncing'} onClick={() => void act(`${d.name}:now`, () => sb.invoke('sync:now', { domain: d.name }))} data-testid={`sync-now-${d.name}`}>
-                <IconRefresh size={12} /> Sincronizza ora
-              </button>
+                <IconRefresh size={12} />{' '}{auditText('audit.SyncStatus.syncNow')}</button>
             )}
           </div>
         ))}
         {err && <p className="menu-note sync-err" role="alert">{err}</p>}
-        <p className="menu-note">I domini «su tutti i tuoi PC» si sincronizzano da soli; prima di ogni invio il controllo cerca dati di lavoro e segreti.</p>
+        <p className="menu-note">{auditText('audit.SyncStatus.domainsSetToOnAllYour')}</p>
       </Popover>
     </>
   );

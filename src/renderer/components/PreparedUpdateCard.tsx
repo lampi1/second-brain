@@ -1,5 +1,6 @@
 // UI adapter for a's single staged-update pipeline. Preparation is owned by main, before any confirmation.
 // Apply must recheck the immutable marker/hash and chat checkpoint; this component never stages or restarts itself.
+import { t as auditText } from '../i18n';
 import { useEffect,useRef,useState } from 'react';
 import { askConfirm,ui } from '../store/ui';
 
@@ -19,15 +20,15 @@ export function PreparedUpdateCard({ update: u, apply }: { update: PreparedUpdat
   const confirm = () => {
     if (u.phase !== 'ready' || u.blocked || working.current || ui.get().modal) return;
     askConfirm({
-      title: 'Applicare l’aggiornamento preparato?',
-      body: `La versione ${u.version} è stata preparata e verificata.`,
+      title: auditText('cmp.preparedUpdate.confirmTitle'),
+      body: auditText('cmp.preparedUpdate.body', { version: u.version }),
       items: [
         ...u.changes.slice(0, 4),
-        'Prima di riavviare vengono salvati lo stato delle chat e i dati. Se il salvataggio non riesce, l’aggiornamento si ferma.',
-        'Le sessioni inattive verranno chiuse; chat e bozze saranno conservate.',
-        'La versione precedente resta disponibile per il ripristino.',
+        auditText('cmp.preparedUpdate.saveFirst'),
+        auditText('cmp.preparedUpdate.idleClosed'),
+        auditText('cmp.preparedUpdate.previousKept'),
       ],
-      confirmLabel: 'Applica e riavvia',
+      confirmLabel: auditText('cmp.preparedUpdate.apply'),
       onConfirm: () => {
         if(!live.current||working.current)return;
         const current=latest.current;
@@ -37,11 +38,11 @@ export function PreparedUpdateCard({ update: u, apply }: { update: PreparedUpdat
       },
     });
   };
-  const state = { preparing: 'Preparazione e verifiche in background…', ready: 'Aggiornamento preparato', applying: 'Salvataggio e applicazione…', applied: 'Aggiornamento applicato', failed: 'Aggiornamento non completato', restored: 'Versione precedente ripristinata' };
+  const state = { preparing: auditText('cmp.preparedUpdate.phase.preparing'), ready: auditText('cmp.preparedUpdate.phase.ready'), applying: auditText('cmp.preparedUpdate.phase.applying'), applied: auditText('cmp.preparedUpdate.phase.applied'), failed: auditText('cmp.preparedUpdate.phase.failed'), restored: auditText('cmp.preparedUpdate.phase.restored') };
   return <section className="imp-card" data-testid="prepared-update">
     <h3>{state[u.phase]}</h3><p>{u.version}</p>
     <ul>{u.changes.map((c, i) => <li key={i}>{c}</li>)}</ul>
-    {(u.blocked || failed) && <p role="status">{u.blocked || 'Non è stato possibile completare l’operazione. Rileggi lo stato prima di riprovare.'}</p>}
-    <button type="button" className="btn btn-primary" onClick={confirm} disabled={submitting || u.phase !== 'ready' || !!u.blocked}>Applica aggiornamento</button>
+    {(u.blocked || failed) && <p role="status">{u.blocked || auditText('cmp.preparedUpdate.opFailed')}</p>}
+    <button type="button" className="btn btn-primary" onClick={confirm} disabled={submitting || u.phase !== 'ready' || !!u.blocked}>{auditText('audit.PreparedUpdateCard.applyUpdate')}</button>
   </section>;
 }

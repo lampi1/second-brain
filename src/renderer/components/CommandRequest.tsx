@@ -9,6 +9,7 @@
 // that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the layer:
 // later). In the questions window (`window`, ADR 0049) the chat's explanation is the large title and the command a
 // readable block under it. Used by RequestPanel.tsx (it hands over every request of type 'command').
+import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { copyText } from '../brain/components/ui';
@@ -94,7 +95,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   if (variant === 'window') {
     return (
       <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`wq cmd-ask ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
-        aria-busy={busy} aria-label={t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? 'una chat', command: lines[0] ?? '' })}>
+        aria-busy={busy} aria-label={t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? auditText('cmp.commandRequest.aChat'), command: lines[0] ?? '' })}>
         <div className="wq-kicker"><IconTerminal size={13} /><span>{t('chat.command.title')}</span>{prod && prodBadge}</div>
         <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || t('chat.command.defaultLead')}</h2>
         <div className={`ask-raw wq-code ${open ? 'open' : ''}`}>
@@ -109,7 +110,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
         <div className="wq-perm">
           <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
             data-tip={armed ? undefined : t('chat.command.helpWindow')}>
-            {armed ? <><IconAlert size={13} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={12} /> {t('chat.command.execWithKey')} <Kbd>Invio</Kbd></>}
+            {armed ? <><IconAlert size={13} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={12} /> {t('chat.command.execWithKey')} <Kbd>{auditText('audit.CommandRequest.enter')}</Kbd></>}
           </button>
           <button type="button" className="btn btn-ghost btn-l" onClick={copy} data-testid={`${testBase}-copy`}>
             {copied ? <><IconCheck size={13} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={13} /> {t('chat.command.copy')}</>}
@@ -124,7 +125,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
 
   return (
     <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`${cls} ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
-      aria-busy={busy} aria-label={t('chat.command.askLabel', { chatTitle: chatTitle ?? 'una chat', command: lines[0] ?? '' })} {...(variant === 'lane' ? { 'data-lane': '' } : {})}>
+      aria-busy={busy} aria-label={t('chat.command.askLabel', { chatTitle: chatTitle ?? auditText('cmp.commandRequest.aChat'), command: lines[0] ?? '' })} {...(variant === 'lane' ? { 'data-lane': '' } : {})}>
       {variant === 'lane' ? (
         // the lane: who first, like the other lane cards
         <div className="need-head">
@@ -153,7 +154,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
       <div className="cmd-actions">
         <button type="button" className={`btn btn-primary ${small ? 'btn-s' : 'btn-m'} ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
           data-tip={armed ? undefined : t('chat.command.help')}>
-          {armed ? <><IconAlert size={12} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={11} /> {t('chat.command.exec')}</>}{!small && !armed && <Kbd>Invio</Kbd>}
+          {armed ? <><IconAlert size={12} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={11} /> {t('chat.command.exec')}</>}{!small && !armed && <Kbd>{auditText('audit.CommandRequest.enter')}</Kbd>}
         </button>
         <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={copy} data-testid={`${testBase}-copy`}>
           {copied ? <><IconCheck size={12} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={12} /> {t('chat.command.copy')}</>}

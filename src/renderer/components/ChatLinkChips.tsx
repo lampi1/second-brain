@@ -4,6 +4,7 @@
 // click opens the link in the system browser, where the user is signed in to DevOps (the internal browser has no
 // DevOps session: a click landed on the Microsoft sign-in; the user, 2026-10-14, as the question's context links since
 // 2026-10-12). Why: "dammi il link alla PR" without asking the chat (and re-reading its whole context). Used by ChatTile.
+import { t as auditText } from '../i18n';
 import { memo, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '@shared/contract';
 import { extractDevLinks, linkKindLabel, linkLabel, type DevLink } from '../lib/devlinks';
@@ -17,7 +18,7 @@ const MAX_CHIPS = 4;
 // window.open: main's window-open handler hands an http(s) URL to the system browser (window.ts), never a new window
 const openLink = (l: DevLink): void => { window.open(l.url, '_blank', 'noopener'); };
 
-const tipOf = (l: DevLink) => `${linkKindLabel(l)} ${l.id}${l.title ? `: ${l.title}` : ''}\n${l.url}\nSi apre nel browser di sistema`;
+const tipOf = (l: DevLink) => `${linkKindLabel(l)} ${l.id}${l.title ? `: ${l.title}` : ''}\n${l.url}\n${auditText('cmp.linkChips.opensInSystemBrowser')}`;
 
 export const ChatLinkChips = memo(function ChatLinkChips({ chatId }: { chatId: string }) {
   const devops = useDevops(s => s);
@@ -40,7 +41,7 @@ export const ChatLinkChips = memo(function ChatLinkChips({ chatId }: { chatId: s
   const shown = links.slice(0, MAX_CHIPS);
   const rest = links.slice(MAX_CHIPS);
   return (
-    <div className="th-links" data-testid={`chat-devlinks-${chatId}`} aria-label="Link DevOps della chat">
+    <div className="th-links" data-testid={`chat-devlinks-${chatId}`} aria-label={auditText('audit.ChatLinkChips.chatDevopsLinks')}>
       {shown.map(l => (
         <button key={`${l.kind}:${l.id}`} type="button" className={`devlink devlink-${l.kind}${l.title ? '' : ' devlink-bare'}`} onClick={() => openLink(l)} data-tip={tipOf(l)}
           data-testid={`chat-devlink-${chatId}-${l.kind}-${l.id}`}>
@@ -50,7 +51,7 @@ export const ChatLinkChips = memo(function ChatLinkChips({ chatId }: { chatId: s
       ))}
       {rest.length > 0 && (<>
         <button ref={more} type="button" className="devlink devlink-more" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
-          data-tip={`Altri ${rest.length} link`} data-testid={`chat-devlinks-more-${chatId}`}>+{rest.length}</button>
+          data-tip={auditText('auditExpression.ChatLinkChips.text18', { v0: rest.length })} data-testid={`chat-devlinks-more-${chatId}`}>+{rest.length}</button>
         <Popover anchor={more} open={open} onClose={() => setOpen(false)} align="start" width={320} testid={`chat-devlinks-menu-${chatId}`}>
           {rest.map(l => (
             <MenuItem key={`${l.kind}:${l.id}`} onSelect={() => { openLink(l); setOpen(false); }} testid={`chat-devlink-${chatId}-${l.kind}-${l.id}`}>

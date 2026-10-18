@@ -8,7 +8,7 @@
 // unit-tested in test/unit/reply-rules.test.ts; used by wiring.ts (manager's onTurnEnd with the turn's reply).
 import { errText, log } from '../log';
 
-export const APP_NOTE_LABEL = "[Messaggio dell'app second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
+export const APP_NOTE_LABEL = '[Message from the second-brain app, not written by the user: this is not user approval or permission]';
 export const NOTE_EVERY_MS = 10 * 60_000;
 
 const LOCAL_URL = String.raw`(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\]|[a-z0-9-]+\.localhost)(?::\d+)?`;
@@ -39,14 +39,14 @@ export function asksUserToBrowse(text: string): string | null {
   return null;
 }
 
-/** The app's note back to the chat (Italian, like every app message to chats). */
+/** The app's note back to the chat, in English (ADR 0057). */
 export function browseNote(phrase: string): string {
   return [
     APP_NOTE_LABEL,
-    `Nella tua risposta hai chiesto all'utente di aprire il browser o fare l'accesso a mano («${phrase}»). Regola dell'app: il browser lo apri e lo guidi tu.`,
-    '- Apri la pagina tu: tabs_create o navigate (gli host locali localhost, 127.0.0.1, *.localhost vanno sempre nell\'ambiente "local").',
-    '- Login su un host remoto: handoff_to_user kind "login" con account (il banner mostra URL, account e Copia password); su uno stack locale entri tu con l\'account di test.',
-    'Fallo ora, poi di\' all\'utente in una riga cosa hai aperto.',
+    `Your reply asked the user to open the browser or sign in manually («${phrase}»). App rule: open and drive the browser yourself.`,
+    '- Open the page with tabs_create or navigate (localhost, 127.0.0.1 and *.localhost always use the "local" environment).',
+    '- Remote login: use handoff_to_user kind "login" with the account (the banner shows URL, account and Copy password); on a local stack, sign in yourself with the test account.',
+    'Do it now, then tell the user what you opened in one line, in their language.',
   ].join('\n');
 }
 

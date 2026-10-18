@@ -16,7 +16,7 @@ import { closeChat, setChat, setSetting, useApp } from '../store/store';
 import { openHandoff, setFocused } from '../store/ui';
 import { askClearRegia, askCloseRegia, askRenewRegia, copyLink, resumeChat, toggleFocusMode } from '../actions';
 import { regieIdsOf } from '../lib/regia-route';
-import { OPEN_NEXT_LABEL, RESUME_LABEL, useContinuedBy } from './ContextBar';
+import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 import { t } from '../i18n';
 
@@ -107,7 +107,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
       <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>{t('chat.menu.handoffRead')}</MenuItem>
       {!chat.isRegia && !chat.appRegia && (
         <MenuItem onSelect={pick(() => void resumeChat(id))} disabled={!next && (isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy)} testid={`chat-resume-${id}`}>
-          {next ? OPEN_NEXT_LABEL : RESUME_LABEL}
+          {next ? openNextLabel() : resumeLabel()}
         </MenuItem>
       )}
       <MenuSep />

@@ -11,6 +11,8 @@
 // userData/devops.json so the page opens with the last read. Then, when the brain has it, ops/tools/qa-status.mjs
 // --mine --json: the "Test e QA" section (my PRs' test plans); a failure there keeps the last QA and never fails the read. Read-only by construction: the app never writes to DevOps.
 // Used by wiring.ts (devops:* channels); logic in model.ts.
+import { timersFor } from '../timers';
+const { setTimeout, clearTimeout } = timersFor('devops/service');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

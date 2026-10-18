@@ -4,6 +4,8 @@
 // frozen frame shown under overlays. Why: the browser tiles and the layout protocol can be built and tested before
 // the real browser module lands. Used by wiring.ts; e2e tests read globalThis.__sbDemo.layout() to check what the UI
 // reported (e.g. every rect null while the palette is open).
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('demo-browser');
 import { WebContentsView, type BrowserWindow } from 'electron';
 import type { BrowserEnv, BrowserHandoff, CredentialEntry, BrowserTab, Rect, ViewLayout } from '../shared/contract';
 import type { BrowserService, FeedInput } from './services';

@@ -9,6 +9,8 @@
 // headlineOn). A failure, a timeout or no API key keeps the previous line (source previous), else a line of the
 // built-in list (source builtin): get() never waits for a model, so the Home renders at once. State in
 // <userData>/headline.json; what it spent this month is shown in Costi. Unit-tested in test/unit/headline.test.ts.
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('headline');
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Effort, HeadlineState, Lang, Settings } from '../shared/contract';

@@ -1,6 +1,7 @@
 // The app action bar: history, search, observed status, requests, browsers and stop controls.
 // Settings owns appearance and connectors; its gear menu only links to settings and shortcuts.
 // Used by App.tsx; fit steps keep the final action group reachable at narrow widths.
+import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import{t}from'../i18n';
 import type { CliStatus, EngineInfo } from '@shared/contract';
@@ -27,12 +28,12 @@ function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st:
       <span className={`cli-dot ${!st ? 'unknown' : ok ? 'ok' : 'bad'}`} aria-hidden="true" />
       <span className="cli-text">
         <b>{name}</b>
-        <small>{!st ? 'controllo in corso…' : !st.found ? 'CLI non trovata' : `${st.version ?? 'versione ?'} · ${st.loggedIn === true ? (st.account ?? 'accesso fatto') : st.loggedIn === false ? 'accesso da fare' : 'accesso non controllato'}`}</small>
+        <small>{!st ? auditText('auditExpression.TopBar.text175') : !st.found ? auditText('auditExpression.TopBar.text176') : `${st.version ?? auditText('auditExpression.TopBar.text178')} · ${st.loggedIn === true ? (st.account ?? auditText('auditExpression.TopBar.text179')) : st.loggedIn === false ? auditText('auditExpression.TopBar.text180') : auditText('auditExpression.TopBar.text181')}`}</small>
       </span>
       {st?.found && st.loggedIn !== true && (
-        <button type="button" className="btn btn-primary btn-s" onClick={() => void cliLogin(harness)} data-testid={`cli-login-${harness}`}><IconLogin size={13} /> Accedi</button>
+        <button type="button" className="btn btn-primary btn-s" onClick={() => void cliLogin(harness)} data-testid={`cli-login-${harness}`}><IconLogin size={13} />{' '}{auditText('audit.TopBar.signIn')}</button>
       )}
-      <button type="button" className="icon-btn" aria-label={`Ricontrolla ${name}`} data-tip="Ricontrolla" onClick={() => void cliCheck(harness)} data-testid={`cli-check-${harness}`}><IconRefresh size={13} /></button>
+      <button type="button" className="icon-btn" aria-label={auditText('auditExpression.TopBar.text182', { v0: name })} data-tip={auditText('audit.TopBar.checkAgain')} onClick={() => void cliCheck(harness)} data-testid={`cli-check-${harness}`}><IconRefresh size={13} /></button>
     </div>
   );
 }
@@ -62,9 +63,9 @@ function CliStatusButton() {
         })}
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="cli-pop" width={320}>
-        <MenuLabel>Le CLI che l'app usa (ognuna con il tuo accesso)</MenuLabel>
+        <MenuLabel>{auditText('audit.TopBar.theClisUsedByTheApp')}</MenuLabel>
         {engines.map(e => <CliRow key={e.id} engine={e} st={cli?.[e.id]} />)}
-        <p className="menu-note">L'app non vede mai le tue credenziali: «Accedi» apre il login ufficiale in un terminale.</p>
+        <p className="menu-note">{auditText('audit.TopBar.theAppNeverSeesYourCredentials')}</p>
       </Popover>
     </>
   );
@@ -75,10 +76,10 @@ function SettingsButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   return <>
-    <IconButton ref={ref} label="Impostazioni" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
+    <IconButton ref={ref} label={auditText('audit.TopBar.settings')} onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
     <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={248}>
-      <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">Scorciatoie da tastiera</MenuItem>
-      <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">Tutte le impostazioni</MenuItem>
+      <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">{auditText('audit.TopBar.keyboardShortcuts')}</MenuItem>
+      <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">{auditText('audit.TopBar.allSettings')}</MenuItem>
     </Popover>
   </>;
 }
@@ -90,11 +91,11 @@ function HistoryNav() {
   const ref = useRef<HTMLButtonElement>(null);
   return (
     <span className="hist-nav">
-      <IconButton label="Indietro" shortcut="Alt+←" onClick={back} disabled={hist <= 0} testid="nav-back"><IconArrowLeft size={14} /></IconButton>
-      <IconButton label="Avanti" shortcut="Alt+→" onClick={forward} disabled={hist >= len - 1} testid="nav-forward"><IconArrowRight size={14} /></IconButton>
-      <IconButton ref={ref} label="Posti recenti" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" testid="nav-recent"><IconHistory size={14} /></IconButton>
+      <IconButton label={auditText('audit.TopBar.back')} shortcut="Alt+←" onClick={back} disabled={hist <= 0} testid="nav-back"><IconArrowLeft size={14} /></IconButton>
+      <IconButton label={auditText('audit.TopBar.forward')} shortcut="Alt+→" onClick={forward} disabled={hist >= len - 1} testid="nav-forward"><IconArrowRight size={14} /></IconButton>
+      <IconButton ref={ref} label={auditText('audit.TopBar.recentPlaces')} onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" testid="nav-recent"><IconHistory size={14} /></IconButton>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="start" testid="nav-recent-pop" width={260}>
-        <MenuLabel>Recenti</MenuLabel>
+        <MenuLabel>{auditText('audit.TopBar.recent')}</MenuLabel>
         {recentPlaces().map((p, i) => (
           <MenuItem key={`${p.page}-${p.element ?? ''}-${i}`} onSelect={() => { setOpen(false); go(p); }} testid={`recent-${i}`}>
             {placeLabel(p)}
@@ -114,8 +115,8 @@ function Bell() {
   const pending = useApp(s => s.pending);
   const n = bellCount(feed, read, new Set(pending.map(p => p.chatId)));
   return (
-    <button type="button" className={`bell ${open ? 'on' : ''}`} onClick={toggleCenter} aria-label={`Notifiche: ${n} da leggere (Ctrl+Shift+N)`} aria-expanded={open}
-      data-tip={dnd ? 'Notifiche · non disturbare attivo|Ctrl+Shift+N' : 'Notifiche|Ctrl+Shift+N'} data-testid="bell">
+    <button type="button" className={`bell ${open ? 'on' : ''}`} onClick={toggleCenter} aria-label={auditText('auditExpression.TopBar.text183', { v0: n })} aria-expanded={open}
+      data-tip={dnd ? auditText('auditExpression.TopBar.text184') : auditText('auditExpression.TopBar.text185')} data-testid="bell">
       <IconBell size={16} />
       {n > 0 && <span className="bell-n" data-testid="bell-count">{n > 99 ? '99+' : n}</span>}
       {dnd && <span className="bell-dnd" aria-hidden="true" />}
@@ -149,13 +150,13 @@ function MoreButton() {
   const toggle = () => setOpen(o => !o);
   return (
     <span className="topbar-more">
-      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? `Altre azioni: ${tabs} browser nascosti` : 'Altre azioni: browser nascosti') : 'Altre azioni'} data-tip={hide ? 'Altre azioni|browser nascosti: continuano a lavorare (Ctrl+Shift+B li mostra)' : "Altre azioni|browser, credenziali, Migliora l'app"} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
+      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? auditText('auditExpression.TopBar.text186', { v0: tabs }) : auditText('auditExpression.TopBar.text187')) : auditText('auditExpression.TopBar.text188')} data-tip={hide ? auditText('auditExpression.TopBar.text189') : auditText('auditExpression.TopBar.text190')} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
       {hide && tabs > 0 && <span className="count-badge more-badge" aria-hidden="true" data-testid="topbar-browsers-count">{tabs}</span>}
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
-        <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? `Browser nascosti (${tabs}): continuano a lavorare` : 'Nascondi i browser'}</MenuItem>
-        <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">Credenziali degli ambienti…</MenuItem>
+        <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? auditText('auditExpression.TopBar.text191', { v0: tabs }) : auditText('auditExpression.TopBar.text192')}</MenuItem>
+        <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
         <MenuSep />
-        <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">Migliora l'app</MenuItem>
+        <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">{auditText('audit.TopBar.improveTheApp')}</MenuItem>
       </Popover>
     </span>
   );
@@ -208,31 +209,31 @@ export function TopBar() {
       <div className="brand" aria-label={version ? `second-brain v${version}` : 'second-brain'} data-tip={version ? `second-brain · v${version}` : 'second-brain'} data-testid="app-version"><span className="brand-mark" aria-hidden="true" /></div>
       <HistoryNav />
       <StatoButton />
-      <button type="button" className="search" onClick={() => openModal('palette')} data-testid="topbar-search" aria-label="Cerca chat, pagine e comandi (Ctrl+K)">
-        <IconSearch size={14} /><span className="search-text">Cerca chat, idee o un comando</span><Keys combo="Ctrl+K" />
+      <button type="button" className="search" onClick={() => openModal('palette')} data-testid="topbar-search" aria-label={auditText('audit.TopBar.searchChatsPagesAndCommandsCtrl')}>
+        <IconSearch size={14} /><span className="search-text">{auditText('audit.TopBar.searchChatsIdeasOrACommand')}</span><Keys combo="Ctrl+K" />
       </button>
       <span className="sp" />
       <UsageBar />
       {queued > 0 && (
         <button type="button" className="btn btn-m btn-ghost topbar-queue" onClick={() => { if (firstQueued) focusChat(firstQueued); }} data-testid="topbar-queue"
-          aria-label={`${queued} in coda per il carico del PC: mostra la prima`}
-          data-tip="Chat o messaggi degli agenti in coda: il PC è sotto sforzo, partono uno alla volta quando scende. Clic: mostra la prima, con «Avvia ora».">
-          <span className="queue-label">In coda</span><span className="count-badge">{queued}</span>
+          aria-label={auditText('auditExpression.TopBar.text197', { v0: queued })}
+          data-tip={auditText('audit.TopBar.queuedAgentChatsOrMessagesThe')}>
+          <span className="queue-label">{auditText('audit.TopBar.queued')}</span><span className="count-badge">{queued}</span>
         </button>
       )}
       <CliStatusButton />
       <SyncStatus />
       <button type="button" className={`btn btn-m ${waiting ? 'btn-amber' : 'btn-ghost'} next-btn`} onClick={() => (paused ? openQueue(null) : nextThing())} data-testid="topbar-next" data-queue={inQueue ? '' : undefined} data-paused={paused ? '' : undefined}
-        data-tip={inQueue ? 'Da rispondere: le richieste lasciate per dopo, una alla volta; aprirla riaccende i popup|Ctrl+J' : paused ? 'Rispondi dopo è attivo: le nuove richieste vanno in «Da rispondere» senza popup. Clic per riaccendere i popup' : 'La cosa più vecchia che ti aspetta|Ctrl+J'}
-        aria-label={inQueue ? `Da rispondere: ${waiting} (Ctrl+J)` : paused ? 'Popup in pausa: clic per riaccenderli' : `Prossima cosa per te: ${waiting} (Ctrl+J)`}>
-        <IconBolt size={14} /><span className="next-label">{inQueue ? 'Da rispondere' : paused ? 'Popup in pausa' : waiting ? 'Prossima cosa per te' : 'Niente ti aspetta'}</span>
+        data-tip={inQueue ? auditText('auditExpression.TopBar.text198') : paused ? auditText('auditExpression.TopBar.text199') : auditText('auditExpression.TopBar.text200')}
+        aria-label={inQueue ? auditText('auditExpression.TopBar.text201', { v0: waiting }) : paused ? auditText('auditExpression.TopBar.text202') : auditText('auditExpression.TopBar.text203', { v0: waiting })}>
+        <IconBolt size={14} /><span className="next-label">{inQueue ? auditText('auditExpression.TopBar.text204') : paused ? auditText('auditExpression.TopBar.text205') : waiting ? auditText('auditExpression.TopBar.text206') : auditText('auditExpression.TopBar.text207')}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
       <PopupsSwitch />
       <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
-      <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."
-        aria-label={`Ferma tutto: ${running} al lavoro (Ctrl+Shift+.)`}>
-        <IconStop size={13} /><span>Ferma tutto</span>{running > 0 && <span className="count-badge red">{running}</span>}
+      <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip={auditText('audit.TopBar.stopAllWorkingChatsCtrlShift')}
+        aria-label={auditText('auditExpression.TopBar.text208', { v0: running })}>
+        <IconStop size={13} /><span>{auditText('audit.TopBar.stopAll')}</span>{running > 0 && <span className="count-badge red">{running}</span>}
       </button>
       </div>
       <div className="topbar-end">

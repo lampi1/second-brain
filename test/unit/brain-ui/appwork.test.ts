@@ -44,6 +44,18 @@ describe('app work', () => {
     expect(w.rows.map(r => r.from)).toEqual(['12:00']);
     expect(w.text.split('\n')).toEqual(['## Italia', '- chat Claude "(senza titolo)" 12:00-12:30, 5 messaggi']);
   });
+  it('filters custom checkout paths and nested worktrees without matching sibling prefixes', () => {
+    const root = 'C:/projects/try-main';
+    const row = (cwd: string) => ({ kind: 'chat', title: 'Neutral title', area: 'work', cwd });
+    expect(isAppRow(row(root), root)).toBe(true);
+    expect(isAppRow(row('c:\\PROJECTS\\try-main\\.claude\\worktrees\\audit'), root)).toBe(true);
+    expect(isAppRow(row(`${root}-other`), root)).toBe(false);
+    expect(isAppRow(row('/work/Product'), '/work/product')).toBe(false);
+    expect(isAppRow(row(root))).toBe(false);
+    const report: DayReport = { date: '', day: '', devops: null, areas: [], commits: [],
+      rows: [{ ...row(root), from: '09:00', to: '10:00' }], text: '- chat Codex "Neutral title" 09:00-10:00' };
+    expect(withoutAppWork(report, root)).toMatchObject({ rows: [], text: '' });
+  });
   it('commits about the app', () => {
     expect(isAppCommit("product: publish the app's page")).toBe(true);
     expect(isAppCommit('routing: resolve like the app')).toBe(true);

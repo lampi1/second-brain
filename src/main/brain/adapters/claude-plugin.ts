@@ -20,6 +20,7 @@ const PARTS: readonly { from: string; to: string }[] = [
   { from: '.claude/skills', to: 'skills' },
   { from: '.claude/agents', to: 'agents' },
   { from: '.claude/output-styles', to: 'output-styles' },
+  { from: '.claude/hooks', to: 'hooks' },
 ];
 const TEXT = /\.(md|json|txt|ya?ml|toml)$/i;
 const MAX_FILE = 2_000_000;
@@ -72,7 +73,6 @@ function collect(domains: readonly BrainDomain[]): Src[] {
   };
   for (const d of domains) {
     for (const p of PARTS) walk(path.join(d.root, p.from), (abs, rel) => add(abs, path.join(p.to, rel), d.name));
-    add(path.join(d.root, '.claude', 'hooks', 'hooks.json'), path.join('hooks', 'hooks.json'), d.name);
   }
   return out;
 }

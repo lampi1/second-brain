@@ -11,6 +11,8 @@
 // - Kimi today: tokens from its own session files (kimi-usage.ts), re-read with the Cursor ledger every 30 s; no $ and
 //   no plan quota (only behind Kimi's login).
 // Used by brain/index.ts ('app:usage', 'usage' events, budget.ts input).
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('brain/usage');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

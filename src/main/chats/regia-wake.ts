@@ -14,6 +14,8 @@
 // mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Regia's whole context
 // (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
 // app_digest lists them whenever the Regia looks.
+import { timersFor } from '../timers';
+const { setTimeout, clearTimeout } = timersFor('chats/regia-wake');
 import type { ChatState, ChatSummary, EventMap, Harness, PendingRequest } from '../../shared/contract';
 import { regieOf } from '../../shared/regia';
 import { errText, log } from '../log';

@@ -9,6 +9,7 @@
 // the head of an expanded one collapses it; the key facts (model, effort, cost, work time, context) stay on screen
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
 // off); the inline panels show only on the expanded strip.
+import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { chatCost, effortLabel, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
@@ -121,7 +122,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
-      aria-label={`Chat ${chat.title}, ${st.label}`} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
+      aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
@@ -134,28 +135,28 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           </button>}
           <EffortControl chat={chat} />
           {chat.resumedAt && (
-            <span className="th-resumed" data-tip="Il suo turno si era interrotto con il riavvio dell'app: l'app l'ha fatta ripartire da sola. Sparisce al tuo prossimo messaggio."
-              data-testid={`chat-resumed-${chatId}`}>ripresa dopo il riavvio</span>
+            <span className="th-resumed" data-tip={auditText('audit.ChatTile.itsTurnWasInterruptedByThe')}
+              data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
           )}
           <div className="chat-header-actions">
           {strip&&<button ref={expansionButton} type="button" className="icon-btn chat-expand" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} aria-label={t(expanded?'product.collapse':'product.expand')} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>{setChatExpanded(chatId,!expanded);if(expanded)expansionButton.current?.focus();}} data-testid={`chat-expand-${chatId}`}><IconChevronDown size={14}/></button>}
           {(busy || chat.state === 'waiting') && (
-            <IconButton label="Ferma" shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
+            <IconButton label={t('chat.tile.stop')} shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
           )}
-          <IconButton ref={menuBtn} label="Rinomina, modello, permessi e altro" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
+          <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
           {/* the chats of "Migliora l'app" live in their section, which has no maximized view */}
           {chat.space !== 'app' && (
-            <IconButton label={maximized ? 'Ripristina' : 'Chat a tutto schermo'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
+            <IconButton label={t(maximized ? 'chat.tile.restore' : 'chat.tile.maximize')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
               {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
             </IconButton>
           )}
-          {!chat.isRegia && !chat.appRegia && <IconButton label="Chiudi chat" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          {!chat.isRegia && !chat.appRegia && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
           </div>
         </div>
         {expanded && <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>}
         {renaming && !expanded && <TitleInput chat={chat} onDone={()=>setRenaming(false)}/>}
         <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
-          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip="Tempo di lavoro effettivo: senza le attese delle tue risposte">lavoro {minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}{browsers && !expanded ? ` · ${t('product.browsersN', { n: browsers })}` : ''}</span>
+          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}{browsers && !expanded ? ` · ${t('product.browsersN', { n: browsers })}` : ''}</span>
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
         </div>
@@ -176,16 +177,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       ))}
       {chat.queued && !chat.closedAt && (
         <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
-          <span className="queued-text" data-tip={`Il PC è sotto sforzo (CPU ${chat.queued.cpu}%, RAM libera ${chat.queued.freeRam}%): ${chat.queued.kind === 'start' ? 'questa chat parte' : 'il messaggio dell’Orchestrator o di un’altra chat parte'} quando il carico scende, una alla volta: prima le chat di lavoro, poi quelle sull’app. I tuoi messaggi partono sempre subito.`}>
-            In coda · {queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? 'la prossima' : `${chat.queued.position}ª in fila`}
+          <span className="queued-text" data-tip={auditText('auditExpression.ChatTile.text23', { v0: chat.queued.cpu, v1: chat.queued.freeRam, v2: chat.queued.kind === 'start' ? auditText('auditExpression.ChatTile.text24') : auditText('auditExpression.ChatTile.text25') })}>{auditText('audit.ChatTile.queued')}{' '}{queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? auditText('auditExpression.ChatTile.text26') : auditText('auditExpression.ChatTile.text27', { v0: chat.queued.position })}
           </span>
-          <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>Avvia ora</button>
+          <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>{auditText('audit.ChatTile.startNow')}</button>
         </div>
       )}
       {chat.state === 'error' && (
         <div className="error-bar" role="alert">
-          <IconAlert size={14} /><span>{chat.lastError || 'La chat si è fermata con un errore.'}</span>
-          <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, 'Riprova da dove eri rimasto.')} data-testid={`chat-retry-${chatId}`}>Riprova</button>
+          <IconAlert size={14} /><span>{chat.lastError || auditText('cmp.chatTile.stoppedWithError')}</span>
+          <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, auditText('cmp.chatTile.retryMessage'))} data-testid={`chat-retry-${chatId}`}>{auditText('audit.ChatTile.retry')}</button>
         </div>
       )}
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} />

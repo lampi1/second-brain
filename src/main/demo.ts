@@ -6,6 +6,8 @@
 // are built in parallel. SB_DEMO_FREEZE=1 = deterministic: fixed clock (FROZEN_EPOCH), no randomness, no timers; the
 // demo sits at one rich state and every action completes instantly. Used by wiring.ts (with demo-browser.ts for tabs)
 // and test/unit/demo.test.ts. The data is fictional: no real people, customers or paths.
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('demo');
 import type {
   AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
   FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,

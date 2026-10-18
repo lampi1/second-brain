@@ -1,9 +1,9 @@
 // Views of a day for Fatto: what was done grouped by topic (PRs, work items, diary outcomes, chats; names not numbers,
 // the id only inside the link) and the stand-up box (3-5 sentences to read aloud, with Copia), both without the app's
 // own work (lib/appwork.ts). Data: /api/day (report or brief, from the brain's day tool) and /api/tables.
-import type { ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import type { DayReport, DayRow, Tables } from '../types';
-import { useBrain, combine } from '../api';
+import { useAppRepo, useBrain, combine } from '../api';
 import { bugName, clean, firstClause, lastDiaryDay, short, standupText, topicOf } from '../lib/text';
 import { normWorkBrief, normWorkReport } from '../lib/appwork';
 import { dayName } from '../lib/format';
@@ -56,8 +56,10 @@ export function DoneView({ rep, max = 12, compact = false }: { rep: DayReport; m
 
 /** The stand-up box: the last work day and today, in sentences to read aloud. */
 export function Standup({ tables, owner }: { tables: Tables; owner: string }) {
+  const appRepo = useAppRepo();
+  const normalizeReport = useCallback((v: unknown) => normWorkReport(v, appRepo), [appRepo]);
   const prev = lastDiaryDay(tables.journal, tables.today);
-  const rep = useBrain(`/api/day?kind=report&date=${prev}`, normWorkReport);
+  const rep = useBrain(`/api/day?kind=report&date=${prev}`, normalizeReport);
   const br = useBrain('/api/day?kind=brief', normWorkBrief);
   const st = combine(rep, br);
   const text = rep.data && br.data ? standupText(rep.data, br.data, owner) : '';

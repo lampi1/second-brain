@@ -12,7 +12,7 @@ import { closeModal, toast, ui } from '../store/ui';
 import { t, locale } from '../i18n';
 import { Markdown } from './ChatItems';
 import { IconFile, IconLayers, IconSpinner } from './Icons';
-import { OPEN_NEXT_LABEL, RESUME_LABEL, useContinuedBy } from './ContextBar';
+import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { Keys, Modal } from './ui';
 
 const when = (at: number) => new Date(at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -82,7 +82,7 @@ export function HandoffDialog() {
         <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} autoFocus={past || !canResume} data-testid="handoff-close">{t('dialogs.handoffDialog.closeButton')}</button>
         {!past && !chat.isRegia && !chat.appRegia && (
           <button type="button" className="btn btn-primary btn-m" autoFocus={canResume} disabled={!canResume} onClick={() => { closeModal(); void resumeChat(chatId); }} data-testid="handoff-resume">
-            {next ? OPEN_NEXT_LABEL : RESUME_LABEL}
+            {next ? openNextLabel() : resumeLabel()}
           </button>
         )}
       </div>

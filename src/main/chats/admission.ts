@@ -9,6 +9,8 @@
 // "hanno sempre la precedenza le chat di lavoro rispetto a quelle dell'app"); only the order changes, and only while
 // something waits. Zero tokens and no dependency: the load is os.cpus() deltas and os.freemem(). Who: wiring.ts builds
 // it (OsLoadSampler, or a forced one from SB_LOAD_FORCE for tests/demo), ChatManager uses it.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('chats/admission');
 import os from 'node:os';
 
 /** percent, 0-100 */

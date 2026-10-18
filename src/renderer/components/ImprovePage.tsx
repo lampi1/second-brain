@@ -1,4 +1,5 @@
 // Isolated app proposals with an explicit publication action. Never invokes the legacy promote/update path.
+import { t as auditText } from '../i18n';
 import {useEffect,useRef,useState} from 'react';
 import type {AppProposal,ProposalAvailability} from '@shared/improve-proposals';
 import {sb} from '../sb';
@@ -27,7 +28,7 @@ export function ImprovePage(){
       if(alive.current&&capRevision===capSequence.current)setAvailability(capability);
       const rows=await sb.invoke('improve:proposals',undefined);
       if(alive.current&&revision===sequence.current){setProposals(rows);setError(null);}
-    }catch{if(alive.current&&capRevision===capSequence.current)setError('Le modifiche non sono disponibili. Puoi riprovare senza perdere il lavoro locale.');}
+    }catch{if(alive.current&&capRevision===capSequence.current)setError(auditText('cmp.improve.unavailable'));}
   };
   useEffect(()=>{
     alive.current=true;
@@ -35,15 +36,15 @@ export function ImprovePage(){
     void load();return()=>{alive.current=false;sequence.current++;capSequence.current++;off();};
   },[]);
   return <div className="imp proposal-page" data-testid="improve">
-    <section className="imp-card"><header className="imp-card-head"><h2>Migliora la tua app</h2></header><p>Chiedi una modifica, provala e rivedi le verifiche. Solo il pulsante PR condivide i file sul repository.</p><small>Versione in uso: {current?.running==='dev'?'sviluppo':current?.runningAt?new Intl.DateTimeFormat('it-IT',{dateStyle:'short',timeStyle:'short'}).format(current.runningAt):'dato non disponibile'}</small></section>
+    <section className="imp-card"><header className="imp-card-head"><h2>{auditText('audit.ImprovePage.improveYourApp')}</h2></header><p>{auditText('audit.ImprovePage.requestAChangeTryItAnd')}</p><small>{auditText('audit.ImprovePage.currentVersion')}{' '}{current?.running==='dev'?auditText('auditExpression.ImprovePage.text65'):current?.runningAt?new Intl.DateTimeFormat('it-IT',{dateStyle:'short',timeStyle:'short'}).format(current.runningAt):auditText('auditExpression.ImprovePage.text66')}</small></section>
     <UpdateRecoveryPanel/>
-    {error&&<p role="alert">{error} <button type="button" className="link-btn" onClick={()=>void load()}>Riprova</button></p>}
+    {error&&<p role="alert">{error} <button type="button" className="link-btn" onClick={()=>void load()}>{auditText('audit.ImprovePage.retry')}</button></p>}
     <ProposalPanel proposals={proposals} {...proposalBlocks(availability)}
       onCreate={async()=>{await sb.invoke('improve:proposalCreate',undefined);await load();}}
       onRefresh={async id=>{await sb.invoke('improve:proposalRefresh',{id});await load();}}
       onResume={async id=>{await sb.invoke('improve:proposalResume',{id});await load();}}
       onPublish={async request=>{await sb.invoke('improve:proposalPublish',request);await load();}}/>
-    <section className="imp-card" aria-label="Agenti delle modifiche"><h3>Agenti delle modifiche</h3>{ids.length?<ul className="imp-chats">{ids.map(id=><AppAgent key={id} id={id} selected={id===selected}/>)}</ul>:<p>Prepara una modifica per aprire il suo agente nello spazio separato.</p>}</section>
+    <section className="imp-card" aria-label={auditText('audit.ImprovePage.changeAgents')}><h3>{auditText('audit.ImprovePage.changeAgents')}</h3>{ids.length?<ul className="imp-chats">{ids.map(id=><AppAgent key={id} id={id} selected={id===selected}/>)}</ul>:<p>{auditText('audit.ImprovePage.prepareAChangeToOpenIts')}</p>}</section>
     {selected&&selectedOk&&<div className="imp-open" data-testid="improve-open-chat"><ChatTile chatId={selected}/></div>}
     <UpdatePanel/>
   </div>;
