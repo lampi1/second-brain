@@ -10,7 +10,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brainRoot } from './brain-root.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const TABLE_FILE = path.join(brainRoot(import.meta.url), 'harness', 'models.json');
+// The brain's own table; a fresh brain has none (the app owns it, ADR 0072): the app-owned copy's, next to this tool.
+const OWN_TABLE = path.join(brainRoot(import.meta.url), 'harness', 'models.json');
+export const TABLE_FILE = fs.existsSync(OWN_TABLE) ? OWN_TABLE : path.resolve(HERE, '..', '..', 'harness', 'models.json');
 
 let cached = null;
 /** The registry (harness/models.json); `file` only for tests. */

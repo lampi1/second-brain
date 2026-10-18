@@ -94,7 +94,7 @@ export const toolsIt = {
   'tools.skillsPage.engineClaude': 'Claude',
   'tools.skillsPage.engineCursor': 'Cursor',
   'tools.skillsPage.emptySearch': 'Nessuna skill o agente con queste parole.',
-  'tools.skillsPage.emptyNoItems': 'Nessuna skill o agente qui: creane uno con i pulsanti in alto.',
+  'tools.skillsPage.emptyNoItems': 'Nessuna skill o agente ancora: creane uno con i pulsanti in alto. Quelle dell’app lavorano dietro le quinte e non compaiono qui.',
   'tools.skillsPage.readOnlyPill': 'sola lettura',
   'tools.skillsPage.errorCount': (p: { n: number }) => p.n === 1 ? '1 errore' : `${p.n} errori`,
   'tools.skillsPage.noDescription': 'senza descrizione',

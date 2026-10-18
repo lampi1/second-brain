@@ -1,5 +1,8 @@
 // App-owned copy of the template utilities for product brains (ADR 0062): the brain holds personal content only, the
 // app renders the scripts of its own release per brain under userData. Legacy brains keep running their own copy.
+// For a fresh brain (rules.appRules, ADR 0072) the copy also holds the product's text: the topic rules, the agents,
+// skills and output styles the Claude plugin loads, and the model and price table, so a clean install shows the owner
+// an empty brain. Used by rules/new-brain.ts, the launch adapters (brain/adapters/*), brain/api.ts and brain/routing.ts.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +15,17 @@ import { read } from './storage';
 /** Template code the app owns for a product brain; everything else in the template is personal content. */
 export const isTemplateCode = (rel: string): boolean =>
   /^(?:ops\/tools\/brain-site\/|ops\/tools\/[^/]+\.m?js$|harness\/(?:claude|cursor|compare)\/[^/]+\.m?js$|\.claude\/hooks\/[^/]+\.mjs$)/.test(rel);
+/** Template text a fresh brain gets from this copy, never in its folder: Claude agents, the shipped skills (the
+ * `{{BRAIN_NAME}}` skill is only the entry from ~/.claude, which the app never wires), output styles, the model and
+ * price table. Topic rules (any template .md with `when:` frontmatter) are found by content (appFiles). */
+const APP_TEXT = /^(?:\.claude\/agents\/[^/]+\.md|harness\/claude\/skills\/(?:explain|create-agent)\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
+const TOPIC = /^---\r?\nwhen: /;
+/** Where the Claude plugin finds the app's own parts inside the copy (claude-plugin.ts), as plugin folders. */
+export const APP_PLUGIN_PARTS: readonly { from: string; to: string }[] = [
+  { from: 'harness/claude/skills', to: 'skills' },
+  { from: '.claude/agents', to: 'agents' },
+  { from: 'harness/claude/output-styles', to: 'output-styles' },
+];
 /** Values the installer rendered that are not derived from the brain folder; stored in brain.json `template`. */
 export const STORED_VALUES = ['OWNER', 'ROLE', 'LANG', 'REPOS', 'DEVOPS_ORG', 'DEVOPS_PROJECT', 'HARNESSES', 'TODAY'] as const;
 export type TemplateValues = Partial<Record<(typeof STORED_VALUES)[number], string>>;
@@ -69,6 +83,43 @@ function codeFiles(dir: string, base = dir): string[] {
     return e.isFile() && isTemplateCode(rel) && !/\.test\.mjs$/.test(rel) ? [rel] : [];
   });
 }
+/** The template's product text (APP_TEXT and the topic rules), split so the copy can list its topics. */
+function appFiles(dir: string, base = dir): { text: string[]; topics: string[] } {
+  const out = { text: [] as string[], topics: [] as string[] };
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const file = path.join(d, e.name);
+      if (e.isSymbolicLink()) throw new Error('The release template contains links.');
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(file); continue; }
+      const rel = fwd(path.relative(base, file));
+      if (!e.isFile() || rel === 'me.template.md') continue;
+      if (APP_TEXT.test(rel)) out.text.push(rel);
+      else if (rel.endsWith('.md') && TOPIC.test(fs.readFileSync(file, 'utf8').slice(0, 16))) { out.text.push(rel); out.topics.push(rel); }
+    }
+  };
+  walk(dir);
+  out.text.sort(); out.topics.sort();
+  return out;
+}
+/** Rewrites references to template code (absolute under the brain, or brain-relative) as `{tools}/<rel>`; references to
+ * personal scripts the owner adds later (e.g. ops/tools/devops-me.mjs) stay brain paths. */
+export function toolReferences(text: string, brain: string): string {
+  const B = fwd(brain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const W = brain.replace(/\//g, '\\').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const code = String.raw`((?:ops/tools|harness/(?:claude|cursor|compare)|\.claude/hooks)/[\w./-]+\.m?js)`;
+  const anySep = String.raw`((?:ops[/\\]tools|harness[/\\](?:claude|cursor|compare)|\.claude[/\\]hooks)[/\\][\w./\\-]+\.m?js)`;
+  return text
+    .replace(new RegExp(`(?:${B}|${W})[/\\\\]${anySep}`, 'g'), (m, rel: string) => shipped(rel) ? `{tools}/${fwd(rel)}` : m)
+    .replace(new RegExp(`(?<![\\w/{}.\\\\-])${code}`, 'g'), (m, rel: string) => shipped(rel) ? `{tools}/${rel}` : m);
+}
+/** Product text rendered for one brain: code and the app's own documents named by their absolute brain path point at
+ * the copy (`target`), whose path also replaces `{tools}`; everything else (now.md, me.md…) stays a brain path. */
+function appText(text: string, brain: string, target: string, own: ReadonlySet<string>): string {
+  const B = fwd(brain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return toolReferences(text, brain)
+    .replace(new RegExp(`${B}/([\\w./-]+\\.(?:md|json))`, 'g'), (m, rel: string) => own.has(rel) ? `{tools}/${rel}` : m)
+    .replace(/\{tools\}/g, () => fwd(target));
+}
 /** A release manifest (brain-template.manifest.json next to the template) must match every copied file. */
 function verified(source: string, files: string[]): void {
   const manifest = path.join(path.dirname(source), 'brain-template.manifest.json');
@@ -84,9 +135,10 @@ export function toolsDir(root: string): string {
 /** Renders the release's utilities for this brain once per (release, values); the swap keeps the old copy on failure. */
 export function ensureTools(root: string): string {
   const source = templateRoot();
-  const files = codeFiles(source).sort();
+  const app = appFiles(source), own = new Set(app.text);
+  const files = [...codeFiles(source), ...app.text].sort();
   const V = values(fs.realpathSync(root));
-  const sig = createHash('sha256').update(JSON.stringify(V));
+  const sig = createHash('sha256').update('render-v2').update(JSON.stringify(V));
   for (const rel of files) sig.update(rel).update(fs.readFileSync(path.join(source, rel)));
   const digest = sig.digest('hex');
   const target = toolsDir(root);
@@ -102,9 +154,11 @@ export function ensureTools(root: string): string {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       const buf = fs.readFileSync(path.join(source, rel));
       if (buf.subarray(0, 8000).includes(0)) fs.copyFileSync(path.join(source, rel), out);
+      else if (own.has(rel)) fs.writeFileSync(out, appText(render(buf.toString('utf8'), V, false), V.BRAIN!, target, own));
       else fs.writeFileSync(out, render(buf.toString('utf8'), V, /\.(m?js|cjs)$/.test(rel)));
     }
-    fs.writeFileSync(path.join(stage, '.sb-tools.json'), JSON.stringify({ root: fs.realpathSync(root), sig: digest }));
+    // topics: the product's topic rules in this copy, read by the hook runtime (rules/topics.ts) for appRules brains
+    fs.writeFileSync(path.join(stage, '.sb-tools.json'), JSON.stringify({ root: fs.realpathSync(root), sig: digest, topics: app.topics }));
     const old = `${target}.old-${process.pid}-${Date.now()}`;
     if (fs.existsSync(target)) fs.renameSync(target, old);
     try { fs.renameSync(stage, target); }
@@ -122,6 +176,22 @@ export function brainScript(root: string, rel: string): string | null {
   } catch { return null; } // a product brain never falls back to stale code in its folder; the caller reports it missing
   const own = path.join(root, rel);
   return fs.existsSync(own) ? own : null;
+}
+const copies = new Map<string, { key: string; dir: string }>();
+/** Where the app reads a data file the template ships (e.g. harness/models.json, the model and price table): the
+ * brain's own file when the owner has one, else, for a product brain, the app-owned copy's; null when neither exists.
+ * The copy is rendered once per process and brain.json revision (ensureTools hashes the whole template). */
+export function brainFile(root: string, rel: string): string | null {
+  const own = path.join(root, rel);
+  if (fs.existsSync(own)) return own;
+  if (!isProduct(root)) return null;
+  try {
+    const key = read(root, 'brain.json');
+    let hit = copies.get(root);
+    if (hit?.key !== key) { hit = { key, dir: ensureTools(root) }; copies.set(root, hit); }
+    const file = path.join(hit.dir, rel);
+    return fs.existsSync(file) ? file : null;
+  } catch { return null; }
 }
 /** Template code this release ships (the pattern alone also matches personal scripts such as ops/tools/devops-me.mjs). */
 export function shipped(rel: string): boolean {

@@ -493,15 +493,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'brain',
     title: b('Il brain: memoria e procedure', 'The brain: memory and procedures'),
-    summary: b('Una cartella di note, regole e strumenti scelta all’installazione: gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
-      'A folder of notes, rules and tools chosen at setup: agents read and write it, the app shows it live.'),
+    summary: b('Una cartella di note scelta all’installazione: parte vuota, gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
+      'A folder of notes chosen at setup: it starts empty, agents read and write it, the app shows it live.'),
     points: [
       // src/main/brain/detect.ts isBrainFolder
-      b('Si riconosce da AGENTS.md più ops/tools/brain-site.mjs; il percorso è salvato in config.json (brainRoot).',
-        'It is recognised by AGENTS.md plus ops/tools/brain-site.mjs; the path is saved in config.json (brainRoot).'),
-      // brain-template/ (map.md, now.md, ai-errors.md, ideas.md, journal/)
-      b('Dentro: map.md (l’indice), now.md (il filo di adesso), ideas.md, ai-errors.md, journal/, rules/, playbooks/.',
-        'Inside: map.md (the index), now.md (the current thread), ideas.md, ai-errors.md, journal/, rules/, playbooks/.'),
+      b('Si riconosce da brain.json (un brain nuovo) oppure da AGENTS.md più ops/tools/brain-site.mjs (un brain di prima); il percorso è salvato in config.json (brainRoot).',
+        'It is recognised by brain.json (a new brain) or by AGENTS.md plus ops/tools/brain-site.mjs (an older brain); the path is saved in config.json (brainRoot).'),
+      // src/main/rules/new-brain.ts writeFreshBrain, src/main/rules/tools.ts (ADR 0072)
+      b('Un brain nuovo contiene solo me.md (il tuo profilo) e brain.json: regole, procedure, skill, agenti e strumenti dell’app restano nell’app e arrivano a ogni chat. now.md, ideas.md, ai-errors.md e journal/ nascono al primo uso.',
+        'A new brain holds only me.md (your profile) and brain.json: the app’s rules, procedures, skills, agents and tools stay in the app and reach every chat. now.md, ideas.md, ai-errors.md and journal/ appear on first use.'),
       // brain-template/ops/tools/mem.mjs; src/main/brain/profile.ts; src/main/chats/mail.ts; src/main/skills/service.ts
       b('Gli strumenti del brain aggiornano le note con mem.mjs; l’app scrive anche il profilo me.md, la posta in ops/state/inbox/, brain-settings.json e file di skill/agenti, oltre allo stato in ops/state/improve/.',
         'Brain tools update notes through mem.mjs; the app also writes the me.md profile, mail under ops/state/inbox/, brain-settings.json and skill/agent files, as well as state in ops/state/improve/.'),
@@ -527,12 +527,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Il server dati del brain (brain-site.mjs) gira su una porta 127.0.0.1; il main inoltra solo GET su percorsi ammessi.',
         'The brain’s data server (brain-site.mjs) runs on a 127.0.0.1 port; main forwards only GETs on allowed paths.'),
     ],
-    target: [
-      // ADR 0062 lists its work as not done
-      b('Regole e hook consegnati dal prodotto invece che copiati nel brain (ADR 0062): non ancora implementato.',
-        'Rules and hooks delivered by the product instead of copied into the brain (ADR 0062): not implemented yet.'),
-    ],
-    sources: ['src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brain/procedures.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
+    sources: ['src/main/rules/new-brain.ts', 'src/main/rules/tools.ts', 'src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brain/procedures.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
   },
   {
     id: 'search',
@@ -627,8 +622,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(DATA, 'Riga: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; tabella con exploration e costWeight (default 7).',
         'Row: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; table with exploration and costWeight (default 7).'),
-      tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json.',
-        '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json.'),
+      tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json, o nella copia dell’app finché un brain nuovo non ne ha una sua.',
+        '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
     ],
     sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],

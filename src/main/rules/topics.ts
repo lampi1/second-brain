@@ -1,5 +1,7 @@
 // Small, explicit frontmatter dialect for topic rules: JSON flow mappings (valid YAML) avoid executing YAML tags.
 // Hooks inject matching content once per revision and share a total allowance across all tools in one turn.
+// A fresh brain (rules.appRules) also gets the product's topic rules from the app-owned copy (`tools`, rules/tools.ts:
+// its .sb-tools.json lists them), labelled by their path there; the brain's own topicFiles come after them.
 import { createHash } from 'node:crypto';
 import { read } from './storage';
 import type { HookInput, RuleContext } from './types';
@@ -8,9 +10,18 @@ export interface Topic { file: string; body: string; hash: string; when: { promp
 export interface TopicState { seen: Record<string, string>; used: number }
 /** `{tools}` in personal text names the app-owned utilities (rules/tools.ts); left as is when the launch has none. */
 export const expandTools = (text: string, tools?: string): string => tools ? text.replace(/\{tools\}/g, () => tools) : text;
+/** The product topic files of the app-owned copy (relative to it); [] when the copy is absent or names none. */
+export function appTopicFiles(tools: string | undefined): string[] {
+  if (!tools) return [];
+  try {
+    const list = (JSON.parse(read(tools, '.sb-tools.json') || '{}') as { topics?: unknown }).topics;
+    return Array.isArray(list) ? list.filter((f): f is string => typeof f === 'string' && f.endsWith('.md')) : [];
+  } catch { return []; }
+}
 export function topics(ctx: RuleContext): Topic[] {
-  return ctx.config.topicFiles.flatMap(file => {
-    const text = read(ctx.root, file);
+  const app = ctx.config.appRules ? appTopicFiles(ctx.tools).map(rel => ({ base: ctx.tools!, rel, file: `${ctx.tools!.replace(/\\/g, '/')}/${rel}` })) : [];
+  return [...app, ...ctx.config.topicFiles.map(rel => ({ base: ctx.root, rel, file: rel }))].flatMap(({ base, rel, file }) => {
+    const text = read(base, rel);
     if (!text) return [];
     const match = /^---\nwhen: (\{[^\n]+\})\n---\n([\s\S]*)$/.exec(text);
     if (!match) throw new Error(`Invalid topic frontmatter: ${file}; use when: {"prompt":[],"tools":[],"paths":[]}.`);

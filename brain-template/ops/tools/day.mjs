@@ -192,7 +192,9 @@ async function main() {
   const arg = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
   const offline = argv.includes('--offline');
   const day = arg('--date') ?? romeDay(Date.now());
-  const nowText = fs.readFileSync(arg('--now') ?? path.join(OPS, 'now.md'), 'utf8');
+  // a fresh brain has no now.md until the first chat writes its line (ADR 0072): an empty day, not an error
+  const nowFile = arg('--now') ?? path.join(OPS, 'now.md');
+  const nowText = fs.existsSync(nowFile) ? fs.readFileSync(nowFile, 'utf8') : '';
   if (argv[0] === 'brief') {
     let prsText = '', items = [];
     if (!offline) {

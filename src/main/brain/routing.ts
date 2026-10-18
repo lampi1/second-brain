@@ -18,6 +18,7 @@ import { log } from '../log';
 import { engineLabel, engineOf, engines } from '../engines/registry';
 import { availableEngine } from '../../shared/engine-readiness';
 import { engineReadiness } from '../engines/readiness';
+import { brainFile } from '../rules/tools';
 
 export const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 /** The app's areas retain their routing priority and safety scope on every engine. */
@@ -353,7 +354,7 @@ export interface SaveOptions { exploration?: number; costWeight?: number; eviden
 
 // ── the files ───────────────────────────────────────────────────────────────────────────────────────────────────────
 export class Routing {
-  private regCache: { mtime: number; reg: ModelRegistry | null } | null = null;
+  private regCache: { file: string; mtime: number; reg: ModelRegistry | null } | null = null;
 
   /** `apiFile` (in userData, out of the agents' reach): the rows the user put «sui crediti API» at their last save. The
    *  brain's files can be written by any agent, so a row counts as onApi only when it is listed there too (ADR 0052). */
@@ -377,12 +378,14 @@ export class Routing {
   registry(): ModelRegistry | null {
     const r = this.root();
     if (!r) return null;
-    const f = path.join(r, 'harness', 'models.json');
+    // a fresh brain has no table of its own: the release's (rules/tools.ts brainFile) until the owner adds one
+    const f = brainFile(r, 'harness/models.json');
+    if (!f) return null;
     let mtime: number;
     try { mtime = fs.statSync(f).mtimeMs; } catch { return null; }
-    if (this.regCache?.mtime !== mtime) {
+    if (this.regCache?.mtime !== mtime || this.regCache.file !== f) {
       const j = readJson(f) as ModelRegistry | null;
-      this.regCache = { mtime, reg: j && Array.isArray(j.models) ? j : null };
+      this.regCache = { file: f, mtime, reg: j && Array.isArray(j.models) ? j : null };
     }
     return this.regCache.reg;
   }

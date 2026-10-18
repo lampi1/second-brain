@@ -206,8 +206,8 @@ test('Regole imparate: a brain without ops/improve/improve.mjs gets a plain empt
   await open('miglioramento');
   const p = page.getByTestId('brain-page-miglioramento');
   await settled();
-  await expect(p.getByTestId('bx-empty')).toContainText('Il cervello non ha ancora il ciclo di miglioramento');
-  await expect(p.getByTestId('bx-empty')).toContainText('ops/improve/improve.mjs');
+  await expect(p.getByTestId('bx-empty')).toContainText('Nessuna regola imparata ancora');
+  await expect(p.getByTestId('bx-empty')).toContainText('Non è un errore'); // plain words, no program path (a fresh brain, ADR 0072)
   await expect(p.getByTestId('bx-error')).toHaveCount(0);
   await expect(p.getByTestId('bx-error-details')).toHaveCount(0);
   await expect(p).not.toContainText('Cannot find module');

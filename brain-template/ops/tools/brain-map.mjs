@@ -157,16 +157,18 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
     if (!r.startsWith('..') && dates[r]) return dates[r];
     try { return fs.statSync(abs).mtime.toISOString(); } catch { return null; }
   };
+  // a product rule a fresh brain does not hold (ADR 0072) is read from the app-owned copy this tool runs from
+  const doc = r => { const own = path.join(root, r), app = path.resolve(HERE, '..', '..', r); return !fs.existsSync(own) && fs.existsSync(app) ? app : own; };
   const fileNode = (id, layer, kind, label, abs, extra = {}) => add(node(id, layer, kind, label, {
     file: abs.replace(/\\/g, '/'), modified: modified(abs), ...extra }));
 
   // People and chats
   add(node('owner', 'persone', 'persona', 'Owner', { what: 'Il proprietario del cervello: lavora con le chat, decide, lancia lui i comandi di produzione.', file: `${root}/me.md`, modified: modified(path.join(root, 'me.md')) }));
   if (fs.existsSync(path.join(root, 'people.md'))) add(node('colleghi', 'persone', 'persona', 'Colleghi e QA', { what: 'Colleghi, soprannomi, ruoli e chi taggare su DevOps (people.md).', file: `${root}/people.md`, modified: modified(path.join(root, 'people.md')) }));
-  add(node('chat:regia-claude', 'chat', 'regia', 'Regia (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libera.', file: `${root}/hub.md`, modified: modified(path.join(root, 'hub.md')) }));
+  add(node('chat:regia-claude', 'chat', 'regia', 'Regia (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libera.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
   const cursorRegia = path.join(root, '.cursor', 'skills', 'regia', 'SKILL.md');
   if (fs.existsSync(cursorRegia)) fileNode('chat:regia-cursor', 'chat', 'regia', 'Regia (Cursor)', cursorRegia, { what: 'La stessa Regia dentro Cursor, accesa con /regia; legge le chat Cursor con chats.mjs.' });
-  add(node('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', { what: 'Una chat per ogni lavoro (fix, QA, produzione, OS): tiene la sua riga in now.md e parla alle altre con inbox.mjs.', file: `${root}/hub.md`, modified: modified(path.join(root, 'hub.md')) }));
+  add(node('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', { what: 'Una chat per ogni lavoro (fix, QA, produzione, OS): tiene la sua riga in now.md e parla alle altre con inbox.mjs.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
   for (const b of inbox?.boxes ?? []) {
     if (/^regia$/.test(b.who)) continue;
     add(node(`chat:box:${b.who}`, 'chat', 'chat-viva', b.who, { what: `Chat con una casella di posta: ${b.listening ? 'in ascolto' : 'non in ascolto'}${b.unread ? `, ${b.unread} da leggere` : ''}.`, live: b }));
@@ -182,7 +184,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   // Harnesses
   const claudeSettings = path.join(home, '.claude', 'settings.json');
   add(node('harness:claude', 'esterni', 'harness', 'Claude Code', { what: 'Il programma delle chat Claude (app desktop): esegue gli hook configurati.', ...(fs.existsSync(claudeSettings) ? { file: claudeSettings.replace(/\\/g, '/') } : {}) }));
-  add(node('harness:cursor', 'esterni', 'harness', 'Cursor', { what: 'Il secondo programma: stesse regole, adattate da harness/cursor e harness/tools.md.', file: `${root}/harness/tools.md` }));
+  add(node('harness:cursor', 'esterni', 'harness', 'Cursor', { what: 'Il secondo programma: stesse regole, adattate da harness/cursor e harness/tools.md.', file: doc('harness/tools.md').replace(/\\/g, '/') }));
 
   // Agents, notebooks, skills
   const agentsDir = path.join(root, '.claude', 'agents');

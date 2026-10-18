@@ -6,7 +6,7 @@ import type { BrainRulesConfig } from './types';
 
 export const DEFAULT_RULES: BrainRulesConfig = {
   fixedFiles: ['AGENTS.md', 'me.md', 'CLAUDE.md'], fixedBudget: 15_000,
-  topicFiles: ['code.md', 'brain-rules.md', 'hub.md'], turnBudget: 6000, nowLineLimit: 250, autoCommit: false, claudeLaunch: true,
+  topicFiles: ['code.md', 'brain-rules.md', 'hub.md'], turnBudget: 6000, nowLineLimit: 250, autoCommit: false, claudeLaunch: true, appRules: false,
 };
 export function confined(root: string, relative: string): string {
   if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).some(p => !p || p === '..' || p === '.') || /[:\x00-\x1f]/.test(relative)) throw new Error('Use a relative brain path without traversal.');
@@ -39,6 +39,7 @@ export function configOf(root: string): BrainRulesConfig {
   }
   if (typeof c.autoCommit !== 'boolean') throw new Error('Invalid rules.autoCommit.');
   if (typeof c.claudeLaunch !== 'boolean') throw new Error('Invalid rules.claudeLaunch.');
+  if (typeof c.appRules !== 'boolean') throw new Error('Invalid rules.appRules.');
   return c;
 }
 export function atomicWrite(root: string, relative: string, text: string): void {

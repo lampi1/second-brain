@@ -1,5 +1,6 @@
 // Creates a personal brain from the verified template of this installed release. Main supplies the picked local
-// destination; the renderer cannot supply a script/repo/runtime or enable global hooks/settings. Wired by main only.
+// destination; the renderer cannot supply a script/repo/runtime or enable global hooks/settings. The published brain
+// is fresh and empty (rules/new-brain.ts prepareNewBrain, ADR 0072): the app keeps its rules and tools. Wired by main only.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -102,7 +103,8 @@ export class BrainCreator {
       const result = await (this.options.run ?? runNode)(node, path.join(template, 'install.mjs'), args, template, 60000);
       if (result.code !== 0) throw new Error('Creazione della memoria non riuscita. La cartella parziale viene conservata.');
       if (!owned()) throw new Error('La destinazione è cambiata durante la creazione.');
-      for (const file of ['AGENTS.md', 'me.md', 'ops/tools/brain-site.mjs']) { // before prepareNewBrain moves the tools out
+      // the installer proved it can render this release's template; prepareNewBrain then keeps only the owner's part
+      for (const file of ['AGENTS.md', 'me.md', 'ops/tools/brain-site.mjs']) {
         const target = path.join(stage, file);
         if (!samePath(fs.realpathSync(target), target) || !fs.lstatSync(target).isFile()) throw new Error('La memoria creata è incompleta.');
       }

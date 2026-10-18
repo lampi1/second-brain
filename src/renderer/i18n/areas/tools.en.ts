@@ -96,7 +96,7 @@ export const toolsEn: typeof toolsIt = {
   'tools.skillsPage.engineClaude': 'Claude',
   'tools.skillsPage.engineCursor': 'Cursor',
   'tools.skillsPage.emptySearch': 'No skills or agents with these words.',
-  'tools.skillsPage.emptyNoItems': 'No skills or agents here: create one with the buttons above.',
+  'tools.skillsPage.emptyNoItems': 'No skills or agents yet: create one with the buttons above. The app’s own skills work behind the scenes and are not listed here.',
   'tools.skillsPage.readOnlyPill': 'read-only',
   'tools.skillsPage.errorCount': (p: { n: number }) => p.n === 1 ? '1 error' : `${p.n} errors`,
   'tools.skillsPage.noDescription': 'no description',

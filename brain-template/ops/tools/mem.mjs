@@ -74,7 +74,7 @@ const edit = (rel, change) => {
     const msg = change(lines);
     const after = lines.join('\n').replace(/\n/g, eol);
     if (DRY) return console.log(`(dry) ${rel}: ${msg}`);
-    if (after !== before) fs.writeFileSync(file, after);
+    if (after !== before) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, after); } // journal/ appears on first use
     console.log(`${rel} (main checkout): ${msg}`);
   } finally { unlock(); }
 };
@@ -103,6 +103,8 @@ const meCmd = (lines, text) => {
     lines[mine[0][1]] = line;
     return `replaced line ${mine[0][1] + 1}`;
   }
+  // a fresh brain has no now.md (ADR 0072): the first line creates it with the default section only
+  if (lines.length === 1 && lines[0] === '' && !arg('--section')) lines.splice(0, 1, '# Now: open threads', '', '## Agenti e sessioni attive', '');
   const ws = words(arg('--section') ?? 'Agenti e sessioni attive');
   const heads = lines.map((l, i) => [l, i]).filter(([l]) => /^##\s/.test(l) && hasAll(l, ws));
   if (heads.length !== 1) fail(`--section must match exactly one "## " heading, matches ${heads.length}: ${lines.filter(l => /^##\s/.test(l)).join(' | ')}`);
