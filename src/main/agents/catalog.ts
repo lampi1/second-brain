@@ -16,6 +16,7 @@ import { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_INSTRUCTIONS } from './orchestrator
 import { log, errText } from '../log';
 import { LEGACY_ROLE_REPLACEMENTS, roleAgentPresets } from '../../shared/agent-presets';
 import { presetDraft, presetHash } from './preset-support';
+import { checkAuthorPolicy, checkAgentCwd, protectedAgent } from './author-policy';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
@@ -36,6 +37,8 @@ function text(v: unknown, max: number, label: string, empty = false): string {
 }
 export interface AgentCatalogDeps {
   presetEvent?: (message: string) => void;
+  enabledMcp?: () => readonly string[];
+  approvedRoots?: () => readonly string[];
   pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
   language?: () => 'it' | 'en';
   userData: string;
@@ -451,6 +454,7 @@ export class AgentCatalogService {
       tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null };
   }
   /** Brother's edit. A behaviour change becomes a new active version; a cosmetic one (name, avatar, role…) saves in place. */
+  validateDraft(value: unknown): AgentDraft { return this.validate(value, true); }
   save(value: unknown, id?: string): AgentProfile {
     this.writable();
     const old = id === undefined ? undefined : this.find(id);
@@ -490,6 +494,49 @@ export class AgentCatalogService {
   duplicate(id: string): AgentProfile {
     const p = this.find(id);
     return this.save({ ...p, name: `${p.name.slice(0, 72)} (copia)` });
+  }
+  /** Separate automatic writer: callers cannot smuggle user authority through save(). */
+  author(value: unknown, options: { reason: string; evidence: AgentEvidenceRef[]; id?: string; presetId?: string; requestItemId?: string; probation?: boolean; baseline?: number }): AgentProfile {
+    this.writable();
+    const old = options.id ? this.find(options.id) : undefined;
+    if (old && (protectedAgent(old) || old.status !== 'active')) throw new Error('Protected or archived agent: propose the change instead.');
+    const draft = this.validate(old ? { ...old, ...obj(value) } : value, true);
+    checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
+    const base = old ?? (options.presetId ? this.find(options.presetId) : undefined);
+    if (!old && (!base || base.origin.kind !== 'preset' || base.status !== 'active')) throw new Error('Choose an active base preset.');
+    if (base?.tools && draft.tools?.allow.some(c => !base.tools!.allow.includes(c))) throw new Error('Automatic tools must be a subset of the base policy.');
+    const at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1);
+    const reason = text(options.reason, 600, 'Reason');
+    const origin = readOrigin({ kind: 'orchestrator', reason, evidence: options.evidence });
+    if (!old) {
+      if (!options.requestItemId) throw new Error('A verified task message is required.');
+      if (this.profiles.length >= MAX_AGENTS || this.profiles.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error('Agent catalog limit reached.');
+      const p: AgentProfile = { ...draft, id: `agent-${randomUUID()}`, createdAt: at, updatedAt: at, origin, version: 1, activeVersion: 1, lastEditedBy: 'orchestrator', userLocked: false, status: 'active', ...(options.probation ? { probation: { since: at, requestItemId: options.requestItemId } } : {}) };
+      this.commit([...this.profiles, p], [firstVersion(p, 'orchestrator', reason, at)]);
+      return structuredClone(p);
+    }
+    const changed = !sameBehaviour(old, draft);
+    if (changed && old.trial) throw new Error('Finish the current trial first.');
+    if (changed && this.history(old.id).some(v => v.author === 'orchestrator' && new Date(v.at).toDateString() === new Date(at).toDateString())) throw new Error('At most one behavioural change per agent per day.');
+    if (changed && (options.baseline ?? 0) < 5) throw new Error('At least five verified baseline runs are required; propose the change instead.');
+    const version = changed ? old.version + 1 : old.version;
+    const p: AgentProfile = { ...old, ...draft, updatedAt: at, lastEditedBy: 'orchestrator', version, activeVersion: changed ? version : old.activeVersion, ...(changed ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
+    this.commit(this.profiles.map(x => x.id === p.id ? p : x), changed ? [{ agentId: p.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'orchestrator', reason, at, state: 'trial' }] : []);
+    return structuredClone(p);
+  }
+
+  /** Rollback is also an automatic write: protected definitions and unsafe historical policies stay protected. */
+  authorRollback(id: string, version: number): AgentProfile {
+    this.writable();
+    const old = this.find(id), entry = this.store.get(id, version);
+    if (old.origin.kind !== 'orchestrator' || protectedAgent(old) || old.status !== 'active') throw new Error('Only owned, unlocked active agents may be rolled back.');
+    if (!entry || !count(version) || version >= old.activeVersion) throw new Error('Choose an earlier version.');
+    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, ...entry.behaviour }, true);
+    checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
+    const { trial: _trial, ...rest } = old; void _trial;
+    const p: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: Math.max(this.now(), old.updatedAt + 1), lastEditedBy: 'orchestrator' };
+    this.commit(this.profiles.map(x => x.id === id ? p : x), [], [{ agentId: id, version: old.activeVersion, state: old.trial ? 'rejected' : 'superseded' }, { agentId: id, version, state: 'active' }]);
+    return structuredClone(p);
   }
   /** Out of the launch list and the active limit; definition and history stay. */
   archive(id: string): AgentProfile {
@@ -555,6 +602,22 @@ export class AgentCatalogService {
     this.find(id);
     return this.store.list(id);
   }
+  /** Brother's Undo of an automatic behavioural change: the trial version is rejected and its baseline is active again. */
+  rejectTrial(id: string, baseline: number): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (!p.trial || p.trial.version !== p.activeVersion || p.trial.baseline !== baseline) throw new Error('Nessuna prova da annullare su questa versione.');
+    const entry = this.store.get(id, baseline);
+    if (!entry) throw new Error('Questa versione non è più nella cronologia.');
+    const { manifest: _m, effort: _e, trial: _t, ...rest } = p;
+    void _m; void _e; void _t;
+    const draft = this.validate({ ...rest, ...entry.behaviour }, true);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: baseline, updatedAt: at, lastEditedBy: 'user', userLocked: true };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
+    this.d.onCustomized?.();
+    return structuredClone(profile);
+  }
   /** Makes an older version the one new runs use. The next edit records it as the parent. */
   restoreVersion(id: string, version: number): AgentProfile {
     this.writable();
@@ -599,9 +662,14 @@ export class AgentCatalogService {
     }
     const p = this.profiles.find(x => x.id === req.agentId);
     if (!p) throw new Error('L’Agente selezionato non esiste più. Scegline un altro.');
+    if (req.agentVersion !== undefined && req.agentVersion !== p.activeVersion) throw new Error('Agent version changed. Read the definition again before starting.');
     if (p.status === 'archived') throw new Error('L’Agente selezionato è archiviato. Ripristinalo o scegline un altro.');
     // Validate known availability again at launch, without falling back to another engine/model.
     this.validate(p, true);
+    if (p.lastEditedBy === 'orchestrator') {
+      checkAuthorPolicy(p, this.d.enabledMcp?.() ?? []);
+      checkAgentCwd(req.cwd, this.d.approvedRoots?.() ?? []);
+    }
     const e = this.d.models().find(x => x.engine === p.engine)!;
     if (!e.enabled || !e.trusted) throw new Error('Il motore dell’Agente è spento o deve essere riconfermato nelle Impostazioni.');
     if (req.harness !== p.engine || req.model !== undefined && req.model !== p.model || req.effort !== undefined && req.effort !== p.effort) throw new Error('La configurazione della nuova chat non corrisponde all’Agente scelto.');

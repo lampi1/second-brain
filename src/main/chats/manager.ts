@@ -437,6 +437,8 @@ export class ChatManager implements ChatService {
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null }, links: RunLinks = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
+    links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
+    if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
     if (this.opts.unifiedOrchestrator && (req.regia || req.appRegia)) {
@@ -520,7 +522,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    if (agent.owner.source === 'catalog') this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 0, goal: prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
+    if (agent.owner.source === 'catalog') this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 0, goal: req.goal ?? prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) } });
     this.chats.set(id, r);
     if (old) {

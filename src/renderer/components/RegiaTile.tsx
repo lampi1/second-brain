@@ -11,6 +11,7 @@
 // one. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by RegiaOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { FeedEvent } from '@shared/contract';
+import { AgentFeedAction } from './AgentFeedAction';
 import { ago, chatCost, prettyModel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineName } from '../lib/engines';
@@ -76,6 +77,7 @@ function FeedRow({ e, now }: { e: FeedEvent; now: number }) {
         <span className="feed-t">{e.title}</span>
         <span className="feed-age">{ago(e.at, now)}</span>
       </button>
+      <AgentFeedAction action={e.action} />
     </li>
   );
 }

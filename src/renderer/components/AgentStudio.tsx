@@ -18,6 +18,7 @@ import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentManifestPanel } from './AgentManifestPanel';
 import { ProgressPanel } from './ProgressPanel';
+import { AgentProposals } from './AgentProposals';
 import { checkedManifest } from '@shared/agent-manifest';
 import '../styles/agent-studio.css';
 
@@ -89,6 +90,7 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
     <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
     <AppearancePreview />
     <ProgressPanel />
+    <AgentProposals />
     {problem && <p role="alert">{problem}</p>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}

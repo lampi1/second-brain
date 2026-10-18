@@ -175,6 +175,9 @@ app.whenReady().then(async () => {
     'agents:list': () => s.agents.list(),
     // the demo has no local model: its ranking is words only, labelled as such in the dialog
     'agents:classify': a => s.classifyAgents ? s.classifyAgents(a?.request) : classifyByWords(classifierRequest(a?.request), s.agents.list().profiles),
+    'agents:proposals': () => s.agentAuthoring?.proposals() ?? [],
+    'agents:proposalDecide': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.decide(a.id, a.accept); },
+    'agents:undo': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.undo(a); },
     'agents:save': a => s.agents.save(a.profile, a.id),
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:archive': a => s.agents.archive(a.id),
@@ -239,11 +242,11 @@ app.whenReady().then(async () => {
     'chat:list': () => s.chats.list(),
     'chat:items': a => s.chats.items(a.chatId),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
-    'chat:create': a => s.chats.create(a),
+    'chat:create': async a => { const chat = await s.chats.create(a); if (a.prompt) s.agentAuthoring?.rememberHumanMessage(chat.id, a.prompt); return chat; },
     // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
+    'chat:send': async a => { const before = s.chats.items(a.chatId).map(i => i.id); await s.chats.send(a.chatId, a.text, a.images); s.agentAuthoring?.rememberHumanMessage(a.chatId, a.text, before); s.chats.resumedByUser?.(a.chatId, a.text); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),

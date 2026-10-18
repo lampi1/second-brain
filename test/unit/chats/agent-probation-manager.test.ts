@@ -21,7 +21,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   fs.mkdirSync(path.join(work, '.git'), { recursive: true });
   fs.mkdirSync(path.join(work, 'src', 'deep'), { recursive: true });
   // reloaded after a test writes a probation agent into the file: the manager reaches it through this holder
-  const box = { catalog: new AgentCatalogService({ userData: dir, models }) };
+  const box = { catalog: new AgentCatalogService({ userData: dir, models, approvedRoots: () => [dir] }) };
   const catalog: Pick<AgentCatalogService, 'list' | 'keep' | 'retire'> = { list: () => box.catalog.list(), keep: (...a) => box.catalog.keep(...a), retire: (...a) => box.catalog.retire(...a) };
   const feed: FeedInput[] = [];
   const sinks = new Map<string, SessionSink>();
@@ -44,14 +44,14 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const run = (id: string) => m.list().find(x => x.id === id)?.run;
   return { m, dir, work, box, get catalog() { return box.catalog; }, feed, create, run, sink: (id: string) => sinks.get(id)! };
 }
-/** An agent in probation, written as A7 will create it (no API creates one yet). */
+/** An agent in probation, written as A7 creates it: explicit policy within the default, launched inside an approved root. */
 function probationAgent(f: ReturnType<typeof fixture>, name = 'Specialista'): string {
-  const p = f.box.catalog.save({ name, purpose: 'p', instructions: 'i', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'search' } });
+  const p = f.box.catalog.save({ name, purpose: 'p', instructions: 'i', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'search' }, tools: { allow: ['read'] }, permissionCeiling: 'default' });
   const file = path.join(f.dir, 'agents.v2.json'), body = JSON.parse(fs.readFileSync(file, 'utf8')) as { profiles: Record<string, unknown>[] };
   const stored = body.profiles.find(x => x.id === p.id)!;
   stored.probation = { since: Date.now() - 1000, requestItemId: 'u_task' }; stored.userLocked = false; stored.lastEditedBy = 'orchestrator';
   fs.writeFileSync(file, JSON.stringify(body, null, 2));
-  f.box.catalog = new AgentCatalogService({ userData: f.dir, models });
+  f.box.catalog = new AgentCatalogService({ userData: f.dir, models, approvedRoots: () => [f.dir] });
   return p.id;
 }
 
@@ -106,6 +106,20 @@ describe('Generale runs and tags', () => {
     expect(repoOf(path.join(f.work, 'src', 'deep'))).toBe('my-repo');
     expect(repoOf(f.work)).toBe('my-repo');
     expect(repoOf(f.dir)).toBeNull();
+  });
+});
+
+describe('launch of an Orchestrator-edited agent', () => {
+  it('refuses a definition without explicit policy, or a folder outside the approved roots, before anything starts', async () => {
+    const f = fixture();
+    const id = probationAgent(f);
+    await expect(f.create({ agentId: id, cwd: path.dirname(f.dir) })).rejects.toThrow(/approved/);
+    const file = path.join(f.dir, 'agents.v2.json'), body = JSON.parse(fs.readFileSync(file, 'utf8')) as { profiles: Record<string, unknown>[] };
+    delete body.profiles.find(x => x.id === id)!.tools;
+    fs.writeFileSync(file, JSON.stringify(body, null, 2));
+    f.box.catalog = new AgentCatalogService({ userData: f.dir, models, approvedRoots: () => [f.dir] });
+    await expect(f.create({ agentId: id })).rejects.toThrow(/explicit tools/);
+    expect(f.m.list()).toHaveLength(0);
   });
 });
 
