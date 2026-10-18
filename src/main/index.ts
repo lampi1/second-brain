@@ -1,6 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
+import { findBrainCandidates } from './brain/detect';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -152,6 +153,7 @@ app.whenReady().then(async () => {
       'update:recovery': () => updates.recovery(),
       'update:recoveryAck': a => updates.acknowledge(a?.id),
     'app:brainCreation': () => brainCreation.capability(),
+    'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
     'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
     'improve:proposals': () => s.proposals.list(),
     'improve:proposalAvailability': () => s.proposals.availability(),

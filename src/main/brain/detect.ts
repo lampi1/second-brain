@@ -1,8 +1,5 @@
-// First run without a brain folder: look for one by its signature (AGENTS.md + ops/tools/brain-site.mjs) one level
-// under the user's home folder and its usual "source/repos" folder, so the app works at once without choosing anything
-// (the user, 2026-10-11: "io non voglio sbattermi a scegliere la cartella giusta"). No personal names in code: only the
-// signature. Exactly one match is used automatically; zero or several leave the choice to the banner. Used by
-// brain/index.ts at start.
+// Suggest existing brains by signature, one level below home and its usual project folders.
+// The first-run interview asks before using any match. Its IPC caller accepts SB_HOME for isolated trials.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

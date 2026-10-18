@@ -214,6 +214,8 @@ export interface SetupDraft {
   tools: string;
   style: 'balanced' | 'concise' | 'detailed';
   agentIds: string[];
+  /** Explicit engine preferences; never a trust or login grant. */
+  engines?: string[];
   guide?: SetupGuide;
   /** the me.md answers the owner gave in this run (unanswered ones are read from me.md), written on confirm */
   profile?: SetupProfile;

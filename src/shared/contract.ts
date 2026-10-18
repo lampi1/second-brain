@@ -1180,6 +1180,8 @@ export interface InvokeMap {
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
+  /** Suggestions only: discovering a folder never selects it. SB_HOME isolates discovery in local trials. */
+  'app:brainCandidates': [void, string[]];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
@@ -1421,7 +1423,7 @@ export const INVOKE_CHANNELS = [
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
-  'app:brainCreation', 'app:createBrain',
+  'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
