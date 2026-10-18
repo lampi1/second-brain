@@ -10,12 +10,14 @@ import { launch, setSize, shot } from './helpers';
 
 const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis as unknown as { __sbOpened: string[] }).__sbOpened)]);
 const open = async (page: Page, file: string) => { await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('sb://esplora/' + file.replace(/\\/g, '/')); await page.keyboard.press('Enter'); };
-/** A one-page PDF with a line of text, its cross-reference table computed so pdf.js reads it without repairs. */
-function pdf(text: string): Buffer {
+/** A PDF with repeated pages, its cross-reference table computed so pdf.js reads it without repairs. */
+function pdf(text: string, pages = 1): Buffer {
   const stream = `BT /F1 24 Tf 72 720 Td (${text}) Tj ET`;
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
     `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  for (let n = 1; n < pages; n++) objects.push(objects[2]!);
+  objects[1] = `<< /Type /Pages /Kids [3 0 R ${Array.from({ length: pages - 1 }, (_, i) => `${6 + i} 0 R`).join(' ')}] /Count ${pages} >>`;
   let body = '%PDF-1.4\n'; const offsets: number[] = [];
   objects.forEach((o, i) => { offsets.push(body.length); body += `${i + 1} 0 obj\n${o}\nendobj\n`; });
   const xref = body.length;
@@ -33,7 +35,7 @@ test('file viewer: any local file, highlighted code, CSV table, pretty JSON, pag
   fs.writeFileSync(path.join(dir, '.env'), 'TOKEN=shown-on-purpose\n');
   // 300,000 lines of 8 bytes: three pages of 1 MB
   fs.writeFileSync(path.join(dir, 'big.log'), Array.from({ length: 300_000 }, (_, i) => `L${String(i + 1).padStart(6, '0')}\n`).join(''));
-  fs.writeFileSync(path.join(dir, 'doc.pdf'), pdf('Hello from a PDF'));
+  fs.writeFileSync(path.join(dir, 'doc.pdf'), pdf('Hello from a PDF', 12));
   const { app, page } = await launch({ SB_BRAIN: brain });
   try {
     await setSize(app, 1600, 1000);
@@ -75,9 +77,17 @@ test('file viewer: any local file, highlighted code, CSV table, pretty JSON, pag
     await expect(viewer.locator('[data-l="280000"]')).toHaveText(/L280000/);
 
     await open(page, path.join(dir, 'doc.pdf'));
-    await expect(viewer.getByTestId('viewer-pdf')).toHaveAttribute('data-pages', '1');
-    await expect(viewer.getByTestId('viewer-pdf-page')).toHaveAttribute('data-rendered', 'true');
+    const pdfView = viewer.getByTestId('viewer-pdf'), pdfPages = viewer.getByTestId('viewer-pdf-page');
+    await expect(pdfView).toHaveAttribute('data-pages', '12');
+    await expect(pdfPages.first()).toHaveAttribute('data-rendered', 'true');
     await shot(page, 'file-viewer-pdf');
+    await pdfView.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(pdfPages.last()).toHaveAttribute('data-rendered', 'true');
+    await expect.poll(() => pdfPages.first().evaluate(el => (el as HTMLCanvasElement).width)).toBe(0);
+    await expect.poll(() => pdfPages.evaluateAll(els => els.filter(el => (el as HTMLCanvasElement).width > 0).length)).toBeLessThanOrEqual(8);
+    await shot(page, 'file-viewer-pdf-released');
+    await pdfView.evaluate(el => { el.scrollTop = 0; });
+    await expect(pdfPages.first()).toHaveAttribute('data-rendered', 'true');
 
     await open(page, path.join(dir, 'big.log'));
     await viewer.getByTestId('viewer-show-in-folder').click();
