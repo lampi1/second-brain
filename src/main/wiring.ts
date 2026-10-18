@@ -11,6 +11,8 @@ import { engineReadiness } from './engines/readiness';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
+import { AgentAuthoring } from './agents/authoring';
+import { SuggestionBudget } from './agents/suggestion-budget';
 import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
 import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
@@ -78,6 +80,7 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  agentAuthoring?: AgentAuthoring;
   oneShot?: OneShotService;
   agentRuns?: AgentRunStore;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
@@ -267,6 +270,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
   };
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     presetEvent: detail => brain.publish([{ kind: 'proposal', title: 'Preset Agenti aggiornati', detail }]),
+    approvedRoots: () => [brain.info().brainRoot, brain.settings().appRepo, ...(brain.settings().codexAutonomyRoots ?? [])].filter((p): p is string => typeof p === 'string' && !!p),
     pulsePreset: () => {
       const choices = engineInfos();
       let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
@@ -521,7 +525,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  const suggestionBudget = new SuggestionBudget(ctx.userData);
+  const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
+    suggestionSpend: () => suggestionBudget.spent(),
+    send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
+  });
+  attachAppTools(mcp, { agentAuthoring, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -577,7 +586,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

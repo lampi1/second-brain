@@ -4,6 +4,7 @@
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
 import type { AgentClassification } from './agent-classifier';
+import type { AgentProposal, AgentUndo } from './agent-authoring';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
@@ -329,6 +330,12 @@ export interface RunInfo {
 }
 
 export interface NewChat {
+  /** Expected catalog version and run links; validated before a new engine starts. */
+  agentVersion?: number;
+  parentRunId?: string;
+  reviewOf?: string;
+  reworkOf?: string;
+  goal?: string;
   /** Catalog owner. Main resolves its frozen configuration; never changes an existing session. */
   agentId?: string;
   harness: Harness;
@@ -487,7 +494,7 @@ export interface FeedEvent {
   /** the card's one action (agent-retired: Ripristina) */
   action?: FeedAction;
 }
-export type FeedAction = { kind: 'agent-restore'; agentId: string };
+export type FeedAction = { kind: 'agent-restore'; agentId: string } | { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
 
 // ---- DevOps (src/main/devops): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
@@ -1143,6 +1150,9 @@ export interface InvokeMap {
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
   'agents:classify': [{ request: string }, AgentClassification];
+  'agents:proposals': [void, AgentProposal[]];
+  'agents:proposalDecide': [{ id: string; accept: boolean }, AgentProfile | null];
+  'agents:undo': [AgentUndo, AgentProfile];
   'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
   'agents:duplicate': [{ id: string }, AgentProfile];
   'agents:archive': [{ id: string }, AgentProfile];
@@ -1421,7 +1431,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:classify', 'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
