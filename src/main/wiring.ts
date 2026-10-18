@@ -62,12 +62,16 @@ import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
 import { launcherName, restartWaiter, sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
+import { OneShotService } from './agents/oneshot';
+import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  oneShot?: OneShotService;
+  agentRuns?: AgentRunStore;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -251,6 +255,16 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
   };
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    pulsePreset: () => {
+      const choices = engineInfos();
+      let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
+        ?? choices.find(e => e.kind === 'claude');
+      const legacy = brain.settings();
+      if (legacy.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
+      const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
+      return { engine: e?.id ?? 'claude', model: legacy.headlineModel || model,
+        ...(e?.caps.effort ? { effort: legacy.headlineEffort || 'low' as const } : {}) };
+    },
     language: () => brain.settings().language === 'system' ? systemLang() : brain.settings().language as 'it' | 'en',
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
@@ -517,6 +531,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     brainRoot: () => brain.info().brainRoot, node, runner: headless,
     anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
   });
+  const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
+    settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
+    hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
+    headless, text: engines.text, runs: manager.runs });
   // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
   if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
@@ -528,7 +546,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

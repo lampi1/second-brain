@@ -1,6 +1,10 @@
 // Battito's renderer/main contract (ADR 0070): cards, explicit approvals and shared job budgets.
 // These are data only; main validates all references and owns every action.
 export type PulseType = 'idea' | 'consiglio' | 'promemoria' | 'collegamento' | 'curiosita' | 'agente';
+export interface PulseSettings {
+  on: boolean; dailyUsd: number; slots: string[]; headline: { on: boolean };
+  types: Record<PulseType, boolean>; places: Record<'board' | 'agent' | 'search' | 'file', boolean>;
+}
 export type PulsePlace = 'board' | 'search' | `agent:${string}` | `file:${string}`;
 export type PulseCostBasis = 'reported' | 'estimated' | 'unknown';
 export type PulseDismissReason = 'irrilevante' | 'gia-noto' | 'sbagliato' | 'troppo-spesso';
