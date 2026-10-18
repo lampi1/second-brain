@@ -40,7 +40,7 @@ const stem = (w: string): string => {
 };
 /** Topic words: folded case and accents, no stopwords or single characters, stemmed. A word of a bilingual work concept
  *  (shared/work-concepts.ts) becomes that concept's token, so "correggi" in a request meets "fix" in an English
- *  description; "perché"/"why" and "quando" count there even though they are stopwords elsewhere. */
+ *  description. */
 const words = (s: string): string[] => (s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').match(/[\p{L}\p{N}]+/gu) ?? [])
   .flatMap(w => { const c = conceptOf(w); return c ? [`#${c}`] : w.length > 1 && !STOPWORDS.has(w) ? [stem(w)] : []; });
 /** Same stem, or one stem (at least 4 letters) begins the other: "scriv" ~ "scriver", "lent" ~ "lentezz". */

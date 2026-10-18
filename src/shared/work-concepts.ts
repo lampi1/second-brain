@@ -13,17 +13,18 @@ export type Concept = 'fix' | 'build' | 'review' | 'qa' | 'cause' | 'ops' | 'run
 /** Words per concept, accents folded, lower case: "stem*" matches any word that begins with it, any other entry only the
  *  whole word (so "prod" never catches "produttività" and "post" never catches "postgres"). */
 export const CONCEPTS: Readonly<Record<Concept, readonly string[]>> = {
-  fix: ['fix*', 'hotfix*', 'bug', 'bugs', 'correg*', 'sistem*', 'ripar*', 'repair*', 'crash*', 'rotto', 'rotta', 'rotti', 'broken', 'guast*',
+  fix: ['fix', 'fixed', 'fixes', 'fixing', 'hotfix*', 'bug', 'bugs', 'correg*', 'sistemal*', 'sistemare', 'sistemato', 'sistemata', 'ripar*', 'repair*', 'crash*', 'rotto', 'rotta', 'rotti', 'broken', 'guast*',
     'errore', 'errori', 'error', 'errors'],
   build: ['implement*', 'aggiung*', 'add', 'adds', 'crea', 'creare', 'creami', 'create', 'build', 'svilupp*', 'develop*', 'refactor*', 'migra',
     'migrare', 'migrate', 'feature', 'features', 'funzionalit*', 'endpoint*', 'paginazion*', 'pagination', 'pulsant*', 'button*', 'schermat*',
     'screen', 'salvataggio'],
   review: ['review*', 'revision*', 'rivedi', 'rivedere', 'revisiona*', 'diff', 'occhiata'],
   qa: ['test', 'tests', 'testa', 'testare', 'testing', 'collaud*', 'smoke', 'e2e', 'accettazion*', 'acceptance', 'staging', 'browser', 'qa'],
-  cause: ['perche', 'why', 'causa', 'cause', 'root', 'investig*', 'indag*', 'analizz*', 'analy*', 'quando', 'since', 'bisect', 'commit', 'regress*'],
+  // no stopwords here ("perché", "quando", "why"): Italian agents say "Usa quando…", so they would match every question
+  cause: ['causa', 'cause', 'investig*', 'indag*', 'analizz*', 'analy*', 'bisect', 'commit', 'regress*'],
   ops: ['alert*', 'allarm*', 'incident*', 'outage*', 'latenz*', 'latency', 'log', 'logs', 'produzione', 'production', 'prod', 'metric*', 'metrich*',
     'dashboard*', 'cluster*', 'cpu', 'azure', 'diagnos*', 'database', 'down'],
-  runbook: ['runbook*', 'procedur*', 'rollback', 'failover', 'documenta*', 'document'],
+  runbook: ['runbook*', 'procedur*', 'rollback', 'failover', 'documenta', 'documentare', 'documentalo', 'documentala', 'document'],
   research: ['ricerc*', 'research*', 'fonti', 'fonte', 'source', 'sources', 'cite', 'cita', 'citare', 'online', 'studi', 'study', 'studies',
     'confront*', 'compar*', 'autorevol*', 'affidabil*', 'reliable', 'link', 'web'],
   write: ['scriv*', 'write', 'writing', 'draft*', 'bozz*', 'testo', 'text', 'post', 'newsletter*', 'annunci*', 'announc*', 'riscriv*', 'rewrite',

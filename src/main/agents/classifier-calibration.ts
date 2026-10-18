@@ -40,7 +40,9 @@ export function calibrate(mode: ClassifierMode, runs: readonly AgentRun[], profi
   const scores = rows.map(r => r.routing!.score ?? 0);
   const defaultThreshold = DEFAULT_CLASSIFIER_THRESHOLDS[mode], threshold = o.approved ?? defaultThreshold;
   const share = (t: number | null) => t === null || !scores.length ? null : scores.filter(s => s >= t).length / scores.length;
-  const suggested = scores.length >= (o.minRuns ?? CALIBRATION_MIN_RUNS) ? conformalLower(scores, o.alpha) : null;
+  // at least 1: a quantile that lands on an unranked run (0) would mean "never say none fits", not a threshold
+  const lower = scores.length >= (o.minRuns ?? CALIBRATION_MIN_RUNS) ? conformalLower(scores, o.alpha) : null;
+  const suggested = lower === null ? null : Math.max(1, lower);
   return {
     mode, threshold, defaultThreshold, approved: o.approved ?? null, n: scores.length,
     rank1: rows.length ? rows.filter(r => r.routing!.rank === 1).length / rows.length : null,

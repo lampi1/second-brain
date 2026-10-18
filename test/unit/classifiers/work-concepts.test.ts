@@ -5,11 +5,13 @@ import { builtinTask, conceptOf, conceptsOf } from '../../../src/shared/work-con
 
 describe('work concepts', () => {
   it('matches Italian and English forms of the same job, accents and case aside', () => {
-    expect(['correggilo', 'Sistema', 'fix', 'BUG', 'crashes'].map(conceptOf)).toEqual(['fix', 'fix', 'fix', 'fix', 'fix']);
-    expect(conceptOf('Perché')).toBe('cause');
+    expect(['correggilo', 'Sistemala', 'fix', 'BUG', 'crashes'].map(conceptOf)).toEqual(['fix', 'fix', 'fix', 'fix', 'fix']);
+    expect(conceptOf('Indaga')).toBe('cause');
     expect(conceptOf('revisiona')).toBe('review');
   });
-  it('keeps whole-word entries whole: no "prod" in produttività, no "post" in postgres, no "add" in addetto', () => {
+  it('keeps whole-word entries whole and stopwords out: no "prod" in produttività, no "sistema" as a noun, no "quando"', () => {
+    expect(conceptOf('sistema')).toBeNull(); expect(conceptOf('sistemalo')).toBe('fix');
+    expect(conceptOf('quando')).toBeNull(); expect(conceptOf('perché')).toBeNull(); expect(conceptOf('fixture')).toBeNull();
     expect(conceptOf('produttività')).toBeNull();
     expect(conceptOf('postgres')).toBeNull();
     expect(conceptOf('addetto')).toBeNull();

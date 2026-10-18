@@ -40,6 +40,9 @@ describe('calibrate', () => {
     expect(c.coverageNow).toBeCloseTo(20 / 21);
     expect(calibrate('words', runs, PROFILES).n).toBe(1);
   });
+  it('never suggests 0, even when unranked right matches reach the quantile', () => {
+    expect(calibrate('hybrid', [run(null), run(null), ...many(Array(18).fill(80))], PROFILES).suggested).toBe(1);
+  });
   it('suggests nothing below the minimum; pending only when far enough and not dismissed', () => {
     expect(calibrate('hybrid', many(Array(19).fill(90)), PROFILES)).toMatchObject({ suggested: null, pending: false, n: 19 });
     const runs = many([...Array(18).fill(70), 44, 45]);
