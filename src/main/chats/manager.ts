@@ -52,6 +52,9 @@ import { compatibleOwner } from '../agents/catalog';
 import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
 import type { AgentOwnerSnapshot, AgentRun, AgentRunEnd, AgentRunOutcome } from '../../shared/agents';
 import { AgentRunStore, addTurn, endRun, reopenRun, staleDue, type RunLinks } from '../agents/runs';
+import { reportOf } from '../agents/run-report';
+import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
@@ -264,6 +267,8 @@ interface Rec {
   idleSince?: number;
   /** open "Comando da eseguire" requests (run/asks.ts keeps them, not r.pending): they pause the stale clock too */
   commandsOpen?: Set<string>;
+  /** since when the chat runs a turn of its open agent run (its execution time; not persisted: a quit cuts the turn) */
+  runningSince?: number;
 }
 
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
@@ -804,12 +809,29 @@ export class ChatManager implements ChatService {
 
   /** The user went on with this chat himself (typed in it, reopened it: the IPC handlers only): an ended agent run is
    *  open again and counts as reworked. A message from an agent, the Orchestrator or the app never reopens a run. */
-  resumedByUser(chatId: string): void {
+  resumedByUser(chatId: string, text?: string): void {
     const r = this.chats.get(chatId);
-    if (!r?.s.run || !reopenRun(r.s.run)) return;
-    r.idleSince = Date.now(); // persisted below
-    log.info('chats', 'agent run reopened by the user', { chat: chatId, data: { runId: r.s.run.runId, reopened: r.s.run.counters.reopened } });
+    const run = r?.s.run;
+    if (!r || !run) return;
+    // Brother's corrections (AGENTS-DESIGN §5): (a) a "[Reasoning correction]", else (b) his reopen of a run whose
+    // agent had reported; runs recorded before they were counted have no tally (unknown, not zero)
+    const tagged = text !== undefined && isCorrection(text), reported = run.report?.ok === true;
+    const reopened = reopenRun(run);
+    if (run.corrections && (tagged || (reopened && reported))) run.corrections[tagged ? 'tagged' : 'afterReport']++;
+    if (!reopened && !tagged) return;
+    if (reopened) {
+      delete run.report; // it reported on the work before the reopen
+      r.idleSince = Date.now(); // persisted below
+      log.info('chats', 'agent run reopened by the user', { chat: chatId, data: { runId: run.runId, reopened: run.counters.reopened } });
+    }
     this.runSave(); this.persist(); this.updated(r);
+  }
+
+  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
+   *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
+  runMetrics(opts: { aiErrors?: string; since?: number } = {}): ReturnType<typeof runMetrics> {
+    this.runs.flush();
+    return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}) });
   }
 
   /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;
@@ -1008,6 +1030,8 @@ export class ChatManager implements ChatService {
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
+    // the agent's work goes on in a new run: the old one counts as reworked (§5)
+    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) { nr.s.run.continuedFrom = r.s.run.runId; this.runSave(); }
     r.s.continuedBy = { id: c.id, title: c.title };
     this.addItem(r, sysItem('continuedIn', { title: c.title }, 'info'), false);
     this.persist();
@@ -1401,6 +1425,12 @@ export class ChatManager implements ChatService {
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
+    // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last)
+    const run = r.s.run;
+    if (run && run.endedAt === undefined) {
+      const report = reportOf(turnReply(r.items), item.at);
+      if (report) { run.report = report; this.runSave(); }
+    }
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;
@@ -1483,11 +1513,24 @@ export class ChatManager implements ChatService {
 
   /** Ends a run and, below it, every open run it spawned (a child never ends its parent). */
   private finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now()): void {
-    if (!run || !endRun(run, reason, at)) return;
+    if (!run || run.endedAt !== undefined) return;
+    const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
+    if (mine) this.ranUntil(r!, at);
+    endRun(run, reason, at);
     log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
     for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
-    const r = this.chats.get(run.chatId);
-    if (r && r.s.run === run) this.updated(r);
+    if (!mine) return;
+    // its cost, tokens and time now live in the run: the analytics row may be pruned when the archive is full
+    this.hook('analytics', () => this.analytics.rolledUp(r!.s));
+    this.updated(r!);
+  }
+  /** A running turn of the open run stops counting at `at` (a state change, or the run's end). */
+  private ranUntil(r: Rec, at: number): void {
+    const run = r.s.run, since = r.runningSince;
+    delete r.runningSince;
+    if (since === undefined || !run || run.endedAt !== undefined || typeof run.executionMs !== 'number') return;
+    run.executionMs += Math.max(0, at - since);
+    this.runs.touch();
   }
   private endRunOf(r: Rec, reason: AgentRunEnd, at = Date.now()): void {
     if (!r.s.run || r.s.run.endedAt !== undefined) return;
@@ -2017,6 +2060,11 @@ export class ChatManager implements ChatService {
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     const run = r.s.run;
+    // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
+    if (p.state && run && run.endedAt === undefined) {
+      if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
+      else if (p.state !== 'running') this.ranUntil(r, Date.now());
+    }
     if (run && run.endedAt === undefined) {
       if (p.contextTokens !== undefined && p.contextTokens > (run.counters.contextPeak ?? 0)) { run.counters.contextPeak = p.contextTokens; this.runs.touch(); }
       // a settled turn (its result): what it cost while the run was open

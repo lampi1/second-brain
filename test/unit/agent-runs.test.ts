@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AgentRunStore, RUNS_MAX, STALE_MS, addTurn, endRun, readRun, reopenRun, staleDue, type RunStart } from '../../src/main/agents/runs';
+import { AgentRunStore, ROLLUP_BYTES, RUNS_MAX, STALE_MS, addTurn, endRun, fitRollups, readRun, readTally, reopenRun, staleDue, type RunStart } from '../../src/main/agents/runs';
+import { SAMPLE_MAX, emptyTally } from '../../src/main/agents/run-metrics';
 
 const roots: string[] = [];
 afterEach(() => { for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -114,5 +115,85 @@ describe('agent run store', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(s.adopt(run)).toBe(run);
     expect(s.adopt({ ...run })).toBe(run);
+  });
+});
+
+describe('agent run store: A6 fields and rollups', () => {
+  it('reads back the report, corrections, execution time and continuation, and refuses them out of shape', () => {
+    const s = new AgentRunStore(tmp());
+    const prev = s.start(start());
+    const run = { ...s.start(start()), continuedFrom: prev.runId, report: { ok: true as const, at: 5, outcome: 'done' as const, verified: 'yes' as const, summary: 'ok', findings: 2, blocking: 1 }, corrections: { tagged: 1, afterReport: 0 }, executionMs: 1500 };
+    expect(run.executionMs).toBe(1500);
+    expect(readRun(run)).toEqual(run);
+    expect(readRun({ ...run, report: { ok: false, at: 5 } })).toEqual({ ...run, report: { ok: false, at: 5 } });
+    for (const bad of [{ continuedFrom: 'x' }, { report: { ok: true, at: 5, outcome: 'great', verified: 'yes', summary: 'ok' } }, { report: { ...run.report, summary: 'x'.repeat(141) } },
+      { report: { ...run.report, blocking: 3 } }, { corrections: { tagged: -1, afterReport: 0 } }, { corrections: { tagged: 0 } }, { executionMs: -1 }, { executionMs: null }])
+      expect(readRun({ ...run, ...bad })).toBeNull();
+    const legacy: Record<string, unknown> = { ...run };
+    delete legacy.corrections; delete legacy.executionMs; delete legacy.report; delete legacy.continuedFrom;
+    expect(readRun(legacy)).toEqual(legacy); // pre-A6 runs: unknown, not refused
+  });
+
+  it('a pruned run is folded into its rollup, which survives a reload; a review whose target stays is kept', () => {
+    const dir = tmp();
+    const s = new AgentRunStore(dir);
+    const target = s.start(start({ agentId: 'coder' }), false);
+    endRun(target, 'completed', 100);
+    const review = s.start(start({ agentId: 'reviewer', version: 3, reviewOf: target.runId }), false);
+    review.report = { ok: true, at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4 };
+    endRun(review, 'completed', 1); // the oldest end, but its target is kept: it stays with it
+    const old = s.start(start({ agentId: 'coder', startedAt: 0 }), false);
+    old.costUsd = 0.25;
+    endRun(old, 'completed', 2);
+    for (let i = 0; i < RUNS_MAX - 2; i++) endRun(s.start(start({ startedAt: 10 }), false), 'closed', 1000 + i);
+    s.save();
+    expect(s.get(old.runId)).toBeUndefined();
+    expect(s.get(review.runId)).toBeDefined();
+    const rolled = new AgentRunStore(dir).rolledUp();
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0]).toMatchObject({ agentId: 'coder', version: 2, ended: 1, cost: { n: 1, values: [0.25] }, corrections: { runs: 1, tagged: 0, afterReport: 0 } });
+  });
+
+  it('a pruned target takes its reviews along, their findings counted on it', () => {
+    const s = new AgentRunStore(tmp());
+    const target = s.start(start({ agentId: 'coder' }), false);
+    endRun(target, 'completed', 1);
+    const review = s.start(start({ agentId: 'reviewer', version: 3, reviewOf: target.runId }), false);
+    review.report = { ok: true, at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4, blocking: 1 };
+    endRun(review, 'completed', 5000);
+    for (let i = 0; i < RUNS_MAX - 1; i++) endRun(s.start(start({ startedAt: 10 }), false), 'closed', 1000 + i);
+    s.save();
+    expect(s.get(target.runId)).toBeUndefined();
+    expect(s.get(review.runId)).toBeUndefined();
+    expect(s.list()).toHaveLength(RUNS_MAX - 1);
+    const coder = s.rolledUp().find(t => t.agentId === 'coder')!;
+    expect(coder.reviews).toEqual({ 'reviewer/3': { runs: 1, findings: 4, blockingRuns: 1, blocking: 1 } });
+    expect(s.rolledUp().find(t => t.agentId === 'reviewer')).toMatchObject({ version: 3, ended: 1 });
+  });
+
+  it('refuses a rollup out of shape and two rollups of the same version', () => {
+    const t = emptyTally('coder', 1);
+    expect(readTally(t)).toEqual(t);
+    for (const bad of [{ agentId: 'Bad' }, { version: -1 }, { verdicts: { success: 1 } }, { cost: { n: 0, values: [1] } }, { cost: { n: 1, values: [-1] } },
+      { reviews: { 'reviewer/x': { runs: 1, findings: 0, blockingRuns: 0, blocking: 0 } } }, { reviews: { 'reviewer/1': { runs: 0, findings: 0, blockingRuns: 0, blocking: 0 } } }])
+      expect(readTally({ ...t, ...bad })).toBeNull();
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json');
+    fs.writeFileSync(file, JSON.stringify({ version: 1, runs: [], rollups: [t, t] }));
+    expect(new AgentRunStore(dir).problem).toMatch(/non è leggibile/);
+    fs.writeFileSync(file, JSON.stringify({ version: 1, runs: [], rollups: [t] }));
+    expect(new AgentRunStore(dir).rolledUp()).toEqual([t]);
+  });
+
+  it('past their budget the largest rollup samples are halved, counts kept', () => {
+    const big = Array.from({ length: 60 }, (_, i) => {
+      const t = emptyTally(`agent-${i}`, 1);
+      for (const s of [t.cost, t.contextPeak, t.elapsed, t.execution, ...Object.values(t.tokens)]) { s.n = 1000; s.values = Array.from({ length: SAMPLE_MAX }, (_, j) => 1_000_000 + j + 0.123456789); }
+      return t;
+    });
+    const fit = fitRollups(big);
+    expect(Buffer.byteLength(JSON.stringify(fit, null, 2), 'utf8')).toBeLessThanOrEqual(ROLLUP_BYTES);
+    expect(fit.every(t => t.cost.n === 1000)).toBe(true);
+    expect(fit.some(t => t.cost.values.length < SAMPLE_MAX)).toBe(true);
+    expect(fit[0]!.cost.values.at(-1)).toBe(big[0]!.cost.values.at(-1)); // the newest stay
   });
 });
