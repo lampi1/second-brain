@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DefaultBrain } from './default-brain';
+import { pathToFileURL } from 'node:url';
 const temporary: string[] = [];
 afterEach(async () => { for (const root of temporary.splice(0)) await fs.rm(root, { recursive: true, force: true }); });
 async function fixture() {
@@ -68,4 +69,8 @@ it('renders the actual bundled template without enabling hidden project integrat
   const me = await fs.readFile(path.join(created.root, 'me.md'), 'utf8'); expect(me).toContain('Not connected yet'); expect(me).not.toMatch(/\{\{[A-Z_]+\}\}/);
   expect((await fs.stat(path.join(created.root, 'projects'))).isDirectory()).toBe(true);
   await expect(fs.stat(path.join(created.root, '.claude'))).rejects.toThrow();
+  const mapModule = await import(/* @vite-ignore */ pathToFileURL(path.join(created.root, 'ops', 'tools', 'brain-map.mjs')).href);
+  const map = mapModule.collect({ root: created.root, home: f.userData });
+  expect(map.warnings).toEqual([]);
+  expect(mapModule.check(map)).toEqual([]);
 });

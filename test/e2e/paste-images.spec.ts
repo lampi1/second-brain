@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatSummary } from '../../src/shared/contract';
-import { launch, launchDemo, setSize, shot } from './helpers';
+import { closeSetup, expandChats, launch, launchDemo, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 
@@ -49,6 +49,8 @@ for (const engine of ['claude', 'cursor'] as const) {
     await setSize(app, 1400, 900);
     const chat: ChatSummary = await page.evaluate(([h, dir]) => window.sb.invoke('chat:create', { harness: h, cwd: dir, title: 'Screenshot' }), [engine, cwd] as const);
     const input = `chat-input-${chat.id}`;
+    await closeSetup(page);
+    await expandChats(page, chat.id);
     await expect(page.getByTestId(input)).toBeVisible();
 
     // Ctrl+V of two screenshots, then one dropped: three previews; the second goes away with its ✕
@@ -123,6 +125,7 @@ async function pasteFreshScreenshot(app: ElectronApplication, page: Page, testid
 
 test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main reads it, in a tile and in the Regia', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // the input is on the open strip
   await pasteFreshScreenshot(app, page, 'chat-input-qa', true);
   await expect(page.getByTestId('chat-input-qa-images-0')).toBeVisible();
   await expect(page.getByTestId('chat-input-qa')).toHaveValue('');
@@ -142,6 +145,7 @@ test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main 
 
 test('a screenshot pasted in one chat stays there when focus mode swaps to another chat', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // the input is on the open strip
   await page.getByTestId('chat-input-qa').click();
   await page.keyboard.press('Control+Shift+F');
   const focus = page.getByTestId('focus-view');
@@ -161,6 +165,7 @@ test('a screenshot pasted in one chat stays there when focus mode swaps to anoth
 
 test('the Regia overlay (Ctrl+R) takes pasted screenshots too (here it waits on a decision: queued with its image)', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // the input is on the open strip
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press('q');

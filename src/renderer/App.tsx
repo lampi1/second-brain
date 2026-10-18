@@ -45,6 +45,7 @@ import { QuestionsWindow } from './components/QuestionsWindow';
 import { ImprovePage } from './components/ImprovePage';
 import { LaunchBanner } from './components/LaunchBanner';
 import { Dashboard } from './dashboard/Dashboard';
+import { GuidePage } from './components/GuidePage';
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -162,7 +163,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentStudio /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label="Impostazioni"><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label="Skill e agenti"><div className="bx-inner"><SkillsPage /></div></div>

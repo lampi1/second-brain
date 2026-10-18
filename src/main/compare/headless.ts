@@ -37,6 +37,10 @@ export interface HeadlessRequest {
   round: string;
   /** absolute folders this run may never read (the brain's list: the other side's output), on top of HeadlessDeps.denyRead */
   denyRead?: string[];
+  /** Agent one-shot jobs use shorter deadlines and deny every permission, including reads. */
+  timeoutMs?: number;
+  maxTokens?: number;
+  noTools?: boolean;
 }
 
 /** What a run gives back: the answer and what it cost, or why it failed (short, never a key). */
@@ -316,7 +320,9 @@ export class HeadlessRunner {
       item: item => c.item(item),
       changed: p => { if (c.changed(p)) settle({ error: null }); },
       pending: req2 => {
-        const answer = readOnlyAnswer(engine.kind, req2, { cwd: req.cwd, deny });
+        const answer: Answer = req.noTools
+          ? { kind: 'permission', allow: false, message: 'Questo job usa solo il digest ricevuto. Nessuno strumento è consentito.' }
+          : readOnlyAnswer(engine.kind, req2, { cwd: req.cwd, deny });
         log.info('compare', 'headless permission answered', { chat: chatId, data: { engine: engine.id, type: req2.type, tool: req2.tool, allow: answer.kind === 'permission' && answer.allow } });
         // answered right after the session finished reporting the request
         queueMicrotask(() => {
@@ -326,19 +332,22 @@ export class HeadlessRunner {
       resolved: () => { /* nothing waits on it */ },
       exit: info => settle({ error: info.error ?? 'il motore si è chiuso prima di finire' }),
     };
-    const timeoutMs = this.d.timeoutMs ?? RUN_TIMEOUT_MS;
+    const timeoutMs = req.timeoutMs ?? this.d.timeoutMs ?? RUN_TIMEOUT_MS;
     const timer = setTimeout(() => settle({ error: `tempo scaduto (${Math.round(timeoutMs / 60_000) || '<1'} min): fermato` }), timeoutMs);
     timer.unref?.();
     try {
-      session = sessionFor(engine, { chatId, cwd: req.cwd, model: m.model, effort, readOnly: true, denyRead: deny, mcpConfig: null }, sink, {
+      session = sessionFor(engine, { chatId, cwd: req.cwd, model: m.model, effort, readOnly: true, denyRead: deny, mcpConfig: null,
+        ...(req.maxTokens !== undefined ? { maxTokens: req.maxTokens } : {}),
+        ...(req.noTools ? { toolPolicy: { allow: [] }, ceiling: 'plan' } : {}),
+      }, sink, {
         userData: this.d.userData, mcpUrl: null, appMcpUrl: null, showReplay: false, acpModelConfig: null,
         key: () => this.d.keyFor(engine.id), ...(override ? { path: override } : {}), ...(this.d.appVersion ? { appVersion: this.d.appVersion } : {}),
       });
       this.live.add(session);
       session.start();
       if (session.alive) {
-        await session.ready;
-        if (session.alive) session.send(req.prompt);
+        const ready = await Promise.race([Promise.resolve(session.ready).then(() => true), ended.then(() => false)]);
+        if (ready && session.alive) session.send(req.prompt);
       }
       const end = await ended;
       const durationMs = Date.now() - t0;

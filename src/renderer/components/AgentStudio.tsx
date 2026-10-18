@@ -14,6 +14,7 @@ import {t}from'../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentManifestPanel } from './AgentManifestPanel';
+import { ProgressPanel } from './ProgressPanel';
 import { checkedManifest } from '@shared/agent-manifest';
 import '../styles/agent-studio.css';
 
@@ -82,6 +83,7 @@ export function AgentStudio() {
   return <section className="agent-studio" aria-label={t('home.manageAgents')} data-testid="agent-studio">
     <header className="studio-head"><div><h2>{t('home.manageAgents')}</h2><p>{t('product.agentsPurpose')}</p></div><button type="button" className="btn btn-primary" disabled={!catalog || busy} onClick={() => pick()}>{t('product.newAgent')}</button><button type="button" className="btn btn-ghost" onClick={() => openModal('setup')}>{t('product.setup')}</button></header>
     <AppearancePreview />
+    <ProgressPanel />
     {problem && <p role="alert">{problem}</p>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}

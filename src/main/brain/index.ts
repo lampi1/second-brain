@@ -18,8 +18,7 @@ import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
 import { ConfigStore } from './config';
-import { findBrainCandidates } from './detect';
-import { Live, KINDS, stamp, cut, type RawEvent } from './live';
+import { Live, KINDS, stamp, cut, feedAction, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
 import { cursorToday, installHook } from './cursor-ledger';
@@ -49,6 +48,8 @@ export interface BrainCtx {
   scriptEnv?: () => Record<string, string>;
   /** the Anthropic API engine when the writing rows «Sui crediti API» may use it now (on, with a key), else null (ADR 0052) */
   apiRoute?: () => Harness | null;
+  /** a brain file changed (relative path, '/'): the hybrid search re-syncs (SPEC 23) */
+  onFile?: (f: string) => void;
 }
 
 const FEED_MAX = 500;
@@ -59,13 +60,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   // a hidden run (SB_HIDDEN=1: tests, the agents' dev instance) never pops Windows toasts nor raises the window
   const quiet = testing || env.SB_HIDDEN === '1';
   const cfg = new ConfigStore(ctx.userData, env);
-  // first run (or an unreadable config): a single brain folder found by its signature is used at once (brain/detect.ts),
-  // before any listener exists: no restart races with the first start (two live feeds were seen in the stable test)
-  if (!cfg.get().brainRoot && !testing) {
-    const found = findBrainCandidates();
-    if (found.length === 1) { cfg.set({ brainRoot: found[0]! }); log.info('brain', 'brain folder found by itself', { data: { brainRoot: found[0] } }); }
-    else if (found.length > 1) log.info('brain', 'several brain folders found: the user chooses', { data: { found } });
-  }
+  // Discovery is only a suggestion in the interview. Until an explicit choice, start without a brain.
   const node = electronNode();
   const file = (f: string) => path.join(ctx.userData, f);
   const feed: FeedEvent[] = [];
@@ -149,6 +144,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   localApi.set('/api/procedure', q => procedures.get(q.get('id') ?? ''));
   let procTimer: NodeJS.Timeout | null = null;
   const onBrainFile = (f: string) => {
+    ctx.onFile?.(f);
     if (!touchesProcedures(f)) return;
     procedures.invalidate();
     if (procTimer) clearTimeout(procTimer);
@@ -294,6 +290,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       publishRaw(events.filter(e => kindOk(e?.kind) && typeof e.title === 'string').map(e => ({
         kind: e.kind, title: cut(e.title, 200), detail: cut(e.detail ?? '', 400),
         ...(e.who ? { who: e.who } : {}), ...(e.chatId ? { chatId: e.chatId } : {}), ...(e.file ? { file: e.file } : {}),
+        ...(feedAction(e.action) ? { action: feedAction(e.action)! } : {}),
       })));
     },
     ingestRateLimits: msg => { usage?.ingest(msg); },

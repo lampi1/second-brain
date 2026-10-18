@@ -62,12 +62,21 @@ import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
 import { launcherName, restartWaiter, sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
+import { OneShotService } from './agents/oneshot';
+import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
+import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
+import { apiSearch, brainSearchTool } from './search/hybrid/tool';
+import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  oneShot?: OneShotService;
+  agentRuns?: AgentRunStore;
+  /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
+  hybrid?: HybridSearch;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -251,6 +260,16 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
   };
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    pulsePreset: () => {
+      const choices = engineInfos();
+      let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
+        ?? choices.find(e => e.kind === 'claude');
+      const legacy = brain.settings();
+      if (legacy.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
+      const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
+      return { engine: e?.id ?? 'claude', model: legacy.headlineModel || model,
+        ...(e?.caps.effort ? { effort: legacy.headlineEffort || 'low' as const } : {}) };
+    },
     language: () => brain.settings().language === 'system' ? systemLang() : brain.settings().language as 'it' | 'en',
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
@@ -289,8 +308,18 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});
   let apiRoute: () => Harness | null = () => null;
+  // the hybrid brain search (SPEC 23): its worker starts after the window (index.ts); a brain file change re-syncs it
+  const hybrid = new HybridSearch({
+    dir: path.join(ctx.userData, 'search'), brainRoot: () => brain.info().brainRoot, workerFile: workerFileNextTo(path.dirname(fileURLToPath(import.meta.url))),
+    download: !process.env.SB_TEST, onStatus: st => ctx.emitter.emit('search:status', st),
+  });
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
-    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute() });
+    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: () => hybrid.fileChanged() });
+  // undefined when the hybrid search fails: the brain's own server answers (substring search)
+  brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
+  brain.serveApi('/api/themes', q => hybrid.themes(q.get('kind') === 'ideas' ? 'ideas' : 'errors'));
+  // past errors similar to a prompt, for the brain's prompt hook in the chats the app starts (their env: RECALL_ENV)
+  const recall = mountRecallTool(mcp, (text, k) => hybrid.recall(text, k));
   // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
   // brain folder counts from the next chat
   setCodexAutonomyRoots(() => brain.settings().codexAutonomyRoots ?? []);
@@ -302,8 +331,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
-  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false);
-  addChatTools([agentCatalogTool(() => agents.list())]);
+  // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
+  // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
+  const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
+  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false, () => progressService.award('first-agent'));
+  addChatTools([agentCatalogTool(() => agents.list()), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -323,9 +355,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => agents.resolve(req),
+    // probation agents are judged at each run end and once a day; the daily pass stays off in the test suites
+    probation: { catalog: agents, publish: events => brain.publish(events) },
+    ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
     userData: ctx.userData,
+    env: { [RECALL_ENV]: recall.url() },
+    recall: text => hybrid.recall(text),
     enginePaths: enginePathsFromEnv(),
     // an engine the user switched off never starts, whoever asks (engines/policy.ts)
     engineOn: h => engineOn(brain.settings(), h),
@@ -421,8 +458,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // brain domains (ADR 0059): a new chat reads the brain, so the remote's changes land first (bounded, throttled)
   syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
-  // Retired milestones remain readable for compatibility; no new awards or content deletion.
-  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
   if (!process.env.SB_TEST) sweeper.start();
@@ -516,6 +551,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     brainRoot: () => brain.info().brainRoot, node, runner: headless,
     anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
   });
+  const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
+    settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
+    hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
+    headless, text: engines.text, runs: manager.runs });
   // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
   if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
@@ -527,16 +566,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, autoClose: autoCloseService, progress: progressService,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
-    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
+    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
-    shutdown: async () => { clearInterval(autoCloseTimer); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

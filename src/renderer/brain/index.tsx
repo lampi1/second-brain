@@ -31,7 +31,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti';
+export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -53,6 +53,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('impostazioni', 'G P'),
   // not a brain page either: "Migliora l'app" (components/ImprovePage.tsx, ADR 0020), the app improving itself
   page('migliora', 'G U'),
+  // not a brain page either: the guide to the app's concepts (components/GuidePage.tsx, content in shared/concept-guide.ts)
+  page('guida', 'G E'),
 ];
 const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
@@ -100,7 +102,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'miglioramento': page = <Miglioramento nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'guida': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'devops': page = <Devops nav={nav} />; break;
   }
   return (

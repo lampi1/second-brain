@@ -7,8 +7,8 @@ import type { ChatItem, ChatSummary } from '@shared/contract';
 import { splitNotes } from './sendable';
 import { t } from '../i18n';
 
-// in English, like every prompt the app injects into a chat (i18n rule); the user's fix stays in their own words
-export const CORRECTION_TAG = '[Reasoning correction]';
+import { CORRECTION_TAG } from '@shared/correction';
+export { CORRECTION_TAG };
 /** the longest quote sent: a whole paragraph selected is cut, its start is enough to find it */
 export const QUOTE_MAX = 400;
 

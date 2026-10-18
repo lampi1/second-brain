@@ -1,0 +1,27 @@
+// Italian UI texts of the "guide" area (ADR 0057): the frame of the Guida page (components/GuidePage.tsx); the cards'
+// own content is in src/shared/concept-guide.ts. Spread into it.ts. Keys start with "guide.".
+export const guideIt = {
+  'guide.eyebrow': 'GUIDA',
+  'guide.title': 'Come funziona l’app',
+  'guide.lead': 'I concetti chiave, uno per scheda: una riga semplice, poi come funziona, un’analogia e i dettagli tecnici con i file da cui vengono.',
+  'guide.filter': 'Filtra i concetti',
+  'guide.filterPlaceholder': 'Cerca un concetto: run, permessi, brain…',
+  'guide.none': 'Nessun concetto corrisponde al filtro.',
+  'guide.count': (p: { count: number }) => `${p.count} concetti`,
+  'guide.howItWorks': 'Come funziona',
+  'guide.hide': 'Nascondi',
+  'guide.analogy': 'In pratica è come…',
+  'guide.technical': 'Dettagli tecnici',
+  'guide.sources': 'Fonti nel codice',
+  'guide.target': 'Obiettivo, non ancora così oggi',
+  'guide.targetBadge': 'in parte obiettivo',
+  'guide.coming': 'In arrivo, non ancora su main',
+  'guide.comingBadge': (p: { pr: number }) => `in arrivo (PR #${p.pr})`,
+  'guide.diagram': (p: { title: string }) => `Schema: ${p.title}`,
+  'guide.back': 'si ricomincia',
+  'guide.discuss': 'Discutine',
+  'guide.discussTip': 'Apre una chat su questo concetto con la scheda già scritta nell’input: parte quando premi Invio.',
+  'guide.toAgent': (p: { name: string }) => `Chat aperta con ${p.name}: la scheda è nell’input, premi Invio per iniziare.`,
+  'guide.toRegia': 'Bozza nell’Orchestrator: la scheda e la richiesta di un agente che spiega. Premi Invio per mandarla.',
+  'guide.noRegia': 'Nessun agente che spiega e nessun Orchestrator aperto: avvia l’Orchestrator (Ctrl+R) e riprova.',
+};

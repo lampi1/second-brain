@@ -6,7 +6,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { launch, setSize, shot, goPage } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -27,7 +27,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await app?.close(); });
 
 test('Qualità: four true metrics with source and dates, out-of-count rows visible, proposals in one row', async () => {
-  await page.getByTestId('nav-qualita').click();
+  await goPage(page, 'qualita');
   const p = page.getByTestId('page-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 });

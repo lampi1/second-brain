@@ -5,10 +5,11 @@
 // aspettano" strip, ADR 0019) and the open requests. Screenshot: test-results/shots/resolve-question.png.
 import { expect, test } from '@playwright/test';
 import { McpClient } from './fixture-server';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 test('the Regia closes a work chat\'s question with the user\'s answer, only after he spoke in the Regia', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // the question waits on the open strip
   const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
   const regia = new McpClient(`${info.mcpUrl}/app`);
   await regia.init();

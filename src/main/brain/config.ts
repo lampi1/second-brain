@@ -41,6 +41,8 @@ export function fromSaved(raw: unknown): Settings {
     }
     if (c.ok) s = setAt(s, c.key, c.value);
   }
+  const legacy = raw as { headlineOn?: unknown; pulse?: { headline?: { on?: unknown } } };
+  if (legacy.pulse?.headline?.on === undefined && legacy.headlineOn === false && s.pulse) s.pulse.headline.on = false;
   const mute = (raw as { mute?: unknown }).mute;
   if (mute && typeof mute === 'object') for (const [k, v] of Object.entries(mute)) { const c = validate(`mute.${k}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
   // every engine the file names, also one the brain defines later (its registry entry comes after the settings load);

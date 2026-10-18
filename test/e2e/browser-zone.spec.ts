@@ -4,11 +4,12 @@
 // is resolved. Hiding with a browser maximized restores the column.
 // Screenshots in test-results/shots/zones-*.png.
 import { expect, test } from '@playwright/test';
-import { launch, launchDemo, shot, waitThumbs } from './helpers';
+import { closeSetup, expandChats, launch, launchDemo, shot, waitThumbs } from './helpers';
 import { McpClient, imageSize, startSites } from './fixture-server';
 
 test('each browser under its chat; Nascondi browser hides them, the choice is remembered', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'sms'); // a strip's browser shows once the strip is open
   await waitThumbs(page);
   const column = page.getByTestId('view-agents');
   await expect(column.locator('[data-testid^="tile-browser-"]')).toHaveCount(2);
@@ -54,6 +55,7 @@ test('with the browsers hidden, an agent tab keeps working off screen at the sam
   const sites = await startSites();
   const { app, page } = await launch();
   try {
+    await closeSetup(page); // its modal covers the browser views
     const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
     const agent = new McpClient(info.mcpUrl);
     await agent.init();
