@@ -7,7 +7,7 @@
 // the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
 // aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths (panel of
 // the Regia dell'app, 2026-10-14). Used by index.ts and improve/service.ts; test/unit/routed-chat.test.ts.
-import { TASK_KINDS, type ChatSpace, type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
+import { TASK_KINDS, type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
 import { EFFORTS, type RouteRequest, type RouteResult } from '../brain/routing';
 import { engineLabel, engineOf } from '../engines/registry';
 import { log } from '../log';
@@ -21,10 +21,10 @@ export interface RoutedChatDeps {
   create(req: NewChat): Promise<ChatSummary>;
 }
 
-/** Main's own callers only (never from the renderer): the app's Regia lives in the "Migliora l'app" section. */
+/** Main-only routing context for verified app-source proposals, never a UI partition. */
 /** `byUser` = "Nuova chat" (the renderer): no cap on the first message (as chat:create), no exploration (the chat starts
  *  on the model the dialog showed) and the permission mode the user picked kept on any engine that has them. */
-export interface RoutedSpace { space?: ChatSpace; appRegia?: boolean; byUser?: boolean }
+export interface RoutedSpace { appCode?: boolean; appRegia?: boolean; byUser?: boolean }
 
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' && engineOf(v) ? v : undefined);
@@ -58,7 +58,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   const routed = d.route({
     // no title: the area is the prompt's would-be title's, i.e. none ('altro'); the kind comes from the prompt
     title, prompt: typeof req.routeText === 'string' ? req.routeText.slice(0, 2000) : prompt.slice(0, 2000),
-    ...(kind ? { kind } : {}), ...(text(req.area, 40) ? { area: text(req.area, 40) } : {}), ...(own.space === 'app' ? { appSpace: true } : {}),
+    ...(kind ? { kind } : {}), ...(text(req.area, 40) ? { area: text(req.area, 40) } : {}), ...(own.appCode ? { appCode: true } : {}),
     canRun: h => !refusal(h),
     ask: named ? { ...(said.harness ? { harness: said.harness } : {}), ...(said.model ? { model: said.model } : {}), ...(said.effort ? { effort: said.effort } : {}), reason: text(req.ask?.reason, 300) || 'scelta dell’utente' } : {},
     defaults: { harness, models: { [harness]: text(def.model, 200) || null }, effort },
@@ -91,7 +91,7 @@ export async function createRoutedChat(d: RoutedChatDeps, req: RoutedNewChat, ow
     harness: routed.harness, cwd, ...(title ? { title } : {}), ...(prompt ? { prompt } : {}), ...(routed.model ? { model: routed.model } : {}), ...(routed.effort ? { effort: routed.effort } : {}),
     ...pm, ...wt, ...(typeof req.regiaOf === 'string' && req.regiaOf ? { regiaOf: req.regiaOf } : {}),
     ...(req.regia === true ? { regia: true, ...(text(req.replaces, 100) ? { replaces: text(req.replaces, 100) } : {}), ...(text(req.regiaName, 40) ? { regiaName: text(req.regiaName, 40) } : {}) } : {}),
-    ...(own.space ? { space: own.space } : {}), ...(own.appRegia ? { appRegia: true } : {}),
+    ...(own.appRegia ? { appRegia: true } : {}),
     route: routed.route,
   });
   const r = routed.route;

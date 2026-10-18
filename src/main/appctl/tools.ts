@@ -13,11 +13,11 @@
 // - Long chats: it can ask a chat's hand-off and "Riprendi" it in a new chat (app_handoff_chat, app_continue_chat),
 //   under the same rule for chats across engines as messages (engines/policy.ts; an agent never starts a stopped
 //   chat on another engine).
-// - Two mounts (wiring.ts): /mcp/app for the work Regia, /mcp/improve (space 'app') for the Regia of "Migliora l'app":
-//   each sees and creates only the chats of its own space; the app's Regia also reads the branches (app_improve_state)
+// - Both mounts see the shared Grindhouse; legacy /mcp/improve creation still requires the source repository.
+//   The app's Regia also reads the branches (app_improve_state)
 //   but can never promote nor restart (only the user's click on "Aggiorna", ADR 0007/0020).
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSpace, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { EFFORTS, isFable, modelRow } from '../brain/routing';
 import { engineLabel, engineOf, engines } from '../engines/registry';
@@ -52,8 +52,8 @@ export interface AppCtlDeps {
   runs?: (chatId?: string) => RunInfo[];
   /** the "Comando da eseguire" requests (shell blocks left for the user), listed with the other open requests */
   commandAsks?: () => PendingRequest[];
-  /** 'app' = the tools of the app's Regia ("Migliora l'app"): its chats only, created in the app's code folder */
-  space?: ChatSpace;
+  /** Legacy /mcp/improve mount: creation requires a verified app source folder. */
+  sourceOnly?: boolean;
   /** Only the authenticated per-chat mount may enable the canonical coordinator's union scope. */
   unified?: boolean;
   /** "Migliora l'app": the code folder and the branches' state (read-only) */
@@ -100,20 +100,21 @@ export function regiaEndpointAuth(tokens: { check(key: string, token: string): b
 }
 
 /** callerId = the work Regia that calls (its own endpoint /mcp/app/r/<id>/<token>, ADR 0021); none or stale = the first
- *  Regia (/mcp/app: test agents). The chats it creates answer to it; its messages are signed with its title. With
- *  space 'app' (/mcp/improve) the caller is the app's Regia and only the chats of that space are seen. */
+ *  Regia (/mcp/app: test agents). The chats it creates answer to it; its messages are signed with its title.
+ *  /mcp/improve retains its source-folder creation restriction, not a separate chat partition. */
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const unified = () => d.unified === true && !!callerId && d.chats.list().some(c => c.id === callerId && c.isRegia && c.orchestrator && !c.closedAt);
-  const mine = (c: ChatSummary) => unified() || (d.space === 'app' ? c.space === 'app' : c.space !== 'app');
+  const mine = (_c: ChatSummary) => true;
   /** the caller: the app's Regia on /mcp/improve, else the work Regia of this endpoint */
   const caller = (): ChatSummary | undefined => {
     const all = d.chats.list();
     if (unified()) return all.find(c => c.id === callerId);
-    if (d.space === 'app') return all.find(c => c.appRegia);
+    const legacy = d.sourceOnly ? all.find(c => c.appRegia && !c.closedAt) : undefined;
+    if (legacy) return legacy;
     const id = regiaOfChat(all.find(c => c.id === callerId), all);
     return all.find(c => c.id === id);
   };
-  /** a chat id of the other space reads as unknown (its items, runs and requests stay with its own Regia) */
+  /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
@@ -173,7 +174,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread DevOps news from the app's last DevOps read. Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always listed.`,
       inputSchema: obj({ since: str('"last", an ISO time, or omit') }),
       run: a => {
-        const key = `${d.space ?? 'work'}:${callerId ?? ''}`;
+        const key = `${d.sourceOnly ? 'improve' : 'app'}:${callerId ?? ''}`;
         const now = Date.now();
         const raw = typeof a.since === 'string' ? a.since.trim() : '';
         const since = raw === 'last' ? lastDigest.get(key) ?? null : raw ? Date.parse(raw) : null;
@@ -181,7 +182,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         lastDigest.set(key, now);
         return digest({
           chats: d.chats.list().filter(mine), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)),
-          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), devops: d.space === 'app' ? null : d.devops?.() ?? null,
+          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), devops: d.sourceOnly ? null : d.devops?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
       },
@@ -246,7 +247,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
         const regia = caller();
         // several Regie (ADR 0021): only the Regia the chat answers to, where its question shows, closes it
-        if (regia && d.space !== 'app') {
+        if (regia && !d.sourceOnly) {
           const all = d.chats.list();
           const owner = regiaOfChat(target, all);
           if (owner !== regia.id) throw new Error(`bloccato: questa domanda è dell’Orchestrator «${chatName(all.find(c => c.id === owner) ?? regia)}»: la risponde l'utente lì`);
@@ -312,9 +313,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: a => {
         const action = String(a.action);
         if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette)`);
-        // the section of "Migliora l'app" has no maximized view: its Regia never maximizes; the work Regia never
-        // maximizes a chat of the app or one of its tabs
-        if (action === 'maximize' && d.space === 'app') throw new Error("app_ui: maximize non c'è nella sezione «Migliora l'app»");
+        // Every worker and its browser can be maximized in the Grindhouse.
         if (action === 'maximize' && a.value !== undefined) { const v = String(a.value); const tab = d.browser.list().find(t => t.id === v); guard(tab?.ownerChatId ?? v); }
         d.emitUi({ action, value: a.value === undefined ? undefined : String(a.value) });
         return 'ok';
@@ -332,13 +331,16 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); omit it to let the routing table decide'),
         reason: str('why, when harness/model/effort differ from what the table says (required then)'),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
-        ...(d.unified ? { space: { type: 'string', enum: ['work', 'app'], description: 'Explicit worker scope; app retains source-folder and launch gates. Default work.' } } : {}),
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Regia (one at a time: a new one would take the role from the agent's own chat)
         if (a.space !== undefined && a.space !== 'work' && a.space !== 'app') throw new Error('Invalid chat space.');
-        if (a.space !== undefined && !unified() && a.space !== (d.space ?? 'work')) throw new Error('Chat space is outside this endpoint scope.');
-        const app = unified() ? a.space === 'app' : d.space === 'app';
+        // Legacy app requests keep their source default and fail-closed folder check, never a UI partition.
+        const sourceRequired = a.space === 'app' || d.sourceOnly;
+        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : sourceRequired ? d.improve?.repo() ?? null : d.brain.info().brainRoot;
+        if (!cwd) throw new Error(sourceRequired ? "nessuna cartella: imposta la cartella del codice dell'app nelle impostazioni" : 'nessuna cartella: il cervello non è collegato');
+        const app = await d.improve?.inRepo?.(cwd) ?? false;
+        if (sourceRequired && !app) throw new Error(`cartella non ammessa: scegli la cartella del codice dell'app o un suo worktree (${d.improve?.repo() ?? '-'})`);
         if (a.regia !== undefined && a.regia !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
         const title = String(a.title ?? '').trim().slice(0, 80), prompt = String(a.prompt ?? '').trim();
         if (!title || !prompt || prompt.length > 8000) throw new Error('title and prompt are required (prompt ≤ 8000 chars)');
@@ -378,7 +380,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const routed = d.brain.route({
           ...(selected ? { api: null } : {}),
           canRun: h => !openRefusal(s, from, h),
-          title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appSpace: app,
+          title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app,
           ask: { ...(said ? { harness: said } : {}), ...(askedModel !== undefined ? { model: askedModel } : {}), ...(askedEffort !== undefined ? { effort: askedEffort as Effort | null } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
           defaults: { harness: s.regiaChats.harness, models: { claude: s.regiaChats.claudeModel || null, cursor: s.regiaChats.cursorModel || null }, effort: s.regiaChats.claudeEffort || null },
         });
@@ -386,14 +388,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const { harness, model, effort, route } = routed;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        // the app's Regia works on the app's code: its chats start there and belong to its space
-        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : app ? d.improve?.repo() ?? null : d.brain.info().brainRoot;
-        if (!cwd) throw new Error(app ? "nessuna cartella: imposta la cartella del codice dell'app nelle impostazioni" : 'nessuna cartella: il cervello non è collegato');
-        // the app's chats work on the app's code only: the code folder or one of its worktrees (ADR 0020)
-        if (app && !(await d.improve?.inRepo?.(cwd))) throw new Error(`cartella non ammessa: le chat di «Migliora l'app» lavorano solo nella cartella del codice dell'app o in un suo worktree (${d.improve?.repo() ?? '-'})`);
         // a work chat answers to the Regia that opens it: its questions go to her tab, and it knows whom to write to
         const yours = regia ? `\n\nIl tuo Orchestrator è «${regia.title}»: scrivigli con send_to_chat.` : '';
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(app ? { space: 'app' as const } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason } };
@@ -486,7 +483,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
   ];
-  if ((d.space === 'app' || unified()) && d.improve) {
+  if ((d.sourceOnly || unified()) && d.improve) {
     if (d.improveEvidence) {
       const evidence = d.improveEvidence;
       tools.push({

@@ -121,8 +121,6 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.ImprovePage.requestAChangeTryItAnd": "Request a change, try it and review the checks. Only the PR button shares files with the repository.",
   "audit.ImprovePage.currentVersion": "Current version:",
   "audit.ImprovePage.retry": "Retry",
-  "audit.ImprovePage.changeAgents": "Change agents",
-  "audit.ImprovePage.prepareAChangeToOpenIts": "Prepare a change to open its agent in a separate workspace.",
   "audit.OverlayApp.then": "then",
   "audit.OverlayApp.nothingElseNeedsYou": "nothing else needs you",
   "audit.OverlayApp.open": "Open",

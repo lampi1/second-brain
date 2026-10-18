@@ -299,7 +299,7 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     const r = fresh();
     const { s, created } = service({ dir: r.dir, base: r.base, running: 'dev', stable: false });
     await s.createRegia('claude', 'claude-opus-5-5');
-    expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, space: 'app', appRegia: true, model: 'claude-opus-5-5', title: 'Orchestrator' });
+    expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, appRegia: true, model: 'claude-opus-5-5', title: 'Orchestrator' });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
     expect(appRegiaPrompt(r.dir)).toMatch(/Non aggiorni e non riavvii mai/);
   });
@@ -312,7 +312,7 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     const routing = { route: (req: RouteRequest) => routeChat(req, table, DEMO_REGISTRY, null, 9), engineOn: () => true, agentsMayOpen: () => true };
     const { s, created } = service({ dir: r.dir, base: r.base, running: 'dev', stable: false, routing });
     await s.createRegia('claude');
-    expect(created[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', space: 'app', appRegia: true, cwd: r.dir,
+    expect(created[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', appRegia: true, cwd: r.dir,
       route: { source: 'table', kind: 'regia', area: 'App', version: 5 } });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
     // engine parity: the app's Regia runs on the engine the user picked, keeping its app scope and never Claude's model

@@ -137,7 +137,7 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(store.show('w', args({ target: 'regia' }))).toContain('nell’Orchestrator «Regia · B»');
     expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
     store.show('aw', args({ target: 'regia' }));
-    expect(sent.at(-1)?.chatId).toBe('ar');
+    expect(sent.at(-1)?.chatId).toBe('r1');
     // two chats of the same Regia with the same id never replace each other; the sender's folder goes along
     const w2 = chat('w2', { regiaOf: 'r2', cwd: 'C:\\repo2' });
     all.push(w2);

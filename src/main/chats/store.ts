@@ -77,7 +77,7 @@ export interface StoredChat {
   closedBy?: 'auto' | 'user';
   /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
   working?: true;
-  /** a chat of the "Migliora l'app" section; appRegia = that section's Regia */
+  /** Legacy input markers; space is dropped on load, appRegia feeds coordinator migration. */
   space?: ChatSpace;
   appRegia?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
@@ -122,7 +122,8 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
-    ...(c.space === 'app' ? { space: 'app' as const, ...(c.appRegia === true ? { appRegia: true as const } : {}) } : {}),
+    // Legacy space is discarded; the coordinator marker survives until role migration.
+    ...(c.appRegia === true ? { appRegia: true as const } : {}),
   };
 }
 

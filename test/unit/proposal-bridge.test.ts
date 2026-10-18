@@ -37,7 +37,8 @@ describe('renderer proposal bridge', () => {
     expect(await bridge.availability()).toMatchObject({ available: true, publishBlocked: null });
     const proposal = await bridge.create();
     expect(proposal.phase).toBe('editing'); expect(proposal.directory.startsWith(userData + path.sep)).toBe(true);
-    expect(requests[0]).toMatchObject({ cwd: proposal.directory, space: 'app' });
+    expect(requests[0]).toMatchObject({ cwd: proposal.directory });
+    expect(requests[0]).not.toHaveProperty('space');
     expect(requests[0]).not.toHaveProperty('permissionMode');
     expect(runGit(repo, 'branch', '--show-current')).toBe('main'); expect(runGit(repo, 'status', '--porcelain')).toBe('');
     rows[0]!.closedAt = Date.now(); await bridge.resume(proposal.id); await bridge.resume(proposal.id);

@@ -151,7 +151,7 @@ describe('routing: task kind and routeChat', () => {
     const table = { version: 5, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: ROUTES };
     const r = routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
     expect(r).toEqual({ harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', route: { policy: 'routing', version: 5, source: 'table', reason: 'triage Magazzino', kind: 'triage', area: 'Magazzino', at: 42 } });
-    const app = routeChat({ title: 'Tema scuro', prompt: '', appSpace: true, kind: 'app-feature', ask: {}, defaults: DEF }, table, REG, null, 1);
+    const app = routeChat({ title: 'Tema scuro', prompt: '', appCode: true, kind: 'app-feature', ask: {}, defaults: DEF }, table, REG, null, 1);
     expect(app).toMatchObject({ model: 'claude-opus-5-5', route: { area: 'App', kind: 'app-feature', source: 'table' } });
     expect(routeChat({ title: 'x', prompt: '', ask: { effort: 'max' }, defaults: DEF }, null, REG, null)).toEqual({ error: expect.stringMatching(/max/) });
   });

@@ -120,8 +120,6 @@ export const auditIt = {
   "audit.ImprovePage.requestAChangeTryItAnd": "Chiedi una modifica, provala e rivedi le verifiche. Solo il pulsante PR condivide i file sul repository.",
   "audit.ImprovePage.currentVersion": "Versione in uso:",
   "audit.ImprovePage.retry": "Riprova",
-  "audit.ImprovePage.changeAgents": "Agenti delle modifiche",
-  "audit.ImprovePage.prepareAChangeToOpenIts": "Prepara una modifica per aprire il suo agente nello spazio separato.",
   "audit.OverlayApp.then": "poi",
   "audit.OverlayApp.nothingElseNeedsYou": "nient'altro ti aspetta",
   "audit.OverlayApp.open": "Apri",

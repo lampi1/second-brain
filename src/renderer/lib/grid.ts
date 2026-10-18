@@ -15,12 +15,12 @@ export function workspaceTiles(order: readonly string[], chats: Readonly<Record<
   for (const t of tabs) if (t.ownerChatId && regiaIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   for (const id of order) {
     const c = chats[id];
-    if (!c || c.isRegia || c.closedAt || c.space === 'app') continue; // closed chats: the palette (Ctrl+K); app chats: their section
+    if (!c || c.isRegia || c.closedAt) continue; // closed chats: the palette (Ctrl+K)
     tiles.push({ kind: 'chat', id });
     for (const t of tabs) if (t.ownerChatId === id && !placed.has(t.id)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   }
-  // the user's own or orphaned tabs; never those of a chat of "Migliora l'app" (off the work grid like its chat)
-  for (const t of tabs) if (!placed.has(t.id) && !(t.ownerChatId && chats[t.ownerChatId]?.space === 'app')) tiles.push({ kind: 'browser', id: t.id });
+  // The user's own or orphaned tabs share the same workspace.
+  for (const t of tabs) if (!placed.has(t.id)) tiles.push({ kind: 'browser', id: t.id });
   return tiles;
 }
 

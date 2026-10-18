@@ -144,7 +144,7 @@ export class ImproveService {
         const common = path.resolve(repo, commonOut.trim());
         const checks = readJson<Checks>(path.join(common, 'sb-checks.json')) ?? {};
         mainChecked = !!mainSha && checkAt(checks, mainSha, 'full') !== null;
-        const chats = this.d.chats.list().filter(c => c.space === 'app' && !c.appRegia && !c.closedAt);
+        const chats = this.d.chats.list().filter(c => !c.isRegia && !c.appRegia && !c.closedAt);
         const chatOf = (b: string) => {
           const dir = trees.get(b);
           const c = dir ? chats.filter(x => samePath(x.cwd, dir)).sort((a, z) => z.updatedAt - a.updatedAt)[0] : undefined;
@@ -253,12 +253,12 @@ export class ImproveService {
   async createRegia(harness: Harness, model?: string): Promise<ChatSummary> {
     const repo = this.repo();
     if (!repo || !fs.existsSync(repo)) throw new Error("Imposta prima la cartella del codice dell'app (Impostazioni).");
-    const req = { harness, cwd: repo, title: "Orchestrator", space: 'app' as const, appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) };
+    const req = { harness, cwd: repo, title: "Orchestrator", appRegia: true, ...(model ? { model } : {}), prompt: appRegiaPrompt(repo) };
     if (!this.d.routing) return this.d.chats.create(req);
     const { route, engineOn, agentsMayOpen } = this.d.routing;
     return createRoutedChat({ route, engineOn, agentsMayOpen, create: r => this.d.chats.create(r) },
       { title: req.title, prompt: req.prompt, cwd: repo, defaults: { harness }, ask: { harness, ...(model ? { model } : {}), reason: 'motore scelto dall’utente' } },
-      { space: 'app', appRegia: true });
+      { appCode: true, appRegia: true });
   }
 
   private push(): void {

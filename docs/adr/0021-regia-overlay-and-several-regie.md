@@ -62,3 +62,5 @@ the second-brain-app folder.
 - ADR 0005's "Regia tile: fixed position (left)" and the Mosaico "grid of Regia + chat tiles" no longer hold.
 - e2e testids: the overlay keeps `tile-regia` / `regia-input`; `regia-dock*` and `splitter-regia` are gone.
 - Several Regie spend tokens each only when the user writes to them; none starts by itself.
+
+> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

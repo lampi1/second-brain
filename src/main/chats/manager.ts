@@ -89,7 +89,7 @@ export interface ChatManagerOptions {
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
   /** the app-control MCP for the Regie only: each work Regia its own /mcp/app/r/<id>/<token> (ADR 0021), the app's
-   *  Regia ("Migliora l'app", space 'app') /mcp/improve; it reads the app and creates the chats of its space by itself */
+   *  legacy app Regia /mcp/improve; its source-folder gate remains, while every worker shares the Grindhouse */
   appMcpUrl?: ((regiaId: string, space?: ChatSpace) => string | null) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
@@ -471,7 +471,7 @@ export class ChatManager implements ChatService {
     }
 
     // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
-    const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !(req.space === 'app' && req.appRegia === true) && req.permissionMode !== 'bypassPermissions'
+    const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !req.appRegia && req.permissionMode !== 'bypassPermissions'
       // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
       && !policy
       ? this.warm.take(cwd) : null;
@@ -485,8 +485,7 @@ export class ChatManager implements ChatService {
     if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.s.isRegia ? req.regiaOf : null;
     // the app's Regia ("Migliora l'app", ADR 0020) is one and never a work Regia: a new one takes the role
-    const space = req.space === 'app' ? 'app' as const : undefined;
-    const appRegia = !!space && req.appRegia === true && !req.regia;
+    const appRegia = req.appRegia === true && !req.regia;
     const oldApp = appRegia ? [...this.chats.values()].filter(x => x.s.appRegia) : [];
     const title = req.title?.trim() || (req.regia && regiaName && !old ? `Orchestrator · ${regiaName}` : '') || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
@@ -507,7 +506,7 @@ export class ChatManager implements ChatService {
         ...(req.regia ? { regiaSince: old?.s.regiaSince ?? now } : {}),
         ...(req.regia && this.opts.unifiedOrchestrator ? { orchestrator: true as const, ...(old?.s.mailAliases?.length ? { mailAliases: [...old.s.mailAliases] } : {}) } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
-        ...(space ? { space, ...(appRegia ? { appRegia: true } : {}) } : {}),
+        ...(appRegia ? { appRegia: true } : {}),
         ...(req.route ? { route: req.route } : {}),
       },
       createdAt: now,
@@ -594,7 +593,7 @@ export class ChatManager implements ChatService {
     const q = adm.request(r.s.id, r.session ? 'turn' : 'start', () => {
       const p = deliver();
       if (late) p.catch(e => this.lateFailed(r, e)); else now = p;
-    }, isAppChat(r.s.title, r.s.space));
+    }, isAppChat(r.s.title) || r.s.route?.area === 'App');
     if (!q) return now ?? Promise.resolve();
     late = true;
     log.info('chats', 'agent work queued: the machine is busy', { chat: r.s.id, data: { kind: q.kind, position: q.position, app: !!q.app, ...adm.load() } });
@@ -724,7 +723,7 @@ export class ChatManager implements ChatService {
       let held = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
       const coordinated = [...this.chats.values()].some(x => !x.s.closedAt && x.s.regiaOf === c.id);
-        const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !c.appRegia && !c.space && !coordinated && !held &&
+        const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !c.appRegia && !coordinated && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
@@ -1099,7 +1098,6 @@ export class ChatManager implements ChatService {
     const c = await this.create({
       harness: r.s.harness, cwd: r.s.cwd, title: nextTitle(r.s.title, taken), ...(r.s.regiaOf ? { regiaOf: r.s.regiaOf } : {}),
       ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}), ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
-      ...(r.s.space ? { space: r.s.space } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
@@ -1719,7 +1717,7 @@ export class ChatManager implements ChatService {
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
         ...(c.closedAt ? { closedAt: c.closedAt, closedBy: c.closedBy ?? 'auto' } : {}),
-        ...(c.space ? { space: c.space, ...(c.appRegia ? { appRegia: true } : {}) } : {}),
+        ...(c.appRegia ? { appRegia: true } : {}),
         ...(c.route ? { route: c.route } : {}),
       },
       createdAt: c.createdAt,
@@ -1765,7 +1763,7 @@ export class ChatManager implements ChatService {
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
-      ...(r.s.space ? { space: r.s.space, ...(r.s.appRegia ? { appRegia: true as const } : {}) } : {}),
+      ...(r.s.appRegia ? { appRegia: true as const } : {}),
       ...(r.s.route ? { route: r.s.route } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);

@@ -105,3 +105,5 @@ one cache-read factor) did not match the real per-model prices.
   a change to one needs the other.
 - A Cursor chat titled "App · …" is now refused; an agent must use another title or Claude.
 - No new dependency.
+
+> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

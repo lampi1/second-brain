@@ -57,7 +57,7 @@ describe('migrateOrchestrator', () => {
     }
     // history kept: the demoted app Regia keeps its session and title; app workers keep their scope
     expect(by.appR).toMatchObject({ sessionId: '11111111-1111-4111-8111-111111111111', title: "Regia dell'app" });
-    expect(by.appWorker).toMatchObject({ space: 'app', cwd: 'C:/repo', regiaOf: 'w1' });
+    expect(by.appWorker).toMatchObject({ cwd: 'C:/repo', regiaOf: 'w1' });
     expect(by.child2!.regiaOf).toBe('w1');
     expect(by.loose!.regiaOf).toBe('w1');
     expect(out.filter(c => c.orchestrator)).toHaveLength(1);
@@ -80,7 +80,7 @@ describe('migrateOrchestrator', () => {
     const once = migrateOrchestrator(legacy());
     expect(migrateOrchestrator(once)).toEqual(once);
     const none = [row({ id: 'a' }), row({ id: 'b' })];
-    expect(migrateOrchestrator(none)).toBe(none);
+    expect(migrateOrchestrator(none)).toEqual(none);
   });
 });
 
@@ -215,18 +215,33 @@ describe('app control scope', () => {
     const t = tools([orch, work], true, 'o');
     expect(await t.create.run({ title: 'A', prompt: 'p' })).toMatchObject({ cwd: 'C:/brain' });
     expect(await t.create.run({ title: 'B', prompt: 'p', space: 'app' })).toMatchObject({ cwd: 'C:/repo' });
-    expect(t.made[1]).toMatchObject({ space: 'app', regiaOf: 'o', regia: false });
+    expect(t.made[1]).toMatchObject({ regiaOf: 'o', regia: false });
     expect(t.made[0]).not.toHaveProperty('space');
+    expect(t.made[1]).not.toHaveProperty('space');
     await expect(Promise.resolve(t.create.run({ title: 'C', prompt: 'p', space: 'app', cwd: 'C:/elsewhere' }))).rejects.toThrow(/cartella non ammessa/);
     await expect(Promise.resolve(t.create.run({ title: 'D', prompt: 'p', space: 'root' }))).rejects.toThrow(/Invalid chat space/);
     await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', regia: true }))).rejects.toThrow(/Orchestrator/);
     expect(t.made).toHaveLength(2);
   });
 
+  it('derives app-code routing from cwd even with a legacy work flag', async () => {
+    const t = tools([orch, work], true, 'o');
+    for (const space of [undefined, 'work']) {
+      await t.create.run({ title: 'Neutral title', prompt: 'p', cwd: 'C:/repo', ...(space ? { space } : {}) });
+    }
+    expect(t.made).toHaveLength(2);
+    for (const created of t.made) {
+      expect(created).toMatchObject({ cwd: 'C:/repo', route: { area: 'App' } });
+      expect(created).not.toHaveProperty('space');
+    }
+    expect(JSON.stringify(t.create.inputSchema)).not.toContain('"space"');
+  });
+
   it('another chat on the same mount gets no union scope', async () => {
     const t = tools([orch, work], true, 'w');
-    await expect(Promise.resolve(t.create.run({ title: 'B', prompt: 'p', space: 'app' }))).rejects.toThrow(/outside this endpoint scope/);
-    expect(t.made).toHaveLength(0);
+    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
+    expect(t.made).toHaveLength(1);
+    expect(t.made[0]).not.toHaveProperty('space');
     expect(t.all.some(x => x.name === 'app_improve_state')).toBe(false);
   });
 
@@ -253,7 +268,7 @@ describe('news and mail reach the Orchestrator', () => {
         w.observe('chat:updated', summary({ id: 'fix', space: 'app', state: 'running' }));
         w.observe('chat:updated', summary({ id: 'fix', space: 'app', state: 'idle', lastText: 'PR pronta' }));
         await vi.advanceTimersByTimeAsync(20);
-        expect(sent.some(t => t.includes('«fix»'))).toBe(orchestrator);
+        expect(sent.some(t => t.includes('«fix»'))).toBe(true);
         w.stop();
       }
     } finally { vi.useRealTimers(); }

@@ -2,15 +2,15 @@
 // run (SB_IMPROVE_STABLE), a temp releases folder (SB_RELEASES_ROOT) and a temp git repo standing for the app's code
 // (SB_IMPROVE_REPO) whose scripts/release.mjs only prints. Checks: after a start that went back to the previous
 // version the notice says which one, why, and where it is now, and goes away when closed; the section shows the
-// version in use, main's new commit and the branches by stage; the section's Regia is created in its column (never
-// the work Regia); "Aggiorna" asks first, runs release.mjs promote, shows its steps and asks the restart (recorded,
+// version in use, main's new commit and the branches by stage; legacy app workers appear in the Grindhouse;
+// "Aggiorna" asks first, runs release.mjs promote, shows its steps and asks the restart (recorded,
 // never real in tests). Screenshots: test-results/shots/improve-*.png.
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launchDemo, shot } from './helpers';
+import { goPage, launchDemo, shot } from './helpers';
 
 function fakeAppRepo(): { dir: string; running: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-repo-'));
@@ -34,7 +34,7 @@ function fakeAppRepo(): { dir: string; running: string } {
   return { dir, running: `0.1.0-${running}` };
 }
 
-test("Migliora l'app: the start notice, the stages, the app's Regia, Aggiorna", async () => {
+test("Migliora l'app: the start notice, stages, workers in Grindhouse, Aggiorna", async () => {
   test.setTimeout(120_000);
   const repo = fakeAppRepo();
   const releases = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-rel-'));
@@ -76,14 +76,15 @@ test("Migliora l'app: the start notice, the stages, the app's Regia, Aggiorna", 
   await expect(banner).toHaveCount(0);
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('improve:get', {})).launch)).toBe(null);
 
-  // the section's own Regia: in its column, never the work Regia
-  await expect(sec.getByTestId('improve-regia-empty')).toBeVisible();
-  await shot(page, 'improve-section');
-  await sec.getByTestId('improve-regia-create').click();
-  await expect(sec.getByTestId('improve-regia')).toBeVisible();
-  const chats = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).filter(c => c.space === 'app'));
-  expect(chats).toEqual([expect.objectContaining({ appRegia: true, isRegia: false, cwd: repo.dir, title: 'Orchestrator' })]);
-  await shot(page, 'improve-regia');
+  // Legacy app workers appear in the Grindhouse, never in a second Improve-page list.
+  const worker = await page.evaluate(async cwd => window.sb.invoke('chat:create', { harness: 'claude', cwd, title: 'App · Grid regression', space: 'app' }), repo.dir);
+  expect(worker).not.toHaveProperty('space');
+  await expect(sec.getByTestId('improve-open-chat')).toHaveCount(0);
+  await goPage(page, 'home');
+  await expect(page.getByTestId(`chat-${worker.id}`)).toBeVisible();
+  await expect(page.getByTestId(`chat-max-${worker.id}`)).toBeVisible();
+  await shot(page, 'improve-worker-grindhouse');
+  await goPage(page, 'migliora');
 
   // Aggiorna: confirm, release.mjs promote runs, its steps show, the app asks the restart
   await promote.click();
