@@ -6,6 +6,7 @@
 // then, or if it fails, results come from BM25 only. A dead worker is restarted on the next call (not within 10 s of
 // the last crash: no restart loop), a hung one is terminated when a call times out. Until the brain is indexed, query
 // throws, so every caller falls back to its old search. Used by main/index.ts.
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errText, log } from '../../log';
@@ -124,7 +125,7 @@ export class HybridSearch {
     if (this.deps.brainRoot() !== this.syncedRoot && !(await this.sync())) return notReady;
     if (this.last.model.state !== 'ready') return notReady;
     const rows = await this.vectors(`brain:${THEME_FILES[kind]}`);
-    const today = ROME_DAY.format(now), key = `${this.syncedRoot}|${today}|${rows.map(r => `${r.id}:${r.line}:${r.text.length}`).join(',')}`;
+    const today = ROME_DAY.format(now), key = `${today}|${rowsKey(this.syncedRoot, rows)}`;
     const kept = this.themeCache.get(kind);
     if (kept?.key === key) return kept.themes;
     let fellBack = false;
@@ -136,15 +137,17 @@ export class HybridSearch {
   /** Passage vectors by text, kept between calls, embedded EMBED_BATCH at a time (one long call could time out and
    *  take the worker, and Ctrl+K with it, down). */
   private async embedCached(texts: string[]): Promise<Float32Array[]> {
-    let missing = [...new Set(texts.filter(t => !this.textVecs.has(t)))];
-    if (this.textVecs.size + missing.length > TEXT_VECS_MAX) { this.textVecs.clear(); missing = [...new Set(texts)]; }
+    // vectors are read back from `got`, not the shared cache: another caller may clear it between two batches
+    const got = new Map(texts.flatMap(t => { const v = this.textVecs.get(t); return v ? [[t, v] as const] : []; }));
+    const missing = [...new Set(texts.filter(t => !got.has(t)))];
+    if (this.textVecs.size + missing.length > TEXT_VECS_MAX) this.textVecs.clear();
     for (let i = 0; i < missing.length; i += EMBED_BATCH) {
       const batch = missing.slice(i, i + EMBED_BATCH);
       const vs = await this.embed(batch, 'passage');
       if (!vs) throw new Error('model not available');
-      batch.forEach((t, k) => this.textVecs.set(t, vs[k]!));
+      batch.forEach((t, k) => { got.set(t, vs[k]!); this.textVecs.set(t, vs[k]!); });
     }
-    return texts.map(t => this.textVecs.get(t)!);
+    return texts.map(t => got.get(t)!);
   }
 
   status(): HybridStatus { return this.last; }
@@ -161,6 +164,13 @@ export class HybridSearch {
 }
 
 export { cosine };
+
+/** The brain folder and a hash of a file's chunks (ids, lines, text): a cached result stays valid while it is the same. */
+const rowsKey = (root: string | null, rows: { id: number; line: number; text: string }[]): string => {
+  const h = crypto.createHash('sha1');
+  for (const r of rows) h.update(`${r.id}:${r.line}:${r.text}\n`);
+  return `${root}|${h.digest('base64url')}`;
+};
 
 /** The `k` items most similar to `q` (cosine, best first). */
 export function topK(q: Float32Array, items: { id: string; vec: Float32Array }[], k: number): { id: string; score: number }[] {
