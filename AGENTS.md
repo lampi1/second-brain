@@ -69,7 +69,7 @@ first runs on main: say so in the hand-off, so the Regia knows which branch to l
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.
 4. **Each harness spends only its own tokens.** The app starts `claude` only for Claude chats and `agent` only for
-   Cursor chats, with the user's own login. An agent working on this repo inside Claude Code never runs the Cursor CLI.
+   Cursor chats and for the token-free login check (`agent status`), with the user's own login. An agent working on this repo inside Claude Code never runs the Cursor CLI.
 5. **No production from the app**: no prod DB, no ops scripts, no write `az` commands are ever wired in.
 6. **Coexistence**: the app never changes Claude desktop / Cursor config, hooks or settings files; it reads their
    transcripts and state read-only; an external session is resumed only as a fork (never two writers).
