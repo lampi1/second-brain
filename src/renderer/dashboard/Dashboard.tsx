@@ -1,4 +1,4 @@
-// Live Dashboard: six views of existing app/brain sources, each with a source-preserving Orchestrator draft.
+// Live Dashboard: seven views of existing app/brain sources, each with a source-preserving Orchestrator draft.
 // Mounted by App's PageFrame. No telemetry is fabricated and Discuss never sends a message automatically.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isLongChat } from '@shared/context';
@@ -10,16 +10,17 @@ import { costRows, liveTotal } from '../lib/live-costs';
 import { lang, locale } from '../i18n';
 import { chatName, connections, contextLevel, contextRatio, cursorCoverage, neighbourhood, observedErrors } from './data';
 import { Graph } from './Graph';
+import { ThemesTab } from './Themes';
 import { HeadlineLine, useHeadline } from '../brain/pages/HomeHeadline';
 import './dashboard.css';
 
 const copy = (it: string, en: string) => lang() === 'en' ? en : it;
 const number = (value: number) => new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(value);
 const money = (value: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
-const tabs = ['agents', 'brain', 'costs', 'context', 'errors', 'tips'] as const;
+const tabs = ['agents', 'brain', 'costs', 'context', 'errors', 'themes', 'tips'] as const;
 type Tab = typeof tabs[number];
-const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), brain: copy('Mappa brain', 'Brain map'), costs: copy('Costi', 'Costs'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), tips: copy('Spunti', 'Tips') })[tab];
-const marks: Record<Tab, string> = { agents: '◎', brain: '⌘', costs: '↗', context: '◫', errors: '△', tips: '✦' };
+const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), brain: copy('Mappa brain', 'Brain map'), costs: copy('Costi', 'Costs'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), themes: copy('Temi', 'Themes'), tips: copy('Spunti', 'Tips') })[tab];
+const marks: Record<Tab, string> = { agents: '◎', brain: '⌘', costs: '↗', context: '◫', errors: '△', themes: '❖', tips: '✦' };
 
 function Discuss({ title, facts, source }: { title: string; facts: string; source: string }) {
   const [missing, setMissing] = useState(false);
@@ -158,6 +159,7 @@ export function Dashboard() {
           {errors.length ? errors.map(e => <article className="dash-error" key={e.id}><small>{e.source} · {new Date(e.at).toLocaleString(locale())}</small><h4>{e.title}</h4><p>{e.detail}</p><Discuss title={e.title} facts={e.detail} source={`${e.source} · ${new Date(e.at).toISOString()}`} /></article>) : <Empty>{copy('Nessun evento di errore nei dati conservati.', 'No error events in retained data.')}</Empty>}
         </Panel>
       </>}
+      {tab === 'themes' && <ThemesTab ui={{ Panel, Empty, Source }} />}
       {tab === 'tips' && <>
         <div className="dash-tip-intro"><span>✦</span><div><h2>{copy('Segnali che meritano attenzione', 'Signals worth your attention')}</h2><p>{copy('Calcolati dai tuoi dati. Porta il contesto all’Orchestrator e scegli il prossimo passo.', 'Computed from your data. Bring the context to the Orchestrator and choose the next step.')}</p></div></div>
         <Source data={costs} name={copy('Costi', 'Costs')} /><Source data={tables} name="ai-errors.md" />

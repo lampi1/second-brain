@@ -302,6 +302,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: () => hybrid.fileChanged() });
   // undefined when the hybrid search fails: the brain's own server answers (substring search)
   brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
+  brain.serveApi('/api/themes', q => hybrid.themes(q.get('kind') === 'ideas' ? 'ideas' : 'errors'));
   // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
   // brain folder counts from the next chat
   setCodexAutonomyRoots(() => brain.settings().codexAutonomyRoots ?? []);

@@ -6,10 +6,12 @@
 // then, or if it fails, results come from BM25 only. A dead worker is restarted on the next call (not within 10 s of
 // the last crash: no restart loop), a hung one is terminated when a call times out. Until the brain is indexed, query
 // throws, so every caller falls back to its old search. Used by main/index.ts.
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errText, log } from '../../log';
 import { cosine, type Hit } from './engine';
+import { THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
 import type { HybridStatus, WorkerReq } from './protocol';
 
 export interface HybridDeps {
@@ -26,6 +28,9 @@ export interface HybridDeps {
 const SYNC_DELAY_MS = 3000;
 const CALL_TIMEOUT_MS = 60_000;
 const RESTART_PAUSE_MS = 10_000;
+const TEXT_VECS_MAX = 5000; // idea texts embedded for the themes, cleared past this
+const EMBED_BATCH = 16;
+const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
 
 export class HybridSearch {
   private worker: Worker | null = null;
@@ -34,6 +39,8 @@ export class HybridSearch {
   private last: HybridStatus = { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false };
   private syncTimer: NodeJS.Timeout | null = null;
   private syncedRoot: string | null = null;
+  private textVecs = new Map<string, Float32Array>();
+  private themeCache = new Map<ThemeKind, { key: string; themes: Themes }>();
   private restartAfter = 0;
 
   constructor(private deps: HybridDeps) {}
@@ -110,6 +117,39 @@ export class HybridSearch {
   /** Every embedded chunk of the documents under a key prefix ("brain:ai-errors.md"). */
   vectors(prefix: string): Promise<{ id: number; doc: string; line: number; text: string; v: Float32Array }[]> { return this.call({ op: 'vectors', prefix }); }
 
+  /** Errors or ideas grouped by theme (the Dashboard's Temi tab); not ready without the model or a synced index. The
+   *  result is kept until the file's chunks or the day change: the tab polls every minute and clustering runs here, in
+   *  the main process. */
+  async themes(kind: ThemeKind, now = Date.now()): Promise<Themes> {
+    const notReady: Themes = { kind, ready: false, entries: 0, themes: [], duplicates: [] };
+    if (this.deps.brainRoot() !== this.syncedRoot && !(await this.sync())) return notReady;
+    if (this.last.model.state !== 'ready') return notReady;
+    const rows = await this.vectors(`brain:${THEME_FILES[kind]}`);
+    const today = ROME_DAY.format(now), key = `${today}|${rowsKey(this.syncedRoot, rows)}`;
+    const kept = this.themeCache.get(kind);
+    if (kept?.key === key) return kept.themes;
+    let fellBack = false;
+    const t = await themesOf(kind, rows.map(r => ({ ...r, at: 0 })), today, { embed: texts => this.embedCached(texts).catch(e => { fellBack = true; throw e; }) });
+    if (!fellBack) this.themeCache.set(kind, { key, themes: t }); // a fallback is retried on the next poll
+    return t;
+  }
+
+  /** Passage vectors by text, kept between calls, embedded EMBED_BATCH at a time (one long call could time out and
+   *  take the worker, and Ctrl+K with it, down). */
+  private async embedCached(texts: string[]): Promise<Float32Array[]> {
+    // vectors are read back from `got`, not the shared cache: another caller may clear it between two batches
+    const got = new Map(texts.flatMap(t => { const v = this.textVecs.get(t); return v ? [[t, v] as const] : []; }));
+    const missing = [...new Set(texts.filter(t => !got.has(t)))];
+    if (this.textVecs.size + missing.length > TEXT_VECS_MAX) this.textVecs.clear();
+    for (let i = 0; i < missing.length; i += EMBED_BATCH) {
+      const batch = missing.slice(i, i + EMBED_BATCH);
+      const vs = await this.embed(batch, 'passage');
+      if (!vs) throw new Error('model not available');
+      batch.forEach((t, k) => { got.set(t, vs[k]!); this.textVecs.set(t, vs[k]!); });
+    }
+    return texts.map(t => got.get(t)!);
+  }
+
   status(): HybridStatus { return this.last; }
 
   /** Starts (or restarts after a failure) the model download. */
@@ -124,6 +164,13 @@ export class HybridSearch {
 }
 
 export { cosine };
+
+/** The brain folder and a hash of a file's chunks (ids, lines, text): a cached result stays valid while it is the same. */
+const rowsKey = (root: string | null, rows: { id: number; line: number; text: string }[]): string => {
+  const h = crypto.createHash('sha1');
+  for (const r of rows) h.update(`${r.id}:${r.line}:${r.text}\n`);
+  return `${root}|${h.digest('base64url')}`;
+};
 
 /** The `k` items most similar to `q` (cosine, best first). */
 export function topK(q: Float32Array, items: { id: string; vec: Float32Array }[], k: number): { id: string; score: number }[] {
