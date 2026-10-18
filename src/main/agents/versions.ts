@@ -1,7 +1,7 @@
 // Agent definition versions: the v1 → v2 catalog migration and the bounded behaviour history (agent-history.json).
 // The catalog owns profiles; this module owns what each version did, so metrics can compare versions later.
 import path from 'node:path';
-import { BEHAVIOUR_FIELDS, type AgentAuthor, type AgentBehaviour, type AgentCategory, type AgentProfile, type AgentProfileV1, type AgentVersion, type AgentVersionState } from '../../shared/agents';
+import { BEHAVIOUR_FIELDS, type AgentAuthor, type AgentBehaviour, type AgentCategory, type AgentProbationDecision, type AgentProfile, type AgentProfileV1, type AgentVersion, type AgentVersionState } from '../../shared/agents';
 import { readLocal, writeLocal } from './local-store';
 
 export const HISTORY_PER_AGENT = 50;
@@ -41,9 +41,17 @@ function readEntry(v: unknown): AgentVersion {
   const e = v as Partial<AgentVersion> | null;
   if (!e || typeof e !== 'object' || typeof e.agentId !== 'string' || !ID.test(e.agentId) || !count(e.version) || !(e.parentVersion === null || count(e.parentVersion))
     || !e.behaviour || typeof e.behaviour !== 'object' || typeof e.behaviour.instructions !== 'string' || typeof e.behaviour.engine !== 'string'
-    || !AUTHORS.includes(e.author as AgentAuthor) || typeof e.reason !== 'string' || e.reason.length > 600 || !Number.isFinite(e.at) || !STATES.includes(e.state as AgentVersionState)) throw new Error('Invalid agent history entry');
+    || !AUTHORS.includes(e.author as AgentAuthor) || typeof e.reason !== 'string' || e.reason.length > 600 || !Number.isFinite(e.at) || !STATES.includes(e.state as AgentVersionState)
+    || (e.probation !== undefined && !readDecision(e.probation))) throw new Error('Invalid agent history entry');
   return e as AgentVersion;
 }
+function readDecision(v: unknown): boolean {
+  const d = v as Partial<AgentProbationDecision> | null;
+  return !!d && typeof d === 'object' && (d.decision === 'kept' || d.decision === 'retired') && (d.by === 'brother' || d.by === 'evaluator')
+    && typeof d.reason === 'string' && d.reason.length <= 600 && typeof d.at === 'number' && Number.isFinite(d.at);
+}
+/** A change to a stored version: its state, or the probation decision taken while it was active. */
+export interface VersionChange { agentId: string; version: number; state?: AgentVersionState; probation?: AgentProbationDecision }
 
 /** Bounded per agent; pruning drops the oldest superseded or rejected version, never v1 or the active/trial one. */
 export class AgentHistory {
@@ -66,9 +74,10 @@ export class AgentHistory {
    * Applies all changes in one write. Adding version N drops that agent's entries from N up: they belong to a save
    * whose catalog write failed, or to an agent whose catalog was regenerated, and the new N supersedes them.
    */
-  commit(add: AgentVersion[], states: { agentId: string; version: number; state: AgentVersionState }[] = []): void {
+  commit(add: AgentVersion[], states: VersionChange[] = []): void {
     if (this.problem) throw new Error(this.problem);
-    let next = this.entries.map(e => { const s = states.find(x => x.agentId === e.agentId && x.version === e.version); return s ? { ...e, state: s.state } : e; });
+    let next = this.entries.map(e => states.filter(x => x.agentId === e.agentId && x.version === e.version)
+      .reduce<AgentVersion>((v, s) => ({ ...v, ...(s.state ? { state: s.state } : {}), ...(s.probation ? { probation: structuredClone(s.probation) } : {}) }), e));
     for (const e of add) next = [...next.filter(x => !(x.agentId === e.agentId && x.version >= e.version)), structuredClone(e)];
     const removable = (e: AgentVersion) => e.version !== 1 && (e.state === 'superseded' || e.state === 'rejected');
     for (const agentId of new Set(add.map(e => e.agentId))) {
