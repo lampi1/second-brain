@@ -47,3 +47,11 @@ The Dashboard's Temi tab groups ai-errors.md and ideas.md by meaning (`search/hy
   7 days at least 1.5× its share of the 7 before, only once the file has 5 entries in that earlier week (a new brain
   has no baseline, and more logging overall is not a theme growing).
 - Without the model the tab says the themes appear once it has read the brain; nothing falls back to words.
+
+## Recall engine parity (2026-10-18)
+
+Claude receives past-error context through its UserPromptSubmit hook. For the other app-managed engines,
+ChatManager calls the same HybridSearch.recall before delivering initial prompts, later messages and agent mail.
+It prepends up to three short, labelled quotations, keeping the original user message in the UI. The lookup has
+a 300 ms deadline and failures, unavailable vectors or no matching errors leave delivery unchanged. Internal
+handoff-note turns do not need task recall. No CLI login or external engine tokens are used for the lookup.

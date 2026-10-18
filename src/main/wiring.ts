@@ -345,6 +345,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     emitter: ctx.emitter,
     userData: ctx.userData,
     env: { [RECALL_ENV]: recall.url() },
+    recall: text => hybrid.recall(text),
     enginePaths: enginePathsFromEnv(),
     // an engine the user switched off never starts, whoever asks (engines/policy.ts)
     engineOn: h => engineOn(brain.settings(), h),
