@@ -1,6 +1,7 @@
 // The app shell: top bar, the left navigation (the Grindhouse, brain sections, the map), the needs-you lane (focus mode's
 // peek), a brain page (the Grindhouse holds the agents' vertical strips; focus mode replaces it with one chat), the full-screen 3D map, the
-// Orchestrator column on the right outside Dashboard/map exploration, the notification center, toasts, the live
+// persistent Orchestrator column on the right (always, on every page, the Dashboard and the 3D map included: the user,
+// 2026-10-18, «io voglio sempre l'orchestratore a destra»; RegiaOverlay.tsx, ADR 0068), the notification center, toasts, the live
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
@@ -195,8 +196,7 @@ export function App() {
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
-  const reserve = useDockReserve();
-  const dock = map || page === 'dashboard' ? { right: 0, bottom: 0, top: 0 } : reserve;
+  const dock = useDockReserve();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -217,7 +217,7 @@ export function App() {
   // its Ctrl+J peek
   const showLane = inFocus && lanePeek;
   return (
-    // Map exploration uses the full width; other workspaces reserve the coordinator column (shell.css).
+    // the Orchestrator column's room: the workspace, the map and the questions window leave it free (shell.css)
     <div className="app" data-testid="app" style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
@@ -243,7 +243,7 @@ export function App() {
             live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} />
         </div>
       )}
-      {!map && page !== 'dashboard' && <RegiaOverlay />}
+      <RegiaOverlay />{/* always: the Dashboard and the 3D map sit beside it, never over it */}
       {center && <NotificationCenter />}
       <QuestionsWindow />
       <LiveRegion />

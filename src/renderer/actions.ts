@@ -235,10 +235,9 @@ export function collapseRegia(): void {
   (document.activeElement as HTMLElement | null)?.blur();
 }
 
-/** Ctrl+R: the Regia overlay from anywhere. Closed → it opens with its input focused; open but the keyboard is
- *  elsewhere → its input; open with the keyboard inside → it closes to its pill. */
+/** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the Dashboard and the
+ *  3D map included): its input takes the keyboard. */
 export function toggleRegia(): void {
-  if (ui.get().map || ui.get().page === 'dashboard') go({ page: 'home' });
   setRegiaOpen(true);
   const r = regiaId();
   if (r) requestFocus(r);
@@ -291,10 +290,8 @@ export function focusChat(chatId: string): void {
   const c = s.chats[chatId];
   if (!c) return;
   const u = ui.get();
-  if (chatId === orchestratorIdOf(s)) {
-    if (u.map || u.page === 'dashboard') go({ page: 'home' });
-    setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return;
-  }
+  // the Orchestrator: its column is beside every page (the Dashboard and the 3D map too), so the page stays
+  if (chatId === orchestratorIdOf(s)) { setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return; }
   if (c.isRegia) {
     // Existing work coordinators remain accessible as chats; only the app coordinator owns the column.
     go({ page: 'home' });
