@@ -60,4 +60,10 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.stats.trendDown': 'declining',
   'brainLib.stats.trendNoData': (p: { value: string; before: string }) => `${p.value}; ${p.before} no data to compare`,
   'brainLib.stats.trendWithData': (p: { word: string; cur: string; prev: string }) => `${p.word}: ${p.cur} versus ${p.prev}`,
+  // Markdown.tsx
+  'brainLib.markdown.copyBlock': 'Copy',
+  'brainLib.markdown.copyBlockTitle': 'Copy the block to the clipboard',
+  'brainLib.markdown.blockCopied': 'Copied',
+  'brainLib.markdown.blockCopiedToast': 'Block copied',
+  'brainLib.markdown.copyFailed': 'Copy failed',
 };
