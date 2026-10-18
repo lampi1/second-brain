@@ -34,7 +34,7 @@ import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
 import { claimsAlias } from '../chats/mail';
 import { parseImproveSelection } from './improve-evidence';
-import type { ImproveService } from '../improve/service';
+import type { ImproveService, PullResult } from '../improve/service';
 import type { ImproveEvidenceSelection } from '../improve/evidence';
 import type { AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
@@ -62,7 +62,7 @@ export interface AppCtlDeps {
   /** Only the authenticated per-chat mount may enable the canonical coordinator's union scope. */
   unified?: boolean;
   /** "Migliora l'app": the code folder and the branches' state (read-only) */
-  improve?: { repo: () => string | null; state: () => Promise<ImproveState>; inRepo?: (dir: string) => Promise<boolean> };
+  improve?: { repo: () => string | null; state: () => Promise<ImproveState>; inRepo?: (dir: string) => Promise<boolean>; pull?: () => Promise<PullResult> };
   improveEvidence?: (selection: ImproveEvidenceSelection) => ReturnType<ImproveService['evidence']>;
   /** the DevOps page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
   devops?: () => DevopsState | null;
@@ -74,6 +74,8 @@ const lastDigest = new Map<string, number>();
 const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
 const str = (description: string) => ({ type: 'string', description });
 const num = (description: string) => ({ type: 'number', description });
+/** app_update_code runs only within this many minutes of a message the user wrote to the Orchestrator (ADR 0074) */
+export const PULL_ASK_MIN = 10;
 export const AGENT_LABEL = "[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 /** how a work chat sees an answer the Regia delivered for the user (app_resolve_question) */
 export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
@@ -534,6 +536,22 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj(),
       run: async () => improve.state(),
     });
+    // only the authenticated Orchestrator mount (/mcp/app/r/<id>/<token>): the plain mounts are open to local processes
+    if (improve.pull && unified()) {
+      const pull = improve.pull;
+      tools.push({
+        name: 'app_update_code',
+        description: `Only when the user asked in their own words to update the app ("aggiornati", "aggiorna l'app"): brings the app's code folder up to date with GitHub (scripts/pull.mjs: fetch main, fast-forward only, never merges or drops local work, never pushes), reinstalls the pinned dependencies if the lockfile changed and builds. It never promotes or restarts. Refused unless the user wrote to the Orchestrator in the last ${PULL_ASK_MIN} minutes. Then tell the user the result: a dev app run from the checkout picks it up when restarted; a stable copy changes only when the user promotes it.`,
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+        inputSchema: obj(),
+        run: async () => {
+          const regia = caller();
+          if (!unified() || !regia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
+          if (!decidedSince(regia.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
+          return pull();
+        },
+      });
+    }
   }
   return tools;
 
