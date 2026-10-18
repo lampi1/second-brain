@@ -172,6 +172,10 @@ app.whenReady().then(async () => {
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'agents:list': () => s.agents.list(),
+    'agents:classify': a => {
+      if (!s.classifyAgents) throw Error('agent classifier unavailable');
+      return s.classifyAgents(a?.request);
+    },
     'agents:save': a => s.agents.save(a.profile, a.id),
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:archive': a => s.agents.archive(a.id),

@@ -1,6 +1,11 @@
 // English counterpart of the agent workspace and packaged appearance UI.
 import type{productIt}from'./product.it';
 export const productEn:typeof productIt={
+ 'start.matchSuggestion':({name,score})=>`Suggested: ${name} · affinity ${score}/100.`,
+ 'start.matchNone':'No agent is close enough. You can ask the Orchestrator to propose a new one; creation requires your request.',
+ 'start.matchWords':'Word matching: local model unavailable.',
+ 'start.matchLocal':'Local meaning and word matching; not a capability assessment.',
+ 'start.matchChoose':'Choose suggested agent',
  'product.transcriptLoading':'Loading','product.transcriptEmpty':'No messages yet: describe where you would like to start below.',
  'start.needMemory':'Connect a memory folder before starting the agent.','start.needTask':'Describe the first task for the agent.','start.needName':'Name this coordinator.','start.failed':'The agent did not start. Your request is still here: check engine availability.',
  'start.regiaTitle':'Start a coordinator','start.agentTitle':'Start an agent','start.shortcut':'Ctrl+Enter','start.editAgent':'Create or edit an agent','start.firstMessage':'First message · optional','start.task':'What would you like to achieve?','start.promptHint':'Prepare a meeting, compare two offers or draft a message for a client','start.contextTitle':'Context and expected result','start.context':'Useful information','start.outcome':'What would you like to receive?',

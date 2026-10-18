@@ -69,6 +69,8 @@ import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
+import { AgentClassifier } from './agents/classifier';
+import type { ClassifyAgents } from './agents/discovery';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
@@ -80,6 +82,7 @@ export interface Wired {
   agentRuns?: AgentRunStore;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
+  classifyAgents?: ClassifyAgents;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -340,7 +343,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
   // Tests never run installed vendors; their fake status is requested explicitly.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
-  addChatTools([agentCatalogTool(() => agents.list()), brainSearchTool((q, o) => hybrid.query(q, o))]);
+  const classifier = new AgentClassifier(hybrid);
+  const classifyAgents: ClassifyAgents = request => classifier.classify(request, agents.list().profiles, manager.runs.list());
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -515,7 +520,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
-  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -571,7 +576,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

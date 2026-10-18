@@ -37,13 +37,14 @@ import { parseImproveSelection } from './improve-evidence';
 import type { ImproveService } from '../improve/service';
 import type { ImproveEvidenceSelection } from '../improve/evidence';
 import type { AgentCatalog } from '../../shared/agents';
-import { agentCatalogTool, discoverAgents } from '../agents/discovery';
+import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
   agents?: () => AgentCatalog;
+  classifyAgents?: ClassifyAgents;
   chats: ChatService; browser: BrowserService; brain: BrainService;
   window: () => BrowserWindow | null;
   emitUi: (cmd: EventMap['ui:command']) => void;
@@ -118,7 +119,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
-    ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverAgents(d.agents!, a) }] : []),
+    ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',
       description: 'Select the reasoning effort for one app chat. Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',

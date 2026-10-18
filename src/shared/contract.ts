@@ -3,6 +3,7 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
+import type { AgentClassification } from './agent-classifier';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
@@ -1141,6 +1142,7 @@ export interface InvokeMap {
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
+  'agents:classify': [{ request: string }, AgentClassification];
   'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
   'agents:duplicate': [{ id: string }, AgentProfile];
   'agents:archive': [{ id: string }, AgentProfile];
@@ -1419,7 +1421,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:classify', 'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',

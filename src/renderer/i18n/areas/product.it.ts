@@ -1,5 +1,10 @@
 // Agent workspace and packaged appearance UI. Kept separate from provider output and user-authored content.
 export const productIt={
+ 'start.matchSuggestion':({name,score}:{name:string;score:number})=>`Suggerito: ${name} · affinità ${score}/100.`,
+ 'start.matchNone':'Nessun agente abbastanza vicino. Puoi chiedere all’Orchestrator di proporne uno nuovo; la creazione richiede una tua richiesta.',
+ 'start.matchWords':'Confronto per parole: modello locale non disponibile.',
+ 'start.matchLocal':'Confronto locale per significato e parole; non è una verifica delle capacità.',
+ 'start.matchChoose':'Scegli il suggerito',
  'product.transcriptLoading':'Caricamento','product.transcriptEmpty':'Nessun messaggio ancora: scrivi qui sotto da dove partire.',
  'start.needMemory':'Collega una cartella della memoria prima di avviare l’agente.','start.needTask':'Descrivi il primo compito da affidare all’agente.','start.needName':'Dai un nome a questo Orchestrator.','start.failed':'L’agente non è partito. La richiesta rimane qui: controlla la disponibilità del motore.',
  'start.regiaTitle':'Avvia un Orchestrator','start.agentTitle':'Avvia un agente','start.shortcut':'Ctrl+Invio','start.editAgent':'Crea o modifica un agente','start.firstMessage':'Primo messaggio · facoltativo','start.task':'Che cosa vuoi ottenere?','start.promptHint':'Prepara una riunione, confronta due offerte o scrivi una bozza per un cliente','start.contextTitle':'Contesto e risultato atteso','start.context':'Informazioni utili','start.outcome':'Che cosa vuoi ricevere?',
