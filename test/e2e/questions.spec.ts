@@ -11,7 +11,7 @@
 // on (no off button in the window: the user, 2026-10-16).
 // Screenshots: test-results/shots/questions-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { __sbDemo: { answers(): { chatId: string }[]; stop(id: string): Promise<void>; ask(id: string, r: object): void; say(id: string, t: string): void; think(id: string, t: string): void; toolDone(id: string, n: string, i: unknown, o?: string): void } };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: Demo['__sbDemo'], ...a: A) => void, ...a: A) =>
@@ -24,6 +24,7 @@ const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis
 
 test('a question carries its context: the turn\'s prose, the reasoning before it, web and file links', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip
   await demo(app, (d, id) => {
     d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md). La PR è https://dev.azure.com/o/proj/_git/app/pullrequest/27.');
@@ -78,6 +79,7 @@ test('a file link clicked in the questions window shows the viewer in front; the
 
 test('the questions window: waits while the user types, never takes the field, Ctrl+J brings it, 1 answers, Esc is "Rispondi dopo"', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
   // the open requests of the demo (Regia, QA, Feedback) are in the window now; the tiles keep one line
@@ -147,6 +149,7 @@ test('the questions window: waits while the user types, never takes the field, C
 
 test('the questions window stays on: a question from the chat the user is in goes to the window, never inline, and the switch stays on', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -180,6 +183,7 @@ test('the questions window: the first click on an option answers, even when the 
   // the user, 2026-10-15: "a volte nella modale della domanda devo premere 2 volte". The note left on the mousedown (the
   // option took the keyboard) and the options moved up under the pointer: the mouseup fell elsewhere, no click.
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -205,6 +209,7 @@ test('the questions window: the first click on an option answers, even when the 
 
 test('the questions window, two questions in a row: the second shows once, with its own reasoning, and says it is asked again', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
@@ -236,6 +241,7 @@ test('the questions window, two questions in a row: the second shows once, with 
 
 test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Regia's question first, QA and Feedback under it
   await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   const picks = page.getByTestId('qwin-pick');
@@ -266,6 +272,7 @@ test('the questions window answers in any order: a waiting request is one click 
 
 test('the questions window reads context first: the agent\'s lead muted on top, the real question large under it', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);

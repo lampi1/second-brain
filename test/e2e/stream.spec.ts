@@ -4,10 +4,11 @@
 // at the bottom stays there however fast the content grows; a small (compact) tile shows the typing line too; the
 // alive marks (dots, spinner) step from lib/beat.ts.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 test('answers stream in place, tools flip live, the typing line follows the turn', async () => {
   const { app, page } = await launchDemo({ freeze: false });
+  await expandChats(page, 'mappa'); // transcript and input are on the open strip
   const tile = page.getByTestId('tile-chat-mappa');
   await page.getByTestId('chat-input-mappa').fill('Aggiungi la legenda');
   await page.getByTestId('chat-input-mappa').press('Enter');
@@ -40,6 +41,7 @@ test('answers stream in place, tools flip live, the typing line follows the turn
 
 test('scrolled up to read, the list does not jump: a "nuove righe" pill appears', async () => {
   const { app, page } = await launchDemo({ freeze: false });
+  await expandChats(page, 'sms'); // as the user would: open the strip, then full screen
   await page.getByTestId('chat-max-sms').click();
   const list = page.getByTestId('tile-chat-sms').locator('.items');
   await expect.poll(async () => list.evaluate(el => el.scrollHeight > el.clientHeight + 40), { timeout: 20_000 }).toBe(true); // the browser loop fills it
@@ -58,6 +60,7 @@ test('scrolled up to read, the list does not jump: a "nuove righe" pill appears'
 
 test('at the bottom, the list stays there while content grows frame after frame (its own scroll never detaches it)', async () => {
   const { app, page } = await launchDemo({ freeze: false });
+  await expandChats(page, 'sms');
   await page.getByTestId('chat-max-sms').click();
   const tile = page.getByTestId('tile-chat-sms');
   const list = tile.locator('.items');
@@ -96,6 +99,7 @@ test('a small (compact) tile shows the typing line while its chat works', async 
 test('a running turn\'s dots and spinner step twice a second, and stand still with reduced motion', async () => {
   const { app, page } = await launchDemo({ freeze: false });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expandChats(page, 'mappa');
   await page.getByTestId('chat-input-mappa').fill('Aggiungi la legenda');
   await page.getByTestId('chat-input-mappa').press('Enter');
   await expect(page.getByTestId('typing-mappa')).toBeVisible();

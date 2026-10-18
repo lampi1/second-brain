@@ -54,6 +54,8 @@ export function visibleRequestKeys(): Set<string> {
   if (ui.get().modal) return out; // a dialog covers the page: nothing below it counts as visible
   if (!app.get().pending.length) return out; // no request anywhere: no panel to look for (and no forced layout)
   for (const el of document.querySelectorAll<HTMLElement>('[data-request-key]')) if (onScreen(el)) out.add(el.dataset.requestKey ?? '');
+  // a collapsed Grindhouse strip shows its requests as its "waits for you" pill: on screen, they do not float
+  for (const el of document.querySelectorAll<HTMLElement>('[data-waits-keys]')) if (onScreen(el)) for (const k of (el.dataset.waitsKeys ?? '').split(' ')) if (k) out.add(k);
   return out;
 }
 

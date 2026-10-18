@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
 import { correctionText } from '../../src/renderer/lib/correction';
-import { launch, setSize, shot } from './helpers';
+import { closeSetup, expandChats, launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 const SENTENCE = 'Penso di usare la libreria vecchia.';
@@ -33,6 +33,8 @@ const endedAfter = async (page: Page, id: string, text: string) => {
 
 /** Opens the chat's first reasoning block and selects SENTENCE in it, as a mouse would (press, select, release). */
 async function selectSentence(page: Page, chatId: string): Promise<void> {
+  await closeSetup(page);
+  await expandChats(page, chatId); // the transcript is on the expanded strip
   const tile = page.getByTestId(`tile-chat-${chatId}`);
   await expect(tile.getByTestId('thinking-toggle').first()).toBeVisible({ timeout: 15000 });
   const toggle = tile.getByTestId('thinking-toggle').first();

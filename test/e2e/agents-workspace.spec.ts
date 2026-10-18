@@ -39,8 +39,11 @@ test('an offscreen transcript catches up without losing the mounted composer dra
       const chat = (await window.sb.invoke('chat:list', undefined)).find(chat => chat.id === 'fix')!;
       for (let i = 0; i < 3; i++) await window.sb.invoke('chat:create', { harness: 'claude', cwd: chat.cwd, title: `Scroll fixture ${i}`, prompt: '' });
     });
-    const expand = page.getByTestId('chat-expand-fix');
-    if (await expand.getAttribute('aria-expanded') !== 'true') await expand.click();
+    // every strip starts collapsed: expanding the strips above pushes this one below the fold
+    for (const id of ['feedback', 'qa', 'fix']) {
+      const expand = page.getByTestId(`chat-expand-${id}`);
+      if (await expand.getAttribute('aria-expanded') !== 'true') await expand.click();
+    }
     const tile = page.getByTestId('tile-chat-fix');
     const transcript = tile.locator('.chat-transcript');
     const scroller = page.getByTestId('brain-page-home'); // the Home's own scroller (.bx-scroll)
