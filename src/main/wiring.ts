@@ -71,7 +71,7 @@ import { releaseId } from './release';
 import { launcherName, restartWaiter, sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import type { AgentRunStore } from './agents/runs';
+import { unknownRunError, type AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
@@ -539,8 +539,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
   const suggestionBudget = new SuggestionBudget(ctx.userData);
+  // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
+  const chatOf = (id: string) => chats.list().find(c => c.id === id);
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
     suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
+    chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
   });
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md): the "Da approvare" queue and the local daily suggestions
@@ -551,7 +554,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // mailbox's engine and user-wait gates first) and the trial evaluation (no classifier routing snapshot of the parent
   // version: unknown routing turns every open trial into a "revert" proposal after five runs).
   const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false, feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } });
-  const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id), (args, caller) => agentAuthoring.recordFeedback(args, caller));
+  const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id), (args, caller) => agentAuthoring.recordFeedback(args, caller), id => unknownRunError(id, manager.runs.list(), chatOf));
   mountLifecycleApi(brain, lifecycleApi);
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));

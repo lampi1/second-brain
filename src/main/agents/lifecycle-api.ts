@@ -5,6 +5,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { AgentLifecycle } from './lifecycle';
 import { AGENT_LIFECYCLE_PATH, parseAgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { BrainService } from '../services';
+import { unknownRunError } from './runs';
 import { log, errText } from '../log';
 
 const object = (value: unknown): Record<string, unknown> => {
@@ -27,7 +28,8 @@ export function mountLifecycleApi(brain: Pick<BrainService, 'serveApi'>, api: Re
 /** The one store's writer (AgentAuthoring.recordFeedback): reads agent/version from the run, decides the basis, persists. */
 export type FeedbackWriter = (args: AgentFeedbackArgs, callerId: string) => Promise<AgentFeedback>;
 export type LifecycleApi = ReturnType<typeof createLifecycleApi>;
-export function createLifecycleApi(service: AgentLifecycle, runById: (id: string) => AgentRun | undefined, write?: FeedbackWriter) {
+/** unknown = the error for a runId that names no run (unknownRunError with the store and the chats; wiring.ts). */
+export function createLifecycleApi(service: AgentLifecycle, runById: (id: string) => AgentRun | undefined, write?: FeedbackWriter, unknown: (id: string) => Error = id => unknownRunError(id, [])) {
   return {
     read(value: unknown): AgentLifecycleSnapshot {
       const { agentId } = lifecycleQuery(value);
@@ -42,7 +44,7 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
      *  refuses any argument outside AgentFeedbackArgs (agent, version, basis…). */
     async feedback(value: unknown, callerId: string): Promise<AgentFeedback> {
       const args = parseAgentFeedbackArgs(value);
-      if (!runById(args.runId)) throw Error('Unknown run.');
+      if (!runById(args.runId)) throw unknown(args.runId);
       if (!write) throw Error('Feedback store unavailable.');
       const record = await write(args, callerId);
       // the record is stored: a lifecycle problem (unreadable queue) only costs the gap proposal, never the feedback
