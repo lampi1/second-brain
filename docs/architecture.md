@@ -21,9 +21,9 @@
 │ window.sb = { invoke, on }                                                    │
 └───────────────▲───────────────────────────────────────────────────────────────┘
 ┌───────────────┴──────────────── renderer (React) ─────────────────────────────┐
-│ store (one external store, events → state) · views: Mosaico | Corsie · Brain   │
+│ store (one external store, events → state) · Grindhouse (strips) · Brain      │
 │ tiles: Chat · Browser (reports its rect → main places the view)               │
-│ Regia widget: docked bottom-right, a tab per Regia (ADR 0028)                 │
+│ Orchestrator column: full height beside every page (ADR 0068)                 │
 └────────────────────────────────────────────────────────────────────────────────┘
         child processes: claude.exe (per Claude chat) · agent (per Cursor chat)
         · node brain tools (chats.mjs, cost.mjs, …) run with Electron as Node

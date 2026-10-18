@@ -91,6 +91,72 @@ export interface AgentOwnerSnapshot {
   /** Definition version the chat runs. Absent on chats started before versions existed (= v0 legacy). */
   version?: number;
 }
+/** How a run ended: its work was marked completed (by the Orchestrator or Brother), its chat was closed, or it sat idle. */
+export type AgentRunEnd = 'completed' | 'closed' | 'stale';
+/** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). */
+export interface AgentRunOutcome {
+  verdict: 'success' | 'partial' | 'fail' | 'unknown';
+  basis: 'human' | 'reviewed-evidence' | 'orchestrator-opinion' | 'self-report' | 'unknown';
+  at: number; by: string; note?: string;
+}
+export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
+export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
+/** The fenced `run-report` block an agent ends its run with (AGENTS-DESIGN §3 preamble): the latest one of the run.
+ *  `ok: false` = a block was there but did not parse; no block at all leaves the field out. */
+export type AgentRunReport =
+  | { ok: true; at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number }
+  | { ok: false; at: number };
+/** Brother's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) his reopen of a run whose agent had
+ *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
+export interface AgentRunCorrections { tagged: number; afterReport: number }
+// Agent metrics (AGENTS-DESIGN §5), computed in main (agents/run-metrics.ts) from agent-runs.json.
+/** One §5 metric: n = the runs it rests on, coverage = n / ended runs (null: no ended run). */
+export interface Metric { value: number | null; n: number; coverage: number | null }
+export interface VersionMetrics {
+  agentId: string;
+  /** null = all versions from 1 up (v0 left out) */
+  version: number | null;
+  legacy: boolean;
+  ended: number;
+  successRate: Metric;
+  opinion: { value: number | null; n: number }; selfReport: { value: number | null; n: number };
+  correctionsPerRun: Metric;
+  aiErrorsPerRun: Metric;
+  reworkRate: Metric;
+  costPerRun: { median: Metric; p90: number | null };
+  tokensPerRun: Record<keyof AgentRunTokens, Metric>;
+  contextPeak: { median: Metric; max: number | null; ofWindow: number | null };
+  timeToDone: { elapsed: Metric; execution: Metric };
+  questionsPerRun: Metric; permissionsPerRun: Metric; commandsPerRun: Metric;
+  reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
+}
+export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number }
+/** One run = a chat started from an agent definition (agent-runs.json is the source of truth; the chat keeps a mirror). */
+export interface AgentRun {
+  runId: string; chatId: string; agentId: string;
+  /** pinned at start; 0 = started before versions existed (v0 legacy: never a baseline) */
+  version: number;
+  goal: string; startedBy: 'user' | 'orchestrator'; startedAt: number;
+  /** a reviewer run of an implementer run, or a child started by agent_spawn */
+  parentRunId?: string;
+  /** the parent run that spawned it: it ends when the parent ends */
+  spawnedBy?: string;
+  reviewOf?: string; reworkOf?: string;
+  /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): counts as rework of it */
+  continuedFrom?: string;
+  endedAt?: number; endReason?: AgentRunEnd;
+  outcome?: AgentRunOutcome;
+  counters: AgentRunCounters;
+  /** settled turns while the run was open; null = its engine reports no cost */
+  costUsd: number | null;
+  /** null = a turn reported no token usage (or a backfilled run): unknown, never a partial sum */
+  tokens: AgentRunTokens | null;
+  report?: AgentRunReport;
+  corrections?: AgentRunCorrections;
+  /** time the chat spent running (not waiting on Brother, a permission or the queue) while the run was open; missing on
+   *  runs recorded before it was measured */
+  executionMs?: number;
+}
 export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
   models: { id: string; name: string }[];
@@ -124,7 +190,10 @@ export interface SetupDraft {
   style: 'balanced' | 'concise' | 'detailed';
   agentIds: string[];
   guide?: SetupGuide;
+  /** the me.md answers the owner gave in this run (unanswered ones are read from me.md), written on confirm */
+  profile?: SetupProfile;
 }
+export interface SetupProfile { name?: string; role?: string; language?: string; areas?: string; style?: SetupDraft['style'] }
 export interface SetupState {
   version: 1;
   status: 'new' | 'existing' | 'draft' | 'completed' | 'skipped';

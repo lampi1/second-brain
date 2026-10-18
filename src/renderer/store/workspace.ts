@@ -1,35 +1,34 @@
-// Private layout/preferences for the agents workspace, versioned independently of legacy grid fractions.
-// Only stable pane IDs/topology and user-authored purposes live here; no transcript, browser state or credentials.
+// Private agent purposes typed by the user (setAgentPurpose), kept across restarts and updates. No layout or order lives
+// here: the Orchestrator orders the agents (lib/agent-order.ts). The stored shape stays { version: 1, root, purposes } so
+// copies written by older versions still load; their saved `root` (the retired drag layout) is ignored and saved as null.
 import { createStore } from './createStore';
-import { boundedLayout, restoreWorkspace, type LayoutNode } from '../lib/agents-layout';
 
 const KEY = 'sb.agents.workspace.v1';
-interface WorkspaceState { root: LayoutNode | null; purposes: Record<string, string> }
-function load(): WorkspaceState {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    const root = restoreWorkspace(raw);
-    const p = raw && typeof raw === 'object' && 'purposes' in raw ? raw.purposes : null;
-    const purposes: Record<string, string> = Object.create(null) as Record<string, string>;
-    if (p && typeof p === 'object') for (const [key, value] of Object.entries(p).slice(0, 500)) {
-      if (key !== '__proto__' && key !== 'constructor' && typeof value === 'string') purposes[key] = value.slice(0, 500);
-    }
-    return { root, purposes };
-  } catch { return { root: null, purposes: {} }; }
+interface WorkspaceState { purposes: Record<string, string> }
+
+/** The purposes of a stored copy, read as untrusted input (the first 500, no prototype keys); null = not a valid copy. */
+export function readPurposes(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || !('version' in raw) || raw.version !== 1) return null;
+  const p = 'purposes' in raw ? raw.purposes : {};
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+  const purposes: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const [key, value] of Object.entries(p).slice(0, 500)) if (key !== '__proto__' && key !== 'constructor' && typeof value === 'string') purposes[key] = value.slice(0, 500);
+  return purposes;
 }
+function load(): WorkspaceState {
+  try { return { purposes: readPurposes(JSON.parse(localStorage.getItem(KEY) ?? 'null')) ?? {} }; } catch { return { purposes: {} }; }
+}
+const stored = () => JSON.stringify({ version: 1, root: null, ...workspace.get() });
 export const workspace = createStore<WorkspaceState>(load());
 function save(): void {
-  try {
-    const state=workspace.get();
-    // Excessive panel counts remain usable in memory; never replace a recoverable saved layout with invalid data.
-    if(state.root&&!restoreWorkspace({version:1,root:state.root}))return;
-    localStorage.setItem(KEY, JSON.stringify({ version: 1, ...state }));
-  } catch { /* memory-only if storage is unavailable */ }
+  try { localStorage.setItem(KEY, stored()); } catch { /* memory-only if storage is unavailable */ }
 }
-export function setWorkspace(root: LayoutNode | null): void { workspace.set(s => ({ ...s, root:boundedLayout(root) })); save(); }
 export function setAgentPurpose(id: string, purpose: string): void {
   workspace.set(s => ({ ...s, purposes: { ...s.purposes, [id]: purpose.trim().slice(0, 500) } })); save();
 }
 
-export function checkpointWorkspace():string{const state=workspace.get();if(Object.keys(state.purposes).length>500)throw Error('Gli scopi salvati superano il limite di ripristino. L’app resta aperta.');if(state.root&&!restoreWorkspace({version:1,root:state.root}))throw Error('La disposizione supera il limite di salvataggio.');const value=JSON.stringify({version:1,...state});localStorage.setItem(KEY,value);return value;}
-export function restoreCheckpointWorkspace():void{workspace.set(load());}
+export function checkpointWorkspace(): string {
+  if (Object.keys(workspace.get().purposes).length > 500) throw Error('Gli scopi salvati superano il limite di ripristino. L’app resta aperta.');
+  const value = stored(); localStorage.setItem(KEY, value); return value;
+}
+export function restoreCheckpointWorkspace(): void { workspace.set(load()); }

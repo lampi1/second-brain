@@ -42,6 +42,7 @@ export const costsIt = {
   'costs.spendDay': "Spesa per giorno",
   'costs.todayHighlight': "oggi in arancione",
   'costs.byKind': "Per tipo di lavoro",
+  'costs.headline': (p: { usd: string; calls: number; model: string }) => `Battuta del Grindhouse: $${p.usd} questo mese, ${p.calls} ${p.calls === 1 ? 'richiesta' : 'richieste'} a ${p.model} (crediti API).`,
   'costs.kindSays': "in cosa se ne vanno i token: leggere, scrivere, comandi, browser…",
   'costs.kindWhy': "il tipo più grande è la prima leva per spendere meno.",
   'costs.spendKind': "spesa per tipo di lavoro",

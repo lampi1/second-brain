@@ -47,7 +47,7 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
   wc.on('devtools-opened', () => { if (wc.devToolsWebContents) swallowCloseKey(wc.devToolsWebContents); });
   // hidden: shown inactive off screen (a never-shown window stops painting and cannot be captured)
   // and its page gets the keyboard inside the app as a shown window would, without activating it on the desktop
-  win.once('ready-to-show', () => { if (hidden) { win.showInactive(); wc.focus(); } else win.show(); });
+  win.once('ready-to-show', () => { if (hidden) { win.showInactive(); wc.focus(); } else { win.maximize(); win.show(); } });
   // SB_HANG_RELOAD_MS: e2e only, a hang reloads at once
   guardRenderer(win, () => win.loadURL(page), { hangMs: Number(process.env.SB_HANG_RELOAD_MS) || undefined });
   // Bootstrap defers the first page load until recovery and service IPC handlers exist.

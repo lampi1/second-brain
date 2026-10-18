@@ -2,12 +2,12 @@
    Windows (prefers-color-scheme) unless the user picked a theme (data-theme on <html>); density (data-density) scales
    paddings. Every component uses these variables (styles/app.css); contrast checked for WCAG 2.2 AA on --surface. */
 :root {
-  --bg: #0a0b0f;
-  --bg-2: #0e1015;
-  --surface: #121419;
-  --surface-2: #171a21;
-  --surface-3: #1e222a;
-  --surface-4: #262b35;
+  --bg: #101114;
+  --bg-2: #141519;
+  --surface: #191a1f;
+  --surface-2: #1e2026;
+  --surface-3: #272930;
+  --surface-4: #30333c;
   --border: #20242d;
   --border-2: #2a2f3a;
   --border-3: #3a404d;
@@ -17,7 +17,7 @@
   --text-4: #7b8293;
   --md-text: #d7dae2;
 
-  --blue: #7b93ff;
+  --blue: #a59bff;
   --blue-strong: #9aacff;
   --blue-bg: rgba(123, 147, 255, 0.13);
   --blue-line: rgba(123, 147, 255, 0.5);
@@ -30,11 +30,11 @@
   --red-bg: rgba(255, 107, 122, 0.11);
   --violet: #b892ff;
   --violet-bg: rgba(184, 146, 255, 0.12);
-  --regia-bg: #141019;
-  --regia-surface: #1c1626;
-  --regia-input: #100c16;
-  --regia-line: #2f2542;
-  --regia-line-2: #46385f;
+  --regia-bg: #17181d;
+  --regia-surface: #1e1f27;
+  --regia-input: #202128;
+  --regia-line: #2b2c35;
+  --regia-line-2: #454251;
   --claude: #e2805a;
   --claude-fg: #fff6f1;
   --cursor-bg: #e3e6ed;

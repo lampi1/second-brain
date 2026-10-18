@@ -49,7 +49,12 @@ import { waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
 import { compatibleOwner } from '../agents/catalog';
-import type { AgentOwnerSnapshot } from '../../shared/agents';
+import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
+import type { AgentOwnerSnapshot, AgentRun, AgentRunEnd, AgentRunOutcome } from '../../shared/agents';
+import { AgentRunStore, addTurn, endRun, reopenRun, staleDue, type RunLinks } from '../agents/runs';
+import { reportOf } from '../agents/run-report';
+import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
@@ -127,6 +132,8 @@ export interface ChatManagerOptions {
   cacheTtlMs?: number;
   /** ms between two checks of the cold chats (default 60 s; 0 = no timer, tests call coldTick) */
   coldEveryMs?: number;
+  /** ms between two checks for stale agent runs (default 10 min; 0 = no timer, tests call staleRuns) */
+  runEveryMs?: number;
   /** absolute path of the brain's mem.mjs, when it has one: the hand-off request asks to update the now.md line too */
   memTool?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */
@@ -187,6 +194,8 @@ interface Rec {
   s: ChatSummary;
   createdAt: number;
   agentInstructions?: string;
+  /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
+  policy?: AgentPolicy | null;
   agentPrimed?: boolean;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
@@ -252,6 +261,16 @@ interface Rec {
   after?: { kind: 'continuation' | 'compaction'; left: number } | undefined;
   /** the last hand-off turn ended in an error or was stopped by the user: a "Riprendi" waiting on it is cancelled */
   handoffStopped?: boolean;
+  /** request ids its agent run already counted (a request the engine reports again is one request) */
+  runSeen?: Set<string>;
+  /** the last time nothing waited on the user any more: a run's stale clock pauses while a request is open */
+  idleSince?: number;
+  /** open "Comando da eseguire" requests (run/asks.ts keeps them, not r.pending): they pause the stale clock too */
+  commandsOpen?: Set<string>;
+  /** since when the chat runs a turn of its open agent run (its execution time; not persisted: a quit cuts the turn) */
+  runningSince?: number;
+  /** when the current turn started running: a run ended during it (completed by its Regia) still takes its report */
+  turnAt?: number;
 }
 
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
@@ -280,6 +299,9 @@ const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 
 export class ChatManager implements ChatService {
   readonly analytics: AgentAnalyticsCollector;
+  /** agent-runs.json: the runs of chats started from catalog agents (AGENTS-DESIGN §1.2, §5) */
+  readonly runs: AgentRunStore;
+  private runTimer: NodeJS.Timeout | null = null;
   private chats = new Map<string, Rec>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
@@ -305,6 +327,14 @@ export class ChatManager implements ChatService {
 
   constructor(private readonly opts: ChatManagerOptions) {
     this.analytics = new AgentAnalyticsCollector(opts.userData);
+    this.runs = new AgentRunStore(opts.userData);
+    if (this.runs.problem) log.warn('chats', 'agent runs file unreadable', { cause: this.runs.problem, hint: 'move agent-runs.json aside to record runs again' });
+    // a pruned run lives on in the rollups only: a chat mirror of it would be adopted back and counted twice
+    this.runs.onPrune = ids => {
+      let any = false;
+      for (const r of this.chats.values()) if (r.s.run && ids.has(r.s.run.runId)) { delete r.s.run; delete r.runningSince; any = true; this.updated(r); }
+      if (any) this.persist();
+    };
     this.store = new ChatStore(opts.userData);
     this.admission = opts.admission ? new AdmissionQueue({ ...opts.admission, onChange: () => this.refreshQueued() }) : null;
     this.handoffs = new HandoffStore(opts.userData);
@@ -320,11 +350,13 @@ export class ChatManager implements ChatService {
     // one app Regia ("Migliora l'app"): the newest keeps the role
     const appRegie = [...this.chats.values()].filter(r => r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt);
     for (const r of appRegie.slice(1)) delete r.s.appRegia;
-    if (appRegie.length > 1 || stored.some(c => !c.agent) || JSON.stringify(stored) !== JSON.stringify(loaded)) this.persist();
+    const backfilled = this.backfillRuns();
+    if (backfilled || appRegie.length > 1 || stored.some(c => !c.agent) || JSON.stringify(stored) !== JSON.stringify(loaded)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
     if ((opts.coldEveryMs ?? 60_000) > 0) { this.coldTimer = setInterval(() => this.coldTick(), opts.coldEveryMs ?? 60_000); this.coldTimer.unref?.(); }
+    if ((opts.runEveryMs ?? 600_000) > 0) { this.runTimer = setInterval(() => this.staleRuns(), opts.runEveryMs ?? 600_000); this.runTimer.unref?.(); }
     if (opts.prewarm) {
       const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isRegia && !r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
@@ -355,8 +387,10 @@ export class ChatManager implements ChatService {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
   }
 
-  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string }): Promise<ChatSummary> {
+  /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
+  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null }, links: RunLinks = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
+    if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     if (this.opts.unifiedOrchestrator && (req.regia || req.appRegia)) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = this.list().find(c => c.orchestrator && c.isRegia);
@@ -364,8 +398,14 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, regia: true, appRegia: false, space: undefined, title: 'Orchestrator', regiaName: 'Orchestrator' };
     }
-    const agent = inherited ? { ...inherited, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
+    const agent = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
+    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews, the chat that opens it
+    const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
+    const parent = forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? (by === 'agent' && req.regiaOf ? this.chats.get(req.regiaOf) : undefined);
+    const policy = narrowest(agent.policy, parent?.policy);
+    // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
+    if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
     this.needOn(engine.id);
     const caps = engine.caps;
@@ -384,6 +424,8 @@ export class ChatManager implements ChatService {
 
     // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
     const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !(req.space === 'app' && req.appRegia === true) && req.permissionMode !== 'bypassPermissions'
+      // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
+      && !policy
       ? this.warm.take(cwd) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
@@ -422,6 +464,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: now,
       agentInstructions: agent.instructions,
+      ...(policy ? { policy } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
       worktree: !!req.worktree && caps.worktree,
@@ -430,6 +473,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
+    if (agent.owner.source === 'catalog') this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 0, goal: prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links });
     this.chats.set(id, r);
     if (old) {
       this.demoteRegia(old, id);
@@ -648,6 +692,7 @@ export class ChatManager implements ChatService {
       if (!authorized || !valid()) return false;
       this.flushItems(chatId);
       r.s.closedAt = Date.now(); r.s.closedBy = 'auto'; r.s.state = 'closed';
+      this.endRunOf(r, 'closed', r.s.closedAt);
       this.pruneArchived(); this.persist(); this.updated(r);
       return true;
     } finally { r.archiving = undefined; r.autoClosing = false; r.autoEnding = false; }
@@ -689,6 +734,7 @@ export class ChatManager implements ChatService {
     this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
     this.flushItems(chatId);
+    this.endRunOf(r, 'closed');
     this.chats.delete(chatId);
     this.persist();
     log.info('chats', 'chat closed', { chat: chatId });
@@ -750,6 +796,7 @@ export class ChatManager implements ChatService {
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
     r.s.closedBy = opts.auto ? 'auto' : 'user';
+    this.endRunOf(r, 'closed', r.s.closedAt);
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';
@@ -766,6 +813,77 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId);
     if (r.s.closedAt) this.unarchive(r);
     return { ...r.s };
+  }
+
+  /** The user went on with this chat himself (typed in it, reopened it: the IPC handlers only): an ended agent run is
+   *  open again and counts as reworked. A message from an agent, the Orchestrator or the app never reopens a run. */
+  resumedByUser(chatId: string, text?: string): void {
+    const r = this.chats.get(chatId);
+    const run = r?.s.run;
+    if (!r || !run) return;
+    // Brother's corrections (AGENTS-DESIGN §5): (a) a "[Reasoning correction]", else (b) his reopen of a run whose
+    // agent had reported; runs recorded before they were counted have no tally (unknown, not zero)
+    const tagged = text !== undefined && isCorrection(text), reported = run.report?.ok === true;
+    const reopened = reopenRun(run);
+    if (run.corrections && (tagged || (reopened && reported))) run.corrections[tagged ? 'tagged' : 'afterReport']++;
+    if (!reopened && !tagged) return;
+    if (reopened) {
+      delete run.report; // it reported on the work before the reopen
+      // chat:send started the turn before this reopen: its running time counts from now
+      if (r.s.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
+      r.idleSince = Date.now(); // persisted below
+      log.info('chats', 'agent run reopened by the user', { chat: chatId, data: { runId: run.runId, reopened: run.counters.reopened } });
+    }
+    this.runSave(); this.persist(); this.updated(r);
+  }
+
+  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
+   *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
+  runMetrics(opts: { aiErrors?: string; since?: number } = {}): ReturnType<typeof runMetrics> {
+    this.runs.flush();
+    return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}) });
+  }
+
+  /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;
+   *  an open run ends as completed, an ended one keeps how it ended. */
+  markRun(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary {
+    const r = this.need(chatId);
+    const run = r.s.run;
+    if (!run) throw new Error('Questa chat non è un’esecuzione di un Agente.');
+    if (!['success', 'partial', 'fail', 'unknown'].includes(verdict)) throw new Error('Esito non valido.');
+    const text = typeof note === 'string' ? note.trim().slice(0, 600) : '';
+    run.outcome = { verdict, basis: 'human', at: Date.now(), by: 'user', ...(text ? { note: text } : {}) };
+    this.finishRun(run, 'completed');
+    this.runSave(); this.persist(); this.updated(r);
+    return { ...r.s };
+  }
+
+  /** A "Comando da eseguire" request (run/asks.ts keeps it, not the engine): counted once on the chat's open run. */
+  commandAsked(chatId: string, requestId: string): void {
+    const r = this.chats.get(chatId);
+    if (!r) return;
+    this.countRequest(r, { id: requestId, type: 'command' });
+    (r.commandsOpen ??= new Set()).add(requestId);
+  }
+  /** That request left (run, "Non serve", the chat went on): when nothing else waits, the stale clock starts again. */
+  commandDone(chatId: string, requestId: string): void {
+    const r = this.chats.get(chatId);
+    if (!r?.commandsOpen?.delete(requestId)) return;
+    if (!r.commandsOpen.size && !r.pending.size) this.idleAgain(r);
+  }
+
+  /** Ends the open runs with no turn and nothing waiting on the user for STALE_MS (the timer; tests call it). */
+  staleRuns(now = Date.now()): number {
+    let n = 0;
+    for (const r of this.chats.values()) {
+      const run = r.s.run;
+      if (!run || run.endedAt !== undefined) continue;
+      const waiting = r.pending.size > 0 || !!r.commandsOpen?.size || !!r.working || !!r.session?.busy || !!r.s.queued;
+      if (!staleDue(run, Math.max(run.startedAt, r.lastTurnAt, r.idleSince ?? 0, r.activeAt ?? 0), waiting, now)) continue;
+      this.finishRun(run, 'stale', now); n++;
+    }
+    if (n) { this.runSave(); this.persist(); }
+    return n;
   }
 
   /** After a start: every chat whose turn the last quit or crash cut (working still set) resumes by itself with
@@ -794,6 +912,7 @@ export class ChatManager implements ChatService {
       this.autoActivity(r);
       r.s.work={status:patch.workStatus,updatedAt:Date.now()};
       try{this.persist(true);}catch(error){r.s.work=previous;throw error;}
+      if (patch.workStatus === 'completed' && r.s.run && r.s.run.endedAt === undefined) { this.endRunOf(r, 'completed'); this.persist(); }
     }
     const later: string[] = [];
     const apply = async (what: string, fn: (() => Promise<void>) | undefined): Promise<void> => {
@@ -831,6 +950,7 @@ export class ChatManager implements ChatService {
     if (patch.permissionMode !== undefined) {
       if (!MODES.includes(patch.permissionMode)) throw new Error(`Modalità permessi non valida: ${patch.permissionMode}`);
       const pm = patch.permissionMode;
+      if (aboveCeiling(pm, r.policy?.ceiling ?? null)) throw new Error(`Questo Agente ha come limite la modalità «${r.policy!.ceiling}». Per alzarlo modifica l’Agente.`);
       r.choice.permissionMode = pm; r.s.permissionMode = pm;
       await apply('permissionMode', sess ? () => sess.setPermissionMode(pm) : undefined);
     }
@@ -916,10 +1036,12 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '' });
+    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
+    // the agent's work goes on in a new run: the old one counts as reworked (§5)
+    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) { nr.s.run.continuedFrom = r.s.run.runId; this.runSave(); }
     r.s.continuedBy = { id: c.id, title: c.title };
     this.addItem(r, sysItem('continuedIn', { title: c.title }, 'info'), false);
     this.persist();
@@ -1118,7 +1240,9 @@ export class ChatManager implements ChatService {
     await this.killLeft(Math.max(0, end - Date.now()), kids, spawnMs);
     if (this.usageTimer) clearInterval(this.usageTimer);
     if (this.coldTimer) clearInterval(this.coldTimer);
+    if (this.runTimer) clearInterval(this.runTimer);
     this.counters.flush();
+    if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
     process.off('exit', this.onExit);
     log.info('chats', 'manager stopped', { data: { sessions: live.length, left: live.filter(x => x.alive).length, ms: Date.now() - end + capMs, spawnMs } });
   }
@@ -1311,6 +1435,14 @@ export class ChatManager implements ChatService {
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
+    // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
+    // ended during this turn (its Regia marked it completed) still takes it
+    const run = r.s.run, turnAt = r.turnAt;
+    delete r.turnAt;
+    if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
+      const report = reportOf(turnReply(r.items), item.at);
+      if (report) { run.report = report; this.runSave(); }
+    }
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;
@@ -1382,6 +1514,82 @@ export class ChatManager implements ChatService {
     }
   }
 
+  /** A chat started from a catalog agent is a run; a store that cannot record leaves the chat as it is (logged). */
+  private startRun(r: Rec, s: Omit<Parameters<AgentRunStore['start']>[0], 'chatId' | 'startedAt'>): void {
+    if (this.runs.problem) return;
+    try {
+      r.s.run = this.runs.start({ ...s, chatId: r.s.id, startedAt: r.createdAt });
+      r.idleSince = r.createdAt;
+    } catch (e) { log.warn('chats', 'agent run not recorded', { chat: r.s.id, cause: errText(e), hint: 'the chat works; this run is missing from the agent metrics' }); }
+  }
+
+  /** Ends a run and, below it, every open run it spawned (a child never ends its parent). */
+  private finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now()): void {
+    if (!run || run.endedAt !== undefined) return;
+    const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
+    if (mine) this.ranUntil(r!, at);
+    endRun(run, reason, at);
+    log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
+    for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
+    if (!mine) return;
+    // its cost, tokens and time now live in the run: the analytics row may be pruned when the archive is full
+    this.hook('analytics', () => this.analytics.rolledUp(r!.s));
+    this.updated(r!);
+  }
+  /** A running turn of the open run stops counting at `at` (a state change, or the run's end). */
+  private ranUntil(r: Rec, at: number): void {
+    const run = r.s.run, since = r.runningSince;
+    delete r.runningSince;
+    if (since === undefined || !run || run.endedAt !== undefined || typeof run.executionMs !== 'number') return;
+    run.executionMs += Math.max(0, at - since);
+    this.runs.touch();
+  }
+  private endRunOf(r: Rec, reason: AgentRunEnd, at = Date.now()): void {
+    if (!r.s.run || r.s.run.endedAt !== undefined) return;
+    this.finishRun(r.s.run, reason, at);
+    this.runSave();
+  }
+  /** Nothing waits on the user any more: an open run's stale clock starts again from now (kept in chats.json). */
+  private idleAgain(r: Rec): void {
+    r.idleSince = Date.now();
+    if (r.s.run && r.s.run.endedAt === undefined) this.persist();
+  }
+  private runSave(): void {
+    if (this.runs.problem) return;
+    try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+  }
+
+  /** Each request once per run, by its id: question, permission or command. */
+  private countRequest(r: Rec, req: Pick<PendingRequest, 'id' | 'type'>): void {
+    const run = r.s.run;
+    if (!run || run.endedAt !== undefined || r.pending.has(req.id)) return;
+    const seen = r.runSeen ??= new Set();
+    if (seen.has(req.id)) return;
+    seen.add(req.id);
+    if (seen.size > 1000) seen.delete(seen.values().next().value!);
+    run.counters[req.type === 'question' ? 'questions' : req.type === 'permission' ? 'permissions' : 'commands']++;
+    this.runSave();
+  }
+
+  /** Chats owned by a catalog agent before runs were recorded: one v0 run each (never a baseline), ended if archived. */
+  private backfillRuns(): boolean {
+    if (this.runs.problem) return false;
+    let added = false;
+    for (const r of this.chats.values()) {
+      const owner = r.s.agent;
+      if (r.s.run || owner?.source !== 'catalog') continue;
+      try {
+        const run = this.runs.start({ chatId: r.s.id, agentId: owner.id, version: 0, goal: r.s.title, startedBy: r.s.work || r.s.regiaOf ? 'orchestrator' : 'user', startedAt: r.createdAt, costKnown: false }, false);
+        run.tokens = null;
+        run.outcome = { verdict: 'unknown', basis: 'unknown', at: r.createdAt, by: 'migration' };
+        if (r.s.closedAt) endRun(run, 'closed', r.s.closedAt);
+        r.s.run = run; added = true;
+      } catch (e) { log.warn('chats', 'agent run not backfilled', { chat: r.s.id, cause: errText(e) }); }
+    }
+    try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e) }); }
+    return added;
+  }
+
   private need(chatId: string): Rec {
     const r = this.chats.get(chatId);
     if (!r) throw new Error('Chat non trovata.');
@@ -1396,6 +1604,9 @@ export class ChatManager implements ChatService {
     return {
       s: {
         agent: c.agent ?? compatibleOwner(c.harness, c.model, true),
+        // agent-runs.json is the source of truth; a mirror it does not know (a lost or reset file) is taken back
+        // (not one already pruned into the rollups: that mirror is dropped)
+        ...(() => { const run = c.run && (this.runs.get(c.run.runId) ?? (this.runs.problem ? c.run : this.runs.adopt(c.run))); return run ? { run } : {}; })(),
         ...(c.work ? {work:c.work} : c.regiaOf ? {work:{status:'assigned' as const,updatedAt:c.createdAt}} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
@@ -1414,6 +1625,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
+      ...(c.agentPolicy ? { policy: c.agentPolicy } : {}),
       children,
       choice: { model: c.model, effort: c.effort, permissionMode: c.permissionMode },
       ...(c.forkFrom ? { forkFrom: c.forkFrom } : {}),
@@ -1424,6 +1636,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: false, firstPrompt: null, turnSinceDone: false, // a restored chat continues a job begun in an earlier run
       lastTurnAt: c.lastTurnAt ?? 0,
+      ...(c.run && c.runIdleSince ? { idleSince: c.runIdleSince } : {}),
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
@@ -1435,6 +1648,8 @@ export class ChatManager implements ChatService {
     const rows: StoredChat[] = [...this.chats.values()].map(r => ({
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
+      ...(r.policy ? { agentPolicy: r.policy } : {}),
+      ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
@@ -1536,6 +1751,7 @@ export class ChatManager implements ChatService {
 
   private dropPending(r: Rec, requestId: string): void {
     if (!r.pending.delete(requestId)) return;
+    if (!r.pending.size && !r.commandsOpen?.size) this.idleAgain(r);
     this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
     r.s.pending = r.pending.size;
     this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId });
@@ -1574,6 +1790,21 @@ export class ChatManager implements ChatService {
     }
   }
 
+  /** min(ceiling, Brother's mode) for this start. Claude without a chat choice follows his settings, so their default is
+   *  read here (passing --permission-mode replaces it); other engines narrow through their own options (ceiling). */
+  private modeFor(r: Rec): PermissionMode | null {
+    const ceiling = r.policy?.ceiling ?? null, chosen = r.choice.permissionMode;
+    if (!ceiling) return chosen;
+    const brother = chosen ?? (engineOf(r.s.harness)?.kind === 'claude' ? claudeDefaultMode(r.s.cwd, this.opts.env ?? process.env) : null);
+    return brother && aboveCeiling(brother, ceiling) ? ceiling : chosen;
+  }
+
+  /** false when the chat's agent has a tool policy without 'browser' (the per-chat MCP hides the browser tools) */
+  browserAllowed(chatId: string): boolean {
+    const tools = this.chats.get(chatId)?.policy?.tools;
+    return !tools || tools.allow.includes('browser');
+  }
+
   private mcpConfig(chatId: string): string | null {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
     const app = this.appMcpFor(this.chats.get(chatId));
@@ -1608,7 +1839,8 @@ export class ChatManager implements ChatService {
     r.s.agentChildren = r.children.snapshot();
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
     const opts: SessionOptions = {
-      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, title: r.s.title,
+      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
+      ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
@@ -1738,6 +1970,7 @@ export class ChatManager implements ChatService {
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };
+        this.countRequest(r, req);
         r.pending.set(req.id, full);
         r.s.pending = r.pending.size;
         this.opts.emitter.emit('pending:added', full);
@@ -1829,8 +2062,28 @@ export class ChatManager implements ChatService {
     // shown, never persisted: only the user's own choice (create / chat:set) is saved and used on the next start,
     // so a mode the CLI took from a suggestion or ExitPlanMode does not outlive this process
     if (p.permissionMode) r.s.permissionMode = p.permissionMode;
+    // second guard: a mode the engine took on its own (ExitPlanMode, a suggestion, its settings) above the ceiling is
+    // set back at once
+    if (p.permissionMode && r.policy && aboveCeiling(p.permissionMode, r.policy.ceiling) && r.session) {
+      const ceiling = r.policy.ceiling!;
+      log.warn('chats', 'agent mode above its ceiling, set back', { chat: r.s.id, data: { mode: p.permissionMode, ceiling } });
+      r.s.permissionMode = ceiling;
+      void r.session.setPermissionMode(ceiling).catch(e => log.error('chats', 'agent ceiling not restored', { chat: r.s.id, cause: errText(e), hint: 'stop the chat: its mode is above the agent ceiling' }));
+    }
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
+    const run = r.s.run;
+    if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
+    // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
+    if (p.state && run && run.endedAt === undefined) {
+      if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();
+      else if (p.state !== 'running') this.ranUntil(r, Date.now());
+    }
+    if (run && run.endedAt === undefined) {
+      if (p.contextTokens !== undefined && p.contextTokens > (run.counters.contextPeak ?? 0)) { run.counters.contextPeak = p.contextTokens; this.runs.touch(); }
+      // a settled turn (its result): what it cost while the run was open
+      if (p.turnCostUsd !== undefined) { addTurn(run, p.costKnown === false ? null : p.turnCostUsd, p.turnTokens); this.runs.touch(); this.runSave(); }
+    }
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;
     if (p.turnCostUsd !== undefined || p.liveCostUsd !== undefined) {
       // costUsd = settled turns + the running turn's estimate; a result settles it (its real cost replaces the estimate)

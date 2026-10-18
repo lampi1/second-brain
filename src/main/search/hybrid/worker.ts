@@ -3,28 +3,19 @@
 // answered in order ({ id, ok, result | error }); model and index changes are pushed as { event: 'status' }. After a
 // sync or once the model is loaded, the chunks without a vector are embedded in small batches, yielding between them so
 // a query never waits more than one batch. Started by hybrid/service.ts.
-import fs from 'node:fs';
 import { parentPort, workerData } from 'node:worker_threads';
 import path from 'node:path';
 import { downloadModel, loadEmbedder, MODEL_BYTES, modelPresent, type Mode } from './embedder';
 import { BRAIN, Engine } from './engine';
-import { Store, vecExtension } from './store';
+import { openStore, vecExtension } from './store';
 import type { HybridStatus, WorkerReq } from './protocol';
 
 const { dir } = workerData as { dir: string };
 const modelDir = path.join(dir, 'model');
-const store = openStore(path.join(dir, 'index.db'));
+const store = openStore(path.join(dir, 'index.db'), vecExtension());
 const engine = new Engine(store);
 let model: HybridStatus['model'] = { state: 'missing' };
 let pumping = false;
-
-/** The index, rebuilt from scratch when the file is unreadable (it is only a cache of the brain). */
-function openStore(file: string): Store {
-  try { return new Store(file, vecExtension()); } catch {
-    for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
-    return new Store(file, vecExtension());
-  }
-}
 
 const status = (): HybridStatus => ({ model, ...engine.status() });
 const push = () => parentPort!.postMessage({ event: 'status', status: status() });

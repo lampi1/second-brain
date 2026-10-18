@@ -2,7 +2,6 @@
 // setting's schema. The widget's size and room: regia-dock.test.ts.
 import { describe, expect, it } from 'vitest';
 import { chatName, cleanRegiaName, regiaLabel, regiaOfChat, regieOf } from '../../src/shared/regia';
-import { regiaTabsOf } from '../../src/renderer/lib/regia-route';
 import { defOf, validate } from '../../src/main/brain/settings-schema';
 import { DEFAULTS } from '../../src/main/brain/config';
 
@@ -49,18 +48,6 @@ describe('which Regia a chat answers to', () => {
     expect(chatName({ isRegia: false, regiaName: 'App', title: 'Fix' })).toBe('Fix');
   });
 });
-
-describe('the overlay tabs', () => {
-  it('the work Regie in tab order, then the one app Regia (Migliora l’app) while open; never a second concept', () => {
-    const c = (id: string, p: object) => ({ id, ...p }) as never;
-    const st = (list: { id: string }[]) => ({ order: list.map(x => x.id), chats: Object.fromEntries(list.map(x => [x.id, x])) }) as never;
-    const work = [c('r2', { isRegia: true, regiaSince: 2 }), c('r1', { isRegia: true, regiaSince: 1 }), c('w', {})];
-    expect(regiaTabsOf(st(work))).toEqual(['r1', 'r2']);
-    expect(regiaTabsOf(st([...work, c('app', { appRegia: true, space: 'app' }), c('a1', { space: 'app' })]))).toEqual(['r1', 'r2', 'app']);
-    expect(regiaTabsOf(st([...work, c('app', { appRegia: true, space: 'app', closedAt: 5 })]))).toEqual(['r1', 'r2']);
-  });
-});
-
 describe('the Regia opacity setting', () => {
   it('40-100 %, fully opaque by default, free (not protected)', () => {
     expect(DEFAULTS.regiaOpacity).toBe(100);

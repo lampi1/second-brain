@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { localPath } from '../../open-path';
+import { narrowCodex, type AgentPolicy } from '../../agents/tool-policy';
 
 export interface CodexExecutionPolicy {
   approvalPolicy: 'on-request' | 'never';
@@ -14,8 +15,9 @@ export interface CodexExecutionPolicy {
 let readRoots: () => readonly string[] = () => [];
 /** App-owned settings provider, read at launch and every new turn; tests can reset it to an empty provider. */
 export function setCodexAutonomyRoots(read: () => readonly string[]): void { readRoots = read; }
-export function codexPolicyFor(cwd: string, readOnly = false): CodexExecutionPolicy {
-  return resolveCodexPolicy(cwd, readRoots(), readOnly);
+/** `agent`: the run's agent policy (A2), which only narrows the folder's policy. */
+export function codexPolicyFor(cwd: string, readOnly = false, agent?: AgentPolicy | null): CodexExecutionPolicy {
+  return narrowCodex(resolveCodexPolicy(cwd, readRoots(), readOnly), agent);
 }
 
 const real = (file: string): string => fs.realpathSync.native(file);

@@ -2,6 +2,7 @@
 // app directly, or to a chat the app only reads (Claude desktop, Cursor IDE: it has a mailbox in the brain) through the
 // Regia, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia) because a
 // message makes a model work. Used by Adesso.
+import { Select } from '../../components/Select';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { chatName } from '@shared/regia';
@@ -92,11 +93,11 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
     <div className="bx-composer" data-testid="bx-composer">
       <div className="bx-row">
         <label className="small muted" htmlFor="bx-to">{t('brainPages.composer.label')}</label>
-        <select id="bx-to" className="bx-select" value={cur ? keyOf(cur) : ''} onChange={e => onTarget(e.target.value)} aria-label={t('brainPages.composer.selectLabel')}>
+        <Select id="bx-to" className="bx-select" value={cur ? keyOf(cur) : ''} onChange={e => onTarget(e.target.value)} aria-label={t('brainPages.composer.selectLabel')}>
           {!cur && <option value="" disabled>{t('brainPages.composer.selectEmpty')}</option>}
           {app.length > 0 && <optgroup label={t('brainPages.composer.selectGroup1')}>{app.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
           {regia && mailboxes.length > 0 && <optgroup label={t('brainPages.composer.selectGroup2')}>{mailboxes.map(t => <option key={keyOf(t)} value={keyOf(t)}>{t.name}</option>)}</optgroup>}
-        </select>
+        </Select>
         {cur?.kind === 'mailbox' && <span className="small muted">{t('brainPages.composer.viaRegia')}</span>}
         {target && !chosen && <span className="small" style={{ color: 'var(--bx-amber)' }}>{t('brainPages.composer.chatGone')}</span>}
       </div>

@@ -1,77 +1,45 @@
-// Default dashboard: existing map, source-preserving local metrics and an explicit send to the existing app Regia.
-import { useEffect, useRef, useState } from 'react';
-import { useBrain } from '../api';
-import { BrainMapView } from '../map/BrainMap';
-import { HOME_CARDS, homeCost, homeTables } from './home-cards';
-import { app, send, useApp } from '../../store/store';
-import { requestFocus, setRegiaOpen, setRegiaTab } from '../../store/ui';
-import { newAppRegia } from '../../store/improve';
-import { liveSource } from '../../lib/liveSource';
-import { t, locale } from '../../i18n';
+// The Grindhouse (page id 'home') is the one place for the agents, beside the persistent Orchestrator (SPEC 19):
+// actionable requests, then the agents' strips (components/AgentStrips.tsx), grouped and ordered by the Orchestrator
+// (lib/agent-order.ts: by area, start order inside a group; never by the user); focus mode opens from a strip.
+// Requests keep the existing review/answer flow; nothing here sends or approves anything by itself.
+import { useApp } from '../../store/store';
+import { isBusy, sameList } from '../../store/state';
+import { focusRequest } from '../../actions';
+import { openModal } from '../../store/ui';
+import { IconPlus } from '../../components/Icons';
+import { t } from '../../i18n';
+import { AgentStrips, AgentStripsActions } from '../../components/AgentStrips';
+import { orchestratorIdOf } from '../../lib/regia-route';
+import { HeadlineLine, useHeadline } from './HomeHeadline';
 import './home.css';
 
 export function Home({ nav }: { nav: (target: string) => void }) {
-  const question = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { question.current?.focus({ preventScroll: true }); }, []);
-  const cost = useBrain('/api/cost?days=7', homeCost);
-  const tables = useBrain('/api/tables', homeTables);
-  const regia = useApp(s => s.order.find(id => s.chats[id]?.appRegia && !s.chats[id]?.closedAt) ?? null);
-  const info = useApp(s => s.info), settings = useApp(s => s.settings);
-  const engines = (info?.engines ?? []).filter(e => e.trusted && settings?.engineOn[e.id]===true && settings.engines[e.id] !== false);
-  const [engineId, setEngineId] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [text, setText] = useState('');
-  const [message, setMessage] = useState('');
-  const showRegia = (id: string) => { setRegiaTab(id); setRegiaOpen(true); requestFocus(id); };
-  const createRegia = async () => {
-    const engine = engines.find(e => e.id === engineId);
-    if (!engine || creating) return;
-    setCreating(true);
-    try {
-      const chat = await newAppRegia(engine.id);
-      if (chat) showRegia(chat.id); else setMessage(t('home.notSent'));
-    } finally { setCreating(false); }
-  };
-  const submit = () => {
-    // Resolve again at the gesture boundary: do not send to a closed/replaced Regia captured by an old render.
-    const s = app.get(), id = s.order.find(id => s.chats[id]?.appRegia && !s.chats[id]?.closedAt);
-    if (!id) { setMessage(t('home.noRegia')); return; }
-    const result = send(id, text);
-    if (result === 'empty') { setMessage(t('home.notSent')); return; }
-    setText(''); setMessage(t(result === 'queued' ? 'home.queued' : 'home.sent')); showRegia(id);
-  };
+  const chats = useApp(s => s.order.flatMap(id => { const c = s.chats[id]; return c && !c.closedAt && id !== orchestratorIdOf(s) ? [c] : []; }), sameList);
+  const orchestrator = useApp(s => { const id = orchestratorIdOf(s); return id ? s.chats[id]?.title ?? null : null; });
+  const byId = new Map(chats.map(c => [c.id, c]));
+  const pending = useApp(s => [...s.pending].sort((a, b) => a.at - b.at), sameList);
+  const working = chats.filter(isBusy).length;
+  const headline = useHeadline();
   return <div className="home-page" data-testid="home">
-    <section className="home-map" aria-label={t('home.map')}>
-      <BrainMapView embedded onClose={() => {}} onNavigate={nav} live={liveSource} onOpenChat={id => nav(`workspace/chat-${id}`)} />
+    <header className="home-heading">
+      <span className="home-eyebrow">{t('home.title')}</span>
+      <h1>{t('home.greeting', { name: 'Brother' })}</h1>
+      <HeadlineLine state={headline} />
+      <p>{t('home.activityLead')}</p>
+      <div className="home-overview"><span><i className={working ? 'home-live-dot' : ''} />{t('home.workingCount', { count: working })}</span><span>{t('home.reviewCount', { count: pending.length })}</span></div>
+    </header>
+    <section className="home-section home-waiting" aria-labelledby="home-waiting-title">
+      <div className="home-section-head"><h2 id="home-waiting-title">{t('home.waiting')}</h2><span className="home-count">{pending.length}</span></div>
+      {pending.length ? <div className="home-request-list">{pending.map(req => <button type="button" key={`${req.chatId}/${req.id}`} className="home-request" onClick={() => focusRequest(req)} data-testid={`home-request-${req.id}`}>
+        <span className="home-request-icon" aria-hidden="true">{req.type === 'command' ? '›_' : req.type === 'permission' ? '◇' : '?'}</span>
+        <span className="home-row-copy"><strong>{req.title}</strong><small>{byId.get(req.chatId)?.title || orchestrator || t('home.orchestrator')} · {req.type === 'command' ? t('home.commandReview') : req.type === 'permission' ? t('home.permissionReview') : t('home.questionReview')}</small></span>
+        <span className="home-row-arrow" aria-hidden="true">↗</span>
+      </button>)}</div> : <p className="home-calm">{t('home.clear')}</p>}
     </section>
-    <div className="home-content">
-      <header><h1>{t('home.greeting', { name: 'Brother' })}</h1><p>{t('home.lead')}</p></header>
-      <section className="home-cards" aria-label={t('home.summary')}>
-        {HOME_CARDS.map(card => {
-          const source = card.id === 'spend' ? cost : tables;
-          const reading = card.read({ cost: cost.data, tables: tables.data });
-          return <article className="bx-card home-card" key={card.id} data-testid={`home-card-${card.id}`}>
-            <h2>{card.title()}</h2><strong className="home-value">{reading?.value ?? '—'}</strong>
-            <p>{reading?.explanation ?? t(source.loading ? 'home.loading' : 'home.unavailable')}</p>
-            {reading && <small>{reading.source}</small>}
-            {source.at != null && <small>{t('home.updated')} {new Intl.DateTimeFormat(locale(), { dateStyle: 'short', timeStyle: 'short' }).format(source.at)}</small>}
-            {source.error && <p role="status">{t('home.readFailed')} <button type="button" className="bx-btn s" onClick={() => source.reload()}>{t('home.retry')}</button></p>}
-            <button type="button" className="bx-btn" onClick={() => nav(card.target)}>{t('home.details')}</button>
-          </article>;
-        })}
-      </section>
-      <section className="bx-card home-conversation" aria-label={t('home.conversation')}>
-        <h2>{t('home.conversation')}</h2><p>{regia ? t('home.ask') : t('home.noRegia')}</p>
-        {!regia && <div><label htmlFor="home-engine">{t('home.chooseEngine')}</label><select id="home-engine" value={engineId} onChange={e => setEngineId(e.target.value)} disabled={creating}><option value="">{t('home.chooseEngine')}</option>{engines.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select><button type="button" className="bx-btn" disabled={!engineId || creating} onClick={() => void createRegia()}>{t('home.createRegia')}</button></div>}
-        <form onSubmit={e => { e.preventDefault(); submit(); }}>
-          <label htmlFor="home-question">{t('home.question')}</label>
-          <textarea ref={question} id="home-question" value={text} onChange={e => setText(e.target.value)} placeholder={t('home.placeholder')} rows={3} />
-          <button type="submit" className="bx-btn" disabled={!regia || !text.trim()}>{t('home.send')}</button>
-          {regia && <button type="button" className="bx-btn" onClick={() => showRegia(regia)}>{t('home.openRegia')}</button>}
-        </form>
-        <p role="status">{message}</p>
-        <div className="home-links"><button type="button" className="bx-btn" onClick={() => nav('agenti')}>{t('home.manageAgents')}</button><button type="button" className="bx-btn" onClick={() => nav('migliora')}>{t('home.improve')}</button><button type="button" className="bx-btn" onClick={() => nav('confronto')}>{t('home.compare')}</button></div>
-      </section>
-    </div>
+    <section className="home-section" aria-labelledby="home-agents-title">
+      <div className="home-section-head"><h2 id="home-agents-title">{t('home.agents')}</h2><span className="home-count">{chats.length}</span><span className="sp" /><AgentStripsActions /><button type="button" className="btn btn-ghost btn-s" onClick={() => openModal('newChat')}><IconPlus size={14} /> {t('home.newAgent')}</button></div>
+      <AgentStrips />
+    </section>
+    <footer className="home-footer"><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('agenti')} data-testid="home-manage-agents">{t('home.manageAgents')}</button><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('mappa')}>{t('home.map')} ↗</button><span className="sp" /><span>{t('home.regiaBeside')}</span></footer>
   </div>;
 }

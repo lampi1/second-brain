@@ -1,6 +1,6 @@
 // E2E of the review fixes (frozen demo): sanitized markdown (no area/map/forms/frames, no file:/UNC/protocol-relative
 // URLs), the global layer never answering from another control, the keyboard handed back to the app (toast action,
-// Ctrl+J to an app card, last card answered), the layer reloading after a crash, older chats in Corsie, free text
+// Ctrl+J to an app card, last card answered), the layer reloading after a crash, tabs without a snapshot, free text
 // for Cursor questions too (with a note), long permission details keeping the buttons visible, a failed answer coming
 // back answerable, browser tiles without a snapshot showing title and address.
 import { expect, test, type ElectronApplication } from '@playwright/test';
@@ -56,7 +56,7 @@ test('S2/S3/C8: Enter on "Apri" never answers; a toast action and the last answe
   const layer = await layerPage(app);
   await layer.getByTestId('layer-open').focus();
   await layer.keyboard.press('Enter');
-  await expect(page.getByTestId('view-mosaico')).toBeVisible(); // "Apri" opened the chat…
+  await expect(page.getByTestId('view-agents')).toBeVisible(); // "Apri" opened the chat…
   await expect(page.getByTestId('request-qa-qa-q1')).toBeVisible(); // …and did not answer it
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
   // a toast action hands the keyboard back (a chat's turn failing toasts; a logged error no longer does: lib/notify.ts
@@ -115,8 +115,7 @@ test('C2/C10: an old finished chat is reachable from the palette, tabs without a
   const { app, page } = await launchDemo();
   await demo(app, d => d.clearThumbs(), null);
   await expect(page.getByTestId('browser-info-tab-qa')).toContainText('Rimborso 2026/118');
-  await page.getByTestId('view-toggle-corsie').click();
-  await expect(page.getByTestId('thumb-info-tab-sms')).toContainText('test-2.app.example.com');
+  await expect(page.getByTestId('browser-info-tab-sms')).toContainText('test-2.app.example.com');
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('report settimanale');
   await page.keyboard.press('Enter');
@@ -157,8 +156,8 @@ test('C3/C4/C7: free text for Cursor questions too, with a note; long details ke
   const box = await allow.boundingBox();
   const vh = await layer.evaluate(() => innerHeight);
   expect(box!.y + box!.height).toBeLessThanOrEqual(vh);
-  // C7: back on the grid, a failed answer brings the card back, answerable again
-  await page.getByTestId('nav-workspace').click();
+  // C7: back in the Grindhouse, a failed answer brings the card back, answerable again
+  await page.getByTestId('nav-home').click();
   await demo(app, d => d.failNextAnswer(), null);
   const card = page.locator('[data-request-key^="mappa/"]').first(); // the long permission, in its tile
   await card.focus();

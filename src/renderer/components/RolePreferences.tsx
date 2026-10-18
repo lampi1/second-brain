@@ -1,4 +1,5 @@
 // Explicit role preference preview and reversible durable commits, used only in Settings > My space.
+import { Select } from './Select';
 import { useEffect, useRef, useState } from 'react';
 import { initialRolePresets } from '../../shared/role-preset-catalog';
 import { validatePreset, type ResolvedRole, type RoleSelection } from '../../shared/role-presets';
@@ -12,7 +13,7 @@ export function RolePreferences() {
   const [target, setTarget] = useState('dev'), [preview, setPreview] = useState<(ReturnType<typeof rolePreview> & { expected: string | undefined }) | null>(null);
   const [undo, setUndo] = useState<{ previous: RoleSelection | undefined; applied: string } | null>(null);
   const [error, setError] = useState(false);
-  const previewButton = useRef<HTMLButtonElement>(null), roleSelect = useRef<HTMLSelectElement>(null), [focusTick, setFocusTick] = useState(0), [status, setStatus] = useState('');
+  const previewButton = useRef<HTMLButtonElement>(null), roleSelect = useRef<HTMLButtonElement>(null), [focusTick, setFocusTick] = useState(0), [status, setStatus] = useState('');
   useEffect(() => { if (focusTick) (previewButton.current?.disabled ? roleSelect.current : previewButton.current)?.focus(); }, [focusTick]);
   const returnFocus = () => setFocusTick(n => n + 1);
   const it = lang() === 'it';
@@ -37,9 +38,9 @@ export function RolePreferences() {
     <p className="st-desc">{it ? 'Scegli una composizione di agenti e pagine. Le chat e i permessi restano come sono.' : 'Choose a composition of agents and pages. Chats and permissions stay as they are.'}</p>
     {!catalog && <p role="status">{catalogError ? (it ? 'Catalogo non disponibile.' : 'Catalog unavailable.') : (it ? 'Caricamento agenti…' : 'Loading agents…')}</p>}
     {invalid && <p role="alert">{it ? 'Il ruolo salvato non è utilizzabile. Puoi rimuoverlo e scegliere di nuovo.' : 'The saved role cannot be used. You can remove it and choose again.'}</p>}
-    <label>{it ? 'Ruolo' : 'Role'} <select aria-label={it ? 'Ruolo' : 'Role'} ref={roleSelect} value={target} disabled={!catalog || invalid} onChange={e => { setTarget(e.target.value); setPreview(null); setError(false); }}>
+    <label>{it ? 'Ruolo' : 'Role'} <Select aria-label={it ? 'Ruolo' : 'Role'} ref={roleSelect} value={target} disabled={!catalog || invalid} onChange={e => { setTarget(e.target.value); setPreview(null); setError(false); }}>
       {choices.map(p => <option key={p.id} value={p.id} disabled={!p.available}>{p.title}{!p.available ? (it ? ' — agenti o pagine mancanti' : ' — missing agents or pages') : ''}</option>)}
-    </select></label>{' '}
+    </Select></label>{' '}
     <button ref={previewButton} className="btn btn-ghost" disabled={!catalog || invalid || !choices.find(p => p.id === target)?.available} onClick={() => attempt(() => { setStatus(''); setPreview({ ...rolePreview(raw, target, refs), expected: signature }); })}>{it ? 'Anteprima' : 'Preview'}</button>
     {preview && <div aria-live="polite" data-testid="role-preview">
       <h4>{it ? 'Prima' : 'Before'}</h4>{preview.before ? describe(preview.before) : <p>{it ? 'Nessun ruolo scelto' : 'No role selected'}</p>}

@@ -1,7 +1,7 @@
-// UI state (not data): view, maximized tile, focus mode, open dialog, the current place (chat grid, a brain page, the
+// UI state (not data): maximized tile, focus mode, open dialog, the current place (a brain page, the Grindhouse with the agents, the
 // map) with its back/forward history, the notification center and its read state, the Regia widget (expanded, size,
 // tab, when its replies were last seen; ADR 0021, 0028), toasts, the tile
-// to flash/focus, the chat whose hand-off dialog is open, and the preferences the app remembers across restarts (view, density, theme, sidebar, the Regia widget,
+// to flash/focus, the chat whose hand-off dialog is open, and the preferences the app remembers across restarts (density, theme, the Orchestrator column,
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, PermissionMode } from '@shared/contract';
@@ -15,20 +15,18 @@ import { DEFAULT_V, type DockSize } from '../lib/regia-dock';
 import { createStore } from './createStore';
 import{t,type TextKey}from'../i18n';
 
-export type View = 'mosaico' | 'corsie';
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
 export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'regiaRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
-export const pageLabel = (id: string): string => (id === 'workspace' ? t('home.agents') : id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
+export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
 export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.page==='esplora'?readFileViewArg(p.arg??undefined):null;const arg=file?`${file.path}${file.line?`:${file.line}`:''}`:p.arg;return `${p.page==='file'||p.page==='esplora'?t('viewer.title'):pageLabel(p.page)}${arg ? ` · ${arg}` : ''}${p.element ? ` · ${p.element.replace(/^chat-/, '')}` : ''}`;};
 
-/** A place in the app: the chat grid, a brain page or the full-screen map; `element` = what to highlight there. */
-/** A place in the app: the chat grid, a brain page or the full-screen map. `arg` is what the page shows inside
+/** A place in the app: a brain page (the Grindhouse, 'home', holds the agents) or the full-screen map. `arg` is what the page shows inside
  *  ("esplora" → a file, "costi" → a period; "mappa" → "tutto", "flat" or a piece to focus); `element` = what to
- *  highlight on the chat grid. */
-export interface Place { page: 'workspace' | 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
+ *  highlight there (a chat or tab strip in the Grindhouse). */
+export interface Place { page: 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
 
 export interface Prefs {
   /** Validate against the loaded agent/page catalogs before use; preserve invalid saved data for explicit recovery. */
@@ -36,9 +34,6 @@ export interface Prefs {
   appearance:AppearancePreference;
   chatPanelsV:0|1;
   chatExpanded:Record<string,boolean>;
-  regiaPlacement:'top'|'corner';
-  regiaTopHeight:number|null;
-  view: View;
   density: Density;
   theme: Theme;
   /** the Regia widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
@@ -49,20 +44,13 @@ export interface Prefs {
   regiaSizeV: number;
   regiaTab: string | null;
   regiaSeenAt: number;
-  /** Mosaico column/row fractions, per column/row count ("3" → [0.3, 0.4, 0.3]) */
-  cols: Record<string, number[]>;
-  rows: Record<string, number[]>;
-  /** chat | browser split of the focus mode and of Corsie's "big browser" pair */
+  /** chat | browser split of the focus mode */
   pairSplit: number;
   feedOpen: boolean;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
   lastFocus: string | null;
-  /** the left navigation shows only icons */
-  navCollapsed: boolean | null;
   /** "Nascondi browser" (Ctrl+Shift+B): browser tiles off screen, the chats take the room; the tabs keep working parked */
   browsersHidden: boolean;
-  /** Mosaico: width of the browser zone (right of the chats), as a fraction of the area */
-  browserZone: number;
 }
 
 export interface Toast { id: number; text: string;labelKey?:TextKey; tone: 'info' | 'ok' | 'warn' | 'err'; action?: { label: string; run: () => void }; ttl: number;expiresAt:number }
@@ -79,7 +67,7 @@ export interface UiState {
   handoffChat: string | null;    // the chat whose hand-off the 'handoff' dialog shows
   handoffSession: string | null; // set: the note one cold continuation started from (read only, ADR 0031)
   ctxHidden: Record<string, number>; // long-chat notice hidden by the user, per chat: the context size when hidden
-  page: BrainPageId | null;      // a brain page replaces the view (the Regia overlay floats over it too)
+  page: BrainPageId;             // the page on screen; 'home' (the Grindhouse) holds the agents' strips and focus mode
   pageArg: string | null;        // what the page shows inside (a file, a period, a tab)
   map: boolean;                  // the full-screen 3D map
   mapArg: string | null;         // "tutto" (every file), "flat" (the 2D list) or a piece to focus
@@ -90,8 +78,6 @@ export interface UiState {
   read: ReadState;               // what was read / seen (badges, center), remembered
   highlight: { id: string; n: number } | null;
   toastDismissed: string[];      // event ids whose toast was closed or used
-  pair: string | null;           // Corsie: tab shown big next to its chat
-  open: Record<string, string>;  // Corsie: column → chat expanded by hand
   lanePeek: boolean;             // focus mode: the lane shown on Ctrl+J
   toasts: Toast[];
   flash: { key: string; n: number } | null;
@@ -114,10 +100,10 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:1,chatExpanded:{},regiaPlacement:'top',regiaTopHeight:null,
-  view: 'mosaico', density: 'comfortable', theme: 'system', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, cols: {}, rows: {}, pairSplit: 0.42, feedOpen: false,
-  newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null, navCollapsed: null,
-  browsersHidden: false, browserZone: 0.3,
+  appearance:readAppearance(null),chatPanelsV:1,chatExpanded:{},
+  density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42, feedOpen: false,
+  newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
+  browsersHidden: false,
 };
 const READ_KEY = 'sb.read.v1';
 function readRead(): ReadState {
@@ -133,22 +119,18 @@ function readRead(): ReadState {
 export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
   if (!raw) return { ...defaultPrefs, regiaSeenAt: at };
   try {
-    // regiaRect: the floating panel's place before ADR 0028, dropped
-    const { regiaRect: _old, ...p } = JSON.parse(raw) as Partial<Prefs> & { regiaRect?: unknown };
+    // Retired and dropped: regiaRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
+    // Corsie views); navCollapsed (the icon-only sidebar); regiaPlacement, regiaTopHeight (the Orchestrator at the top).
+    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
       chatPanelsV:p.chatPanelsV===1?1:0,
       chatExpanded:p.chatExpanded&&typeof p.chatExpanded==='object'&&!Array.isArray(p.chatExpanded)?Object.fromEntries(Object.entries(p.chatExpanded).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{},
-      // Existing installs keep the explicit corner/open preferences. Only a fresh profile defaults to the top.
-      regiaPlacement:p.regiaPlacement==='top'?'top':'corner',
-      regiaTopHeight:typeof p.regiaTopHeight==='number'&&Number.isFinite(p.regiaTopHeight)?Math.max(180,Math.min(700,p.regiaTopHeight)):null,
-      view: 'mosaico',
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
-      cols: p.cols && typeof p.cols === 'object' ? p.cols : {},
-      rows: p.rows && typeof p.rows === 'object' ? p.rows : {},
       browsersHidden: p.browsersHidden === true,
       regiaOpen: p.regiaOpen === true,
       // a size saved under an older default goes back to the new default once (ADR 0028, 2026-10-13: wider and lower)
@@ -156,7 +138,6 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       regiaSizeV: DEFAULT_V,
       regiaTab: typeof p.regiaTab === 'string' ? p.regiaTab : null,
       regiaSeenAt: typeof p.regiaSeenAt === 'number' && Number.isFinite(p.regiaSeenAt) ? p.regiaSeenAt : at,
-      browserZone: typeof p.browserZone === 'number' && p.browserZone >= 0.15 && p.browserZone <= 0.7 ? p.browserZone : defaultPrefs.browserZone,
     };
   } catch { return { ...defaultPrefs, regiaSeenAt: at }; }
 }
@@ -171,7 +152,7 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home', pair: null, open: {},
+  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], regiaFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, newChatRegia: false, read: readRead(), highlight: null, toastDismissed: [],
 });
@@ -183,7 +164,7 @@ export function setRead(fn: (r: ReadState) => ReadState): void {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 export function setPrefs(patch: Partial<Prefs>): void {
-  ui.set(s => ({ ...s, prefs: { ...s.prefs, ...patch, view: 'mosaico' } }));
+  ui.set(s => ({ ...s, prefs: { ...s.prefs, ...patch } }));
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(savePrefs, 150);
 }
@@ -207,14 +188,12 @@ export function setChatExpanded(id:string,expanded:boolean):void{
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });
 
-export const setView = (view: View) => { setPrefs({ view }); ui.set(s => ({ ...s, maximized: null, pair: null })); };
-/** "Nascondi browser" on/off (remembered); a browser shown big (Corsie pair, maximized) closes with it. */
+/** "Nascondi browser" on/off (remembered); a maximized browser closes with it. */
 export function toggleBrowsers(): void {
   const hide = !ui.get().prefs.browsersHidden;
   setPrefs({ browsersHidden: hide });
-  ui.set(s => ({ ...s, pair: hide ? null : s.pair, maximized: hide && s.maximized?.startsWith('browser:') ? null : s.maximized, announce: hide ? 'Browser nascosti: continuano a lavorare' : 'Browser visibili' }));
+  ui.set(s => ({ ...s, maximized: hide && s.maximized?.startsWith('browser:') ? null : s.maximized, announce: hide ? 'Browser nascosti: continuano a lavorare' : 'Browser visibili' }));
 }
-export const toggleView = () => setView('mosaico'); // compatibility alias for old app-control clients
 export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal, newChatRegia: false }));
 /** "Nuova chat" as "Nuova Regia" (the overlay's +): name instead of title, no first message needed */
 export const openNewRegia = () => ui.set(s => ({ ...s, modal: 'newChat', newChatRegia: true }));
@@ -226,8 +205,8 @@ export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ 
 export const hideCtxNotice = (chatId: string, tokens: number) => ui.set(s => ({ ...s, ctxHidden: { ...s.ctxHidden, [chatId]: tokens } }));
 export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key }));
 export const setFocused = (key: string | null) => { if (ui.get().focused !== key) ui.set(s => ({ ...s, focused: key })); };
-/** Low level: show a page (or the grid with null) without touching the history (use actions.go). */
-export const openPage = (page: BrainPageId | null, arg: string | null = null) => ui.set(s => ({ ...s, page, pageArg: page ? arg : null, map: false, maximized: null }));
+/** Low level: show a page without touching the history (use actions.go). */
+export const openPage = (page: BrainPageId, arg: string | null = null) => ui.set(s => ({ ...s, page, pageArg: arg, map: false, maximized: null }));
 export const setMap = (map: boolean, arg: string | null = null) => ui.set(s => ({ ...s, map, mapArg: map ? arg : null }));
 export const setCenter = (center: boolean) => ui.set(s => ({ ...s, center }));
 /** The Regia widget expanded (the panel) or collapsed (the bar); remembered. Both ways its replies count as seen: what
@@ -239,8 +218,6 @@ let hlN = 0;
 export const highlight = (id: string) => ui.set(s => ({ ...s, highlight: { id, n: ++hlN } }));
 export const dismissEventToasts = (ids: string[]) => ui.set(s => ({ ...s, toastDismissed: [...new Set([...s.toastDismissed, ...ids])].slice(-500) }));
 export const setFocusMode = (chatId: string | null) => ui.set(s => ({ ...s, focusMode: chatId, maximized: null, lanePeek: false }));
-export const setPair = (tabId: string | null) => ui.set(s => ({ ...s, pair: tabId }));
-export const openInColumn = (column: string, chatId: string) => ui.set(s => ({ ...s, open: { ...s.open, [column]: chatId } }));
 export const setLanePeek = (lanePeek: boolean) => ui.set(s => ({ ...s, lanePeek }));
 export const announce = (text: string) => ui.set(s => ({ ...s, announce: text }));
 

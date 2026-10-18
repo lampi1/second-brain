@@ -1,7 +1,7 @@
 // Open hand-offs (an agent waits for the user in one of its tabs: login, MFA, CAPTCHA), kept live from main's
 // 'browser:handoff' events after one initial 'browser:handoffs' load, and the user's answers (Fatto / Non riesco /
 // Copia). Starts itself on first use, so it needs no wiring in store.ts. Used by HandoffBanner.tsx and by the views
-// that hide browsers (Mosaico, FocusView: a tab waiting for the user stays visible).
+// that hide browsers (AgentStrips, FocusView: a tab waiting for the user stays visible).
 import type { BrowserHandoff } from '@shared/contract';
 import { sb } from '../sb';
 import { createStore } from './createStore';

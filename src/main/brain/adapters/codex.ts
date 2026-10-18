@@ -11,6 +11,7 @@ import { log } from '../../log';
 import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './domains';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
+import type { AgentPolicy } from '../../agents/tool-policy';
 
 export interface CodexLaunch {
   configArgs: string[];
@@ -30,6 +31,8 @@ export interface CodexLaunchInput {
   brain?: boolean;
   /** the chat being started (only for the log line) */
   chatId?: string;
+  /** the agent's tool policy and ceiling (A2): they only narrow the folder's policy */
+  agentPolicy?: AgentPolicy | null;
 }
 
 /** A value safe on a cmd.exe command line and in a -c override (chats/cli.ts cliArgv's plain-argument rule). */
@@ -56,7 +59,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   const rules = i.domains && i.brain !== undefined ? null : launchRules();
   const domains = i.domains ?? rules?.domains ?? [];
   const brain = i.brain ?? rules?.codex ?? true;
-  const policy = codexPolicyFor(i.cwd ?? '', i.readOnly);
+  const policy = codexPolicyFor(i.cwd ?? '', i.readOnly, i.agentPolicy);
   const approval: CodexApproval = policy.approvalPolicy;
   const sandbox: CodexSandbox = policy.sandbox;
   const c = [`approval_policy=${approval}`, `sandbox_mode=${sandbox}`];

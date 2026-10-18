@@ -10,7 +10,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { chunkText } from '../../src/main/search/hybrid/chunk';
 import { allowedTypos, editDistance, nearWords } from '../../src/main/search/hybrid/typo';
-import { Store } from '../../src/main/search/hybrid/store';
+import { openStore, Store } from '../../src/main/search/hybrid/store';
 import { BRAIN, Engine, queryWords, type Hit } from '../../src/main/search/hybrid/engine';
 import { downloadModel, meanNorm, type Embedder } from '../../src/main/search/hybrid/embedder';
 import { topK } from '../../src/main/search/hybrid/service';
@@ -145,6 +145,18 @@ describe('Store on disk', () => {
     const again = new Store(file, null);
     expect(again.counts('x')).toMatchObject({ docs: 1, chunks: 1 });
     again.close();
+  });
+  it('rebuilds a corrupt index file instead of failing at every start (the bad file is closed, so Windows can delete it)', () => {
+    const file = path.join(mkdir(), 'index.db');
+    fs.writeFileSync(file, Buffer.alloc(4096, 'not a database '));
+    expect(() => new Store(file, null)).toThrow(/not a database/);
+    fs.rmSync(file); // EBUSY on Windows when the failed open kept the file
+    fs.writeFileSync(file, Buffer.alloc(4096, 'not a database '));
+    fs.writeFileSync(`${file}-wal`, 'junk');
+    const s = openStore(file, null);
+    s.put({ key: 'brain:a.md', size: 1, mtimeMs: 1 }, [{ line: 1, text: 'hello world' }]);
+    expect(s.counts('x')).toMatchObject({ docs: 1, chunks: 1 });
+    s.close();
   });
 });
 

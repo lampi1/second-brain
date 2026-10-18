@@ -54,14 +54,14 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   // Ctrl+J: the queue, the oldest first, with the keyboard; quiet mode over
   await page.keyboard.press('Control+J');
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Regia');
+  await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   await expect(page.getByTestId('qwin-count')).toHaveText('3');
   await expect(page.getByTestId('qwin-off')).toHaveCount(0); // "Domande in finestra" is off: this is only the queue
   await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
   // any of them first: Feedback now, the Regia's stays
   await page.getByTestId('qwin-pick').filter({ hasText: 'App · Feedback' }).click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
-  await expect(page.getByTestId('qwin-pick').filter({ hasText: 'Regia' })).toBeVisible();
+  await expect(page.getByTestId('qwin-pick').filter({ hasText: 'Orchestrator' })).toBeVisible();
   await page.mouse.move(2, 2);
   await shot(page, 'answer-later-open');
   // Esc: back in the queue

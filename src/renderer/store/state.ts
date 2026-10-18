@@ -199,26 +199,6 @@ export function toFlush(prev: ChatSummary | undefined, next: ChatSummary, queue:
   return queue[0] ?? null;
 }
 
-/** Corsie columns: waiting (oldest request first) and working: the busy chats (creation order), then the finished
- *  ones still open (newest first) until they close by themselves (lib/autoclose.ts). */
-export function corsie(s: Pick<AppState, 'chats' | 'order' | 'pending'>): { waiting: ChatSummary[]; working: ChatSummary[] } {
-  const oldest = new Map<string, number>();
-  for (const p of s.pending) if (!oldest.has(p.chatId)) oldest.set(p.chatId, p.at);
-  const waiting: ChatSummary[] = [];
-  const working: ChatSummary[] = [];
-  const done: ChatSummary[] = [];
-  for (const id of s.order) {
-    const c = s.chats[id];
-    if (!c || c.isRegia || c.closedAt || c.space === 'app') continue; // closed chats: the palette (Ctrl+K); app chats: their section
-    if (c.state === 'waiting' || c.state === 'error' || c.pending > 0 || oldest.has(id)) waiting.push(c);
-    else if (isBusy(c) || c.queued) working.push(c); // waiting in the CPU queue (ADR 0036): about to work, never "finite"
-    else done.push(c);
-  }
-  waiting.sort((a, b) => (oldest.get(a.id) ?? a.updatedAt) - (oldest.get(b.id) ?? b.updatedAt));
-  done.sort((a, b) => b.updatedAt - a.updatedAt);
-  return { waiting, working: [...working, ...done] };
-}
-
 export function runningCount(s: Pick<AppState, 'chats'>): number {
   let n = 0;
   for (const c of Object.values(s.chats)) if (isBusy(c)) n++;

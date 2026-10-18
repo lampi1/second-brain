@@ -14,8 +14,9 @@ vi.mock('electron', () => ({
     loadURL = vi.fn(async () => undefined);
     constructor() { super(); windows.all.push(this); }
     isDestroyed() { return false; }
-    show() { /* no native window in unit tests */ }
-    showInactive() { /* no native window in unit tests */ }
+    show = vi.fn();
+    showInactive = vi.fn();
+    maximize = vi.fn();
   },
   screen: { getAllDisplays: () => [{ bounds: { x: 0, width: 1600 } }] },
   shell: { openExternal: vi.fn() },
@@ -26,6 +27,21 @@ vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), erro
 vi.mock('../../src/main/health', () => ({ recordRenderer: vi.fn() }));
 
 import { createWindow } from '../../src/main/window';
+
+it('maximizes visible startup but preserves hidden QA geometry', () => {
+  vi.stubEnv('SB_HIDDEN', '0');
+  const visible = createWindow('/app/out', false);
+  visible.emit('ready-to-show');
+  expect(visible.maximize).toHaveBeenCalledOnce();
+  expect(visible.show).toHaveBeenCalledOnce();
+  vi.stubEnv('SB_HIDDEN', '1');
+  const hidden = createWindow('/app/out', false);
+  hidden.emit('ready-to-show');
+  expect(hidden.maximize).not.toHaveBeenCalled();
+  expect(hidden.show).not.toHaveBeenCalled();
+  expect(hidden.showInactive).toHaveBeenCalledOnce();
+  vi.unstubAllEnvs();
+});
 
 it('can install window protection while keeping renderer recovery dormant until backend registration', async () => {
   const win = createWindow('/app/out', false);

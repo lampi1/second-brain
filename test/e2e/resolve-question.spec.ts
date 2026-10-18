@@ -1,8 +1,8 @@
 // End-to-end: a work chat's question answered by the user in the Regia (app_resolve_question, main/appctl/tools.ts,
 // ADR 0017). The Regia calls the tool over the app's MCP: blocked while the user has said nothing in the Regia since
 // the question opened; after he writes there, the work chat's panel closes, the chat gets the answer marked "Risposto
-// in Regia dall'utente" and the question leaves the work chat's tile (where it waits: the Mosaico has no "Ti aspettano"
-// strip, ADR 0019) and the open requests. Screenshot: test-results/shots/resolve-question.png.
+// in Regia dall'utente" and the question leaves the work chat's tile (where it waits: the agents workspace has no "Ti
+// aspettano" strip, ADR 0019) and the open requests. Screenshot: test-results/shots/resolve-question.png.
 import { expect, test } from '@playwright/test';
 import { McpClient } from './fixture-server';
 import { launchDemo, shot } from './helpers';
