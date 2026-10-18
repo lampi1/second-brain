@@ -21,11 +21,11 @@ export const KIND_LABELS: Record<JobKind, string> = {
 // ── classifier ──────────────────────────────────────────────────────────────────────────────────────────────────────
 // Each pattern that matches scores 1 for its kind; the highest score wins, ties go to the earlier kind in this list.
 const RULES: [JobKind, RegExp[]][] = [
-  ['qa', [/\bqa\b/, /\btest ?case\b/, /\btest ?plan\b/, /\be2e\b/, /\bcollaud/, /\brieseg/, /\b(prova|esegui|lancia) (il |i |un )?test/, /\bverifica (la |il )?(pr|fix)\b/, /\bsmoke\b/, /\bretest/, /\btesta(re|lo|la)?\b/, /\btest (the|this) (pr|fix)\b/]],
+  ['qa', [/\bqa\b/, /\btest ?case\b/, /\btest ?plan\b/, /\be2e\b/, /\bcollaud/, /\brieseg/, /\b(prova|esegui|lancia) (il |i |un )?test/, /\bverifica (la |il )?(pr|fix)\b/, /\bsmoke\b/, /\bretest/, /\btesta(re|lo|la)?\b/, /\btest (the|this) (pr|fix)\b/, /\baccettazion/, /\bacceptance\b/, /\bstaging\b/]],
   ['review', [/\breview/, /\brevision/, /\brived/, /\brecensi/, /\bcontrolla (la |il )?(pr|diff|codice)\b/, /\bguarda (la |il )?(pr|diff)\b/, /\bcode ?review\b/]],
   ['fix', [/\bfix/, /\bbug/, /\berror[ei]?\b/, /\berrors\b/, /\bcrash/, /\brott[oaie]\b/, /\bbroken\b/, /\bnon (funziona|va|parte)\b/, /\b(doesn'?t|does not|not) work/, /\bissue\b/, /\bproblem/, /\bsistem[ai]/, /\bcorregg/, /\bregress/, /\bexception\b/, /\beccezion/, /\bfail/, /\bfallisc/, /\b5\d\d\b/, /\bhotfix/]],
   ['feature', [/\bimplement/, /\baggiung/, /\badd\b/, /\bcrea(re)?\b/, /\bcreate\b/, /\bbuild\b/, /\bcostruisc/, /\bnuov[ao] (funzionalita|feature|pagina|schermata)\b/, /\bfeature\b/, /\bfeat\b/, /\bsviluppa/, /\bdevelop/, /\bmigra/, /\brefactor/, /\bscaffold/, /\bintegra/]],
-  ['research', [/\binvestig/, /\bindag/, /\bricerc/, /\bresearch/, /\banalizz/, /\banaly[sz]/, /\bperche\b/, /\bwhy\b/, /\bcerca\b/, /\btrova\b/, /\bfind\b/, /\bstudia/, /\bexplor/, /\besplor/, /\bconfront/, /\bcompar/, /\broot cause\b/, /\bda quando\b/, /\bchi l'?ha\b/, /\blogs?\b/, /\bstato dell'?arte\b/, /\banalisi\b/, /\bverific[ah]\b/]],
+  ['research', [/\binvestig/, /\bindag/, /\bricerc/, /\bresearch/, /\banalizz/, /\banaly[sz]/, /\bperche\b/, /\bwhy\b/, /\bcerca\b/, /\btrova\b/, /\bfind\b/, /\bstudia/, /\bexplor/, /\besplor/, /\bconfront/, /\bcompar/, /\broot cause\b/, /\bda quando\b/, /\bchi l'?ha\b/, /\blogs?\b/, /\bstato dell'?arte\b/, /\banalisi\b/, /\bverific[ah]\b/, /\balert/, /\ballarm/, /\bincident/, /\boutage/, /\bdiagnos/, /\blatenz/, /\blatency\b/]],
   ['question', [/\?\s*$/, /^(cosa|come|quanto|quanti|quale|quali|qual|dove|quando|chi|what|how|which|where|when|who|is|are|can|does|do|spiegami|spiega|explain|dimmi|tell me)\b/, /\bstatus\b/, /\bspiegazion/, /\bcome siamo messi\b/]],
 ];
 

@@ -2,15 +2,23 @@
 // or creates an agent. Private instructions and past goals stay in main; explanations expose only field/run IDs.
 import { createHash } from 'node:crypto';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { AgentCandidate, AgentClassification } from '../../shared/agent-classifier';
+import { DEFAULT_CLASSIFIER_THRESHOLDS, type AgentCandidate, type AgentClassification, type ClassifierMode } from '../../shared/agent-classifier';
 import { cosine, type HybridSearch } from '../search/hybrid/service';
+import { conceptOf } from '../../shared/work-concepts';
+import { PRESET_PREAMBLE } from '../../shared/agent-presets';
 
 type Embeddings = Pick<HybridSearch, 'status' | 'embed'>;
 type Row = { id: string; text: string; why: AgentCandidate['why'] };
-export const CLASSIFIER_THRESHOLD = 60;
+/** The hybrid channel's starting threshold (kept for callers that name one number). */
+export const CLASSIFIER_THRESHOLD = DEFAULT_CLASSIFIER_THRESHOLDS.hybrid;
 const CACHE_MAX = 6000;
 const BATCH = 16;
 const FULL_COVERAGE = 4;
+/** Field weights of the words channel: a match only in the long instructions (which mention many kinds of work in
+ *  passing, "never write to production") counts less than one in the name, purpose or "when to use". Each field is
+ *  its own row here, so the weight scales the row's score; BM25F (Robertson, Zaragoza & Taylor, CIKM 2004) weighs the
+ *  word counts before saturation instead, which would need the fields merged into one document. */
+const FIELD_WEIGHT: Partial<Record<AgentCandidate['why']['field'], number>> = { instructions: 0.75 };
 /** How long a request waits for the local model before answering with words only (the start dialog and agent_catalog
  *  stay responsive while the worker is busy indexing or the vectors are still being built). */
 export const SEMANTIC_DEADLINE_MS = 2500;
@@ -30,11 +38,13 @@ const stem = (w: string): string => {
   if (w.length > 4 && /[^s]s$/.test(w)) w = w.endsWith('ies') ? w.slice(0, -2) : w.endsWith('es') && w.length > 5 ? w.slice(0, -2) : w.slice(0, -1);
   return w.length >= 5 ? w.replace(/[aeiouy]$/, '') : w;
 };
-/** Topic words: folded case and accents, no stopwords or single characters, stemmed. */
+/** Topic words: folded case and accents, no stopwords or single characters, stemmed. A word of a bilingual work concept
+ *  (shared/work-concepts.ts) becomes that concept's token, so "correggi" in a request meets "fix" in an English
+ *  description; "perché"/"why" and "quando" count there even though they are stopwords elsewhere. */
 const words = (s: string): string[] => (s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').match(/[\p{L}\p{N}]+/gu) ?? [])
-  .filter(w => w.length > 1 && !STOPWORDS.has(w)).map(stem);
+  .flatMap(w => { const c = conceptOf(w); return c ? [`#${c}`] : w.length > 1 && !STOPWORDS.has(w) ? [stem(w)] : []; });
 /** Same stem, or one stem (at least 4 letters) begins the other: "scriv" ~ "scriver", "lent" ~ "lentezz". */
-const same = (q: string, t: string): boolean => q === t || (Math.min(q.length, t.length) >= 4 && (t.startsWith(q) || q.startsWith(t)));
+const same = (q: string, t: string): boolean => q === t || (q[0] !== '#' && t[0] !== '#' && Math.min(q.length, t.length) >= 4 && (t.startsWith(q) || q.startsWith(t)));
 export function classifierRequest(value: unknown): string {
   if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw Error('agent classifier: request must contain 1–2000 characters.');
   return value.trim();
@@ -57,14 +67,16 @@ function lexical(request: string, rows: Row[]): number[] {
     // Softened for long requests: four distinct matched topic words are full coverage, whatever the request's length.
     const coverage = Math.min(1, covered / Math.min(query.length, FULL_COVERAGE));
     return coverage * (0.8 + 0.2 * sum / (sum + 1));
-  });
+  }).map((v, i) => v * (FIELD_WEIGHT[rows[i]!.why.field] ?? 1));
 }
 
 export class AgentClassifier {
   private cache = new Map<string, Float32Array>();
   private pending = new Map<string, Promise<Float32Array>>();
-  /** `embeddings` is the app's one HybridSearch (its warm worker and model); absent = words only. */
-  constructor(private embeddings?: Embeddings, private deadlineMs = SEMANTIC_DEADLINE_MS) {}
+  /** `embeddings` is the app's one HybridSearch (its warm worker and model); absent = words only. `thresholds` = the
+   *  "close enough" line per channel in force (the user's approved calibration, classifier-calibration.ts). */
+  constructor(private embeddings?: Embeddings, private deadlineMs = SEMANTIC_DEADLINE_MS,
+    private thresholds: () => Readonly<Record<ClassifierMode, number>> = () => DEFAULT_CLASSIFIER_THRESHOLDS) {}
 
   /** Vectors by text and mode, from the cache, from an embedding already under way (two callers share it), or embedded
    *  BATCH at a time, one batch after the other: each worker call has its own timeout from the moment it is posted, so a
@@ -118,7 +130,9 @@ export class AgentClassifier {
     const rows: Row[] = [];
     // Only what discovery offers: active and routable (the dashboard's internal agent is never a delegate).
     for (const p of profiles.filter(p => p.status === 'active' && p.routable !== false)) {
-      const fields = { name: p.name, whenToUse: p.manifest?.whenToUse, purpose: p.purpose, instructions: p.instructions.slice(0, 2000) };
+      // The packaged agents' shared preamble (house rules, run-report format) says nothing about the job: left out, it no
+      // longer makes every agent's instructions look alike to both channels.
+      const fields = { name: p.name, whenToUse: p.manifest?.whenToUse, purpose: p.purpose, instructions: p.instructions.replace(PRESET_PREAMBLE, '').trim().slice(0, 2000) };
       for (const [field, text] of Object.entries(fields)) if (text?.trim()) rows.push({ id: p.id, text, why: { field: field as AgentCandidate['why']['field'] } });
       // Only ended, successful runs of the active definition; a known failure overrides a completed marker.
       const past = runs.filter(r => r.agentId === p.id && r.version === p.activeVersion && r.endedAt !== undefined && r.outcome?.verdict !== 'fail' && r.outcome?.verdict !== 'partial'
@@ -140,8 +154,10 @@ export class AgentClassifier {
       if (!best.has(r.id) || score > best.get(r.id)!.score) best.set(r.id, { id: r.id, score, why: r.why });
     });
     const candidates = [...best.values()].sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const noneCloseEnough = !candidates.length || candidates[0]!.score < CLASSIFIER_THRESHOLD;
-    return { candidates, mode, threshold: CLASSIFIER_THRESHOLD, noneCloseEnough, proposal: noneCloseEnough ? 'ask-user-to-create' : null };
+    // each channel has its own scale, so its own line: words scores are lower (four matched topic words are full marks)
+    const threshold = this.thresholds()[mode];
+    const noneCloseEnough = !candidates.length || candidates[0]!.score < threshold;
+    return { candidates, mode, threshold, noneCloseEnough, proposal: noneCloseEnough ? 'ask-user-to-create' : null };
   }
 }
 

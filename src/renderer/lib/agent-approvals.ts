@@ -1,12 +1,13 @@
 // The "Da approvare" inbox's read model and decisions (pure, no window): it gathers every pending change to an agent
 // (Orchestrator definition proposals and update/rollback/archive/restore requests, learned-rule proposals, open version
-// trials, agents in probation, lifecycle suggestions) from the typed IPC channels and the lifecycle queue into one list,
+// trials, agents in probation, lifecycle suggestions, a new threshold for the agent classifier) from the typed IPC channels and the lifecycle queue into one list,
 // and maps each user decision to its one channel (agents:lifecycleDecide for the queue's own entries).
 // Nothing here decides by itself: every write runs only from a click in components/AgentApprovals.tsx.
 // Used by store/agent-approvals.ts (loading, sidebar count) and components/AgentApprovals.tsx (cards, undo).
 import type { AgentDraft, AgentMetrics, AgentProfile, VersionMetrics } from '@shared/agents';
 import { inProbation } from '@shared/agents';
 import type { AgentProposal } from '@shared/agent-authoring';
+import type { ClassifierCalibration } from '@shared/agent-classifier';
 import type { AgentLifecycleClient, AgentLifecycleProposal } from '@shared/agent-lifecycle';
 import type { LearnedRuleProposal } from '@shared/agent-pack';
 import type { Bridge } from '@shared/contract';
@@ -29,11 +30,13 @@ export type ApprovalItem =
   | { type: 'probation'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; metrics: VersionMetrics | null }
   /** A lifecycle suggestion: approve = agents:lifecycleDecide (a model trial opens; update/create/merge/split ask the
    *  Orchestrator for a draft that comes back as a 'definition' item), dismiss = hidden for a while. */
-  | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] };
-export type ApprovalSource = 'definitions' | 'lifecycle' | 'rules' | 'metrics';
+  | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] }
+  /** A threshold for the agent classifier calibrated on the user's confirmed runs: agents:classifierDecide. */
+  | { type: 'classifier'; key: string; at: number; calibration: ClassifierCalibration & { suggested: number } };
+export type ApprovalSource = 'definitions' | 'lifecycle' | 'rules' | 'metrics' | 'classifier';
 export interface ApprovalsState { items: ApprovalItem[]; problems: ApprovalSource[]; lifecycleProblem: string | null }
 
-const ORDER: Record<ApprovalItem['type'], number> = { definition: 0, rule: 1, trial: 2, probation: 3, lifecycle: 4 };
+const ORDER: Record<ApprovalItem['type'], number> = { definition: 0, rule: 1, trial: 2, probation: 3, lifecycle: 4, classifier: 5 };
 
 function show(field: DefinitionField, d: AgentDraft): string | null {
   const v = d[field];
@@ -79,7 +82,8 @@ const versionOf = (m: AgentMetrics | undefined, version: number): VersionMetrics
 export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsState> {
   const catalog = await c.invoke('agents:list', undefined);
   const active = catalog.profiles.filter(p => p.status === 'active'), all = [...catalog.profiles, ...catalog.archived];
-  const [proposals, lifecycle, metrics] = await Promise.allSettled([c.invoke('agents:proposals', undefined), c.lifecycle.read({}), c.invoke('agents:metrics', undefined)]);
+  const [proposals, lifecycle, metrics, calibration] = await Promise.allSettled([c.invoke('agents:proposals', undefined), c.lifecycle.read({}), c.invoke('agents:metrics', undefined),
+    c.invoke('agents:classifierCalibration', undefined)]);
   const snapshot = lifecycle.status === 'fulfilled' ? lifecycle.value : null;
   const problems: ApprovalSource[] = [];
   // the queue carries the pending drafts too: either source is enough
@@ -87,6 +91,7 @@ export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsStat
   if (!drafts) problems.push('definitions');
   if (lifecycle.status === 'rejected') problems.push('lifecycle');
   if (metrics.status === 'rejected') problems.push('metrics');
+  if (calibration.status === 'rejected') problems.push('classifier');
   const items: ApprovalItem[] = [];
   for (const p of drafts ?? []) {
     if (p.state !== 'pending') continue;
@@ -120,6 +125,9 @@ export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsStat
   // nothing left to decide
   for (const p of snapshot?.proposals ?? []) if (p.state === 'pending' && !/^(trial|probation):/.test(p.key) && p.kind !== 'keep' && p.kind !== 'revert' && p.kind !== 'retire')
     items.push({ type: 'lifecycle', key: `life:${p.key}`, at: p.at, proposal: p, agents: p.agentIds.map(id => all.find(a => a.id === id)).filter((a): a is AgentProfile => !!a) });
+  // the key carries the value: a suggestion that moved is a new card, never a stale one decided by mistake
+  if (calibration.status === 'fulfilled' && Array.isArray(calibration.value)) for (const cal of calibration.value) if (cal.pending && cal.suggested !== null)
+    items.push({ type: 'classifier', key: `classifier:${cal.mode}:${cal.suggested}`, at: Date.now(), calibration: { ...cal, suggested: cal.suggested } });
   items.sort((x, y) => ORDER[x.type] - ORDER[y.type] || y.at - x.at);
   return { items, problems, lifecycleProblem: snapshot?.problem ?? null };
 }
@@ -130,9 +138,10 @@ export type ApprovalDecision =
   | { type: 'trial'; decision: 'keep' | 'rollback' }
   | { type: 'probation'; decision: 'keep' } | { type: 'probation'; decision: 'retire'; reason: string }
   /** the lifecycle queue's own entry: a lifecycle suggestion, or the advice on a trial/probation card */
-  | { type: 'queue'; decision: 'approve' | 'dismiss' };
+  | { type: 'queue'; decision: 'approve' | 'dismiss' }
+  | { type: 'classifier'; decision: 'apply' | 'dismiss' };
 /** What a just-made decision can be taken back with, when its backend supports it. */
-export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'rule-trial' | 'retire'; agentId: string; run(): Promise<unknown> }
+export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'rule-trial' | 'retire' | 'classifier'; agentId: string; run(): Promise<unknown> }
 /** The queue entry a card carries, if any (decided with agents:lifecycleDecide). */
 export const queueEntry = (item: ApprovalItem): AgentLifecycleProposal | null =>
   item.type === 'lifecycle' ? item.proposal : item.type === 'trial' || item.type === 'probation' ? item.advice : null;
@@ -174,6 +183,13 @@ export async function decideApproval(c: ApprovalsClient, item: ApprovalItem, d: 
     if (d.decision === 'keep') { await c.invoke('agents:keep', { id }); return null; }
     await c.invoke('agents:retire', { id, reason: d.reason });
     return { kind: 'retire', agentId: id, run: () => c.invoke('agents:restore', { id }) };
+  }
+  if (item.type === 'classifier' && d.type === 'classifier') {
+    const { mode, suggested, approved } = item.calibration;
+    await c.invoke('agents:classifierDecide', { mode, decision: d.decision, value: suggested });
+    if (d.decision === 'dismiss') return null;
+    // undo = the threshold that was in force before: the earlier approved value, or the default
+    return { kind: 'classifier', agentId: '', run: () => c.invoke('agents:classifierDecide', approved === null ? { mode, decision: 'reset' } : { mode, decision: 'apply', value: approved }) };
   }
   throw new Error('Decision does not match the item');
 }

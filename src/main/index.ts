@@ -48,6 +48,7 @@ import { pulseDemoHandlers } from './pulse/demo';
 import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { classifierRequest, classifyByWords } from './agents/classifier';
+import { ClassifierTuning } from './agents/classifier-calibration';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -175,6 +176,9 @@ app.whenReady().then(async () => {
     'agents:list': () => s.agents.list(),
     // the demo has no local model: its ranking is words only, labelled as such in the dialog
     'agents:classify': a => s.classifyAgents ? s.classifyAgents(a?.request) : classifyByWords(classifierRequest(a?.request), s.agents.list().profiles),
+    // the demo has no runs to calibrate from: defaults, nothing pending; a decision there changes nothing on disk
+    'agents:classifierCalibration': () => (s.classifierTuning ?? new ClassifierTuning(null, () => ({ runs: [], profiles: [] }))).read(),
+    'agents:classifierDecide': a => (s.classifierTuning ?? new ClassifierTuning(null, () => ({ runs: [], profiles: [] }))).decide(a),
     'agents:proposals': () => s.agentAuthoring?.proposals() ?? [],
     'agents:proposalDecide': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.decide(a.id, a.accept); },
     'agents:undo': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.undo(a); },

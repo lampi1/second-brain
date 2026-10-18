@@ -315,48 +315,61 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'classifiers',
     title: b('I classificatori', 'The classifiers'),
-    summary: b('Dove l’app smista qualcosa da sola: tutte regole scritte nel codice (regex e soglie), nessuna chiamata a un modello.',
-      'Where the app sorts something by itself: all rules written in code (regexes and thresholds), no model call.'),
+    summary: b('Dove l’app smista qualcosa da sola senza spendere token: regole scritte, un modello locale per scegliere l’agente, e una soglia che impara dai tuoi esiti solo con il tuo sì.',
+      'Where the app sorts something by itself without spending tokens: written rules, a local model to pick the agent, and a threshold that learns from your outcomes only with your yes.'),
     points: [
-      // src/main/brain/routing.ts taskOf; src/main/brain/brain-estimates.ts areaOf
-      b('Tipo di lavoro per l’instradamento: titolo, poi prompt, con le regole del brain (estimates.json); nel dubbio «altro». L’area viene dal prefisso «Area · …».',
-        'Kind of work for routing: title, then prompt, with the brain’s rules (estimates.json); when in doubt "altro". The area comes from the "Area · …" prefix.'),
-      // src/shared/runnable.ts prodRisk; src/main/run/runner.ts
-      b('Comandi di produzione: regex su az, sqlcmd, script ops; se scatta, «Esegui» chiede un secondo clic e il main ricontrolla.',
-        'Production commands: regexes on az, sqlcmd, ops scripts; if one fires, "Run" asks for a second click and main checks again.'),
-      // src/shared/command-ask.ts askedBlocks
-      b('«Comando da eseguire»: un blocco di codice alla fine della risposta, o preceduto da «esegui», «lancia», diventa una richiesta; «ad esempio» no.',
-        '"Command to run": a code block at the end of the reply, or after "run this", "esegui", becomes a request; "for example" does not.'),
-      // src/main/chats/claude.ts, src/main/chats/acp.ts
-      b('Permessi e domande non sono indovinati: arrivano già strutturati dalla CLI (Claude, Cursor, Codex).',
-        'Permissions and questions are not guessed: they arrive already structured from the CLI (Claude, Cursor, Codex).'),
-      // src/shared/waiting.ts waitsForWork
-      b('«Aspetta un lavoro»: frasi come «aspetto la QA» o «in background» impediscono che la chat venga chiusa da sola.',
-        '"Waits for work": sentences like "waiting for QA" or "in background" stop the chat from being auto-closed.'),
+      // src/main/agents/classifier.ts classify(); src/main/agents/discovery.ts agent_catalog; src/renderer/components/AgentStartDialog.tsx
+      b('Scelta dell’agente: la richiesta è confrontata con nome, «quando usarlo», scopo, istruzioni e richieste già riuscite di ogni agente, per parole (BM25) e per significato (modello locale multilingual-e5, offline). Vince il punteggio più alto; sotto la soglia l’app propone di creare un agente. È un indizio per te e per l’Orchestrator, mai un permesso.',
+        'Agent matching: the request is compared with each agent’s name, "when to use", purpose, instructions and past successful requests, by words (BM25) and by meaning (local multilingual-e5 model, offline). The highest score wins; below the threshold the app offers to create an agent. It is a hint for you and the Orchestrator, never a permission.'),
+      // src/shared/work-concepts.ts CONCEPTS; src/main/agents/classifier.ts words(), FIELD_WEIGHT, PRESET_PREAMBLE
+      b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le descrizioni in inglese. Una parola trovata solo nelle istruzioni conta meno; il preambolo comune agli agenti forniti è ignorato.',
+        'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and English descriptions. A word found only in the instructions counts less; the preamble shared by the packaged agents is ignored.'),
+      // src/main/agents/routing-snapshot.ts; src/main/agents/classifier-calibration.ts calibrate(); src/renderer/lib/agent-approvals.ts
+      b('Impara dai tuoi esiti: ogni esecuzione registra il punteggio dell’agente usato. Con almeno 20 esecuzioni confermate riuscite per canale, l’app calcola la soglia che lascia sotto al massimo 1 caso giusto su 10 e la propone in «Da approvare». Cambia solo con il tuo clic, e si annulla.',
+        'Learns from your outcomes: every run records the score of the agent used. With at least 20 runs confirmed successful per channel, the app computes the threshold that leaves at most 1 right match in 10 below it and proposes it in "To approve". It changes only on your click, and can be undone.'),
+      // src/main/brain/routing.ts taskOf; src/shared/work-concepts.ts builtinTask
+      b('Tipo di lavoro per l’instradamento: prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Su un brain nuovo, senza regole, non finisce più tutto in «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
+        'Kind of work for routing: the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". On a fresh brain with no rules, not everything lands in "altro" any more. A request that builds or fixes wins over a title that only names a topic.'),
+      // src/main/brain/estimates.ts classify
+      b('Tipo di lavoro nel registro dei costi (correzione, QA, revisione, funzionalità, indagine, domanda, altro): espressioni in italiano e inglese, vince il tipo con più indizi.',
+        'Kind of work in the cost ledger (fix, QA, review, feature, research, question, other): Italian and English patterns, the kind with the most clues wins.'),
       // src/main/chats/regia-delivery.ts mailClassifier
-      b('Posta per l’Orchestrator: urgente → subito, richiesta → raggruppata, avanzamento → silenziosa; nel dubbio raggruppata.',
-        'Mail for the Orchestrator: urgent → now, request → grouped, progress → quiet; when in doubt grouped.'),
-      // src/renderer/lib/foreign.ts; src/main/chats/admission.ts
-      b('Altri: messaggi non scritti da te (mostrati attenuati) e la coda per carico (CPU > 75% o RAM libera < 15%).',
-        'Others: messages you did not type (shown muted) and the load queue (CPU > 75% or free RAM < 15%).'),
-      // brain-template/ops/tools/signals-regex.mjs; ADR 0047
-      b('Rilevare le correzioni nel testo libero e il giudice a campione dei lavori vivono negli strumenti del brain.',
-        'Detecting corrections in free text and the sample judge of works live in the brain’s tools.'),
+      b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
+        'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
+      // src/shared/runnable.ts prodRisk; src/shared/command-ask.ts; src/shared/waiting.ts; src/main/chats/claude.ts
+      b('Sicurezza e attese: i comandi di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; «Comando da eseguire» e «Aspetta un lavoro» sono regole sul testo. Permessi e domande non sono indovinati: arrivano già strutturati dalla CLI.',
+        'Safety and waits: production commands (az, sqlcmd, ops scripts) ask for a second click and main checks again; "Command to run" and "Waits for work" are rules on the text. Permissions and questions are not guessed: they arrive already structured from the CLI.'),
+      // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; brain-template/ops/tools/signals-regex.mjs
+      b('Altri: messaggi non scritti da te (mostrati attenuati), la coda per carico (CPU > 75% o RAM libera < 15%), le correzioni nel testo libero e il giudice a campione negli strumenti del brain.',
+        'Others: messages you did not type (shown muted), the load queue (CPU > 75% or free RAM < 15%), corrections in free text and the sample judge in the brain’s tools.'),
     ],
-    analogy: b('Come lo smistamento della posta in portineria: regole fisse e scritte, e una casella «varie» quando non si capisce.',
-      'Like mail sorting at the front desk: fixed written rules, and a "misc" box when it is unclear.'),
-    diagram: { kind: 'flow', steps: [b('Testo o evento', 'Text or event'), b('Regole: regex, soglie', 'Rules: regex, thresholds'), b('Classe', 'Class'), b('Nel dubbio: default', 'When in doubt: default')] },
+    analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e il portiere che chiede a te prima di cambiare il modo di smistare.',
+      'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and a clerk who asks you before changing how mail is sorted.'),
+    diagram: { kind: 'cycle', steps: [b('Richiesta', 'Request'), b('Parole e significato', 'Words and meaning'), b('Punteggio e soglia', 'Score and threshold'), b('Esito confermato', 'Confirmed outcome'), b('Soglia da approvare', 'Threshold to approve')] },
     tech: [
+      // test/unit/classifiers/evaluation.test.ts, test/fixtures/classifiers/requests.ts
+      tech(b('Quanto sono precisi', 'How accurate they are'),
+        'Misurati il 18/10/2026 su richieste scritte a mano (non tuoi dati reali), 30 mai usate per tarare le regole: scelta dell’agente solo a parole da 7 a 18 giuste su 30; tipo di lavoro senza regole del brain da 6 a 28; registro costi da 26 a 28. La posta: 17 casi tipici su 17. Il canale con il modello non è misurato su queste richieste: per questo la sua soglia si tara sui tuoi esiti.',
+        'Measured on 18/10/2026 on hand-written requests (not your real data), 30 never used to tune the rules: agent matching by words only from 7 to 18 right of 30; kind of work without brain rules from 6 to 28; cost ledger from 26 to 28. Mail: 17 typical cases of 17. The model channel is not measured on these requests: that is why its threshold is tuned on your outcomes.'),
+      // src/shared/agent-classifier.ts DEFAULT_CLASSIFIER_THRESHOLDS, CALIBRATION_MIN_RUNS, CALIBRATION_ALPHA; classifier-calibration.ts SUGGEST_MIN_STEP
+      tech(LIMITS, 'Soglia di partenza: 60 con il modello, 20 a sole parole (i punteggi a parole sono più bassi: 4 parole trovate valgono il massimo). Taratura: almeno 20 esecuzioni confermate per canale, al massimo 1 su 10 sotto la soglia, proposta solo se cambia di almeno 5 punti. Contano solo esiti confermati da te o da una revisione con evidenza; Generale è escluso. Richiesta letta fino a 2000 caratteri.',
+        'Starting threshold: 60 with the model, 20 by words only (word scores are lower: 4 matched words are full marks). Calibration: at least 20 confirmed runs per channel, at most 1 in 10 below the line, proposed only when it moves by 5 points or more. Only outcomes confirmed by you or by a review with evidence count; Generale is left out. Request read up to 2000 characters.'),
+      tech(b('Fonti', 'Sources'),
+        'Parole: Robertson e Zaragoza, «The Probabilistic Relevance Framework: BM25 and Beyond» (2009). Lessico bilingue: Ballesteros e Croft, «Phrasal translation and query expansion techniques for cross-language information retrieval» (SIGIR 1997). Modello: scheda di intfloat/multilingual-e5 su Hugging Face (i punteggi coseno stanno tra 0,7 e 1,0 anche per testi diversi: conta l’ordine, non il valore). Soglia: Angelopoulos e Bates, «A Gentle Introduction to Conformal Prediction» (arXiv 2107.07511, 2021).',
+        'Words: Robertson and Zaragoza, "The Probabilistic Relevance Framework: BM25 and Beyond" (2009). Bilingual lexicon: Ballesteros and Croft, "Phrasal translation and query expansion techniques for cross-language information retrieval" (SIGIR 1997). Model: the intfloat/multilingual-e5 model card on Hugging Face (cosine scores sit between 0.7 and 1.0 even for unrelated texts: the order counts, not the value). Threshold: Angelopoulos and Bates, "A Gentle Introduction to Conformal Prediction" (arXiv 2107.07511, 2021).'),
       // src/shared/contract.ts TaskKind
-      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro.',
-        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro.'),
-      tech(LIMITS, 'Prompt letto per i primi 2000 caratteri; al massimo 3 comandi per risposta; blocco eseguibile ≤ 8000 caratteri.',
-        'Prompt read for its first 2000 chars; at most 3 commands per reply; runnable block ≤ 8000 chars.'),
-      // src/main/headline.ts
-      tech(WHERE, 'Questi classificatori usano regole; altre funzioni chiamano un modello, come la battuta della Dashboard.',
-        'These classifiers use rules; other features call a model, such as the Dashboard headline.'),
+      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro. Soglie approvate in userData/agent-classifier.json.',
+        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro. Approved thresholds in userData/agent-classifier.json.'),
     ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts', 'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/main/headline.ts', 'src/main/agents/catalog.ts', 'src/main/wiring.ts'],
+    target: [
+      b('Unire parole e significato con una media pesata tarata su pochi esempi invece di prendere il più alto dei due (Bruch, Gai e Ingber, «An Analysis of Fusion Functions for Hybrid Retrieval», ACM TOIS 2023).',
+        'Join words and meaning with a weighted average tuned on a few examples instead of taking the higher of the two (Bruch, Gai and Ingber, "An Analysis of Fusion Functions for Hybrid Retrieval", ACM TOIS 2023).'),
+      b('Usare anche le esecuzioni fallite come esempi di «non questo agente», e tarare allo stesso modo il tipo di lavoro.',
+        'Also use failed runs as "not this agent" examples, and calibrate the kind of work the same way.'),
+    ],
+    sources: ['src/main/agents/classifier.ts', 'src/main/agents/classifier-calibration.ts', 'src/shared/agent-classifier.ts', 'src/shared/work-concepts.ts', 'src/main/agents/routing-snapshot.ts',
+      'src/renderer/lib/agent-approvals.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts',
+      'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'test/unit/classifiers/evaluation.test.ts'],
   },
   {
     id: 'permissions',

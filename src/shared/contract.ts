@@ -3,7 +3,7 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
-import type { AgentClassification } from './agent-classifier';
+import type { AgentClassification, ClassifierCalibration, ClassifierDecision } from './agent-classifier';
 import type { AgentProposal, AgentUndo } from './agent-authoring';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
 import type { PackTarget, PackExportPlan, PackFinding, PackImportReview, LearnedRules } from './agent-pack';
@@ -1152,6 +1152,10 @@ export interface InvokeMap {
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
   'agents:classify': [{ request: string }, AgentClassification];
+  /** the agent classifier's threshold per channel against the user's confirmed runs (agents/classifier-calibration.ts) */
+  'agents:classifierCalibration': [void, ClassifierCalibration[]];
+  /** the user's decision on a suggested threshold (apply / dismiss) or back to the default (reset); agents have no tool for it */
+  'agents:classifierDecide': [ClassifierDecision, ClassifierCalibration[]];
   'agents:proposals': [void, AgentProposal[]];
   'agents:proposalDecide': [{ id: string; accept: boolean }, AgentProfile | null];
   'agents:undo': [AgentUndo, AgentProfile];
@@ -1447,7 +1451,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:classify', 'agents:classifierCalibration', 'agents:classifierDecide', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
