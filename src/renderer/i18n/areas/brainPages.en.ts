@@ -5,6 +5,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
+  'brainPages.nav.guida': 'Guide',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',
