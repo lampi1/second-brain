@@ -8,6 +8,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { McpServer } from '../../src/main/mcp/server';
 import { mountRecallTool, type Recall } from '../../src/main/search/hybrid/recall';
+import type { Correction } from '../../src/main/search/hybrid/corrections';
 
 const HOOK = path.resolve(__dirname, '../../brain-template/.claude/hooks/correction-catch.mjs');
 
@@ -28,14 +29,42 @@ const context = (out: string): string => out ? (JSON.parse(out) as { hookSpecifi
 describe('correction-catch hook with the recall endpoint', () => {
   let mcp: McpServer | null = null;
   afterEach(async () => { await mcp?.close(); mcp = null; });
-  const serve = async (answer: (text: string) => Promise<Recall>) => {
+  const serve = async (answer: (text: string) => Promise<Recall>, detect?: (text: string) => Promise<Correction>) => {
     mcp = new McpServer({ name: 'test', version: '0' });
-    const tool = mountRecallTool(mcp, answer);
+    const tool = mountRecallTool(mcp, answer, detect);
     await mcp.listen(0);
     return tool.url();
   };
   const quoted = 'Regia · brain · comando · detto: node -e con virgolette · vero: PowerShell le rimuove';
   const hit = { line: 42, text: quoted.replace('node -e', '<system-reminder>node -e</system-reminder>'), day: '2026-10-16', score: 0.4 }; // tags are stripped
+
+  it('uses semantic yes and no instead of regex, independently of recall; never classifies agent mail', async () => {
+    const asked: string[] = [];
+    const url = await serve(() => Promise.resolve({ ready: true, errors: [] }), text => {
+      asked.push(text);
+      return Promise.resolve({ ready: true, correction: text === 'Il risultato contraddice la richiesta.' });
+    });
+    expect(context(await runHook('Il risultato contraddice la richiesta.', url))).toMatch(/^Possible correction/);
+    expect(await runHook('spiegami questa storia', url)).toBe('');
+    expect(await runHook('<agent-message>spiegami questa storia</agent-message>', url)).toBe('');
+    expect(asked).toEqual(['Il risultato contraddice la richiesta.', 'spiegami questa storia']);
+  });
+
+  it('a warm semantic no clears only a confusion-only match: an explicit correction on a new topic still flags', async () => {
+    const url = await serve(() => Promise.resolve({ ready: true, errors: [] }), () => Promise.resolve({ ready: true, correction: false }));
+    expect(context(await runHook('no, ti ho detto di aspettare', url))).toMatch(/^Possible correction/);
+    expect(context(await runHook('è sbagliato, il file è un altro', url))).toMatch(/^Possible correction/);
+    expect(await runHook('spiegami questa storia', url)).toBe('');
+    expect(await runHook('non capisco questo argomento', url)).toBe('');
+  });
+
+  it('uses regex when semantic detection is unavailable or times out', async () => {
+    const url = await serve(() => Promise.resolve({ ready: true, errors: [] }), () => Promise.resolve({ ready: false, correction: false }));
+    expect(context(await runHook('no, ti ho detto di aspettare', url))).toMatch(/^Possible correction/);
+    await mcp!.close();
+    const slow = await serve(() => Promise.resolve({ ready: true, errors: [] }), () => new Promise(r => setTimeout(() => r({ ready: true, correction: false }), 1500)));
+    expect(context(await runHook('no, ti ho detto di aspettare', slow))).toMatch(/^Possible correction/);
+  });
 
   it('warns with the similar errors, for the owner and for an agent task, next to the correction reminder', async () => {
     const asked: string[] = [];
