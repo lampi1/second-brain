@@ -18,6 +18,7 @@ import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import {lifecycleEn}from'./areas/lifecycle.en';
+import { approvalsEn } from './areas/approvals.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
@@ -54,6 +55,7 @@ export const en: Dict = {
   ...studioEn,
   ...productEn,
   ...lifecycleEn,
+  ...approvalsEn,
   ...settingsEn,
   ...profileEn,
   ...chatEn,

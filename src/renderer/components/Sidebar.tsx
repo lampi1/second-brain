@@ -13,6 +13,7 @@ import {
 import { t } from '../i18n';
 import {useAgents} from '../store/agents';
 import {activeRole} from '../lib/role-consumers';
+import { useApprovalCount } from '../store/agent-approvals';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
@@ -45,6 +46,8 @@ export function Sidebar() {
   // DevOps only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
   const devopsOn = useDevops(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
   const b = badges(feed, read);
+  // pending agent changes (Da approvare, components/AgentApprovals.tsx) outrank the Agenti page's feed count
+  const approvals = useApprovalCount();
   const item = (id: string, label: string, icon: ReactNode, on: boolean, onClick: () => void, extra: { key?: string; badge?: ReactNode; testid: string; onHover?: () => void }) => (
     <button key={id} type="button" className={`nav-item ${on ? 'on' : ''}`} onClick={onClick} onPointerEnter={extra.onHover} onFocus={extra.onHover} aria-current={on ? 'page' : undefined} data-testid={extra.testid}
       data-tip={extra.key ? `${label}|${extra.key}` : undefined} aria-label={label}>
@@ -58,7 +61,7 @@ export function Sidebar() {
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
     return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
-      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
+      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'agenti' && approvals ? <span className="nav-badge amber" data-testid="nav-badge-approvals" aria-label={t('approvals.countLabel', { n: approvals })}>{approvals > 99 ? '99+' : approvals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
   const title = (txt: string, id: string) => <div className="nav-title" data-testid={`nav-group-${id}`}>{txt}</div>;

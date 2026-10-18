@@ -14,14 +14,15 @@ test('pending lifecycle evidence survives reload and opening its editor never ap
   const { app, page } = await launchDemo({ userData });
   try {
     await page.getByTestId('nav-agenti').click();
-    const panel = page.getByTestId('agent-lifecycle');
+    // the list page shows pending lifecycle suggestions in the Da approvare inbox (AgentApprovals.tsx)
+    const panel = page.getByTestId('agent-approvals');
     await expect(panel).toContainText('Tre revisioni ripetute');
     await panel.getByText('Evidenze (1)', { exact: true }).click();
     await expect(panel).toContainText('r_000000000001');
     const before = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     await shot(page, 'agent-lifecycle-pending');
     await page.reload(); await page.getByTestId('nav-agenti').click();
-    await page.getByTestId('agent-lifecycle').getByRole('button', { name: 'Esamina proposta' }).click();
+    await page.getByTestId('agent-approvals').getByRole('button', { name: 'Prepara nell’editor' }).click();
     await expect(page.getByTestId('agent-studio')).toBeVisible();
     const after = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     expect(after.profiles).toEqual(before.profiles);
