@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
+  routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
+  in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
 - CLI login readiness selects available engines for new chats and untouched starter agents. Codex is available on
   fresh installs without extra engine switches; explicit disabled settings remain disabled.
 - App-area chats support every enabled engine. Codex and Cursor pre-approve the same app-control and mail tools as
