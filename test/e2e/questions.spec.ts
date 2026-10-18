@@ -53,6 +53,29 @@ test('a question carries its context: the turn\'s prose, the reasoning before it
   await app.close();
 });
 
+test('a file link clicked in the questions window shows the viewer in front; the pill brings the same question back', async () => {
+  const { app, page } = await launchDemo();
+  await demo(app, (d, id) => d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md).'), 'qa');
+  await demo(app, (d, id, q) => d.ask(id, q), 'qa', question('Pubblico il commento sul TC16?', ['Pubblica', 'Aspetta']));
+  await page.getByTestId('topbar-qwin').click();
+  await expect(page.getByTestId('qwin')).toBeVisible();
+  // the demo's own requests came first: this one is in the rail
+  await page.getByTestId('qwin-pick').filter({ hasText: 'Pubblico il commento sul TC16?' }).click();
+  const win = page.getByTestId('qwin');
+  await expect(win).toContainText('Pubblico il commento sul TC16?');
+  await win.getByText('report TC16').click();
+  // the viewer is on screen, not under the backdrop; the question waits as the pill (nothing answered, no "Rispondi dopo")
+  await expect(page.getByTestId('cited-file-viewer')).toBeVisible();
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await expect(page.getByTestId('qwin-pill')).toContainText('mentre guardi il file');
+  await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
+  expect(await opened(app)).toEqual([]);
+  await shot(page, 'questions-window-file-viewer');
+  await page.getByTestId('qwin-pill').click();
+  await expect(page.getByTestId('qwin')).toContainText('Pubblico il commento sul TC16?');
+  await app.close();
+});
+
 test('the questions window: waits while the user types, never takes the field, Ctrl+J brings it, 1 answers, Esc is "Rispondi dopo"', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('topbar-qwin').click();

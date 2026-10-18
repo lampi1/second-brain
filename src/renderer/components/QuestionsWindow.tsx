@@ -24,7 +24,7 @@ import { isEditable, qwinStats, questionsModalOn, typingLeft, writingElsewhere }
 import { commandsOfTurn } from '../lib/regia-route';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
-import { callQuestions, parkQuestions, setQuestionsShown, ui } from '../store/ui';
+import { callQuestions, parkQuestions, setQuestionsAside, setQuestionsShown, ui } from '../store/ui';
 import { answerLater, openQueue } from '../lib/later';
 import { HarnessMark, IconArrowRight, IconQuestion } from './Icons';
 import { ago } from '../lib/format';
@@ -61,8 +61,13 @@ export function QuestionsWindow() {
     check();
     return () => clearTimeout(t);
   }, [curKey, q.call, calm]);
+  // a file link clicked in the window opened the viewer: the window waits as the pill while that file page is on
+  // screen (Ctrl+J or the pill bring it back, nothing is answered or put off; store/ui.ts setQuestionsAside)
+  const onFile = ui.use(s => s.page === 'file' && !s.map);
+  const aside = !!q.aside && onFile;
+  useEffect(() => { if (q.aside && !onFile) setQuestionsAside(false); }, [q.aside, onFile]);
   // under a dialog (Ctrl+K) the window stays mounted but hidden: a free answer being typed in it survives
-  const up = on && !!cur && calm;
+  const up = on && !!cur && calm && !aside;
   const shown = up && !dialog;
   useEffect(() => { setQuestionsShown(shown); }, [shown]);
   useEffect(() => () => setQuestionsShown(false), []);
@@ -107,9 +112,9 @@ export function QuestionsWindow() {
   if (dialog && !up) return null;
   if (!up || !cur) {
     return (
-      <button type="button" className="qwin-pill" onClick={() => callQuestions(null)} data-testid="qwin-pill" data-tip={`${t('chat.questions.open')}|Ctrl+J`}>
+      <button type="button" className="qwin-pill" onClick={() => callQuestions(aside ? curKey : null)} data-testid="qwin-pill" data-tip={`${t('chat.questions.open')}|Ctrl+J`}>
         <IconQuestion size={13} />
-        <span>{`${queue.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: queue.length })}: ${t('chat.questions.typingHint')}`}</span>
+        <span>{`${queue.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: queue.length })}: ${t(aside ? 'chat.questions.asideHint' : 'chat.questions.typingHint')}`}</span>
         <Keys combo="Ctrl+J" />
       </button>
     );

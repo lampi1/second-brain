@@ -26,7 +26,7 @@ import { showAppChat } from './store/improve';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, type Place,type BrainPageId,
+  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setQuestionsAside, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -347,6 +347,9 @@ export function newBrowser():Promise<void>{return openInAppBrowser('about:blank'
 export function openFileViewer(raw:string,chatId?:string):void{
   // A Regia artifact remains mounted across page navigation; release its focus trap before showing the file.
   if(ui.get().modal==='visual')closeModal();
+  // a link in the questions window (the window is on screen, so the click came from it): the window steps aside, else
+  // the file page would open behind its full-screen backdrop and nothing would visibly change
+  if(ui.get().qwin.shown)setQuestionsAside(true);
   go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
 }
 
