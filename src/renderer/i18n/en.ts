@@ -16,6 +16,7 @@ import { brainPagesEn } from './areas/brainPages.en';
 import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
+import {lifecycleEn}from'./areas/lifecycle.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
@@ -50,6 +51,7 @@ export const en: Dict = {
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
   ...productEn,
+  ...lifecycleEn,
   ...settingsEn,
   ...profileEn,
   ...chatEn,
