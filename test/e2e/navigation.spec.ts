@@ -179,7 +179,9 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('regia-input')).toBeFocused();
   // the map: full screen, browser views hidden, Esc closes
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);

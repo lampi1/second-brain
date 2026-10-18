@@ -164,7 +164,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   return (
     <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
       <div className="bx-map-bar">
-        <h2>Il tuo spazio</h2>
+        <h2>Mappa del brain</h2>
         <form className="bx-search" onSubmit={e => { e.preventDefault(); search(); }} role="search">
           <IconSearch />
           <input className="bx-input" list="bx-map-nodes" type="search" placeholder="Cerca nella mappa…" aria-label="Cerca un pezzo" value={q} onChange={e => setQ(e.target.value)} onBlur={() => q && search()} />
@@ -201,8 +201,9 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
           </div>
         ) : (
           <>
+            <div className="bx-map-colors" aria-label="Legenda della mappa">{view?.layers.filter(layer => drawn.nodes.some(n => n.layer === layer.id)).map(layer => <span key={layer.id}><i style={{ background: layerColor(layer.id) }} />{layer.label}</span>)}</div>
             <div ref={canvas} className="bx-map-canvas" data-testid="bx-map-canvas" tabIndex={0} onPointerDown={event=>event.currentTarget.focus({preventScroll:true})} role="group" aria-label="Mappa interattiva. Frecce per ruotare, più e meno per zoom, Home per ripristinare." onKeyDown={event=>{if(event.target!==event.currentTarget)return;const keys:Record<string,[number,number,number]>={ArrowLeft:[-1,0,1],ArrowRight:[1,0,1],ArrowUp:[0,-1,1],ArrowDown:[0,1,1],'+':[0,0,0.85],'=':[0,0,0.85],'-':[0,0,1.18]};if(event.key==='Home'){event.preventDefault();engine.current?.fit();}else if(keys[event.key]){event.preventDefault();engine.current?.nudge(...keys[event.key]!);}}} />
-            <div className="bx-map-hint">Trascina per esplorare · rotella per avvicinarti · seleziona un nodo</div>
+            <div className="bx-map-hint">File, agenti e strumenti collegati nel brain. Clicca un nodo per vedere i collegamenti.<br />Trascina per ruotare · rotella per zoom · Reset vista per inquadrare tutto</div>
             {legend}
           </>
         )}

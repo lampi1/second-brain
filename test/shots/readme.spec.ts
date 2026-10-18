@@ -89,7 +89,9 @@ test('README screenshots', async () => {
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
   await tool('regia', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map').getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(5000); // the layout settles
   await save('brain-map');

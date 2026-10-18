@@ -90,8 +90,8 @@ export function layout(nodes: Pick<MapNode, 'id'>[], edges: Pick<MapEdge, 'from'
 
 export interface LabelSpot { x: number; y: number; w: number; h: number; anchor: 'start' | 'middle' | 'end' }
 /** Places each label on the free side of its node (below, above, right, left; outward from the focus first), so no
- *  label covers another label or a node dot. Greedy in input order: pass the most important labels first. When no
- *  side is free the side with the least overlap wins. Sizes are estimates in SVG units (about .58em per character). */
+ *  label covers another label or a node dot. Greedy in input order: pass the most important labels first. Crowded
+ *  labels search farther out before falling back to least overlap. Sizes are estimates in SVG units (.58em/char). */
 export function placeLabels(items: { id: string; x: number; y: number; r: number; text: string }[], obstacles: { x: number; y: number; r: number }[], size: number, focus?: Point): Map<string, LabelSpot> {
   const taken: { x0: number; y0: number; x1: number; y1: number }[] = obstacles.map(o => ({ x0: o.x - o.r, y0: o.y - o.r, x1: o.x + o.r, y1: o.y + o.r }));
   const overlap = (a: typeof taken[number]) => taken.reduce((sum, b) => sum + Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)), 0);
@@ -103,7 +103,13 @@ export function placeLabels(items: { id: string; x: number; y: number; r: number
     const outward = focus && item.y < focus.y ? [above, below] : [below, above];
     const sides = focus && item.x !== focus.x && Math.abs(item.x - focus.x) > Math.abs(item.y - focus.y) ? item.x > focus.x ? [right, ...outward, left] : [left, ...outward, right] : [...outward, right, left];
     let best: { spot: LabelSpot; box: typeof taken[number]; cost: number } | null = null;
-    for (const side of sides) {
+    // Search outward when a hub is crowded: labels remain on top without covering dots or other names.
+    const candidates = [...sides];
+    for (const offset of [30, 60, 100, 150]) for (const side of sides) candidates.push({ ...side,
+      x: side.x + (side.anchor === 'start' ? offset : side.anchor === 'end' ? -offset : 0),
+      y: side.y + (side.anchor === 'middle' ? (side.y < item.y ? -offset : offset) : 0),
+    });
+    for (const side of candidates) {
       const x0 = side.anchor === 'start' ? side.x : side.anchor === 'end' ? side.x - w : side.x - w / 2;
       const box = { x0, y0: side.y - h / 2, x1: x0 + w, y1: side.y + h / 2 };
       const cost = overlap(box);
