@@ -1,7 +1,7 @@
 // English counterpart of the agent workspace and packaged appearance UI.
 import type{productIt}from'./product.it';
 export const productEn:typeof productIt={
- 'start.matchSuggestion':({name,score})=>`Suggested: ${name} · affinity ${score}/100.`,
+ 'start.matchSuggestion':({name,score,high})=>`Suggested: ${name} · ${high?'high':'medium'} affinity (${score}/100, a text estimate).`,
  'start.matchNone':'No agent is close enough. You can ask the Orchestrator to propose a new one; creation requires your request.',
  'start.matchWords':'Word matching: local model unavailable.',
  'start.matchLocal':'Local meaning and word matching; not a capability assessment.',

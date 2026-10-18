@@ -343,8 +343,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
   // Tests never run installed vendors; their fake status is requested explicitly.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
+  // The search's own HybridSearch: one worker and one model for search, recall, corrections and agent matching.
   const classifier = new AgentClassifier(hybrid);
-  const classifyAgents: ClassifyAgents = request => classifier.classify(request, agents.list().profiles, manager.runs.list());
+  const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };

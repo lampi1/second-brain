@@ -1,6 +1,6 @@
 // Agent workspace and packaged appearance UI. Kept separate from provider output and user-authored content.
 export const productIt={
- 'start.matchSuggestion':({name,score}:{name:string;score:number})=>`Suggerito: ${name} · affinità ${score}/100.`,
+ 'start.matchSuggestion':({name,score,high}:{name:string;score:number;high:boolean})=>`Suggerito: ${name} · affinità ${high?'alta':'media'} (${score}/100, stima sul testo).`,
  'start.matchNone':'Nessun agente abbastanza vicino. Puoi chiedere all’Orchestrator di proporne uno nuovo; la creazione richiede una tua richiesta.',
  'start.matchWords':'Confronto per parole: modello locale non disponibile.',
  'start.matchLocal':'Confronto locale per significato e parole; non è una verifica delle capacità.',

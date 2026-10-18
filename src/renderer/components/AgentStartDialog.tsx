@@ -36,7 +36,8 @@ export function AgentStartDialog() {
   const [permissionMode, setPermissionMode] = useState<PermissionMode | ''>(prefs.permissionMode);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
   const [matching, setMatching] = useState<{ request: string; result: AgentClassification } | null>(null);
-  const request = [prompt, context, outcome].filter(Boolean).join('\n').trim().slice(0, 2000);
+  // the task field alone: context and expected result describe the case, not which agent fits it, and dilute the match
+  const request = prompt.trim().slice(0, 2000);
   const ranking = matching?.request === request ? matching.result : null;
   useEffect(() => {
     let stale = false;
@@ -85,7 +86,7 @@ export function AgentStartDialog() {
           <optgroup label={t('roleFlow.catalog')}>{profiles.filter(p=>!suggested.some(item=>item.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
         </Select></label>
         {!regia && ranking && <p role="status" data-testid="agent-classification">
-          {ranking.noneCloseEnough ? t('start.matchNone') : t('start.matchSuggestion', { name: profiles.find(p => p.id === ranking.candidates[0]?.id)?.name ?? '', score: ranking.candidates[0]?.score ?? 0 })}
+          {ranking.noneCloseEnough ? t('start.matchNone') : t('start.matchSuggestion', { name: profiles.find(p => p.id === ranking.candidates[0]?.id)?.name ?? '', score: ranking.candidates[0]?.score ?? 0, high: (ranking.candidates[0]?.score ?? 0) >= 80 })}
           {' '}{t(ranking.mode === 'words' ? 'start.matchWords' : 'start.matchLocal')}
           {!ranking.noneCloseEnough && <button type="button" className="link-btn" disabled={busy} onClick={() => choose(ranking.candidates[0]!.id)}>{t('start.matchChoose')}</button>}
         </p>}
