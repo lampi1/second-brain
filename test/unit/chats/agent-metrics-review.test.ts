@@ -183,3 +183,24 @@ describe('a run report goes to its own turn', () => {
     expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' });
   });
 });
+
+describe('agents:metrics on a failed write', () => {
+  it('runMetrics still answers from memory when agent-runs.json cannot be written', async () => {
+    const f = fixture();
+    const c = await f.create();
+    // agent-runs.json cannot be replaced (on Windows: a lock held by an antivirus or indexer; here: a directory)
+    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
+    fs.mkdirSync(path.join(f.dir, 'agent-runs.json'));
+    f.sink(c.id).changed({ contextTokens: 500 }); // touch(): the store is dirty
+    expect(() => f.m.runMetrics()).not.toThrow();
+  });
+
+  it('the answer from memory has the open run in it', async () => {
+    const f = fixture();
+    const c = await f.create();
+    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
+    fs.mkdirSync(path.join(f.dir, 'agent-runs.json'));
+    f.sink(c.id).changed({ contextTokens: 500 });
+    expect(f.m.runMetrics().find(a => a.agentId === 'reviewer')).toMatchObject({ open: 1 });
+  });
+});

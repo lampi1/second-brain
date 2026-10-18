@@ -842,7 +842,8 @@ export class ChatManager implements ChatService {
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
    *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
   runMetrics(opts: { aiErrors?: string; since?: number } = {}): ReturnType<typeof runMetrics> {
-    this.runs.flush();
+    // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
+    try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
     return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}) });
   }
 
