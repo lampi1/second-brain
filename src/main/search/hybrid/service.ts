@@ -2,15 +2,17 @@
 // in userData/search, keeps it in sync with the brain folder (at start, when the folder changes, and a few seconds after
 // a file changes: the brain watcher's onFile) and offers one API to the rest of the app: query (/api/search, Ctrl+K, the
 // agents' brain_search tool), plus the building blocks of the agent classifier (ui-agents, SPEC 23 a): embed, cosine,
-// topK. The model is downloaded once in the background (never blocking the start; progress and retry in the UI); until
+// topK; and the past errors similar to a prompt (recall: SPEC 23 c/d, served to the brain's hook by recall.ts). The model is downloaded once in the background (never blocking the start; progress and retry in the UI); until
 // then, or if it fails, results come from BM25 only. A dead worker is restarted on the next call (not within 10 s of
 // the last crash: no restart loop), a hung one is terminated when a call times out. Until the brain is indexed, query
 // throws, so every caller falls back to its old search. Used by main/index.ts.
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errText, log } from '../../log';
 import { cosine, type Hit } from './engine';
-import { THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
+import { errorEntries, THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
+import { RECALL_K, recallIndex, similarErrors, type Recall, type RecallIndex } from './recall';
 import type { HybridStatus, WorkerReq } from './protocol';
 
 export interface HybridDeps {
@@ -40,6 +42,8 @@ export class HybridSearch {
   private syncedRoot: string | null = null;
   private textVecs = new Map<string, Float32Array>();
   private themeCache = new Map<ThemeKind, { key: string; themes: Themes }>();
+  private errorVecs: { key: string; index: RecallIndex } | null = null;
+  private warming: Promise<void> | null = null;
   private restartAfter = 0;
 
   constructor(private deps: HybridDeps) {}
@@ -124,7 +128,7 @@ export class HybridSearch {
     if (this.deps.brainRoot() !== this.syncedRoot && !(await this.sync())) return notReady;
     if (this.last.model.state !== 'ready') return notReady;
     const rows = await this.vectors(`brain:${THEME_FILES[kind]}`);
-    const today = ROME_DAY.format(now), key = `${this.syncedRoot}|${today}|${rows.map(r => `${r.id}:${r.line}:${r.text.length}`).join(',')}`;
+    const today = ROME_DAY.format(now), key = `${today}|${rowsKey(this.syncedRoot, rows)}`;
     const kept = this.themeCache.get(kind);
     if (kept?.key === key) return kept.themes;
     let fellBack = false;
@@ -133,18 +137,48 @@ export class HybridSearch {
     return t;
   }
 
+  /** The past errors most similar to `text`. Never waits for a sync or for the errors' vectors (the brain's hook asks
+   *  on every prompt with a short timeout): until they exist it answers ready:false and builds them in the background;
+   *  after a change of ai-errors.md it answers from the previous vectors while the new lines are embedded. */
+  async recall(text: string, k = RECALL_K): Promise<Recall> {
+    const notReady: Recall = { ready: false, errors: [] };
+    if (this.deps.brainRoot() !== this.syncedRoot) { this.errorVecs = null; void this.sync(); return notReady; }
+    if (this.last.model.state !== 'ready') return notReady;
+    const rows = await this.vectors(`brain:${THEME_FILES.errors}`);
+    const key = rowsKey(this.syncedRoot, rows);
+    if (this.errorVecs?.key !== key) this.warmErrors(rows, key);
+    const kept = this.errorVecs?.key.startsWith(`${this.syncedRoot}|`) ? this.errorVecs : null; // never another brain's
+    if (!kept) return notReady;
+    const [q] = (await this.embed([text], 'query')) ?? [];
+    return q ? { ready: true, errors: similarErrors(q, kept.index, k) } : notReady;
+  }
+
+  private warmErrors(rows: { id: number; doc: string; line: number; text: string; v: Float32Array }[], key: string): void {
+    if (this.warming) return;
+    const entries = errorEntries(rows.map(r => ({ ...r, at: 0 })));
+    this.warming = this.embedCached(entries.map(e => e.text))
+      .then(vs => {
+        // the brain folder may have changed meanwhile: its vectors are built on the next prompt
+        if (key.startsWith(`${this.syncedRoot}|`)) this.errorVecs = { key, index: recallIndex(entries.map((entry, i) => ({ entry, v: vs[i]! }))) };
+      })
+      .catch(e => log.warn('search', 'error recall vectors failed', { cause: errText(e) }))
+      .finally(() => { this.warming = null; });
+  }
+
   /** Passage vectors by text, kept between calls, embedded EMBED_BATCH at a time (one long call could time out and
    *  take the worker, and Ctrl+K with it, down). */
   private async embedCached(texts: string[]): Promise<Float32Array[]> {
-    let missing = [...new Set(texts.filter(t => !this.textVecs.has(t)))];
-    if (this.textVecs.size + missing.length > TEXT_VECS_MAX) { this.textVecs.clear(); missing = [...new Set(texts)]; }
+    // vectors are read back from `got`, not the shared cache: another caller may clear it between two batches
+    const got = new Map(texts.flatMap(t => { const v = this.textVecs.get(t); return v ? [[t, v] as const] : []; }));
+    const missing = [...new Set(texts.filter(t => !got.has(t)))];
+    if (this.textVecs.size + missing.length > TEXT_VECS_MAX) this.textVecs.clear();
     for (let i = 0; i < missing.length; i += EMBED_BATCH) {
       const batch = missing.slice(i, i + EMBED_BATCH);
       const vs = await this.embed(batch, 'passage');
       if (!vs) throw new Error('model not available');
-      batch.forEach((t, k) => this.textVecs.set(t, vs[k]!));
+      batch.forEach((t, k) => { got.set(t, vs[k]!); this.textVecs.set(t, vs[k]!); });
     }
-    return texts.map(t => this.textVecs.get(t)!);
+    return texts.map(t => got.get(t)!);
   }
 
   status(): HybridStatus { return this.last; }
@@ -161,6 +195,13 @@ export class HybridSearch {
 }
 
 export { cosine };
+
+/** The brain folder and a hash of a file's chunks (ids, lines, text): a cached result stays valid while it is the same. */
+const rowsKey = (root: string | null, rows: { id: number; line: number; text: string }[]): string => {
+  const h = crypto.createHash('sha1');
+  for (const r of rows) h.update(`${r.id}:${r.line}:${r.text}\n`);
+  return `${root}|${h.digest('base64url')}`;
+};
 
 /** The `k` items most similar to `q` (cosine, best first). */
 export function topK(q: Float32Array, items: { id: string; vec: Float32Array }[], k: number): { id: string; score: number }[] {

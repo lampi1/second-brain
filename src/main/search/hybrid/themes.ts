@@ -190,3 +190,6 @@ export async function themesOf(kind: ThemeKind, rows: Row[], today: string, opts
 }
 
 const entry = ({ line, text, day }: Item): ThemeEntry => ({ line, text, day });
+
+/** One entry per dated line of ai-errors.md (the error recall embeds their text: recall.ts). */
+export function errorEntries(rows: Row[]): ThemeEntry[] { return errorItems(rows).map(entry); }
