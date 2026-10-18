@@ -1,3 +1,6 @@
+---
+when: {"prompt":["dove si trova","dove salvo","segnatelo","memoria","memory"],"tools":[],"paths":["**/map.md"]}
+---
 # Memory map: where to read, when to write
 
 The only index of {{BRAIN_NAME}}. Read when: before reading or writing any memory file, or when unsure where something

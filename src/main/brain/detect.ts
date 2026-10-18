@@ -3,9 +3,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isProduct } from '../rules/tools';
 
 export const isBrainFolder = (dir: string): boolean =>
-  fs.existsSync(path.join(dir, 'AGENTS.md')) && fs.existsSync(path.join(dir, 'ops', 'tools', 'brain-site.mjs'));
+  fs.existsSync(path.join(dir, 'AGENTS.md')) && (fs.existsSync(path.join(dir, 'ops', 'tools', 'brain-site.mjs')) || isProduct(dir));
 
 export function findBrainCandidates(home = os.homedir()): string[] {
   const out = new Set<string>();

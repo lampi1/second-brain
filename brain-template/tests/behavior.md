@@ -1,3 +1,6 @@
+---
+when: {"prompt":["test di comportamento","behaviour test","behavior test"],"tools":[],"paths":["**/tests/behavior.md"]}
+---
 # Behaviour tests
 
 One case per real correction by {{OWNER}}: the situation, what the agent must do, when it fails, the rule it tests

@@ -13,9 +13,10 @@ import path from 'node:path';
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { brainRoot } from './brain-root.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const OPS = path.resolve(HERE, '..', '..');
+const OPS = brainRoot(import.meta.url);
 const ORG = 'https://dev.azure.com/{{DEVOPS_ORG}}';
 export const romeDay = t => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t));
 const romeTime = t => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
@@ -196,8 +197,8 @@ async function main() {
     let prsText = '', items = [];
     if (!offline) {
       const [p, t] = await Promise.all([
-        promisify(execFile)(process.execPath, [path.join(HERE, 'devops-me.mjs'), '--prs'], { timeout: 120000 }).then(r => r.stdout).catch(() => ''),
-        promisify(execFile)(process.execPath, [path.join(HERE, 'my-tasks.mjs'), '--json'], { timeout: 120000 }).then(r => JSON.parse(r.stdout).items).catch(() => []),
+        promisify(execFile)(process.execPath, [path.join(OPS, 'ops', 'tools', 'devops-me.mjs'), '--prs'], { timeout: 120000 }).then(r => r.stdout).catch(() => ''),
+        promisify(execFile)(process.execPath, [path.join(OPS, 'ops', 'tools', 'my-tasks.mjs'), '--json'], { timeout: 120000 }).then(r => JSON.parse(r.stdout).items).catch(() => []),
       ]);
       prsText = p; items = t;
     }

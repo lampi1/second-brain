@@ -1,3 +1,6 @@
+---
+when: {"prompt":["nuovo agente","scrivi un agente","agent file"],"tools":[],"paths":["**/.claude/agents/**"]}
+---
 # How to write a specialist agent ({{OWNER}}'s brain)
 
 The standard every file in `.claude/agents/` follows (2026-10-10, Owner: "riscrivili bene ai massimi standard … non

@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { claudeLaunch, PLUGIN_NAME } from '../../../src/main/brain/adapters/claude-plugin';
 import { codexLaunch } from '../../../src/main/brain/adapters/codex';
+import { acpRules } from '../../../src/main/brain/adapters/acp-rules';
 import { log } from '../../../src/main/log';
 import { instructionsOf, launchRules, resolvePlaceholders, setLaunchRules, skillDirs } from '../../../src/main/brain/adapters/domains';
 
@@ -131,6 +132,23 @@ describe('codex launch', () => {
     ]);
     expect(r.developerInstructions).toContain('Regole del lavoro');
     expect(r.skillRoots).toHaveLength(3);
+  });
+
+  it('legacy brains: the joined AGENTS.md of every domain, placeholders across domains; a broken brain.json is not product', () => {
+    const b = brain();
+    write(b.work, 'brain.json', '{ not json');
+    const r = codexLaunch({ mcpUrl: null, appMcpUrl: null, domains: b.domains, brain: true });
+    expect(r.developerInstructions).toBe(instructionsOf(b.domains));
+    expect(r.developerInstructions).toContain(`Leggi ${fwd(b.personal)}/me.md e ${fwd(b.work)}/x.md`);
+    expect(codexLaunch({ mcpUrl: null, appMcpUrl: null, readOnly: true, domains: b.domains, brain: true }).developerInstructions).toBe(instructionsOf(b.domains));
+  });
+
+  it('ACP launch text: none for legacy brains, a broken brain.json included (never throws)', () => {
+    const b = brain();
+    write(b.work, 'brain.json', '{ not json');
+    setLaunchRules(() => ({ domains: b.domains, claude: false, codex: true }));
+    expect(acpRules()).toBeNull();
+    expect(acpRules(true)).toBeNull();
   });
 
   it('brain off: only the app\'s part; read-only: read-only sandbox, no MCP, no skills; an unsafe url is left out', () => {

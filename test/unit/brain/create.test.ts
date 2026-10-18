@@ -7,6 +7,11 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrainCreator, publishNewBrain } from '../../../src/main/brain/create';
 import type { RunResult, runNode } from '../../../src/main/brain/node';
+import type * as Delivery from '../../../src/main/rules/delivery';
+vi.mock('../../../src/main/rules/delivery', async importOriginal => ({
+  ...await importOriginal<typeof Delivery>(),
+  assets: () => '/fixture/product-rules',
+}));
 // @ts-expect-error build helper is intentionally plain JS
 import { templateManifest } from '../../../scripts/template-manifest.mjs';
 
@@ -31,6 +36,8 @@ function fixture() {
     const destination = args[args.indexOf('--output-dir') + 1]!;
     fs.mkdirSync(path.join(destination, 'ops/tools'), { recursive: true });
     for (const file of ['AGENTS.md', 'me.md', 'ops/tools/brain-site.mjs']) fs.writeFileSync(path.join(destination, file), 'fixture');
+    // the shipped topic files carry their routing frontmatter (brain-template/*.md); the installer copies it as is
+    for (const file of ['code.md', 'brain-rules.md', 'hub.md']) fs.writeFileSync(path.join(destination, file), '---\nwhen: {"prompt":["fixture"],"tools":[],"paths":[]}\n---\nfixture');
     return { code: 0, stdout: '', stderr: '' };
   });
   const creator = new BrainCreator({ appPath: app, node: { exe: 'bundled-electron.exe', env: { FIXTURE: 'yes' } }, run });
@@ -43,6 +50,8 @@ describe.skipIf(process.platform !== 'win32')('verified first-run brain creation
     const f = fixture();
     expect(f.creator.capability()).toEqual({ available: true });
     await expect(f.creator.create(f.destination, f.fields)).resolves.toEqual({ root: f.destination });
+    expect(JSON.parse(fs.readFileSync(path.join(f.destination, 'brain.json'), 'utf8')).machinery).toBe('product-v1');
+    expect(fs.readFileSync(path.join(f.destination, 'code.md'), 'utf8')).toContain('when:');
     const [node, script, args, cwd, timeout] = f.run.mock.calls[0]!;
     expect(node).toEqual({ exe: 'bundled-electron.exe', env: { FIXTURE: 'yes', ELECTRON_RUN_AS_NODE: '1' } });
     expect(script).toBe(path.join(f.template, 'install.mjs'));
@@ -152,7 +161,15 @@ describe.skipIf(process.platform !== 'win32')('verified first-run brain creation
     const creator = new BrainCreator({ appPath: f.app, node: { exe: process.execPath, env: { ...process.env, PATH: '', HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData/Roaming'), LOCALAPPDATA: path.join(home, 'AppData/Local') } } });
     await expect(creator.create(f.destination, f.fields)).resolves.toEqual({ root: f.destination });
     expect(fs.readFileSync(path.join(f.destination, 'me.md'), 'utf8')).toContain('Mario Rossi');
-    expect(fs.readFileSync(path.join(f.destination, 'map.md'), 'utf8')).toContain(f.destination.replaceAll('\\', '/'));
+    // placeholders are rendered with the published folder; template code is referenced in the app-owned copy, not the brain
+    expect(fs.readFileSync(path.join(f.destination, '.claude/agents/reviewer.md'), 'utf8')).toContain(`${f.destination.replaceAll('\\', '/')}/me.md`);
+    const map = fs.readFileSync(path.join(f.destination, 'map.md'), 'utf8');
+    expect(map).toContain('{tools}/ops/tools/brain-lint.mjs');
+    expect(map).not.toMatch(/\{\{[A-Z_]+\}\}/);
+    for (const code of ['ops/tools/mem.mjs', 'ops/tools/brain-site.mjs', '.claude/hooks/brain-limits.mjs', 'harness/cursor/chats.mjs', '.claude/settings.json']) expect(fs.existsSync(path.join(f.destination, code)), code).toBe(false);
+    const json = JSON.parse(fs.readFileSync(path.join(f.destination, 'brain.json'), 'utf8'));
+    expect(json).toMatchObject({ machinery: 'product-v1', template: { OWNER: 'Mario Rossi', ROLE: 'consultant', LANG: 'italiano', HARNESSES: 'Codex' } });
+    expect(json.rules.topicFiles).toEqual(expect.arrayContaining(['code.md', 'hub.md', 'brain-rules.md', 'map.md', 'harness/tools.md', 'ops/runbook/index.md']));
     expect(fs.readdirSync(home)).toEqual([]);
   }, 90_000); // Real children: install.mjs (60 s product limit, asserted above), the publish PowerShell (15 s), the copy.
 });

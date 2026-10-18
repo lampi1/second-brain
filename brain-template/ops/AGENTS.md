@@ -1,3 +1,6 @@
+---
+when: {"prompt":["produzione","production","cliente","customer","incidente","incident","deploy","database"],"tools":[],"paths":["**/ops/AGENTS.md"]}
+---
 # Ops: production and shared systems
 
 Rules and commands for {{OWNER}}'s production work (servers, cloud, databases, customers). Read when: anything about

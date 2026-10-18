@@ -18,6 +18,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CORRECTION, CONFUSION } from './signals-regex.mjs';
+import { brainRoot } from './brain-root.mjs';
 
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
 const romeMidnight = d => { // 'YYYY-MM-DD' → epoch ms of 00:00 in Europe/Rome
@@ -145,7 +146,7 @@ if (process.argv.includes('--forced')) {
   const days = Object.keys(forced).sort();
   const total = d => FORCED_KINDS.reduce((a, k) => a + (forced[d][k] ?? 0), 0);
   const topModel = d => Object.entries(models[d] ?? {}).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${m.replace(/^claude-/, '')} ${n}`).join(', ') || '?';
-  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const repo = brainRoot(import.meta.url);
   if (process.argv.includes('--record')) { // append-only measures, one JSON line per day (latest line for a date wins)
     const brain = (spawnSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout || '').trim() || '?';
     const today = day(Date.now()); // a day still in progress is never recorded (partial)

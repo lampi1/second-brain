@@ -1,3 +1,6 @@
+---
+when: {"prompt":["regia","orchestrat","coordina","altre chat","sub-agent","subagent"],"tools":["Agent","Task"],"paths":["**/hub.md"]}
+---
 # Hub: the "Regia"
 
 How one chat, the Regia, coordinates {{OWNER}}'s work chats. Read when: you are the Regia, or you coordinate other

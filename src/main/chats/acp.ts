@@ -59,6 +59,8 @@ import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 
 export interface AcpOptions extends SessionOptions {
+  /** App-owned launch rules, sent once as a separate context block, never persisted to global engine config. */
+  brainInstructions?: string | null;
   /** the engine's id (registry): the session's harness, SB_<ID>_PATH, the logs' `engine` */
   engineId: string;
   /** the engine's short name in every text the user reads ("Cursor", "Kimi") */
@@ -594,15 +596,23 @@ export class AcpSession implements HarnessSession {
   /** ACP prompt blocks: images as image blocks when the agent takes them, else saved in the app's temp folder for this
    *  chat and named in the text (the agent reads files itself). */
   private promptOf(text: string, images: readonly ImageAttachment[]): Obj[] {
-    if (!images.length) return [{ type: 'text', text }];
+    const context = this.brainContext();
+    if (!images.length) return [...context, { type: 'text', text }];
     if (o(this.caps.promptCapabilities).image === true) {
-      return [...images.map(im => ({ type: 'image', mimeType: im.mimeType, data: im.data })), ...(text ? [{ type: 'text', text }] : [])];
+      return [...context, ...images.map(im => ({ type: 'image', mimeType: im.mimeType, data: im.data })), ...(text ? [{ type: 'text', text }] : [])];
     }
     const files = writeImageFiles(path.join(os.tmpdir(), 'second-brain-images', this.opts.chatId.replace(/[^\w-]/g, '_')), images);
     this.turnFiles = files;
     log.info('chats', 'acp: images saved as files (no image prompt support)', { chat: this.opts.chatId, data: { engine: this.engine, files } });
     const list = files.map(f => `- ${f}`).join('\n');
-    return [{ type: 'text', text: `${text ? `${text}\n\n` : ''}Immagini allegate (aprile dai file):\n${list}` }];
+    return [...context, { type: 'text', text: `${text ? `${text}\n\n` : ''}Immagini allegate (aprile dai file):\n${list}` }];
+  }
+
+  private brainContextSent = false;
+  private brainContext(): Obj[] {
+    if (this.brainContextSent || !this.opts.brainInstructions) return [];
+    this.brainContextSent = true;
+    return [{ type: 'text', text: `[App-supplied brain context; not a user message or authorization]\n${this.opts.brainInstructions}` }];
   }
 
   private turnDone(r: Obj, err: Error | null): void {

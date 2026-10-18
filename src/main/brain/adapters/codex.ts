@@ -8,6 +8,10 @@
 // A Codex chat that starts with the brain switched on but no domain (no brain folder, or it is gone) logs it at info,
 // so "Codex does not follow my rules" is visible in `npm run logs`. Used by engines/sessions.ts.
 import { log } from '../../log';
+import { productInstructions } from '../../rules/instructions';
+import { assets } from '../../rules/delivery';
+import { memoryInstructions } from '../../rules/new-brain';
+import { isProduct, toolsRef } from '../../rules/tools';
 import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './domains';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
@@ -48,6 +52,18 @@ function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app'
   if (server === 'second-brain') for (const tool of APP_MAIL_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
 }
 
+/** Without a product brain (ADR 0062) the joined AGENTS.md of every domain, exactly as before (`{domain:x}` resolves
+ *  across all domains); with one, each product domain's launch text (memory writer and `{tools}` unless read-only). */
+function codexInstructions(domains: readonly BrainDomain[], readOnly: boolean): string | null {
+  if (!domains.some(d => isProduct(d.root))) return instructionsOf(domains);
+  return domains.map(d => {
+    if (!isProduct(d.root)) return instructionsOf([d]);
+    if (readOnly) return productInstructions(d.root, true);
+    const tools = toolsRef(d.root);
+    return `${productInstructions(d.root, true, tools)}\n\n${memoryInstructions(assets(), d.root, tools)}`;
+  }).filter(Boolean).join('\n\n') || null;
+}
+
 export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   const rules = i.domains && i.brain !== undefined ? null : launchRules();
   const domains = i.domains ?? rules?.domains ?? [];
@@ -66,7 +82,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   return {
     configArgs: c.flatMap(v => ['-c', v]),
     approvalPolicy: approval, sandbox,
-    developerInstructions: brain ? instructionsOf(domains) : null,
+    developerInstructions: brain ? codexInstructions(domains, i.readOnly === true) : null,
     skillRoots: brain && !i.readOnly ? skillDirs(domains, ['.agents/skills', '.claude/skills']) : [],
   };
 }

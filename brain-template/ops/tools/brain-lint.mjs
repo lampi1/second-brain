@@ -13,9 +13,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { brainRoot } from './brain-root.mjs';
 
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
-const root = path.resolve(arg('--root') ?? path.join(path.dirname(decodeURIComponent(new URL(import.meta.url).pathname).replace(/^\/([A-Z]:)/i, '$1')), '..', '..'));
+const root = path.resolve(arg('--root') ?? brainRoot(import.meta.url));
 const home = os.homedir();
 const live = '{{BRAIN}}'; // imports of the live brain are read from --root (worktree = after)
 const under = (p, d) => path.resolve(p).toLowerCase().startsWith(path.resolve(d).toLowerCase() + path.sep);

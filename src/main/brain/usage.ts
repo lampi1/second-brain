@@ -18,6 +18,7 @@ import type { Usage } from '../../shared/contract';
 import { log } from '../log';
 import { romeDay } from './live';
 import { runNode, type NodeRunner } from './node';
+import { brainScript } from '../rules/tools';
 import type { ChatSpend, Spend } from './budget';
 import type { CursorDay } from './cursor-ledger';
 
@@ -223,7 +224,7 @@ export class UsageMonitor {
     if (this.running) return;
     this.running = true;
     try {
-      const script = this.o.root ? path.join(this.o.root, 'ops', 'tools', 'cost.mjs') : null;
+      const script = this.o.root ? brainScript(this.o.root, 'ops/tools/cost.mjs') : null;
       if (!script || !fs.existsSync(script)) {
         if (!this.warned) log.warn('brain', 'no cost.mjs in this brain: usage without $', { data: { script } });
         this.warned = true;

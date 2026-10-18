@@ -1,3 +1,6 @@
+---
+when: {"prompt":["codice","code","bug","fix","implementa","review","pull request","refactor"],"tools":["Edit","Write","MultiEdit"],"paths":["**/src/**","**/test/**"]}
+---
 # Code work
 
 {{OWNER}}'s rules for code in any repo. Read when: any code work (fix, implement, review, PR). Write when: a code-work

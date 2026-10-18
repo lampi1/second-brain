@@ -12,6 +12,9 @@ const dev = process.argv.includes('--dev');
 fs.rmSync(path.join(root, 'out'), { recursive: true, force: true });
 
 const common = { bundle: true, platform: 'node', target: 'node22', sourcemap: dev ? 'inline' : false, minify: false, logLevel: 'warning', alias: { '@shared': path.join(root, 'src/shared') } };
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/rules/runtime.ts')], outfile: path.join(root, 'out/rules/runtime.mjs'), format: 'esm' });
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/rules/cli.ts')], outfile: path.join(root, 'out/rules/cli.mjs'), format: 'esm' });
+fs.cpSync(path.join(root, 'src/main/rules/hooks'), path.join(root, 'out/rules/hooks'), { recursive: true });
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle

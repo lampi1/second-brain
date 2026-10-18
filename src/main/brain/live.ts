@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import type { ChatSummary, FeedAction, FeedEvent, Priority } from '../../shared/contract';
 import { log, errText } from '../log';
 import { runNode, type NodeRunner } from './node';
+import { brainScript } from '../rules/tools';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
@@ -166,7 +167,7 @@ export const IGNORED = /^(\.git|node_modules|app\/node_modules|\.claude\/worktre
 
 /** Loads the brain's parsers; null (and a warning) when the brain has none or they fail to load. */
 export async function loadParsers(root: string): Promise<Parsers | null> {
-  const f = path.join(root, 'ops', 'tools', 'brain-site', 'parse.mjs');
+  const f = brainScript(root, 'ops/tools/brain-site/parse.mjs') ?? path.join(root, 'ops', 'tools', 'brain-site', 'parse.mjs');
   if (!fs.existsSync(f)) { log.warn('brain', 'no parsers in this brain: feed of chats, playbooks and mail only', { data: { file: f } }); return null; }
   try { return (await import(/* @vite-ignore */ pathToFileURL(f).href)) as Parsers; }
   catch (e) { log.error('brain', 'brain parsers failed to load', { cause: errText(e), hint: `check ${f} with: node --check "${f}"` }); return null; }
@@ -198,7 +199,7 @@ export class Live {
   private src: Source[] = [];
   private chatsScript: string;
 
-  constructor(private o: LiveOptions) { this.chatsScript = path.join(o.root, 'harness', 'cursor', 'chats.mjs'); }
+  constructor(private o: LiveOptions) { this.chatsScript = brainScript(o.root, 'harness/cursor/chats.mjs') ?? path.join(o.root, 'harness', 'cursor', 'chats.mjs'); }
 
   async start(): Promise<void> {
     const P = await loadParsers(this.o.root);

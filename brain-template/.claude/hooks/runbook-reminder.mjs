@@ -14,8 +14,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseHookJson } from '../../harness/cursor/hook-input.mjs';
+import { brainRoot } from '../../ops/tools/brain-root.mjs';
 
-const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const repo = brainRoot(import.meta.url);
 let input = {};
 try { input = parseHookJson(fs.readFileSync(0, 'utf8')); } catch { process.exit(0); } // Cursor: UTF-8 BOM
 // In Cursor a "block" becomes an automatic follow-up with no loop limit: skip repeated runs ({{OWNER}}, 2026-10-09).

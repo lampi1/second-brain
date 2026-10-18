@@ -3,8 +3,9 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brainRoot } from '../../ops/tools/brain-root.mjs';
 
-const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const repo = brainRoot(import.meta.url);
 const git = (...args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 8000 });
 
 try {

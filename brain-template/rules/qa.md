@@ -1,3 +1,6 @@
+---
+when: {"prompt":["qa","test case","caso di test","verifica il fix","collaudo"],"tools":[],"paths":["**/rules/qa.md"]}
+---
 # QA rules
 
 {{OWNER}}'s rules for testing (manual or with an agent in a browser). Read when: a QA chat, a test case, verifying a

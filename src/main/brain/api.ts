@@ -11,10 +11,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
-import path from 'node:path';
 import type { BrainApiResult } from '../../shared/contract';
 import { log, errText } from '../log';
 import type { NodeRunner } from './node';
+import { brainScript } from '../rules/tools';
 
 export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/themes', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve', '/api/agents/analytics']);
 
@@ -48,7 +48,7 @@ export class BrainApi {
 
   constructor(private root: string | null, private node: NodeRunner, private timeoutMs = 120e3, private local: LocalApi = new Map()) {}
 
-  get script(): string | null { return this.root ? path.join(this.root, 'ops', 'tools', 'brain-site.mjs') : null; }
+  get script(): string | null { return this.root ? brainScript(this.root, 'ops/tools/brain-site.mjs') : null; }
 
   private start(): Promise<number> {
     if (this.port) return this.port;

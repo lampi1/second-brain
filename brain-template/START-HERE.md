@@ -1,3 +1,6 @@
+---
+when: {"prompt":["da dove comincio","primo giorno","inizia da qui","pagina vuota"],"tools":[],"paths":["**/START-HERE.md"]}
+---
 # Inizia da qui
 
 La guida del primo giorno di {{BRAIN_NAME}}, il cervello di {{OWNER}}: cosa fare nei primi minuti, cosa mostra ogni

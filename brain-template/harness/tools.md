@@ -1,3 +1,6 @@
+---
+when: {"prompt":["cursor","harness","codex"],"tools":[],"paths":["**/harness/**","**/.cursor/**"]}
+---
 # Tools by harness: the same brain in Claude Code and Cursor
 
 One way for both harnesses wherever both can do it (2026-10-10, Owner: "quasi non serve nemmeno la distinzione"); the
