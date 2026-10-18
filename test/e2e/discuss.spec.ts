@@ -8,7 +8,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { launch, setSize, shot, goPage } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -31,7 +31,7 @@ test.afterAll(async () => { await app?.close(); });
 const settled = async () => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 }); await page.waitForTimeout(250); };
 
 test("Idee · Dall'IA: Discutine docks the Regia with an editable draft that quotes the idea; sent, the idea says Discussa", async () => {
-  await page.getByTestId('nav-idee').click();
+  await goPage(page, 'idee');
   await settled();
   await page.getByTestId('bx-tab-ia').click();
   await expect(page.getByTestId('bx-tab-ia')).toHaveAttribute('aria-selected', 'true');
@@ -101,7 +101,7 @@ test('Idee · Dall\'IA: Apri una chat shows the editable first message; Ctrl+Inv
 });
 
 test('Idee: the table marks the discussed idea; the side peek has Discutine and Apri una chat (light theme too)', async () => {
-  await page.getByTestId('nav-idee').click();
+  await goPage(page, 'idee');
   await settled();
   const row = page.getByRole('row').filter({ hasText: 'Una chat finita si chiude da sola' });
   await expect(row.getByTestId('bx-idea-discussed')).toBeVisible();

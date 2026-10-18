@@ -91,6 +91,11 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   test.setTimeout(120_000);
   await openMap();
   const m = page.getByTestId('brain-map');
+  // The map fills the workspace beside the persistent column; the toast wrapper takes no flex space.
+  const column = (await page.getByTestId('regia-overlay').boundingBox())!;
+  const mapBox = (await m.boundingBox())!;
+  expect(mapBox.width).toBeGreaterThan(column.x * 0.95);
+  expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(column.x + 1);
   const legend = m.getByTestId('bx-map-live');
   await expect(legend).toContainText('Attività osservata');
   await expect(legend).toContainText('Fix totale ordine');

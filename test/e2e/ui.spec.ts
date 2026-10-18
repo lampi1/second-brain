@@ -84,6 +84,7 @@ test('Ferma tutto asks to confirm when more than one chat runs, then stops them'
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('chat-state-fix')).toHaveAttribute('data-state', 'idle');
   await expect(page.getByTestId('chat-state-sms')).toHaveAttribute('data-state', 'idle');
+  await expandChats(page, 'fix');
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Interrotto da te');
   await expect(page.getByTestId('topbar-stopall')).toBeDisabled();
   await app.close();

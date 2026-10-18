@@ -138,6 +138,14 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
+/** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
+const GO_KEY = { home: 'h', agenti: 'a', devops: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', procedure: 'l', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', migliora: 'u' } as const;
+export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press(GO_KEY[id]);
+}
+
 /** Opens the agent studio with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
  *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. */
 export async function openAgents(page: Page): Promise<void> {

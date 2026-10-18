@@ -4,7 +4,7 @@
 // for Cursor questions too (with a note), long permission details keeping the buttons visible, a failed answer coming
 // back answerable, browser tiles without a snapshot showing title and address.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerPage, layerState } from './helpers';
+import { expandChats, launchDemo, layerPage, layerState, goPage } from './helpers';
 
 type Demo = { stop(c: string): Promise<void>; say(c: string, t: string): void; ask(c: string, r: object): void; event(e: object): void; failNextAnswer(): void; clearThumbs(): void };
 const demo = <T,>(app: ElectronApplication, fn: (d: Demo, arg: T) => void, arg: T) =>
@@ -24,6 +24,7 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
     '<iframe src="//evil.example"></iframe><object data="//evil.example"></object><embed src="//evil.example"><base href="//evil.example/"><meta http-equiv="refresh" content="0;url=//evil.example"><link rel="stylesheet" href="//evil.example/s.css">',
     '<div href="//evil.example" style="color:red">div</div>',
   ].join('\n\n');
+  await expandChats(page, 'fix'); // a strip of the Grindhouse shows its transcript once open
   await demo(app, (d, t) => d.say('fix', t), evil);
   const md = page.getByTestId('tile-chat-fix').locator('.msg-assistant .md').last();
   await expect(md).toContainText('ok');
@@ -48,7 +49,7 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
 
 test('S2/S3/C8: Enter on "Apri" never answers; a toast action and the last answer give the keyboard back to the app', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await page.keyboard.press('Control+R'); // the Regia overlay: its card is the one popup, the layer waits
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
   await demo(app, d => d.stop('regia'), null); // her request leaves ("Rispondi dopo" would quiet them all): QA and Feedback float
@@ -61,7 +62,7 @@ test('S2/S3/C8: Enter on "Apri" never answers; a toast action and the last answe
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
   // a toast action hands the keyboard back (a chat's turn failing toasts; a logged error no longer does: lib/notify.ts
   // TOAST_KINDS, "only what needs the user interrupts")
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await demo(app, (d, e) => d.event(e), { kind: 'chat-failed', title: 'Turno finito con un errore', chatId: 'mappa' });
   await layer.getByTestId('ev-toast-close-chat-failed').click();
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
@@ -80,7 +81,7 @@ test('S2/S3/C8: Enter on "Apri" never answers; a toast action and the last answe
 
 test('C1: Ctrl+J from inside the layer to an app card brings the keyboard back to the app', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await page.keyboard.press('Control+R');
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // the Regia's card is the one popup
   await page.keyboard.press('Control+J'); // Regia (dock, app)
@@ -98,7 +99,7 @@ test('C1: Ctrl+J from inside the layer to an app card brings the keyboard back t
 
 test('C9: the layer page reloads after a crash and shows the cards again', async () => {
   const { app, page } = await launchDemo();
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   await expect.poll(async () => (await layerState(app)).cards).toBe(3);
   await app.evaluate(({ webContents }) => webContents.getAllWebContents().find(w => w.getURL().includes('#overlay'))?.forcefullyCrashRenderer());
   await page.waitForTimeout(1200);
@@ -119,7 +120,7 @@ test('C2/C10: an old finished chat is reachable from the palette, tabs without a
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('report settimanale');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('col-working').getByTestId('tile-chat-report')).toBeVisible();
+  await expect(page.getByTestId('tile-chat-report')).toBeVisible();
   await expect(page.getByTestId('chat-input-report')).toBeFocused();
   await app.close();
 });
@@ -139,7 +140,7 @@ test('C3/C4/C7: free text for Cursor questions too, with a note; long details ke
   await expect(page.getByTestId('request-qa-qa-q1-other')).toBeVisible();
   await page.keyboard.press('Escape');
   // C4: a permission with a very long command, floating in the layer on a page
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   const long = Array.from({ length: 200 }, (_, i) => `echo riga ${i}`).join('\n');
   await demo(app, (d, c) => d.ask('mappa', { type: 'permission', tool: 'Bash', title: 'Bash · script lungo', detail: c, input: {} }), long);
   const layer = await layerPage(app);

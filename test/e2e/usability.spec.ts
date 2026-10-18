@@ -100,7 +100,9 @@ test('Seguo un browser a schermo intero e torno', async () => {
   const s = new Scenario('Seguo un browser a schermo intero', page);
   await s.click('browser-max-tab-qa', '⤢ sul browser della QA');
   await s.check('il browser riempie lo spazio di lavoro', async () => {
-    await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(1000);
+    // The persistent Orchestrator column keeps its space beside the maximized browser.
+    const col = await page.getByTestId('maximized').evaluate(e => e.getBoundingClientRect().width);
+    await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(col * 0.9);
   });
   await s.press('Escape', 'Esc: torno alla colonna degli agenti');
   await s.check('di nuovo la colonna degli agenti', async () => { await expect(page.getByTestId('tile-chat-qa')).toBeVisible(); });
