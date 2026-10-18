@@ -21,7 +21,7 @@ the second-brain-app folder.
   panel open at its default place covered the first chat column, the pages' back button and the first "ti aspetta"
   cards. `Ctrl+R` opens/closes it (the keyboard goes back to the button), `Esc` closes it when its input is empty; the
   palette has "Regia: rimetti al suo posto". Place, size and open/closed are UI prefs (localStorage).
-- **Opacity** (removed 2026-10-18: the persistent column of ADR 0068 is always opaque). Setting `regiaOpacity` (40-100 %, default 100), also in the overlay's ⋯ menu; the panel is fully
+- **Opacity.** Setting `regiaOpacity` (40-100 %, default 100), also in the overlay's ⋯ menu; the panel is fully
   opaque while the pointer is over it or the focus is inside. A browser tab is a native view drawn above the page: a
   browser tile the open panel covers hides until the panel moves or closes (the overlay registers like any popover,
   `lib/viewports.ts`), shown as its frozen thumbnail.

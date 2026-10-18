@@ -1,9 +1,10 @@
 // Main-only local attachment viewer regression: actual layout IPC must park all native browser views.
 import { expect,test } from '@playwright/test';
-import { demoLayout,launchDemo,shot } from './helpers';
+import { demoLayout,expandChats,launchDemo,shot } from './helpers';
 test('an attachment modal hides native pages and closing it restores them',async()=>{
   const {app,page}=await launchDemo();
   try{
+    await expandChats(page,'qa','fix'); // the browser and the input show on open strips
     await expect.poll(async()=>(await demoLayout(app)).some(view=>view.rect!==null)).toBe(true);
     await page.evaluate(async()=>{
       const canvas=new OffscreenCanvas(64,64);canvas.getContext('2d')!.fillRect(0,0,64,64);

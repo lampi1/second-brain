@@ -1,10 +1,10 @@
 // Main-only UI acceptance for local catalog/interview; no provider or image-generation requests.
 import { expect,test } from '@playwright/test';
-import { launchDemo, shot, goPage } from './helpers';
+import { launchDemo,openAgents, shot } from './helpers';
 test('offline interview is resumable and agent drafts survive page navigation',async()=>{
   const {app,page}=await launchDemo();
   try {
-    await goPage(page, 'agenti');
+    await openAgents(page);
     const studio=page.getByTestId('agent-studio');await expect(studio).toBeVisible();
     await studio.getByRole('button',{name:'Configura il tuo lavoro',exact:true}).click();
     const setup=page.getByTestId('first-interview');await expect(setup).toBeVisible();
@@ -20,7 +20,7 @@ test('offline interview is resumable and agent drafts survive page navigation',a
     await expect(page.getByTestId('agent-name')).toBeFocused();
     await page.getByTestId('agent-name').fill('Assistente offerte');
     await page.getByTestId('nav-devops').click();
-    await goPage(page, 'agenti');
+    await openAgents(page);
     await expect(page.getByTestId('agent-name')).toHaveValue('Assistente offerte');
     await shot(page,'agent-editor-local-draft');
   } finally {await app.close();}
@@ -29,7 +29,7 @@ test('offline interview is resumable and agent drafts survive page navigation',a
 test('agent manifest edits survive navigation, save and restart, with safe read-only display',async()=>{
   const first=await launchDemo();
   try {
-    await goPage(first.page, 'agenti');
+    await openAgents(first.page);
     const studio=first.page.getByTestId('agent-studio');
     await studio.getByRole('button',{name:'Crea agente',exact:true}).click();
     await first.page.getByTestId('agent-name').fill('Manifest test');
@@ -41,7 +41,7 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
     await first.page.getByTestId('agent-manifest-accessScopes').fill('Authorized sources only');
     await first.page.getByTestId('agent-manifest-successCriteria').fill('Checkable references\nUnknowns explicit');
     await first.page.getByTestId('nav-devops').click();
-    await goPage(first.page, 'agenti');
+    await openAgents(first.page);
     await expect(first.page.getByTestId('agent-manifest-whenToUse')).toHaveValue('<script>untrusted declaration</script>');
     await first.page.getByTestId('agent-save').click();
     const card=studio.locator('article').filter({has: first.page.getByRole('heading',{name:'Manifest test',exact:true})});
@@ -52,7 +52,7 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
   } finally {await first.app.close();}
   const second=await launchDemo({userData:first.userData});
   try {
-    await goPage(second.page, 'agenti');
+    await openAgents(second.page);
     const card=second.page.getByTestId('agent-studio').locator('article').filter({has:second.page.getByRole('heading',{name:'Manifest test',exact:true})});
     await card.getByRole('button',{name:'Modifica',exact:true}).click();
     await expect(second.page.getByTestId('agent-manifest-input')).toHaveValue('Question and constraints');

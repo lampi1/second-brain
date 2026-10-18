@@ -81,7 +81,7 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
   await expect(layer.getByText(/da rispondere|in attesa/)).toHaveCount(0); // no waiting strip: the top bar counts them
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
   await page.getByTestId('page-back').click(); // back to the Grindhouse: the tile says "Da rispondere", no panel, no layer card
-  await expect(page.getByTestId('chat-queued-feedback')).toBeVisible();
+  await expect(page.getByTestId('chat-wait-feedback')).toBeVisible(); // collapsed: the strip's pill
   await expect(page.getByTestId('request-feedback-feedback-p1')).toHaveCount(0);
   await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
   await expect(page.getByTestId('topbar-next')).toContainText('Da rispondere');

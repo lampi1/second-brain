@@ -1,8 +1,8 @@
 // Several Regie (ADR 0021): which Regia a chat answers to (src/shared/regia.ts), tab labels and names, the opacity
-// setting gone. The widget's size and room: regia-dock.test.ts.
+// setting's schema. The widget's size and room: regia-dock.test.ts.
 import { describe, expect, it } from 'vitest';
 import { chatName, cleanRegiaName, regiaLabel, regiaOfChat, regieOf } from '../../src/shared/regia';
-import { defOf } from '../../src/main/brain/settings-schema';
+import { defOf, validate } from '../../src/main/brain/settings-schema';
 import { DEFAULTS } from '../../src/main/brain/config';
 
 const chats = [
@@ -49,8 +49,10 @@ describe('which Regia a chat answers to', () => {
   });
 });
 describe('the Regia opacity setting', () => {
-  it('is gone: the Orchestrator column is always opaque (ADR 0068)', () => {
-    expect(defOf('regiaOpacity')).toBeNull();
-    expect('regiaOpacity' in DEFAULTS).toBe(false);
+  it('40-100 %, fully opaque by default, free (not protected)', () => {
+    expect(DEFAULTS.regiaOpacity).toBe(100);
+    expect(defOf('regiaOpacity')!.protected).toBe(false);
+    expect(validate('regiaOpacity', 70)).toMatchObject({ ok: true, value: 70 });
+    for (const bad of [39, 101, 'x', null, 55.5]) expect(validate('regiaOpacity', bad).ok, String(bad)).toBe(false);
   });
 });

@@ -1,9 +1,9 @@
 // E2E of navigation and notifications (frozen demo): an important event → a toast in the global layer → its action
 // opens the right place with the element highlighted; the notification center (filter, mark all read, remembered);
-// section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the Regia overlay on a brain page;
+// role-specific section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the persistent Orchestrator on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
-import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot, goPage } from './helpers';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { launchDemo, layerPage, shot, windowShot } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
@@ -11,9 +11,17 @@ const event = (app: ElectronApplication, e: { kind: string; title: string; detai
 // ones before it were handled by then (a fixed pause can end before they even arrive on a busy machine)
 const SENTINEL = { kind: 'sync-blocked', title: 'Segnale di fine' };
 
+// Secondary pages remain in Ctrl+K after the Grindhouse redesign removed their default rail entries.
+async function openPage(page: Page, id: 'costi' | 'idee') {
+  await page.keyboard.press('Control+K');
+  await page.getByTestId('palette-input').fill(`sb://${id}`);
+  await page.getByTestId('palette-item-link').click();
+  await expect(page.getByTestId(`page-${id}`)).toBeVisible();
+}
+
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
   const { app, page } = await launchDemo();
-  await goPage(page, 'costi');
+  await openPage(page, 'costi');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await event(app, { kind: 'chat-failed', title: 'Test e2e rossi', detail: 'il turno è finito con un errore', chatId: 'mappa' });
   const layer = await layerPage(app);
@@ -69,11 +77,19 @@ test('notification center: filter by kind, mark all read (remembered after a rel
 test('section badges count new events and clear when the section is visited', async () => {
   // a live clock: frozen, the visit and the event share one instant and the event is never newer than the visit
   const { app, page } = await launchDemo({ freeze: false });
+  // Badges are still available when a saved role explicitly includes these secondary pages.
+  await page.evaluate(() => {
+    const prefs = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}');
+    prefs.role = { schemaVersion: 1, presetId: 'cto', presetRevision: 1, overrides: { addPageIds: ['idee'] } };
+    localStorage.setItem('sb.prefs.v1', JSON.stringify(prefs));
+  });
+  await page.reload();
+  await expect(page.getByTestId('nav-idee')).toBeVisible();
   // Costi's badge is a warning mark, not a number (WARN_SECTIONS): it shows with a new budget event
   const badge = page.getByTestId('nav-badge-costi');
-  await goPage(page, 'costi');
+  await page.getByTestId('nav-costi').click();
   await expect(badge).toHaveText('');
-  await goPage(page, 'idee');
+  await page.getByTestId('nav-idee').click();
   // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was; the budget event after it
   // shows Costi's mark, so the idea was handled by then
   const ideas = page.getByTestId('nav-badge-idee');
@@ -82,7 +98,7 @@ test('section badges count new events and clear when the section is visited', as
   await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
   await expect(badge).toHaveText('!');
   await expect(ideas).toHaveText(ideasBefore ?? '');
-  await goPage(page, 'costi');
+  await page.getByTestId('nav-costi').click();
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await expect(badge).toHaveText('');
   await app.close();
@@ -125,10 +141,10 @@ test('the bell counts only what needs the user; the center keeps everything else
   await app.close();
 });
 
-test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page', async () => {
+test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator on a page', async () => {
   const { app, page } = await launchDemo();
-  await goPage(page, 'costi');
-  await goPage(page, 'idee');
+  await openPage(page, 'costi');
+  await openPage(page, 'idee');
   await expect(page.getByTestId('page-idee')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-costi')).toBeVisible();
@@ -149,6 +165,7 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page'
   // the Regia without leaving the page
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('regia-input')).toBeFocused();
   await page.getByTestId('regia-input').fill('che si fa adesso?');
   await page.getByTestId('regia-input').press('Enter');
   // the Regia waits on its decision: the message is queued (sent when it is free), the decision answerable right here
@@ -159,7 +176,8 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the Regia overlay on a page'
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   await shot(page, 'regia-overlay');
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-overlay')).toHaveCount(0);
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('regia-input')).toBeFocused();
   // the map: full screen, browser views hidden, Esc closes
   await page.getByTestId('nav-map').click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
@@ -174,7 +192,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await page.getByTestId('chat-link-qa').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://home/chat-qa');
   const link = 'sb://workspace/chat-qa'; // a link copied before SPEC 19 still lands on the chat, in the Grindhouse
-  await goPage(page, 'costi');
+  await openPage(page, 'costi');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(link);
@@ -183,7 +201,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
   // a page link from its frame
-  await goPage(page, 'idee');
+  await openPage(page, 'idee');
   await page.getByTestId('page-copy-link').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://idee');
   await app.close();

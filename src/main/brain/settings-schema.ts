@@ -67,6 +67,13 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // the Grindhouse's headline (SPEC 18, main/headline.ts). Protected: it spends the API credits about once an hour
+  { key: 'headlineOn', type: 'boolean', default: true, protected: true, label: 'Battuta del Grindhouse',
+    description: 'Circa una volta l’ora un modello scrive una battuta sui fatti veri della giornata (crediti API, al massimo 1500 token). Spento: una battuta della lista dell’app, zero token.' },
+  { key: 'headlineModel', type: 'model', default: '', protected: true, label: 'Battuta: modello',
+    description: 'Il modello Claude che scrive la battuta, sul motore Anthropic API. Vuoto = claude-opus-5-5.' },
+  { key: 'headlineEffort', type: 'enum', values: ['', 'low', 'medium', 'high'], default: '', protected: true, label: 'Battuta: effort',
+    description: 'Quanto ragiona il modello della battuta. Vuoto = low.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -99,6 +106,9 @@ const BASE: readonly SettingDef[] = [
     description: 'Quanto ragiona il modello di ogni chat Cursor. Vuoto = il predefinito del modello. Se il modello non lo offre, la chat lo dice.' },
   { key: 'regiaChats.cursorFast', type: 'boolean', default: false, protected: true, label: 'Fast per le chat Cursor',
     description: 'Acceso: ogni chat Cursor usa la variante fast del modello, se c’è (più veloce, consuma di più).' },
+  // the floating Regia (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
+  { key: 'regiaOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
+    description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
   // the Regia hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
   { key: 'regiaEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
@@ -198,11 +208,13 @@ export function defaults(): Settings {
     devops: { enabled: false, everyMin: 30, sound: true },
     budget: { enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } },
     regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false },
+    regiaOpacity: 100,
     regiaEvents: true,
     runResults: true,
     questionsModal: false,
     appRepo: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    headlineOn: true, headlineModel: '', headlineEffort: '',
   };
 }
 

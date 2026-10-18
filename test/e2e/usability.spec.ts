@@ -40,6 +40,7 @@ test.afterAll(() => {
 
 test('Rispondo a una domanda dalla sua tessera senza aprire la chat', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'feedback'); // their questions sit on the open strips
   const s = new Scenario('Rispondo a una domanda dalla sua tessera', page);
   await s.press('Control+J', 'Ctrl+J: la cosa più vecchia che mi aspetta');
   await s.press('1', '1: scelgo la prima opzione');
@@ -95,10 +96,11 @@ test('Trovo una chat con la ricerca', async () => {
 
 test('Seguo un browser a schermo intero e torno', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa'); // its browser sits on the open strip
   const s = new Scenario('Seguo un browser a schermo intero', page);
   await s.click('browser-max-tab-qa', '⤢ sul browser della QA');
   await s.check('il browser riempie lo spazio di lavoro', async () => {
-    // ADR 0068: the Orchestrator column stays, so "full" is the agents' column, not the window
+    // The persistent Orchestrator column keeps its space beside the maximized browser.
     const col = await page.getByTestId('maximized').evaluate(e => e.getBoundingClientRect().width);
     await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(col * 0.9);
   });
@@ -110,7 +112,7 @@ test('Seguo un browser a schermo intero e torno', async () => {
 
 test('Torno alla Regia da qualsiasi punto', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'fix');
+  await expandChats(page, 'fix'); // the input is on the open strip
   await page.getByTestId('chat-input-fix').click();
   const s = new Scenario('Torno alla Regia', page);
   await s.press('Control+0', 'Ctrl+0: Regia');

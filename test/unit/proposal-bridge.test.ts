@@ -44,5 +44,5 @@ describe('renderer proposal bridge', () => {
     expect(requests).toHaveLength(1); expect(rows[0]!.closedAt).toBeUndefined(); expect(focus).toHaveBeenCalledTimes(3);
     expect(await bridge.publish({ id: proposal.id, reviewedHead: 'a'.repeat(40) })).toMatchObject({ phase: 'blocked', problem: expect.stringMatching(/Rivedi prima/) });
     expect(runGit(repo, 'remote')).toBe('');
-  });
+  }, 60_000); // real git init/commit/worktree children: ~1.3 s alone, 15 s+ with two full suites in parallel
 });

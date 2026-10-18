@@ -3,7 +3,7 @@
 // nuova" (not on the Regia: it renews instead); close last. The same menu serves a Regia, which adds, after the
 // everyday actions, "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
 // "Cambia motore" (to the first other engine): both open the "Nuova Regia" confirm (RegiaRenewDialog); the old Regia goes on as
-// a normal chat, history kept (the column is always opaque: no opacity setting since ADR 0068). "Chiudi la Regia" only while another Regia stays.
+// a normal chat, history kept; the overlay's opacity (setting regiaOpacity, ADR 0021). "Chiudi la Regia" only while another Regia stays.
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and RegiaTile.
 import type { RefObject } from 'react';
 import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
@@ -12,7 +12,7 @@ import { engineCan, engineName, otherEngine } from '../lib/engines';
 import { modelOptions, useModelsSeen } from '../lib/models';
 import { makeLink } from '../lib/notify';
 import { isBusy, sameList } from '../store/state';
-import { closeChat, setChat, useApp } from '../store/store';
+import { closeChat, setChat, setSetting, useApp } from '../store/store';
 import { openHandoff, setFocused } from '../store/ui';
 import { askClearRegia, askCloseRegia, askRenewRegia, copyLink, resumeChat, toggleFocusMode } from '../actions';
 import { regieIdsOf } from '../lib/regia-route';
@@ -47,6 +47,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
   const next = useContinuedBy(chat);
   const seen = useModelsSeen(open);
   const pick = (fn: () => void) => () => { fn(); onClose(); };
+  const opacity = useApp(s => s.settings?.regiaOpacity ?? 100);
   const regie = useApp(s => regieIdsOf(s), sameList);
   return (
     <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={regia ? 290 : 270}>
@@ -71,6 +72,11 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
               )}
             </>
           )}
+          <label className="menu-range" data-testid="regia-opacity">
+            <span>{t('chat.menu.opacityWord')} <b>{opacity}%</b></span>
+            <input type="range" min={40} max={100} step={5} value={opacity} aria-label={t('chat.menu.opacityLabel')}
+              onChange={e => void setSetting({ regiaOpacity: Number(e.target.value) })} data-testid="regia-opacity-range" />
+          </label>
           <MenuSep />
         </>
       )}

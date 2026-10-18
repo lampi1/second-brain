@@ -7,6 +7,7 @@ import { demoLayout, expandChats, launch, launchDemo, openRegia, setSize, shot, 
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
+  await expandChats(page, 'qa', 'sms', 'feedback'); // open strips: their requests and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
   await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Regia's own floats in the layer
@@ -31,6 +32,7 @@ test('answering a tile panel with "1" resolves the request without opening the c
   const { page, app } = await launchDemo();
   await openRegia(page); // her decision on screen (reduced, it would float in the layer)
   await expect(page.getByTestId('regia-input')).toBeFocused(); // opened: the keyboard is in her input first
+  await expandChats(page, 'qa', 'feedback'); // their cards are on the open strips
   await page.keyboard.press('Control+J'); // the oldest first: the Regia's decision
   await expect(page.getByTestId('request-regia-regia-q1')).toBeFocused();
   await page.keyboard.press('1');
@@ -54,7 +56,7 @@ test('answering a tile panel with "1" resolves the request without opening the c
 
 test('a tile input: Enter sends, Shift+Enter is a new line, a busy chat queues the message', async () => {
   const { page, app } = await launchDemo();
-  await expandChats(page, 'mappa', 'fix'); // strips are collapsed (ADR 0068): the input shows once expanded
+  await expandChats(page, 'mappa', 'fix'); // the inputs are on the open strips
   const input = page.getByTestId('chat-input-mappa');
   await input.click();
   await expect(input).toBeFocused();
@@ -75,6 +77,7 @@ test('a tile input: Enter sends, Shift+Enter is a new line, a busy chat queues t
 
 test('Ferma tutto asks to confirm when more than one chat runs, then stops them', async () => {
   const { page, app } = await launchDemo();
+  await expandChats(page, 'fix'); // its transcript is on the open strip
   await expect(page.getByTestId('chat-state-fix')).toHaveAttribute('data-state', 'running');
   await page.getByTestId('topbar-stopall').click();
   await expect(page.getByTestId('confirm')).toContainText('Fermare 2 chat');
@@ -111,7 +114,8 @@ test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', as
 
 test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', async () => {
   const { page, app } = await launchDemo();
-  await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(2);
+  await expandChats(page, 'qa'); // its browser is on the open strip; SMS stays collapsed
+  await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(1);
   await page.keyboard.press('Control+K');
   await expect(page.getByTestId('palette')).toBeVisible();
   await expect.poll(async () => (await demoLayout(app)).every(l => l.rect === null)).toBe(true);
@@ -122,8 +126,8 @@ test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', 
   await expect(page.getByTestId('palette-item-chat:sms')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('palette')).toHaveCount(0);
-  await expect(page.getByTestId('chat-input-sms')).toBeFocused();
-  await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(2);
+  await expect(page.getByTestId('chat-input-sms')).toBeFocused(); // the jump opened its collapsed strip
+  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect ?? null).not.toBeNull();
   // a brain page from the palette; Esc goes back
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('costi');
@@ -174,7 +178,7 @@ test('Ctrl+N creates a chat: its tile appears with the first message and gets th
 
 test('the live demo streams text and finishes running tools', async () => {
   const { page, app } = await launchDemo({ freeze: false });
-  await expandChats(page, 'fix', 'sms');
+  await expandChats(page, 'fix', 'sms'); // transcripts and requests are on the open strips
   // the fix's running test finishes, then its next message streams in
   await expect(page.getByTestId('tool-fix-t4')).toHaveAttribute('data-status', 'ok', { timeout: 15_000 });
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Tutti verdi', { timeout: 10_000 });

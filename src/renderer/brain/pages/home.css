@@ -1,33 +1,5 @@
-/* The Grindhouse's hierarchy: generous heading, quiet section labels, dense request rows, then the agents' strips
-   (styles/agent-strips.css).
-   Entry and activity motion are bounded and fully disabled by reduced-motion preferences. */
+/* The Grindhouse: only the agents' strips (styles/agent-strips.css), the page gives them the width. */
 .home-page { width: 100%; min-width: 0; max-width: 1040px; margin: 0 auto; color: var(--text); padding: 12px 16px 24px; box-sizing: border-box; }
-.home-heading { padding: 12px 0 20px; }
-.home-eyebrow { font-size: 10px; letter-spacing: .16em; color: var(--text-3); font-weight: 600; }
-.home-heading h1 { font-size: clamp(24px, 2.4vw, 34px); letter-spacing: -1.1px; font-weight: 600; margin: 12px 0 8px; }
-.home-heading p { color: var(--text-3); font-size: 13px; margin: 0; }
-.home-overview { display: flex; gap: 18px; margin-top: 24px; color: var(--text-2); font-size: 12px; }
-.home-overview span { display: inline-flex; align-items: center; gap: 8px; }
-.home-live-dot { width: 6px; height: 6px; background: var(--blue); border-radius: 50%; animation: status-breathe 1.8s ease-in-out infinite; }
-.home-section { margin-bottom: 20px; }
-.home-section-head { display: flex; align-items: center; gap: 9px; min-height: 40px; margin-bottom: 8px; }
-.home-section-head h2 { font-size: 13px; font-weight: 600; margin: 0; }
-.home-count { padding: 2px 6px; border-radius: 5px; font-size: 10px; background: var(--surface-3); color: var(--text-3); }
-.home-waiting .home-count { color: var(--amber); background: var(--amber-bg); }
-.home-request-list { display: flex; flex-direction: column; gap: 2px; }
-.home-request { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 66px; text-align: left; padding: 12px; background: transparent; border: 1px solid transparent; border-bottom-color: var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font: inherit; transition: background var(--dur), transform var(--dur), border-color var(--dur); animation: home-row-enter 260ms var(--ease) both; animation-delay: calc(var(--row-index, 0) * 30ms); }
-.home-request:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-1px); }
-.home-request:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.home-row-copy { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
-.home-row-copy strong { font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-row-copy small { color: var(--text-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-row-arrow { color: var(--text-4); font-size: 18px; }
-.home-request { background: var(--surface); border-color: var(--border); margin-bottom: 4px; }
-.home-request-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; background: var(--amber-bg); color: var(--amber); border-radius: 7px; font-family: var(--mono); }
 .home-calm { color: var(--text-3); border: 1px dashed var(--border-2); border-radius: 8px; padding: 20px; font-size: 12px; line-height: 1.7; }
-.home-footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 16px; color: var(--text-4); font-size: 10px; }
 [data-testid="brain-page-home"] > .bx-inner { max-width: none; min-width: 0; grid-template-columns: minmax(0, 1fr); padding: 16px 20px 32px; }
-.home-heading h1, .home-heading p { white-space: normal; overflow-wrap: anywhere; }
-@keyframes home-row-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 1100px) { .home-page { padding: 0 4px 16px; } .home-footer > span:last-child { display: none; } }
-@media (prefers-reduced-motion: reduce) { .home-request, .home-live-dot { animation: none; transition: none; } .home-request:hover { transform: none; } }
+@media (max-width: 1100px) { .home-page { padding: 0 4px 16px; } }

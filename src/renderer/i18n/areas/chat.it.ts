@@ -78,6 +78,8 @@ export const chatIt = {
   'chat.menu.clear': 'Pulisci…',
   'chat.menu.renew': 'Ricomincia da capo…',
   'chat.menu.switchEngine': (p: { engine: string }) => `Cambia motore → ${p.engine}…`,
+  'chat.menu.opacityWord': 'Opacità',
+  'chat.menu.opacityLabel': 'Opacità dell’Orchestrator',
   'chat.menu.modelLabel': 'Modello',
   'chat.menu.effortLabel': 'Quanto ragiona',
   'chat.menu.permissionLabel': 'Quando chiede il permesso',
