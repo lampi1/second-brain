@@ -32,7 +32,9 @@ describe('platform location fixtures', () => {
     expect(JSON.stringify(found)).not.toContain('david');
   });
 });
-afterEach(async () => { await Promise.all(temporary.splice(0).map(p => fs.rm(p, { recursive: true, force: true }))); });
+// One at a time, newest first: a fixture can live inside an earlier one (the temp-alias case), and two concurrent
+// removals of one tree fail with EPERM on Windows; maxRetries rides out an antivirus handle on a just-written file.
+afterEach(async () => { for (const p of temporary.splice(0).reverse()) await fs.rm(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); });
 async function fixture(local = new LocalFiles(async () => 0)) {
   // Resolve the fixture boundary only; LocalFiles still rejects every link beneath it.
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'sb-onboarding-'))); temporary.push(root);
