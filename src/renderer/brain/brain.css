@@ -387,9 +387,34 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-hits .f { font: 12px var(--bx-mono); color: var(--bx-blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-hits .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-hits mark { background: var(--bx-amber-bg); color: var(--bx-amber); border-radius: 3px; padding: 0 1px; }
+/* syntax colours of the file viewer (highlight.js classes, FileViewer.tsx): the palette's own tones, no theme file */
+.bx-code.hljs .hljs-comment, .bx-code.hljs .hljs-quote, .bx-code.hljs .hljs-meta { color: var(--bx-text-3); font-style: italic; }
+.bx-code.hljs .hljs-keyword, .bx-code.hljs .hljs-selector-tag, .bx-code.hljs .hljs-built_in, .bx-code.hljs .hljs-doctag { color: var(--bx-violet); }
+.bx-code.hljs .hljs-string, .bx-code.hljs .hljs-regexp, .bx-code.hljs .hljs-addition, .bx-code.hljs .hljs-template-tag { color: var(--bx-green); }
+.bx-code.hljs .hljs-number, .bx-code.hljs .hljs-literal, .bx-code.hljs .hljs-symbol, .bx-code.hljs .hljs-bullet { color: var(--bx-amber); }
+.bx-code.hljs .hljs-title, .bx-code.hljs .hljs-section, .bx-code.hljs .hljs-function .hljs-title, .bx-code.hljs .hljs-selector-id { color: var(--bx-blue); }
+.bx-code.hljs .hljs-attr, .bx-code.hljs .hljs-attribute, .bx-code.hljs .hljs-name, .bx-code.hljs .hljs-tag, .bx-code.hljs .hljs-variable, .bx-code.hljs .hljs-type, .bx-code.hljs .hljs-selector-class { color: var(--bx-blue); opacity: 0.85; }
+.bx-code.hljs .hljs-deletion { color: var(--bx-red); }
+.bx-code.hljs .hljs-emphasis { font-style: italic; }
+.bx-code.hljs .hljs-strong { font-weight: 600; }
 .bx-viewer { display: grid; gap: 12px; min-width: 0; }
 .bx-viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bx-viewer-head h2 { font: 600 var(--bx-fs-l) var(--bx-mono); min-width: 0; overflow-wrap: anywhere; }
+.bx-pdf { display: grid; justify-items: center; gap: 12px; max-height: 75vh; overflow: auto; padding: 12px; background: var(--bx-surface-2); border: 1px solid var(--bx-border); border-radius: 8px; }
+.bx-pdf-page { display: block; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+/* the viewer's Compare (FileDiff.tsx): old and new line numbers, then the line, added green and removed red */
+.bx-diff-panel { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--bx-border); border-radius: var(--bx-r-l); background: var(--bx-surface-2); }
+.bx-diff-panel .bx-input { flex: 1; min-width: 180px; font-family: var(--bx-mono); }
+.bx-diff { display: grid; gap: 6px; }
+.bx-diff-label { font-family: var(--bx-mono); min-width: 0; overflow-wrap: anywhere; }
+.bx-diff-add-n { color: var(--bx-green); font-weight: 600; }
+.bx-diff-del-n { color: var(--bx-red); font-weight: 600; }
+.bx-diff-n { display: inline-block; width: var(--bx-diff-w, 5ch); color: var(--bx-text-4); user-select: none; text-align: right; padding-right: 1ch; }
+.bx-diff-sign { display: inline-block; width: 2ch; user-select: none; text-align: center; }
+.bx-diff-add { background: var(--bx-green-bg); }
+.bx-diff-del { background: var(--bx-red-bg); }
+.bx-diff-hunk, .bx-diff-note { color: var(--bx-text-3); font-style: italic; }
+.bx-diff-hunk:not(:first-child) { margin-top: 6px; }
 @media (max-width: 980px) { .bx-explore { grid-template-columns: 1fr; } .bx-tree { position: static; max-height: 320px; } }
 
 /* ── 3D map (night world: fixed colors whatever the theme) ───────────────────────────────────────────────────── */

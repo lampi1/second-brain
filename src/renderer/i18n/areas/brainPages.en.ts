@@ -5,6 +5,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
+  'brainPages.nav.guida': 'Guide',
   'brainPages.nav.devops': 'DevOps',
   'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',
@@ -193,8 +194,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.procedure.maskedMany': (p: { n: number }) => `${p.n} rows hidden`,
   'brainPages.procedure.maskedBecause': (p: { n: number }) => `because ${p.n === 1 ? "it can" : "they can"} contain a credential.`,
   'brainPages.procedure.defaultTitle': 'Procedure',
-  'brainPages.procedure.openFileError': "Can't open the file",
-  'brainPages.procedure.fileSelected': 'The file is selected in File Explorer',
   'brainPages.procedure.pathCopied': 'Path copied',
   'brainPages.procedure.copyFailed': 'Copy failed',
   'brainPages.procedure.rowTitle': (p: { file: string; line: number }) => `${p.file}, line ${p.line}`,

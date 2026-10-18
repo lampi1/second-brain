@@ -138,3 +138,22 @@
 .dash-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0;padding:8px 20px;font-size:12px;color:var(--text-2)}
 .dash-legend span{display:flex;align-items:center;gap:6px}.dash-legend i{display:inline-block;border-radius:50%}
 .dash-inspector h2,.dash-inspector code{overflow-wrap:anywhere}
+
+/* Temi (SPEC 23 b): themes of ai-errors.md / ideas.md by meaning */
+.dash-themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:16px 20px}
+.dash-theme{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px;min-width:0}
+.dash-theme.growing{border-color:var(--blue)}
+.dash-theme header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dash-theme h4{margin:0;font-size:13px;font-weight:600;flex:1 1 auto;overflow-wrap:anywhere}
+.dash-theme-up{color:var(--blue);border-color:var(--blue)}
+.dash-theme ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.dash-theme li{display:grid;grid-template-columns:76px 1fr;gap:8px;font-size:12px;line-height:1.45;color:var(--text-2)}
+.dash-theme li span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.dash-theme li small,.dash-dup small{color:var(--text-3);font-variant-numeric:tabular-nums}
+.dash-theme>.btn{align-self:flex-start}
+.dash-dups{border-top:1px solid var(--border);padding:14px 20px;display:flex;flex-direction:column;gap:10px}
+.dash-dups h4{margin:0;font-size:12px;font-weight:600}
+.dash-dup{display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;align-items:start;font-size:12px;color:var(--text-2)}
+.dash-dup p{margin:0;overflow-wrap:anywhere}
+.dash-dup small{display:block;margin-bottom:3px}
+.dash-dups>.btn{align-self:flex-start}

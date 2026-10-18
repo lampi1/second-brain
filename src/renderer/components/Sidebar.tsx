@@ -8,7 +8,7 @@ import { useDevops } from '../store/devops';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconBrain, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconSettings, IconSparkle, IconTarget, IconTicket,
+  IconBook, IconBrain, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconQuestion, IconSettings, IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {useAgents} from '../store/agents';
@@ -19,7 +19,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
-  dashboard: <IconChart />,
+  dashboard: <IconChart />, guida: <IconQuestion />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: DevOps can hide; the Dashboard shows under any role). */
@@ -35,7 +35,7 @@ export function Sidebar() {
   const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
   const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','devops','fatto','impostazioni','migliora'].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','devops','fatto','impostazioni','migliora'].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -73,6 +73,7 @@ export function Sidebar() {
         {brainPages.map(page1)}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('dashboard')}
+        {page1('guida')}
         {!composition&&APP_GROUP.map(page1)}
       </div>
     </nav>

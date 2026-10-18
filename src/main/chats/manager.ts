@@ -64,6 +64,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 
 import { migrateOrchestrator, ORCHESTRATOR_ROLE } from './orchestrator';
 import { slug as slugTitle } from './mail';
+import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
   /** Production singleton; legacy fixtures may still exercise the old separate roles. */
@@ -92,6 +93,8 @@ export interface ChatManagerOptions {
   claudeHome?: string;
   maxItems?: number;
   env?: NodeJS.ProcessEnv;
+  /** Past-error context for engines without Claude's prompt hook; bounded to 300 ms before delivery. */
+  recall?: (text: string) => Promise<Recall>;
   extraArgs?: string[];
   /** keep one Claude engine started ahead for the next new chat in the same folder (warm.ts); default off */
   prewarm?: boolean;
@@ -339,6 +342,7 @@ export class ChatManager implements ChatService {
   private runTimer: NodeJS.Timeout | null = null;
   private probationTimers: NodeJS.Timeout[] = [];
   private chats = new Map<string, Rec>();
+  private deliveries = new Map<string, Promise<void>>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
   private store: ChatStore;
@@ -634,7 +638,19 @@ export class ChatManager implements ChatService {
   }
 
   /** The delivery of a message (send() decided it goes now). */
-  private async deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
+  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
+    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly);
+    if (!this.opts.recall || engineOf(this.need(chatId).s.harness)?.kind === 'claude') return run();
+    // A later, faster recall must never deliver its message before an earlier one in this chat.
+    const previous = this.deliveries.get(chatId);
+    const delivery = previous ? previous.catch(() => {}).then(run) : run();
+    this.deliveries.set(chatId, delivery);
+    const done = () => { if (this.deliveries.get(chatId) === delivery) this.deliveries.delete(chatId); };
+    void delivery.then(done, done);
+    return delivery;
+  }
+
+  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
@@ -646,6 +662,9 @@ export class ChatManager implements ChatService {
     if (!t && !imgs.length) throw new Error('Messaggio vuoto.');
     if (!resumed && r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
     this.ensureHistory(r);
+    const warning = engineOf(r.s.harness)?.kind === 'claude' ? '' : await recallWarning(t, this.opts.recall);
+    if (this.quitting || this.chats.get(chatId) !== r) throw new Error('La chat non è attiva.');
+    if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
     this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
@@ -671,7 +690,7 @@ export class ChatManager implements ChatService {
     try {
       const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
       const role = r.s.orchestrator ? `${ORCHESTRATOR_ROLE}\n\n` : '';
-      r.session.send(`${role}${profile}${catalog}${body}`, imgs); r.agentPrimed = true;
+      r.session.send(`${role}${profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }
@@ -1873,7 +1892,7 @@ export class ChatManager implements ChatService {
   private modeFor(r: Rec): PermissionMode | null {
     const ceiling = r.policy?.ceiling ?? null, chosen = r.choice.permissionMode;
     if (!ceiling) return chosen;
-    const brother = chosen ?? (engineOf(r.s.harness)?.kind === 'claude' ? claudeDefaultMode(r.s.cwd, this.opts.env ?? process.env) : null);
+    const brother = chosen ?? (engineOf(r.s.harness)?.kind === 'claude' ? claudeDefaultMode(r.s.cwd, { ...process.env, ...this.opts.env }) : null);
     return brother && aboveCeiling(brother, ceiling) ? ceiling : chosen;
   }
 

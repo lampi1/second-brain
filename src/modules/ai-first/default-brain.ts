@@ -49,6 +49,8 @@ export class DefaultBrain {
         // A project hook/MCP config becomes executable as soon as an engine starts in this directory.
         // Copy memory data only; even bundled integration directories require a separate user choice.
         if (depth === 0 && (['install.mjs', 'README.md', 'me.template.md', '.mcp.json', '.claude.json'].includes(entry.name) || (entry.isDirectory() && entry.name.startsWith('.')))) continue;
+        // Cursor's template hooks target the omitted .claude integration scripts. They are opt-in too.
+        if (path.relative(h.templateRoot, path.join(from, entry.name)).split(path.sep).join('/') === 'harness/cursor/hooks.json') continue;
         if (++count > 2000 || entry.isSymbolicLink()) throw new Error('AI_SETUP_TEMPLATE_LIMIT');
         const source = path.join(from, entry.name), name = render(entry.name);
         if (name !== path.basename(name) || name === '.' || name === '..') throw new Error('AI_SETUP_TEMPLATE_PATH');

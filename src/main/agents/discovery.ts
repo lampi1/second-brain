@@ -13,7 +13,7 @@ export function discoverAgents(source: CatalogSource, args: Record<string, unkno
   const offset = args.offset ?? 0;
   if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 || offset > 64) throw Error('agent_catalog: invalid offset.');
   if (args.id !== undefined && offset !== 0) throw Error('agent_catalog: use id or offset.');
-  const all = args.id === undefined ? catalog.profiles : catalog.profiles.filter(p => p.id === args.id);
+  const all = args.id === undefined ? catalog.profiles.filter(p => p.routable !== false) : catalog.profiles.filter(p => p.id === args.id);
   if (args.id !== undefined && !all.length) throw Error('agent_catalog: agent not found.');
   const profiles = all.slice(offset, offset + 4).map(p => {
     const engine = catalog.models.find(m => m.engine === p.engine);

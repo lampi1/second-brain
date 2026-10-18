@@ -8,6 +8,13 @@ import { answerPatch, answerProblems, customReplyStyle, emptySetup, knownName, p
 import { checkSetup } from '../../src/main/agents/setup';
 const profile=(id:string):AgentProfile=>({id,name:id,purpose:'Useful work',instructions:'',engine:'claude',model:null,avatar:{kind:'symbol',value:'briefcase'},createdAt:1,updatedAt:1,role:'',category:'other',tools:null,permissionCeiling:null,origin:{kind:'user'},version:1,activeVersion:1,lastEditedBy:'user',userLocked:true,status:'active'});
 const catalog=['general','planning','writing','analysis','research','development'].map(role=>profile(`default-${role}`));
+it('keeps engine preferences resumable without accepting arbitrary engines or trust flags', () => {
+  expect(checkSetup({ ...emptySetup(), engines: ['codex', 'cursor', 'codex'], trusted: true })).toMatchObject({ engines: ['codex', 'cursor'] });
+  expect(checkSetup({ ...emptySetup(), engines: [] }).engines).toEqual([]);
+  expect(checkSetup({ ...emptySetup(), engines: ['claude'], trusted: true })).not.toHaveProperty('trusted');
+  expect(() => checkSetup({ ...emptySetup(), engines: ['unknown'] })).toThrow();
+  expect(() => checkSetup({ ...emptySetup(), engines: [['codex']] })).toThrow();
+});
 it('starts an offline interview with no assumed work context or connections',()=>{
   expect(emptySetup()).toEqual({step:0,work:'',goals:'',tools:'',style:'balanced',agentIds:[]});
 });

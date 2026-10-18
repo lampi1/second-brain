@@ -3,8 +3,10 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
+import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
+import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
@@ -244,7 +246,7 @@ export type ChatItem =
 // ```sb-ui fence inside an AskUserQuestion option's preview). Shapes only; validation and caps: shared/genui.ts ──
 /** ok = passed/done · fail = failed · blocked · running = in progress · todo = not run yet · info · warn */
 export type UiStatus = 'ok' | 'fail' | 'blocked' | 'running' | 'todo' | 'info' | 'warn';
-/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened through app:openPath) */
+/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened in the app's read-only file viewer) */
 export interface UiLink { label: string; href: string }
 export interface UiTable { columns: string[]; rows: { cells: string[]; status?: UiStatus; link?: UiLink }[] }
 export interface UiCards {
@@ -292,7 +294,7 @@ export interface PendingRequest {
  *  prod = why it looks like production (Esegui asks a second click, shared/runnable.ts prodRisk); lead = the chat's
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
-export type OpenPathResult = { how: 'opened' | 'folder' } | { how: 'missing' | 'refused'; reason: string };
+export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
 /** app:peekFile: a clicked file's preview (main/peek-file.ts): its first lines, an image thumbnail, or why not */
 export type PeekResult =
   | { kind: 'text'; path: string; size: number; text: string; more: boolean }
@@ -698,6 +700,8 @@ export type BudgetMode = 'warn' | 'ask' | 'off';
 export interface BudgetLimits { mode: BudgetMode; dailyUsd: number | null; perChatUsd: number | null }
 export interface BudgetSettings { enabled: boolean; claude: BudgetLimits; cursor: BudgetLimits }
 export interface Settings {
+  pulse?: PulseSettings;
+  jobs?: { fallback: 'auto' | 'off' };
   brainRoot: string | null;
   mcpPort: number;
   mute: Record<string, boolean>;   // feed kind → no toast (still in the feed)
@@ -781,7 +785,8 @@ export interface RegiaChatDefaults {
   cursorFast: boolean;
 }
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'regiaChats' | 'devops'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'regiaChats' | 'devops' | 'pulse'>> & {
+  pulse?: Partial<Omit<PulseSettings, 'headline' | 'types' | 'places'>> & { headline?: { on?: boolean }; types?: Partial<PulseSettings['types']>; places?: Partial<PulseSettings['places']> };
   engines?: Partial<Settings['engines']>;
   devops?: Partial<Settings['devops']>;
   engineOn?: Partial<Settings['engineOn']>;
@@ -793,13 +798,14 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
+  | 'pulse.on' | 'pulse.dailyUsd' | 'pulse.slots' | 'pulse.headline.on' | `pulse.types.${PulseType}` | `pulse.places.${'board' | 'agent' | 'search' | 'file'}` | 'jobs.fallback'
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
   | 'headlineOn' | 'headlineModel' | 'headlineEffort';
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
-  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths'; // repo-paths: explicit existing repository roots
+  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths' | 'slots'; // slots: 1-3 local HH:MM times
   default: unknown;
   nullable?: boolean;
   values?: readonly string[]; // enum
@@ -1112,6 +1118,14 @@ export interface SyncState { domains: DomainSyncStatus[]; at: number }
 export type SyncChoice = 'mine' | 'theirs' | 'both';
 
 export interface SearchResult { q: string; hits: SearchHit[]; ms: number; indexed: { chats: number; files: number } }
+/** The hybrid brain search (SPEC 23): its local embedding model and index. Without the model, words only (BM25). */
+export type SearchModelState =
+  | { state: 'missing' }                                   // not downloaded (tests, or not started yet)
+  | { state: 'downloading'; done: number; total: number }  // bytes
+  | { state: 'loading' }
+  | { state: 'ready' }
+  | { state: 'failed'; error: string };                    // download or load failed: retry from the palette
+export interface SearchIndexStatus { model: SearchModelState; docs: number; chunks: number; vectors: number; vec: boolean }
 
 /** renderer → main. Each entry: [argument, result]. */
 /** Key → letter on screen in the app page over one window (ms): keydown to the first frame after its input event. */
@@ -1167,15 +1181,20 @@ export interface InvokeMap {
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
+  /** Suggestions only: discovering a folder never selects it. SB_HOME isolates discovery in local trials. */
+  'app:brainCandidates': [void, string[]];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
-  /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
-   *  images with their app, anything else only shown in its folder (main/open-path.ts) */
-  'app:openPath': [{ path: string }, OpenPathResult];
+  /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
+  'app:showInFolder': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
-  /** A user-opened citation, read within main-owned brain/project/chat roots. Main renderer only. */
-  'app:readFile': [{ path:string; chatId?:string }, FileViewResult];
+  /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
+   *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
+  'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];
+  /** the viewer's "Compare": the file now and the same file at git HEAD / a commit or branch, or another local file
+   *  (main/file-diff.ts: read-only git, no shell). Main renderer only. */
+  'app:readFileDiff': [{ path:string; chatId?:string; against:DiffAgainst }, FileDiffResult];
   /** an image named in a question (main/ask-image.ts) */
   'app:askImage': [{ path: string }, AskImageResult];
   'chat:list': [void, ChatSummary[]];
@@ -1305,6 +1324,9 @@ export interface InvokeMap {
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
   'search:query': [{ q: string }, SearchResult];
+  /** the hybrid search's model and index; retryModel starts the model download again after a failure */
+  'search:status': [void, SearchIndexStatus];
+  'search:retryModel': [void, SearchIndexStatus];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:get': [void, AnswerLater];
   'later:set': [{ on: boolean }, AnswerLater];
@@ -1314,12 +1336,24 @@ export interface InvokeMap {
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
+  'pulse:list': [{ place: PulsePlace }, PulseList];
+  'pulse:status': [void, PulseStatus];
+  'pulse:seen': [{ ids: string[] }, void];
+  'pulse:save': [{ id: string }, PulseResult];
+  'pulse:act': [{ id: string }, PulseActResult];
+  'pulse:dismiss': [{ id: string; reason?: PulseDismissReason }, PulseResult];
+  'pulse:runNow': [void, PulseResult];
+  'approvals:list': [{ agentId?: string }, ApprovalItem[]];
+  'approvals:decide': [ApprovalDecision, PulseResult];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
  *  Anthropic API engine (main/headline.ts). source: model = the last answer; previous = an older answer kept after a
  *  failed refresh; builtin = none yet, a line of the app's own list. month* = what the headline spent this month. */
 export interface HeadlineState {
+  /** Battito provenance; absent in legacy caches. */
+  engine?: string | null;
+  agentId?: string;
   text: string;
   source: 'model' | 'previous' | 'builtin';
   at: number | null;
@@ -1372,12 +1406,15 @@ export interface EventMap {
   'run:updated': RunInfo;
   'improve:state': ImproveState;
   'later:changed': AnswerLater;
+  'search:status': SearchIndexStatus;
   /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
   'procedures:changed': void;
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
   'headline:changed': HeadlineState;
+  'pulse:changed': void;
+  'approvals:changed': void;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1387,14 +1424,15 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
-  'app:brainCreation', 'app:createBrain',
+  'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1404,17 +1442,18 @@ export const INVOKE_CHANNELS = [
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
-  'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
+  'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
+  'pulse:changed', 'approvals:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'improve:proposals',
   'progress:changed',
   'chat:autoCloseStatus',
   'agents:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

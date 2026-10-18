@@ -39,6 +39,10 @@ export function connections(chats: ChatSummary[], items: Readonly<Record<string,
 }
 
 export interface ObservedError { id: string; at: number; title: string; detail: string; source: string }
+/** One calm summary, with unique diagnostics retained behind the details control. */
+export function brainChecks(map: { warnings: string[]; problems: string[] } | null | undefined): string[] {
+  return [...new Set([...(map?.warnings ?? []), ...(map?.problems ?? [])].filter(line => line.trim()))];
+}
 export function observedErrors(chats: ChatSummary[], items: Readonly<Record<string, readonly ChatItem[]>>, feed: readonly FeedEvent[], turnError = 'Turn ended with an error'): ObservedError[] {
   const rows: ObservedError[] = feed.filter(e => e.kind === 'error').map(e => ({ id: `feed:${e.id}`, at: e.at, title: e.title, detail: e.detail, source: 'feed' }));
   for (const c of chats) for (const item of items[c.id] ?? []) {

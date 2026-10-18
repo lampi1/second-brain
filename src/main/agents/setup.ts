@@ -7,6 +7,7 @@ const blank = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', styl
 export function checkSetup(value: unknown): SetupDraft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Preferenze non valide.');
   const v = value as Record<string, unknown>;
+  if (v.engines !== undefined && (!Array.isArray(v.engines) || v.engines.length > 3 || !v.engines.every(id => typeof id === 'string' && ['claude', 'codex', 'cursor'].includes(id)))) throw new Error('Motori non validi.');
   let guide: SetupGuide | undefined;
   if (v.guide !== undefined) {
     if (!v.guide || typeof v.guide !== 'object' || Array.isArray(v.guide)) throw new Error('Guida non valida.');
@@ -28,7 +29,7 @@ export function checkSetup(value: unknown): SetupDraft {
     if (p.style !== undefined) { if (!['balanced', 'concise', 'detailed'].includes(String(p.style))) throw new Error('Preferenze non valide.'); profile.style = p.style as SetupDraft['style']; }
   }
   if (!Number.isInteger(v.step) || Number(v.step) < 0 || Number(v.step) > 20 || !['', 'employee', 'independent', 'other'].includes(String(v.work)) || !['balanced', 'concise', 'detailed'].includes(String(v.style)) || typeof v.goals !== 'string' || v.goals.length > 2000 || typeof v.tools !== 'string' || v.tools.length > 2000 || !Array.isArray(v.agentIds) || v.agentIds.length > 64 || !v.agentIds.every(x => typeof x === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(x))) throw new Error('Preferenze non valide.');
-  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], agentIds: [...new Set(v.agentIds as string[])], ...(guide ? { guide } : {}), ...(profile ? { profile } : {}) };
+  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], agentIds: [...new Set(v.agentIds as string[])], ...(v.engines ? { engines: [...new Set(v.engines as string[])] } : {}), ...(guide ? { guide } : {}), ...(profile ? { profile } : {}) };
 }
 /** Local preferences only. Never applies brain paths, engine trust, permissions or account changes. */
 export class SetupService {

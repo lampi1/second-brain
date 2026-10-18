@@ -95,8 +95,9 @@ export interface UiState {
 /** The questions window: open = called as the "Da rispondere" queue (Ctrl+J, the counter, "Rispondi" on a tile): it
  *  shows even with "Domande in finestra" off, until the queue is empty or set aside again; first = the request shown
  *  first; call = a new nonce when the user asks for it (it shows at once, typing or not, and takes the keyboard);
- *  shown = on screen now (the browser views hide under it). */
-export interface QWin { open: boolean; first: string | null; call: number; shown: boolean }
+ *  shown = on screen now (the browser views hide under it); aside = stepped aside for a file opened from it (the viewer
+ *  in front, the window a pill until it is called again or the page changes; QuestionsWindow.tsx). */
+export interface QWin { open: boolean; first: string | null; call: number; shown: boolean; aside?: boolean }
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
@@ -264,7 +265,10 @@ export const coversWorkspace = (s: UiState) => s.modal !== null || s.map;
 /** The questions window closes: "Rispondi dopo" (lib/later.ts) or the queue it was called for is empty. */
 export const parkQuestions = () => ui.set(s => (s.qwin.open || s.qwin.first ? { ...s, qwin: { ...s.qwin, open: false, first: null } } : s));
 /** Show the questions window now as the queue (Ctrl+J, the counter, "Apri" on a tile), with this request first. */
-export const callQuestions = (key: string | null) => ui.set(s => ({ ...s, qwin: { ...s.qwin, open: true, first: key, call: s.qwin.call + 1 } }));
+export const callQuestions = (key: string | null) => ui.set(s => ({ ...s, qwin: { ...s.qwin, open: true, first: key, call: s.qwin.call + 1, aside: false } }));
+/** A file link clicked in the questions window: the window steps aside (a pill, nothing answered or put off) so the
+ *  viewer it opened is in front; Ctrl+J, the pill or leaving the file page bring it back. */
+export const setQuestionsAside = (aside: boolean) => { if (!!ui.get().qwin.aside !== aside) ui.set(s => ({ ...s, qwin: { ...s.qwin, aside } })); };
 export const setQuestionsShown = (shown: boolean) => { if (ui.get().qwin.shown !== shown) ui.set(s => ({ ...s, qwin: { ...s.qwin, shown } })); };
 
 /** Synchronous checkpoint of the actual in-memory preferences/read state; storage failures must propagate. */

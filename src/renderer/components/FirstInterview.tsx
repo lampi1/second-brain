@@ -36,7 +36,7 @@ export function FirstInterviewGate() {
   if (modal !== 'setup') return null;
   if (connectors) return <Modal onClose={closeModal} label="Collega i tuoi strumenti" testid="connector-setup"><div className="modal-body"><AppConnectorScreen onClose={() => { setConnectors(false); closeModal(); }}/></div></Modal>;
   if (!setup) return <Modal onClose={closeModal} label="Configura il tuo spazio di lavoro" testid="first-interview"><div className="modal-body"><p role="status">{error ?? 'Caricamento della configurazione…'}</p>{error && <button type="button" className="btn" onClick={() => void refreshSetup()}>Riprova</button>}<button type="button" className="btn btn-ghost" onClick={closeModal}>Chiudi</button></div></Modal>;
-  if (!fallback && (setup.status === 'new' || (setup.preferences.guide && setup.preferences.guide.stage !== 'fallback'))) return <AiFirstGate setup={setup} onFallback={() => setFallback(true)} onConnected={() => setConnectors(true)}/>;
+  if (!fallback && setup.preferences.guide && setup.preferences.guide.stage !== 'fallback') return <AiFirstGate setup={setup} onFallback={() => setFallback(true)} onConnected={() => setConnectors(true)}/>;
   return <FirstInterview initial={setup} catalog={catalog} onConnectAi={async preferences => { await saveSetup({ ...preferences, guide: { stage: 'choosing' } }, 'draft'); setFallback(false); }}/>;
 }
 
@@ -54,11 +54,14 @@ async function saveProfile(draft: SetupDraft): Promise<boolean> {
 }
 
 function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState; catalog: AgentCatalog | null; onConnectAi: (preferences: SetupDraft) => Promise<void> }) {
+  const enabledEngines = useApp(s => s.settings?.engineOn);
   // a finished or skipped run starts over from what me.md says now: its old answers are never written again
-  const [draft, setDraft] = useState<SetupDraft>(() => { const resume = ['new', 'draft'].includes(initial.status); return { ...initial.preferences, step: resume ? validSetupStep(initial.preferences.step) : 0, profile: resume ? initial.preferences.profile : undefined }; });
+  const [draft, setDraft] = useState<SetupDraft>(() => { const resume = ['new', 'draft'].includes(initial.status); return { ...initial.preferences, engines: initial.preferences.engines ?? (resume ? [] : ['claude', 'codex', 'cursor'].filter(id => enabledEngines?.[id])), step: resume ? validSetupStep(initial.preferences.step) : 0, profile: resume ? initial.preferences.profile : undefined }; });
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
   const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(initial.preferences.step >= 3);
   const info = useApp(s => s.info);
+  const [candidates, setCandidates] = useState<string[]>([]);
+  useEffect(() => { void sb.invoke('app:brainCandidates', undefined).then(setCandidates, () => setCandidates([])); }, []);
   const change = (patch: Partial<SetupDraft>) => { setDraft(d => ({ ...d, ...patch })); setSaved(false); };
   // what me.md says now (re-read when the memory folder changes): shown where the owner gave no answer in this run
   const [current, setCurrent] = useState<OwnerProfile | null>(null);
@@ -84,8 +87,20 @@ function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState
     if (saving.current || busy) return;
     saving.current = true; terminal.current = true; setBusy(true); setError(null);
     try {
+      if (status === 'completed') {
+        const latest = await sb.invoke('app:info', undefined);
+        if (!latest.brainRoot) {
+          const created = await sb.invoke('app:createBrain', { automatic: true, name: answers.name, role: answers.role, language: /^en/i.test(answers.language) ? 'en' : 'it', harness: draft.engines?.[0] ?? 'none', folderName: 'memory' });
+          if (!created?.connected) throw new Error('Memoria non collegata');
+          await refreshInfo();
+        }
+        if (draft.engines) await sb.invoke('settings:set', { engineOn: Object.fromEntries(['claude', 'codex', 'cursor'].map(id => [id, draft.engines!.includes(id)])) });
+        if (await saveProfile(draft)) {
+          if (!latest.brainRoot) throw new Error('Profilo non salvato');
+          toast('Configurazione salvata. Il profilo della memoria scelta non è leggibile o modificabile: controllalo in Impostazioni → Il mio profilo.', 'info');
+        }
+      }
       await saveSetup(draft, status);
-      if (status === 'completed' && await saveProfile(draft).catch(() => true)) toast('Configurazione salvata, ma il profilo in me.md non è stato aggiornato: puoi completarlo in Impostazioni → Il mio profilo.', 'info');
       if (ui.get().modal === 'setup') closeModal();
     }
     catch { terminal.current = false; setError('Salvataggio non completato. Le risposte restano qui: riprova.'); }
@@ -128,6 +143,8 @@ function FirstInterview({ initial, catalog, onConnectAi }: { initial: SetupState
       {draft.step === 2 && <><label className="field"><span>Quali strumenti e materiali usi?</span><textarea rows={4} maxLength={2000} value={draft.tools} onChange={e => change({ tools: e.target.value })} placeholder="Documenti, fogli di calcolo, app, siti o cartelle che vuoi usare" data-testid="setup-tools" /><small>È facoltativo. Non vengono collegati account o caricati file in automatico.</small></label><label className="field"><span>Come preferisci le risposte?</span><Select value={answers.style} disabled={fixedStyle} onChange={e => { const style = e.target.value === 'concise' ? 'concise' : e.target.value === 'detailed' ? 'detailed' : 'balanced'; change({ style, profile: answerPatch(draft, { style }) }); }} data-testid="setup-style"><option value="balanced">Chiare, con il dettaglio utile</option><option value="concise">Brevi e dirette</option><option value="detailed">Approfondite e spiegate</option></Select>{fixedStyle && <small>Hai già uno stile tuo in me.md: resta com’è. Lo cambi in Impostazioni → Il mio profilo.</small>}</label><AppConnectorScreen/></>}
       {draft.step === 3 && <><h3>Una squadra di partenza, modificabile</h3><p>Seleziona gli agenti che vuoi ritrovare come preferiti. Puoi creare e cambiare i profili nella sezione Agenti.</p>{catalog?.profiles.map(p => <label key={p.id} className="interview-choice"><input type="checkbox" checked={draft.agentIds.includes(p.id)} onChange={e => change({ agentIds: e.target.checked ? [...draft.agentIds, p.id] : draft.agentIds.filter(id => id !== p.id) })} /><AgentAvatar avatar={p.avatar} name={p.name} /><span><b>{p.name}</b><small>{p.purpose}</small></span></label>)}{!catalog?.profiles.length && <p role="status">Il catalogo non è ancora disponibile. Il setup può essere completato: sceglierai gli agenti quando un motore sarà pronto.</p>}</>}
       {draft.step === 4 && <><h3>Ecco la tua configurazione</h3><dl className="setup-summary"><dt>Nome</dt><dd>{knownName(current) ? current!.name : answers.name.trim() || 'Da indicare'}</dd><dt>Ruolo</dt><dd>{answers.role.trim() || inMeMd.role || 'Da definire'}</dd><dt>Lingua in chat</dt><dd>{answers.language.trim() || inMeMd.language || 'Da definire'}</dd><dt>Aree di lavoro</dt><dd>{(workAreas(answers.areas).length ? workAreas(answers.areas) : workAreas(inMeMd.areas)).join(', ') || 'Da definire'}</dd><dt>Contesto</dt><dd>{draft.work === 'employee' ? 'Organizzazione' : draft.work === 'independent' ? 'Autonomia' : draft.work === 'other' ? 'Altro' : 'Da definire'}</dd><dt>Obiettivi</dt><dd>{draft.goals || 'Da definire durante il lavoro'}</dd><dt>Strumenti e materiali</dt><dd>{draft.tools || 'Da scegliere quando servono'}</dd><dt>Agenti preferiti</dt><dd>{selected.map(p => p.name).join(', ') || 'Da scegliere più tardi'}</dd><dt>Memoria di lavoro</dt><dd>{info?.brainRoot ? 'Cartella collegata' : 'Da collegare, senza perdere questa configurazione'}</dd></dl><button type="button" className="btn btn-ghost" onClick={() => void pickBrain()} disabled={busy}>{info?.brainRoot ? 'Cambia cartella della memoria' : 'Collega una cartella della memoria'}</button><h4>Disponibilità rilevata</h4>{catalog?.models.map(e => <AgentReadiness key={e.engine} choice={e} />)}<p>Il setup non modifica permessi o account. Gli agenti inizieranno a lavorare quando il rispettivo motore sarà disponibile e avrà accesso.</p></>}
+      {draft.step === 3 && <fieldset><legend>Quali motori vuoi usare?</legend>{[['claude', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor']].map(([id, label]) => <label key={id} className="interview-choice"><input type="checkbox" checked={draft.engines?.includes(id!) ?? false} onChange={e => change({ engines: e.target.checked ? [...(draft.engines ?? []), id!] : (draft.engines ?? []).filter(engine => engine !== id) })}/><span>{label}</span></label>)}<small>Puoi scegliere più motori o collegarli in seguito. Account e permessi si configurano separatamente.</small></fieldset>}
+      {draft.step === 4 && !info?.brainRoot && <section><h4>La memoria del tuo lavoro</h4><p>Alla conferma creeremo una nuova memoria privata in questo profilo. Oppure scegli una cartella trovata su questo computer:</p>{candidates.map(root => <button key={root} type="button" className="btn" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { await sb.invoke('settings:set', { brainRoot: root }); await refreshInfo(); } catch { setError('Cartella non collegata. Riprova.'); } finally { setBusy(false); } }}>Usa quella trovata in {root}</button>)}</section>}
       {draft.step===4&&<CreateMemory onBusy={setBusy} initial={answers}/>}
       {draft.step === 4 && Object.values(problems).map(message => <p key={message} role="alert">{message} Torna indietro per correggerlo.</p>)}
       {draft.step === 4 && <p>Alla conferma nome, ruolo, lingua, aree e stile delle risposte vanno nel tuo profilo (me.md). Li rivedi in Impostazioni → Il mio profilo.</p>}

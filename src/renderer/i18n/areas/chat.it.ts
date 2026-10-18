@@ -187,6 +187,7 @@ export const chatIt = {
   'chat.questions.one': 'Una domanda',
   'chat.questions.many': (p: { n: number }) => `${p.n} domande`,
   'chat.questions.typingHint': 'compare quando smetti di scrivere',
+  'chat.questions.asideHint': 'aspetta mentre guardi il file',
   'chat.questions.open': 'Apri le domande',
   'chat.questions.waiting': 'In attesa',
   'chat.questions.inQueue': (p: { noun: string }) => `Da rispondere: ${p.noun}, la chat aspetta.`,

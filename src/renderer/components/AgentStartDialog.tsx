@@ -12,6 +12,7 @@ import { PERMISSION_MODES, permissionLabel } from '../lib/format';
 import type { PermissionMode } from '@shared/contract';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
+import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
 import {roleAgents,profileCanStart} from '../lib/role-consumers';
 import {t} from '../i18n';
@@ -19,7 +20,8 @@ import { Select } from './Select';
 
 export function AgentStartDialog() {
   const { catalog, setup, error: catalogError } = useAgents();
-  const info = useApp(s => s.info), hasRegia = useApp(s => s.order.some(id => s.chats[id]?.isRegia));
+  const info = useApp(s => s.info);
+  const current = useApp(s => { const id = s.order.find(x => s.chats[x]?.isRegia); return id ? s.chats[id] ?? null : null; }), hasRegia = !!current;
   const prefs = ui.use(s => s.prefs.newChat), asRegia = ui.use(s => s.newChatRegia);
   const role=ui.use(s=>s.prefs.role);
   const suggested=role===undefined?[]:roleAgents(role,catalog,BRAIN_PAGES.map(page=>page.id));
@@ -69,11 +71,12 @@ export function AgentStartDialog() {
         {profile && <div className="agent-start-owner"><AgentAvatar avatar={profile.avatar} name={profile.name} /><p>{profile.purpose}</p></div>}
         <button type="button" className="link-btn" onClick={() => { closeModal(); go({ page: 'agenti' }); }}>{t('start.editAgent')}</button>
         <label className="field"><span>{t(regia?'start.firstMessage':'start.task')}</span><textarea rows={4} value={prompt} onChange={e => setPrompt(e.target.value)} autoFocus data-testid="newchat-prompt" placeholder={t('start.promptHint')} /></label>
-        <details className="advanced"><summary>{t('start.contextTitle')}</summary><label className="field"><span>{t('start.context')}</span><textarea rows={2} value={context} onChange={e => setContext(e.target.value)} data-testid="newchat-context" /></label><label className="field"><span>{t('start.outcome')}</span><input value={outcome} onChange={e => setOutcome(e.target.value)} data-testid="newchat-outcome" /></label></details>
+        <details className="advanced" data-testid="newchat-work-context"><summary>{t('start.contextTitle')}</summary><label className="field"><span>{t('start.context')}</span><textarea rows={2} value={context} onChange={e => setContext(e.target.value)} data-testid="newchat-context" /></label><label className="field"><span>{t('start.outcome')}</span><input value={outcome} onChange={e => setOutcome(e.target.value)} data-testid="newchat-outcome" /></label></details>
         <AgentReadiness choice={choice} />
         {profile && <small>{t('start.configuration',{engine:choice?.label??profile.engine,model:profile.model||t('start.defaultModel')})}</small>}
         {regia && hasRegia && <label className="field"><span>{t('start.regiaName')}</span><input value={regiaName} onChange={e => setRegiaName(e.target.value)} maxLength={30} data-testid="newchat-regia-name" /></label>}
-        <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} data-testid="newchat-regia" /><span>{t('start.coordinate')}</span></label>
+        <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>{t('start.coordinate')}</span></label>
+        {regia && current && <p className="regia-note" id="newchat-regia-note" data-testid="newchat-regia-note"><HarnessMark harness={current.harness} regia size={16} /><span>{t('dialogs.newChat.regiaNote')}<b>{current.title}</b>{t('dialogs.newChat.regiaNoteSuffix')}</span></p>}
         <details className="advanced" data-testid="newchat-advanced"><summary>{t('start.details')}</summary>
           <label className="field"><span>{t('start.conversationName')}</span><input value={title} onChange={e => setTitle(e.target.value)} data-testid="newchat-title" /></label>
           <label className="field"><span>{t('start.folder')}</span><input value={cwd} onChange={e => setCwd(e.target.value)} data-testid="newchat-cwd" /></label>

@@ -59,6 +59,8 @@ export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updat
 export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling'] as const;
 export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling'>;
 export interface AgentProfile extends AgentDraft {
+  /** Background presets are visible/editable, but never offered as task delegates. */
+  routable?: boolean;
   id: string; createdAt: number; updatedAt: number;
   role: string;
   category: AgentCategory;
@@ -146,6 +148,8 @@ export interface VersionMetrics {
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number }
 /** One run = a chat started from an agent definition (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {
+  source?: 'chat' | 'oneshot';
+  oneshot?: { engine: string; job: 'pulse' | 'headline'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
   /** pinned at start; 0 = started before versions existed (v0 legacy: never a baseline) */
   version: number;
@@ -210,6 +214,8 @@ export interface SetupDraft {
   tools: string;
   style: 'balanced' | 'concise' | 'detailed';
   agentIds: string[];
+  /** Explicit engine preferences; never a trust or login grant. */
+  engines?: string[];
   guide?: SetupGuide;
   /** the me.md answers the owner gave in this run (unanswered ones are read from me.md), written on confirm */
   profile?: SetupProfile;

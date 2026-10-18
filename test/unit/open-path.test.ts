@@ -1,16 +1,15 @@
-// Opening a local file from a question's context (src/main/open-path.ts): only absolute local paths (file:/// or a drive
-// letter), never a network share; documents open with their app, anything else is only shown in its folder; a missing
-// file says so and opens nothing.
+// Showing a local file in its folder (src/main/open-path.ts): only absolute local paths (file:/// or a drive letter),
+// never a network share; nothing is ever opened with its app or run, only selected in Explorer; a missing file says so.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { localPath, openLocal, type Shell } from '../../src/main/open-path';
+import { localPath, showLocal, type Shell } from '../../src/main/open-path';
 
 const fakeShell = () => {
   const calls: string[] = [];
-  const shell: Shell = { openPath: async p => { calls.push(`open ${p}`); return ''; }, showItemInFolder: p => { calls.push(`folder ${p}`); } };
+  const shell: Shell = { showItemInFolder: p => { calls.push(`folder ${p}`); } };
   return { shell, calls };
 };
 
@@ -43,28 +42,23 @@ describe('localPath', () => {
   });
 });
 
-describe('openLocal', () => {
+describe('showLocal', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-open-'));
   const md = path.join(dir, 'report.md');
   const cmd = path.join(dir, 'tool.cmd');
   fs.writeFileSync(md, '# r');
   fs.writeFileSync(cmd, 'echo hi');
-  it('a document opens with its app', async () => {
+  it('a document, a script or a folder is only shown in Explorer, never opened', () => {
     const { shell, calls } = fakeShell();
-    expect(await openLocal(pathToFileURL(md).href, shell)).toEqual({ how: 'opened' });
-    expect(calls).toEqual([`open ${fs.realpathSync.native(md)}`]);
+    expect(showLocal(pathToFileURL(md).href, shell)).toEqual({ how: 'folder' });
+    expect(showLocal(cmd, shell)).toEqual({ how: 'folder' });
+    expect(showLocal(dir, shell)).toEqual({ how: 'folder' });
+    expect(calls).toEqual([md, cmd, dir].map(p => `folder ${fs.realpathSync.native(p)}`));
   });
-  it('anything Windows would run, or a folder, is only shown in Explorer', async () => {
+  it('missing or refused: nothing is shown, the reason is in Italian', () => {
     const { shell, calls } = fakeShell();
-    expect(await openLocal(cmd, shell)).toEqual({ how: 'folder' });
-    expect(await openLocal(dir, shell)).toEqual({ how: 'folder' });
-    expect(calls.length).toBe(2);
-    expect(calls.every(c => c.startsWith('folder '))).toBe(true);
-  });
-  it('missing or refused: nothing opens, the reason is in Italian', async () => {
-    const { shell, calls } = fakeShell();
-    expect((await openLocal(path.join(dir, 'nope.md'), shell)).how).toBe('missing');
-    expect((await openLocal('\\\\host\\share\\x.md', shell)).how).toBe('refused');
+    expect(showLocal(path.join(dir, 'nope.md'), shell).how).toBe('missing');
+    expect(showLocal('\\\\host\\share\\x.md', shell).how).toBe('refused');
     expect(calls).toEqual([]);
   });
 });

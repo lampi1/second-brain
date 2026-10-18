@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, openRegia, setSize, waitThumbs } from '../e2e/helpers';
+import { launch, openRegia, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -107,7 +107,7 @@ test('README screenshots', async () => {
   await save('devops');
 
   // 6. Qualità: four measured metrics about how the agents work, each with its source
-  await page.getByTestId('nav-qualita').click();
+  await goPage(page, 'qualita');
   await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('quality');
