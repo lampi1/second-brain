@@ -363,23 +363,29 @@ export class AgentCatalogService {
       builder: this.d.builder?.() ?? { available: false, engine: null, models: [], reason: 'La guida AI richiede un servizio testuale configurato. La creazione manuale funziona offline.' },
       imageGeneration: { available: false as const, reason: 'Nessun servizio di generazione immagini è collegato. Scegli un simbolo o carica un’immagine.' } });
   }
-  /** Rebind only pristine, never-edited seeds after asynchronous login discovery. Customized versions stay pinned. */
+  /** Rebind only pristine, never-edited seeds and presets after asynchronous login discovery. Customized versions stay pinned. */
   private refreshDefaults(): void {
     if (this.problem || this.store.problem) return;
     const seeds = this.defaults();
     if (!seeds.length) return;
-    const models = this.d.models();
+    const models = this.d.models(), routes = this.d.legacyRoutes?.() ?? [];
     const changed: AgentProfile[] = [];
     const next = this.profiles.map(p => {
       const current = models.find(e => e.engine === p.engine);
       const seed = seeds.find(s => s.id === p.id);
-      if (!seed || seed.engine === p.engine) return p;
-      const preferred = models.find(e => e.engine === seed.engine);
+      const origin = p.origin;
+      // A preset is rebound only while it is exactly the packaged revision (its fingerprint still matches).
+      const preset = !seed && origin.kind === 'preset' && !p.trial && p.presetHash === presetHash(p)
+        ? roleAgentPresets().find(r => r.id === origin.presetId && r.presetRevision === origin.presetRevision) : undefined;
+      const target = seed ?? (preset ? presetDraft(preset, models, routes) : null);
+      if (!target || target.engine === p.engine) return p;
+      const preferred = models.find(e => e.engine === target.engine);
       const readyAlternative = preferred?.installed === true && preferred.authenticated === true;
       if (current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false
         && (current.authenticated === true || !readyAlternative)) return p;
       if (p.origin.kind !== 'preset' || p.userLocked || p.lastEditedBy !== 'preset' || p.status !== 'active') return p;
-      const updated = { ...p, engine: seed.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      const updated: AgentProfile = { ...p, engine: target.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      if (preset) { updated.model = target.model; updated.effort = target.effort; updated.presetHash = presetHash(updated); }
       changed.push(updated); return updated;
     });
     // Seed the starters only into a catalog born without any (no engine was usable then). A catalog that already holds a
@@ -393,7 +399,9 @@ export class AgentCatalogService {
           parentVersion: this.profiles.find(old => old.id === p.id)?.activeVersion ?? null })),
         changed.flatMap(p => { const old = this.profiles.find(x => x.id === p.id); return old ? [{ agentId: old.id, version: old.activeVersion, state: 'superseded' as const }] : []; }));
       }
-      catch (e) { log.warn('agents', 'starter engine refresh failed', { cause: errText(e), hint: 'check the local catalog is writable' }); }
+      catch (e) { log.warn('agents', 'starter engine refresh failed', { cause: errText(e), hint: 'check the local catalog is writable' }); return; }
+      // A catalog seeded only now gets its presets now, and retires the starters it never showed silently.
+      if (unseeded) { this.fresh = true; this.installPresets(); }
     }
   }
   private validate(value: unknown, current: boolean, partial = false): CheckedDraft {

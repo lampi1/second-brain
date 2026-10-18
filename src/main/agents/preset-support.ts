@@ -19,10 +19,12 @@ export function presetDraft(preset: RoleAgentPreset, models: AgentModelChoice[],
   if (pinned) return { ...draft, engine: pinned.engine, model: pinned.model, ...(pinned.effort === undefined ? { effort: undefined } : {}) };
   // Area-scoped routes cannot be applied to an area-less preset. API engines cannot implement these tool policies.
   const route = routes.find(r => !r.area && r.kind === kind) ?? routes.find(r => !r.area && r.kind === '*');
-  const supported = (e: AgentModelChoice) => e.enabled && e.trusted && e.defaultModel && e.modelSelectable;
+  // Same readiness as the starters: never a logged-out or missing engine, and a ready one before an unknown one.
+  const supported = (e: AgentModelChoice) => e.enabled && e.trusted && e.defaultModel && e.modelSelectable && e.installed !== false && e.authenticated !== false;
   const routed = route && models.find(e => e.engine === route.harness && supported(e) && e.models.some(m => m.id === route.model));
   if (route && !routed) return null; // Never silently substitute a different engine/model for an explicit routing choice.
-  const engine = routed || models.find(e => supported(e) && e.models.length > 0);
+  const candidates = models.filter(e => supported(e) && e.models.length > 0);
+  const engine = routed || candidates.find(e => e.installed === true && e.authenticated === true) || candidates[0];
   if (!engine) return null; // A guessed/default CLI model is not a fixed model. Retry installation on next load.
   return { ...draft, engine: engine.engine, model: routed && route ? route.model : engine.models[0]!.id,
     effort: engine.effort ? draft.effort : undefined };

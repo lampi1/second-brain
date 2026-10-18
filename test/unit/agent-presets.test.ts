@@ -53,6 +53,24 @@ it('retires the seeds of a brand-new catalog silently, and announces a retiremen
   new AgentCatalogService({ userData: dir, models, legacyRoutes, presetEvent: e => events.push(e) });
   expect(events).toEqual(['Ricerca: sostituito dai nuovi preset']);
 });
+it('waits for a ready engine: presets arrive at login and follow a re-login like the starters, unless customized', () => {
+  const dir = tmp(), events: string[] = [], legacyRoutes = () => [];
+  const ready = (engine: string, authenticated: boolean | null = true) => ({ ...models()[0]!, engine, installed: true, authenticated });
+  let choices: AgentModelChoice[] = [{ ...models()[0]!, authenticated: false }];
+  const catalog = new AgentCatalogService({ userData: dir, models: () => choices, legacyRoutes, presetEvent: e => events.push(e) });
+  expect(catalog.list().profiles).toEqual([]);
+  choices = [ready('claude')];
+  const seeded = catalog.list();
+  expect(roleAgentPresets().every(p => seeded.profiles.some(x => x.id === p.id && x.engine === 'claude' && x.model === 'one'))).toBe(true);
+  expect(seeded.archived).toHaveLength(5);
+  expect(events).toEqual([]);
+  catalog.save({ ...seeded.profiles.find(p => p.id === 'default-writer')!, instructions: 'Mine' }, 'default-writer');
+  choices = [ready('claude', false), ready('codex')];
+  const rebound = catalog.list().profiles;
+  expect(rebound.find(p => p.id === 'default-reviewer')).toMatchObject({ engine: 'codex', model: 'one', version: 2 });
+  expect(rebound.find(p => p.id === 'default-reviewer')?.presetHash).toBe(presetHash(rebound.find(p => p.id === 'default-reviewer')!));
+  expect(rebound.find(p => p.id === 'default-writer')).toMatchObject({ engine: 'claude', instructions: 'Mine' });
+});
 it('does not replace an unavailable explicit route with an arbitrary available model', () => {
   const reviewer = roleAgentPresets().find(p => p.id === 'default-reviewer')!;
   expect(presetDraft(reviewer, models(), [{ kind: 'review', harness: 'claude', model: 'missing', effort: null, why: '', since: '', evidence: '' }])).toBeNull();

@@ -17,6 +17,7 @@ describe('Agent catalog and local setup', () => {
   it.each(['codex', 'cursor'])('seeds and repairs untouched agents using the only ready engine: %s', engine => {
     let models = choices();
     const c = new AgentCatalogService({ userData: tmp(), models: () => models });
+    c.restore('default-development'); // a new catalog retires this starter in favour of the role presets
     c.save({ ...draft(), name: 'Personalizzato' }, 'default-development');
     models = [{ ...choices()[0]!, installed: true, authenticated: false }, { ...choices()[0]!, engine, installed: true, authenticated: true }];
     const profiles = c.list().profiles;
