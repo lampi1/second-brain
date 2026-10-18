@@ -6,25 +6,18 @@ Home run strips show their pinned version, Orchestrator origin and current proba
 
 Battito cards now appear on matching agent pages, empty search and a brain file's side panel. Search shows at most two connections/curiosities. Paths outside the brain never become file places. Cards render plain text and expose explicit save, dismiss and task actions through existing IPC. The Orchestrator layout is untouched. Copy is available in Italian and English.
 
-## Required integration before merge
+## Integration (done by the integration chat)
 
-AGENTS.md reserves shared contract/bootstrap files to the integration chat. These edits are requested, not implemented by this workstream:
+- `run:outcome` is in `InvokeMap` and `INVOKE_CHANNELS` (`src/shared/contract.ts`); the preload derives its allow-list from `INVOKE_CHANNELS`, so no bridge change. Not exposed through MCP.
+- The handler lives in `src/main/run/outcome.ts` and is registered in `src/main/index.ts`. It validates a bounded `chatId` (1-120 chars) and one of the three verdicts, rejects an unavailable `markRun`, a chat that is not a run, a starting/running/waiting or queued run, and open pending requests, then delegates to `ChatService.markRun`. The renderer cannot pass basis, author or time: `ChatManager.markRun` fixes the basis to `human`. `ChatManager.markRun` has no busy check of its own, so this handler is the guard.
+- `test/unit/run-outcome-ipc.test.ts` covers malformed payloads, the unavailable service, a non-run chat and busy/pending runs.
+- Fixed in integration: `FileViewer` imported `ContextPulse` statically, which pulled the app bridge (`window.sb`) and store into the brain pages; since `store/ui` imports the brain pages, five unit suites (`ui-lib`, `toast-lifecycle`, `regia-dock`, `appearance-prefs`, `role-preferences`) failed at import with `window is not defined`. The file card is now `FilePulse`, loaded with `lazy` like the other bridge readers of the brain pages.
+- Rebased on origin/main 292273c: the catalog card keeps both the preset update badge from #43 and this PR's run composer and row index.
 
-- In `src/shared/contract.ts`, add to `InvokeMap`: `'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];` and add `'run:outcome'` to `INVOKE_CHANNELS`.
-- `src/preload/index.ts` already derives its allow-list from `INVOKE_CHANNELS`; no additional bridge API is needed.
-- In `src/main/index.ts`, register the handler. Validate nonempty bounded `chatId` and one of the three verdicts; reject unavailable `s.chats.markRun`; reject running/starting/waiting/queued chats or open pending requests. Delegate to `s.chats.markRun(chatId, verdict)`. Do not accept basis/by/at from the renderer. Do not expose this operation through MCP.
-- `ChatService.markRun` is declared here. Existing `ChatManager.markRun` owns persistence and emits `chat:updated`, fixes basis to `human`, ends an open run and evaluates probation. Demo implementation and a settled demo seed are included.
-- Add handler contract/security tests for malformed payloads, unavailable service and busy/pending runs. Existing manager lifecycle coverage remains authoritative for persisted outcomes.
+## Validation (integrator, on origin/main 292273c; per-branch checks decided by Brother on 2026-10-18)
 
-## Validation
-
-- `git diff --check`: passed.
-- Targeted Vitest attempt (run lifecycle, catalog overview, contextual selectors): blocked before any test ran by `EPERM` creating the SSR cache in the system Temp directory outside the sandbox. No sandbox workaround attempted.
-- Typecheck attempted: missing existing dependencies `diff`, `highlight.js`, `pdfjs-dist`; also the pending `run:outcome` contract. A local narrowing error found in ContextPulse was fixed.
-- `npm.cmd run check:branch`: failed at typecheck for the same missing dependencies and pending contract. Its test marker write is also blocked by sandbox permissions on the worktree git metadata. No lint/unit/guard stage reached.
-- E2E spec `test/e2e/agent-surfaces.spec.ts` is written, not run. It covers three outcomes, failed writes, launch failure/success, reduced motion, contextual placements and persistent Orchestrator visibility. Run only on main after merge, as required by AGENTS.md.
-- No app launched: explicitly forbidden by the task brief. Visual verification and screenshots remain required.
-
-## Review and release
-
-Fresh-context review requested from the visible integration chat. Not ready to merge until shared IPC integration, review and verification succeed. Staging was attempted once and failed creating the worktree `index.lock` (Permission denied); nothing was staged or committed. Commit/publish remain with the integration/human workflow.
+- `npx tsc --noEmit` and `npx eslint .` clean.
+- `npm run check:branch`: RESULT_PLACEHOLDER
+- Commit guard (`tools/guard/scan.mjs --commits`) clean.
+- E2E spec `test/e2e/agent-surfaces.spec.ts` is written, not run: e2e runs once on main at the end. It covers three outcomes, failed writes, launch failure/success, reduced motion, contextual placements and persistent Orchestrator visibility.
+- No app launched (forbidden by the brief): visual verification and screenshots remain to do on main.

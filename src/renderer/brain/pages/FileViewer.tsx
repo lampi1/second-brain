@@ -4,7 +4,7 @@
 // its diff against git HEAD, a commit/branch or another file (FileDiff.tsx). Main reads any
 // local file, bounded (never a network share); nothing here edits, runs or hands the file to another app: "Show in
 // folder" only selects it in Explorer, on the user's click.
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
@@ -16,9 +16,8 @@ import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
-import { ContextPulse } from '../../components/ContextPulse';
-import { filePulsePlace } from '../../lib/pulse-context';
-import { useApp } from '../../store/store';
+// Loaded on demand: the Battito card reaches the app bridge and store, which must not load with the brain pages.
+const FilePulse=lazy(()=>import('../../components/ContextPulse').then(m=>({default:m.FilePulse})));
 import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
 const WINDOW=4000;
@@ -182,7 +181,6 @@ async function showInFolder(path:string){
 /** What main is asked for: the page around the cited line at first, then the page the pager moved to. */
 type Request={line?:number;offset?:number;align?:boolean;before?:number};
 function CitedFile({reference}:{reference:FileReference}){
-  const brainRoot = useApp(s => s.info?.brainRoot);
   const ref=JSON.stringify(reference);const[request,setRequest]=useState<{ref:string;page:Request}>({ref,page:{line:reference.line}});
   const page=request.ref===ref?request.page:{line:reference.line},key=JSON.stringify([ref,page]);
   const[state,setState]=useState<{key:string;result:FileViewResult|null}>({key:'',result:null});
@@ -203,7 +201,6 @@ function CitedFile({reference}:{reference:FileReference}){
   // the comparison is asked for per file: another file opens without it
   const[comparing,setComparing]=useState<string|null>(null),compare=comparing===ref&&result?.kind==='text';
   const real=result&&'path'in result?result.path:null;
-  const pulsePlace = real ? filePulsePlace(real, brainRoot) : null;
   return <div className="bx-viewer" data-testid="cited-file-viewer">
     <div className="bx-viewer-head"><h2>{reference.path}{reference.line?`:${reference.line}${reference.column?`:${reference.column}`:''}`:''}</h2><span className="sp"/>
       <span className="small muted">{t('viewer.readOnly')}{result&&'size'in result?` · ${fmtBytes(result.size)}`:''}</span>
@@ -216,7 +213,7 @@ function CitedFile({reference}:{reference:FileReference}){
       :result.kind==='image'?<img src={result.dataUrl} alt={baseName(result.path)} style={{maxWidth:'100%',maxHeight:'75vh',objectFit:'contain'}}/>
       :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
       :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go}/>:null}</div>
-      {pulsePlace && <ContextPulse key={pulsePlace} place={pulsePlace} />}</div>
+      {real&&<Suspense fallback={null}><FilePulse path={real}/></Suspense>}</div>
   </div>;
 }
 

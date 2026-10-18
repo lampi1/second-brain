@@ -5,9 +5,16 @@ import { sb } from '../sb';
 import { t } from '../i18n';
 import { focusChat } from '../actions';
 import { closeModal, toast } from '../store/ui';
-import { contextCards } from '../lib/pulse-context';
+import { contextCards, filePulsePlace } from '../lib/pulse-context';
+import { useApp } from '../store/store';
 import '../styles/context-pulse.css';
 
+/** The cards of a file inside the brain; a path outside it shows none. */
+export function FilePulse({ path }: { path: string }) {
+  const brainRoot = useApp(s => s.info?.brainRoot);
+  const place = filePulsePlace(path, brainRoot);
+  return place ? <ContextPulse key={place} place={place} /> : null;
+}
 export function ContextPulse({ place }: { place: PulsePlace }) {
   const [data, setData] = useState<{ place: PulsePlace; value: PulseList } | null>(null);
   const [failed, setFailed] = useState(false), [revision, refresh] = useState(0);
