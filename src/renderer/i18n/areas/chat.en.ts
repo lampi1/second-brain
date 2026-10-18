@@ -189,6 +189,7 @@ export const chatEn: typeof chatIt = {
   'chat.questions.one': 'One question',
   'chat.questions.many': (p: { n: number }) => `${p.n} questions`,
   'chat.questions.typingHint': 'appears when you stop typing',
+  'chat.questions.asideHint': 'waiting while you look at the file',
   'chat.questions.open': 'Open questions',
   'chat.questions.waiting': 'Waiting',
   'chat.questions.inQueue': (p: { noun: string }) => `To answer: ${p.noun}, chat is waiting.`,

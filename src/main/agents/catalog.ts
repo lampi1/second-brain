@@ -32,6 +32,7 @@ function text(v: unknown, max: number, label: string, empty = false): string {
   return v.trim();
 }
 export interface AgentCatalogDeps {
+  pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
   language?: () => 'it' | 'en';
   userData: string;
   models: () => AgentModelChoice[];
@@ -152,6 +153,15 @@ export class AgentCatalogService {
         pending = [...defaults.map(p => firstVersion(p, 'preset', 'Agente iniziale', this.now())), ...imported.map(p => firstVersion(p, 'migration', 'Importato dal routing', this.now()))];
       }
     } catch { this.problem = 'Il catalogo locale non è leggibile. Il file è conservato; correggilo prima di salvare nuovi Agenti.'; return; }
+    if (d.pulsePreset && !this.profiles.some(p => p.id === 'default-pulse') && this.profiles.length < MAX_AGENTS && this.profiles.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) {
+      const at = this.now();
+      const pulse = upgradeProfile({ id: 'default-pulse', name: 'Battito', purpose: 'Idee, consigli, promemoria, collegamenti e frase della Dashboard',
+        instructions: 'Usa soltanto il digest fornito. Cita le fonti. Proponi poche carte concrete, senza inventare fatti. Non eseguire azioni.',
+        role: 'Tiene vivo il cervello', category: 'personal', tools: { allow: [] }, permissionCeiling: 'plan',
+        avatar: { kind: 'symbol', value: 'eye' }, ...d.pulsePreset(), createdAt: at, updatedAt: at }, true, 'preset');
+      pulse.routable = false;
+      this.profiles.push(pulse); pending = [...(pending ?? []), firstVersion(pulse, 'preset', 'Battito iniziale', at)];
+    }
     if (pending) {
       // History, then catalog: a retry after any failure redoes the same steps (history replaces same versions).
       try {
@@ -233,7 +243,7 @@ export class AgentCatalogService {
       if (!count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean' || !has(['active', 'archived'] as const, p.status)
         || (p.status === 'archived' ? typeof p.archivedAt !== 'number' || !Number.isFinite(p.archivedAt) : p.archivedAt !== undefined)
         || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number' || !Number.isFinite(trial.startedAt)))) throw new Error('Versione Agente non valida.');
-      return { ...draft, id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
+      return { ...draft, ...(p.id === 'default-pulse' ? { routable: false } : {}), id: p.id as string, createdAt: p.createdAt as number, updatedAt: p.updatedAt as number, origin: readOrigin(p.origin), version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
         ...(probation ? { probation: { since: probation.since as number, requestItemId: probation.requestItemId as string, ...(probation.keptBy ? { keptBy: 'brother' as const } : {}) } } : {}),
         lastEditedBy: p.lastEditedBy, userLocked: p.userLocked, status: p.status, ...(p.status === 'archived' ? { archivedAt: p.archivedAt as number } : {}) };
@@ -346,6 +356,7 @@ export class AgentCatalogService {
   }
   /** Out of the launch list and the active limit; definition and history stay. */
   archive(id: string): AgentProfile {
+    if (id === 'default-pulse') throw new Error('Battito si spegne nelle Impostazioni, non si archivia.');
     this.writable();
     const p = this.find(id);
     if (id === GENERAL_AGENT_ID) throw new Error(GENERAL_LOCKED);

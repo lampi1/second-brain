@@ -57,13 +57,6 @@ function Row({ p, open, nav }: { p: ProcedureSummary; open: boolean; nav: Naviga
 function Detail({ id }: { id: string }) {
   const r = useBrain(`/api/procedure?id=${encodeURIComponent(id)}`, normProcedure);
   const d = r.data;
-  const openFile = async () => {
-    if (!d) return;
-    const res = await window.sb.invoke('app:openPath', { path: d.path }).catch(() => null);
-    if (!res) toast(t('brainPages.procedure.openFileError'));
-    else if (res.how === 'folder') toast(t('brainPages.procedure.fileSelected'));
-    else if (res.how === 'missing' || res.how === 'refused') toast(res.reason);
-  };
   return (
     <article className="bx-viewer bx-proc-view" data-testid="bx-proc-view" aria-label={d?.title ?? t('brainPages.procedure.defaultTitle')}>
       <Async loading={r.loading && !d} error={d ? null : r.error} onRetry={() => r.reload()} lines={8}>
@@ -73,7 +66,7 @@ function Detail({ id }: { id: string }) {
               <h2 data-testid="bx-proc-title">{d.title}</h2>
               <p className="small muted">{d.area}{d.group ? ` · ${d.group}` : ''} · <span className="mono">{d.file}</span>{t('brainPages.procedure.lineSuffix', { line: d.line })}{d.changedAt ? t('brainPages.procedure.modifiedSuffix', { day: dayOf(d.changedAt) }) : ''}</p>
               <div className="bx-row">
-                <button type="button" className="bx-btn s" onClick={() => void openFile()} data-testid="bx-proc-open-file"><IconExternal /> {t('brainPages.procedure.openFile')}</button>
+                <button type="button" className="bx-btn s" onClick={() => void import('../../actions').then(m => m.openFileViewer(`${d.path}:${d.line}`))} data-testid="bx-proc-open-file"><IconExternal /> {t('brainPages.procedure.openFile')}</button>
                 <button type="button" className="bx-btn s" onClick={() => void copyText(d.path).then(ok => toast(ok ? t('brainPages.procedure.pathCopied') : t('brainPages.procedure.copyFailed')))}><IconCopy /> {t('brainPages.procedure.copyPath')}</button>
               </div>
             </header>

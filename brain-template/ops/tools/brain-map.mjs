@@ -43,74 +43,8 @@ export const EXTERNALS = [
 ];
 
 // "How it works": each step = from → to, a verb, and the sentence of a real file that says it.
-export const FLOWS = [
-  { id: 'regia', title: '{{OWNER}} parla con la Regia', steps: [
-    ['owner', 'chat:regia-claude', 'scrive solo alla Regia', 'hub.md', '{{OWNER}} talks only to the hub chat'],
-    ['owner', 'chat:regia-cursor', 'su Cursor la Regia si accende con /regia', '.cursor/skills/regia/SKILL.md', "This chat is now {{OWNER}}'s hub, the **Regia**"],
-    ['chat:regia-claude', 'tool:chat-prompt', 'scrive il prompt della chat nuova', 'hub.md', 'The prompt of every new chat comes from the tool'],
-    ['chat:regia-claude', 'chat:lavoro', 'apre una chat per ogni lavoro vero', 'hub.md', 'real work goes to a chat'],
-  ] },
-  { id: 'specialisti', title: 'Le chat chiamano gli specialisti', steps: [
-    ['chat:lavoro', 'agent:reviewer', 'lancia in sottofondo', 'hub.md', 'launched by the worker chats'],
-    ['chat:lavoro', 'agent:prod-log-reader', 'lancia in sottofondo', 'hub.md', 'launched by the worker chats'],
-    ['chat:lavoro', 'agent:code-investigator', 'lancia in sottofondo', 'hub.md', 'launched by the worker chats'],
-    ['chat:regia-claude', 'agent:brain-editor', 'unico agente che la Regia lancia (con /urgente)', 'hub.md', 'the hub itself launches only'],
-  ] },
-  { id: 'posta', title: 'Le chat si scrivono', steps: [
-    ['chat:lavoro', 'tool:inbox', 'manda un messaggio (send)', 'ops/tools/inbox.mjs', 'chats talk to each other on this PC'],
-    ['tool:inbox', 'chat:lavoro', 'sveglia la chat che aspetta (wait)', 'ops/tools/inbox.mjs', 'when a message arrives the command ends and the harness wakes the'],
-    ['hook:claude:inbox-stop', 'tool:inbox', 'a fine turno consegna la posta non letta', 'ops/tools/inbox.mjs', 'the Stop hook (`hook claude` / `hook cursor`, installed only by {{OWNER}}) hands unread messages'],
-    ['chat:lavoro', 'owner', 'domande e comandi per {{OWNER}} nella propria chat (popup o coda dell\'app)', 'hub.md', 'the worker asks in its own chat'],
-  ] },
-  { id: 'memoria', title: 'La memoria si scrive con mem.mjs', steps: [
-    ['chat:lavoro', 'tool:mem', 'ogni riga di memoria passa da qui', 'map.md', 'write these lines and `ai-errors.md` ones with'],
-    ['tool:mem', 'mem:now.md', 'aggiorna la riga del filo', 'ops/tools/mem.mjs', 'the one way to write {{BRAIN_NAME}} shared memory (now.md, ai-errors.md, journal, ideas)'],
-    ['tool:mem', 'mem:journal/', 'scrive il diario', 'ops/tools/mem.mjs', 'the one way to write {{BRAIN_NAME}} shared memory (now.md, ai-errors.md, journal, ideas)'],
-    ['tool:mem', 'mem:ai-errors.md', 'registra un errore', 'ops/tools/mem.mjs', 'the one way to write {{BRAIN_NAME}} shared memory (now.md, ai-errors.md, journal, ideas)'],
-    ['hook:claude:compact-now', 'mem:now.md', 'dopo una compattazione ricorda di aggiornare now.md', '.claude/hooks/compact-now.mjs', 'refresh its now.md line before going on'],
-  ] },
-  { id: 'fine-turno', title: 'A fine turno, da soli', steps: [
-    ['harness:claude', 'hook:brain:auto-commit', 'Stop: salva {{BRAIN_NAME}} in git', '.claude/hooks/auto-commit.mjs', 'auto-commit {{BRAIN_NAME}} (local git, no remote)'],
-    ['hook:brain:auto-commit', 'ext:git', 'commit locale, mai push', '.claude/hooks/auto-commit.mjs', 'Never pushes'],
-    ['harness:claude', 'hook:claude:chat-feed', 'Stop e messaggi di {{OWNER}}', '.claude/hooks/chat-feed.mjs', 'the Regia knows what happens in every chat'],
-    ['hook:claude:chat-feed', 'chat:regia-claude', 'la Regia sa cosa succede in ogni chat', '.claude/hooks/chat-feed.mjs', 'the Regia knows what happens in every chat'],
-    ['harness:claude', 'hook:brain:runbook-reminder', 'Stop: ricorda di salvare il runbook', '.claude/hooks/runbook-reminder.mjs', 'did not update ops/runbook'],
-  ] },
-  { id: 'miglioramento', title: 'Un errore diventa una regola', steps: [
-    ['owner', 'hook:claude:correction-catch', 'corregge un agente', '.claude/hooks/correction-catch.mjs', "when {{OWNER}}'s message looks like a correction or confusion, remind the chat to log it"],
-    ['hook:claude:correction-catch', 'mem:ai-errors.md', 'la chat registra l\'errore', 'AGENTS.md', 'Every AI error gets logged at once'],
-    ['chat:regia-claude', 'agent:brain-editor', 'gli passa le parole esatte di {{OWNER}}', 'hub.md', 'with {{OWNER}}\'s exact words'],
-    ['agent:brain-editor', 'rule:brain-rules.md', 'segue le regole per cambiare il cervello', '.claude/agents/brain-editor.md', 'brain-rules.md'],
-    ['agent:brain-editor', 'mem:tests/behavior.md', 'aggiunge il caso di test', 'brain-rules.md', 'Every rule has a test'],
-    ['agent:brain-editor', 'mem:proposals.md', 'registra la proposta da misurare', 'brain-rules.md', 'Every change is measured'],
-    ['tool:recurrence', 'mem:ai-errors.md', 'misura se l\'errore è tornato dopo la regola', 'ops/tools/recurrence.mjs', 'did a rule really help?'],
-  ] },
-  { id: 'taccuini', title: 'I taccuini degli specialisti', steps: [
-    ['chat:lavoro', 'tool:playbook', 'propone un punto o vota quelli usati', 'hub.md', 'votes the ids of its `Taccuino: usati` line'],
-    ['chat:regia-claude', 'owner', 'chiede "Aggiungo al taccuino?"', 'hub.md', 'Aggiungo al taccuino di <agent>?'],
-    ['tool:playbook', 'mem:playbooks/', 'scrive il taccuino, mai a mano', 'ops/tools/playbook.mjs', 'one notebook per specialist agent'],
-  ] },
-  { id: 'giornata', title: 'Brief, report e costi', steps: [
-    ['tool:day', 'ext:devops', 'legge PR e work item del giorno', 'ops/tools/day.mjs', 'Auth for DevOps: the current `az login`'],
-    ['tool:day', 'mem:journal/', 'legge il diario', 'ops/tools/day.mjs', 'journal, DevOps of the'],
-    ['tool:day', 'chat:regia-claude', 'materiale del brief e del report', 'ops/tools/day.mjs', "the raw material of the Regia's brief and day report"],
-    ['tool:cost', 'ext:transcripts', 'conta quanto costa ogni chat', 'ops/tools/cost.mjs', 'every API response in ~/.claude/projects'],
-    ['tool:brain-usage', 'ext:transcripts', 'conta cosa si usa davvero', 'ops/tools/brain-usage.mjs', 'what of the brain is really used'],
-  ] },
-  { id: 'produzione', title: 'Produzione: propone l\'agente, esegue {{OWNER}}', steps: [
-    ['chat:lavoro', 'chat:regia-claude', 'manda la query di lettura con il perché', 'me.md', 'only from the Regia'],
-    ['chat:regia-claude', 'owner', 'mostra il testo intero e aspetta il suo ok', 'me.md', 'show the **full query text** in chat'],
-    ['chat:regia-claude', 'tool:ro-query', 'dopo l\'ok lancia la query di sola lettura', 'hub.md', '`ops/tools/ro-query.sh` itself'],
-    ['tool:ro-query', 'ext:proddb', 'legge, non scrive', 'me.md', 'Queries on production DBs'],
-    ['owner', 'ext:azure', 'le scritture le lancia solo lui', 'me.md', 'Production: the agent proposes, {{OWNER}} runs.'],
-    ['agent:prod-log-reader', 'ext:appinsights', 'log e Azure letti da soli, senza chiedere', 'me.md', 'Production logs, App Insights, `az` show/list: the agent runs/reads them itself'],
-  ] },
-  { id: 'worktree', title: 'Dal worktree a main', steps: [
-    ['chat:lavoro', 'tool:wt-land', 'porta il lavoro in main', 'ops/tools/wt-land.mjs', 'bring the work of an {{BRAIN_NAME}} worktree into main'],
-    ['tool:wt-land', 'ext:git', 'merge locale, test offline, mai push', 'ops/tools/wt-land.mjs', 'Local git only, never pushes'],
-    ['tool:wt-land', 'tool:brain-lint', 'rifiuta se il contesto fisso cresce', 'ops/tools/wt-land.mjs', 'refuses if the fixed context grew past the budget'],
-  ] },
-];
+// New brains have no owner-specific flow assertions. Add verified flows as procedures grow.
+export const FLOWS = [];
 
 const norm = s => String(s ?? '').replace(/\s+/g, ' ');
 const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
@@ -246,7 +180,8 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   }
 
   // Harnesses
-  add(node('harness:claude', 'esterni', 'harness', 'Claude Code', { what: 'Il programma delle chat Claude (app desktop): esegue gli hook di ~/.claude/settings.json.', file: `${home}/.claude/settings.json`.replace(/\\/g, '/') }));
+  const claudeSettings = path.join(home, '.claude', 'settings.json');
+  add(node('harness:claude', 'esterni', 'harness', 'Claude Code', { what: 'Il programma delle chat Claude (app desktop): esegue gli hook configurati.', ...(fs.existsSync(claudeSettings) ? { file: claudeSettings.replace(/\\/g, '/') } : {}) }));
   add(node('harness:cursor', 'esterni', 'harness', 'Cursor', { what: 'Il secondo programma: stesse regole, adattate da harness/cursor e harness/tools.md.', file: `${root}/harness/tools.md` }));
 
   // Agents, notebooks, skills
@@ -287,7 +222,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
     }
   }
   const compareDir = path.join(root, 'harness', 'compare');
-  if (fs.existsSync(compareDir)) fileNode('tool:compare', 'tool', 'tool', 'confronto A/B', path.join(compareDir, 'README.md'), { what: 'Esperimenti tra Cursor e Claude sullo stesso lavoro: cattura, giudice cieco, report (harness/compare).', text: read(path.join(compareDir, 'README.md')) });
+  if (fs.existsSync(path.join(compareDir, 'README.md'))) fileNode('tool:compare', 'tool', 'tool', 'confronto A/B', path.join(compareDir, 'README.md'), { what: 'Esperimenti tra Cursor e Claude sullo stesso lavoro: cattura, giudice cieco, report (harness/compare).', text: read(path.join(compareDir, 'README.md')) });
 
   // Hook wiring: which harness event runs which script.
   const wire = (harness, event, cmd, where) => {

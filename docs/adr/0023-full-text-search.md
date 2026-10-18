@@ -32,3 +32,5 @@ work lives on, and what the brain's files say were not searchable from one place
 - Memory: at most 2 M characters per chat (the newest) plus the brain's markdown; dropped chats leave the index.
 - A first query on a large brain reads every markdown file once (async, the window stays responsive).
 - Not covered yet: jumping to the message inside the chat, or to the line in Esplora (the hit shows the line).
+- 2026-10-17: the brain half is now the hybrid search of ADR 0068 (words + meaning, typo tolerant) when it runs; the
+  in-memory markdown index above stays as its fallback, and chats keep this index.

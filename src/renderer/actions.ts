@@ -26,7 +26,7 @@ import { showAppChat } from './store/improve';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setChatExpanded, type Place,type BrainPageId,
+  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -241,6 +241,7 @@ export function collapseRegia(): void {
 /** Ctrl+R: the Regia overlay from anywhere. Closed → it opens with its input focused; open but the keyboard is
  *  elsewhere → its input; open with the keyboard inside → it closes to its pill. */
 export function toggleRegia(): void {
+  if (ui.get().map || ui.get().page === 'dashboard') go({ page: 'home' });
   setRegiaOpen(true);
   const r = regiaId();
   if (r) requestFocus(r);
@@ -293,7 +294,10 @@ export function focusChat(chatId: string): void {
   const c = s.chats[chatId];
   if (!c) return;
   const u = ui.get();
-  if (chatId === orchestratorIdOf(s)) { setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return; }
+  if (chatId === orchestratorIdOf(s)) {
+    if (u.map || u.page === 'dashboard') go({ page: 'home' });
+    setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return;
+  }
   // a chat of "Migliora l'app" lives in its section: open it there (its Regia is always shown)
   if (c.space === 'app') {
     if (u.page !== 'migliora' || u.map) go({ page: 'migliora' });
@@ -348,6 +352,9 @@ export function newBrowser():Promise<void>{return openInAppBrowser('about:blank'
 export function openFileViewer(raw:string,chatId?:string):void{
   // A Regia artifact remains mounted across page navigation; release its focus trap before showing the file.
   if(ui.get().modal==='visual')closeModal();
+  // a link in the questions window (the window is on screen, so the click came from it): the window steps aside, else
+  // the file page would open behind its full-screen backdrop and nothing would visibly change
+  if(ui.get().qwin.shown)setQuestionsAside(true);
   go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
 }
 

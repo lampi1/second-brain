@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, openRegia, setSize, waitThumbs } from '../e2e/helpers';
+import { launch, openRegia, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -89,7 +89,9 @@ test('README screenshots', async () => {
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
   await tool('regia', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map').getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(5000); // the layout settles
   await save('brain-map');
@@ -105,7 +107,7 @@ test('README screenshots', async () => {
   await save('devops');
 
   // 6. Qualità: four measured metrics about how the agents work, each with its source
-  await page.getByTestId('nav-qualita').click();
+  await goPage(page, 'qualita');
   await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('quality');

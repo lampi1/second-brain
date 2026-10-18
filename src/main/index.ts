@@ -1,6 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
+import { findBrainCandidates } from './brain/detect';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,15 +19,17 @@ import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
-import { openLocal, type Shell } from './open-path';
+import { showLocal, type Shell } from './open-path';
 import { peekFile } from './peek-file';
 import { readFileView } from './file-view';
+import { readFileDiff } from './file-diff';
+import type { DiffAgainst } from '../shared/file-diff';
 import { askImageRoots, readAskImage } from './ask-image';
 import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
 import { clipReader, readClipboardImage } from './clipboard-image';
 import { gitBranches } from './chats/branch';
-import { SearchService, demoBranchOf } from './search/service';
+import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
@@ -39,6 +42,9 @@ import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
+import { pulseStubHandlers } from './pulse/handlers';
+import { createPulse } from './pulse/wiring';
+import { pulseDemoHandlers } from './pulse/demo';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -74,7 +80,7 @@ app.whenReady().then(async () => {
   overlay.start();
   (globalThis as Record<string, unknown>).__sbOverlay = { state: () => overlay.state() }; // e2e tests and diagnostics
   const opened = hiddenOpened;
-  const hiddenShell: Shell = { openPath: async p => { opened.push(`open ${p}`); return ''; }, showItemInFolder: p => { opened.push(`folder ${p}`); } };
+  const hiddenShell: Shell = { showItemInFolder: p => { opened.push(`folder ${p}`); } };
   (globalThis as Record<string, unknown>).__sbOpened = opened; // e2e: what a hidden run would have opened
   const clip = clipReader();
   // Ctrl+K full-text search (ADR 0023): indexed on the first query, updated only when the user searches
@@ -85,6 +91,8 @@ app.whenReady().then(async () => {
     transcriptOf: c => (!demo && c.harness === 'claude' && c.sessionId ? findTranscript(c.sessionId, c.cwd) : null),
     brainRoot: () => (demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot),
     branchOf: demo ? demoBranchOf : gitBranch,
+    // brain files ranked by the hybrid search (words + meaning, SPEC 23) when it answers; else by the palette's own index
+    ...(s.hybrid ? { brainHits: brainHitsFrom(s.hybrid) } : {}),
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   let brainChoiceRevision = 0;
@@ -130,6 +138,8 @@ app.whenReady().then(async () => {
     calls: !demo && !process.env.SB_TEST,
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
+  const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
+  const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
     const handlers: Handlers = {
@@ -145,6 +155,7 @@ app.whenReady().then(async () => {
       'update:recovery': () => updates.recovery(),
       'update:recoveryAck': a => updates.acknowledge(a?.id),
     'app:brainCreation': () => brainCreation.capability(),
+    'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
     'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
     'improve:proposals': () => s.proposals.list(),
     'improve:proposalAvailability': () => s.proposals.availability(),
@@ -188,13 +199,22 @@ app.whenReady().then(async () => {
       if (dir) { brainChoiceRevision++; await s.brain.setSettings({ brainRoot: dir }); }
       return dir;
     },
-    // an agent's run (SB_HIDDEN, the e2e suite) never opens an app or Explorer: it records what it would have opened
-    'app:openPath': a => openLocal(a.path, hiddenRun() ? hiddenShell : shell),
+    // an agent's run (SB_HIDDEN, the e2e suite) never opens Explorer: it records what it would have shown
+    'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
     'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
     'app:readFile': a => {
       const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
       const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
-      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,roots:[brainRoot,s.brain.settings().appRepo,chat?.cwd].filter((root):root is string=>typeof root==='string'&&!!root)});
+      const count=(n:unknown)=>typeof n==='number'&&Number.isSafeInteger(n)&&n>0?n:undefined;
+      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,offset:count(a?.offset),align:a?.align===true,before:count(a?.before),line:count(a?.line)});
+    },
+    'app:readFileDiff': a => {
+      const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
+      const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
+      const w=a?.against;
+      const against:DiffAgainst|null=w?.kind==='head'?{kind:'head'}:w?.kind==='ref'&&typeof w.ref==='string'?{kind:'ref',ref:w.ref}:w?.kind==='file'&&typeof w.path==='string'?{kind:'file',path:w.path}:null;
+      if(!against)return {kind:'refused',reason:'ref'};
+      return readFileDiff(typeof a?.path==='string'?a.path:'',against,chat?.cwd??brainRoot??undefined);
     },
     'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
       userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,
@@ -300,19 +320,26 @@ app.whenReady().then(async () => {
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
+    'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
+    'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'later:get': () => s.later.get(),
     'later:set': a => s.later.set(a?.on === true),
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
-    'headline:get': () => headline.get(),
+    'headline:get': () => pulse?.headline() ?? headline.get(),
+    ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
+      settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
+    }) : pulseStubHandlers())),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
+  // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
+  const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
-  void windowReady.then(() => { const t = setTimeout(() => headline.start(), 15_000); t.unref(); });
+  void windowReady.then(() => { if (pulse) pulse.start(); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
@@ -334,6 +361,7 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     headline.stop();
+    pulse?.stop(); unsubscribePulse();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

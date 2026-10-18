@@ -64,7 +64,7 @@ export function ProfileSettings() {
         <dt>{t('profile.mainWork')}</dt><dd>{profile.mainWork.length ? <ul>{profile.mainWork.map((a, i) => <li key={i}>{plain(a)}</li>)}</ul> : value('')}</dd>
         <dt>{t('profile.replyStyle')}</dt><dd>{value(profile.replyStyle)}</dd>
       </dl>
-      <div className="st-inline"><button type="button" className="btn btn-ghost" onClick={() => setForm(profileForm(profile))} data-testid="profile-edit">{t('profile.edit')}</button><button type="button" className="btn btn-ghost" onClick={() => void window.sb.invoke('app:openPath', { path: profile.path })}>{t('profile.open')}</button></div>
+      <div className="st-inline"><button type="button" className="btn btn-ghost" onClick={() => setForm(profileForm(profile))} data-testid="profile-edit">{t('profile.edit')}</button><button type="button" className="btn btn-ghost" onClick={() => void import('../actions').then(m => m.openFileViewer(profile.path))}>{t('profile.open')}</button></div>
     </>}
     <details className="st-profile-rules"><summary>{t('profile.rules', { n: profile.rules.length })}</summary><ul>{profile.rules.map((r, i) => <li key={i}><b>{plain(r.title)}</b>: {plain(r.text)}</li>)}</ul></details>
     <div className="st-profile-growth" data-testid="profile-growth">

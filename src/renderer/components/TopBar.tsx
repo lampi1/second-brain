@@ -1,23 +1,14 @@
-// The top bar: brand, back/forward (Alt+←/→) and the recent places, the Stato button, search/palette trigger (Ctrl+K), the
-// usage strip (UsageBar: today's spend, Claude 5 h / week, Cursor), CLI status
-// (each engine's CLI found, version, login, "Accedi"), the brain-sync status (SyncStatus: only when a domain syncs), "Prossima cosa per te" (Ctrl+J) with the count (while "Rispondi
-// dopo" is on, "Da rispondere": the queue's counter, it opens the queue, lib/later.ts), the full-screen popups switch
-// (the questions window, lib/questions.ts) and the connectors with their status dots (SPEC 21: one click, no Settings dive;
-// new agents start from the Grindhouse, Ctrl+N or the palette, so no "Nuova chat" here), "Nuovo browser", "■ Ferma tutto"
-// (confirm only with >1 running), then the end group: "…" (browsers on/off, Credenziali, Migliora l'app: always there, 2026-10-15), the notification bell (Ctrl+Shift+N) and the settings menu (look and
-// the way to Settings). Used by App.tsx. On a bar too full for its width (useFit) the labels go first; the end group never
-// shrinks, so it stays on screen at any width (2026-10-13).
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+// The app action bar: history, search, observed status, requests, browsers and stop controls.
+// Settings owns appearance and connectors; its gear menu only links to settings and shortcuts.
+// Used by App.tsx; fit steps keep the final action group reachable at narrow widths.
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import{t}from'../i18n';
 import type { CliStatus, EngineInfo } from '@shared/contract';
-import type { ConnectorState } from '@shared/connectors';
-import { sb } from '../sb';
-import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
-import { openModal, setPrefs, toggleBrowsers, ui, type Density, type Theme } from '../store/ui';
+import { openModal, toggleBrowsers, ui } from '../store/ui';
 import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
@@ -79,29 +70,17 @@ function CliStatusButton() {
   );
 }
 
-/** The gear: only the look of the app and the way to every setting (2026-10-15: the DevOps interval and "chat tra motori
- *  diversi" live on the DevOps page and in Settings → Motori, not in two places). */
+// Settings has one destination; appearance controls live on that page.
 function SettingsButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const density = ui.use(s => s.prefs.density);
-  const theme = ui.use(s => s.prefs.theme);
-  const set = (patch: { density?: Density; theme?: Theme }) => { setPrefs(patch); setOpen(false); };
-  return (
-    <>
-      <IconButton ref={ref} label="Impostazioni" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
-      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={248}>
-        <MenuLabel>Tema</MenuLabel>
-        {(['system', 'dark', 'light'] as Theme[]).map(t => <MenuItem key={t} checked={theme === t} onSelect={() => set({ theme: t })} testid={`theme-${t}`}>{t === 'system' ? 'Come il sistema' : t === 'dark' ? 'Scuro' : 'Chiaro'}</MenuItem>)}
-        <MenuSep />
-        <MenuLabel>Densità</MenuLabel>
-        {(['comfortable', 'compact'] as Density[]).map(d => <MenuItem key={d} checked={density === d} onSelect={() => set({ density: d })} testid={`density-${d}`}>{d === 'compact' ? 'Compatta' : 'Comoda'}</MenuItem>)}
-        <MenuSep />
-        <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">Scorciatoie da tastiera</MenuItem>
-        <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">Tutte le impostazioni</MenuItem>
-      </Popover>
-    </>
-  );
+  return <>
+    <IconButton ref={ref} label="Impostazioni" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
+    <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={248}>
+      <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">Scorciatoie da tastiera</MenuItem>
+      <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">Tutte le impostazioni</MenuItem>
+    </Popover>
+  </>;
 }
 
 function HistoryNav() {
@@ -155,39 +134,6 @@ function PopupsSwitch() {
       <span className="popups-track" aria-hidden="true"><span className="popups-knob" /></span>
       <span className="popups-label">{t('ui.popups')} <b>{t(on ? 'ui.popupsStateOn' : 'ui.popupsStateOff')}</b></span>
     </button>
-  );
-}
-
-const CONNECTOR_NAME: Record<ConnectorState['provider'], string> = { github: 'GitHub', jira: 'Jira' };
-const CONNECTOR_DOT: Record<ConnectorState['status'], string> = { verified: 'ok', pending: 'warn', failed: 'bad' };
-
-/** The connectors (GitHub, Jira) with one status dot each (SPEC 21): green connected, amber to verify, red failed; a
- *  click opens the same panel as Settings → Strumenti e progetti, the dots are read again when it closes. */
-function ConnectorsButton() {
-  const [list, setList] = useState<ConnectorState[] | null>(null);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLButtonElement>(null);
-  // stable: Popover re-runs its focus effect when onClose changes, which would pull the focus back to the first button
-  const close = useCallback(() => setOpen(false), []);
-  useEffect(() => {
-    if (open) return;
-    let live = true;
-    sb.invoke('connectors:list', undefined).then(value => { if (live) setList(value); }, () => { if (live) setList([]); });
-    return () => { live = false; };
-  }, [open]);
-  const label = !list ? t('ui.connectorsLoading') : list.length ? t('ui.connectorsTip', { list: list.map(c => `${CONNECTOR_NAME[c.provider]} ${t(`ui.connector.${c.status}`)}`).join(', ') }) : t('ui.connectorsNone');
-  return (
-    <>
-      <button ref={ref} type="button" className="btn btn-ghost btn-m connectors-btn" onClick={() => setOpen(o => !o)} aria-label={label} data-tip={label} aria-expanded={open} aria-haspopup="dialog" data-testid="topbar-connectors">
-        <span className="connectors-label">{t('ui.connectors')}</span>
-        {list?.map(c => <span key={c.provider} className="connector-mark" data-testid={`topbar-connector-${c.provider}`} data-status={c.status}>
-          <small aria-hidden="true">{CONNECTOR_NAME[c.provider]}</small><span className={`cli-dot ${CONNECTOR_DOT[c.status]}`} aria-hidden="true" />
-        </span>)}
-      </button>
-      <Popover anchor={ref} open={open} onClose={close} testid="topbar-connectors-pop" width={420} kind="dialog" label={t('ui.connectors')}>
-        <AppConnectorScreen />
-      </Popover>
-    </>
   );
 }
 
@@ -283,7 +229,6 @@ export function TopBar() {
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
       <PopupsSwitch />
-      <ConnectorsButton />
       <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip="Ferma tutte le chat al lavoro|Ctrl+Shift+."
         aria-label={`Ferma tutto: ${running} al lavoro (Ctrl+Shift+.)`}>

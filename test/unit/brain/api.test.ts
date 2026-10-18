@@ -72,6 +72,13 @@ describe('brain api', () => {
     expect(await a.get('/api/tables')).toMatchObject({ ok: false, error: expect.stringMatching(/server dati/) }); // the rest still goes to the brain
   });
 
+  it('a mounted path that answers undefined (e.g. the hybrid search not ready) is served by the brain server', async () => {
+    const root = fakeBrain();
+    const a = new BrainApi(root, plainNode, undefined, new Map([['/api/search', () => undefined]]));
+    apis.push(a);
+    expect(await a.get('/api/search?q=idea')).toEqual({ ok: true, data: { root, path: '/api/search', query: { q: 'idea' } } });
+  });
+
   it('a broken server reports why, and a later request retries', async () => {
     const root = tmpDir();
     fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });

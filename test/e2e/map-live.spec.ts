@@ -49,7 +49,9 @@ async function rate(ms: number): Promise<number> {
   return Math.round(((await frames()) - a) / (ms / 1000) * 10) / 10;
 }
 const openMap = async () => {
-  await page.getByTestId('nav-map').click();
+  await page.getByTestId('nav-dashboard').click();
+    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.getByTestId('bx-map-live').locator('summary').click();
 };
@@ -91,6 +93,11 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   test.setTimeout(120_000);
   await openMap();
   const m = page.getByTestId('brain-map');
+  // The map fills the workspace beside the persistent column; the toast wrapper takes no flex space.
+  const column = (await page.getByTestId('regia-overlay').boundingBox())!;
+  const mapBox = (await m.boundingBox())!;
+  expect(mapBox.width).toBeGreaterThan(column.x * 0.95);
+  expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(column.x + 1);
   const legend = m.getByTestId('bx-map-live');
   await expect(legend).toContainText('Attività osservata');
   await expect(legend).toContainText('Fix totale ordine');

@@ -85,6 +85,11 @@ export function readRun(v: unknown): AgentRun | null {
   for (const k of ['parentRunId', 'spawnedBy', 'reviewOf', 'reworkOf', 'continuedFrom'] as const) if (r[k] !== undefined && !(typeof r[k] === 'string' && RUN_ID.test(r[k]))) return null;
   if ((r.endedAt === undefined) !== (r.endReason === undefined) || (r.endedAt !== undefined && !time(r.endedAt)) || (r.endReason !== undefined && !ENDS.includes(r.endReason as AgentRunEnd))) return null;
   const outcome = r.outcome === undefined ? undefined : readOutcome(r.outcome);
+  if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
+  const oneshot = r.oneshot as AgentRun['oneshot'];
+  if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
+    || !['pulse', 'headline'].includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
+    || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis))) return null;
   if (outcome === null) return null;
   const c = r.counters as Record<string, unknown> | null;
   if (!c || typeof c !== 'object' || !count(c.questions) || !count(c.permissions) || !count(c.commands) || !count(c.reopened) || !(c.contextPeak === null || count(c.contextPeak))) return null;
@@ -102,6 +107,8 @@ export function readRun(v: unknown): AgentRun | null {
     ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
     ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
     ...(outcome ? { outcome } : {}),
+    ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
+    ...(oneshot ? { oneshot: { engine: oneshot.engine, job: oneshot.job, fallback: oneshot.fallback, costBasis: oneshot.costBasis } } : {}),
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
