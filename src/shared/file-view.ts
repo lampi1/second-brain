@@ -10,6 +10,14 @@ export type FileViewResult=
  |{kind:'pdf';path:string;size:number;data:Uint8Array}
  |{kind:'image';path:string;size:number;dataUrl:string}
  |{kind:'refused'|'missing'|'unsupported';reason:FileReadReason};
+/**
+ * The one line rule of main (file-view.ts counts "\n" bytes for `firstLine` and cited lines) and the viewer (its rows
+ * and the pager's line range), as agents' tools cite lines: a line ends at "\n" (or "\r\n") only; a lone "\r", a
+ * progress redraw in a captured log, stays inside its line.
+ */
+export const lineCount=(text:string):number=>text.split('\n').length-(text.endsWith('\n')?1:0);
+/** `text` with "\n" line ends only, each lone "\r" shown as a space inside its line (rows = lines by lineCount). */
+export const lineText=(text:string):string=>text.replace(/\r\n/g,'\n').replace(/\r/g,' ');
 const coordinate=(raw:string|undefined):number|undefined=>{const n=Number(raw);return Number.isSafeInteger(n)&&n>0&&n<=10_000_000?n:undefined;};
 export function fileReference(raw:string,chatId?:string):FileReference{
  const text=raw.trim().replace(/^<|>$/g,'');const at=text.match(/(?::(\d+)(?::(\d+))?|#L(\d+)(?:C(\d+))?)$/i);

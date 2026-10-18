@@ -13,7 +13,7 @@ import {baseName} from '../lib/text';
 import {fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
 import type {PDFDocumentProxy} from '../lib/pdf';
 import {t} from '../../i18n';
-import {FILE_PAGE_BYTES,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
+import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
 const WINDOW=4000;
 /** Above this many characters the text is shown without highlighting (highlight.js would hold the page up). */
@@ -34,7 +34,8 @@ function useHighlight(text:string,path:string,on:boolean):string[]|null{
 /** `base` = the file line number of the text's first line (none: main did not count that far, so no numbers). */
 function Code({ text, path, line, base=1 }: { text: string; path: string; line?: number; base?: number|null }) {
   const ref = useRef<HTMLPreElement>(null);
-  const flat = useMemo(()=>text.replace(/\r\n?/g,'\n'),[text]);
+  // rows follow main's line rule (lineCount): a lone \r stays inside its row, so a page's numbers match main's
+  const flat = useMemo(()=>lineText(text),[text]);
   const lines = useMemo(()=>flat.split('\n'),[flat]);
   const at = line&&base?line-base+1:undefined;
   // a very long text without a cited line is one plain block, so it is not highlighted either
@@ -108,8 +109,6 @@ function Pdf({data,name}:{data:Uint8Array;name:string}){
   </div>;
 }
 
-/** Lines in `text`, a final line end not starting another. */
-const lineCount=(text:string)=>text.split(/\r\n|\r|\n/).length-(/(\r\n|\r|\n)$/.test(text)?1:0);
 /** Where a page sits in a file that does not fit one page, with first/previous/next/last (none for a UTF-16 file). */
 function Pager({result,go}:{result:TextResult;go:(page:Request)=>void}){
   const end=result.offset+result.shown,lines=lineCount(result.text),fixed=result.paged===false;
@@ -163,8 +162,12 @@ function CitedFile({reference}:{reference:FileReference}){
   // the page shown so far stays on screen while the next one loads
   const[last,setLast]=useState<{ref:string;result:FileViewResult}|null>(null);
   const fresh=state.key===key?state.result:null;
-  useEffect(()=>{if(fresh)setLast({ref,result:fresh});},[fresh,ref]);
-  const result=fresh??(last?.ref===ref?last.result:null);
+  // a page that fails (the file changed or went away) keeps the page shown so far and its pager, with the error above:
+  // the user can always page back or on, never left on an empty view
+  const kept=last?.ref===ref&&last.result.kind==='text'?last.result:null;
+  const pageError=fresh&&'reason'in fresh&&kept?fresh.reason:null;
+  useEffect(()=>{if(fresh)setLast(prev=>'reason'in fresh&&prev?.ref===ref&&prev.result.kind==='text'?prev:{ref,result:fresh});},[fresh,ref]);
+  const result=pageError?kept:fresh??(last?.ref===ref?last.result:null);
   const go=(page:Request)=>setRequest({ref,page});
   // another file starts at its cited line, not where the pager was
   useEffect(()=>{setRequest({ref,page:{line:reference.line}});},[ref,reference.line]);
@@ -175,6 +178,7 @@ function CitedFile({reference}:{reference:FileReference}){
       <span className="small muted">{t('viewer.readOnly')}{result&&'size'in result?` · ${fmtBytes(result.size)}`:''}</span>
       <button type="button" className="bx-btn s" onClick={()=>void copyText(real??reference.path)}><IconCopy/>{t('viewer.copyPath')}</button>
       {real&&<button type="button" className="bx-btn s" onClick={()=>void showInFolder(real)} data-testid="viewer-show-in-folder"><IconExternal/>{t('viewer.showInFolder')}</button>}</div>
+    {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
     {!result?<p role="status">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
       :result.kind==='image'?<img src={result.dataUrl} alt={baseName(result.path)} style={{maxWidth:'100%',maxHeight:'75vh',objectFit:'contain'}}/>
       :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
