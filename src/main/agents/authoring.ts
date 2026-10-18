@@ -10,7 +10,7 @@ import type { RawEvent } from '../brain/live';
 import type { AgentCatalogService } from './catalog';
 import type { AgentRunStore } from './runs';
 import { runMetrics } from './run-metrics';
-import { checkCreationRequest, checkPermissionInstructions, protectedAgent } from './author-policy';
+import { checkCreationRequest, checkPermissionInstructions, protectedAgent, withoutPackFields } from './author-policy';
 import { readLocal, writeLocal } from './local-store';
 import { log, errText } from '../log';
 
@@ -165,7 +165,7 @@ export class AgentAuthoring {
       }
       if (this.state.proposals.filter(p => p.state === 'pending').length >= 128) throw new Error('Too many pending proposals.');
       const before = name === 'agent_propose' ? this.profile(a.agentId) : undefined;
-      const draft = catalog.validateDraft(before ? { ...before, ...object(a.patch) } : a.draft);
+      const draft = catalog.validateDraft(before ? { ...before, ...withoutPackFields(object(a.patch)) } : withoutPackFields(a.draft));
       checkPermissionInstructions(draft);
       const p: AgentProposal = { id: randomUUID(), at: this.now(), kind: before ? 'proposal' : 'suggestion', ...(before ? { agentId: before.id, baseRevision: before.updatedAt, before } : {}), draft, reason, expectedEffect: text(a.expectedEffect), evidence: evidence(a.evidence ?? []), state: 'pending' };
       this.write({ ...this.state, proposals: [...this.state.proposals, p] });

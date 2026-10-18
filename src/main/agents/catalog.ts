@@ -17,7 +17,7 @@ import { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_INSTRUCTIONS } from './orchestrator
 import { log, errText } from '../log';
 import { LEGACY_ROLE_REPLACEMENTS, roleAgentPresets } from '../../shared/agent-presets';
 import { presetDraft, presetHash } from './preset-support';
-import { checkAuthorPolicy, checkAgentCwd, protectedAgent } from './author-policy';
+import { checkAuthorPolicy, checkAgentCwd, protectedAgent, withoutPackFields } from './author-policy';
 import { PROBATION_CAP } from './probation';
 
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
@@ -510,7 +510,7 @@ export class AgentCatalogService {
     this.writable();
     const old = options.id ? this.find(options.id) : undefined;
     if (old && (protectedAgent(old) || old.status !== 'active')) throw new Error('Protected or archived agent: propose the change instead.');
-    const draft = this.validate(old ? { ...old, ...obj(value) } : value, true);
+    const draft = this.validate(old ? { ...old, ...withoutPackFields(value) } : withoutPackFields(value), true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
     const base = old ?? (options.presetId ? this.find(options.presetId) : undefined);
     if (!old && (!base || base.origin.kind !== 'preset' || base.status !== 'active')) throw new Error('Choose an active base preset.');

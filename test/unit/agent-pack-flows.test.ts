@@ -161,6 +161,14 @@ describe('async learning and brain forks', () => {
     expect(rolled.knowhow).toBeUndefined();
     expect(learning.list(owned.id).text).not.toContain('Rolled back lesson.');
   });
+  it('ignores know-how and pack identity sent by an automatic author', () => {
+    const f = setup(), preset = f.catalog.list().profiles[0]!, forged = { knowhow: { folder: 'agents/other/versions/x', linked: [], hash: 'b'.repeat(64) }, pack: { id: 'forged-0123456789abcdef', revision: 9 } };
+    const base = { ...draft(), name: 'Owned', tools: { allow: ['read'] as const }, permissionCeiling: 'default' as const };
+    const owned = f.catalog.author({ ...base, ...forged }, { reason: 'Needed', evidence: [{ kind: 'run', ref: 'run:example', at: 1 }], presetId: preset.id, requestItemId: 'item-1' });
+    expect(owned.knowhow).toBeUndefined(); expect(owned.pack).toBeUndefined();
+    const updated = f.catalog.author(forged, { id: owned.id, reason: 'Again', evidence: [{ kind: 'run', ref: 'run:example', at: 1 }], baseline: 5 });
+    expect(updated.knowhow).toBeUndefined(); expect(updated.pack).toBeUndefined();
+  });
   it('preserves direct brain edits on save and learned-rule approval', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     const agent = learning.save(draft()), file = path.join(f.brain, 'agents', agent.id, 'skills', agent.id, 'learned-rules.md');
