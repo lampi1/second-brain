@@ -26,6 +26,7 @@ import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
+import { timerSnapshot } from '../timers';
 import { chatName, regiaOfChat } from '../../shared/regia';
 import { isLongChat } from '../../shared/context';
 import { describeUi } from '../../shared/genui';
@@ -152,7 +153,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         for (const c of chats) if (!c.closedAt) by[c.state] = (by[c.state] ?? 0) + 1;
         const q = d.chats.queueState();
         const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, waiting: q.waiting.filter(w => !other(w.chatId)).map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
-        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().filter(r => !other(r.chatId)).length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot() };
+        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().filter(r => !other(r.chatId)).length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
       },
     },
     {

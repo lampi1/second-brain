@@ -15,6 +15,8 @@
 // Messages are labelled as not written by the user: never an ok or a permission (ADR 0006). A message the app wrote
 // itself is signed (an HMAC with a key that lives only in this process): any other file (inbox.mjs, a hand-written one)
 // shows its sender as "non verificato", so a chat with Bash cannot pass for the Regia. Tests: test/unit/chats/mail.test.ts.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('chats/mail');
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

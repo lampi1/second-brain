@@ -2,6 +2,7 @@
 // it) and fell back to a random one: app chats still work, but external MCP clients configured on the usual port
 // (Claude desktop, Cursor, a terminal claude) lose the browser this run. Before it was only in the log (2 times in 48 h,
 // nobody saw it). One banner, closable for this run; never a toast. Data: AppInfo.health (main/health.ts). Mounted by App.tsx.
+import { t as auditText } from '../i18n';
 import { useState } from 'react';
 import { useApp } from '../store/store';
 
@@ -12,10 +13,10 @@ export function HealthBanner() {
   return (
     <div className="brain-setup" role="alert" data-testid="health-mcp">
       <div className="brain-setup-text">
-        <b>Porta MCP {mcp.wanted} occupata.</b>{' '}
-        <span>L’app usa la {mcp.port}: le chat dell’app funzionano, ma i client esterni configurati sulla {mcp.wanted} non vedono il browser. Chiudi l’altra istanza che la tiene e riavvia l’app.</span>
+        <b>{auditText('audit.HealthBanner.mcpPort')}{' '}{mcp.wanted}{' '}{auditText('audit.HealthBanner.isBusy')}</b>{' '}
+        <span>{auditText('audit.HealthBanner.theAppUses')}{' '}{mcp.port}{auditText('audit.HealthBanner.appChatsWorkButExternalClients')}{' '}{mcp.wanted}{' '}{auditText('audit.HealthBanner.cannotSeeTheBrowserCloseThe')}</span>
       </div>
-      <button type="button" className="btn btn-s" onClick={() => setHidden(true)} data-testid="health-mcp-close" aria-label="Chiudi l’avviso">✕</button>
+      <button type="button" className="btn btn-s" onClick={() => setHidden(true)} data-testid="health-mcp-close" aria-label={auditText('audit.HealthBanner.dismissNotice')}>✕</button>
     </div>
   );
 }

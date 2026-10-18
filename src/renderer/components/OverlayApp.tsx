@@ -6,6 +6,7 @@
 // (overlay:model) and relays what the user does (overlay:action): 1-9 / Enter answer, Esc or "Rispondi dopo" turns
 // "Rispondi dopo" on (every card goes to "Da rispondere", lib/later.ts),
 // Ctrl+J goes to the next one. It never takes the keyboard by itself: only on a click or Ctrl+J (focusKey). No sounds.
+import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
@@ -29,22 +30,22 @@ const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listen
 
 function LayerCard({ card, queue, waiting, now }: { card: OverlayCard; queue: OverlayCard[]; waiting: number; now: number }) {
   return (
-    <section className="layer-card" data-testid="layer-card" data-request={card.key} aria-label={`${card.chatTitle} ti chiede qualcosa`}>
+    <section className="layer-card" data-testid="layer-card" data-request={card.key} aria-label={auditText('auditExpression.OverlayApp.text70', { v0: card.chatTitle })}>
       <header className="layer-head">
         <HarnessMark harness={card.harness} regia={card.isRegia} size={18} />
-        <span className="layer-who"><b>{card.chatTitle}</b><span>{card.req.type === 'command' ? 'ti lascia un comando' : 'ti chiede'} · {ago(card.req.at, now)}</span></span>
+        <span className="layer-who"><b>{card.chatTitle}</b><span>{card.req.type === 'command' ? auditText('auditExpression.OverlayApp.text71') : auditText('auditExpression.OverlayApp.text72')} · {ago(card.req.at, now)}</span></span>
         <span className="sp" />
-        <span className="layer-badge" data-testid="layer-badge" aria-label={`${waiting} ti aspettano`}>{waiting}</span>
+        <span className="layer-badge" data-testid="layer-badge" aria-label={auditText('auditExpression.OverlayApp.text73', { v0: waiting })}>{waiting}</span>
       </header>
       <RequestPanel key={`${card.key}#${card.attempt ?? 0}`} req={card.req} variant="tile" chatTitle={card.chatTitle} harness={card.harness} engine={card.engine} testid={`layer-request-${card.req.chatId}-${card.req.id}`}
         onAnswer={answer => act({ kind: 'answer', key: card.key, answer })} onEscape={() => act({ kind: 'postpone', key: card.key })} onLater={() => act({ kind: 'postpone', key: card.key })}
         command={{ onRun: confirmProd => { act({ kind: 'run', key: card.key, confirmProd }); return true; }, onDismiss: () => act({ kind: 'dismiss', key: card.key }), onOpen: () => act({ kind: 'open', key: card.key }) }} />
       <footer className="layer-foot">
         {queue.length > 0 ? (
-          <span className="layer-queue" data-testid="layer-queue">poi {queue.slice(0, 2).map(q => q.chatTitle).join(', ')}{queue.length > 2 ? ` e altre ${queue.length - 2}` : ''}</span>
-        ) : <span className="layer-queue">nient'altro ti aspetta</span>}
+          <span className="layer-queue" data-testid="layer-queue">{auditText('audit.OverlayApp.then')}{' '}{queue.slice(0, 2).map(q => q.chatTitle).join(', ')}{queue.length > 2 ? auditText('auditExpression.OverlayApp.text74', { v0: queue.length - 2 }) : ''}</span>
+        ) : <span className="layer-queue">{auditText('audit.OverlayApp.nothingElseNeedsYou')}</span>}
         <span className="sp" />
-        <button type="button" className="layer-open" onClick={() => act({ kind: 'open', key: card.key })} data-testid="layer-open">Apri <IconArrowRight size={12} /></button>
+        <button type="button" className="layer-open" onClick={() => act({ kind: 'open', key: card.key })} data-testid="layer-open">{auditText('audit.OverlayApp.open')}{' '}<IconArrowRight size={12} /></button>
       </footer>
     </section>
   );
@@ -60,7 +61,7 @@ function EventToast({ t }: { t: OverlayToast }) {
         {t.detail && <span className="ev-detail">{t.detail}</span>}
       </span>
       <button type="button" className="ev-act" onClick={() => act({ kind: 'toast', id: t.id, act: 'open' })} data-testid={`ev-toast-open-${t.kind}`}>{t.action}</button>
-      <button type="button" className="ev-x" aria-label="Chiudi" onClick={() => act({ kind: 'toast', id: t.id, act: 'dismiss' })} data-testid={`ev-toast-close-${t.kind}`}><IconX size={12} /></button>
+      <button type="button" className="ev-x" aria-label={auditText('audit.OverlayApp.close')} onClick={() => act({ kind: 'toast', id: t.id, act: 'dismiss' })} data-testid={`ev-toast-close-${t.kind}`}><IconX size={12} /></button>
     </div>
   );
 }
@@ -124,10 +125,10 @@ export function OverlayApp() {
   const cards = model?.cards ?? [];
   const toasts = model?.toasts ?? [];
   return (
-    <div key={lang()} className="layer" ref={ref} data-testid="layer" role="region" aria-label="Richieste e avvisi per te" aria-live="polite">
+    <div key={lang()} className="layer" ref={ref} data-testid="layer" role="region" aria-label={auditText('audit.OverlayApp.requestsAndNoticesForYou')} aria-live="polite">
       {toasts.map(t => <EventToast key={t.id} t={t} />)}
       {cards[0] && <LayerCard card={cards[0]} queue={cards.slice(1)} waiting={model?.waiting ?? cards.length} now={model?.now ?? Date.now()} />}
-      {cards[0] && <div className="layer-hint" aria-hidden="true"><Keys combo="Ctrl+J" /> per rispondere da tastiera</div>}
+      {cards[0] && <div className="layer-hint" aria-hidden="true"><Keys combo="Ctrl+J" />{' '}{auditText('audit.OverlayApp.toAnswerWithTheKeyboard')}</div>}
     </div>
   );
 }

@@ -6,6 +6,8 @@
 // reports (overlay:size), kept on top whenever other views are added, and focused only on demand (overlay:focus from
 // Ctrl+J or a click: it never steals the keyboard while the user types). The app page decides the cards (overlay:model);
 // what the user does in the layer goes back to the app page (overlay:action). Used by index.ts.
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('overlay');
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

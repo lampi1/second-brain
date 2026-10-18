@@ -129,6 +129,8 @@ export class SkillsService {
 
     let pl: SkillPlace | null;
     let old: string | null = null;
+    let original: string | null = null;
+    let originalMtime = 0;
     if (req.id) {
       pl = this.placeOf(req.id);
       if (!pl || pl.kind !== kind) return { ok: false, error: 'Non è un file di skill o di agente di una cartella conosciuta.' };
@@ -137,6 +139,8 @@ export class SkillsService {
       if (generatedBy(cur)) return { ok: false, error: generatedBy(cur)! };
       if (typeof req.mtime === 'number' && fs.statSync(req.id).mtimeMs > req.mtime + 1) return { ok: false, error: 'Il file è cambiato su disco dopo che l’hai aperto: ricaricalo, poi rifai la modifica.' };
       old = req.id;
+      original = cur;
+      originalMtime = fs.statSync(req.id).mtimeMs;
     } else {
       const scope: SkillScope = req.scope === 'project' ? 'project' : 'user';
       const root = scope === 'project' && req.root ? norm(req.root) : null;
@@ -156,6 +160,13 @@ export class SkillsService {
     if (refused) return { ok: false, error: refused.message, hook: refused.command };
 
     try {
+      // Hooks can wait for seconds. Revalidate both ends after that await, before any move or write.
+      if (old && (!fs.existsSync(old) || fs.readFileSync(old, 'utf8') !== original || fs.statSync(old).mtimeMs !== originalMtime)) {
+        return { ok: false, error: 'Il file è cambiato su disco durante il salvataggio: ricaricalo, poi rifai la modifica.' };
+      }
+      if ((!old || moving) && fs.existsSync(kind === 'skill' ? path.dirname(target) : target)) {
+        return { ok: false, error: `Esiste già ${kind === 'skill' ? 'una skill' : 'un agente'} "${name}" in questa cartella.` };
+      }
       if (moving && kind === 'skill') fs.renameSync(path.dirname(old!), path.dirname(target)); // the folder goes with its other files
       fs.mkdirSync(path.dirname(target), { recursive: true });
       const tmp = `${target}.${process.pid}.tmp`;

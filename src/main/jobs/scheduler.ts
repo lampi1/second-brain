@@ -1,5 +1,7 @@
 // Serial, visibility-gated agent jobs for Battito and maintenance (ADR 0070).
 // The owner supplies a durable ledger; claiming before running prevents restart catch-up bursts.
+import { timersFor } from '../timers';
+const { setTimeout, clearTimeout } = timersFor('jobs/scheduler');
 export type JobSchedule = { slots: string[] } | { everyMin: number };
 export interface JobContext { at: number; slot: string }
 export interface Job {

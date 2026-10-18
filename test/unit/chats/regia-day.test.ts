@@ -32,7 +32,7 @@ describe('regia day rule', () => {
 
   it('the summary keeps what the Regia needs to go on', () => {
     expect(REGIA_COMPACT.startsWith('/compact ')).toBe(true);
-    for (const w of ['chat che segui', 'domande all’utente', 'decisioni', 'background']) expect(REGIA_COMPACT).toContain(w);
+    for (const w of ['chats you coordinate', 'questions for the user', 'decisions', 'background', "user's language"]) expect(REGIA_COMPACT).toContain(w);
   });
 });
 

@@ -14,6 +14,8 @@
 // queued. No retry: a run this app took once is never taken again. Stopped on quit (running sessions killed, nothing
 // written back: the brain's claim goes stale). Only the stable app runs it (queueAllowed). Used by wiring.ts (demo:
 // none).
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('compare/queue');
 import fs from 'node:fs';
 import path from 'node:path';
 import { ENGINE_ID } from '../engines/registry';

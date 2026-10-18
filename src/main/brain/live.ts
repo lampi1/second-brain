@@ -6,6 +6,8 @@
 // them the feed has chats, playbooks and mail only. The first scan is a baseline: it emits nothing except what changed
 // since the last run of the app (keys persisted in userData/live-state.json), marked away ("mentre eri via").
 // Used by brain/index.ts, which stamps, stores and notifies the events. Pure diff functions are exported for tests.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('brain/live');
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

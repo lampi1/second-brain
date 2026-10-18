@@ -1,4 +1,5 @@
 // Optional local milestones. Only a deliberate user confirmation can award a useful result.
+import { t as auditText } from '../i18n';
 import { Select } from './Select';
 import {useEffect,useRef,useState} from 'react';
 import type {ProgressState} from '@shared/progress';
@@ -17,7 +18,7 @@ export function ProgressPanel(){
     live.current=true;
     const connection=connectProgress({get:()=>sb.invoke('progress:get',undefined),listen:accept=>sb.on('progress:changed',accept)},(next,earned)=>{
       setState(next);if(earned.length)setNotice(earned.map(id=>MILESTONE_LABELS[id]).join(' · '));
-    },()=>setProblem('Traguardi non disponibili. Il lavoro può continuare.'));
+    },()=>setProblem(auditText('cmp.progress.unavailable')));
     bridge.current=connection;
     return()=>{live.current=false;connection.dispose();bridge.current=null;};
   },[]);
@@ -25,18 +26,18 @@ export function ProgressPanel(){
     if(working.current||state?.available!==true)return;
     working.current=true;setBusy(true);setProblem('');
     try{await bridge.current?.perform(action);}
-    catch{if(live.current)setProblem('Operazione non completata. Nessun risultato viene confermato automaticamente.');}
+    catch{if(live.current)setProblem(auditText('cmp.progress.opFailed'));}
     finally{working.current=false;if(live.current)setBusy(false);}
   };
   if(!state)return problem?<p role="status">{problem}</p>:null;
   const earned=new Set(state.earned.map(entry=>entry.id));
-  if(state.hidden)return <div><button type="button" className="link-btn" disabled={!state.available||busy} onClick={()=>void run(()=>sb.invoke('progress:setHidden',{hidden:false}))}>Mostra i traguardi personali</button>{problem&&<p role="alert">{problem}</p>}</div>;
+  if(state.hidden)return <div><button type="button" className="link-btn" disabled={!state.available||busy} onClick={()=>void run(()=>sb.invoke('progress:setHidden',{hidden:false}))}>{auditText('audit.ProgressPanel.showPersonalMilestones')}</button>{problem&&<p role="alert">{problem}</p>}</div>;
   const candidate=candidates.find(chat=>chat.id===selected)??candidates[0];
-  return <section className="progress-panel" aria-label="Traguardi personali" data-testid="personal-progress">
-    <header><b>Il tuo spazio prende forma</b><span>{earned.size} di 3 traguardi</span><button type="button" className="link-btn" disabled={!state.available||busy} onClick={()=>void run(()=>sb.invoke('progress:setHidden',{hidden:true}))}>Nascondi</button></header>
-    <ul>{Object.entries(MILESTONE_LABELS).map(([id,label])=><li key={id}><span aria-hidden="true">{earned.has(id as keyof typeof MILESTONE_LABELS)?'✓':'○'}</span> {label}<span className="sr-only">: {earned.has(id as keyof typeof MILESTONE_LABELS)?'raggiunto':'da raggiungere'}</span></li>)}</ul>
-    {!state.available&&<p role="status">{state.reason||state.problem||'Traguardi in sola lettura.'}</p>}
-    {!earned.has('first-result')&&state.available&&candidate&&<div className="progress-result"><label>Un risultato da rivedere <Select value={candidate.id} disabled={busy} onChange={event=>setSelected(event.target.value)}>{candidates.map(chat=><option key={chat.id} value={chat.id}>{chat.title}</option>)}</Select></label><button type="button" className="link-btn" onClick={()=>focusChat(candidate.id)}>Apri il risultato</button><button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>void run(()=>sb.invoke('progress:confirmResult',{chatId:candidate.id,resultAt:candidate.lastResult!.at}))}>Confermo: ho ottenuto un risultato utile</button></div>}
+  return <section className="progress-panel" aria-label={auditText('audit.ProgressPanel.personalMilestones')} data-testid="personal-progress">
+    <header><b>{auditText('audit.ProgressPanel.yourWorkspaceIsTakingShape')}</b><span>{earned.size}{' '}{auditText('audit.ProgressPanel.of3Milestones')}</span><button type="button" className="link-btn" disabled={!state.available||busy} onClick={()=>void run(()=>sb.invoke('progress:setHidden',{hidden:true}))}>{auditText('audit.ProgressPanel.hide')}</button></header>
+    <ul>{Object.entries(MILESTONE_LABELS).map(([id,label])=><li key={id}><span aria-hidden="true">{earned.has(id as keyof typeof MILESTONE_LABELS)?'✓':'○'}</span> {label}<span className="sr-only">: {earned.has(id as keyof typeof MILESTONE_LABELS)?auditText('auditExpression.ProgressPanel.text76'):auditText('auditExpression.ProgressPanel.text77')}</span></li>)}</ul>
+    {!state.available&&<p role="status">{state.reason||state.problem||auditText('cmp.progress.readOnly')}</p>}
+    {!earned.has('first-result')&&state.available&&candidate&&<div className="progress-result"><label>{auditText('audit.ProgressPanel.anOutcomeToReview')}{' '}<Select value={candidate.id} disabled={busy} onChange={event=>setSelected(event.target.value)}>{candidates.map(chat=><option key={chat.id} value={chat.id}>{chat.title}</option>)}</Select></label><button type="button" className="link-btn" onClick={()=>focusChat(candidate.id)}>{auditText('audit.ProgressPanel.openTheOutcome')}</button><button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>void run(()=>sb.invoke('progress:confirmResult',{chatId:candidate.id,resultAt:candidate.lastResult!.at}))}>{auditText('audit.ProgressPanel.iConfirmIGotAUseful')}</button></div>}
     <p role="status">{notice}</p>{problem&&<p role="alert">{problem}</p>}
   </section>;
 }

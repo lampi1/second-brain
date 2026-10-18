@@ -4,6 +4,8 @@
 // still starts only once the user turned it on with this very definition (engines/trust.ts). Why: the owner, 14/10,
 // "voglio che sia facilmente utilizzabile da tutte le cli": a new engine is one entry, no app release. Used by
 // wiring.ts.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('brain/engines');
 import fs from 'node:fs';
 import path from 'node:path';
 import { brainEngine, setBrainEngines, type EngineEntry } from '../engines/registry';

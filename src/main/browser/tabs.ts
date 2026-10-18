@@ -13,6 +13,8 @@
 // (opener kept, so OAuth popups work); downloads of agent tabs go to <userData>/evidence/<group>/downloads. Session
 // status per environment (valid / expiring / expired) is tracked from auth cookies and login pages. Every change is
 // pushed as `browser:tabs` / `browser:envs` events. Used by browser/actions.ts, browser/tools.ts, browser/service.ts.
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('browser/tabs');
 import { BrowserWindow, WebContentsView, app, screen, session as electronSession, type WebContents, type WebFrameMain, type Session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';

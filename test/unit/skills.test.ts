@@ -53,6 +53,25 @@ describe('SkillsService catalog', () => {
 });
 
 describe('SkillsService save and delete', () => {
+  it.each(['edit', 'rename', 'delete', 'destination'] as const)('preserves changes made during a save hook: %s', async action => {
+    const { home } = fixture();
+    const id = path.join(home, '.claude/skills/rivedi/SKILL.md');
+    const target = path.join(home, '.claude/skills/new-name/SKILL.md');
+    const external = md('rivedi', 'Changed by another editor');
+    const svc = new SkillsService({ home, roots: () => [], trash: async () => {}, guard: async () => {
+      if (action === 'delete') fs.unlinkSync(id);
+      else if (action === 'destination') put(home, '.claude/skills/new-name/SKILL.md', external);
+      else fs.writeFileSync(id, external);
+      return null;
+    } });
+    const doc = svc.read(id);
+    const result = await svc.save({ id, mtime: doc.entry.mtime, kind: 'skill', harness: 'claude', scope: 'user', text: md(action === 'edit' ? 'rivedi' : 'new-name') });
+    expect(result.ok).toBe(false);
+    if (action === 'delete') expect(fs.existsSync(id)).toBe(false);
+    else if (action === 'destination') expect(fs.readFileSync(target, 'utf8')).toBe(external);
+    else expect(fs.readFileSync(id, 'utf8')).toBe(external);
+    if (action !== 'destination') expect(fs.existsSync(target)).toBe(false);
+  });
   it('creates a new skill in a place, refuses errors and duplicates', async () => {
     const { svc, home } = fixture();
     const bad = await svc.save({ kind: 'skill', harness: 'claude', scope: 'user', text: md('Bad Name') });

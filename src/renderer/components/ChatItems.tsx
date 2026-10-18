@@ -11,6 +11,7 @@
 // and a "Nuova chat" badge on a message sent with that toggle (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and RegiaTile.
+import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
 import '../styles/follow-bottom.css';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -324,7 +325,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   return (
     <ChatIdCtx.Provider value={chatId}>
     <div className="items-wrap">
-      <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label="Messaggi" onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
+      <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
         {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : shown.map(i => <Item key={i.id} item={i} beforeAsk={open.has(i.id)} refs={refs.get(i.id)} marks={fixed.get(i.id)} />)}
@@ -334,7 +335,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
       {peek.popover}
       {!follow.following && (
         <button type="button" className="unseen" data-testid="unseen" onClick={follow.jump}>
-          <IconArrowDown size={13} /> {follow.unseen ? 'Nuovi messaggi · Torna agli ultimi' : 'Torna agli ultimi'}
+          <IconArrowDown size={13} /> {follow.unseen ? auditText('auditExpression.ChatItems.text16') : auditText('auditExpression.ChatItems.text17')}
         </button>
       )}
     </div>

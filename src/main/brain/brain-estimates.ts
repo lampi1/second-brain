@@ -5,6 +5,8 @@
 // and the refreshed table itself (table(), schedule(), run a little after each turn ends, at most every 5 minutes, by
 // brain/index.ts's recordJob). No model is ever called: the table is refreshed by running the script (incremental,
 // < 1 s warm).
+import { timersFor } from '../timers';
+const { setTimeout, clearTimeout } = timersFor('brain/brain-estimates');
 import fs from 'node:fs';
 import path from 'node:path';
 import { log } from '../log';

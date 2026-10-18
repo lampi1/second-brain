@@ -3,6 +3,7 @@
 // large inside the app (← → move between them, Esc or a click outside closes; the Esc never reaches the question).
 // main reads each file once (app:askImage: allowed folders, magic bytes, size) and hands a data: URL; one that is
 // missing or refused says why in one line instead. Used by AskContext.tsx (every size of the panel that has a context).
+import { t as auditText } from '../i18n';
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import type { AskImageResult } from '@shared/contract';
 import type { AskImage } from '../lib/askImages';
@@ -44,7 +45,7 @@ function useImages(list: readonly AskImage[]): (AskImageResult | null)[] {
 export const AskImages = memo(function AskImages({ images, testBase, size = 'm' }: { images: readonly AskImage[]; testBase: string; size?: 'm' | 'l' }) {
   const loaded=useImages(images);
   const [decodeFailed,setDecodeFailed]=useState<Set<string>>(()=>new Set());
-  const res=images.map((image,i):AskImageResult|null=>decodeFailed.has(image.path)?{kind:'refused',reason:'Il file non si decodifica come immagine. Rigenera o scegli un altro file.'}:loaded[i]??null);
+  const res=images.map((image,i):AskImageResult|null=>decodeFailed.has(image.path)?{kind:'refused',reason:auditText('cmp.askImages.notImage')}:loaded[i]??null);
   const [open, setOpen] = useState<number | null>(null);
   const shown = images.map((im, i) => ({ im, r: res[i] })).filter((x): x is { im: AskImage; r: Extract<AskImageResult, { kind: 'image' }> } => x.r?.kind === 'image');
   const bad = images.map((im, i) => ({ im, r: res[i] })).filter(x => x.r && x.r.kind !== 'image');

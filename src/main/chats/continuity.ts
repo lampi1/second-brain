@@ -22,8 +22,8 @@ export const REGIA_DAY_MIN = 50_000;
 /** idle this long first: never between two messages of a conversation the user is having with the Regia */
 export const REGIA_DAY_IDLE_MS = 3 * 60_000;
 
-/** What a Regia's day summary keeps (Claude Code's `/compact <instructions>`). Italian: the Regia works in Italian. */
-export const REGIA_COMPACT = '/compact Giorno nuovo: tieni solo quello che serve per continuare. Le chat che segui (titolo, a che punto sono, cosa aspetti da ognuna), i messaggi e le domande all’utente ancora aperti, le sue decisioni e preferenze di oggi e di ieri ancora valide, i lavori in background e come riprenderli. Togli il resto.';
+/** What a Regia's day summary keeps (Claude Code's `/compact <instructions>`). Injected prompts use English. */
+export const REGIA_COMPACT = '/compact New day: keep only what is needed to continue. Keep the chats you coordinate (title, progress, what you await from each), outstanding messages and questions for the user, their decisions and preferences from today and yesterday that still apply, background work and how to resume it. Remove the rest. Continue answering in the user\'s language.';
 
 /** What the continuity rules look at in a chat. noteAt = its cold note (0 = none); lastCallAt = its last API call. */
 export interface ColdView {

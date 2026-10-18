@@ -10,6 +10,8 @@
 // sync ends after the promotion restarted the app) is notified at the next start, not marked as old (on 14/10 a crash
 // and three days of blocks went unseen). A failure says since when GitHub is behind (the last ok outcome). Used by
 // wiring.ts.
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('sync');
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -95,6 +97,7 @@ export class ProductSync {
   private seenUntil = 0;
   private lastOkAt: string | null = null;
   private firstScan: NodeJS.Timeout | null = null;
+  private hourly: NodeJS.Timeout | null = null;
   private seen = new Set<string>();
   private watchers: fs.FSWatcher[] = [];
   private brainWatcher: fs.FSWatcher | null = null;
@@ -130,11 +133,11 @@ export class ProductSync {
     const first = this.o.firstScanMs ?? 30e3;
     if (first > 0) { this.firstScan = setTimeout(() => this.scanOutcomes(), first); this.firstScan.unref(); } else this.scanOutcomes();
     void this.loadPaths();
-    const hourly = setInterval(() => void this.loadPaths(), 3600e3);
-    hourly.unref();
+    this.hourly = setInterval(() => void this.loadPaths(), 3600e3);
+    this.hourly.unref();
   }
 
-  stop(): void { for (const w of this.watchers) w.close(); this.brainWatcher?.close(); if (this.timer) clearTimeout(this.timer); if (this.firstScan) clearTimeout(this.firstScan); }
+  stop(): void { for (const w of this.watchers) w.close(); this.brainWatcher?.close(); if (this.timer) clearTimeout(this.timer); if (this.firstScan) clearTimeout(this.firstScan); clearInterval(this.hourly); this.hourly = null; }
 
   private mtime(f: string): number { try { return fs.statSync(path.join(this.dir, f)).mtimeMs; } catch { return 0; } }
 

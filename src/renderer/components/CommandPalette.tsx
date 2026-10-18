@@ -6,10 +6,11 @@
 // search in main ('search:query', ADR 0023) adds the messages of the chats of the last 30 days (closed ones too: Enter
 // reopens), the chats' git branches and the brain's markdown files, grouped by kind with snippet and date, after the
 // quick matches above. Used by App.tsx.
+import { t as auditText } from '../i18n';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
-import { t } from '../i18n';
+import { locale, t, type TextKey } from '../i18n';
 import { chatName } from '@shared/regia';
 import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
@@ -51,7 +52,7 @@ function buildCommands(): Cmd[] {
   const out: Cmd[] = [];
   for (const r of s.pending) {
     const c = s.chats[r.chatId];
-    out.push({ id: `req:${r.chatId}/${r.id}`, group: 'Ti aspettano', title: `Rispondi: ${r.title}`, sub: c && chatName(c), icon: <IconQuestion />, run: () => focusRequest(r) });
+    out.push({ id: `req:${r.chatId}/${r.id}`, group: 'Ti aspettano', title: auditText('cmp.palette.answer', { title: r.title }), sub: c && chatName(c), icon: <IconQuestion />, run: () => focusRequest(r) });
   }
   for (const id of s.order) {
     const c = s.chats[id];
@@ -64,7 +65,7 @@ function buildCommands(): Cmd[] {
   }
   for (const c of closedChats(s.chats)) {
     out.push({
-      id: `closed:${c.id}`, group: 'Chiuse', title: c.title, sub: `chiusa ${closedTime(c.closedAt!, now())}, Invio la riapre${c.lastText ? ` · ${c.lastText}` : ''}`,
+      id: `closed:${c.id}`, group: 'Chiuse', title: c.title, sub: `${auditText('cmp.palette.closedAt', { when: closedTime(c.closedAt!, now()) })}${c.lastText ? ` · ${c.lastText}` : ''}`,
       icon: <HarnessMark harness={c.harness} size={18} />, run: () => { void reopenChat(c.id); }, text: `${c.title} ${c.cwd} ${c.lastText} chiusa riapri`,
     });
   }
@@ -72,7 +73,7 @@ function buildCommands(): Cmd[] {
     if (u.hiddenTabs.includes(t.id)) continue;
     const owner = t.ownerChatId ? s.chats[t.ownerChatId]?.title : null;
     out.push({
-      id: `tab:${t.id}`, group: 'Browser', title: t.title || t.url, sub: owner ? `guidato da ${owner} · ${t.url}` : t.url, icon: <IconGlobe />, text: `${t.title} ${t.url} ${owner ?? ''}`,
+      id: `tab:${t.id}`, group: 'Browser', title: t.title || t.url, sub: owner ? `${auditText('cmp.palette.drivenBy', { owner })} · ${t.url}` : t.url, icon: <IconGlobe />, text: `${t.title} ${t.url} ${owner ?? ''}`,
       run: () => setMaximized(`browser:${t.id}`),
     });
   }
@@ -81,42 +82,42 @@ function buildCommands(): Cmd[] {
   const regia = rid ? s.chats[rid] : undefined;
   const to = regia && otherEngine(regia.harness);
   const actions: Omit<Cmd, 'group'>[] = [
-    { id: 'stato', title: 'Stato: a che punto siamo', sub: 'chat, domande in attesa, rami e le tue PR, senza token', shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
-    { id: 'next', title: 'Prossima cosa che ti aspetta', shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
-    { id: 'new', title: 'Nuova chat', shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => openModal('newChat') },
+    { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
+    { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
+    { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => openModal('newChat') },
     { id: 'new-browser', title: t('ui.newBrowser'), sub: t('ui.browserMine'), icon: <IconGlobe />, run: () => { void newBrowser(); }, text: 'browser tab scheda web' },
-    { id: 'stopall', title: 'Ferma tutto', shortcut: 'Ctrl+Shift+.', icon: <IconStop />, run: stopAllAsk },
-    { id: 'stop', title: 'Ferma la chat selezionata', shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
-    { id: 'focus', title: u.focusMode ? 'Esci dalla modalità focus' : 'Modalità focus sulla chat selezionata', shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
-    { id: 'max', title: 'Ingrandisci / ripristina la tessera selezionata', shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
-    { id: 'regia', title: 'Vai all’Orchestrator', sub: regia ? `su ${engineName(regia.harness)}` : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
+    { id: 'stopall', title: auditText('cmp.palette.stopAll'), shortcut: 'Ctrl+Shift+.', icon: <IconStop />, run: stopAllAsk },
+    { id: 'stop', title: auditText('cmp.palette.stop'), shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
+    { id: 'focus', title: u.focusMode ? auditText('cmp.palette.focusExit') : auditText('cmp.palette.focusEnter'), shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
+    { id: 'max', title: auditText('cmp.palette.maximize'), shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
+    { id: 'regia', title: auditText('cmp.palette.goRegia'), sub: regia ? auditText('cmp.palette.onEngine', { engine: engineName(regia.harness) }) : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
     ...(regia ? [
-      { id: 'regiaclear', title: `Orchestrator: pulisci «${regia.title}»`, sub: 'riparte vuoto dalla memoria, la conversazione resta tra le chat chiuse', icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera orchestrator regia' },
-      { id: 'regianew', title: 'Nuova Regia', sub: 'una tab in più, es. «App»', icon: <IconPlus />, run: openNewRegia },
-      { id: 'regiarenew', title: 'Orchestrator: ricomincia da capo', sub: `nuovo Orchestrator su ${engineName(regia.harness)}, il vecchio resta tra le chat`, shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
-      ...(to ? [{ id: 'regiaengine', title: `Orchestrator: passa a ${engineName(to)}`, sub: `cambia motore, l’Orchestrator su ${engineName(regia.harness)} resta tra le chat`, icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
+      { id: 'regiaclear', title: auditText('cmp.palette.regiaClear', { title: regia.title }), sub: auditText('cmp.palette.regiaClearSub'), icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera orchestrator regia' },
+      { id: 'regianew', title: auditText('cmp.palette.newRegia'), sub: auditText('cmp.palette.newRegiaSub'), icon: <IconPlus />, run: openNewRegia },
+      { id: 'regiarenew', title: auditText('cmp.palette.regiaRenew'), sub: auditText('cmp.palette.regiaRenewSub', { engine: engineName(regia.harness) }), shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
+      ...(to ? [{ id: 'regiaengine', title: auditText('cmp.palette.regiaEngine', { engine: engineName(to) }), sub: auditText('cmp.palette.regiaEngineSub', { engine: engineName(regia.harness) }), icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
     ] : []),
-    { id: 'qwin', title: questionsModalOn(s) ? 'Domande in finestra: spegni' : 'Domande in finestra: accendi',
-      sub: questionsModalOn(s) ? 'ora le domande compaiono in primo piano, una alla volta' : 'ora le domande restano nelle chat e nell’Orchestrator',
+    { id: 'qwin', title: questionsModalOn(s) ? auditText('cmp.palette.questionsOff') : auditText('cmp.palette.questionsOn'),
+      sub: questionsModalOn(s) ? auditText('cmp.palette.questionsOffSub') : auditText('cmp.palette.questionsOnSub'),
       icon: <IconQuestion />, run: toggleQuestionsModal, text: 'domande finestra modale popup permessi' },
-    { id: 'density', title: u.prefs.density === 'compact' ? 'Densità comoda' : 'Densità compatta', icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
-    { id: 'theme', title: 'Tema: chiaro / scuro / come il sistema', sub: `ora: ${u.prefs.theme === 'system' ? 'come il sistema' : u.prefs.theme === 'dark' ? 'scuro' : 'chiaro'}`, icon: <IconSettings />,
+    { id: 'density', title: u.prefs.density === 'compact' ? auditText('cmp.palette.densityComfortable') : auditText('cmp.palette.densityCompact'), icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
+    { id: 'theme', title: auditText('cmp.palette.theme'), sub: auditText(u.prefs.theme === 'system' ? 'cmp.palette.themeNowSystem' : u.prefs.theme === 'dark' ? 'cmp.palette.themeNowDark' : 'cmp.palette.themeNowLight'), icon: <IconSettings />,
       run: () => setPrefs({ theme: u.prefs.theme === 'system' ? 'dark' : u.prefs.theme === 'dark' ? 'light' : 'system' }) },
-    { id: 'credentials', title: 'Credenziali', sub: 'URL, utente e Copia password degli ambienti (test, local, prod)', icon: <IconLogin />, run: () => openModal('credentials'),
+    { id: 'credentials', title: auditText('cmp.palette.credentials'), sub: auditText('cmp.palette.credentialsSub'), icon: <IconLogin />, run: () => openModal('credentials'),
       text: 'credenziali password utente login account ambienti test url pms' },
-    { id: 'keys', title: 'Scorciatoie da tastiera', shortcut: 'Ctrl+/', icon: <IconKeyboard />, run: () => openModal('shortcuts') },
-    { id: 'center', title: 'Notifiche', shortcut: 'Ctrl+Shift+N', icon: <IconBell />, run: toggleCenter },
-    { id: 'regiadock', title: 'Espandi o riduci l’Orchestrator', shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" regia size={18} />, run: toggleRegia },
-    { id: 'regiaplace', title: 'Orchestrator: misura di partenza', sub: 'in basso a destra, la misura iniziale', icon: <HarnessMark harness="claude" regia size={18} />, run: () => { setPrefs({ regiaSize: null }); setRegiaOpen(true); }, text: 'misura dimensione reset orchestrator regia' },
-    { id: 'back', title: 'Indietro', shortcut: 'Alt+←', icon: <IconArrowLeft />, run: back },
-    { id: 'forward', title: 'Avanti', shortcut: 'Alt+→', icon: <IconArrowRight />, run: forward },
-    { id: 'copylink', title: 'Copia il link di questo punto', sub: currentLink(), icon: <IconLink />, run: () => { void copyLink(); } },
+    { id: 'keys', title: auditText('cmp.palette.shortcuts'), shortcut: 'Ctrl+/', icon: <IconKeyboard />, run: () => openModal('shortcuts') },
+    { id: 'center', title: auditText('cmp.palette.notifications'), shortcut: 'Ctrl+Shift+N', icon: <IconBell />, run: toggleCenter },
+    { id: 'regiadock', title: auditText('cmp.palette.regiaDock'), shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" regia size={18} />, run: toggleRegia },
+    { id: 'regiaplace', title: auditText('cmp.palette.regiaPlace'), sub: auditText('cmp.palette.regiaPlaceSub'), icon: <HarnessMark harness="claude" regia size={18} />, run: () => { setPrefs({ regiaSize: null }); setRegiaOpen(true); }, text: 'misura dimensione reset orchestrator regia' },
+    { id: 'back', title: auditText('cmp.palette.back'), shortcut: 'Alt+←', icon: <IconArrowLeft />, run: back },
+    { id: 'forward', title: auditText('cmp.palette.forward'), shortcut: 'Alt+→', icon: <IconArrowRight />, run: forward },
+    { id: 'copylink', title: auditText('cmp.palette.copyLink'), sub: currentLink(), icon: <IconLink />, run: () => { void copyLink(); } },
   ];
   for (const a of actions) out.push({ ...a, group: 'Azioni' });
   // the Grindhouse holds the agents (SPEC 19): Ctrl+1 and a search for "agenti" or "chat" land there
   for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.id === 'home' ? 'Ctrl+1' : p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }),
     ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : p.id === 'guida' ? { sub: t('guide.title'), text: `${p.label} guida guide aiuto help concetti concepts come funziona how it works` } : {}) });
-  out.push({ id: 'page:mappa', group: 'Vai a', title: 'Mappa 3D', sub: 'a tutto schermo', shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
+  out.push({ id: 'page:mappa', group: 'Vai a', title: auditText('cmp.palette.map'), sub: auditText('cmp.palette.mapSub'), shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
   recentPlaces(6).forEach((p, i) => {
     if (i === 0) return; // where you are now
     out.push({ id: `recent:${i}`, group: 'Recenti', title: placeLabel(p), icon: <IconHistory />, run: () => go(p) });
@@ -131,9 +132,9 @@ const FOUND_GROUP: Record<SearchHit['kind'], string> = { chat: 'Chat trovate', m
 export function hitDate(at: number, nowMs: number): string {
   if (!at) return '';
   const d = new Date(at);
-  if (sameDay(at, nowMs)) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  if (sameDay(at, nowMs)) return d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   const y = d.getFullYear() !== new Date(nowMs).getFullYear();
-  return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', ...(y ? { year: 'numeric' } : {}) });
+  return d.toLocaleDateString(locale(), { day: 'numeric', month: 'short', ...(y ? { year: 'numeric' } : {}) });
 }
 
 /** Full-text hits → palette rows: a chat already listed above comes back only for where its messages matched. */
@@ -153,14 +154,14 @@ function foundCommands(hits: SearchHit[], shown: Set<string>): Cmd[] {
     const closed = c ? !!c.closedAt : !!h.closed;
     const base = { id: `found:${h.key}`, group: FOUND_GROUP[listed ? 'message' : h.kind], date: hitDate(h.at, t), found: true, ...(h.snippet ? { snippet: { text: h.snippet, mark: h.mark } } : {}) };
     if (h.kind === 'brain') {
-      out.push({ ...base, title: h.path ?? h.title, sub: h.line && h.line > 1 ? `riga ${h.line}` : undefined, icon: <IconFile />, run: () => go({ page: 'esplora', arg: h.path ?? h.title }) });
+      out.push({ ...base, title: h.path ?? h.title, sub: h.line && h.line > 1 ? auditText('cmp.palette.line', { n: h.line }) : undefined, icon: <IconFile />, run: () => go({ page: 'esplora', arg: h.path ?? h.title }) });
     } else if (h.kind === 'branch') {
       out.push({ ...base, title: h.title, sub: h.sub, icon: <IconBranch />, run: () => openChat(h.chatId) });
     } else {
       const title = c ? chatName(c) : h.title;
-      const more = h.count && h.count > 1 ? ` · ${h.count} messaggi` : '';
+      const more = h.count && h.count > 1 ? ` · ${auditText('cmp.palette.messages', { n: h.count })}` : '';
       out.push({
-        ...base, title, sub: `${closed ? 'chiusa, Invio la riapre · ' : ''}${h.sub ?? ''}${more}`,
+        ...base, title, sub: `${closed ? `${auditText('cmp.palette.closedReopen')} · ` : ''}${h.sub ?? ''}${more}`,
         icon: c ? <HarnessMark harness={c.harness} regia={c.isRegia} size={18} /> : <IconHistory />, run: () => openChat(h.chatId),
       });
     }
@@ -215,6 +216,9 @@ function ModelNote({ model }: { model: SearchIndexStatus['model'] | null }) {
   return null;
 }
 
+/** A group's name on screen: the group is an internal id (order, bonus), its label follows the language. */
+const groupLabel = (group: string): string => auditText(`cmp.palette.group.${group}` as TextKey);
+
 const GROUP_ORDER = ['Ti aspettano', 'Recenti', 'Chat', 'Chiuse', 'Vai a', 'Azioni', 'Browser'];
 const GROUP_BONUS: Record<string, number> = { 'Ti aspettano': 260, Chat: 300, Chiuse: 240, 'Vai a': 220, Recenti: 120, Azioni: 160, Browser: 120, Novità: 0 };
 
@@ -227,7 +231,7 @@ export function CommandPalette() {
   const model = useSearchModel();
   const quick = useMemo(() => {
     const link = parseLink(q);
-    if (link) return [{ id: 'link', group: 'Link', title: `Vai a ${q.trim()}`, sub: `${pageLabel(link.page)}${link.element ? ` · ${link.element}` : ''}`, icon: <IconLink />, run: () => { openLink(q); } } as Cmd];
+    if (link) return [{ id: 'link', group: 'Link', title: auditText('cmp.palette.goTo', { target: q.trim() }), sub: `${pageLabel(link.page)}${link.element ? ` · ${link.element}` : ''}`, icon: <IconLink />, run: () => { openLink(q); } } as Cmd];
     if (!q.trim()) {
       const g = all.filter(c => c.group !== 'Novità');
       return GROUP_ORDER.flatMap(name => g.filter(c => c.group === name));
@@ -261,10 +265,10 @@ export function CommandPalette() {
   };
   let lastGroup = '';
   return (
-    <Modal onClose={closeModal} label="Cerca e comandi" testid="palette" className="modal-palette" top>
+    <Modal onClose={closeModal} label={auditText('audit.CommandPalette.searchAndCommands')} testid="palette" className="modal-palette" top>
       <div className="palette-search">
         <IconSearch size={16} />
-        <input autoFocus value={q} placeholder="Cerca chat, browser, pagine, comandi…" aria-label="Cerca" data-testid="palette-input" role="combobox" aria-expanded="true" aria-controls="palette-list"
+        <input autoFocus value={q} placeholder={auditText('audit.CommandPalette.searchChatsBrowsersPagesCommands')} aria-label={auditText('audit.CommandPalette.search')} data-testid="palette-input" role="combobox" aria-expanded="true" aria-controls="palette-list"
           aria-activedescendant={list[active] ? `pal-${active}` : undefined}
           onChange={e => { setQ(e.target.value); setActiveId(null); }}
           onKeyDown={e => {
@@ -274,14 +278,14 @@ export function CommandPalette() {
           }} />
         <Keys combo="Esc" />
       </div>
-      <div className="palette-list" id="palette-list" role="listbox" ref={listRef} aria-label="Risultati">
-        {list.length === 0 && <div className="palette-empty">{found.busy ? 'Cerco nelle chat e nel brain…' : <>Niente per «{q}». Prova con il nome di una chat o di un comando.</>}</div>}
+      <div className="palette-list" id="palette-list" role="listbox" ref={listRef} aria-label={auditText('audit.CommandPalette.results')}>
+        {list.length === 0 && <div className="palette-empty">{found.busy ? auditText('auditExpression.CommandPalette.text28') : <>{auditText('audit.CommandPalette.noResultsFor')}{q}{auditText('audit.CommandPalette.tryTheNameOfAChat')}</>}</div>}
         {list.map((c, i) => {
           const header = (!q.trim() || c.found) && c.group !== lastGroup ? c.group : null;
           lastGroup = c.group;
           return (
             <div key={c.id}>
-              {header && <div className="palette-group">{header}</div>}
+              {header && <div className="palette-group">{groupLabel(header)}</div>}
               <div id={`pal-${i}`} role="option" aria-selected={i === active} data-index={i} className={`palette-item ${i === active ? 'active' : ''}`} data-testid={`palette-item-${c.id}`}
                 onMouseMove={() => setActiveId(c.id)} onClick={() => run(c)}>
                 <span className="palette-icon">{c.icon}</span>
@@ -291,15 +295,15 @@ export function CommandPalette() {
                     <span className="palette-snippet" data-testid="palette-snippet">{markText(c.snippet.text, c.snippet.mark)}</span>
                   </span>
                 ) : <span className="palette-text"><span className="palette-title">{c.title}</span>{c.sub && <span className="palette-sub">{c.sub}</span>}</span>}
-                {c.found ? c.date && <span className="palette-tag">{c.date}</span> : q.trim() && <span className="palette-tag">{c.group}</span>}
+                {c.found ? c.date && <span className="palette-tag">{c.date}</span> : q.trim() && <span className="palette-tag">{groupLabel(c.group)}</span>}
                 {c.shortcut && <Keys combo={c.shortcut} />}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="palette-foot"><span><Keys combo="↑ ↓" /> scegli</span><span><Keys combo="Invio" /> apri</span><span><Keys combo="Esc" /> chiudi</span>
-        {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">cerco nei messaggi e nel brain…</span>}
+      <div className="palette-foot"><span><Keys combo="↑ ↓" />{' '}{auditText('audit.CommandPalette.select')}</span><span><Keys combo="Invio" />{' '}{auditText('audit.CommandPalette.open')}</span><span><Keys combo="Esc" />{' '}{auditText('audit.CommandPalette.close')}</span>
+        {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">{auditText('audit.CommandPalette.searchingMessagesAndTheBrain')}</span>}
         <ModelNote model={model} /></div>
     </Modal>
   );

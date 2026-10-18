@@ -4,6 +4,7 @@
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
 // own costs (live estimate included): today's total moves at each message and the popup lists every chat of the day by
 // cost (lib/live-costs.ts, LiveCosts.tsx). Used by TopBar.tsx.
+import { t as auditText } from '../i18n';
 import { useRef, useState } from 'react';
 import type { ChatSummary, Usage } from '@shared/contract';
 import { formatCost, tokensShort, until } from '../lib/format';
@@ -75,7 +76,7 @@ function PlanRow({ title, pct, resets, now, testid }: { title: string; pct: numb
         <b className={`ub-plan-pct tone-${toneOf(pct)}`}>{pct == null ? 'n/d' : pctText(pct)}</b>
       </div>
       <Meter pct={pct} wide />
-      <div className="ub-plan-foot">{pct == null ? 'Nessun dato recente' : resets ? `Si azzera ${dayKey(resets) === dayKey(now) ? 'alle ' : ''}${resetAt(resets, now)} · ${inTime(resets, now)}` : 'Orario di azzeramento non noto'}</div>
+      <div className="ub-plan-foot">{pct == null ? auditText('auditExpression.UsageBar.text216') : resets ? auditText('auditExpression.UsageBar.text217', { v0: dayKey(resets) === dayKey(now) ? auditText('auditExpression.UsageBar.text218') : '', v1: resetAt(resets, now), v2: inTime(resets, now) }) : auditText('auditExpression.UsageBar.text219')}</div>
     </div>
   );
 }
@@ -89,40 +90,40 @@ function Details({ usage, chats, now, close }: { usage: Usage | null; chats: Cha
   return (
     <div className="ub-pop">
       <section className="ub-sec">
-        <div className="ub-sec-head"><span>Spesa di oggi</span>{usage?.costAt ? <small data-tip={`Il conteggio completo dalle chat è delle ${hhmm(usage.costAt)}; poi si aggiunge a ogni messaggio`}>dal vivo</small> : usage?.at ? <small>aggiornata {ago(usage.at, now)}</small> : null}</div>
+        <div className="ub-sec-head"><span>{auditText('audit.UsageBar.todaySSpending')}</span>{usage?.costAt ? <small data-tip={auditText('auditExpression.UsageBar.text220', { v0: hhmm(usage.costAt) })}>{auditText('audit.UsageBar.live')}</small> : usage?.at ? <small>{auditText('audit.UsageBar.updated')}{' '}{ago(usage.at, now)}</small> : null}</div>
         <div className="ub-total" data-testid="usage-pop-total">{total ? `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` : 'n/d'}</div>
         <div className="ub-rows">
           <div className="ub-row"><HarnessMark harness="claude" size={16} /><span className="ub-label">Claude</span><b>{usage?.costKnown === false ? 'n/d' : formatCost(usage?.todayUsd ?? 0)}</b></div>
-          <div className="ub-row"><HarnessMark harness="cursor" size={16} /><span className="ub-label">Cursor</span>{usage?.cursorExact === false ? <span className="ub-tag" data-testid="usage-pop-cursor-est">stima</span> : null}<b>{cursorText(usage, true)}</b></div>
+          <div className="ub-row"><HarnessMark harness="cursor" size={16} /><span className="ub-label">Cursor</span>{usage?.cursorExact === false ? <span className="ub-tag" data-testid="usage-pop-cursor-est">{auditText('audit.UsageBar.estimate')}</span> : null}<b>{cursorText(usage, true)}</b></div>
         </div>
-        <p className="ub-note">{usage?.costKnown === false ? usage.costNote : 'Claude a prezzo di listino API: sull’abbonamento è un costo equivalente, non una fattura.'}</p>
+        <p className="ub-note">{usage?.costKnown === false ? usage.costNote : auditText('auditExpression.UsageBar.text222')}</p>
         {usage?.cursorNote ? <p className="ub-note">{usage.cursorNote}</p> : null}
       </section>
       <section className="ub-sec">
-        <div className="ub-sec-head"><span><HarnessMark harness="claude" size={16} /> Piano Claude</span>{usage?.limitsAt ? <small>letto {ago(usage.limitsAt, now)}</small> : null}</div>
-        <PlanRow title="Finestra di 5 ore" pct={usage?.fiveHourPct} resets={usage?.fiveHourResetsAt} now={now} testid="usage-pop-5h" />
-        <PlanRow title="Settimana" pct={usage?.weekPct} resets={usage?.weekResetsAt} now={now} testid="usage-pop-week" />
+        <div className="ub-sec-head"><span><HarnessMark harness="claude" size={16} />{' '}{auditText('audit.UsageBar.claudePlan')}</span>{usage?.limitsAt ? <small>{auditText('audit.UsageBar.read')}{' '}{ago(usage.limitsAt, now)}</small> : null}</div>
+        <PlanRow title={auditText('audit.UsageBar.5HourWindow')} pct={usage?.fiveHourPct} resets={usage?.fiveHourResetsAt} now={now} testid="usage-pop-5h" />
+        <PlanRow title={auditText('audit.UsageBar.week')} pct={usage?.weekPct} resets={usage?.weekResetsAt} now={now} testid="usage-pop-week" />
         {usage?.fiveHourPct == null && usage?.weekPct == null && usage?.limitsNote ? <p className="ub-note">{usage.limitsNote}</p> : null}
       </section>
       <section className="ub-sec">
-        <div className="ub-sec-head"><span><HarnessMark harness="cursor" size={16} /> Piano Cursor</span></div>
-        <div className="ub-na" data-testid="usage-pop-cursor"><b>Non disponibile</b><span>{usage?.cursorPlanNote ?? 'Cursor non espone l’uso del piano.'}</span></div>
+        <div className="ub-sec-head"><span><HarnessMark harness="cursor" size={16} />{' '}{auditText('audit.UsageBar.cursorPlan')}</span></div>
+        <div className="ub-na" data-testid="usage-pop-cursor"><b>{auditText('audit.UsageBar.unavailable')}</b><span>{usage?.cursorPlanNote ?? auditText('auditExpression.UsageBar.text223')}</span></div>
       </section>
       {usage?.kimi ? (
         <section className="ub-sec" data-testid="usage-pop-kimi">
-          <div className="ub-sec-head"><span><HarnessMark harness="kimi" size={16} /> Kimi oggi</span>{usage.kimi.lastAt ? <small>ultimo turno {ago(usage.kimi.lastAt, now)}</small> : null}</div>
-          <div className="ub-total" data-testid="usage-pop-kimi-total">{usage.kimi.tokens ? `${tokensShort(usage.kimi.tokens)} token` : 'Nessun turno oggi'}</div>
+          <div className="ub-sec-head"><span><HarnessMark harness="kimi" size={16} />{' '}{auditText('audit.UsageBar.kimiToday')}</span>{usage.kimi.lastAt ? <small>{auditText('audit.UsageBar.lastTurn')}{' '}{ago(usage.kimi.lastAt, now)}</small> : null}</div>
+          <div className="ub-total" data-testid="usage-pop-kimi-total">{usage.kimi.tokens ? `${tokensShort(usage.kimi.tokens)} token` : auditText('auditExpression.UsageBar.text225')}</div>
           {usage.kimi.tokens ? (
             <div className="ub-rows">
               {usage.kimi.models.slice(0, 4).map(m => <div key={m.model} className="ub-row"><span className="ub-label">{kimiModel(m.model)}</span><b>{tokensShort(m.tokens)}</b></div>)}
-              <div className="ub-row"><span className="ub-label">di cui letti dalla cache</span><b>{tokensShort(usage.kimi.cacheRead)}</b></div>
+              <div className="ub-row"><span className="ub-label">{auditText('audit.UsageBar.ofWhichReadFromCache')}</span><b>{tokensShort(usage.kimi.cacheRead)}</b></div>
             </div>
           ) : null}
-          <div className="ub-na"><b>Quota del piano non disponibile</b><span>{usage.kimi.planNote}</span></div>
+          <div className="ub-na"><b>{auditText('audit.UsageBar.planQuotaUnavailable')}</b><span>{usage.kimi.planNote}</span></div>
         </section>
       ) : null}
       <section className="ub-sec" data-testid="usage-pop-chats">
-        <div className="ub-sec-head"><span>Chat di oggi, dalla più cara</span><small>dal vivo</small></div>
+        <div className="ub-sec-head"><span>{auditText('audit.UsageBar.todaySChatsMostExpensiveFirst')}</span><small>{auditText('audit.UsageBar.live')}</small></div>
         <LiveCostList rows={rows} limit={POP_ROWS} testid="usage-pop-list" unpricedModels={usage?.cursorUnpriced?.models}
           onOpen={id => { close(); focusChat(id); }} onMore={() => { close(); go({ page: 'costi', arg: '1' }); }} />
       </section>
@@ -139,17 +140,17 @@ export function UsageBar() {
   const list = Object.values(chats);
   const total = liveTotal(usage, list);
   const tip = [
-    total ? `Oggi ${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}${total.partial ? ' (Cursor escluso: sconosciuto)' : ''}` : 'Spesa di oggi non disponibile',
-    usage?.cursorTodayUsd != null ? `Cursor ${cursorText(usage, true)}${usage.cursorExact === false ? ' (stima)' : ''}` : null,
-    usage?.fiveHourPct != null ? `5 ore al ${pctText(usage.fiveHourPct)}` : null,
-    usage?.weekPct != null ? `settimana al ${pctText(usage.weekPct)}` : null,
-    'Cursor: uso del piano non disponibile',
-    usage?.kimi ? `Kimi oggi ${tokensShort(usage.kimi.tokens)} token` : null,
+    total ? auditText(total.partial ? 'cmp.usage.todayPartial' : 'cmp.usage.today', { cost: `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` }) : auditText('cmp.usage.todayUnavailable'),
+    usage?.cursorTodayUsd != null ? `Cursor ${cursorText(usage, true)}${usage.cursorExact === false ? auditText('cmp.usage.estimateSuffix') : ''}` : null,
+    usage?.fiveHourPct != null ? auditText('cmp.usage.fiveHour', { pct: pctText(usage.fiveHourPct) }) : null,
+    usage?.weekPct != null ? auditText('cmp.usage.week', { pct: pctText(usage.weekPct) }) : null,
+    auditText('cmp.usage.cursorPlanUnavailable'),
+    usage?.kimi ? auditText('cmp.usage.kimiToday', { n: tokensShort(usage.kimi.tokens) }) : null,
   ].filter(Boolean).join(' · ');
   return (
     <>
-      <button ref={ref} type="button" className="usagebar" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="dialog" aria-label={`Utilizzo: ${tip}`} data-tip={tip} data-testid="usage">
-        <span className="ub-today"><span className="ub-k">Oggi</span><b className="ub-v" data-testid="usage-today">{total ? `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` : 'n/d'}</b></span>
+      <button ref={ref} type="button" className="usagebar" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="dialog" aria-label={auditText('auditExpression.UsageBar.text226', { v0: tip })} data-tip={tip} data-testid="usage">
+        <span className="ub-today"><span className="ub-k">{auditText('audit.UsageBar.today')}</span><b className="ub-v" data-testid="usage-today">{total ? `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` : 'n/d'}</b></span>
         <span className="ub-sep" />
         <span className="ub-group" data-testid="usage-claude">
           <HarnessMark harness="claude" size={16} />

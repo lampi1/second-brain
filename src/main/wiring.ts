@@ -71,6 +71,8 @@ import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
+import { timersFor } from './timers';
+const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {

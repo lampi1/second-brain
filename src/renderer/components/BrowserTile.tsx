@@ -5,6 +5,7 @@
 // snapshot fills the placeholder, so overlays and screenshots show the page instead of a hole. An open hand-off (the
 // chat waits for the user: login, MFA) shows its banner between the header and the page (HandoffBanner.tsx).
 // Used by the agents' strips in the Grindhouse (AgentStrips.tsx) and the focus view.
+import { t as auditText } from '../i18n';
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
 import { registerView } from '../lib/viewports';
@@ -40,7 +41,7 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
   const { host, rest } = splitUrl(tab.url);
   return (
     <section className={`tile browser-tile ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${handoff ? 'has-handoff' : ''} ${pair.cls}`} style={pair.style} role="region"
-      aria-label={`Browser: ${tab.title}${owner ? `, guidato da ${owner.title}` : ''}`} data-testid={`tile-browser-${tabId}`} data-tab-id={tabId} data-sb-id={`tab-${tabId}`}
+      aria-label={auditText('auditExpression.BrowserTile.text10', { v0: tab.title, v1: owner ? auditText('auditExpression.BrowserTile.text11', { v0: owner.title }) : '' })} data-testid={`tile-browser-${tabId}`} data-tab-id={tabId} data-sb-id={`tab-${tabId}`}
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(tab.ownerChatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
@@ -58,19 +59,19 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
             </button>
           )}
           <span className="bt-nav">
-            <IconButton label="Indietro" onClick={() => void goTab(tabId, 'back')} testid={`browser-back-${tabId}`}><IconArrowLeft size={14} /></IconButton>
-            <IconButton label="Avanti" onClick={() => void goTab(tabId, 'forward')} testid={`browser-forward-${tabId}`}><IconArrowRight size={14} /></IconButton>
-            <IconButton label="Ricarica" onClick={() => void goTab(tabId, 'reload')} testid={`browser-reload-${tabId}`}><IconRefresh size={14} /></IconButton>
+            <IconButton label={auditText('audit.BrowserTile.back')} onClick={() => void goTab(tabId, 'back')} testid={`browser-back-${tabId}`}><IconArrowLeft size={14} /></IconButton>
+            <IconButton label={auditText('audit.BrowserTile.forward')} onClick={() => void goTab(tabId, 'forward')} testid={`browser-forward-${tabId}`}><IconArrowRight size={14} /></IconButton>
+            <IconButton label={auditText('audit.BrowserTile.reload')} onClick={() => void goTab(tabId, 'reload')} testid={`browser-reload-${tabId}`}><IconRefresh size={14} /></IconButton>
           </span>
-          <IconButton label={maximized ? 'Ripristina' : 'Browser a tutto schermo'} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
+          <IconButton label={maximized ? auditText('auditExpression.BrowserTile.text12') : auditText('auditExpression.BrowserTile.text13')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
           </IconButton>
-          <IconButton label="Chiudi scheda" shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
+          <IconButton label={auditText('audit.BrowserTile.closeTab')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
         </div>
         <div className="th-sub">
           {owner ? (
-            <span className="drv"><span className="drv-of">di:</span><button type="button" className="pair-chip" onClick={() => focusChat(owner.id)} data-testid={`browser-owner-${tabId}`}
-              aria-label={`Browser della chat ${owner.title}: vai alla chat`} data-tip="Vai alla chat che guida questo browser"><span className="pair-dot" aria-hidden="true" /><span className="pair-name">{owner.title}</span></button></span>
+            <span className="drv"><span className="drv-of">{auditText('audit.BrowserTile.by')}</span><button type="button" className="pair-chip" onClick={() => focusChat(owner.id)} data-testid={`browser-owner-${tabId}`}
+              aria-label={auditText('auditExpression.BrowserTile.text14', { v0: owner.title })} data-tip={auditText('audit.BrowserTile.goToTheChatControllingThis')}><span className="pair-dot" aria-hidden="true" /><span className="pair-name">{owner.title}</span></button></span>
           ) : <span className="drv mine">{t('ui.browserMine')}</span>}
           {tab.lastAction && <span className="last-action" data-testid={`browser-action-${tabId}`}>{tab.lastAction}</span>}
         </div>
@@ -79,8 +80,8 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
       <div className="viewport-wrap">
         <div className="viewport" ref={holder} data-testid={`browser-view-${tabId}`}>
           {tab.thumb ? <img src={tab.thumb} alt="" draggable={false} />
-            : tab.loading ? <div className="viewport-loading"><IconSpinner size={16} /> Carico la pagina…</div>
-            : <div className="viewport-info" data-testid={`browser-info-${tabId}`}><b>{tab.title || 'Pagina'}</b><span>{tab.url}</span></div>}
+            : tab.loading ? <div className="viewport-loading"><IconSpinner size={16} />{' '}{auditText('audit.BrowserTile.loadingThePage')}</div>
+            : <div className="viewport-info" data-testid={`browser-info-${tabId}`}><b>{tab.title || auditText('cmp.browserTile.page')}</b><span>{tab.url}</span></div>}
         </div>
       </div>
     </section>

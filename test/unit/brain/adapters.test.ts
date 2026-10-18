@@ -60,6 +60,17 @@ describe('domains', () => {
 });
 
 describe('claude plugin', () => {
+  it('ships hook scripts and their local imports and rebuilds when a script changes', () => {
+    const b = brain(), userData = tmp('ud');
+    write(b.personal, '.claude/hooks/check.mjs', 'import "./lib/helper.mjs";');
+    write(b.personal, '.claude/hooks/lib/helper.mjs', 'export const version = 1;');
+    const input = { domains: b.domains, on: true };
+    const dir = claudeLaunch(userData, input).pluginDir!;
+    expect(fs.readFileSync(path.join(dir, 'hooks/check.mjs'), 'utf8')).toBe('import "./lib/helper.mjs";');
+    write(b.personal, '.claude/hooks/lib/helper.mjs', 'export const version = 200;');
+    claudeLaunch(userData, input);
+    expect(fs.readFileSync(path.join(dir, 'hooks/lib/helper.mjs'), 'utf8')).toBe('export const version = 200;');
+  });
   it('off by default: no arguments, nothing written', () => {
     const userData = tmp('ud');
     setLaunchRules(() => ({ domains: brain().domains, claude: false, codex: true }));

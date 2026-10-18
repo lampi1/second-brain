@@ -6,6 +6,8 @@
 // were chosen for it at spawn) and only sends its model / effort / permission mode / title as control requests.
 // No model call happens before the user's message: a waiting engine spends no tokens. Who: ChatManager (create,
 // shutdown); BufferedSink holds what the engine reports before a chat owns it, then replays it in order.
+import { timersFor } from '../timers';
+const { setTimeout, clearTimeout } = timersFor('chats/warm');
 import path from 'node:path';
 import { log } from '../log';
 import type { HarnessSession, SessionSink } from './session';

@@ -75,7 +75,7 @@ export function ThoughtText({ chatId, text, marks }: { chatId: string | null; te
       {pick && (
         <button type="button" className="thought-pick" style={{ left: pick.x, top: pick.y }} data-testid="thought-pick"
           onMouseDown={e => e.preventDefault()} onClick={() => open(pick.quote)} data-tip={t('chat.correct.pickTip')}>
-          No, così
+          {t('chat.correct.pick')}
         </button>
       )}
       {form !== null && <FixForm quote={form} blocked={blocked} step={step} onDone={close}
@@ -122,7 +122,7 @@ function FixForm({ quote, blocked, step, onSend, onDone }: { quote: string; bloc
           data-tip={t('chat.correct.stopTip')}>{t('chat.correct.stop')}</button>
         {step && <button type="button" className="btn btn-ghost btn-s" disabled={busy || !fix.trim() || !!blocked} onClick={() => void go('step')} data-testid="thought-fix-step"
           data-tip={t('chat.correct.stepTip')}>{t('chat.correct.step')}</button>}
-        <button type="button" className="btn btn-ghost btn-s" onClick={onDone} data-testid="thought-fix-cancel">Annulla</button>
+        <button type="button" className="btn btn-ghost btn-s" onClick={onDone} data-testid="thought-fix-cancel">{t('common.cancel')}</button>
       </div>
     </div>
   );

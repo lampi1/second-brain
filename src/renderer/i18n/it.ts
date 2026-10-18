@@ -1,4 +1,7 @@
 import { costsIt } from './areas/costs.it';
+import { auditIt } from './areas/audit.it';
+import { auditExpressionsIt } from './areas/audit-expressions.it';
+import { componentsIt } from './areas/components.it';
 import { catalogIt } from './areas/catalog.it';
 import { connectorsIt } from './areas/connectors.it';
 // The Italian UI texts (ADR 0057): the source dictionary. Every key the UI shows lives here; en.ts must have the same
@@ -21,6 +24,9 @@ import { guideIt } from './areas/guide.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 
 export const it = {
+  ...auditIt,
+  ...auditExpressionsIt,
+  ...componentsIt,
   ...catalogIt,
   ...costsIt,
   ...connectorsIt,

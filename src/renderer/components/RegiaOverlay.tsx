@@ -1,5 +1,6 @@
 // Persistent coordinator column. The shell and native overlays share its exact width;
 // pointer and keyboard resizing preserve a usable workspace without covering inputs.
+import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../store/store';
 import { openModal, setPrefs, ui } from '../store/ui';
@@ -13,7 +14,7 @@ import { t } from '../i18n';
 import { orchestratorIdOf } from '../lib/regia-route';
 
 export function StatoButton() {
-  return <IconButton label="Stato: chat e PR" shortcut="Ctrl+Shift+S" onClick={() => openModal('stato')} testid="stato-btn"><IconList size={16} /></IconButton>;
+  return <IconButton label={auditText('audit.RegiaOverlay.statusChatsAndPrs')} shortcut="Ctrl+Shift+S" onClick={() => openModal('stato')} testid="stato-btn"><IconList size={16} /></IconButton>;
 }
 
 function useColumnSize() {
