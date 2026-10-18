@@ -79,6 +79,6 @@ Engine failover is out of scope.
   - Template hooks, the activation switch and `{tools}`.
   - Reference rewriting, the migration plan, and every crash-recovery state (pending refusal, before, between and after the renames, invalid journal).
 - `create.test.ts` checks the real template result.
-- `npm run check:branch`: CHECK_BRANCH_RESULT
-- Guard scan of the branch commits: GUARD_RESULT
+- `npm run check:branch`: typecheck and lint green; unit **red in 3 runs, on time-bound tests only, a different set each time**: file-diff, default-brain, archive, compare/headless and correction-catch-hook timeouts or duration assertions. The machine was at 100% CPU with about 50 node/claude processes from other sessions. None of these tests or their subjects are in this diff, and all of them pass when run alone (7 files, 64 tests). The first run also caught real publish-guard findings in the new tests (user paths, a GUID, emails) and a timeout in rules-tools; both are fixed. **Rerun check:branch on an idle machine before the merge.**
+- Guard scan of the branch commits: `guard: clean`
 - App not launched; no e2e, live model call, push, real-brain or global-settings write.
