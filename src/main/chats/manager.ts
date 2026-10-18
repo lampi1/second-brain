@@ -2082,6 +2082,8 @@ export class ChatManager implements ChatService {
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     const run = r.s.run;
+    // A fresh submission also starts a turn while Claude is still running after its previous result (delayed idle).
+    if ('effortSubmitted' in p && !r.handoffTurn) r.turnAt = Date.now();
     if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
     // out of the turn with no result (a crash, a clean exit mid-turn): the next turn starts its own clock
     else if (p.state === 'idle' || p.state === 'error' || p.state === 'closed') delete r.turnAt;

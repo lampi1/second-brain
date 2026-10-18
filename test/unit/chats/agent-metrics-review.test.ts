@@ -121,6 +121,21 @@ describe('a pruned run is never counted again', () => {
 });
 
 describe('a run report goes to its own turn', () => {
+  it('a fresh turn before delayed idle cannot overwrite a run completed after the previous result', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const s = f.sink(c.id);
+    s.changed({ state: 'running' });
+    reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
+    await f.m.set(c.id, { workStatus: 'completed' });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(f.run(c.id)!.endedAt! + 100);
+    // Claude emits submission on a fresh send or autonomous activity, even when running is unchanged.
+    s.changed({ effortSubmitted: null });
+    reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
+    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' });
+  });
+
   it('a turn that died without a result does not let a later post-end turn overwrite the ended run’s report', async () => {
     const f = fixture();
     const c = await f.create();
