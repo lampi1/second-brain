@@ -1,6 +1,7 @@
 // The "Da approvare" inbox's read model and decisions (pure, no window): it gathers every pending change to an agent
-// (Orchestrator definition proposals, learned-rule proposals, open version trials, agents in probation, lifecycle
-// suggestions) from the existing typed IPC channels into one list, and maps each user decision to its one channel.
+// (Orchestrator definition proposals and update/rollback/archive/restore requests, learned-rule proposals, open version
+// trials, agents in probation, lifecycle suggestions) from the typed IPC channels and the lifecycle queue into one list,
+// and maps each user decision to its one channel (agents:lifecycleDecide for the queue's own entries).
 // Nothing here decides by itself: every write runs only from a click in components/AgentApprovals.tsx.
 // Used by store/agent-approvals.ts (loading, sidebar count) and components/AgentApprovals.tsx (cards, undo).
 import type { AgentDraft, AgentMetrics, AgentProfile, VersionMetrics } from '@shared/agents';
@@ -25,8 +26,9 @@ export type ApprovalItem =
   /** An open version trial (pack update, approved rule): agents:trialDecide. advice = the lifecycle's keep/revert, when it has one. */
   | { type: 'trial'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; reason: string | null; before: VersionMetrics | null; after: VersionMetrics | null }
   /** A new agent (imported or made for a task) still being judged: agents:keep / agents:retire. */
-  | { type: 'probation'; key: string; at: number; agent: AgentProfile; metrics: VersionMetrics | null }
-  /** A lifecycle suggestion with no decision channel yet: it is prepared in the editor, where saving is the approval. */
+  | { type: 'probation'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; metrics: VersionMetrics | null }
+  /** A lifecycle suggestion: approve = agents:lifecycleDecide (a model trial opens; update/create/merge/split ask the
+   *  Orchestrator for a draft that comes back as a 'definition' item), dismiss = hidden for a while. */
   | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] };
 export type ApprovalSource = 'definitions' | 'lifecycle' | 'rules' | 'metrics';
 export interface ApprovalsState { items: ApprovalItem[]; problems: ApprovalSource[]; lifecycleProblem: string | null }
@@ -77,30 +79,30 @@ const versionOf = (m: AgentMetrics | undefined, version: number): VersionMetrics
 export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsState> {
   const catalog = await c.invoke('agents:list', undefined);
   const active = catalog.profiles.filter(p => p.status === 'active'), all = [...catalog.profiles, ...catalog.archived];
-  const [proposals, lifecycle, metrics, rules] = await Promise.allSettled([
-    c.invoke('agents:proposals', undefined), c.lifecycle.read({}), c.invoke('agents:metrics', undefined),
-    Promise.allSettled(active.map(p => c.invoke('agents:learnList', { id: p.id }))),
-  ]);
+  const [proposals, lifecycle, metrics] = await Promise.allSettled([c.invoke('agents:proposals', undefined), c.lifecycle.read({}), c.invoke('agents:metrics', undefined)]);
+  const snapshot = lifecycle.status === 'fulfilled' ? lifecycle.value : null;
   const problems: ApprovalSource[] = [];
-  if (proposals.status === 'rejected') problems.push('definitions');
+  // the queue carries the pending drafts too: either source is enough
+  const drafts = proposals.status === 'fulfilled' ? proposals.value : snapshot?.drafts ?? null;
+  if (!drafts) problems.push('definitions');
   if (lifecycle.status === 'rejected') problems.push('lifecycle');
   if (metrics.status === 'rejected') problems.push('metrics');
   const items: ApprovalItem[] = [];
-  for (const p of proposals.status === 'fulfilled' ? proposals.value : []) {
+  for (const p of drafts ?? []) {
     if (p.state !== 'pending') continue;
     const agent = p.agentId ? all.find(a => a.id === p.agentId) ?? null : null;
     const stale = !!p.agentId && (!agent || agent.updatedAt !== p.baseRevision);
-    items.push({ type: 'definition', key: `def:${p.id}`, at: p.at, proposal: p, agent, stale, changes: diffDefinition(p.before ?? agent, p.draft) });
+    const op = p.op ?? 'update';
+    items.push({ type: 'definition', key: `def:${p.id}`, at: p.at, proposal: p, agent, stale, changes: op === 'update' ? diffDefinition(p.before ?? agent, p.draft) : [] });
   }
-  if (rules.status === 'fulfilled') {
-    // an agent without its own know-how folder has no rule list: a refused read is not a problem worth showing
-    if (active.length && rules.value.every(r => r.status === 'rejected')) problems.push('rules');
-    rules.value.forEach((r, index) => {
-      if (r.status !== 'fulfilled') return;
-      for (const rule of r.value.proposals) if (rule.status === 'pending') items.push({ type: 'rule', key: `rule:${rule.id}`, at: rule.createdAt, rule, agent: active[index]! });
-    });
+  const rule = (r: LearnedRuleProposal, agent: AgentProfile | undefined) => { if (agent && r.status === 'pending') items.push({ type: 'rule', key: `rule:${r.id}`, at: r.createdAt, rule: r, agent }); };
+  if (snapshot?.learned) for (const r of snapshot.learned) rule(r, active.find(a => a.id === r.agentId));
+  else {
+    // older main: one read per agent; an agent without its own know-how has no list, so only a total failure is shown
+    const rules = await Promise.allSettled(active.map(p => c.invoke('agents:learnList', { id: p.id })));
+    if (active.length && rules.every(r => r.status === 'rejected')) problems.push('rules');
+    rules.forEach((r, index) => { if (r.status === 'fulfilled') for (const x of r.value.proposals) rule(x, active[index]); });
   }
-  const snapshot = lifecycle.status === 'fulfilled' ? lifecycle.value : null;
   const stats = metrics.status === 'fulfilled' ? metrics.value : [];
   for (const agent of active) {
     const m = stats.find(x => x.agentId === agent.id);
@@ -109,10 +111,14 @@ export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsStat
       const evaluation = snapshot?.evaluations.find(e => e.agentId === agent.id && e.version === trial.version)?.result;
       const before = advice?.metrics?.before ?? evaluation?.before ?? versionOf(m, trial.baseline), after = advice?.metrics?.after ?? evaluation?.after ?? versionOf(m, trial.version);
       items.push({ type: 'trial', key: `trial:${agent.id}:${trial.version}`, at: trial.startedAt, agent, advice, reason: advice?.reason ?? evaluation?.reason ?? null, before, after });
-    } else if (inProbation(agent)) items.push({ type: 'probation', key: `probation:${agent.id}`, at: agent.probation!.since, agent, metrics: versionOf(m, agent.activeVersion) ?? m?.all ?? null });
+    } else if (inProbation(agent)) {
+      const advice = snapshot?.proposals.find(p => p.key === `probation:${agent.id}`) ?? null;
+      items.push({ type: 'probation', key: `probation:${agent.id}`, at: advice?.at ?? agent.probation!.since, agent, advice, metrics: versionOf(m, agent.activeVersion) ?? m?.all ?? null });
+    }
   }
-  // keep/revert advice belongs to its open trial (above); one whose trial is already closed has nothing left to decide
-  for (const p of snapshot?.proposals ?? []) if (p.state === 'pending' && p.kind !== 'keep' && p.kind !== 'revert')
+  // trial and probation advice belongs to its agent's card (above); advice whose trial or probation already ended has
+  // nothing left to decide
+  for (const p of snapshot?.proposals ?? []) if (p.state === 'pending' && !/^(trial|probation):/.test(p.key) && p.kind !== 'keep' && p.kind !== 'revert' && p.kind !== 'retire')
     items.push({ type: 'lifecycle', key: `life:${p.key}`, at: p.at, proposal: p, agents: p.agentIds.map(id => all.find(a => a.id === id)).filter((a): a is AgentProfile => !!a) });
   items.sort((x, y) => ORDER[x.type] - ORDER[y.type] || y.at - x.at);
   return { items, problems, lifecycleProblem: snapshot?.problem ?? null };
@@ -122,15 +128,31 @@ export type ApprovalDecision =
   | { type: 'definition'; accept: boolean }
   | { type: 'rule'; decision: 'approve' | 'discard' } | { type: 'rule'; decision: 'edit'; text: string }
   | { type: 'trial'; decision: 'keep' | 'rollback' }
-  | { type: 'probation'; decision: 'keep' } | { type: 'probation'; decision: 'retire'; reason: string };
+  | { type: 'probation'; decision: 'keep' } | { type: 'probation'; decision: 'retire'; reason: string }
+  /** the lifecycle queue's own entry: a lifecycle suggestion, or the advice on a trial/probation card */
+  | { type: 'queue'; decision: 'approve' | 'dismiss' };
 /** What a just-made decision can be taken back with, when its backend supports it. */
-export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'rule-trial' | 'retire'; agentId: string; run(): Promise<unknown> }
+export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'rule-trial' | 'retire'; agentId: string; run(): Promise<unknown> }
+/** The queue entry a card carries, if any (decided with agents:lifecycleDecide). */
+export const queueEntry = (item: ApprovalItem): AgentLifecycleProposal | null =>
+  item.type === 'lifecycle' ? item.proposal : item.type === 'trial' || item.type === 'probation' ? item.advice : null;
 
 /** Runs one decision through its typed channel; returns how to undo it, or null when it cannot be undone from here. */
 export async function decideApproval(c: ApprovalsClient, item: ApprovalItem, d: ApprovalDecision): Promise<ApprovalUndo | null> {
+  if (d.type === 'queue') {
+    const entry = queueEntry(item);
+    if (!entry) throw new Error('No queue entry on this item');
+    await c.invoke('agents:lifecycleDecide', { key: entry.key, decision: d.decision });
+    return null;
+  }
   if (item.type === 'definition' && d.type === 'definition') {
     const profile = await c.invoke('agents:proposalDecide', { id: item.proposal.id, accept: d.accept });
     if (!d.accept || !profile) return null;
+    const op = item.proposal.op ?? 'update';
+    if (op === 'archive' || op === 'restore') {
+      const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: op === 'archive' ? 'restore' as const : 'archive' as const };
+      return { kind: op === 'archive' ? 'definition-archive' : 'definition-restore', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };
+    }
     if (item.agent) {
       const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: 'version' as const, version: item.agent.activeVersion };
       return { kind: 'definition-version', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };

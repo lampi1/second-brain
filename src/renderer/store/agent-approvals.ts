@@ -1,5 +1,6 @@
-// Shared state of the "Da approvare" inbox: one read of every pending agent change, kept fresh on catalog changes and
-// every minute (the lifecycle queue sends no event), so the Agenti page and the sidebar's count agree.
+// Shared state of the "Da approvare" inbox: one read of every pending agent change, kept fresh on catalog and lifecycle
+// queue changes (agents:changed, agents:lifecycleChanged) with a slow safety poll, so the Agenti page and the sidebar's
+// count agree.
 // Used by components/AgentApprovals.tsx and components/Sidebar.tsx.
 import { useEffect } from 'react';
 import { gatherApprovals, type ApprovalsClient, type ApprovalsState } from '../lib/agent-approvals';
@@ -16,10 +17,15 @@ export async function refreshApprovals(): Promise<void> {
   try { const state = await gatherApprovals(approvalsClient); if (mine === revision) approvals.set({ state, error: false }); }
   catch { if (mine === revision) approvals.set(s => ({ ...s, error: true })); }
 }
+let soon: ReturnType<typeof setTimeout> | null = null;
+/** Bursts of queue writes (an evaluation, then its proposal) become one read. */
+function refreshSoon(): void { if (soon) return; soon = setTimeout(() => { soon = null; void refreshApprovals(); }, 300); }
 function start(): void {
   if (started) return; started = true;
-  sb.on('agents:changed', () => void refreshApprovals());
-  setInterval(() => void refreshApprovals(), 60_000);
+  sb.on('agents:changed', refreshSoon);
+  sb.on('agents:lifecycleChanged', refreshSoon);
+  // safety net only: metrics and learned rules written outside the queue send no event
+  setInterval(() => void refreshApprovals(), 5 * 60_000);
   void refreshApprovals();
 }
 export function useApprovals() { useEffect(start, []); return approvals.use(s => s); }

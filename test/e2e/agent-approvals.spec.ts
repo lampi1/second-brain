@@ -1,6 +1,6 @@
 // Main-only acceptance for the "Da approvare" inbox on the Agenti page: seeded pending changes (an Orchestrator
-// suggestion, a learned rule, a lifecycle suggestion) appear in one place with a sidebar count; each decision asks for
-// a confirmation, applies through its channel, and an approval can be undone. Hidden window (helpers.launchDemo).
+// suggestion, a learned rule, two lifecycle suggestions) appear in one place with a sidebar count; each decision asks
+// for a confirmation, applies through its channel, an approval can be undone and a suggestion can be set aside. Hidden window (helpers.launchDemo).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,13 +19,15 @@ test('pending agent changes gather in Da approvare and are decided only after co
   }] }));
   fs.writeFileSync(path.join(userData, 'agent-lifecycle.json'), JSON.stringify({ version: 1, pendingRuns: [], lastDay: '', trials: [], proposals: [{
     key: 'work:fixture', kind: 'create', agentIds: [], reason: 'Tre revisioni ripetute', evidence: [{ kind: 'run', ref: 'r_000000000001', at: Date.now() - 86_400_000 }], at: Date.now() - 7_200_000, state: 'pending',
+  }, {
+    key: 'model:default-general:haiku', kind: 'model-trial', model: 'haiku', agentIds: ['default-general'], reason: 'Stessi esiti a un terzo del costo', evidence: [], at: Date.now() - 600_000, state: 'pending',
   }] }));
   const { app, page } = await launchDemo({ userData });
   try {
-    await expect(page.getByTestId('nav-badge-approvals')).toHaveText('3');
+    await expect(page.getByTestId('nav-badge-approvals')).toHaveText('4');
     await page.getByTestId('nav-agenti').click();
     const inbox = page.getByTestId('agent-approvals');
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(3);
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(4);
     await expect(inbox).toContainText('Verificatore fonti');
     await expect(inbox).toContainText('Cita sempre il file e la riga che hai letto.');
     await expect(inbox).toContainText('Tre revisioni ripetute');
@@ -42,7 +44,7 @@ test('pending agent changes gather in Da approvare and are decided only after co
     await shot(page, 'agent-approvals-confirm');
     await page.keyboard.press('Enter');
     await expect(inbox.getByRole('status')).toContainText('Verificatore fonti: modifica applicata.');
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(2);
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(3);
     let list = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     expect(list.profiles.some(p => p.name === 'Verificatore fonti')).toBe(true);
     await shot(page, 'agent-approvals-done');
@@ -58,9 +60,21 @@ test('pending agent changes gather in Da approvare and are decided only after co
     const rule = inbox.getByTestId('approval-card').filter({ hasText: 'Cita sempre' });
     await rule.getByRole('button', { name: 'Scarta', exact: true }).click();
     await rule.getByRole('button', { name: 'Conferma: Scarta' }).click();
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(1);
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(2);
     list = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     expect(list.profiles.find(p => p.id === 'default-general')).toEqual(before);
+
+    // Ignora sets a suggestion aside: it leaves the queue and nothing on the agent changes
+    const trial = inbox.getByTestId('approval-card').filter({ hasText: 'Stessi esiti a un terzo del costo' });
+    await trial.getByRole('button', { name: 'Ignora', exact: true }).click();
+    await expect(trial.getByRole('group', { name: 'Conferma la decisione' })).toContainText('14 giorni');
+    await shot(page, 'agent-approvals-dismiss');
+    await trial.getByRole('button', { name: 'Conferma: Ignora' }).click();
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(1);
+    await expect(page.getByTestId('nav-badge-approvals')).toHaveText('1');
+    const queue = await page.evaluate(() => window.sb.invoke('brain:api', { path: '/api/agents/lifecycle' }));
+    expect(JSON.stringify(queue)).not.toContain('model:default-general:haiku');
+    expect((await page.evaluate(() => window.sb.invoke('agents:list', undefined))).profiles).toEqual(list.profiles);
 
     // a lifecycle suggestion is prepared in the editor; opening it changes nothing
     await inbox.getByRole('button', { name: 'Prepara nell’editor', exact: true }).click();

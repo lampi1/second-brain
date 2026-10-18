@@ -23,7 +23,7 @@ const vm = (agentId: string, version: number, success: number): VersionMetrics =
   timeToDone: { elapsed: metric(180_000), execution: metric(null, 0) }, questionsPerRun: metric(2), permissionsPerRun: metric(0), commandsPerRun: metric(0), reviews: [],
 });
 
-function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; rules?: Record<string, LearnedRules>; failLifecycle?: boolean; profiles?: AgentProfile[] } = {}) {
+function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; rules?: Record<string, LearnedRules>; failLifecycle?: boolean; failProposals?: boolean; profiles?: AgentProfile[] } = {}) {
   const profiles = over.profiles ?? [
     agent('writer'),
     agent('tester', { trial: { version: 3, baseline: 2, startedAt: 50 }, activeVersion: 3, version: 3 }),
@@ -34,7 +34,7 @@ function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentL
   const answers: Record<string, unknown> = {
     'agents:list': catalog, 'agents:proposals': over.proposals ?? [], 'agents:metrics': [{ agentId: 'tester', versions: [vm('tester', 2, 0.5), vm('tester', 3, 0.8)], all: null, open: 0 }],
     'agents:proposalDecide': agent('writer', { updatedAt: 200, activeVersion: 3 }), 'agents:undo': agent('writer'), 'agents:learnDecide': { text: '', proposals: [] },
-    'agents:trialDecide': agent('tester'), 'agents:keep': agent('imported'), 'agents:retire': agent('imported'), 'agents:restore': agent('imported'),
+    'agents:trialDecide': agent('tester'), 'agents:lifecycleDecide': { proposals: [], evaluations: [], feedback: [], problem: null }, 'agents:keep': agent('imported'), 'agents:retire': agent('imported'), 'agents:restore': agent('imported'),
   };
   const client: ApprovalsClient = {
     invoke: (async (channel: string, arg: unknown) => {
@@ -44,11 +44,12 @@ function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentL
         if (!r) throw new Error('no know-how');
         return r;
       }
+      if (channel === 'agents:proposals' && over.failProposals) throw new Error('store unreadable');
       return answers[channel];
     }) as ApprovalsClient['invoke'],
     lifecycle: { read: async () => { if (over.failLifecycle) throw new Error('down'); return { proposals: [], evaluations: [], feedback: [], problem: null, ...over.lifecycle }; } },
   };
-  return { client, calls, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:learnList'].includes(c)), profiles };
+  return { client, calls, reads: (channel: string) => calls.filter(([c]) => c === channel).length, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:learnList'].includes(c)), profiles };
 }
 const proposal = (extra: Partial<AgentProposal> = {}): AgentProposal => ({
   id: 'p1', at: 10, kind: 'proposal', agentId: 'writer', baseRevision: 100, state: 'pending', reason: 'Troppe domande', expectedEffect: 'Meno domande',
@@ -83,7 +84,55 @@ describe('gatherApprovals', () => {
   });
 });
 
+describe('gatherApprovals with the lifecycle queue (learned, drafts, advice)', () => {
+  it('reads learned rules from the queue in one call and falls back to its drafts when agents:proposals fails', async () => {
+    const f = fixture({ failProposals: true, lifecycle: {
+      learned: [{ id: 'r9', agentId: 'writer', rule: 'Cita', evidence: 'x', createdAt: 5, status: 'pending' }, { id: 'r0', agentId: 'unknown', rule: 'x', evidence: 'x', createdAt: 5, status: 'pending' }],
+      drafts: [proposal({ id: 'd1' })],
+    } });
+    const s = await gatherApprovals(f.client);
+    expect(f.reads('agents:learnList')).toBe(0);
+    expect(s.items.filter(i => i.type === 'rule').map(i => i.key)).toEqual(['rule:r9']);
+    expect(s.items.find(i => i.type === 'definition')?.key).toBe('def:d1');
+    expect(s.problems).toEqual([]);
+  });
+  it('puts probation advice on the probation card and never lists trial/probation entries as suggestions', async () => {
+    const f = fixture({ lifecycle: { proposals: [
+      { key: 'probation:imported', kind: 'retire', agentIds: ['imported'], reason: 'Due esiti negativi', evidence: [], at: 80, state: 'pending' },
+      { key: 'model:writer:haiku', kind: 'model-trial', model: 'haiku', agentIds: ['writer'], reason: 'Costa meno', evidence: [], at: 40, state: 'pending' },
+    ] } });
+    const s = await gatherApprovals(f.client);
+    const probation = s.items.find(i => i.type === 'probation') as Extract<ApprovalItem, { type: 'probation' }>;
+    expect(probation.advice?.kind).toBe('retire');
+    expect(s.items.filter(i => i.type === 'lifecycle').map(i => i.key)).toEqual(['life:model:writer:haiku']);
+  });
+  it('shows an archive request as one sentence, without a field diff', async () => {
+    const f = fixture({ proposals: [proposal({ op: 'archive' })] });
+    const item = (await gatherApprovals(f.client)).items[0]!;
+    expect(item).toMatchObject({ type: 'definition', changes: [] });
+  });
+});
+
 describe('decideApproval', () => {
+  it('decides queue entries with agents:lifecycleDecide by their key, and only those', async () => {
+    const f = fixture({ lifecycle: { proposals: [
+      { key: 'trial:tester:3', kind: 'revert', agentIds: ['tester'], reason: 'Peggiora', evidence: [], at: 60, state: 'pending' },
+      { key: 'work:x', kind: 'update', agentIds: ['writer'], reason: 'Lacuna ripetuta', evidence: [], at: 30, state: 'pending' },
+    ] }, rules: { writer: { text: '', proposals: [{ id: 'r1', agentId: 'writer', rule: 'Cita', evidence: 'x', createdAt: 1, status: 'pending' }] } } });
+    const items = (await gatherApprovals(f.client)).items, by = (t: string) => items.find(i => i.type === t)!;
+    expect(await decideApproval(f.client, by('lifecycle'), { type: 'queue', decision: 'approve' })).toBeNull();
+    await decideApproval(f.client, by('trial'), { type: 'queue', decision: 'dismiss' });
+    expect(f.writes()).toEqual([['agents:lifecycleDecide', { key: 'work:x', decision: 'approve' }], ['agents:lifecycleDecide', { key: 'trial:tester:3', decision: 'dismiss' }]]);
+    await expect(decideApproval(f.client, by('rule'), { type: 'queue', decision: 'approve' })).rejects.toThrow();
+    await expect(decideApproval(f.client, by('probation'), { type: 'queue', decision: 'dismiss' })).rejects.toThrow(); // no advice on it
+  });
+  it('undoes an accepted archive request by restoring the agent', async () => {
+    const f = fixture({ proposals: [proposal({ op: 'archive' })] });
+    const item = (await gatherApprovals(f.client)).items[0]!;
+    const undo = await decideApproval(f.client, item, { type: 'definition', accept: true });
+    await undo!.run();
+    expect(f.writes()[1]).toEqual(['agents:undo', { agentId: 'writer', expectedRevision: 200, operation: 'restore' }]);
+  });
   it('approves a definition change and undoes it by restoring the version it replaced', async () => {
     const f = fixture({ proposals: [proposal()] });
     const item = (await gatherApprovals(f.client)).items[0]!;
@@ -147,6 +196,16 @@ describe('AgentApprovalsView', () => {
     for (const label of ['Approva', 'Rifiuta', 'Modifica prima di approvare', 'Tieni questa versione', 'Torna a v2', 'Tieni l’agente', 'Ritira']) expect(html).toContain(label);
     expect(html).toContain('riga nuova'); expect(html).toContain('80%'); expect(html).toContain('n=3');
     expect(props.onDecide).not.toHaveBeenCalled(); expect(f.writes()).toEqual([]);
+  });
+  it('offers queue decisions on suggestions and advice, and names rollback requests', async () => {
+    const f = fixture({ proposals: [proposal({ op: 'rollback', toVersion: 1 })], lifecycle: { proposals: [
+      { key: 'trial:tester:3', kind: 'keep', agentIds: ['tester'], reason: 'Migliora', evidence: [], at: 60, state: 'pending' },
+      { key: 'work:x', kind: 'split', agentIds: ['writer'], reason: 'Due ruoli', evidence: [], at: 30, state: 'pending' },
+    ] } });
+    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { ...props, state: await gatherApprovals(f.client) }));
+    for (const label of ['Ritorno alla v1', 'Le prossime esecuzioni useranno la v1 invece della v2.', 'Chiedi la bozza', 'Ignora', 'Prepara nell’editor', 'seconda approvazione']) expect(html).toContain(label);
+    expect(html).not.toContain('Modifica prima di approvare'); // a rollback is not edited, only approved or rejected
+    expect(html.match(/>Ignora</g)).toHaveLength(2); // the trial's advice and the suggestion
   });
   it('shows the undo line after a decision and a stale proposal only as closable', async () => {
     const f = fixture({ proposals: [proposal({ baseRevision: 1 })], profiles: [agent('writer')] });

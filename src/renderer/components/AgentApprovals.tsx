@@ -12,7 +12,12 @@ import { approvalsClient, refreshApprovals, useApprovals } from '../store/agent-
 import { AgentApprovalsView, type ApprovalDone } from './AgentApprovalCards';
 
 function doneText(item: ApprovalItem, d: ApprovalDecision): string {
-  const name = item.type === 'definition' ? item.proposal.draft.name : item.type === 'lifecycle' ? '' : item.agent.name;
+  const name = item.type === 'definition' ? item.proposal.draft.name : item.type === 'lifecycle' ? item.agents.map(a => a.name).join(', ') : item.agent.name;
+  if (d.type === 'queue') {
+    const label = name || t('approvals.toDefine');
+    if (d.decision === 'dismiss') return t('approvals.done.dismissed', { name: label });
+    return t(item.type === 'lifecycle' && item.proposal.kind === 'model-trial' ? 'approvals.done.trialStarted' : 'approvals.done.draftAsked', { name: label });
+  }
   if (d.type === 'definition') return t(d.accept ? 'approvals.done.approved' : 'approvals.done.rejected', { name });
   if (d.type === 'rule') return t(d.decision === 'discard' ? 'approvals.done.discarded' : 'approvals.done.rule', { name });
   if (d.type === 'trial') return t(d.decision === 'keep' ? 'approvals.done.kept' : 'approvals.done.rolledBack', { name });

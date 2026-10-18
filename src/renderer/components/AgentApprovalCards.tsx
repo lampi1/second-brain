@@ -4,6 +4,7 @@
 // Used by components/AgentApprovals.tsx (which wires the decisions) and by its unit test (static render).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AgentEvidenceRef, AgentProfile, Metric, VersionMetrics } from '@shared/agents';
+import type { AgentLifecycleProposal } from '@shared/agent-lifecycle';
 import { lineDiff, type ApprovalDecision, type ApprovalItem, type ApprovalsState, type ApprovalUndo, type FieldChange } from '../lib/agent-approvals';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -79,9 +80,11 @@ interface Choice { label: string; decision: ApprovalDecision; confirm: string; t
 function choices(item: ApprovalItem): Choice[] {
   switch (item.type) {
     case 'definition': {
-      const fresh = !item.proposal.agentId;
+      const fresh = !item.proposal.agentId, op = item.proposal.op ?? 'update';
+      const confirm = fresh ? t('approvals.confirm.create') : op === 'rollback' ? t('approvals.confirm.opRollback', { v: item.proposal.toVersion ?? 0 })
+        : op === 'archive' ? t('approvals.confirm.opArchive') : op === 'restore' ? t('approvals.confirm.opRestore') : t('approvals.confirm.approve');
       return [
-        ...(item.stale ? [] : [{ label: t(fresh ? 'approvals.create' : 'approvals.approve'), decision: { type: 'definition', accept: true }, confirm: t(fresh ? 'approvals.confirm.create' : 'approvals.confirm.approve'), tone: 'primary' } as Choice]),
+        ...(item.stale ? [] : [{ label: t(fresh ? 'approvals.create' : 'approvals.approve'), decision: { type: 'definition', accept: true }, confirm, tone: 'primary' } as Choice]),
         { label: t(item.stale ? 'approvals.close' : 'approvals.reject'), decision: { type: 'definition', accept: false }, confirm: t('approvals.confirm.reject'), tone: 'ghost' },
       ];
     }
@@ -93,17 +96,32 @@ function choices(item: ApprovalItem): Choice[] {
       const keepFirst = item.advice?.kind !== 'revert';
       const keep: Choice = { label: t('approvals.keep'), decision: { type: 'trial', decision: 'keep' }, confirm: t('approvals.confirm.keepTrial', { v: item.agent.trial!.version }), tone: keepFirst ? 'primary' : 'ghost' };
       const back: Choice = { label: t('approvals.rollback', { v: item.agent.trial!.baseline }), decision: { type: 'trial', decision: 'rollback' }, confirm: t('approvals.confirm.rollback', { v: item.agent.trial!.baseline }), tone: keepFirst ? 'ghost' : 'primary' };
-      return keepFirst ? [keep, back] : [back, keep];
+      return [...(keepFirst ? [keep, back] : [back, keep]), ...ignore(item.advice, 'approvals.confirm.ignoreTrial')];
     }
-    case 'probation': return [
-      { label: t('approvals.keepAgent'), decision: { type: 'probation', decision: 'keep' }, confirm: t('approvals.confirm.keepAgent'), tone: 'primary' },
-      { label: t('approvals.retire'), decision: { type: 'probation', decision: 'retire', reason: t('approvals.retireReason') }, confirm: t('approvals.confirm.retire'), tone: 'ghost' },
-    ];
-    case 'lifecycle': return [];
+    case 'probation': {
+      const keepFirst = item.advice?.kind !== 'retire';
+      const keep: Choice = { label: t('approvals.keepAgent'), decision: { type: 'probation', decision: 'keep' }, confirm: t('approvals.confirm.keepAgent'), tone: keepFirst ? 'primary' : 'ghost' };
+      const retire: Choice = { label: t('approvals.retire'), decision: { type: 'probation', decision: 'retire', reason: t('approvals.retireReason') }, confirm: t('approvals.confirm.retire'), tone: keepFirst ? 'ghost' : 'primary' };
+      return [...(keepFirst ? [keep, retire] : [retire, keep]), ...ignore(item.advice, 'approvals.confirm.ignoreProbation')];
+    }
+    case 'lifecycle': {
+      const kind = item.proposal.kind;
+      const confirm = kind === 'model-trial' ? t('approvals.confirm.modelTrial', { model: item.proposal.model ?? '—' }) : t('approvals.confirm.draft');
+      return [{ label: t(kind === 'model-trial' ? 'approvals.startTrial' : 'approvals.askDraft'), decision: { type: 'queue', decision: 'approve' }, confirm, tone: 'primary' },
+        ...ignore(item.proposal, 'approvals.confirm.ignoreSuggestion')];
+    }
   }
 }
+/** Ignora = the queue's dismiss: the advice or suggestion leaves the list for a while; nothing on the agent changes. */
+function ignore(entry: AgentLifecycleProposal | null, confirm: 'approvals.confirm.ignoreTrial' | 'approvals.confirm.ignoreProbation' | 'approvals.confirm.ignoreSuggestion'): Choice[] {
+  return entry ? [{ label: t('approvals.ignore'), decision: { type: 'queue', decision: 'dismiss' }, confirm: t(confirm), tone: 'ghost' }] : [];
+}
 function title(item: ApprovalItem): string {
-  if (item.type === 'definition') return t(item.proposal.agentId ? 'approvals.kind.definition' : 'approvals.kind.new');
+  if (item.type === 'definition') {
+    if (!item.proposal.agentId) return t('approvals.kind.new');
+    const op = item.proposal.op ?? 'update';
+    return op === 'update' ? t('approvals.kind.definition') : op === 'rollback' ? t('approvals.kind.opRollback', { v: item.proposal.toVersion ?? 0 }) : t(op === 'archive' ? 'approvals.kind.opArchive' : 'approvals.kind.opRestore');
+  }
   if (item.type === 'lifecycle') return t(`lifecycle.kind.${item.proposal.kind}`);
   return t(`approvals.kind.${item.type}`);
 }
@@ -118,7 +136,7 @@ function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: b
       <Section label={t('approvals.why')}><p>{item.proposal.reason}</p></Section>
       {item.proposal.expectedEffect && <Section label={t('approvals.effect')}><p>{item.proposal.expectedEffect}</p></Section>}
       {item.stale && <p className="apv-warn" role="note">{t('approvals.stale')}</p>}
-      <Section label={t('approvals.what')}><Changes changes={item.changes} /></Section>
+      <Section label={t('approvals.what')}><OpChange item={item} /></Section>
       <Evidence refs={item.proposal.evidence} />
     </>;
     case 'rule': return <>
@@ -130,7 +148,7 @@ function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: b
     </>;
     case 'trial': return <>
       <Section label={t('approvals.what')}><p>{t('approvals.trialWhat', { v: item.agent.trial!.version, base: item.agent.trial!.baseline, since: when(item.agent.trial!.startedAt) })}</p></Section>
-      <Section label={t('approvals.why')}>{item.advice ? <p><span className="apv-tag" data-advice={item.advice.kind}>{t(item.advice.kind === 'keep' ? 'approvals.adviceKeep' : 'approvals.adviceRevert')}</span> {item.reason}</p> : <p className="apv-muted">{item.reason ?? t('approvals.trialWait')}</p>}</Section>
+      <Section label={t('approvals.why')}>{item.advice ? <p><span className="apv-tag" data-advice={item.advice.kind === 'keep' ? 'keep' : 'revert'}>{t(item.advice.kind === 'keep' ? 'approvals.adviceKeep' : 'approvals.adviceRevert')}</span> {item.reason}</p> : <p className="apv-muted">{item.reason ?? t('approvals.trialWait')}</p>}</Section>
       <Section label={t('approvals.numbers')}><ApprovalNumbers before={item.before} after={item.after} beforeLabel={`v${item.agent.trial!.baseline}`} afterLabel={`v${item.agent.trial!.version}`} /></Section>
       {item.advice && <Evidence refs={item.advice.evidence} />}
     </>;
@@ -139,16 +157,25 @@ function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: b
       return <>
         <Section label={t('approvals.what')}><p>{src ? t('approvals.imported', { pack: src.packId, rev: src.revision }) : t('approvals.madeForTask')} {t('approvals.since', { at: when(item.agent.probation!.since) })}</p>
           <p className="apv-muted">{item.agent.purpose}</p></Section>
+        {item.advice && <Section label={t('approvals.why')}><p><span className="apv-tag" data-advice={item.advice.kind === 'retire' ? 'revert' : 'keep'}>{t(item.advice.kind === 'retire' ? 'approvals.adviceRetire' : 'approvals.adviceKeepAgent')}</span> {item.advice.reason}</p></Section>}
         <Section label={t('approvals.numbers')}><ApprovalNumbers before={null} after={item.metrics} afterLabel={`v${item.agent.activeVersion}`} /></Section>
       </>;
     }
     case 'lifecycle': return <>
       <Section label={t('approvals.why')}><p>{item.proposal.reason}</p></Section>
+      {item.proposal.kind === 'model-trial' && item.proposal.model && <Section label={t('approvals.what')}><p>{t('approvals.modelTrialWhat', { model: item.proposal.model })}</p></Section>}
       {item.proposal.metrics && <Section label={t('approvals.numbers')}><ApprovalNumbers {...item.proposal.metrics} beforeLabel={t('approvals.baseline')} afterLabel={t('approvals.evaluated')} /></Section>}
       <Evidence refs={item.proposal.evidence} />
-      <p className="apv-muted">{t('approvals.lifecycleNote')}</p>
+      <p className="apv-muted">{t(item.proposal.kind === 'model-trial' ? 'approvals.modelTrialNote' : 'approvals.draftNote')}</p>
     </>;
   }
+}
+/** What accepting a definition proposal does: the field diff for an update, one sentence for the other operations. */
+function OpChange({ item }: { item: Extract<ApprovalItem, { type: 'definition' }> }) {
+  const op = item.proposal.op ?? 'update';
+  if (op === 'update' || !item.proposal.agentId) return <Changes changes={item.changes} />;
+  if (op === 'rollback') return <p>{t('approvals.opRollbackWhat', { from: item.agent?.activeVersion ?? 0, to: item.proposal.toVersion ?? 0 })}</p>;
+  return <p>{t(op === 'archive' ? 'approvals.opArchiveWhat' : 'approvals.opRestoreWhat')}</p>;
 }
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return <div className="apv-section"><h5>{label}</h5>{children}</div>;
@@ -182,8 +209,8 @@ export function ApprovalCard({ item, busy, locked, onDecide, onEdit }: { item: A
       : <div className="apv-actions">
         {list.map(c => <button key={c.label} type="button" className={`btn btn-m ${c.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`} disabled={disabled || (c.decision.type === 'rule' && c.decision.decision === 'edit' && !text.trim())} onClick={() => setAsking(c)}>{c.label}</button>)}
         {item.type === 'rule' && !editing && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => { setText(item.rule.rule); setEditing(true); }}>{t('approvals.editRule')}</button>}
-        {item.type === 'definition' && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => onEdit(item)}>{t(item.stale ? 'approvals.openEditor' : 'approvals.editFirst')}</button>}
-        {item.type === 'lifecycle' && <button type="button" className="btn btn-m btn-primary" disabled={disabled} onClick={() => onEdit(item)}>{t('approvals.prepare')}</button>}
+        {item.type === 'definition' && (item.proposal.op ?? 'update') === 'update' && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => onEdit(item)}>{t(item.stale ? 'approvals.openEditor' : 'approvals.editFirst')}</button>}
+        {item.type === 'lifecycle' && item.proposal.kind !== 'model-trial' && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => onEdit(item)}>{t('approvals.prepare')}</button>}
         {editing && <button type="button" className="btn btn-m btn-ghost" onClick={() => setEditing(false)}>{t('approvals.back')}</button>}
       </div>}
   </article>;
