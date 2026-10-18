@@ -55,6 +55,16 @@ async function lineAfter(fd:FileHandle,offset:number,limit:number):Promise<numbe
  const before=await readAt(fd,offset-1,limit-offset+1),nl=before.indexOf(NL);
  return nl>=0&&offset+nl<limit?offset+nl:charAt(fd,offset);
 }
+/** A link to a local file (with or without :line), resolved to the real file, or why it is not one; also used by file-diff.ts. */
+export function localFile(raw:string,cwd?:string):{requested:string;real:string;stats:fs.Stats}|Extract<FileViewResult,{reason:unknown}>{
+ if(typeof raw!=='string'||raw.length>4096||raw.includes('\0'))return{kind:'refused',reason:'outside'};
+ const requested=resolvePeek(fileReference(raw).path,cwd);if(!requested||linksToShare(requested))return{kind:'refused',reason:'outside'};
+ let real:string;let stats:fs.Stats;
+ try{real=fs.realpathSync.native(requested);stats=fs.statSync(real);}catch{return{kind:'missing',reason:'missing'};}
+ if(share(real))return{kind:'refused',reason:'outside'};
+ if(!stats.isFile())return{kind:'unsupported',reason:'unsupported'};
+ return{requested,real,stats};
+}
 /**
  * One page of text, from (the first that applies):
  * - `line`: the page around that cited line (up to LINE_CONTEXT lines above it, from the top in the first half page);
@@ -65,12 +75,8 @@ async function lineAfter(fd:FileHandle,offset:number,limit:number):Promise<numbe
  * line fills it, so following `offset + shown` from the top joins every byte once.
  */
 export async function readFileView(raw:string,options:{cwd?:string;offset?:number;align?:boolean;before?:number;line?:number}={}):Promise<FileViewResult>{
- if(typeof raw!=='string'||raw.length>4096||raw.includes('\0'))return{kind:'refused',reason:'outside'};
- const requested=resolvePeek(fileReference(raw).path,options.cwd);if(!requested||linksToShare(requested))return{kind:'refused',reason:'outside'};
- let real:string;let initial:fs.Stats;
- try{real=fs.realpathSync.native(requested);initial=fs.statSync(real);}catch{return{kind:'missing',reason:'missing'};}
- if(share(real))return{kind:'refused',reason:'outside'};
- if(!initial.isFile())return{kind:'unsupported',reason:'unsupported'};
+ const local=localFile(raw,options.cwd);if('kind'in local)return local;
+ const{requested,real,stats:initial}=local;
  const ext=path.extname(real).toLowerCase(),mime=MIME[ext],pdf=ext==='.pdf';let fd:FileHandle|undefined;
  const same=(stats:fs.Stats,than:fs.Stats)=>stats.isFile()&&stats.dev===than.dev&&stats.ino===than.ino&&key(fs.realpathSync.native(requested))===key(real);
  try{

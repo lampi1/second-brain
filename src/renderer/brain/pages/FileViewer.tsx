@@ -1,6 +1,7 @@
 // The one read-only viewer for every file link (SPEC 22): markdown rendered, code and config highlighted (highlight.js,
 // one lazy chunk per language), CSV/TSV and JSONL as tables, JSON pretty-printed, images, PDFs (pdf.js, canvas only);
-// a big text file comes one page at a time (main cuts it at line ends; a cited line opens its own page). Main reads any
+// a big text file comes one page at a time (main cuts it at line ends; a cited line opens its own page); "Compare" shows
+// its diff against git HEAD, a commit/branch or another file (FileDiff.tsx). Main reads any
 // local file, bounded (never a network share); nothing here edits, runs or hands the file to another app: "Show in
 // folder" only selects it in Explorer, on the user's click.
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -11,6 +12,7 @@ import {Empty} from '../components/States';
 import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
 import {baseName} from '../lib/text';
 import {fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
+import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
@@ -194,12 +196,16 @@ function CitedFile({reference}:{reference:FileReference}){
   // another file starts at its cited line, not where the pager was
   useEffect(()=>{setRequest({ref,page:{line:reference.line}});},[ref,reference.line]);
   const reason=result&&'reason'in result?result.reason:null;
+  // the comparison is asked for per file: another file opens without it
+  const[comparing,setComparing]=useState<string|null>(null),compare=comparing===ref&&result?.kind==='text';
   const real=result&&'path'in result?result.path:null;
   return <div className="bx-viewer" data-testid="cited-file-viewer">
     <div className="bx-viewer-head"><h2>{reference.path}{reference.line?`:${reference.line}${reference.column?`:${reference.column}`:''}`:''}</h2><span className="sp"/>
       <span className="small muted">{t('viewer.readOnly')}{result&&'size'in result?` · ${fmtBytes(result.size)}`:''}</span>
       <button type="button" className="bx-btn s" onClick={()=>void copyText(real??reference.path)}><IconCopy/>{t('viewer.copyPath')}</button>
+      {result?.kind==='text'&&<button type="button" className="bx-btn s" aria-pressed={compare} onClick={()=>setComparing(compare?null:ref)} data-testid="viewer-compare">{t('viewer.compare')}</button>}
       {real&&<button type="button" className="bx-btn s" onClick={()=>void showInFolder(real)} data-testid="viewer-show-in-folder"><IconExternal/>{t('viewer.showInFolder')}</button>}</div>
+    {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
     {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
     {!result?<p role="status">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
       :result.kind==='image'?<img src={result.dataUrl} alt={baseName(result.path)} style={{maxWidth:'100%',maxHeight:'75vh',objectFit:'contain'}}/>

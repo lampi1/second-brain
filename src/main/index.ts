@@ -22,6 +22,8 @@ import { OverlayLayer } from './overlay';
 import { showLocal, type Shell } from './open-path';
 import { peekFile } from './peek-file';
 import { readFileView } from './file-view';
+import { readFileDiff } from './file-diff';
+import type { DiffAgainst } from '../shared/file-diff';
 import { askImageRoots, readAskImage } from './ask-image';
 import { healthSnapshot } from './health';
 import { jobGuard } from './chats/jobguard';
@@ -205,6 +207,14 @@ app.whenReady().then(async () => {
       const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
       const count=(n:unknown)=>typeof n==='number'&&Number.isSafeInteger(n)&&n>0?n:undefined;
       return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,offset:count(a?.offset),align:a?.align===true,before:count(a?.before),line:count(a?.line)});
+    },
+    'app:readFileDiff': a => {
+      const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
+      const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
+      const w=a?.against;
+      const against:DiffAgainst|null=w?.kind==='head'?{kind:'head'}:w?.kind==='ref'&&typeof w.ref==='string'?{kind:'ref',ref:w.ref}:w?.kind==='file'&&typeof w.path==='string'?{kind:'file',path:w.path}:null;
+      if(!against)return {kind:'refused',reason:'ref'};
+      return readFileDiff(typeof a?.path==='string'?a.path:'',against,chat?.cwd??brainRoot??undefined);
     },
     'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
       userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,

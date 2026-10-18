@@ -45,4 +45,15 @@ them with WebAssembly files the app does not ship) and fonts neither embedded no
 pdfjs-dist's optional native `@napi-rs/canvas` (used by pdf.js only under Node, never in the renderer) is pinned to
 1.0.10 by `overrides` in package.json, so it too meets the 14-day rule.
 
-Next: a diff on request (vs HEAD, vs a ref, two files) with read-only git (argument allow-list, no shell) and jsdiff.
+**Compare (V3).** On request ("Confronta", text files only) the viewer shows the file's diff against git HEAD, a commit
+or branch the user types, or another local file. Main (`file-diff.ts`) reads both sides, each up to 2 MB of text. Any
+folder can be a repository, so it is untrusted: the app finds it itself (the nearest `.git` folder or file) and refuses
+it when its git folder, objects or alternates could lead to a network share or its config mentions `include` at all;
+git then runs on exactly that folder and work tree (`--git-dir`, `--work-tree`: a `core.worktree` on a share is never
+resolved), found by absolute path, without a shell, only `rev-parse` and `cat-file` (an
+allow-list in the helper), with the inherited `GIT_*` variables dropped, no lazy fetch and no transport (a partial
+clone's missing object would otherwise run the repository's ssh command), `core.fsmonitor` off and
+`--no-replace-objects`. A typed ref must look like one revision (no leading `-`, no range, no `:path`) and is resolved
+to a commit id before the blob is read. Nothing is written: no index, no lock (`GIT_OPTIONAL_LOCKS=0`). The renderer
+computes the hunks with jsdiff (pinned) in a worker with a 3 s limit, ignoring CRLF/LF differences, and draws at most
+20,000 rows.
