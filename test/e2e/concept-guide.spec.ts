@@ -1,7 +1,9 @@
 // End-to-end: the «Guida» page (components/GuidePage.tsx, content in src/shared/concept-guide.ts) in the frozen demo.
-// It opens from the left rail and from Ctrl+K, shows the prominent card «Ogni compito passa da un agente» first, a card
-// expands to its numbered points, analogy, technical details and sources, and «Discutine» (no explainer agent in the
-// demo catalog) docks the Orchestrator with a draft that carries the card and the Explainer instruction, NOT sent.
+// It opens from the left rail and from Ctrl+K, shows the prominent card «Ogni compito passa da un agente» first as a
+// hero and the other cards in a multi-column grid (not full-width strips), a card opens a reading panel with its
+// numbered points, analogy, technical details and sources that Esc closes (focus back on the card), and «Discutine»
+// (no explainer agent in the demo catalog) docks the Orchestrator with a draft that carries the card and the Explainer
+// instruction, NOT sent.
 // Screenshots: test-results/shots/concept-guide-*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -18,6 +20,9 @@ test('Guida opens from the left rail and from Ctrl+K, with the prominent card fi
   await expect(first).toContainText('Ogni compito passa da un agente');
   await expect(first.getByTestId('guide-diagram')).toBeVisible(); // the prominent card shows its diagram collapsed
   await expect(page.getByTestId('guide-body-runs')).toHaveCount(0);
+  const card = await page.getByTestId('guide-card-runs').boundingBox();
+  const hero = await first.boundingBox();
+  expect(card!.width).toBeLessThan(hero!.width / 2 + 1); // a grid of cards, not full-width strips
   await shot(page, 'concept-guide-collapsed');
 
   await page.getByTestId('nav-home').click();
@@ -27,19 +32,25 @@ test('Guida opens from the left rail and from Ctrl+K, with the prominent card fi
   await expect(page.getByTestId('guide-page')).toBeVisible();
 });
 
-test('a card expands to points, analogy, technical details and sources; the filter narrows the cards', async () => {
+test('a card opens a panel with points, analogy, technical details and sources; Esc closes it; the filter narrows the cards', async () => {
   const toggle = page.getByTestId('guide-toggle-runs');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const body = page.getByTestId('guide-body-runs');
-  await expect(body.locator('ol.guide-points > li')).toHaveCount(6);
+  await expect(body.locator('ol.guide-points > li')).toHaveCount(8);
   await expect(body).toContainText('In pratica è come');
   await expect(body).toContainText('Dettagli tecnici');
   await expect(body).toContainText('src/main/agents/runs.ts');
   await expect(body.getByTestId('guide-target')).toBeVisible();
-  await page.getByTestId('guide-card-runs').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('guide-panel')).toContainText('Le run degli agenti');
   await shot(page, 'concept-guide-expanded');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('guide-panel')).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  await expect(page.getByTestId('guide-page')).toBeVisible(); // Esc closed the panel, not the page
 
   await page.getByTestId('guide-filter').fill('instradamento');
   await expect(page.getByTestId('guide-card-routing')).toBeVisible();
