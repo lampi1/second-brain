@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../../src/shared/agents';
-import { AgentFeedbackStore, repeatedGap, type FeedbackInput } from '../../../src/main/agents/feedback';
+import { repeatedGap } from '../../../src/main/agents/feedback';
+import type { AgentFeedback } from '../../../src/shared/agent-lifecycle';
 import { AgentLifecycle } from '../../../src/main/agents/lifecycle';
 import { evaluateTrial, TRIAL_DAYS } from '../../../src/main/agents/trials';
 import { suggestAgents, instructionOverlap, type SuggestionInput } from '../../../src/main/agents/suggestions';
@@ -23,35 +24,39 @@ const run = (id: number, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r
   corrections: { tagged: 2, afterReport: 0 }, ...over });
 const baseline = () => Array.from({ length: 10 }, (_, i) => run(i));
 const trial = () => Array.from({ length: 5 }, (_, i) => run(i + 20, { version: 2, startedAt: 1100, endedAt: 1200, corrections: { tagged: 1, afterReport: 0 } }));
-const input: FeedbackInput = { verdict: 'partial', worked: 'Read', failed: 'Missed tests', gap: 'instructions', gapKey: 'test-contract', evidence: [{ kind: 'run', ref: 'r_000000000001', at: 1 }] };
+/** A stored record as the authoring store writes it (agent/version from the run, basis from main). */
+const fb = (id: number, over: Partial<AgentFeedback> = {}): AgentFeedback => ({ id: `f${id}-${Math.random()}`, at: id, agentId: 'reviewer', runId: run(id).runId, version: 1,
+  outcome: { verdict: 'partial', basis: 'orchestrator-opinion', by: 'regia', at: id, note: 'Missed tests' }, worked: 'Read', failed: 'Missed tests',
+  gap: 'instructions', gapKey: 'test-contract', evidence: [{ kind: 'run', ref: 'r_000000000001', at: 1 }], ...over });
 const empty = (): SuggestionInput => ({ agents: [], runs: [], work: [], models: [] });
 
 describe('feedback', () => {
-  it('retains only 200 per agent independently of runs, and survives restart', () => {
-    const dir = tmp(), store = new AgentFeedbackStore(dir);
-    for (let i = 0; i < 201; i++) store.add(run(i), input, i);
-    store.add(run(900, { agentId: 'other' }), input);
-    const reopened = new AgentFeedbackStore(dir);
-    expect(reopened.list('reviewer')).toHaveLength(200);
-    expect(reopened.list('other')).toHaveLength(1);
-    expect(reopened.list('reviewer')[0]!.runId).toBe(run(1).runId);
-    expect(reopened.list('reviewer')[0]!.basis).toBe('orchestrator-opinion');
-  });
   it('does not count retries, unclear goals or old versions as repeated defects', () => {
-    const store = new AgentFeedbackStore(tmp());
-    store.add(run(1), input); store.add(run(1), input);
-    expect(repeatedGap(store.list('reviewer'))).toBeNull();
-    store.add(run(2), input);
-    expect(repeatedGap(store.list('reviewer'))?.kind).toBe('update');
-    store.add(run(3), { ...input, gap: 'unclear-goal' });
-    expect(repeatedGap(store.list('reviewer'))).toBeNull();
-    store.add(run(4, { version: 2 }), input);
-    expect(repeatedGap(store.list('reviewer'))).toBeNull();
+    const rows: AgentFeedback[] = [fb(1), fb(1)];
+    expect(repeatedGap(rows)).toBeNull();
+    rows.push(fb(2, { gapKey: '  Test-Contract ' }));
+    const p = repeatedGap(rows);
+    expect(p?.kind).toBe('update'); expect(p?.key).toBe('gap:reviewer:1:instructions:test-contract');
+    expect(p?.evidence.map(e => e.kind)).toEqual(['feedback', 'feedback', 'feedback']);
+    rows.push(fb(3, { gap: 'unclear-goal' }));
+    expect(repeatedGap(rows)).toBeNull();
+    rows.push(fb(4, { version: 2 }));
+    expect(repeatedGap(rows)).toBeNull();
   });
-  it('preserves corrupt files', () => {
-    const dir = tmp(), file = path.join(dir, 'agent-feedback.json'); fs.writeFileSync(file, 'broken');
-    const store = new AgentFeedbackStore(dir);
-    expect(() => store.add(run(1), input)).toThrow(); expect(fs.readFileSync(file, 'utf8')).toBe('broken');
+  it('ignores records without a version or a gap (older records, feedback that names no gap)', () => {
+    const { version: _v, ...old } = fb(1);
+    expect(repeatedGap([old, { ...fb(2), version: undefined }])).toBeNull();
+    const { gap: _g, gapKey: _k, ...plain } = fb(3);
+    expect(repeatedGap([fb(2), plain])).toBeNull();
+  });
+  it('turns a stored repeated gap into one pending proposal, read from the one store', () => {
+    const rows: AgentFeedback[] = [fb(1)];
+    const lifecycle = new AgentLifecycle({ userData: tmp(), wake: () => false, feedback: { list: id => rows.filter(f => f.agentId === id), problem: null } });
+    lifecycle.onFeedback(rows[0]!);
+    expect(lifecycle.proposals()).toEqual([]);
+    rows.push(fb(2)); lifecycle.onFeedback(rows[1]!); rows.push(fb(3)); lifecycle.onFeedback(rows[2]!);
+    expect(lifecycle.proposals()).toHaveLength(1);
+    expect(lifecycle.proposals()[0]!.state).toBe('pending');
   });
 });
 describe('trials', () => {

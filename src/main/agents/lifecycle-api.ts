@@ -1,11 +1,11 @@
 // Validated lifecycle API facade. Renderer reads go through the existing sender-checked IPC adapter;
-// feedback writes are for the authenticated Orchestrator MCP owner, never renderer-supplied run records.
-import type { AgentLifecycleQuery, AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
+// feedback writes come only from the authenticated Orchestrator agent_feedback tool, never renderer-supplied run records.
+import type { AgentFeedback, AgentFeedbackArgs, AgentLifecycleQuery, AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { AgentRun } from '../../shared/agents';
-import type { FeedbackInput } from './feedback';
 import type { AgentLifecycle } from './lifecycle';
-import { AGENT_LIFECYCLE_PATH } from '../../shared/agent-lifecycle';
+import { AGENT_LIFECYCLE_PATH, parseAgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { BrainService } from '../services';
+import { log, errText } from '../log';
 
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Richiesta ciclo Agenti non valida');
@@ -24,26 +24,30 @@ export function mountLifecycleApi(brain: Pick<BrainService, 'serveApi'>, api: Re
     return api.read(query.has('agentId') ? { agentId: query.get('agentId') } : {});
   });
 }
-export function createLifecycleApi(service: AgentLifecycle, runById: (id: string) => AgentRun | undefined) {
+/** The one store's writer (AgentAuthoring.recordFeedback): reads agent/version from the run, decides the basis, persists. */
+export type FeedbackWriter = (args: AgentFeedbackArgs, callerId: string) => Promise<AgentFeedback>;
+export type LifecycleApi = ReturnType<typeof createLifecycleApi>;
+export function createLifecycleApi(service: AgentLifecycle, runById: (id: string) => AgentRun | undefined, write?: FeedbackWriter) {
   return {
     read(value: unknown): AgentLifecycleSnapshot {
       const { agentId } = lifecycleQuery(value);
       return {
         proposals: service.proposals().filter(p => !agentId || p.agentIds.includes(agentId)),
         evaluations: service.evaluations().filter(e => !agentId || e.agentId === agentId),
-        feedback: agentId ? service.feedback.list(agentId) : [],
+        feedback: agentId ? structuredClone(service.feedback.list(agentId)) : [],
         problem: service.problem ?? service.feedback.problem,
       };
     },
-    /** The MCP adapter must authorize its caller before invoking this method. Unknown/elevated fields are refused. */
-    feedback(value: unknown): void {
-      const q = object(value);
-      const allowed = ['runId', 'verdict', 'worked', 'failed', 'gap', 'gapKey', 'evidence'];
-      if (Object.keys(q).some(k => !allowed.includes(k)) || typeof q.runId !== 'string' || !/^r_[a-f0-9]{12}$/.test(q.runId)) throw Error('Feedback non valido');
-      const run = runById(q.runId);
-      if (!run) throw Error('Esecuzione non trovata');
-      // Store validates every feedback field and supplies agent/version/basis from the authoritative run.
-      service.recordFeedback(run, { verdict: q.verdict, worked: q.worked, failed: q.failed, gap: q.gap, gapKey: q.gapKey, evidence: q.evidence } as FeedbackInput);
+    /** agent_feedback's single entry point. The MCP tool authenticates its caller before calling this; the shared parser
+     *  refuses any argument outside AgentFeedbackArgs (agent, version, basis…). */
+    async feedback(value: unknown, callerId: string): Promise<AgentFeedback> {
+      const args = parseAgentFeedbackArgs(value);
+      if (!runById(args.runId)) throw Error('Unknown run.');
+      if (!write) throw Error('Feedback store unavailable.');
+      const record = await write(args, callerId);
+      // the record is stored: a lifecycle problem (unreadable queue) only costs the gap proposal, never the feedback
+      try { service.onFeedback(record); } catch (e) { log.warn('agents', 'feedback gap proposal not recorded', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
+      return record;
     },
   };
 }

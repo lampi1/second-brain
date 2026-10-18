@@ -42,7 +42,9 @@ export function AgentLifecycleView({ snapshot, onReview }: { snapshot: AgentLife
       {e.result.other && <details><summary>Altre richieste (escluse dalla decisione)</summary><Comparison before={null} after={e.result.other} /></details>}
     </article>)}</details>}
     {snapshot.feedback.length > 0 && <details><summary>Feedback ({snapshot.feedback.length})</summary>{[...snapshot.feedback].reverse().map(f => <article key={f.id}>
-      <h4>{f.runId} · v{f.version}</h4><p>Valutazione dell’Orchestrator, non conferma dell’utente.</p>
+      <h4>{f.runId}{f.version !== undefined && ` · v${f.version}`}</h4>
+      <p>{f.outcome.basis === 'reviewed-evidence' ? 'Valutazione dell’Orchestrator con una revisione verificata, non conferma dell’utente.' : 'Valutazione dell’Orchestrator, non conferma dell’utente.'}</p>
+      {f.outcome.note && <p>{f.outcome.note}</p>}
       <p>Ha funzionato: {f.worked || 'Non indicato'}</p><p>Da migliorare: {f.failed || 'Non indicato'}</p>
       {f.gapKey && <p>Lacuna: {f.gapKey}</p>}
       <ul>{f.evidence.map((e, i) => <li key={i}>{e.kind}: <code>{e.ref}</code></li>)}</ul>
@@ -57,5 +59,5 @@ export function AgentLifecyclePanel({ api, agentId, onReview }: { api: AgentLife
     return () => { alive = false; };
   }, [api, agentId, revision]);
   return <div>{error ? <p role="alert">Ciclo degli agenti non disponibile.</p> : snapshot ? <AgentLifecycleView snapshot={snapshot} onReview={onReview} /> : <p role="status">Caricamento delle proposte…</p>}
-    <button type="button" className="btn btn-ghost" onClick={() => refresh(n => n + 1)}>Aggiorna proposte</button></div>;
+    <button type="button" className="btn btn-ghost" onClick={() => refresh(n => n + 1)}>Ricarica proposte</button></div>;
 }

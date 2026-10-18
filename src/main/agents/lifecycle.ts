@@ -2,14 +2,16 @@
 // The daily pass is entirely local ($0); it does not launch an LLM or write the brain/catalog.
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { AgentLifecycleProposal, TrialEvaluation } from '../../shared/agent-lifecycle';
-import { AgentFeedbackStore, repeatedGap, type FeedbackInput } from './feedback';
+import type { AgentFeedback, AgentLifecycleProposal, TrialEvaluation } from '../../shared/agent-lifecycle';
+import { NO_FEEDBACK, repeatedGap, type FeedbackSource } from './feedback';
 import { readLocal, writeLocal } from './local-store';
 import { suggestAgents, type SuggestionInput } from './suggestions';
 import { evaluateTrial } from './trials';
 
 export interface LifecycleDeps {
   userData: string;
+  /** the one feedback store (the authoring store behind agent_feedback); none = no feedback yet */
+  feedback?: FeedbackSource;
   /** Deliver one labelled request through the Orchestrator mailbox; false means no recipient yet. */
   wake(runIds: string[]): boolean | Promise<boolean>;
   /** UI adapter shows these as Da approvare. It must not apply them from this callback. */
@@ -21,14 +23,14 @@ interface LifecycleState {
   proposals: AgentLifecycleProposal[]; trials: { agentId: string; version: number; result: TrialEvaluation }[];
 }
 export class AgentLifecycle {
-  readonly feedback: AgentFeedbackStore;
+  readonly feedback: FeedbackSource;
   private readonly file: string;
   private state: LifecycleState = { version: 1, pendingRuns: [], lastDay: '', proposals: [], trials: [] };
   private sending = false;
   problem: string | null = null;
   constructor(private readonly d: LifecycleDeps) {
     this.file = path.join(d.userData, 'agent-lifecycle.json');
-    this.feedback = new AgentFeedbackStore(d.userData);
+    this.feedback = d.feedback ?? NO_FEEDBACK;
     try {
       const raw = readLocal(this.file) as LifecycleState | undefined;
       if (raw === undefined) return;
@@ -53,8 +55,8 @@ export class AgentLifecycle {
     if (next.length >= 1000) throw Error('Coda proposte piena');
     this.commit({ ...this.state, proposals: [...next, structuredClone(proposal)] });
   }
-  recordFeedback(run: AgentRun, input: FeedbackInput): void {
-    const f = this.feedback.add(run, input, this.now());
+  /** A feedback record was just stored (by the authenticated writer): a gap named on two runs becomes a proposal. */
+  onFeedback(f: AgentFeedback): void {
     const proposal = repeatedGap(this.feedback.list(f.agentId));
     if (proposal) this.propose(proposal);
   }
