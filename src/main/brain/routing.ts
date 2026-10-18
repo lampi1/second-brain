@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Effort, Harness, ModelRegistry, RegistryModel, RouteDecision, RoutingChange, RoutingInfo, RoutingRow, RoutingTable, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
+import { builtinTask } from '../../shared/work-concepts';
 import { areaOf } from './brain-estimates';
 import { log } from '../log';
 import { engineLabel, engineOf, engines } from '../engines/registry';
@@ -85,7 +86,8 @@ export function taskOf(title: string, prompt: string, rules: [string, string, st
   };
   const k = word(t), p = plain(String(prompt ?? '').slice(0, 2000));
   if ((!k || TOPIC_KINDS.includes(k)) && (BUILD.test(p) || FIX.test(p))) return BUILD.test(p) ? 'app-feature' : 'bug-fix';
-  return k ?? word(p) ?? 'altro';
+  // the built-in bilingual work words (shared/work-concepts.ts) when the brain's rules say nothing or there are none
+  return k ?? word(p) ?? builtinTask(`${t} ${p}`) ?? 'altro';
 }
 
 // ── the table's rules ───────────────────────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import type { AgentCatalog, AgentProfile, VersionMetrics } from '../../src/share
 import type { AgentProposal } from '../../src/shared/agent-authoring';
 import type { AgentLifecycleSnapshot } from '../../src/shared/agent-lifecycle';
 import type { LearnedRules } from '../../src/shared/agent-pack';
+import type { ClassifierCalibration } from '../../src/shared/agent-classifier';
 import { decideApproval, diffDefinition, gatherApprovals, lineDiff, lifecycleTarget, type ApprovalItem, type ApprovalsClient } from '../../src/renderer/lib/agent-approvals';
 import { AgentApprovalsView } from '../../src/renderer/components/AgentApprovalCards';
 
@@ -23,7 +24,7 @@ const vm = (agentId: string, version: number, success: number): VersionMetrics =
   timeToDone: { elapsed: metric(180_000), execution: metric(null, 0) }, questionsPerRun: metric(2), permissionsPerRun: metric(0), commandsPerRun: metric(0), reviews: [],
 });
 
-function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; rules?: Record<string, LearnedRules>; failLifecycle?: boolean; failProposals?: boolean; profiles?: AgentProfile[] } = {}) {
+function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; rules?: Record<string, LearnedRules>; failLifecycle?: boolean; failProposals?: boolean; profiles?: AgentProfile[]; calibration?: ClassifierCalibration[] } = {}) {
   const profiles = over.profiles ?? [
     agent('writer'),
     agent('tester', { trial: { version: 3, baseline: 2, startedAt: 50 }, activeVersion: 3, version: 3 }),
@@ -35,6 +36,7 @@ function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentL
     'agents:list': catalog, 'agents:proposals': over.proposals ?? [], 'agents:metrics': [{ agentId: 'tester', versions: [vm('tester', 2, 0.5), vm('tester', 3, 0.8)], all: null, open: 0 }],
     'agents:proposalDecide': agent('writer', { updatedAt: 200, activeVersion: 3 }), 'agents:undo': agent('writer'), 'agents:learnDecide': { text: '', proposals: [] },
     'agents:trialDecide': agent('tester'), 'agents:lifecycleDecide': { proposals: [], evaluations: [], feedback: [], problem: null }, 'agents:keep': agent('imported'), 'agents:retire': agent('imported'), 'agents:restore': agent('imported'),
+    'agents:classifierCalibration': over.calibration ?? [], 'agents:classifierDecide': [],
   };
   const client: ApprovalsClient = {
     invoke: (async (channel: string, arg: unknown) => {
@@ -49,7 +51,7 @@ function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentL
     }) as ApprovalsClient['invoke'],
     lifecycle: { read: async () => { if (over.failLifecycle) throw new Error('down'); return { proposals: [], evaluations: [], feedback: [], problem: null, ...over.lifecycle }; } },
   };
-  return { client, calls, reads: (channel: string) => calls.filter(([c]) => c === channel).length, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:learnList'].includes(c)), profiles };
+  return { client, calls, reads: (channel: string) => calls.filter(([c]) => c === channel).length, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:learnList', 'agents:classifierCalibration'].includes(c)), profiles };
 }
 const proposal = (extra: Partial<AgentProposal> = {}): AgentProposal => ({
   id: 'p1', at: 10, kind: 'proposal', agentId: 'writer', baseRevision: 100, state: 'pending', reason: 'Troppe domande', expectedEffect: 'Meno domande',
@@ -212,5 +214,35 @@ describe('AgentApprovalsView', () => {
     const state = await gatherApprovals(f.client);
     const html = renderToStaticMarkup(createElement(AgentApprovalsView, { ...props, state, done: { text: 'Fatto.', undo: { kind: 'retire', agentId: 'x', run: async () => null } } }));
     expect(html).toContain('Annulla'); expect(html).toContain('Chiudi la proposta'); expect(html).not.toContain('>Approva<');
+  });
+});
+
+describe('classifier threshold card', () => {
+  const cal = (extra: Partial<ClassifierCalibration> = {}): ClassifierCalibration => ({ mode: 'hybrid', threshold: 60, defaultThreshold: 60, approved: null, n: 24,
+    rank1: 0.75, coverageNow: 0.7, coverageSuggested: 0.92, suggested: 47, pending: true, ...extra });
+  it('lists a pending suggestion only, keyed by its value, after the agent changes', async () => {
+    const f = fixture({ calibration: [cal(), cal({ mode: 'words', pending: false, suggested: 22 })] });
+    const items = (await gatherApprovals(f.client)).items;
+    expect(items.filter(i => i.type === 'classifier').map(i => i.key)).toEqual(['classifier:hybrid:47']);
+    expect(items.at(-1)!.type).toBe('classifier');
+  });
+  it('applies the value shown and undoes back to the default, or to the earlier approved value', async () => {
+    const f = fixture({ calibration: [cal()] });
+    const item = (await gatherApprovals(f.client)).items.find(i => i.type === 'classifier')!;
+    const undo = await decideApproval(f.client, item, { type: 'classifier', decision: 'apply' });
+    await undo!.run();
+    expect(f.writes()).toEqual([['agents:classifierDecide', { mode: 'hybrid', decision: 'apply', value: 47 }], ['agents:classifierDecide', { mode: 'hybrid', decision: 'reset' }]]);
+    const g = fixture({ calibration: [cal({ approved: 55, threshold: 55 })] });
+    const again = (await gatherApprovals(g.client)).items.find(i => i.type === 'classifier')!;
+    await (await decideApproval(g.client, again, { type: 'classifier', decision: 'apply' }))!.run();
+    expect(g.writes().at(-1)).toEqual(['agents:classifierDecide', { mode: 'hybrid', decision: 'apply', value: 55 }]);
+    expect(await decideApproval(g.client, again, { type: 'classifier', decision: 'dismiss' })).toBeNull();
+  });
+  it('renders what changes, the numbers behind it and the method', async () => {
+    const f = fixture({ calibration: [cal()] });
+    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { state: await gatherApprovals(f.client), error: false, busy: null, done: null, failure: null,
+      onDecide: vi.fn(), onEdit: vi.fn(), onUndo: vi.fn(), onDismiss: vi.fn(), onRefresh: vi.fn() }));
+    for (const text of ['Soglia del classificatore', 'con il modello locale', 'da 60 a 47', 'Su 24 esecuzioni', '70%', '92%', '75%', 'quantile conforme', 'Applica la soglia']) expect(html).toContain(text);
+    expect(f.writes()).toEqual([]);
   });
 });

@@ -79,6 +79,7 @@ import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { AgentClassifier } from './agents/classifier';
+import { ClassifierTuning } from './agents/classifier-calibration';
 import type { ClassifyAgents } from './agents/discovery';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
@@ -95,6 +96,8 @@ export interface Wired {
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
   classifyAgents?: ClassifyAgents;
+  /** the agent classifier's thresholds and their calibration from confirmed runs (decided only by the user) */
+  classifierTuning?: ClassifierTuning;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   proposals: ProposalBridge;
   progress: ProgressService;
@@ -347,7 +350,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Tests never run installed vendors; their fake status is requested explicitly.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
   // The search's own HybridSearch: one worker and one model for search, recall, corrections and agent matching.
-  const classifier = new AgentClassifier(hybrid);
+  // Its thresholds: the user's approved calibration from confirmed runs (classifier-calibration.ts, ADR 0074), else defaults.
+  const classifierTuning = new ClassifierTuning(path.join(ctx.userData, 'agent-classifier.json'), () => ({ runs: manager.runs.list(), profiles: agents.list().profiles }));
+  const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
   addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o))]);
@@ -625,7 +630,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents,
+    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

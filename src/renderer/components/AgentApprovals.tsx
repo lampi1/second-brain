@@ -12,6 +12,7 @@ import { approvalsClient, refreshApprovals, useApprovals } from '../store/agent-
 import { AgentApprovalsView, type ApprovalDone } from './AgentApprovalCards';
 
 function doneText(item: ApprovalItem, d: ApprovalDecision): string {
+  if (item.type === 'classifier') return d.type === 'classifier' && d.decision === 'apply' ? t('approvals.done.clsApplied', { v: item.calibration.suggested }) : t('approvals.done.clsDismissed');
   const name = item.type === 'definition' ? item.proposal.draft.name : item.type === 'lifecycle' ? item.agents.map(a => a.name).join(', ') : item.agent.name;
   if (d.type === 'queue') {
     const label = name || t('approvals.toDefine');

@@ -110,6 +110,10 @@ function choices(item: ApprovalItem): Choice[] {
       return [{ label: t(kind === 'model-trial' ? 'approvals.startTrial' : 'approvals.askDraft'), decision: { type: 'queue', decision: 'approve' }, confirm, tone: 'primary' },
         ...ignore(item.proposal, 'approvals.confirm.ignoreSuggestion')];
     }
+    case 'classifier': return [
+      { label: t('approvals.cls.apply'), decision: { type: 'classifier', decision: 'apply' }, confirm: t('approvals.confirm.clsApply', { v: item.calibration.suggested }), tone: 'primary' },
+      { label: t('approvals.ignore'), decision: { type: 'classifier', decision: 'dismiss' }, confirm: t('approvals.confirm.clsDismiss'), tone: 'ghost' },
+    ];
   }
 }
 /** Ignora = the queue's dismiss: the advice or suggestion leaves the list for a while; nothing on the agent changes. */
@@ -123,12 +127,14 @@ function title(item: ApprovalItem): string {
     return op === 'update' ? t('approvals.kind.definition') : op === 'rollback' ? t('approvals.kind.opRollback', { v: item.proposal.toVersion ?? 0 }) : t(op === 'archive' ? 'approvals.kind.opArchive' : 'approvals.kind.opRestore');
   }
   if (item.type === 'lifecycle') return t(`lifecycle.kind.${item.proposal.kind}`);
+  if (item.type === 'classifier') return t('approvals.kind.classifier');
   return t(`approvals.kind.${item.type}`);
 }
 const subject = (item: ApprovalItem): { name: string; agent: AgentProfile | null } =>
   item.type === 'definition' ? { name: item.proposal.draft.name, agent: item.agent }
     : item.type === 'lifecycle' ? { name: item.agents.map(a => a.name).join(', ') || t('approvals.toDefine'), agent: item.agents[0] ?? null }
-      : { name: item.agent.name, agent: item.agent };
+      : item.type === 'classifier' ? { name: t('approvals.cls.name', { mode: item.calibration.mode }), agent: null }
+        : { name: item.agent.name, agent: item.agent };
 
 function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: boolean; text: string; setText(v: string): void }) {
   switch (item.type) {
@@ -168,6 +174,14 @@ function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: b
       <Evidence refs={item.proposal.evidence} />
       <p className="apv-muted">{t(item.proposal.kind === 'model-trial' ? 'approvals.modelTrialNote' : 'approvals.draftNote')}</p>
     </>;
+    case 'classifier': {
+      const c = item.calibration, pct = (v: number | null) => v === null ? '—' : `${Math.round(v * 100)}%`;
+      return <>
+        <Section label={t('approvals.what')}><p>{t('approvals.cls.what', { from: c.threshold, to: c.suggested })}</p></Section>
+        <Section label={t('approvals.why')}><p>{t('approvals.cls.why', { n: c.n, now: pct(c.coverageNow), next: pct(c.coverageSuggested), rank1: pct(c.rank1) })}</p></Section>
+        <p className="apv-muted">{t('approvals.cls.how')}</p>
+      </>;
+    }
   }
 }
 /** What accepting a definition proposal does: the field diff for an update, one sentence for the other operations. */

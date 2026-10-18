@@ -132,7 +132,7 @@ describe('routing: resolve', () => {
 });
 
 describe('routing: task kind and routeChat', () => {
-  it('reads the kind from title, then prompt, accents off; a Regia is its own; no rules = altro', () => {
+  it('reads the kind from title, then prompt, accents off; a Regia is its own; no rule matches = the built-in work words, else altro', () => {
     expect(taskOf('Posta · smista la inbox', '', TASKS)).toBe('triage');
     expect(taskOf('Ordini · totale', 'c’è un bug nel totale', TASKS)).toBe('bug-fix');
     expect(taskOf('Posta · novità', '', TASKS)).toBe('triage');
@@ -144,7 +144,8 @@ describe('routing: task kind and routeChat', () => {
     expect(taskOf('Magazzino · Log', 'leggi i log e correggi il parsing', OPS)).toBe('bug-fix');
     expect(taskOf('Magazzino · Log', 'leggi i log di ieri', OPS)).toBe('ops-read');
     expect(taskOf('Posta · smista', 'apri la PR', TASKS)).toBe('triage');
-    expect(taskOf('fix', '', undefined)).toBe('altro');
+    expect(taskOf('fix', '', undefined)).toBe('bug-fix');
+    expect(taskOf('Ordini · x', 'y', undefined)).toBe('altro');
   });
 
   it('routes a chat: area from the title (the app space is App), kind, version, time', () => {

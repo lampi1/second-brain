@@ -140,8 +140,9 @@ describe('words-only fallback (model unavailable)', () => {
     const result = await words().classify('le query sul database sono lente da ieri, soprattutto i report mensili del cliente', it_profiles(), []);
     expect(result.candidates[0]?.id).toBe('dba');
     expect(result.candidates[0]!.score).toBeGreaterThanOrEqual(60);
-    // one topic word among three still stays far below a suggestion
-    expect((await words().classify('database astronomia telescopio', it_profiles(), [])).noneCloseEnough).toBe(true);
+    // one topic word among three scores well below the clear request; no topic word in common is never a suggestion
+    expect((await words().classify('database astronomia telescopio', it_profiles(), [])).candidates[0]!.score).toBeLessThan(result.candidates[0]!.score / 2);
+    expect((await words().classify('astronomia telescopio', it_profiles(), [])).noneCloseEnough).toBe(true);
   });
 
   it('falls back to words, without calling the embedder, for every model state but ready and for no embedder', async () => {
