@@ -25,3 +25,10 @@ it('disables startup when the saved profile model is no longer supported, instea
 it('renders the mounted start flow and unknown readiness in English without translating persisted profile identities',()=>{
  setLang('en');try{const html=renderToStaticMarkup(createElement(AgentStartDialog));expect(html).toContain('Start an agent');expect(html).toContain('Context and expected result');expect(html).toContain('installation or sign-in needs verification');expect(html).not.toContain('Dettagli e permessi');expect(html).toContain('implementer');}finally{setLang('it');}
 });
+it('never offers the coordinator preset as a work chat agent, even as the first or a role-suggested profile',()=>{
+ const general=mock.catalog!.profiles[0]!;mock.catalog!.profiles.unshift({...general,id:'default-orchestrator',name:'Orchestrator'});
+ mock.role=rolePreview(undefined,'dev',{agentIds:mock.catalog!.profiles.map(p=>p.id),pageIds:pages.map(p=>p.id)}).next;
+ expect(renderToStaticMarkup(createElement(AgentStartDialog))).not.toContain('default-orchestrator');
+ mock.role=undefined;const html=renderToStaticMarkup(createElement(AgentStartDialog));
+ expect(html).not.toContain('default-orchestrator');expect(html).toContain('value="default-general" selected=""');
+});

@@ -44,7 +44,7 @@ describe('agent manifest', () => {
     fs.writeFileSync(file, JSON.stringify(original));
     const before = fs.readFileSync(file, 'utf8'), service = new AgentCatalogService({ userData, models, language: () => 'en' });
     // A7b: a catalog without Generale gets it back (agentless chats run as Generale)
-    expect(service.list().profiles.map(p => p.id)).toEqual(['default-general', 'default-development']);
+    expect(service.list().profiles.map(p => p.id)).toEqual(['default-general', 'default-development', 'default-orchestrator']);
     const migrated = () => service.list().profiles.find(p => p.id === 'default-development');
     expect(migrated()).toEqual(expect.objectContaining(original.profiles[0]));
     expect(migrated()?.manifest).toBeUndefined();
@@ -80,7 +80,7 @@ describe('agent manifest', () => {
     fs.writeFileSync(file, JSON.stringify({ version: 1, profiles }));
     const before = fs.readFileSync(file, 'utf8');
     const loaded = new AgentCatalogService({ userData, models, language: () => 'en' }).list();
-    expect(loaded.profiles.every(p => p.createdAt === 40 && p.updatedAt === 40 && p.manifest)).toBe(true);
+    expect(loaded.profiles.filter(p => p.id !== 'default-orchestrator').every(p => p.createdAt === 40 && p.updatedAt === 40 && p.manifest)).toBe(true);
     expect(loaded.profiles[0]?.manifest).toEqual(DEFAULT_MANIFESTS_EN.general);
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });

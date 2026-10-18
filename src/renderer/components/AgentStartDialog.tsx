@@ -7,6 +7,7 @@ import { BRAIN_PAGES, closeModal, openModal, setPrefs, setRegiaTab, ui } from '.
 import { focusChat, go, regiaId } from '../actions';
 import { cleanRegiaName } from '@shared/regia';
 import { workBrief } from '@shared/work-brief';
+import { ORCHESTRATOR_AGENT_ID } from '@shared/agents';
 import { engineCan } from '../lib/engines';
 import { PERMISSION_MODES, permissionLabel } from '../lib/format';
 import type { PermissionMode } from '@shared/contract';
@@ -24,7 +25,9 @@ export function AgentStartDialog() {
   const current = useApp(s => { const id = s.order.find(x => s.chats[x]?.isRegia); return id ? s.chats[id] ?? null : null; }), hasRegia = !!current;
   const prefs = ui.use(s => s.prefs.newChat), asRegia = ui.use(s => s.newChatRegia);
   const role=ui.use(s=>s.prefs.role);
-  const suggested=role===undefined?[]:roleAgents(role,catalog,BRAIN_PAGES.map(page=>page.id));
+  // The coordinator preset only shapes the Orchestrator chat: main refuses it as a work chat's agent.
+  const startable=(p:{id:string})=>p.id!==ORCHESTRATOR_AGENT_ID;
+  const suggested=(role===undefined?[]:roleAgents(role,catalog,BRAIN_PAGES.map(page=>page.id))).filter(startable);
   const [chosen, choose] = useState<string|null>(null), [prompt, setPrompt] = useState(''), [context, setContext] = useState(''), [outcome, setOutcome] = useState('');
   const [title, setTitle] = useState(''), [regiaName, setRegiaName] = useState('');
   const [regia, setRegia] = useState(asRegia || !hasRegia), [worktree, setWorktree] = useState(false);
@@ -35,7 +38,7 @@ export function AgentStartDialog() {
   const live = useRef(true);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const preferred = setup?.preferences.agentIds ?? [];
-  const profiles = catalog?.profiles ?? [];
+  const profiles = (catalog?.profiles ?? []).filter(startable);
   const profile = chosen===null?(suggested[0]??profiles.find(p => preferred.includes(p.id))??profiles[0]):profiles.find(p=>p.id===chosen);
   const choice = catalog?.models.find(e => e.engine === profile?.engine);
   const unavailable = !profileCanStart(profile,choice) || !!catalog?.problem;

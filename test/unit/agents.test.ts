@@ -40,6 +40,7 @@ describe('Agent catalog and local setup', () => {
     c.resolve({ harness: 'codex', cwd: '/synthetic', permissionMode: 'default' });
     const seeded = c.list().profiles;
     expect(seeded.length).toBeGreaterThan(1);
+    expect(seeded.map(p => p.id)).toContain('default-orchestrator');
     expect(seeded.every(p => p.engine === 'codex' && p.origin.kind === 'preset')).toBe(true);
     expect(c.list().profiles.map(p => p.id)).toEqual(seeded.map(p => p.id));
   });
@@ -68,9 +69,9 @@ describe('Agent catalog and local setup', () => {
   });
   it('offers professional defaults without inventing installed models or login', () => {
     const c = new AgentCatalogService({ userData: tmp(), models: choices }).list();
-    expect(c.profiles).toHaveLength(11);
+    expect(c.profiles).toHaveLength(12);
     expect(c.archived).toHaveLength(5);
-    expect(c.profiles.every(p => p.model === (p.id === 'default-general' ? null : 'known-model') && p.engine === 'claude')).toBe(true);
+    expect(c.profiles.every(p => p.model === (['default-general', 'default-orchestrator'].includes(p.id) ? null : 'known-model') && p.engine === 'claude')).toBe(true);
     expect(c.models[0]).toMatchObject({ installed: null, authenticated: null });
     expect(c.imageGeneration.available).toBe(false);
     expect(c.builder.available).toBe(false);
