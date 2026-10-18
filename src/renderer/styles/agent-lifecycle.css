@@ -1,0 +1,11 @@
+/* Lifecycle approval cards and readable cohort comparisons, used by AgentLifecyclePanel. */
+.agent-lifecycle { display: grid; gap: 12px; margin-block: 20px; }
+.agent-lifecycle article { border: 1px solid var(--border-2); border-radius: 8px; padding: 16px; min-width: 0; }
+.agent-lifecycle h3, .agent-lifecycle h4 { margin: 0; }
+.agent-lifecycle p, .agent-lifecycle code { overflow-wrap: anywhere; }
+.agent-lifecycle details { margin-block: 10px; }
+.agent-lifecycle summary { cursor: pointer; }
+.lifecycle-table-wrap { max-width: 100%; overflow-x: auto; }
+.agent-lifecycle table { width: 100%; border-collapse: collapse; text-align: left; }
+.agent-lifecycle th, .agent-lifecycle td { padding: 8px; border-bottom: 1px solid var(--border-2); vertical-align: top; }
+.agent-lifecycle caption { text-align: left; padding-block: 8px; }

@@ -19,13 +19,16 @@ import { SetupService } from './agents/setup';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
+import { AgentLifecycle } from './agents/lifecycle';
+import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
+import { lifecycleInput } from './agents/lifecycle-input';
 import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { EngineSweeper } from './chats/sweep';
-import { ChatManager } from './chats/manager';
+import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
@@ -527,9 +530,30 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
-    suggestionSpend: () => suggestionBudget.spent(),
+    suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
   });
+  // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md): the "Da approvare" queue and the local daily suggestions
+  // ($0, no model, at most once a day after 18:00 while nothing works; off in the test suites). One feedback store: the
+  // authoring store (agent-authoring.json) behind agent_feedback; the lifecycle reads it, and its facade is the tool's
+  // entry point (the shared AgentFeedbackArgs), so a gap named on two runs becomes a proposal. Left out on purpose:
+  // the run-end Orchestrator wake asking for feedback (it would spend the user's tokens on every run end; it needs the
+  // mailbox's engine and user-wait gates first) and the trial evaluation (no classifier routing snapshot of the parent
+  // version: unknown routing turns every open trial into a "revert" proposal after five runs).
+  const lifecycle = new AgentLifecycle({ userData: ctx.userData, wake: () => false, feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } });
+  const lifecycleApi = createLifecycleApi(lifecycle, id => manager.runs.get(id), (args, caller) => agentAuthoring.recordFeedback(args, caller));
+  mountLifecycleApi(brain, lifecycleApi);
+  const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
+    && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
+  const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => {
+    try {
+      lifecycle.daily(lifecycleIdle(), () => {
+        const all = agents.list();
+        return lifecycleInput([...all.profiles, ...all.archived], manager.runs.list(), manager.list(), (id, v) => agents.history(id).find(x => x.version === v));
+      });
+    } catch (e) { log.warn('agents', 'daily agent suggestions failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable' }); }
+  }, 10_000);
+  lifecycleTimer?.unref();
   attachAppTools(mcp, { agentAuthoring, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -595,7 +619,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

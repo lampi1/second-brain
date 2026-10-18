@@ -12,11 +12,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import type { BrainApiResult } from '../../shared/contract';
+import { AGENT_LIFECYCLE_PATH } from '../../shared/agent-lifecycle';
 import { log, errText } from '../log';
 import type { NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
 
 export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/themes', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/improve', '/api/agents/analytics']);
+API_PATHS.add(AGENT_LIFECYCLE_PATH);
 
 /** Paths answered by main itself instead of the brain's server (brain.serveApi); undefined = not now, ask the server. */
 export type LocalApi = Map<string, (query: URLSearchParams) => unknown | Promise<unknown>>;
@@ -92,6 +94,7 @@ export class BrainApi {
     if (own) {
       try { const data = await own(u.searchParams); if (data !== undefined) return { ok: true, data }; } catch (e) { return { ok: false, error: errText(e) }; }
     }
+    if (u.pathname === AGENT_LIFECYCLE_PATH) return { ok: false, error: 'Ciclo degli agenti non disponibile.' };
     let port: number;
     try { port = await this.start(); } catch (e) { return { ok: false, error: errText(e) }; }
     return new Promise<BrainApiResult>(resolve => {

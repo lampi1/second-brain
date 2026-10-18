@@ -2,7 +2,8 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { AgentEvidenceRef, AgentProfile, AgentRunOutcome } from '../../shared/agents';
-import type { AgentFeedback, AgentProposal, AgentUndo } from '../../shared/agent-authoring';
+import type { AgentProposal, AgentUndo } from '../../shared/agent-authoring';
+import { AGENT_FEEDBACK_SCHEMA, DEFINITION_GAPS, parseAgentFeedbackArgs, parseEvidence, type AgentFeedback, type AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatItem, FeedAction } from '../../shared/contract';
 import type { ToolDef } from '../appctl/tools';
 import type { RawEvent } from '../brain/live';
@@ -21,6 +22,9 @@ interface Deps {
   /** Main-owned ledger value; unknown fails closed. No authoring tool starts a paid job. */
   suggestionSpend: () => number | null;
   send: (chatId: string, text: string) => Promise<unknown>;
+  /** agent_feedback's entry point once the lifecycle is wired (createLifecycleApi(...).feedback): it parses the shared
+   *  shape, calls recordFeedback (this store, the only one) and turns repeated gaps into proposals. Absent: recordFeedback. */
+  feedback?: (args: Record<string, unknown>, callerId: string) => Promise<AgentFeedback>;
   now?: () => number;
 }
 const object = (v: unknown): Record<string, unknown> => {
@@ -31,14 +35,8 @@ const text = (v: unknown, max = 600): string => {
   if (typeof v !== 'string' || !v.trim() || v.length > max) throw new Error(`Text required, at most ${max} characters.`);
   return v.trim();
 };
-function evidence(value: unknown): AgentEvidenceRef[] {
-  if (!Array.isArray(value) || value.length > 20) throw new Error('At most 20 evidence references required.');
-  return value.map(v => {
-    const e = object(v);
-    if (!['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'].includes(String(e.kind)) || typeof e.at !== 'number' || !Number.isFinite(e.at) || e.at < 0) throw new Error('Invalid evidence.');
-    return { kind: e.kind as AgentEvidenceRef['kind'], ref: text(e.ref, 200), at: e.at };
-  });
-}
+/** One evidence rule for every tool: the shared parser agent_feedback uses too. */
+const evidence = parseEvidence;
 export class AgentAuthoring {
   private readonly file: string;
   private state: Store = { version: 1, used: [], proposals: [], feedback: [] };
@@ -61,6 +59,8 @@ export class AgentAuthoring {
           const f = object(value), o = object(f.outcome);
           if (typeof f.id !== 'string' || typeof f.agentId !== 'string' || typeof f.runId !== 'string' || !['orchestrator-opinion', 'reviewed-evidence'].includes(String(o.basis)) || !['success', 'partial', 'fail', 'unknown'].includes(String(o.verdict))) throw new Error('Invalid stored feedback.');
           evidence(f.evidence);
+          if (f.version !== undefined && (!Number.isSafeInteger(f.version) || Number(f.version) < 0) || f.gap !== undefined && !DEFINITION_GAPS.includes(f.gap as never)
+            || ['worked', 'failed', 'gapKey'].some(k => f[k] !== undefined && typeof f[k] !== 'string')) throw new Error('Invalid stored feedback detail.');
         }
         // The file is never interpreted as authority to execute a proposal without a new user decision.
         this.state = structuredClone(s) as unknown as Store;
@@ -145,6 +145,8 @@ export class AgentAuthoring {
       if (!run) throw new Error('Unknown run.');
       return structuredClone({ run, reviews: this.d.runs.list().filter(r => r.reviewOf === run.runId), feedback: this.state.feedback.filter(f => f.runId === run.runId) });
     }
+    // the shared AgentFeedbackArgs shape (parseAgentFeedbackArgs) is the only validation: no `reason` alias here
+    if (name === 'agent_feedback') return this.d.feedback ? this.d.feedback(a, callerId) : this.recordFeedback(parseAgentFeedbackArgs(a), callerId);
     const reason = text(a.reason ?? a.notes);
     if (name === 'agent_create') {
       const id = text(a.requestItemId, 200), key = `${callerId}:${id}`;
@@ -169,7 +171,6 @@ export class AgentAuthoring {
       this.write({ ...this.state, proposals: [...this.state.proposals, p] });
       this.event(before ? 'agent-proposal' : 'agent-suggested', reason, before?.id, { kind: 'agent-proposals' }, p.evidence); return structuredClone(p);
     }
-    if (name === 'agent_feedback') return this.feedback(a, callerId, reason);
     const p = this.profile(a.agentId);
     if (protectedAgent(p)) throw new Error('Protected agent: use agent_propose.');
     let result: AgentProfile;
@@ -196,12 +197,17 @@ export class AgentAuthoring {
     const result = runMetrics(this.d.runs.list(), { ...(since !== undefined ? { since: since as number } : {}), rollups: this.d.runs.rolledUp(), filter });
     return result.filter(m => a.agentId === undefined || m.agentId === a.agentId).map(m => a.version === undefined ? m : { ...m, all: null, versions: m.versions.filter(v => v.version === a.version) });
   }
-  private async feedback(a: Record<string, unknown>, callerId: string, notes: string): Promise<AgentFeedback> {
-    const run = this.d.runs.get(text(a.runId, 80));
+  /** The one feedback store's reader (the lifecycle's FeedbackSource): an agent's records, oldest first. */
+  feedbackOf(agentId: string): AgentFeedback[] { return structuredClone(this.state.feedback.filter(f => f.agentId === agentId)); }
+  get storeProblem(): string | null { return this.problem; }
+  /** The one feedback store's writer. Arguments are already parsed (AgentFeedbackArgs); agent and version come from the run,
+   *  the basis from the evidence check below. Callers: agent_feedback (directly, or through the lifecycle facade). */
+  async recordFeedback(a: AgentFeedbackArgs, callerId: string): Promise<AgentFeedback> {
+    if (this.problem) throw new Error(this.problem);
+    const run = this.d.runs.get(a.runId), notes = a.notes;
     if (!run) throw new Error('Unknown run.');
-    if (!['success', 'partial', 'fail', 'unknown'].includes(String(a.verdict))) throw new Error('Invalid verdict.');
     if (a.sendToRun && run.endedAt !== undefined) throw new Error('Ended runs cannot receive feedback messages.');
-    const refs = evidence(a.evidence);
+    const refs = a.evidence;
     const verified = refs.some(e => {
       if (e.kind !== 'run') return false;
       const review = this.d.runs.get(e.ref);
@@ -210,7 +216,9 @@ export class AgentAuthoring {
       return !!p && p.origin.kind === 'preset' && /(?:^|-)reviewer(?:$|-)/.test(p.origin.presetId) && review.version > 0;
     });
     const outcome: AgentRunOutcome = { verdict: a.verdict as AgentRunOutcome['verdict'], basis: verified ? 'reviewed-evidence' : 'orchestrator-opinion', by: callerId, at: this.now(), note: notes };
-    const f: AgentFeedback = { id: randomUUID(), at: this.now(), agentId: run.agentId, runId: run.runId, outcome, evidence: refs };
+    const f: AgentFeedback = { id: randomUUID(), at: this.now(), agentId: run.agentId, runId: run.runId, version: run.version, outcome, evidence: refs,
+      ...(a.worked !== undefined ? { worked: a.worked } : {}), ...(a.failed !== undefined ? { failed: a.failed } : {}),
+      ...(a.gap !== undefined ? { gap: a.gap } : {}), ...(a.gapKey !== undefined ? { gapKey: a.gapKey } : {}) };
     const own = this.state.feedback.filter(x => x.agentId === run.agentId).slice(-199);
     this.write({ ...this.state, feedback: [...this.state.feedback.filter(x => x.agentId !== run.agentId), ...own, f] });
     // Human decisions always win; an opinion cannot erase a previously verified outcome.
@@ -232,10 +240,14 @@ export function authoringTools(service: AgentAuthoring, callerId: string, authen
     agent_create: ['draft', 'presetId', 'requestItemId', 'reason'], agent_suggest: ['draft', 'reason', 'expectedEffect'],
     agent_get: ['agentId'], agent_update: ['agentId', 'patch', 'reason'], agent_propose: ['agentId', 'patch', 'reason', 'expectedEffect'],
     agent_archive: ['agentId', 'reason'], agent_restore: ['agentId', 'reason'], agent_rollback: ['agentId', 'toVersion', 'reason'],
-    agent_feedback: ['runId', 'verdict', 'notes', 'evidence'], agent_run_report: ['runId'],
+    agent_run_report: ['runId'], // agent_feedback: AGENT_FEEDBACK_SCHEMA (shared with the lifecycle facade)
   };
   const string = { type: 'string' }, record = { type: 'object' }, boolean = { type: 'boolean' }, integer = { type: 'integer' };
-  return names.map(name => ({
+  return names.map(name => name === 'agent_feedback' ? {
+    name, description: 'agent_feedback: your opinion of an agent run (verdict, notes, evidence; optionally what worked, what failed and which part of the definition fell short as gap + a short gapKey). It counts as reviewed evidence only when it cites an ended, verified Reviewer run of that run; it never overwrites the user\'s verdict. The agent and its version come from the run.',
+    inputSchema: AGENT_FEEDBACK_SCHEMA,
+    run: async (a: Record<string, unknown>) => { if (!authenticated()) throw new Error('Authenticated unified Orchestrator required.'); return await service.call(name, a, callerId) as object; },
+  } : ({
     name, description: `${name}: bounded agent management. Definitions never grant permissions. Protected changes require the user's decision in Agenti. Creation requires an active presetId, full draft with explicit tools/permissionCeiling, and a fresh human requestItemId.`,
     inputSchema: { type: 'object', required: required[name] ?? [], properties: {
       agentId: string, presetId: string, draft: record, patch: record, requestItemId: string, reason: string, expectedEffect: string,
@@ -244,6 +256,6 @@ export function authoringTools(service: AgentAuthoring, callerId: string, authen
       filter: record, period: record, skill: string, app: string, repo: string,
     } },
     annotations: { readOnlyHint: ['agent_list', 'agent_get', 'agent_metrics', 'agent_run_report'].includes(name) },
-    run: async a => { if (!authenticated()) throw new Error('Authenticated unified Orchestrator required.'); return await service.call(name, a, callerId) as object; },
+    run: async (a: Record<string, unknown>) => { if (!authenticated()) throw new Error('Authenticated unified Orchestrator required.'); return await service.call(name, a, callerId) as object; },
   }));
 }

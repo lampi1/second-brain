@@ -1,5 +1,5 @@
 // Reviewable automatic authoring records, shared by main and the user's decision panel.
-import type { AgentDraft, AgentEvidenceRef, AgentRunOutcome } from './agents';
+import type { AgentDraft, AgentEvidenceRef } from './agents';
 export interface AgentUndo { agentId: string; expectedRevision: number; operation: 'archive' | 'restore' | 'version'; version?: number }
 
 export interface AgentProposal {
@@ -7,6 +7,5 @@ export interface AgentProposal {
   draft: AgentDraft; before?: AgentDraft; reason: string; expectedEffect: string; evidence: AgentEvidenceRef[];
   state: 'pending' | 'accepted' | 'rejected';
 }
-export interface AgentFeedback {
-  id: string; at: number; agentId: string; runId: string; outcome: AgentRunOutcome; evidence: AgentEvidenceRef[];
-}
+/** One feedback record type for the whole app: defined beside agent_feedback's argument shape. */
+export type { AgentFeedback } from './agent-lifecycle';
