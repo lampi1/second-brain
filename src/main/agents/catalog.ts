@@ -602,6 +602,22 @@ export class AgentCatalogService {
     this.find(id);
     return this.store.list(id);
   }
+  /** Brother's Undo of an automatic behavioural change: the trial version is rejected and its baseline is active again. */
+  rejectTrial(id: string, baseline: number): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (!p.trial || p.trial.version !== p.activeVersion || p.trial.baseline !== baseline) throw new Error('Nessuna prova da annullare su questa versione.');
+    const entry = this.store.get(id, baseline);
+    if (!entry) throw new Error('Questa versione non è più nella cronologia.');
+    const { manifest: _m, effort: _e, trial: _t, ...rest } = p;
+    void _m; void _e; void _t;
+    const draft = this.validate({ ...rest, ...entry.behaviour }, true);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: baseline, updatedAt: at, lastEditedBy: 'user', userLocked: true };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
+    this.d.onCustomized?.();
+    return structuredClone(profile);
+  }
   /** Makes an older version the one new runs use. The next edit records it as the parent. */
   restoreVersion(id: string, version: number): AgentProfile {
     this.writable();

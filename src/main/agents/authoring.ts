@@ -86,7 +86,11 @@ export class AgentAuthoring {
     if (p.updatedAt !== input.expectedRevision) throw new Error('Agent changed: review its current definition before undoing.');
     if (input.operation === 'archive') return this.d.catalog.archive(p.id);
     if (input.operation === 'restore') return this.d.catalog.restore(p.id);
-    if (input.operation === 'version' && Number.isSafeInteger(input.version)) return this.d.catalog.restoreVersion(p.id, input.version!);
+    if (input.operation === 'version' && Number.isSafeInteger(input.version)) {
+      // an automatic behavioural change is always a trial: undoing it rejects the trial (restoreVersion refuses during one)
+      if (p.trial && p.trial.version === p.activeVersion && p.trial.baseline === input.version) return this.d.catalog.rejectTrial(p.id, input.version!);
+      return this.d.catalog.restoreVersion(p.id, input.version!);
+    }
     throw new Error('Invalid undo operation.');
   }
   proposals(): AgentProposal[] {

@@ -110,6 +110,30 @@ describe('MCP authoring boundary', () => {
     await expect(f.service.call('agent_update', { agentId: p.id, patch: { instructions: 'New' }, reason: 'Change', trial: false }, 'orch')).rejects.toThrow(/trial/);
     await expect(f.service.call('agent_update', { agentId: p.id, patch: { instructions: 'New' }, reason: 'Change' }, 'orch')).rejects.toThrow(/one behavioural/);
   });
+  it('undoes an automatic behavioural change from the feed card by rejecting its trial', async () => {
+    let t = Date.now();
+    const userData = tmp(), items: ChatItem[] = [{ kind: 'user', id: 'task', text: 'Create a reader', at: t }];
+    const catalog = new AgentCatalogService({ userData, models, now: () => t, approvedRoots: () => [userData] });
+    const runs = new AgentRunStore(userData), publish = vi.fn();
+    const service = new AgentAuthoring({ userData, catalog, runs, items: () => items, now: () => t, suggestionSpend: () => 0, publish, send: vi.fn(async () => undefined) });
+    service.rememberHumanMessage('orch', 'Create a reader');
+    const created = await service.call('agent_create', { draft: draft(), presetId: 'default-research', requestItemId: 'task', reason: 'User task' }, 'orch') as { id: string };
+    for (let i = 0; i < 5; i++) {
+      const run = runs.start({ agentId: created.id, version: 1, chatId: `work-${i}`, goal: 'Read', startedBy: 'orchestrator', startedAt: t, costKnown: true });
+      run.endedAt = t; run.endReason = 'completed'; run.outcome = { verdict: 'success', basis: 'human', by: 'user', at: t };
+    }
+    t += 86_400_000;
+    const updated = await service.call('agent_update', { agentId: created.id, patch: { instructions: 'Report observations briefly.' }, reason: 'Shorter reports' }, 'orch') as { activeVersion: number; trial?: unknown };
+    expect(updated).toMatchObject({ activeVersion: 2, trial: { version: 2, baseline: 1 } });
+    const card = publish.mock.calls.map(c => c[0][0]).find(e => e.kind === 'agent-updated');
+    expect(card.action).toMatchObject({ kind: 'agent-undo', undo: { operation: 'version', version: 1 } });
+    t += 1000;
+    const undone = service.undo(card.action.undo);
+    expect(undone).toMatchObject({ activeVersion: 1, instructions: 'Report observations.', lastEditedBy: 'user', userLocked: true });
+    expect(undone.trial).toBeUndefined();
+    expect(catalog.history(created.id).find(v => v.version === 2)?.state).toBe('rejected');
+    expect(() => service.undo(card.action.undo)).toThrow(/changed/);
+  });
   it('checks suggestion budget including unknown cost and persists proposals for human decisions only', async () => {
     const f = fixture(), args = { draft: draft(), reason: 'Potential task', expectedEffect: 'Fewer questions' };
     for (const cost of [null, 0.5, 1, NaN, -1]) await expect(new AgentAuthoring({ ...f, suggestionSpend: () => cost }).call('agent_suggest', args, 'orch')).rejects.toThrow(/budget/);
