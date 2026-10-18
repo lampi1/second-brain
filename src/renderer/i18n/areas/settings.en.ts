@@ -1,6 +1,10 @@
 // English counterpart of essential settings.
 import type{settingsIt}from'./settings.it';
 export const settingsEn:typeof settingsIt={
+ 'autonomy.title':'Codex autonomy in repositories','autonomy.hint':'From the next turn, Codex can work in these folders without confirmation for each command, within repository boundaries and the agent policy. Removal also applies from the next turn.',
+ 'autonomy.empty':'No repositories authorized.','autonomy.add':'Add folder','autonomy.remove':'Remove','autonomy.confirm':'Confirm change',
+ 'autonomy.confirmHint':'After confirmation, autonomy will be allowed only in the folders listed below. An empty list disables it.',
+ 'autonomy.error':'Change not saved. Choose an existing local Git repository or worktree root without links or network shares (up to 32 folders). If the path changed, cancel and select it again.',
  'essential.title':'Settings','essential.lead':'A few choices for your workspace.','essential.accounts':'Accounts and tools','essential.space':'My workspace','essential.appearance':'Appearance and language','essential.notifications':'Notifications',
  'essential.search':'Search settings','essential.searchHint':'For example: language, notifications, memory','essential.empty':'No settings found','essential.clear':'Clear search',
  'essential.configure':'Configure','essential.available':'Available','essential.off':'Disabled','essential.enable':'Enable','essential.disable':'Disable','essential.signIn':'Sign in','essential.check':'Check access','essential.signedIn':'Access verified','essential.signInNeeded':'Sign-in required','essential.unknown':'Access not reported','essential.notInstalled':'Tool not found',

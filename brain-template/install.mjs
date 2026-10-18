@@ -79,7 +79,7 @@ const V = {
   HOME: H, HOME_WIN: toWin(H), HOME_JS: H,
   DEVOPS_ORG: org?.trim() || 'your-org', DEVOPS_PROJECT: project?.trim() || 'your-project', ROLE: role?.trim() || 'developer', LANG: lang,
   OS: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: win ? 'PowerShell' : 'bash',
-  HARNESSES: harness.map(h => ({ claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex', kimi: 'Kimi' })[h] ?? h).join(' + '),
+  HARNESSES: harness.filter(h => ['claude', 'cursor', 'codex'].includes(h)).map(h => ({ claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex' })[h]).join(' + '),
 };
 // In JavaScript the values land inside '...', "..." and `...` strings and regex literals: quotes, backticks and $ are
 // escaped there (a folder like "D'Amico" must not break the tools); BRAIN_RE is already a regex source.

@@ -1,5 +1,9 @@
 // Essential settings surface. Technical policy remains in main; this dictionary never grants permissions.
 export const settingsIt={
+ 'autonomy.title':'Autonomia Codex nei repository','autonomy.hint':'Dal prossimo turno, in queste cartelle Codex può lavorare senza chiedere conferma per ogni comando, entro i limiti del repository e della policy dell’agente. Anche la rimozione vale dal prossimo turno.',
+ 'autonomy.empty':'Nessun repository autorizzato.','autonomy.add':'Aggiungi cartella','autonomy.remove':'Rimuovi','autonomy.confirm':'Conferma modifica',
+ 'autonomy.confirmHint':'Dopo la conferma, l’autonomia sarà consentita solo nelle cartelle elencate qui sotto. Se l’elenco è vuoto, sarà disattivata.',
+ 'autonomy.error':'Modifica non salvata. Scegli una cartella principale Git o worktree locale esistente, senza collegamenti o condivisioni (massimo 32 cartelle). Se il percorso è cambiato, annulla e selezionalo di nuovo.',
  'essential.title':'Impostazioni','essential.lead':'Poche scelte per il tuo spazio di lavoro.','essential.accounts':'Account e strumenti','essential.space':'Il mio spazio','essential.appearance':'Aspetto e lingua','essential.notifications':'Notifiche',
  'essential.search':'Cerca nelle impostazioni','essential.searchHint':'Per esempio: lingua, notifiche, memoria','essential.empty':'Nessuna impostazione trovata','essential.clear':'Cancella ricerca',
  'essential.configure':'Configura','essential.available':'Disponibile','essential.off':'Disattivato','essential.enable':'Attiva','essential.disable':'Disattiva','essential.signIn':'Accedi','essential.check':'Verifica accesso','essential.signedIn':'Accesso verificato','essential.signInNeeded':'Accesso da completare','essential.unknown':'Accesso non riportato','essential.notInstalled':'Strumento non trovato',

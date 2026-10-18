@@ -19,7 +19,7 @@ export class DefaultBrain {
   ensure(language: 'it' | 'en', harness: string): Promise<CreatedBrain> {
     const current = this.host.current();
     if (current) return Promise.resolve({ root: current, connected: this.host.usable?.() ?? true });
-    if (!['it', 'en'].includes(language) || !['none', 'claude', 'codex', 'kimi', 'cursor'].includes(harness)) return Promise.reject(new Error('AI_SETUP_FIELDS'));
+    if (!['it', 'en'].includes(language) || !['none', 'claude', 'codex', 'cursor'].includes(harness)) return Promise.reject(new Error('AI_SETUP_FIELDS'));
     if (!this.pending) this.pending = this.create(language, harness).finally(() => { this.pending = null; });
     return this.pending;
   }
@@ -34,7 +34,7 @@ export class DefaultBrain {
       BRAIN_NAME: 'memory', TODAY: (h.now?.() ?? new Date()).toISOString().slice(0, 10), BRAIN: fwd, BRAIN_WIN: root, BRAIN_JS: root.replace(/\\/g, '\\\\'), BRAIN_RE: fwd.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
       REPOS: forward(projects), REPOS_WIN: projects, REPOS_JS: projects.replace(/\\/g, '\\\\'), HOME: home, HOME_WIN: os.homedir(), HOME_JS: os.homedir().replace(/\\/g, '\\\\'),
       DEVOPS_ORG: 'your-org', DEVOPS_PROJECT: 'your-project', OS: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: process.platform === 'win32' ? 'PowerShell' : 'bash',
-      HARNESSES: harness === 'none' ? (language === 'it' ? 'Da collegare' : 'Not connected yet') : ({ claude: 'Claude Code', codex: 'Codex', kimi: 'Kimi', cursor: 'Cursor' } as Record<string, string>)[harness]!,
+      HARNESSES: harness === 'none' ? (language === 'it' ? 'Da collegare' : 'Not connected yet') : ({ claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' } as Record<string, string>)[harness]!,
     };
     const render = (text: string, js = false) => text.replace(/\{\{([A-Z_]+)\}\}/g, (match, key: string) => {
       const value = values[key];

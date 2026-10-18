@@ -113,10 +113,9 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,
 .topbar[data-fit~="3"] .ub-meter:not(.wide), .topbar[data-fit~="3"] .ub-pill { display: none; }
 .topbar[data-fit~="3"] .search { flex: none; min-width: 0; width: auto; }
-/* 4 the usage strip without Cursor and Kimi (still in its panel); 5 the popups switch and the connectors without
+/* 4 the usage strip without Cursor (still in its panel); 5 the popups switch and the connectors without
    their words (the switch and the dots stay) */
-.topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]),
-.topbar[data-fit~="4"] [data-testid="usage-kimi"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-kimi"]) { display: none; }
+.topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
 .topbar[data-fit~="5"] .popups-label, .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
 /* the full-screen popups switch and the connectors (SPEC 21) */
 .popups-switch, .connectors-btn { gap: 7px; }

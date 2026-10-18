@@ -22,7 +22,6 @@ import { Live, KINDS, stamp, cut, feedAction, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
 import { cursorToday, installHook } from './cursor-ledger';
-import { KimiReader, kimiHome } from './kimi-usage';
 import { BudgetWatcher, type Spend } from './budget';
 import { FileJobStore, Ledger } from './estimates';
 import { BrainEstimates } from './brain-estimates';
@@ -180,13 +179,10 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
 
   const startParts = async () => {
     const root = cfg.get().brainRoot;
-    // Kimi: its own session files (tests point it at their folder, SB_KIMI_HOME, never the user's)
-    const kimi = !testing || env.SB_KIMI_HOME ? new KimiReader(env.SB_KIMI_HOME || kimiHome(env)) : null;
     usage = new UsageMonitor({
       root, node, claudeConfig: testing ? null : claudeConfigFile(env),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
-      ...(kimi ? { kimi: () => kimi.today() } : {}),
       onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
     });
     usage.start();

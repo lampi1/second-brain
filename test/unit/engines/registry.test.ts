@@ -14,7 +14,7 @@ const opts: SessionOptions = { chatId: 'c_x', cwd: process.cwd(), model: null, e
 
 describe('engine registry', () => {
   it('knows Claude, Cursor and the presets, in display order, by caps', () => {
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'kimi', 'anthropic']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'anthropic']);
     expect(engineOf('claude')?.caps.effort).toBe(true);
     expect(engineOf('cursor')?.caps.effort).toBe(false);
     expect(engineOf('cursor')?.kind).toBe('acp');
@@ -29,7 +29,7 @@ describe('engine registry', () => {
     expect(a).toMatchObject({ id: 'anthropic', kind: 'api', protocol: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', defaultOn: false, key: 'required', trusted: false });
     expect(a!.caps.tools).toBe(false);
     expect(priceEnginesOf(a!)).toEqual(['anthropic', 'claude']);
-    expect(priceEnginesOf(engineOrThrow('kimi'))).toEqual(['kimi']);
+    expect(priceEnginesOf(engineOrThrow('cursor'))).toEqual(['cursor']);
     // a brain entry with that id but another protocol is no Anthropic Messages endpoint
     const other = brainEngine('anthropic', { kind: 'api', label: 'Altro', baseUrl: 'https://example.com/v1', protocol: 'openai' });
     if (typeof other === 'string') throw new Error(other);
@@ -52,7 +52,7 @@ describe('engine registry', () => {
   });
 
   it('reads each engine\'s override from SB_<ID>_PATH only', () => {
-    expect(enginePathsFromEnv({ SB_CLAUDE_PATH: 'a.mjs', SB_CURSOR_PATH: 'b.mjs', SB_KIMI_PATH: 'k.mjs', SB_OTHER_PATH: 'c' })).toEqual({ claude: 'a.mjs', cursor: 'b.mjs', kimi: 'k.mjs' });
+    expect(enginePathsFromEnv({ SB_CLAUDE_PATH: 'a.mjs', SB_CURSOR_PATH: 'b.mjs', SB_KIMI_PATH: 'k.mjs', SB_OTHER_PATH: 'c' })).toEqual({ claude: 'a.mjs', cursor: 'b.mjs' });
     expect(enginePathsFromEnv({})).toEqual({});
   });
 
@@ -66,7 +66,6 @@ describe('engine registry', () => {
     const ctx = { userData: process.cwd(), mcpUrl: null, appMcpUrl: null, showReplay: false, acpModelConfig: null, key: () => null };
     expect(sessionFor(engineOrThrow('claude'), opts, sink, ctx)).toBeInstanceOf(ClaudeSession);
     expect(sessionFor(engineOrThrow('cursor'), opts, sink, ctx)).toBeInstanceOf(AcpSession);
-    expect(sessionFor(engineOrThrow('kimi'), opts, sink, ctx)).toBeInstanceOf(AcpSession);
     expect(sessionFor(engineOrThrow('codex'), opts, sink, ctx)).toBeInstanceOf(CodexSession);
     const api = brainEngine('local', { kind: 'api', label: 'Locale', baseUrl: 'http://127.0.0.1:1/v1', protocol: 'openai' });
     if (typeof api === 'string') throw new Error(api);

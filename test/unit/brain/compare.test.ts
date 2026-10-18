@@ -50,7 +50,7 @@ describe('model comparisons', { timeout: 120e3 }, () => {
     const d = path.join(root, 'harness', 'compare', 'experiments');
     fs.writeFileSync(path.join(d, 'ab.json'), JSON.stringify({
       name: 'ab', title: 'A contro B', description: 'y',
-      a: { engine: 'cursor', capture: { agents: ['reviewer'] } }, b: { engine: 'claude', model: 'opus', effort: 'medium' }, judge: { engine: 'kimi', model: 'k2' },
+      a: { engine: 'cursor', capture: { agents: ['reviewer'] } }, b: { engine: 'claude', model: 'opus', effort: 'medium' }, judge: { engine: 'codex', model: 'gpt-5' },
       defaults: { on: true, agents: { reviewer: true } },
     }));
     const round = (name: string, files: Record<string, unknown>) => {
@@ -65,7 +65,7 @@ describe('model comparisons', { timeout: 120e3 }, () => {
       name: 'ab', title: 'A contro B', description: 'y', on: true, changedAt: null,
       a: { engine: 'cursor', label: 'Cursor', agents: ['reviewer'] },
       b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
-      judge: { engine: 'kimi', label: 'Kimi', model: 'k2' },
+      judge: { engine: 'codex', label: 'Codex', model: 'gpt-5' },
       agents: [{ name: 'reviewer', on: true }],
       rounds: 2, cost: { a: { usd: 0.5, missing: 0 }, b: { usd: 1.7, missing: 0 } },
     });

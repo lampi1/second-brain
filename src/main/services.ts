@@ -156,6 +156,7 @@ export interface BrainService {
 export interface DevopsApi {
   get(): DevopsState;
   refresh(): Promise<DevopsState>;
+  refreshFresh(): Promise<DevopsState>;
   markRead(keys?: string[]): DevopsState;
   shutdown(): void;
 }

@@ -28,7 +28,7 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', on
       const choices = await Promise.all(engines.map(async id => {
         const definition = info.engines.find(e => e.id === id && e.source === 'app');
         let status: CliStatus | null = null; try { if (definition) status = await sb.invoke('cli:status', { harness: id, checkLogin: true }); } catch { /* unknown is not absent */ }
-        return { id, label: ({ claude: 'Claude Code', codex: 'Codex', kimi: 'Kimi', cursor: 'Cursor' })[id], status, trusted: !!definition?.trusted, runs: definition?.runs ?? '' } satisfies EngineOption;
+        return { id, label: ({ claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' })[id], status, trusted: !!definition?.trusted, runs: definition?.runs ?? '' } satisfies EngineOption;
       }));
       const rank = (c: EngineOption) => c.status?.found ? c.status.loggedIn === true ? 0 : c.status.loggedIn === false ? 2 : 1 : 3;
       return { root: !info.brainProblem ? info.brainRoot : null, engines: choices.sort((a, b) => rank(a) - rank(b)) };

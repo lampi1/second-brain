@@ -74,9 +74,6 @@ else {
   add('codex-login', true, 'not checked here (only the app or the user check it: Codex tokens are spent only by Codex)', '', 'info');
 }
 
-const kimi = process.env.SB_KIMI_PATH || findCli('kimi');
-add('kimi-cli', true, kimi ?? 'Kimi CLI not found: optional engine', '', kimi ? 'ok' : 'info');
-if (kimi) add('kimi-login', true, 'not verified (CLI not started)', '', 'info');
 
 // 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the embedded engine; Cursor: its newest
 // version folder, no process started) against the versions recorded in test/fixtures/cli; format drift seen today

@@ -8,15 +8,13 @@
 //   response (0-100, ISO resets; needs a running CLI process but no model call), both pushed by the chat manager via
 //   BrainService.ingestRateLimits; (3) Claude Code's own cache `cachedUsageUtilization` in ~/.claude.json (written when
 //   /usage or get_usage ran; trusted for 1 hour, as Claude Code itself does). Nothing found = null + limitsNote.
-// - Kimi today: tokens from its own session files (kimi-usage.ts), re-read with the Cursor ledger every 30 s; no $ and
-//   no plan quota (only behind Kimi's login).
 // Used by brain/index.ts ('app:usage', 'usage' events, budget.ts input).
 import { timersFor } from '../timers';
 const { setInterval, clearInterval } = timersFor('brain/usage');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { KimiUsage, Usage } from '../../shared/contract';
+import type { Usage } from '../../shared/contract';
 import { log } from '../log';
 import { romeDay } from './live';
 import { runNode, type NodeRunner } from './node';
@@ -122,7 +120,7 @@ export function readClaudeCache(file: string, now = Date.now()): Limits | null {
 }
 
 /** Snapshot for the top bar from the last cost and the freshest limits. Windows past their reset become unknown. */
-export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null, kimi: KimiUsage | null = null): Usage {
+export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null): Usage {
   const u: Usage = { todayUsd: cost?.todayUsd ?? 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, weekResetsAt: null, limitsSource: null, limitsAt: null, at: now,
     costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '', cursorPlanNote: CURSOR_PLAN_NOTE };
   if (cost?.costKnown && cost.at !== undefined) {
@@ -134,7 +132,6 @@ export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, n
     u.cursorTodayUsd = cursor.usd; u.cursorNote = cursor.note; u.cursorExact = cursor.exact; u.cursorMarginPct = Math.round(cursor.margin * 100); u.cursorChats = cursor.chats; u.cursorChatsToday = cursor.todayChats;
     if (cursor.unpricedChats?.length || cursor.unpricedModels?.length) u.cursorUnpriced = { chats: cursor.unpricedChats ?? [], models: cursor.unpricedModels ?? [] };
   } else if (cursor && u.cursorTodayUsd == null) u.cursorNote = cursor.note;
-  if (kimi) u.kimi = kimi;
   if (!limits) {
     u.limitsNote = 'Limiti 5 ore / 7 giorni non disponibili: arrivano da una chat Claude aperta nell\'app (o, per un\'ora, da /usage in Claude Code)';
     return u;
@@ -157,15 +154,13 @@ export interface UsageMonitorOptions {
   everyMs?: number;              // default 3 min
   claudeConfig?: string | null;  // null = do not read Claude Code's cache (tests)
   cursor?: () => CursorDay;      // today's Cursor ledger (brain/cursor-ledger.ts cursorToday); absent = cost.mjs's CSV only
-  cursorEveryMs?: number;        // default 30 s (Kimi too)
-  kimi?: () => KimiUsage | null; // today's Kimi tokens (brain/kimi-usage.ts KimiReader); absent = no Kimi in the strip
+  cursorEveryMs?: number;        // default 30 s
   onUsage(u: Usage, spend: Spend): void;
 }
 
 export class UsageMonitor {
   private cost: CostSnapshot | null = null;
   private cursor: CursorDay | null = null;
-  private kimi: KimiUsage | null = null;
   private limits: Limits | null = null;
   private timer: NodeJS.Timeout | null = null;
   private cursorTimer: NodeJS.Timeout | null = null;
@@ -177,8 +172,8 @@ export class UsageMonitor {
   start(): void {
     void this.refresh();
     this.timer = setInterval(() => void this.refresh(), this.o.everyMs ?? 180e3);
-    // the Cursor ledger and Kimi's sessions are local files: re-read them often, so a turn shows within half a minute
-    if (this.o.cursor || this.o.kimi) this.cursorTimer = setInterval(() => { const c = this.readCursor(), k = this.readKimi(); if (c || k) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
+    // Re-read the local Cursor ledger so a turn appears within half a minute.
+    if (this.o.cursor) this.cursorTimer = setInterval(() => { if (this.readCursor()) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
   }
 
   stop(): void {
@@ -198,18 +193,7 @@ export class UsageMonitor {
     } catch (e) { log.warn('brain', 'cursor ledger unreadable', { data: { error: String(e) } }); return false; }
   }
 
-  /** true when today's Kimi figure changed */
-  private readKimi(): boolean {
-    if (!this.o.kimi) return false;
-    try {
-      const next = this.o.kimi();
-      const changed = JSON.stringify(next) !== JSON.stringify(this.kimi);
-      this.kimi = next;
-      return changed;
-    } catch (e) { log.warn('brain', 'kimi sessions unreadable', { data: { error: String(e) } }); return false; }
-  }
-
-  get(): Usage { return composeUsage(this.cost, this.freshest(), Date.now(), this.cursor, this.kimi); }
+  get(): Usage { return composeUsage(this.cost, this.freshest(), Date.now(), this.cursor); }
 
   spend(): Spend {
     const u = this.get();
@@ -256,7 +240,6 @@ export class UsageMonitor {
         }
       }
       this.readCursor();
-      this.readKimi();
       this.o.onUsage(this.get(), this.spend());
     } finally { this.running = false; }
   }

@@ -1,7 +1,7 @@
 // The engine registry (ADR 0046): every engine the app can run a chat on, with the protocol it speaks (its kind: one
 // adapter per kind, sessions.ts), how it starts and what it can do (caps). The app asks an engine's caps, never its
 // name, so a new engine is one entry. Three sources, in order: the built-in Claude Code (stream-json) and Cursor
-// (ACP), whose start is app code; the app's presets (Kimi: an ACP CLI; Anthropic API: the Messages API on the
+// (ACP), whose start is app code; the app's presets (Anthropic API: the Messages API on the
 // user's key, ADR 0052; all off until the user turns them on); the
 // brain's harness/models.json `engines` entries (an ACP CLI or an HTTP endpoint), which may add engines or change a
 // preset (an id the app removed, REMOVED_ENGINES, is left out). Every engine's start definition has a fingerprint: an engine that is not built in starts only while its
@@ -15,7 +15,7 @@ import { ANTHROPIC_API, type EngineCaps, type EngineInfo, type EngineKind, type 
 export interface EngineStart {
   /** ACP: the CLI's name on PATH or an absolute path */
   command?: string;
-  /** ACP: the arguments that start its ACP mode (Kimi ['acp']) */
+  /** ACP: the arguments that start its ACP mode (['acp']) */
   args?: string[];
   /** ACP: the flag that names the model before args (Cursor '--model'); absent = the model only through ACP */
   modelFlag?: string;
@@ -40,7 +40,7 @@ export const ENGINE_ID = /^[a-z][a-z0-9-]{0,30}$/;
 const BUILT_IN = new Set(['claude', 'cursor', 'codex']);
 /** Engines the app no longer runs (ADR 0046: Gemini CLI, 15/10): a brain entry with their id is left out and logged once,
  *  the settings saved for them are dropped on load (brain/config.ts fromSaved). */
-export const REMOVED_ENGINES: ReadonlySet<string> = new Set(['gemini']);
+export const REMOVED_ENGINES: ReadonlySet<string> = new Set(['gemini', 'kimi']);
 
 const CLAUDE_CAPS: EngineCaps = {
   effort: true, liveModel: true, fork: true, warm: true, worktree: true, permissionMode: true,
@@ -64,8 +64,6 @@ const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
   { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: true },
-  // Kimi CLI defaults to mainland-cn when the region is omitted; Second Brain's Kimi login must use the global kimi.ai account.
-  { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login', '--region', 'global'], defaultOn: false },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];
 
@@ -75,7 +73,7 @@ export function fingerprint(e: Pick<EngineDef, 'kind' | 'login'> & EngineStart):
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16);
 }
 
-/** What Settings shows of how an engine starts ("kimi acp", the URL): what the user turns on is what they see. */
+/** What Settings shows of how an engine starts ("agent acp", the URL): what the user turns on is what they see. */
 const runsOf = (e: EngineEntry): string => (e.kind === 'api' ? `${e.baseUrl ?? ''} (${e.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI'})`
   : e.kind === 'claude' ? 'Claude Code (incorporato)'
   : [e.command ?? '', ...(e.args ?? [])].join(' ') + (e.login.length ? ` · accesso: ${[e.command ?? '', ...e.login].join(' ')}` : ''));
@@ -141,15 +139,13 @@ function build(): void {
   const brainIds = new Set(fromBrain.map(e => e.id));
   list = [...APP_ENGINES.filter(e => !brainIds.has(e.id)), ...fromBrain].map(e => {
     const source = brainIds.has(e.id) ? 'brain' : 'app';
-    // Keep a previously enabled built-in Kimi CLI enabled when only its login region changes from the mainland default.
-    const oldKimiLogin = e.id === 'kimi' && source === 'app' && trust.kimi === fingerprint({ ...e, login: ['login'] });
     return {
       ...e,
       caps: CAPS[e.kind],
       source,
       key: e.kind === 'api' ? 'required' : e.keyEnv ? 'optional' : 'none',
       runs: runsOf(e),
-      trusted: BUILT_IN.has(e.id) || trust[e.id] === fingerprint(e) || oldKimiLogin,
+      trusted: BUILT_IN.has(e.id) || trust[e.id] === fingerprint(e),
     };
   });
   for (const fn of listeners) fn();
@@ -157,7 +153,7 @@ function build(): void {
 build();
 
 /** The brain's valid `engines` entries (brain/engines.ts reads models.json and leaves the invalid ones out). */
-export function setBrainEngines(entries: EngineEntry[]): void { fromBrain = entries; build(); }
+export function setBrainEngines(entries: EngineEntry[]): void { fromBrain = entries.filter(e => !REMOVED_ENGINES.has(e.id)); build(); }
 
 /** The fingerprints the user turned on (trust.ts). */
 export function setTrust(t: Readonly<Record<string, string>>): void { trust = t; build(); }
@@ -194,7 +190,7 @@ export function priceEnginesOf(e: Pick<EngineDef, 'id' | 'kind' | 'protocol'>): 
 export const engineLabel = (id: Harness): string => engineOf(id)?.label ?? id;
 
 /** The engines as the renderer sees them (of the start, only what Settings shows). */
-export const engineInfos = (): EngineInfo[] => list.map(({ id, label, name, kind, caps, source, key, runs, trusted }) => ({ id, label, name, kind, caps, source, key, runs, trusted }));
+export const engineInfos = (): EngineInfo[] => list.filter(e => ['claude', 'codex', 'cursor'].includes(e.id)).map(({ id, label, name, kind, caps, source, key, runs, trusted }) => ({ id, label, name, kind, caps, source, key, runs, trusted }));
 
 /** Per engine, the command override in the environment: SB_<ID>_PATH (SB_CLAUDE_PATH, SB_CURSOR_PATH: the tests'
  *  fakes; a dash in the id becomes an underscore). */
