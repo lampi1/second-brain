@@ -1,6 +1,6 @@
-// Typed local catalog/setup bridge. Agent drafts go to a provider only through an explicit builder action.
+// Typed local catalog/setup bridge: the agent catalog, its manual edits and the first-run setup state.
 // Profile edits affect future conversations; authoritative owner/model snapshots of running agents stay in main.
-import type { AgentCatalog, AgentDraft, AgentDraftRequest, SetupDraft, SetupState } from '@shared/agents';
+import type { AgentCatalog, AgentDraft, SetupDraft, SetupState } from '@shared/agents';
 import { useEffect } from 'react';
 import { sb } from '../sb';
 import { createStore } from './createStore';
@@ -32,7 +32,6 @@ export async function archiveAgent(id: string) { const saved = await sb.invoke('
 export async function restoreAgent(id: string) { const saved = await sb.invoke('agents:restore', { id }); await refreshAgents(); return saved; }
 export const agentHistory = (id: string) => sb.invoke('agents:history', { id });
 export async function restoreAgentVersion(id: string, version: number) { const saved = await sb.invoke('agents:restoreVersion', { id, version }); await refreshAgents(); return saved; }
-export const draftAgent = (request: AgentDraftRequest) => sb.invoke('agents:draft', request);
 let saving: Promise<unknown> = Promise.resolve();
 export function saveSetup(preferences: SetupDraft, status: 'draft' | 'completed' | 'skipped'): Promise<SetupState> {
   const snapshot = structuredClone(preferences);

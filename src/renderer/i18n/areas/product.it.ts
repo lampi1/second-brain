@@ -35,5 +35,5 @@ export const productIt={
  'product.coordinated':(p:{count:number})=>`Agenti nello spazio di lavoro (${p.count})`,'product.backRegia':(p:{name:string})=>`Torna a ${p.name}`,
  'product.restoreLayout':'Torna alla colonna','product.showBrowsers':'Mostra browser','product.hideBrowsers':'Nascondi browser','product.noArea':'Senza progetto',
  'product.advanced':'Dettagli avanzati',
- 'product.agents':'I tuoi agenti','product.agentsPurpose':'Un ruolo chiaro per ogni lavoro.','product.newAgent':'Crea agente','product.setup':'Configura il tuo lavoro',
+ 'product.agents':'I tuoi agenti','product.agentsPurpose':'Un ruolo chiaro per ogni lavoro.','product.setup':'Configura il tuo lavoro',
 };

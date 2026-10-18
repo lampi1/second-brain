@@ -205,7 +205,6 @@ app.whenReady().then(async () => {
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
-    'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
     'setup:save': a => s.setup.save(a.preferences, a.status),
     'profile:get': () => profile.get(),

@@ -4,6 +4,7 @@ import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
 import { componentsEn } from './areas/components.en';
 import { catalogEn } from './areas/catalog.en';
+import { agentCreateEn } from './areas/agent-create.en';
 import { connectorsEn } from './areas/connectors.en';
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
@@ -30,6 +31,7 @@ export const en: Dict = {
   ...componentsEn,
   ...agentPackEn,
   ...catalogEn,
+  ...agentCreateEn,
   ...costsEn,
   ...connectorsEn,
   ...reviewedContextEn,

@@ -1,4 +1,5 @@
-// Main-only UI acceptance for local catalog/interview; no provider or image-generation requests.
+// Main-only UI acceptance for the local catalog editor and the first-run interview; no provider or image-generation
+// requests. New agents come from "Crea agente" (agent-create.spec.ts): here an existing agent or its duplicate is edited.
 import { expect,test } from '@playwright/test';
 import { launchDemo,openAgents, shot } from './helpers';
 test('offline interview is resumable and agent drafts survive page navigation',async()=>{
@@ -16,8 +17,7 @@ test('offline interview is resumable and agent drafts survive page navigation',a
     await expect(page.getByTestId('setup-goals')).toHaveValue('Preparare riunioni e documenti');
     await shot(page,'setup-offline-resume');
     await setup.getByRole('button',{name:'Salva e riprendi più tardi',exact:true}).click();
-    await studio.getByRole('button',{name:'Crea agente',exact:true}).click();
-    await expect(page.getByTestId('agent-name')).toBeFocused();
+    await expect(page.getByTestId('agent-name')).toHaveValue('Generale');
     await page.getByTestId('agent-name').fill('Assistente offerte');
     await page.getByTestId('nav-devops').click();
     await openAgents(page);
@@ -31,7 +31,8 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
   try {
     await openAgents(first.page);
     const studio=first.page.getByTestId('agent-studio');
-    await studio.getByRole('button',{name:'Crea agente',exact:true}).click();
+    await studio.locator('article').filter({has:first.page.getByRole('heading',{name:'Generale',exact:true})}).getByRole('button',{name:'Duplica',exact:true}).click();
+    await expect(first.page.getByTestId('agent-name')).toHaveValue('Generale (copia)');
     await first.page.getByTestId('agent-name').fill('Manifest test');
     await first.page.getByTestId('agent-purpose').fill('Check persisted delegation criteria');
     await first.page.getByTestId('agent-manifest-editor').locator('summary').click();
@@ -41,7 +42,7 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
     await first.page.getByTestId('agent-manifest-accessScopes').fill('Authorized sources only');
     await first.page.getByTestId('agent-manifest-successCriteria').fill('Checkable references\nUnknowns explicit');
     await first.page.getByTestId('nav-devops').click();
-    await openAgents(first.page);
+    await openAgents(first.page,'Generale (copia)');
     await expect(first.page.getByTestId('agent-manifest-whenToUse')).toHaveValue('<script>untrusted declaration</script>');
     await first.page.getByTestId('agent-save').click();
     const card=studio.locator('article').filter({has: first.page.getByRole('heading',{name:'Manifest test',exact:true})});

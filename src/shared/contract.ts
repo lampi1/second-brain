@@ -10,7 +10,7 @@ import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
-import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -1178,7 +1178,6 @@ export interface InvokeMap {
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
-  'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   /** the owner's profile in the brain's me.md (src/main/brain/profile.ts) */
@@ -1442,7 +1441,7 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:classify', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',

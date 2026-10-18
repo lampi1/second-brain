@@ -36,5 +36,5 @@ export const productEn:typeof productIt={
  'product.coordinated':p=>`Agents in the workspace (${p.count})`,'product.backRegia':p=>`Back to ${p.name}`,
  'product.restoreLayout':'Back to the column','product.showBrowsers':'Show browsers','product.hideBrowsers':'Hide browsers','product.noArea':'No project',
  'product.advanced':'Advanced details',
- 'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.newAgent':'Create agent','product.setup':'Set up your work',
+ 'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.setup':'Set up your work',
 };

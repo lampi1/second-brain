@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest';
 import type { AgentProfile, AgentRun } from '../../src/shared/agents';
 import { runMetrics } from '../../src/main/agents/run-metrics';
 import { AgentCatalogCard } from '../../src/renderer/components/AgentCatalogCard';
-import { agentCreationBrief, selectCatalog } from '../../src/renderer/lib/agent-catalog';
+import { selectCatalog } from '../../src/renderer/lib/agent-catalog';
 import { setLang } from '../../src/renderer/i18n';
 
 const profile = (id: string, role: string, engine = 'claude'): AgentProfile => ({
@@ -49,11 +49,4 @@ it('renders verified successes and cost sample coverage without using self-repor
   expect(html.match(/1 of 2 runs/g)).toHaveLength(2);
   expect(html).toContain('On probation');
   expect(html).toContain('0.25');
-});
-it('authoring brief asks for a profile and explicit Studio saving, preserving user data as JSON', () => {
-  const brief = agentCreationBrief(' Review changes ', 'Repo "A"', 'codex');
-  expect(brief).toContain(JSON.stringify({ task: 'Review changes', area: 'Repo "A"', preferredEngine: 'codex' }));
-  expect(brief).toContain('agent_catalog');
-  expect(brief).toContain('Do not start implementation work');
-  expect(brief).toContain('do not claim it is saved until confirmed');
 });

@@ -146,13 +146,21 @@ export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void>
   await page.keyboard.press(GO_KEY[id]);
 }
 
-/** Opens the agent studio with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
- *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. */
-export async function openAgents(page: Page): Promise<void> {
+/** Opens the agents overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
+ *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. "Crea agente" lives here (AgentCreateDialog). */
+export async function openAgentOverview(page: Page): Promise<void> {
   await page.getByTestId('nav-home').click();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press('a');
+  await expect(page.getByTestId('agent-overview')).toBeVisible();
+}
+
+/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card;
+ *  Generale is in every catalog. */
+export async function openAgents(page: Page, agent = 'Generale'): Promise<void> {
+  await openAgentOverview(page);
+  await page.getByTestId('agent-overview').getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 

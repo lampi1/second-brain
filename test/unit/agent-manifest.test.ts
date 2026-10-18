@@ -1,5 +1,5 @@
 // Manifest persistence, compatibility and untrusted discovery boundaries; synthetic profiles only, no models invoked.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -100,10 +100,7 @@ describe('agent manifest', () => {
     const exposed = discoverAgents(source, { id: saved.id }); exposed.profiles[0]!.manifest!.whenToUse = 'mutated';
     expect(service.list().profiles.find(p => p.id === saved.id)?.manifest?.whenToUse).toBe(manifest.whenToUse);
   });
-  it('keeps manifests in guide drafts and validates restart recovery', async () => {
-    const complete = vi.fn(async () => ({ ok: true as const, text: JSON.stringify(draft) }));
-    const service = new AgentCatalogService({ userData: tmp(), models, builder: () => ({ available: true, engine: 'api', models: ['guide'], reason: null }), complete });
-    expect(await service.draft({ text: 'Improve', engine: 'api', model: 'guide', base: { ...draft, manifest } })).toMatchObject({ ok: true, draft: { manifest } });
+  it('keeps manifests in editor drafts across restart recovery', () => {
     const copy = { version: 1, active: '__new', entries: [['__new', { draft: { ...draft, manifest }, message: '', history: [], suggestion: null }]] };
     expect(validateAgentDraftCopy(copy).entries[0]?.[1].draft.manifest).toEqual(manifest);
     copy.entries[0]![1] = { ...copy.entries[0]![1] as object, draft: { ...draft, manifest: { declaredTools: 'invalid' } } } as never;

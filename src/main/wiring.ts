@@ -266,14 +266,8 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
   });
 }
 
-/** Shared by real and demo wiring; demo never calls a provider for the builder. */
-export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, demo = false, onCustomized?: () => void): AgentCatalogService {
-  const builder = () => {
-    const e = anthropicApi();
-    const models = e ? withApiModels(brain.modelsSeen())[e.id]?.ids.map(m => m.id).filter(m => /^claude-[a-z0-9.-]+$/.test(m)) ?? [] : [];
-    const available = !demo && !!e && engineOn(brain.settings(), e.id) && e.trusted && engines.hasKey(e.id) && models.length > 0;
-    return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
-  };
+/** Shared by real and demo wiring. */
+export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     presetEvent: detail => brain.publish([{ kind: 'proposal', title: 'Preset Agenti aggiornati', detail }]),
     approvedRoots: () => [brain.info().brainRoot, brain.settings().appRepo, ...(brain.settings().codexAutonomyRoots ?? [])].filter((p): p is string => typeof p === 'string' && !!p),
@@ -296,13 +290,8 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
         modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
-    }, imageSize: bytes => { const image = nativeImage.createFromBuffer(bytes); return image.isEmpty() ? null : image.getSize(); }, builder,
-    complete: async req => {
-      const info = builder();
-      if (!info.available || req.engine !== info.engine || !info.models.includes(req.model)) return { ok: false, reason: info.reason ?? 'Modello non disponibile.' };
-      const result = await engines.text.complete({ purpose: 'agent-builder', model: req.model, system: req.system, prompt: req.prompt, maxTokens: 5000 });
-      return result.ok ? { ok: true, text: result.text } : { ok: false, reason: result.unavailable ? result.reason : result.error };
-    }, emit: catalog => ctx.emitter.emit('agents:changed', catalog),
+    }, imageSize: bytes => { const image = nativeImage.createFromBuffer(bytes); return image.isEmpty() ? null : image.getSize(); },
+    emit: catalog => ctx.emitter.emit('agents:changed', catalog),
   });
 }
 
@@ -349,7 +338,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
-  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), false, () => progressService.award('first-agent'));
+  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), () => progressService.award('first-agent'));
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
   // Tests never run installed vendors; their fake status is requested explicitly.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });

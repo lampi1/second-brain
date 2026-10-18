@@ -9,7 +9,7 @@ export const catalogIt = {
   'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',
   'contextPulse.save': 'Salva nelle idee', 'contextPulse.saved': 'Salvata nelle idee', 'contextPulse.act': 'Fallo', 'contextPulse.dismiss': 'Non mi serve',
   'contextPulse.sources': 'Fonti', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Salvataggio nelle idee non disponibile.',
-  'catalog.title': 'Agenti', 'catalog.create': 'Crea agente', 'catalog.studio': 'Apri Studio agenti',
+  'catalog.title': 'Agenti', 'catalog.create': 'Crea agente',
   'catalog.intro': 'Gli agenti sono assistenti riutilizzabili con un ruolo, istruzioni e un motore: parti da un preset o creane uno con l’Orchestratore.',
   'catalog.subtitle': 'La tua squadra, le sue specialità e i risultati osservati.',
   'catalog.role': 'Ruolo', 'catalog.engine': 'Motore', 'catalog.all': 'Tutti', 'catalog.sort': 'Ordina per', 'catalog.name': 'Nome',
@@ -19,9 +19,5 @@ export const catalogIt = {
   'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} esecuzioni`,
   'catalog.note': 'Statistiche sulle versioni note. I successi contano solo esiti verificati; l’ultimo avvio riguarda le chat disponibili. Dati mancanti non significano zero.',
   'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
-  'catalog.task': 'Cosa deve fare?', 'catalog.area': 'Su quale repository o area?',
-  'catalog.guide': 'Apri Orchestratore', 'catalog.guideNote': 'L’Orchestratore ti aiuta a definire il profilo. Salvalo poi nello Studio agenti: apparirà qui automaticamente.',
-  'catalog.cancel': 'Annulla', 'catalog.createError': 'Impossibile aprire l’Orchestratore. Riprova.',
-  'catalog.noRoot': 'Scegli la cartella del brain nelle Impostazioni prima di aprire l’Orchestratore.',
   'catalog.preset': 'Preset', 'catalog.custom': 'Personalizzato',
 };
