@@ -37,8 +37,8 @@ ADR 41 (Fatto and appRepo), ADR 56 (timer registry), ADR 57 (IT/EN UI, app shell
 
 ## Integrator: shared-file change
 
-`src/main/wiring.ts` is integrator-only (AGENTS.md). The integrator applied the change in this PR's integration
-commit, after the last import, so the auto-close timer joins the registry:
+`src/main/wiring.ts` is integrator-only (AGENTS.md). The integrator applied the change in its own commit, after the
+last import, so the auto-close timer joins the registry:
 
 ```diff
  import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
@@ -62,6 +62,11 @@ commit, after the last import, so the auto-close timer joins the registry:
   file-diff, compare/headless and correction-catch-hook. Re-run alone, all of these pass except `file-diff.test.ts`,
   which still times out at 15 s on this machine (slow git spawns). The branch does not touch file-diff, and it passed
   in the earlier full run.
+- Integrator, after the rebase on main ad1c983 and the wiring.ts commit: `npx tsc --noEmit` passed; `npm run
+  check:branch` (untracked `tmp/` moved out) passed typecheck and lint, unit 1297 passed, 1 failed:
+  `compare/headless` "a run past its time is killed" (the fake's log had no process yet under load). It passes alone
+  (21/21) and failed the same way on another branch that does not touch compare/. The branch changes only the timer
+  registry lines of `compare/queue.ts`. Known timeouts to check in the final gate on main: this one and `file-diff`.
 - Guard on the branch commits (`tools/guard/scan.mjs --commits`): clean.
 - E2E was not run, and the app was not launched (the brief forbids it). The English rendering of the converted labels
   is covered by unit assertions only.
