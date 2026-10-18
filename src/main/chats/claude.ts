@@ -252,7 +252,12 @@ export class ClaudeSession implements HarnessSession {
     if (mode) a.push('--permission-mode', mode);
     // a read-only run: only the read tools exist (--tools is variadic: a flag follows it), no MCP server, no transcript
     // (it never shows up among the external chats)
-    if (op.readOnly) a.push('--tools', READ_ONLY_TOOLS.join(','), '--strict-mcp-config', '--no-session-persistence');
+    if (op.readOnly) {
+      const tools = op.toolPolicy ? READ_ONLY_TOOLS.filter(t => claudeTools(op.toolPolicy!).includes(t)) : READ_ONLY_TOOLS;
+      if (op.toolPolicy) a.push(`--tools=${tools.join(',')}`);
+      else a.push('--tools', tools.join(','));
+      a.push('--strict-mcp-config', '--no-session-persistence');
+    }
     // an agent's tool policy (A2): only its built-in tools exist; without 'mcp' only the app's own servers load
     const agentMcp = !op.readOnly && op.toolPolicy ? claudeMcp(op.toolPolicy) : null;
     if (!op.readOnly && op.toolPolicy) a.push(`--tools=${claudeTools(op.toolPolicy).join(',')}`); // `=`: the variadic flag takes only this list
