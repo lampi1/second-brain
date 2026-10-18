@@ -10,7 +10,7 @@ The Codex account now includes a searchable repository-autonomy section. A nativ
 
 ## Relation to #35 (engine-parity, merged)
 
-Rebased on `a120c8a` (main with #35). #35's engine changes are kept as merged: Codex built-in and on by default, `checkLogin: true` and the readiness ranking in `ai-first/port.ts`. This PR only removes the Kimi lines next to them. Two trust tests used Codex as the example of an untrusted preset; since #35 made Codex built-in they now use the remaining app preset, the Anthropic API (same assertions).
+Rebased on `a120c8a` (main with #35). #35's engine changes are kept as merged: Codex built-in and on by default, `checkLogin: true` and the readiness ranking in `ai-first/port.ts`. This PR only removes the Kimi lines next to them. Tests that used Codex as the example of an off/untrusted preset (`engines/trust`, `compare/headless`) now use the remaining app preset, the Anthropic API, with the same assertions; `brain/config` now expects Codex on by default, as #35 ships it.
 
 ## Integrator wiring (shared files, AGENTS.md rule 11)
 
