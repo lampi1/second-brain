@@ -46,6 +46,12 @@ it('keeps selected names readable ahead of overlapping names after overview scal
   const boxes=candidates.map(([id,x,priority])=>{const sprite=new Sprite();sprite.position.x=x;sprite.scale.set(180,23,0);return{id,priority,...readableMapLabel(sprite,camera,1500,1000,23,14,22)!};});
   expect([...mapLabels(boxes,1500,1000)]).toEqual(['selected','separate']);
 });
+it('gives the same label size for the same camera whatever the path, even a step under 0.1%',()=>{
+  const camera=new PerspectiveCamera(40,1.5,0.1,10000),project=(sprite:Sprite,z:number)=>{camera.position.z=z;camera.updateMatrixWorld();return readableMapLabel(sprite,camera,1500,1000,23,14,22)!;};
+  const fresh=new Sprite();fresh.scale.set(180,23,0);const direct=project(fresh,4002);
+  const moved=new Sprite();moved.scale.set(180,23,0);project(moved,4000);project(moved,4006);const back=project(moved,4002);
+  expect(back.height).toBe(direct.height);expect(moved.scale.y).toBe(fresh.scale.y);expect(moved.scale.x).toBeCloseTo(fresh.scale.x,9);
+});
 it('restores the natural initial projection after zooming nearer and resetting the camera',()=>{
   const camera=new PerspectiveCamera(40,1.5,0.1,10000),sprite=new Sprite();sprite.scale.set(180,23,0);
   const project=()=>{camera.updateMatrixWorld();return readableMapLabel(sprite,camera,1500,1000,23,14,22)!;};
