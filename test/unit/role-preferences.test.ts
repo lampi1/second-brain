@@ -3,18 +3,18 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { rolePreview, savedRole } from '../../src/renderer/lib/role-preferences';
 import { initialRolePresets } from '../../src/shared/role-preset-catalog';
 import { loadPrefs, saveRolePreference, ui } from '../../src/renderer/store/ui';
-const refs = { agentIds: ['general', 'research', 'writing', 'analysis', 'planning', 'development'].map(id => `default-${id}`), pageIds: [...new Set(initialRolePresets().flatMap(p => p.pageIds))] };
+const refs = { agentIds: ['general', 'researcher', 'writer', 'reviewer', 'day-planner', 'implementer'].map(id => `default-${id}`), pageIds: [...new Set(initialRolePresets().flatMap(p => p.pageIds))] };
 afterEach(() => { vi.unstubAllGlobals(); ui.set(s => ({ ...s, prefs: loadPrefs(null, 0) })); });
 it('previews first choice, keeps overrides across switches and does not mutate the saved selection', () => {
   const dev = rolePreview(undefined, 'dev', refs).next;
-  dev.overrides.addAgentIds = ['default-writing'];
+  dev.overrides.addAgentIds = ['default-writer'];
   const before = structuredClone(dev), next = rolePreview(dev, 'qa', refs);
-  expect(dev).toEqual(before); expect(next.after.agentIds).toContain('default-writing');
+  expect(dev).toEqual(before); expect(next.after.agentIds).toContain('default-writer');
   expect(savedRole(next.previous, refs).selection).toEqual(dev);
 });
 it('migrates retired explorer references without losing other role customizations or changing the saved object',()=>{
- const raw={schemaVersion:1,presetId:'dev',presetRevision:1,overrides:{addPageIds:['esplora','costi'],removePageIds:['esplora'],addAgentIds:['default-writing']}};
- const before=JSON.stringify(raw),resolved=savedRole(raw,refs).resolved;expect(resolved.pageIds).not.toContain('esplora');expect(resolved.pageIds).toContain('costi');expect(resolved.agentIds).toContain('default-writing');expect(JSON.stringify(raw)).toBe(before);
+ const raw={schemaVersion:1,presetId:'dev',presetRevision:1,overrides:{addPageIds:['esplora','costi'],removePageIds:['esplora'],addAgentIds:['default-writer']}};
+ const before=JSON.stringify(raw),resolved=savedRole(raw,refs).resolved;expect(resolved.pageIds).not.toContain('esplora');expect(resolved.pageIds).toContain('costi');expect(resolved.agentIds).toContain('default-writer');expect(JSON.stringify(raw)).toBe(before);
 });
 it('preserves malformed preferences for explicit recovery and rejects missing references/revisions', () => {
   const bad = { presetId: 'unknown' };
@@ -22,7 +22,7 @@ it('preserves malformed preferences for explicit recovery and rejects missing re
   expect(() => rolePreview(bad, 'dev', refs)).toThrow();
   const dev = rolePreview(undefined, 'dev', refs).next;
   expect(() => savedRole({ ...dev, presetRevision: 999 }, refs)).toThrow();
-  expect(() => rolePreview(undefined, 'qa', { ...refs, agentIds: ['default-development'] })).toThrow();
+  expect(() => rolePreview(undefined, 'qa', { ...refs, agentIds: ['default-implementer'] })).toThrow();
 });
 it('commits durable preferences preserving other fields, rejects stale apply and restores the prior choice', () => {
   const setItem = vi.fn(); vi.stubGlobal('localStorage', { setItem });

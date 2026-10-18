@@ -60,6 +60,8 @@ export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updat
 export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling'] as const;
 export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling'>;
 export interface AgentProfile extends AgentDraft {
+  /** Canonical behaviour digest at the last packaged install/update; absent on legacy/user definitions. */
+  presetHash?: string;
   /** Background presets are visible/editable, but never offered as task delegates. */
   routable?: boolean;
   id: string; createdAt: number; updatedAt: number;
@@ -195,6 +197,8 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
+  /** Read-only candidates. Applying one uses the normal explicit user save (or fork-on-edit). */
+  presetUpdates?: { agentId: string; presetRevision: number; draft: AgentDraft; differences: { field: string; before: unknown; after: unknown }[] }[];
   /** Active definitions only: the launchable ones. */
   profiles: AgentProfile[];
   archived: AgentProfile[];

@@ -81,6 +81,7 @@ export function AgentCatalogPage() {
     <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map(p => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
+        updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)}
         metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id })} />;
     })}</div>
     {catalog && !selectCatalog(profiles, role, engine, sort).length && <p role="status">{t('catalog.empty')}</p>}

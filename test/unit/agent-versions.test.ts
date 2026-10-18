@@ -40,10 +40,11 @@ describe('Agent definitions v2', () => {
     expect(byId['default-development']).toMatchObject({ origin: { kind: 'preset', presetId: 'legacy-development' }, category: 'development', userLocked: true, instructions: 'My own workflow' });
     expect(byId['agent-mine']).toMatchObject({ origin: { kind: 'user' }, category: 'other', role: 'Il mio scopo', userLocked: true });
     const history = json(dir, 'agent-history.json') as { entries: AgentVersion[] };
-    expect(history.entries.map(e => [e.agentId, e.version, e.parentVersion, e.author, e.state])).toEqual([
+    expect(history.entries.filter(e => e.author === 'migration').map(e => [e.agentId, e.version, e.parentVersion, e.author, e.state])).toEqual([
       ['default-general', 1, null, 'migration', 'active'], ['default-development', 1, null, 'migration', 'active'], ['agent-mine', 1, null, 'migration', 'active']]);
     const after = fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8');
-    expect(service(dir).list().profiles).toHaveLength(3);
+    expect(history.entries.filter(e => e.author === 'preset')).toHaveLength(10);
+    expect(service(dir).list().profiles).toHaveLength(13);
     expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).toBe(after);
     // A rolled-back build reads agents.json: it must still be the v1 catalog it wrote.
     expect(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')).toBe(original);

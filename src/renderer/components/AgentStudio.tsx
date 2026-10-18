@@ -48,6 +48,7 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
   const change = (patch: Partial<AgentDraft>) => { revision.current++; setUploading(false); setEditing(p => p ? { ...p, ...patch } : p); setSuggestion(null); };
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
   const avatarDuplicates = editing ? duplicateAgentAvatars(editing.avatar, catalog?.profiles ?? [], id) : [];
+  const presetUpdate = catalog?.presetUpdates?.find(update => update.agentId === id);
   const knownModel = !!choice && (editing?.model === null ? choice.defaultModel : choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   let validManifest = true;
   try { checkedManifest(editing?.manifest); } catch { validManifest = false; }
@@ -101,6 +102,11 @@ export function AgentStudio({ initialProfile }: { initialProfile?: AgentProfile 
       {catalog?.profiles.length === 0 && <p>{t('studio.empty')}</p>}
     </div>{editing && catalog && <form className="agent-editor" onSubmit={e => { e.preventDefault(); void save(); }} aria-label={id ? t('studio.editAgent') : t('studio.createAgent')}>
       <fieldset disabled={busy} className="agent-editor-fields"><legend>{id ? t('studio.editAgent') : t('studio.newAgent')}</legend><p>{t('studio.newSessions')}</p>
+      {presetUpdate && <details data-testid="preset-update"><summary>Aggiornamento preset disponibile</summary>
+        <p>Confronta il preset con le tue personalizzazioni. La bozza viene salvata solo con Salva.</p>
+        {presetUpdate.differences.map(diff => <section key={diff.field}><h4>{diff.field}</h4><p>Attuale</p><pre>{JSON.stringify(diff.before, null, 2)}</pre><p>Preset</p><pre>{JSON.stringify(diff.after, null, 2)}</pre></section>)}
+        <button type="button" className="btn btn-ghost" onClick={() => change({ ...presetUpdate.draft, name: editing.name, purpose: editing.purpose, avatar: editing.avatar })}>Usa aggiornamento nella bozza</button>
+      </details>}
       <label className="field"><span>{t('studio.name')}</span><input ref={nameInput} maxLength={80} value={editing.name} onChange={e => change({ name: e.target.value })} required data-testid="agent-name" /></label>
       <label className="field"><span>{t('studio.purpose')}</span><textarea maxLength={400} rows={2} value={editing.purpose} onChange={e => change({ purpose: e.target.value })} required data-testid="agent-purpose" /></label>
       <label className="field"><span>{t('studio.category')}</span><Select value={editing.category ?? 'other'} onChange={e => {

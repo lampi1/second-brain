@@ -261,6 +261,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     return { available, engine: e?.id ?? null, models, reason: available ? null : 'La guida AI richiede un motore Anthropic API attivo, un modello noto e una chiave configurata. Puoi creare l’Agente manualmente, anche offline.' };
   };
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    presetEvent: detail => brain.publish([{ kind: 'proposal', title: 'Preset Agenti aggiornati', detail }]),
     pulsePreset: () => {
       const choices = engineInfos();
       let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
