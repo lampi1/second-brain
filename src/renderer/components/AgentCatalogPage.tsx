@@ -1,6 +1,6 @@
 // Dedicated agent overview and guided Orchestrator entry; profile editing stays in the existing Studio.
 import { useEffect, useRef, useState } from 'react';
-import type { AgentMetrics } from '@shared/agents';
+import { inProbation, type AgentMetrics } from '@shared/agents';
 import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
 import { AgentLifecyclePanel } from './AgentLifecyclePanel';
 import { lifecycleClient } from '../lib/agent-lifecycle';
@@ -84,7 +84,17 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
     </div>
     {metricsError && <p role="alert">{t('catalog.metricsError')}</p>}
     {lifecycleApi && <AgentLifecyclePanel api={lifecycleApi} onReview={p => go({ page: 'agenti', arg: p.agentIds.find(id => profiles.some(a => a.id === id)) ?? 'studio' })} />}
-    <p className="catalog-note">{t('catalog.note')}</p>
+    {(() => {
+      const shown = selectCatalog(profiles, role, engine, sort);
+      const working = shown.filter(p => !inProbation(p) && (metrics?.find(m => m.agentId === p.id)?.open ?? 0) > 0).length;
+      const trial = shown.filter(p => inProbation(p)).length;
+      return <div className="catalog-summary" data-testid="catalog-summary">
+        <p className="catalog-count"><strong>{t('agentsGrid.count', { n: shown.length })}</strong>
+          {working > 0 && <span data-state="working"><i aria-hidden="true" />{t('agentsGrid.workingCount', { n: working })}</span>}
+          {trial > 0 && <span data-state="probation"><i aria-hidden="true" />{t('agentsGrid.probationCount', { n: trial })}</span>}</p>
+        <p className="catalog-note">{t('catalog.note')}</p>
+      </div>;
+    })()}
     <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)} index={index} run={<CatalogRun profile={p} available={!catalog?.problem && profileCanStart(p, catalog?.models.find(m => m.engine === p.engine))} />} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
