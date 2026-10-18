@@ -112,7 +112,8 @@ describe('Agent definitions v2', () => {
     while (c.list().profiles.length < MAX_ACTIVE_AGENTS) c.save(draft());
     expect(() => c.save(draft())).toThrow(/64 Agenti attivi/);
     expect(() => c.restore(p.id)).toThrow(/64 Agenti attivi/);
-    c.archive(c.list().profiles[0]!.id);
+    // Generale (the seed default-general) can never be archived: free a slot with another agent
+    c.archive(c.list().profiles.find(x => x.id !== 'default-general')!.id);
     expect(c.restore(p.id)).toMatchObject({ status: 'active' });
     expect(c.restore(p.id).archivedAt).toBeUndefined();
     expect(c.resolve({ harness: 'claude', cwd: '/unused', agentId: p.id }).owner).toMatchObject({ id: p.id, version: 1 });

@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import type { ChatSummary, FeedEvent, Priority } from '../../shared/contract';
+import type { ChatSummary, FeedAction, FeedEvent, Priority } from '../../shared/contract';
 import { log, errText } from '../log';
 import { runNode, type NodeRunner } from './node';
 
@@ -40,10 +40,17 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'brain-sync': { label: 'Sincronizzazione del cervello ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
   devops: { label: 'DevOps', priority: 'normal' },   // devops/service.ts: news on my work items, PRs and the tickets I follow
   'devops-alert': { label: 'DevOps per te', priority: 'normal' },  // devops/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
+  'agent-kept': { label: 'Agente tenuto', priority: 'quiet' },      // chats/manager.ts: a probation agent passed (AGENTS-DESIGN §4.7)
+  'agent-retired': { label: 'Agente ritirato', priority: 'normal' }, // a probation agent was archived; the card offers Ripristina
 };
 
 /** An event before stamping. `priority` overrides the kind's default (a budget alert at 100 % is urgent). */
-export interface RawEvent { kind: string; title: string; detail?: string; who?: string; chatId?: string; file?: string; update?: boolean; away?: boolean; priority?: Priority }
+export interface RawEvent { kind: string; title: string; detail?: string; who?: string; chatId?: string; file?: string; update?: boolean; away?: boolean; priority?: Priority; action?: FeedAction }
+/** The only actions a card may carry, checked again here: an event from a script never names anything else. */
+export function feedAction(v: unknown): FeedAction | undefined {
+  const a = v as Partial<FeedAction> | null;
+  return a && typeof a === 'object' && a.kind === 'agent-restore' && typeof a.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId) ? { kind: 'agent-restore', agentId: a.agentId } : undefined;
+}
 
 export function stamp(e: RawEvent, at = Date.now()): FeedEvent {
   const k = KINDS[e.kind] ?? { label: e.kind, priority: 'quiet' as Priority };
@@ -52,6 +59,8 @@ export function stamp(e: RawEvent, at = Date.now()): FeedEvent {
   if (e.chatId) out.chatId = e.chatId;
   if (e.file) out.file = e.file;
   if (e.away) out.away = true;
+  const action = feedAction(e.action);
+  if (action) out.action = action;
   return out;
 }
 
