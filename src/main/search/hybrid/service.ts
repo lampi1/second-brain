@@ -2,7 +2,7 @@
 // in userData/search, keeps it in sync with the brain folder (at start, when the folder changes, and a few seconds after
 // a file changes: the brain watcher's onFile) and offers one API to the rest of the app: query (/api/search, Ctrl+K, the
 // agents' brain_search tool), plus the building blocks of the agent classifier (ui-agents, SPEC 23 a): embed, cosine,
-// topK. The model is downloaded once in the background (never blocking the start; progress and retry in the UI); until
+// topK; and the past errors similar to a prompt (recall: SPEC 23 c/d, served to the brain's hook by recall.ts). The model is downloaded once in the background (never blocking the start; progress and retry in the UI); until
 // then, or if it fails, results come from BM25 only. A dead worker is restarted on the next call (not within 10 s of
 // the last crash: no restart loop), a hung one is terminated when a call times out. Until the brain is indexed, query
 // throws, so every caller falls back to its old search. Used by main/index.ts.
@@ -11,7 +11,8 @@ import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errText, log } from '../../log';
 import { cosine, type Hit } from './engine';
-import { THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
+import { errorEntries, THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
+import { RECALL_K, recallIndex, similarErrors, type Recall, type RecallIndex } from './recall';
 import type { HybridStatus, WorkerReq } from './protocol';
 
 export interface HybridDeps {
@@ -41,6 +42,8 @@ export class HybridSearch {
   private syncedRoot: string | null = null;
   private textVecs = new Map<string, Float32Array>();
   private themeCache = new Map<ThemeKind, { key: string; themes: Themes }>();
+  private errorVecs: { key: string; index: RecallIndex } | null = null;
+  private warming: Promise<void> | null = null;
   private restartAfter = 0;
 
   constructor(private deps: HybridDeps) {}
@@ -132,6 +135,34 @@ export class HybridSearch {
     const t = await themesOf(kind, rows.map(r => ({ ...r, at: 0 })), today, { embed: texts => this.embedCached(texts).catch(e => { fellBack = true; throw e; }) });
     if (!fellBack) this.themeCache.set(kind, { key, themes: t }); // a fallback is retried on the next poll
     return t;
+  }
+
+  /** The past errors most similar to `text`. Never waits for a sync or for the errors' vectors (the brain's hook asks
+   *  on every prompt with a short timeout): until they exist it answers ready:false and builds them in the background;
+   *  after a change of ai-errors.md it answers from the previous vectors while the new lines are embedded. */
+  async recall(text: string, k = RECALL_K): Promise<Recall> {
+    const notReady: Recall = { ready: false, errors: [] };
+    if (this.deps.brainRoot() !== this.syncedRoot) { this.errorVecs = null; void this.sync(); return notReady; }
+    if (this.last.model.state !== 'ready') return notReady;
+    const rows = await this.vectors(`brain:${THEME_FILES.errors}`);
+    const key = rowsKey(this.syncedRoot, rows);
+    if (this.errorVecs?.key !== key) this.warmErrors(rows, key);
+    const kept = this.errorVecs?.key.startsWith(`${this.syncedRoot}|`) ? this.errorVecs : null; // never another brain's
+    if (!kept) return notReady;
+    const [q] = (await this.embed([text], 'query')) ?? [];
+    return q ? { ready: true, errors: similarErrors(q, kept.index, k) } : notReady;
+  }
+
+  private warmErrors(rows: { id: number; doc: string; line: number; text: string; v: Float32Array }[], key: string): void {
+    if (this.warming) return;
+    const entries = errorEntries(rows.map(r => ({ ...r, at: 0 })));
+    this.warming = this.embedCached(entries.map(e => e.text))
+      .then(vs => {
+        // the brain folder may have changed meanwhile: its vectors are built on the next prompt
+        if (key.startsWith(`${this.syncedRoot}|`)) this.errorVecs = { key, index: recallIndex(entries.map((entry, i) => ({ entry, v: vs[i]! }))) };
+      })
+      .catch(e => log.warn('search', 'error recall vectors failed', { cause: errText(e) }))
+      .finally(() => { this.warming = null; });
   }
 
   /** Passage vectors by text, kept between calls, embedded EMBED_BATCH at a time (one long call could time out and

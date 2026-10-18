@@ -67,6 +67,7 @@ import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
+import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
@@ -303,6 +304,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // undefined when the hybrid search fails: the brain's own server answers (substring search)
   brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
   brain.serveApi('/api/themes', q => hybrid.themes(q.get('kind') === 'ideas' ? 'ideas' : 'errors'));
+  // past errors similar to a prompt, for the brain's prompt hook in the chats the app starts (their env: RECALL_ENV)
+  const recall = mountRecallTool(mcp, (text, k) => hybrid.recall(text, k));
   // the brain's rules each Claude / Codex chat gets at launch (ADR 0060): read at every start, so a switch or a new
   // brain folder counts from the next chat
   setCodexAutonomyRoots(() => brain.settings().codexAutonomyRoots ?? []);
@@ -344,6 +347,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
     userData: ctx.userData,
+    env: { [RECALL_ENV]: recall.url() },
+    recall: text => hybrid.recall(text),
     enginePaths: enginePathsFromEnv(),
     // an engine the user switched off never starts, whoever asks (engines/policy.ts)
     engineOn: h => engineOn(brain.settings(), h),
