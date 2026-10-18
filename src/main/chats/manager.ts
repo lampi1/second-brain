@@ -114,6 +114,8 @@ export interface ChatManagerOptions {
   onModels?: (harness: Harness, list: { id: string; name: string }[]) => void;
   /** a turn ended (→ the job ledger: real cost and time) */
   onTurnEnd?: (info: TurnEndInfo) => void;
+  /** Once per actual run end (not per turn); the lifecycle service batches Orchestrator feedback requests. */
+  onRunEnded?: (run: AgentRun) => void;
   /** a question or permission opened in an app chat (→ feed "chat waiting") */
   onWaiting?: (chatId: string, pending: PendingRequest) => void;
   /** a turn ended with nothing pending: the chat is idle again (→ feed "chat done") */
@@ -1598,6 +1600,7 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
     if (mine) this.ranUntil(r!, at);
     endRun(run, reason, at);
+    this.hook('agent lifecycle', () => this.opts.onRunEnded?.(structuredClone(run)));
     log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
     for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
     this.probationTick(run.agentId);

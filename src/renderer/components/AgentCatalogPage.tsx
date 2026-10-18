@@ -1,6 +1,9 @@
 // Dedicated agent overview and guided Orchestrator entry; profile editing stays in the existing Studio.
 import { useEffect, useRef, useState } from 'react';
 import type { AgentMetrics } from '@shared/agents';
+import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
+import { AgentLifecyclePanel } from './AgentLifecyclePanel';
+import { lifecycleClient } from '../lib/agent-lifecycle';
 import { go, focusChat } from '../actions';
 import { t } from '../i18n';
 import { agentCreationBrief, selectCatalog, type CatalogSort } from '../lib/agent-catalog';
@@ -16,7 +19,7 @@ import { CatalogRun } from './CatalogRun';
 import { profileCanStart } from '../lib/role-consumers';
 import '../styles/agent-catalog.css';
 
-export function AgentCatalogPage() {
+export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycleApi?: AgentLifecycleClient } = {}) {
   const { catalog, error } = useAgents();
   const arg = ui.use(s => s.pageArg);
   const chats = useApp(s => s.chats);
@@ -42,7 +45,7 @@ export function AgentCatalogPage() {
     return () => { alive = false; clearInterval(timer); };
   }, [catalog, refresh]);
   const profile = catalog?.profiles.find(p => p.id === arg);
-  if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} />{profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}</>;
+  if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} />{profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}{lifecycleApi && profile && <AgentLifecyclePanel api={lifecycleApi} agentId={profile.id} onReview={() => go({ page: 'agenti', arg: profile.id })} />}</>;
   const profiles = catalog?.profiles ?? [];
   const choices = catalog?.models.filter(m => m.enabled && m.trusted && (m.defaultModel || m.modelSelectable && m.models.length > 0)) ?? [];
   const chosen = choices.find(m => m.engine === guideEngine) ?? choices[0];
@@ -80,6 +83,7 @@ export function AgentCatalogPage() {
       <button type="button" className="btn btn-ghost" onClick={() => { setRefresh(n => n + 1); void refreshAgents(); }}>{t('studio.retry')}</button>
     </div>
     {metricsError && <p role="alert">{t('catalog.metricsError')}</p>}
+    {lifecycleApi && <AgentLifecyclePanel api={lifecycleApi} onReview={p => go({ page: 'agenti', arg: p.agentIds.find(id => profiles.some(a => a.id === id)) ?? 'studio' })} />}
     <p className="catalog-note">{t('catalog.note')}</p>
     <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
