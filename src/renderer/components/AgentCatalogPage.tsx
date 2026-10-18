@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { inProbation, type AgentMetrics } from '@shared/agents';
 import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
 import { AgentLifecyclePanel } from './AgentLifecyclePanel';
+import { AgentApprovals } from './AgentApprovals';
 import { lifecycleClient } from '../lib/agent-lifecycle';
 import { go } from '../actions';
 import { t } from '../i18n';
@@ -50,6 +51,7 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>
       <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })} data-testid="agent-import">{t('pack.import')}</button>
       <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={!catalog || !!catalog.problem} data-testid="agent-create-open">{t('catalog.create')}</button></header>
+    <AgentApprovals />
     {!profiles.some(p => p.origin.kind !== 'preset') && <p className="catalog-intro">{t('catalog.intro')}</p>}
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}
@@ -61,7 +63,6 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
       <button type="button" className="btn btn-ghost" onClick={() => { setRefresh(n => n + 1); void refreshAgents(); }}>{t('studio.retry')}</button>
     </div>
     {metricsError && <p role="alert">{t('catalog.metricsError')}</p>}
-    {lifecycleApi && <AgentLifecyclePanel api={lifecycleApi} onReview={p => go({ page: 'agenti', arg: p.agentIds.find(id => profiles.some(a => a.id === id)) ?? 'studio' })} />}
     {(() => {
       const shown = selectCatalog(profiles, role, engine, sort);
       const working = shown.filter(p => !inProbation(p) && (metrics?.find(m => m.agentId === p.id)?.open ?? 0) > 0).length;

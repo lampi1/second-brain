@@ -20,6 +20,7 @@ import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import {lifecycleEn}from'./areas/lifecycle.en';
 import { agentsGridEn } from './areas/agents-grid.en';
+import { approvalsEn } from './areas/approvals.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
@@ -58,6 +59,7 @@ export const en: Dict = {
   ...productEn,
   ...lifecycleEn,
   ...agentsGridEn,
+  ...approvalsEn,
   ...settingsEn,
   ...profileEn,
   ...chatEn,
