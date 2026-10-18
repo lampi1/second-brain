@@ -312,6 +312,19 @@ async function runTurn(text) {
     if (!stopped) setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: 'a26420c62ff6f065f', status: 'completed', output_file: '', summary: 'ok', session_id: sessionId }), Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400));
   }
   if (/background/.test(text)) out({ type: 'system', subtype: 'task_started', task_id: 'task_bg', tool_use_id: 'toolu_bg', description: 'npm test', task_type: 'local_bash', session_id: sessionId });
+  // "subagent": an Agent tool launched with run_in_background (CLI 2.1.28x: the tool_use, its task_started, the result
+  // that acknowledges the launch), ended after the turn by its task_notification (FAKE_CLAUDE_TASK_MS; "subagent fails"
+  // ends it failed; "subagent twice" launches two)
+  if (/subagent/.test(text) && !turn.aborted) {
+    const launch = (id, description) => {
+      assistant([{ type: 'tool_use', id: `toolu_${id}`, name: 'Agent', input: { description, prompt: `${description} e riferisci`, subagent_type: 'Explore', run_in_background: true } }]);
+      out({ type: 'system', subtype: 'task_started', task_id: id, tool_use_id: `toolu_${id}`, description, task_type: 'local_agent', session_id: sessionId });
+      toolResult(`toolu_${id}`, [{ type: 'text', text: `Async agent launched successfully.\nagentId: ${id}\noutput_file: ${id}.output` }]);
+      setTimeout(() => out({ type: 'system', subtype: 'task_notification', task_id: id, status: /subagent fails/.test(text) ? 'failed' : 'completed', output_file: '', summary: 'ok', session_id: sessionId }), Number(process.env.FAKE_CLAUDE_TASK_MS ?? 400));
+    };
+    launch('task_sub', 'Esplora il repo');
+    if (/subagent twice/.test(text)) launch('task_sub2', 'Controlla i test');
+  }
   result(final, aborted, t0);
   turn = null;
   if (/background/.test(text)) {

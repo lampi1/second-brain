@@ -21,6 +21,15 @@ function recording(initial?: unknown): { sink: RecSink; state: AgentChildrenRedu
 }
 
 describe('child observation reducer', () => {
+  it('preserves the first observation through native correlation, completion and restore', () => {
+    const state = new AgentChildrenReducer();
+    state.observe(observation({ nativeId: null, toolCallId: 'spawn', observedAt: 10 }));
+    state.observe(observation({ key: 'native', toolCallId: 'spawn', observedAt: 20 }));
+    state.observe(observation({ key: 'native', toolCallId: 'spawn', state: 'completed', observedAt: 30 }));
+    expect(new AgentChildrenReducer(state.snapshot()).snapshot().children[0]).toMatchObject({ startedAt: 10, observedAt: 30, state: 'completed' });
+    expect(sanitizeChildObservation(observation({ startedAt: 50 }))?.startedAt).toBe(10);
+    expect(sanitizeChildObservation(observation({ observedAt: Number.MAX_VALUE }))).toBeNull();
+  });
   it('keeps observed agents separate from shell work and from an unavailable census', () => {
     const state = new AgentChildrenReducer();
     state.coverage('partial', 1);
@@ -81,9 +90,72 @@ describe('child observation reducer', () => {
     expect(state.snapshot().children[0]?.state).toBe('running');
     expect(sanitizeChildObservation(observation({ task: '\u001b[31mReview\u0000the change' }))?.task).toBe('Review the change');
   });
+  it('keeps the newest 20 finished commands, so hundreds of them never crowd out a later sub-agent', () => {
+    const state = new AgentChildrenReducer();
+    state.coverage('partial', 1);
+    const shell = (i: number, patch: Partial<ChildObservation> = {}) =>
+      observation({ key: `shell:${i}`, nativeId: `cmd${i}`, kind: 'shell', state: 'completed', observedAt: 100 + i, ...patch });
+    state.observe(shell(-1, { state: 'running' }));
+    for (let i = 0; i < 600; i++) state.observe(shell(i));
+    expect(state.observe(observation({ key: 'agent:late', nativeId: 'late', observedAt: 1000 }))).toBe(true);
+    const keys = state.snapshot().children.map(row => row.key);
+    expect(keys).toContain('agent:late');
+    expect(keys).toContain('shell:-1'); // a running command is never pruned
+    expect(keys.filter(key => key.startsWith('shell:') && key !== 'shell:-1')).toEqual(Array.from({ length: 20 }, (_, i) => `shell:${580 + i}`));
+    expect(state.snapshot().coverage).toBe('partial'); // dropping finished commands loses no agent
+  });
+  it('when full, drops the oldest finished agent with an unknown census, and refuses only when every row is unfinished', () => {
+    const full = (finished: number) => {
+      const state = new AgentChildrenReducer();
+      state.coverage('complete', 1);
+      for (let i = 0; i < 500; i++) state.observe(observation({ key: `agent:${i}`, nativeId: `a${i}`, state: i === finished ? 'completed' : 'running', observedAt: 10 + i }));
+      return state;
+    };
+    const room = full(7);
+    expect(room.observe(observation({ key: 'agent:new', nativeId: 'new', observedAt: 900 }))).toBe(true);
+    const keys = room.snapshot().children.map(row => row.key);
+    expect(keys).toContain('agent:new');
+    expect(keys).not.toContain('agent:7');
+    expect(room.snapshot()).toMatchObject({ coverage: 'unknown', total: null, observedTotal: 500 });
+    const busy = full(-1);
+    expect(busy.observe(observation({ key: 'agent:new', nativeId: 'new', observedAt: 900 }))).toBe(false);
+    expect(busy.snapshot()).toMatchObject({ coverage: 'unknown', observedTotal: 500 });
+  });
 });
 
 describe('provider child observations', () => {
+  it('observes nested Claude Agent tools without leaking their transcript into the parent chat', async () => {
+    const { sink, state } = recording();
+    const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);
+    line(session, { type: 'assistant', parent_tool_use_id: 'outer', message: { id: 'nested', content: [{ type: 'tool_use', id: 'inner', name: 'Task', input: { description: 'Nested review', run_in_background: false } }] } });
+    expect(state.snapshot().children[0]).toMatchObject({ task: 'Nested review', state: 'running' });
+    line(session, { type: 'user', parent_tool_use_id: 'outer', message: { content: [{ type: 'tool_result', tool_use_id: 'inner', content: 'Finished' }] } });
+    expect(state.snapshot().children[0]?.state).toBe('completed');
+    expect(sink.items.size).toBe(0);
+    await session.close();
+  });
+  it('keeps a Claude background launch running after acknowledgment and retains its final state', async () => {
+    const { sink, state } = recording();
+    const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);
+    line(session, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'spawn', name: 'Agent', input: { description: 'Review', run_in_background: true } }] } });
+    line(session, { type: 'system', subtype: 'task_started', task_id: 'native', tool_use_id: 'spawn', task_type: 'local_agent', description: 'Review' });
+    const startedAt = state.snapshot().children[0]?.startedAt;
+    line(session, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'spawn', content: 'Async agent launched successfully.' }] } });
+    expect(state.snapshot().children).toHaveLength(1);
+    expect(state.snapshot().children[0]?.state).toBe('running');
+    line(session, { type: 'system', subtype: 'task_notification', task_id: 'native', status: 'failed' });
+    expect(state.snapshot().children[0]).toMatchObject({ state: 'failed', startedAt });
+    await session.close();
+    expect(state.snapshot().children[0]?.state).toBe('failed');
+  });
+  it('settles a rejected Claude background Agent tool instead of leaving a running ghost', async () => {
+    const { sink, state } = recording();
+    const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);
+    line(session, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'spawn', name: 'Agent', input: { description: 'Review', run_in_background: true } }] } });
+    line(session, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'spawn', is_error: true, content: 'Launch failed' }] } });
+    expect(state.snapshot().children[0]?.state).toBe('failed');
+    await session.close();
+  });
   it('extracts Claude agent/shell lifecycle, tool identity and SendMessage resumption', async () => {
     const { sink, state } = recording();
     const session = new ClaudeSession({ chatId: 'parent', cwd: '.', sessionId: 'parent-session' }, sink);

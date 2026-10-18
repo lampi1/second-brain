@@ -13,6 +13,7 @@ import { setPrefs, ui } from '../store/ui';
 import { t as tr } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
+import { ChildStrips } from './ChildStrips';
 import { toggleMaximize } from '../actions';
 import { pairOf, pairStyle } from '../lib/pairs';
 import '../styles/agent-strips.css';
@@ -91,6 +92,8 @@ export function AgentStrips() {
           {lead.kind === 'chat'
             ? <div className={side.length ? 'strip-pair' : 'strip-solo'} {...(side.length ? { 'data-testid': `strip-pair-${lead.id}` } : {})}>{pane(lead)}{side.length > 0 && <div className="strip-pair-side">{side.map(pane)}</div>}</div>
             : pane(lead)}
+          {/* Child activity remains visible when its parent is collapsed, expanded or maximized. */}
+          {lead.kind === 'chat' && <ChildStrips chatId={lead.id} />}
         </div>;
       })}
     </div>

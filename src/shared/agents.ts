@@ -245,6 +245,9 @@ export interface ChildObservation {
   task: string | null;
   observedAt: number;
   source: 'live' | 'replay';
+  /** When the app first saw this child (its start as far as the app knows: the first event's time, kept across the
+   *  later updates). Missing on rows saved before it existed: the UI shows the observation time then. */
+  startedAt?: number;
 }
 export interface AgentChildren {
   coverage: 'unknown' | 'partial' | 'complete';

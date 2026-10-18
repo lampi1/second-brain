@@ -8,6 +8,15 @@ const STATES: Record<string, ChildState> = { pendingInit: 'running', running: 'r
 export function codexChildren(value: unknown, source: 'live' | 'replay', observedAt: number): ChildObservation[] {
   const it = obj(value), call = str(it.id);
   if (!call) return [];
+  // The app-server does not label a command foreground/background. Keep every command's lifecycle visible,
+  // including a process that outlives the turn; its item completion, not turn completion, settles this row.
+  if (it.type === 'commandExecution' && typeof it.command === 'string') {
+    const state: ChildState = it.status === 'inProgress' ? 'running'
+      : it.status === 'declined' ? 'stopped' : it.status === 'failed' ? 'failed'
+        : it.status === 'completed' ? (typeof it.exitCode === 'number' && it.exitCode !== 0 ? 'failed' : 'completed') : 'unknown';
+    return [{ key: `codex:command:${call}`, nativeId: null, toolCallId: call, parentNativeId: null,
+      kind: 'shell', state, task: it.command.slice(0, 1200), observedAt, source }];
+  }
   if (it.type === 'subAgentActivity') {
     const id = str(it.agentThreadId);
     if (!id) return [];
