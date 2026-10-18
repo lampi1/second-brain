@@ -4,7 +4,7 @@ import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
-import type { AgentMetrics } from '../shared/agents';
+import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import type { Emitter } from './ipc';
 import type { RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
@@ -32,6 +32,8 @@ export interface ChatService {
   resumedByUser?(chatId: string, text?: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */
   runMetrics?(opts?: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
+  /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */
+  markRun?(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary;
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */
   commandAsked?(chatId: string, requestId: string): void;
   /** that request left (run, dismissed, the chat went on) */

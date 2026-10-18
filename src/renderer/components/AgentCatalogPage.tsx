@@ -11,6 +11,9 @@ import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
 import { AgentStudio } from './AgentStudio';
 import { Select } from './Select';
+import { ContextPulse } from './ContextPulse';
+import { CatalogRun } from './CatalogRun';
+import { profileCanStart } from '../lib/role-consumers';
 import '../styles/agent-catalog.css';
 
 export function AgentCatalogPage() {
@@ -39,7 +42,7 @@ export function AgentCatalogPage() {
     return () => { alive = false; clearInterval(timer); };
   }, [catalog, refresh]);
   const profile = catalog?.profiles.find(p => p.id === arg);
-  if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} /></>;
+  if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} />{profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}</>;
   const profiles = catalog?.profiles ?? [];
   const choices = catalog?.models.filter(m => m.enabled && m.trusted && (m.defaultModel || m.modelSelectable && m.models.length > 0)) ?? [];
   const chosen = choices.find(m => m.engine === guideEngine) ?? choices[0];
@@ -78,10 +81,9 @@ export function AgentCatalogPage() {
     </div>
     {metricsError && <p role="alert">{t('catalog.metricsError')}</p>}
     <p className="catalog-note">{t('catalog.note')}</p>
-    <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map(p => {
+    <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
-      return <AgentCatalogCard key={p.id} profile={p} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
-        updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)}
+      return <AgentCatalogCard key={p.id} profile={p} updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)} index={index} run={<CatalogRun profile={p} available={!catalog?.problem && profileCanStart(p, catalog?.models.find(m => m.engine === p.engine))} />} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
         metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id })} />;
     })}</div>
     {catalog && !selectCatalog(profiles, role, engine, sort).length && <p role="status">{t('catalog.empty')}</p>}

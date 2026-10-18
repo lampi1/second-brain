@@ -31,6 +31,7 @@ import {
   IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
+import { ContextPulse } from './ContextPulse';
 
 interface Cmd {
   id: string; group: string; title: string; sub?: string; shortcut?: string; icon: ReactNode; run: () => void; text?: string;
@@ -302,6 +303,7 @@ export function CommandPalette() {
           );
         })}
       </div>
+      {!found.busy && (!q.trim() || list.length === 0) && <ContextPulse place="search" />}
       <div className="palette-foot"><span><Keys combo="↑ ↓" />{' '}{auditText('audit.CommandPalette.select')}</span><span><Keys combo="Invio" />{' '}{auditText('audit.CommandPalette.open')}</span><span><Keys combo="Esc" />{' '}{auditText('audit.CommandPalette.close')}</span>
         {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">{auditText('audit.CommandPalette.searchingMessagesAndTheBrain')}</span>}
         <ModelNote model={model} /></div>

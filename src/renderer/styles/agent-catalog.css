@@ -12,3 +12,9 @@
 .catalog-stats{display:grid;grid-template-columns:1fr 1fr;gap:16px 12px;border-top:1px solid var(--border);padding-top:16px;margin:0 0 16px}.catalog-stats dt,.catalog-stats small{font-size:var(--fs-s);color:var(--text-2)}.catalog-stats dd{font-weight:600;margin:4px 0;font-variant-numeric:tabular-nums}
 .catalog-card footer{display:grid;gap:6px;font-size:var(--fs-s);color:var(--text-2);border-top:1px solid var(--border);padding-top:12px}.catalog-back{margin:16px 20px 0}
 @media(max-width:600px){.agent-overview{padding:16px}.catalog-grid{grid-template-columns:1fr}}
+.catalog-card{animation:catalog-row-enter 260ms var(--ease) both;animation-delay:calc(var(--row-index,0)*30ms)}
+@keyframes catalog-row-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.catalog-run{position:relative;z-index:1;margin-top:16px}.catalog-run form{display:grid;gap:12px;margin-top:12px}.catalog-run input,.catalog-run textarea{width:100%}
+.run-confirmed .run-mark{display:inline-block;animation:run-check 220ms ease-out}
+@keyframes run-check{from{transform:scale(.6) rotate(-20deg);opacity:.3}to{transform:scale(1) rotate(0);opacity:1}}
+@media(prefers-reduced-motion:reduce){.catalog-card,.run-confirmed .run-mark{animation:none}}

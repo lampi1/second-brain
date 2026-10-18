@@ -1,5 +1,14 @@
 // Catalogue overview strings for Italian users; composed into the typed UI dictionary.
 export const catalogIt = {
+  'runs.legacy': 'Versione precedente: definizione non verificabile', 'runs.version': 'Versione fissata all’avvio',
+  'runs.auto': 'Avviata dall’Orchestrator', 'runs.outcome': 'Com’è andata?',
+  'runs.success': 'Riuscita', 'runs.partial': 'In parte', 'runs.fail': 'Non riuscita',
+  'runs.saved': 'Il tuo esito è salvato', 'runs.error': 'Esito non salvato. Riprova.',
+  'runs.run': 'Avvia', 'runs.started': 'Avviata, la trovi nella Home', 'runs.startedShort': 'Avviata', 'runs.open': 'Apri',
+  'runs.goal': 'Obiettivo', 'runs.folder': 'Cartella', 'runs.startError': 'Avvio non riuscito. Riprova.',
+  'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',
+  'contextPulse.save': 'Salva nelle idee', 'contextPulse.saved': 'Salvata nelle idee', 'contextPulse.act': 'Fallo', 'contextPulse.dismiss': 'Non mi serve',
+  'contextPulse.sources': 'Fonti', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Salvataggio nelle idee non disponibile.',
   'catalog.title': 'Agenti', 'catalog.create': 'Crea agente', 'catalog.studio': 'Apri Studio agenti',
   'catalog.intro': 'Gli agenti sono assistenti riutilizzabili con un ruolo, istruzioni e un motore: parti da un preset o creane uno con l’Orchestratore.',
   'catalog.subtitle': 'La tua squadra, le sue specialità e i risultati osservati.',

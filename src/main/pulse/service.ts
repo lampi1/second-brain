@@ -68,7 +68,8 @@ export class PulseService {
     }
     if (changed && !this.store.problem) { this.outcomes(); this.store.save(); }
     const s = this.settings(), family = place?.split(':')[0] as keyof typeof s.places;
-    const cards = s.on && s.places[family] ? this.store.data.cards.filter(c => live(c) && s.types[c.type] && c.places.includes(place))
+    const cards = s.on && s.places[family] ? this.store.data.cards.filter(c => live(c) && s.types[c.type] && c.places.includes(place)
+      && (place !== 'search' || c.type === 'collegamento' || c.type === 'curiosita'))
       .sort((a, b) => b.createdAt - a.createdAt).slice(0, place === 'board' ? 6 : 2) : [];
     return { cards: structuredClone(cards), status: this.status() };
   }

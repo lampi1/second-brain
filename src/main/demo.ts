@@ -27,6 +27,7 @@ import { KIMI_PLAN_NOTE } from './brain/kimi-usage';
 import { runResultMessage } from './run/results';
 import { cleanRegiaName, regieOf } from '../shared/regia';
 import { splitNewChat } from '../shared/newchat';
+import type { AgentRunOutcome } from '../shared/agents';
 
 /** The fixed "now" of SB_DEMO_FREEZE=1 (2026-10-11 10:30 Rome). The UI receives it through ui:command 'clock'. */
 export const FROZEN_EPOCH = Date.UTC(2026, 9, 11, 8, 30, 0);
@@ -132,6 +133,13 @@ export function seed(E: number): Seed {
     chat({ id: 'report', title: 'Report settimanale', model: 'claude-sonnet-4-5', costUsd: 1.2, updatedAt: E - 26 * 60 * MIN, ...closedBy(E - 26 * 60 * MIN + 2 * MIN), lastText: 'Report pronto: 9 PR, 3 bug chiusi.' }),
     chat({ id: 'note', title: 'Note personali', model: 'claude-haiku-4-5', effort: 'low', costUsd: 0.8, updatedAt: E - 180 * MIN, ...closedBy(E - 178 * MIN), lastText: 'Fatto: lista aggiornata.' }),
   ];
+  // One settled run for the human outcome controls; other seeded chats retain their legacy identities.
+  const settled = chats.find(c => c.id === 'mappa')!;
+  settled.agent = { id: 'default-general', name: 'Generale', purpose: 'Assistente generale', avatar: { kind: 'symbol', value: 'compass' },
+    engine: settled.harness, model: settled.model, revision: 1, version: 1, source: 'catalog' };
+  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'default-general', version: 1, goal: settled.title,
+    startedBy: 'orchestrator', startedAt: E - 30 * MIN, costUsd: settled.costUsd, tokens: null,
+    counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: settled.contextTokens ?? null } };
   const items: Record<string, ChatItem[]> = {
     regia: [
       // not typed by the user: mail from a work chat and an Esegui result fold to one line (renderer lib/foreign.ts)
@@ -421,6 +429,17 @@ export class DemoChats implements ChatService {
   pending(): PendingRequest[] { return [...this.pend]; }
   /** no engine: the "/" list comes from the demo's skills on disk (skills/demo.ts) */
   commands(): null { return null; }
+
+  markRun(chatId: string, verdict: AgentRunOutcome['verdict']): ChatSummary {
+    const chat = this.chats.get(chatId);
+    if (!chat?.run) throw new Error('No agent run');
+    if (!['success', 'partial', 'fail', 'unknown'].includes(verdict)) throw new Error('Invalid outcome');
+    if (['starting', 'running', 'waiting'].includes(chat.state) || chat.pending || chat.queued) throw new Error('Run is busy');
+    const run = structuredClone(chat.run);
+    run.outcome = { verdict, basis: 'human', at: this.now(), by: 'user' };
+    if (run.endedAt === undefined) { run.endedAt = this.now(); run.endReason = 'completed'; }
+    return this.patch(chatId, { run })!;
+  }
 
   async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
     // one Orchestrator, like the real manager (unifiedOrchestrator): a coordinator request returns the current one
