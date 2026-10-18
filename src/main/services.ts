@@ -27,6 +27,12 @@ export interface ChatService {
   archive(chatId: string, opts?: { auto?: boolean }): Promise<ChatSummary>;
   /** an archived chat back on the grid; its session resumes on the next message */
   reopen(chatId: string): Promise<ChatSummary>;
+  /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
+  resumedByUser?(chatId: string): void;
+  /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */
+  commandAsked?(chatId: string, requestId: string): void;
+  /** that request left (run, dismissed, the chat went on) */
+  commandDone?(chatId: string, requestId: string): void;
   /** after a start: chats whose turn the last quit (or crash) cut get an automatic "riprendi" message; how many */
   resumeInterrupted(): number;
   /** "Avvia ora": the chat's start or turn waiting in the CPU queue runs now (ADR 0036); false = nothing waited */
