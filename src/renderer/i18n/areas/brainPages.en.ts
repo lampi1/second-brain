@@ -161,7 +161,9 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposal" : "proposals"} to decide`,
   'brainPages.miglioramento.leadNoPending': 'no proposals to decide',
   'brainPages.miglioramento.emptyTitle': 'No policies',
-  'brainPages.miglioramento.emptyDesc': 'Brain does not yet have the improvement loop (ops/improve).',
+  'brainPages.miglioramento.emptyDesc': 'The brain’s improvement loop has no policies yet: as soon as it has one, it shows up here.',
+  'brainPages.miglioramento.loopMissingTitle': 'The brain does not have the improvement loop yet',
+  'brainPages.miglioramento.loopMissingDesc': 'This page reads the learned rules from the brain’s ops/improve/improve.mjs program, which the chosen folder does not have. Not an error: once the brain has it, you will see every policy here with its version, its typical error and the proposals to decide.',
 
   // Procedure.tsx
   'brainPages.procedure.pageTitle': 'Procedures',

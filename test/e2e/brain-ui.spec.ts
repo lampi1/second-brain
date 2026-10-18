@@ -188,11 +188,46 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
   await shot(page,'brain-map-flat');await page.getByTestId('bx-map-close').click();
 });
 
+test('Regole imparate: a brain without ops/improve/improve.mjs gets a plain empty state, never an error or a stack', async () => {
+  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts)
+  await open('miglioramento');
+  const p = page.getByTestId('brain-page-miglioramento');
+  await settled();
+  await expect(p.getByTestId('bx-empty')).toContainText('Il cervello non ha ancora il ciclo di miglioramento');
+  await expect(p.getByTestId('bx-empty')).toContainText('ops/improve/improve.mjs');
+  await expect(p.getByTestId('bx-error')).toHaveCount(0);
+  await expect(p.getByTestId('bx-error-details')).toHaveCount(0);
+  await expect(p).not.toContainText('Cannot find module');
+  await expect(p).not.toContainText('MODULE_NOT_FOUND');
+  // a stack frame ("at fn (file:1:2)" or "at file:1:2"); a plain '    at ' would match "aggiornato" once whitespace is normalized
+  await expect(p).not.toContainText(/\bat (?:\S+ \()?\S+:\d+:\d+\)?/);
+  await shot(page, 'brain-miglioramento-senza-ciclo');
+});
+
+test('States: technical details stay collapsed until requested', async () => {
+  const failure = path.join(brain, 'FAIL_tables');
+  fs.writeFileSync(failure, 'Error: Data source unavailable\n    at readData (fixture.mjs:12:3)');
+  try {
+    await open('idee', true);
+    const p = page.getByTestId('brain-page-idee');
+    await expect(p.getByTestId('bx-error-cause')).toHaveText('Data source unavailable');
+    const details = p.getByTestId('bx-error-details');
+    await expect(details.locator('pre')).toBeHidden();
+    await shot(page, 'brain-error-collapsed');
+    await details.locator('summary').click();
+    await expect(details.locator('pre')).toBeVisible();
+    await expect(details.locator('pre')).toContainText('at readData');
+  } finally {
+    fs.rmSync(failure, { force: true });
+  }
+});
+
 test('States: a failing data source shows its cause and Riprova; light theme follows the app', async () => {
   fs.writeFileSync(path.join(brain, 'FAIL_tables'), '');
   await open('idee', true);
   const p = page.getByTestId('brain-page-idee');
-  await expect(p.getByTestId('bx-error')).toContainText('errore simulato');
+  await expect(p.getByTestId('bx-error-cause')).toHaveText('errore simulato su /api/tables');
+  await expect(p.getByTestId('bx-error-details')).toHaveCount(0); // one line: nothing to fold
   await shot(page, 'brain-error');
   fs.rmSync(path.join(brain, 'FAIL_tables'));
   await p.getByRole('button', { name: 'Riprova' }).click();

@@ -1,10 +1,13 @@
 // The Miglioramento page's clicks (src/main/brain/learn.ts): only apply/reject of a well-formed proposal id and rollback
 // of a well-formed policy reach the brain's improve.mjs (a fake one here, recording its arguments), one at a time; its
 // JSON answer becomes the page's message, its {ok:false} error the page's error; no brain or no ops/improve said plainly.
+// The page's read (/api/improve) of a brain without improve.mjs is answered by main with an empty "loop missing" status
+// (learnStatusWithoutCli), so the brain's server child is never asked (it would print a MODULE_NOT_FOUND stack).
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BY, Learn, learnArgs, learnMessage } from '../../../src/main/brain/learn';
+import { BY, Learn, learnArgs, learnMessage, learnStatusWithoutCli } from '../../../src/main/brain/learn';
+import { BrainApi } from '../../../src/main/brain/api';
 import { plainNode, tmpDir } from './helpers';
 
 const brain = (): string => {
@@ -53,5 +56,22 @@ describe('learn clicks', () => {
   it('says when there is no brain or no loop in it', async () => {
     expect(await new Learn(() => null, plainNode).act({ action: 'apply', id: 'estimates-1' })).toEqual({ ok: false, error: 'nessuna cartella del cervello scelta' });
     expect((await new Learn(() => tmpDir(), plainNode).act({ action: 'apply', id: 'estimates-1' })).ok).toBe(false);
+  });
+
+  it('answers the page itself when the brain has no improve.mjs: an empty status that says the loop is missing', async () => {
+    // a brain of today (work-keys.mjs only, like the owner's, or a new user's): no CLI → main's answer, the server's shape
+    const d = tmpDir();
+    fs.mkdirSync(path.join(d, 'ops', 'improve'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'ops', 'improve', 'work-keys.mjs'), 'export const x = 1;\n');
+    expect(learnStatusWithoutCli(d, 1000)).toEqual({ value: { policies: [], loop: 'missing' }, at: 1000, refreshing: false, error: null });
+    // the CLI is there → undefined: the brain's server answers; no brain chosen → undefined: that error is the server's
+    expect(learnStatusWithoutCli(brain())).toBeUndefined();
+    expect(learnStatusWithoutCli(null)).toBeUndefined();
+    // through the proxy, as brain/index.ts wires it: no server child is started (the brain has no brain-site.mjs at all)
+    const local = new Map([['/api/improve', () => learnStatusWithoutCli(d, 1000)]]);
+    const api = new BrainApi(d, plainNode, undefined, local);
+    expect(await api.get('/api/improve')).toEqual({ ok: true, data: { value: { policies: [], loop: 'missing' }, at: 1000, refreshing: false, error: null } });
+    expect(await api.get('/api/improve?fresh=1')).toMatchObject({ ok: true });
+    expect((await api.get('/api/now')).ok).toBe(false); // the other paths still need the server
   });
 });

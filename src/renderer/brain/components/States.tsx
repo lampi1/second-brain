@@ -3,6 +3,7 @@
 // head (title, the explain line, last update, refresh). Used by every page.
 import { useEffect, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/format';
+import { shortError } from '../lib/error-text';
 import { IconRefresh } from './ui';
 import { HelpTip } from '../../components/HelpTip';
 import { t } from '../../i18n';
@@ -23,14 +24,22 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   return <div className="bx-empty" data-testid="bx-empty"><b>{title}</b>{children && <span>{children}</span>}</div>;
 }
 
-/** What failed, why (the server's own words) and one thing to do. */
+/** What failed, why (one short line in the server's own words), one thing to do; a long or multi-line error (a
+ *  stack trace, a child's stderr) stays folded under "Dettagli", never raw on the page (lib/error-text.ts). */
 export function ErrorState({ what = t('costs.readError'), error, onRetry }: { what?: string; error: string; onRetry?: () => void }) {
+  const { short, details } = shortError(error);
   const hint = /server dati|brain-site|non è partito|uscito/.test(error) ? t('costs.serverHint')
-    : /tempo|timeout/.test(error) ? t('costs.slowHint')
-      : /DevOps|az login/.test(error) ? t('costs.devopsHint') : '';
+    : /Cannot find module|MODULE_NOT_FOUND|ENOENT/.test(error) ? t('costs.toolHint')
+      : /tempo|timeout/.test(error) ? t('costs.slowHint')
+        : /DevOps|az login/.test(error) ? t('costs.devopsHint') : '';
   return (
     <div className="bx-error" role="alert" data-testid="bx-error">
-      <div className="t"><b>{what}</b><span className="cause">{error}</span>{hint && <span className="cause">{hint}</span>}</div>
+      <div className="t">
+        <b>{what}</b>
+        <span className="cause" data-testid="bx-error-cause">{short}</span>
+        {hint && <span className="cause">{hint}</span>}
+        {details && <details className="bx-error-details" data-testid="bx-error-details"><summary>{t('costs.errorDetails')}</summary><pre>{details}</pre></details>}
+      </div>
       {onRetry && <button type="button" className="bx-btn" onClick={onRetry}><IconRefresh /> {t('costs.retry')}</button>}
     </div>
   );

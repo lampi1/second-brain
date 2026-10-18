@@ -2,8 +2,11 @@
 // self-improvement loop and [Ripristina] of a policy's previous version. The app never writes the loop's state
 // (<brain>/ops/state/improve): each click runs the brain's own CLI, ops/improve/improve.mjs apply|reject|rollback
 // --json, as an Electron-node child in the brain folder, one at a time (the CLI appends to shared files), like the
-// model comparisons' switch.mjs (compare.ts). The page reads the loop through the brain proxy (/api/improve). Used by
-// brain/index.ts ('learn:act').
+// model comparisons' switch.mjs (compare.ts). The page reads the loop through the brain proxy (/api/improve); a brain
+// without the CLI (a new user's, or one whose ops/improve has no improve.mjs yet) is answered by main itself
+// (learnStatusWithoutCli, served as /api/improve by brain/index.ts): an empty status that says the loop is missing,
+// so the page shows a plain empty state instead of the server child's MODULE_NOT_FOUND stack (seen 2026-10-18).
+// Used by brain/index.ts ('learn:act', '/api/improve').
 import fs from 'node:fs';
 import path from 'node:path';
 import type { LearnResult } from '../../shared/contract';
@@ -13,6 +16,17 @@ import { runNode, type NodeRunner } from './node';
 
 /** Who the loop's audit names for a click in the app (the owner's name stays out of the app's code). */
 export const BY = 'app (clic)';
+
+/** The brain's CLI of the loop (ADR 0030): status for the page, apply/reject/rollback for its clicks. */
+export const improveScript = (root: string): string => path.join(root, 'ops', 'improve', 'improve.mjs');
+
+/** /api/improve when the brain has no improve.mjs: the same stale-while-revalidate shape the brain's server answers,
+ *  with no policies and `loop: 'missing'` (the page's empty state). A brain that has the CLI → undefined: ask the
+ *  server (BrainApi.get falls through). No brain chosen → undefined too: that error belongs to the server's path. */
+export function learnStatusWithoutCli(root: string | null, now = Date.now()): { value: { policies: never[]; loop: 'missing' }; at: number; refreshing: false; error: null } | undefined {
+  if (!root || fs.existsSync(improveScript(root))) return undefined;
+  return { value: { policies: [], loop: 'missing' }, at: now, refreshing: false, error: null };
+}
 const ID = /^[a-z][a-z0-9-]{0,30}-\d{1,6}$/; // lib.mjs nextProposalId: "<domain>-<n>"
 const DOMAIN = /^[a-z][a-z0-9-]{0,30}$/;
 
@@ -53,7 +67,7 @@ export class Learn {
     if (!v.ok) return v;
     const root = this.root();
     if (!root) return { ok: false, error: 'nessuna cartella del cervello scelta' };
-    const script = path.join(root, 'ops', 'improve', 'improve.mjs');
+    const script = improveScript(root);
     if (!fs.existsSync(script)) return { ok: false, error: 'questo cervello non ha il ciclo di miglioramento (ops/improve)' };
     const r = await runNode(this.node, script, v.args, root, this.timeoutMs);
     let out: Record<string, unknown> | null = null;

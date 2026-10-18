@@ -78,6 +78,8 @@ export const costsEn: typeof costsIt = {
   'costs.serverHint': "The selected brain has no data server, or it did not start: check its folder in Settings.",
   'costs.slowHint': "This calculation is slow (up to a minute the first time): try again shortly.",
   'costs.devopsHint': "DevOps is not responding: run “az login” in the terminal and retry.",
+  'costs.toolHint': "The brain lacks a tool this page uses: update the brain, or wait until it has it.",
+  'costs.errorDetails': "Details",
   'costs.now': "now",
   'costs.yesterday': "yesterday",
   'costs.days': (p) => `${p.days} days`,

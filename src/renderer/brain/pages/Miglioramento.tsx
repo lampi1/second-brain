@@ -2,13 +2,14 @@
 // cost estimates, model choice, notification thresholds): the version in force and since when, its typical error now
 // with the last ones as bars, how often the 80% range held, results out of the count, a proposal waiting with
 // [Applica] / [No], the after-check of the last change and [Ripristina v<N-1>]. Nothing changes without a click here
-// (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy); a
+// (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy; a
+// brain without that CLI gets main's "loop missing" answer and this page says what it needs, with no error); a
 // click goes to main ('learn:act'), which runs the brain's own improve.mjs. Words and numbers: lib/learn.ts. A short
 // intro and a "?" beside every term that is not obvious (HELP), shown on hover or focus.
 import { useState } from 'react';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
-import { HELP, WAITING, checkLine, coverageLine, errorLine, factor, gainLine, normLearn, policyLabel, type LearnPolicy } from '../lib/learn';
+import { HELP, WAITING, checkLine, coverageLine, errorLine, factor, gainLine, normLearnData, policyLabel, type LearnPolicy } from '../lib/learn';
 import { Async, Empty, PageHead } from '../components/States';
 import { Sparkline } from '../components/Charts';
 import { Pill, toast, type Navigate } from '../components/ui';
@@ -71,9 +72,10 @@ function Policy({ p, busy, act }: { p: LearnPolicy; busy: boolean; act: (a: Lear
 }
 
 export function Miglioramento(_: { nav: Navigate }) {
-  const d = useBrain('/api/improve', normLearn);
+  const d = useBrain('/api/improve', normLearnData);
   const [busy, setBusy] = useState(false);
-  const list = d.data ?? [];
+  const list = d.data?.policies ?? [];
+  const missing = d.data?.loop === 'missing';
   const pending = list.filter(p => p.pending).length;
   const act = (a: LearnAction) => {
     setBusy(true);
@@ -86,9 +88,11 @@ export function Miglioramento(_: { nav: Navigate }) {
         lead={list.length ? <>{t('brainPages.miglioramento.lead', { count: list.length })}{pending ? <b>{t('brainPages.miglioramento.leadPending', { pending })}</b> : t('brainPages.miglioramento.leadNoPending')}.</> : undefined}
         what={HELP().intro} />
       <Async loading={d.loading && !d.data} error={d.data ? null : d.error} onRetry={() => d.reload(true)} lines={5} block>
-        {() => !list.length
-          ? <Empty title={t('brainPages.miglioramento.emptyTitle')}>{t('brainPages.miglioramento.emptyDesc')}</Empty>
-          : <div className="bx-learn-list">{list.map(p => <Policy key={p.domain} p={p} busy={busy} act={act} />)}</div>}
+        {() => missing
+          ? <Empty title={t('brainPages.miglioramento.loopMissingTitle')}>{t('brainPages.miglioramento.loopMissingDesc')}</Empty>
+          : !list.length
+            ? <Empty title={t('brainPages.miglioramento.emptyTitle')}>{t('brainPages.miglioramento.emptyDesc')}</Empty>
+            : <div className="bx-learn-list">{list.map(p => <Policy key={p.domain} p={p} busy={busy} act={act} />)}</div>}
       </Async>
     </>
   );

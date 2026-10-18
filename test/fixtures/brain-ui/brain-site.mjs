@@ -20,7 +20,8 @@ export function makeServer(root) {
     const p = u.pathname;
     const name = p.replace(/^\/api\//, '');
     const answer = () => {
-      if (fs.existsSync(path.join(root, `FAIL_${name}`))) return json(500, { error: `errore simulato su ${p}` });
+      const failure = path.join(root, `FAIL_${name}`);
+      if (fs.existsSync(failure)) return json(500, { error: fs.readFileSync(failure, 'utf8') || `errore simulato su ${p}` });
       if (p === '/api/tables') return json(200, D.tables);
       if (p === '/api/now') return json(200, wrap(D.now));
       if (p === '/api/cost') { const days = Math.min(90, Math.max(1, Number(u.searchParams.get('days')) || 7)); return json(200, wrap(D.cost(days))); }
