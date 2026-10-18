@@ -10,6 +10,7 @@ import { costRows, liveTotal } from '../lib/live-costs';
 import { lang, locale } from '../i18n';
 import { chatName, connections, contextLevel, contextRatio, cursorCoverage, neighbourhood, observedErrors } from './data';
 import { Graph } from './Graph';
+import { HeadlineLine, useHeadline } from '../brain/pages/HomeHeadline';
 import './dashboard.css';
 
 const copy = (it: string, en: string) => lang() === 'en' ? en : it;
@@ -70,6 +71,7 @@ function Bars({ title, rows, format = money, source }: { title: string; rows: Ba
 
 export function Dashboard() {
   const [tab, setTab] = useState<Tab>('agents');
+  const headline = useHeadline();
   const tabBar = useRef<HTMLDivElement>(null), [ink, setInk] = useState({ x: 0, w: 0 });
   useLayoutEffect(() => {
     const place = () => { const el = tabBar.current?.querySelector<HTMLElement>('[aria-selected=true]'); if (el) setInk({ x: el.offsetLeft, w: el.offsetWidth }); };
@@ -109,7 +111,7 @@ export function Dashboard() {
   for (const error of tables.data?.errors ?? []) if (error.data) errorDays.set(error.data, (errorDays.get(error.data) ?? 0) + 1);
 
   return <div className="dashboard" data-testid="dashboard">
-    <header className="dash-header"><div><span className="dash-eyebrow">{copy('IL TUO SISTEMA, IN DIRETTA', 'YOUR SYSTEM, LIVE')}</span><h1>Dashboard<span className="dash-live-dot" /></h1><p>{copy('Ogni connessione racconta il lavoro. Ogni dato apre una conversazione.', 'Every connection tells a story. Every signal starts a conversation.')}</p></div><span className="dash-live-label">{copy('Dati reali · aggiornamento live', 'Real data · live updates')}</span></header>
+    <header className="dash-header"><div><span className="dash-eyebrow">{copy('IL TUO SISTEMA, IN DIRETTA', 'YOUR SYSTEM, LIVE')}</span><h1>Dashboard<span className="dash-live-dot" /></h1><HeadlineLine state={headline} /><p>{copy('Ogni connessione racconta il lavoro. Ogni dato apre una conversazione.', 'Every connection tells a story. Every signal starts a conversation.')}</p></div><span className="dash-live-label">{copy('Dati reali · aggiornamento live', 'Real data · live updates')}</span></header>
     <div className="dash-tabs" role="tablist" aria-label="Dashboard" ref={tabBar}><i className="dash-ink" aria-hidden="true" style={{ transform: `translateX(${ink.x}px)`, width: ink.w }} />{tabs.map((id, i) => <button key={id} type="button" role="tab" id={`dash-tab-${id}`} aria-controls={`dash-panel-${id}`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} onClick={() => switchTab(id)} onKeyDown={event => {
       const next = event.key === 'ArrowRight' ? (i + 1) % tabs.length : event.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
       if (next !== null) { event.preventDefault(); switchTab(tabs[next]!); document.getElementById(`dash-tab-${tabs[next]}`)?.focus(); }

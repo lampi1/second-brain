@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
-import { launch, setSize, shot } from './helpers';
+import { closeSetup, expandChats, launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 
@@ -23,6 +23,8 @@ for (const engine of ['claude', 'cursor'] as const) {
     const { app, page } = await launch(fakes);
     await setSize(app, 1400, 900);
     const chat: ChatSummary = await page.evaluate(([h, dir]) => window.sb.invoke('chat:create', { harness: h, cwd: dir, prompt: 'slow', title: 'Coda' }), [engine, cwd] as const);
+    await closeSetup(page);
+    await expandChats(page, chat.id); // the input is on the open strip
     const input = page.getByTestId(`chat-input-${chat.id}`);
     await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'running', { timeout: 15000 });
 
@@ -62,6 +64,8 @@ test('claude: Enter again on an empty input sends the last queued message now ("
   const { app, page } = await launch({ SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), FAKE_CLAUDE_DELAY: '60' });
   await setSize(app, 1400, 900);
   const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'slow', title: 'Coda' }), cwd);
+  await closeSetup(page);
+  await expandChats(page, chat.id); // the input is on the open strip
   const input = page.getByTestId(`chat-input-${chat.id}`);
   await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'running', { timeout: 15000 });
   await input.fill('primo in coda');
