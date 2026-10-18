@@ -137,8 +137,10 @@ describe('MCP authoring boundary', () => {
   it('checks suggestion budget including unknown cost and persists proposals for human decisions only', async () => {
     const f = fixture(), args = { draft: draft(), reason: 'Potential task', expectedEffect: 'Fewer questions' };
     for (const cost of [null, 0.5, 1, NaN, -1]) await expect(new AgentAuthoring({ ...f, suggestionSpend: () => cost }).call('agent_suggest', args, 'orch')).rejects.toThrow(/budget/);
+    const presets = f.catalog.list().profiles.length;
     const p = await f.service.call('agent_suggest', args, 'orch') as { id: string };
-    expect(f.catalog.list().profiles).toHaveLength(6);
+    // a suggestion writes no definition: only the user's click in Agenti does
+    expect(f.catalog.list().profiles).toHaveLength(presets);
     const saved = f.service.decide(p.id, true)!;
     expect(saved.userLocked).toBe(true);
     expect(() => f.service.decide(p.id, true)).toThrow(/Pending/);
