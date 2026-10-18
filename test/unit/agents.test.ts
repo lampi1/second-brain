@@ -1,3 +1,4 @@
+// Catalog regressions cover readiness-based seeds, preserved user choices and safe local persistence.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,6 +14,32 @@ const choices = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', 
 const draft = (): AgentDraft => ({ name: 'Ricerca', purpose: 'Controllare fonti', instructions: 'Cita le fonti.', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'search' }, effort: 'medium' });
 
 describe('Agent catalog and local setup', () => {
+  it.each(['codex', 'cursor'])('seeds and repairs untouched agents using the only ready engine: %s', engine => {
+    let models = choices();
+    const c = new AgentCatalogService({ userData: tmp(), models: () => models });
+    c.save({ ...draft(), name: 'Personalizzato' }, 'default-development');
+    models = [{ ...choices()[0]!, installed: true, authenticated: false }, { ...choices()[0]!, engine, installed: true, authenticated: true }];
+    const profiles = c.list().profiles;
+    expect(profiles.filter(p => p.id !== 'default-development').every(p => p.engine === engine)).toBe(true);
+    expect(profiles.find(p => p.id === 'default-development')).toMatchObject({ engine: 'claude', name: 'Personalizzato', userLocked: true });
+    const fresh = new AgentCatalogService({ userData: tmp(), models: () => models });
+    expect(fresh.list().profiles.every(p => p.engine === engine)).toBe(true);
+  });
+  it('does not seed a disabled, untrusted, missing or logged-out engine', () => {
+    for (const patch of [{ enabled: false }, { trusted: false }, { installed: false }, { authenticated: false }]) {
+      expect(new AgentCatalogService({ userData: tmp(), models: () => [{ ...choices()[0]!, ...patch }] }).list().profiles).toEqual([]);
+    }
+  });
+  it('rebinds unknown-login pristine seeds to a ready engine without rewriting their history', () => {
+    let models = choices();
+    const c = new AgentCatalogService({ userData: tmp(), models: () => models });
+    const first = c.list().profiles[0]!;
+    models = [{ ...choices()[0]!, installed: true }, { ...choices()[0]!, engine: 'codex', installed: true, authenticated: true }];
+    expect(c.list().profiles.every(p => p.engine === 'codex' && p.version === 2)).toBe(true);
+    expect(c.history(first.id).find(v => v.version === 1)?.behaviour.engine).toBe('claude');
+    expect(c.history(first.id).find(v => v.version === 2)?.behaviour.engine).toBe('codex');
+    expect(c.list().profiles.every(p => p.version === 2)).toBe(true);
+  });
   it('adds concrete duties only to fresh seeds and preserves customized default identities on reload', () => {
     const dir = tmp(), service = new AgentCatalogService({ userData: dir, models: choices });
     const profiles = service.list().profiles;

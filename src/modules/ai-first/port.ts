@@ -27,18 +27,21 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', on
       const info = await sb.invoke('app:info', undefined);
       const choices = await Promise.all(engines.map(async id => {
         const definition = info.engines.find(e => e.id === id && e.source === 'app');
-        let status: CliStatus | null = null; try { if (definition) status = await sb.invoke('cli:status', { harness: id, checkLogin: false }); } catch { /* unknown is not absent */ }
+        let status: CliStatus | null = null; try { if (definition) status = await sb.invoke('cli:status', { harness: id, checkLogin: true }); } catch { /* unknown is not absent */ }
         return { id, label: ({ claude: 'Claude Code', codex: 'Codex', kimi: 'Kimi', cursor: 'Cursor' })[id], status, trusted: !!definition?.trusted, runs: definition?.runs ?? '' } satisfies EngineOption;
       }));
-      return { root: !info.brainProblem ? info.brainRoot : null, engines: choices };
+      const rank = (c: EngineOption) => c.status?.found ? c.status.loggedIn === true ? 0 : c.status.loggedIn === false ? 2 : 1 : 3;
+      return { root: !info.brainProblem ? info.brainRoot : null, engines: choices.sort((a, b) => rank(a) - rank(b)) };
     },
     async login(engine) { await trust(engine); await sb.invoke('cli:login', { harness: engine }); },
     async start(engine, root) {
       await trust(engine);
       const current = await sb.invoke('app:info', undefined);
       if (current.brainProblem || current.brainRoot !== root) throw new Error('AI_SETUP_MEMORY_CHANGED');
+      await sb.invoke('cli:status', { harness: engine, checkLogin: true });
       const chat = await createChat({ harness: engine, cwd: root, title: language === 'it' ? 'Il tuo spazio, insieme' : 'Your workspace, together', prompt: guidePrompt(language), permissionMode: 'default' });
       if (!chat) throw new Error('AI_SETUP_START');
+      await sb.invoke('settings:set', { regiaChats: { harness: engine } });
       return chat.id;
     },
     prove(chatId, signal) {

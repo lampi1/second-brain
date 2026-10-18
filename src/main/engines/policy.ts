@@ -9,11 +9,13 @@
 // and the chat manager's gates (chats/manager.ts, wired in wiring.ts).
 import type { Harness, Settings } from '../../shared/contract';
 import { engineLabel, engineOf } from './registry';
+import { cliAvailable } from '../../shared/engine-readiness';
+import { engineReadiness } from './readiness';
 
 export type EngineSwitches = Pick<Settings, 'engineOn' | 'engines' | 'messaging'>;
 
 /** Is the engine switched on (may anything start on it)? On, and its definition the one the user turned on (trust.ts). */
-export const engineOn = (s: Pick<Settings, 'engineOn'>, h: Harness): boolean => s.engineOn[h] === true && engineOf(h)?.trusted === true;
+export const engineOn = (s: Pick<Settings, 'engineOn'>, h: Harness): boolean => s.engineOn[h] === true && engineOf(h)?.trusted === true && cliAvailable(engineReadiness()[h]);
 
 /** May an agent open or resume a chat on this engine at all (on, and «Le Regie possono usare X» on)? */
 export const agentsMayOpen = (s: Pick<Settings, 'engineOn' | 'engines'>, h: Harness): boolean => engineOn(s, h) && s.engines[h] === true;

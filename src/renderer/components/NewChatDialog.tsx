@@ -26,6 +26,7 @@ import { HarnessMark } from './Icons';
 import { Keys, Modal } from './ui';
 import { WORK_PATHS, workBrief, type WorkPath } from '@shared/work-brief';
 import { workLabels } from '../lib/work-labels';
+import { availableEngine } from '@shared/engine-readiness';
 
 export function NewChatDialog() {
   const last = ui.use(s => s.prefs.newChat);
@@ -36,8 +37,10 @@ export function NewChatDialog() {
   const recent = useApp(s => [...new Set(s.order.map(id => s.chats[id]?.cwd).filter((x): x is string => !!x))].slice(0, 8), (a, b) => a.join('|') === b.join('|'));
   // engine, model and effort start from "Chat aperte dall’Orchestrator" (Settings page), the same defaults app_create_chat uses
   const def = useApp(s => s.settings?.regiaChats);
+  const enabled = useApp(s => s.settings?.engineOn);
+  const engines = useEngines();
   const modelOf = (h: Harness) => (def && (h === 'claude' || h === 'cursor') ? (h === 'cursor' ? def.cursorModel : def.claudeModel) : last.harness === h ? last.model : '');
-  const harness0: Harness = def?.harness ?? last.harness;
+  const harness0: Harness = availableEngine(engines.filter(e => e.trusted && enabled?.[e.id]).map(e => e.id), def?.harness ?? last.harness, info?.cli) ?? def?.harness ?? last.harness;
   const effort0: Effort | '' = def ? def.claudeEffort : last.effort;
   // every chat starts in the brain folder (the user, 2026-10-11: «non voglio sbattermi a scegliere la cartella giusta»):
   // the AI picks the repo or worktree from the task; another folder only under Avanzate
@@ -58,7 +61,6 @@ export function NewChatDialog() {
   const [worktree, setWorktree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const engines = useEngines();
   const ok = preview && !('error' in preview) ? preview : null;
   // the fields show what will start: the user's pick, else the table's (preview), else the defaults
   const harness: Harness = pick.harness ?? ok?.harness ?? harness0;

@@ -31,6 +31,16 @@ it('rejects a stale memory selection before creating a token-spending guide chat
 it('starts the actual guide in the chosen engine without widening permission mode', async () => {
   expect(await createAiSetupPort(state, 'it').start('claude', 'authoritative-root')).toBe('fixture-chat');
   expect(mock.create).toHaveBeenCalledWith(expect.objectContaining({ harness: 'claude', cwd: 'authoritative-root', permissionMode: 'default' }));
+  expect(mock.invoke).toHaveBeenCalledWith('settings:set', { regiaChats: { harness: 'claude' } });
+});
+it('checks login and presents the only ready engine first without starting it', async () => {
+  mock.invoke.mockImplementation(async (channel, arg) => channel === 'app:info'
+    ? { ...info, engines: ['claude', 'codex', 'cursor'].map(id => ({ id, source: 'app', trusted: true, runs: id })) }
+    : channel === 'cli:status' ? { found: true, loggedIn: arg.harness === 'codex', path: null, version: null } : undefined);
+  const result = await createAiSetupPort(state, 'it').bootstrap();
+  expect(result.engines[0]?.id).toBe('codex');
+  expect(mock.invoke).toHaveBeenCalledWith('cli:status', { harness: 'codex', checkLogin: true });
+  expect(mock.create).not.toHaveBeenCalled();
 });
 it('verifies a completed provider reply rather than chat creation and stops an aborted trial', async () => {
   mock.invoke.mockImplementation(async channel => channel === 'chat:items' ? [{ kind: 'user', id: 'u', at: 1, text: 'Hi' }, { kind: 'assistant', id: 'a', at: 2, text: 'How do you work?' }, { kind: 'result', id: 'r', at: 3, isError: false, costUsd: 0, durationMs: 1, turns: 1 }] : undefined);
