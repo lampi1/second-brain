@@ -38,6 +38,7 @@
 // engineAllowed). Used by manager.ts through the HarnessSession interface (built by engines/sessions.ts).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
+import { cursorAppPermissions } from './app-tool-approval';
 import os from 'node:os';
 import path from 'node:path';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
@@ -149,7 +150,7 @@ export function cursorConfigDir(env: NodeJS.ProcessEnv): string {
  *  first and its owner refuses it; a file that is not JSON is left out. denyRead (read-only only): folders the run may
  *  never read, added to cli-config.json's permissions.deny as Read(<folder>/**) (a minimal cli-config.json is written
  *  when the user has none, so the rule is there anyway). */
-export function snapshotCursorConfig(from: string, to: string, withoutAllow = false, denyRead: readonly string[] = []): void {
+export function snapshotCursorConfig(from: string, to: string, withoutAllow = false, denyRead: readonly string[] = [], appAllow: readonly string[] = []): void {
   fs.mkdirSync(to, { recursive: true });
   for (const f of ['cli-config.json', 'permissions.json']) {
     const src = path.join(from, f), dst = path.join(to, f);
@@ -164,6 +165,14 @@ export function snapshotCursorConfig(from: string, to: string, withoutAllow = fa
     const cfg = noAllowRules(fs.readFileSync(src, 'utf8'), deny);
     if (cfg === null) fs.rmSync(dst, { force: true });
     else fs.writeFileSync(dst, cfg);
+  }
+  if (!withoutAllow && appAllow.length && path.resolve(from) !== path.resolve(to)) {
+    const dst = path.join(to, 'cli-config.json');
+    const cfg = fs.existsSync(dst) ? JSON.parse(fs.readFileSync(dst, 'utf8')) as unknown : {};
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('Invalid Cursor CLI configuration');
+    const out = cfg as Obj, permissions = o(out.permissions);
+    out.permissions = { ...permissions, allow: [...new Set([...arr(permissions.allow), ...appAllow])] };
+    fs.writeFileSync(dst, JSON.stringify(out, null, 2));
   }
 }
 
@@ -374,7 +383,7 @@ export class AcpSession implements HarnessSession {
     try { argv = cliArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
     const env: NodeJS.ProcessEnv = { ...argv.env, ...this.opts.env };
     if (this.opts.configDir) {
-      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir, !!this.opts.readOnly, this.opts.readOnly ? this.opts.denyRead ?? [] : []); } catch (e) {
+      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir, !!this.opts.readOnly, this.opts.readOnly ? this.opts.denyRead ?? [] : [], cursorAppPermissions(this.opts.mcpUrl, this.opts.appMcpUrl)); } catch (e) {
         return this.fail(`Impostazioni di ${label} non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
       }
       env.CURSOR_CONFIG_DIR = this.opts.configDir;

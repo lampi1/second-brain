@@ -42,9 +42,10 @@ describe('engine registry', () => {
     for (const k of ['login', 'command', 'args', 'keyEnv', 'baseUrl']) expect(Object.keys(engineInfos()[1]!)).not.toContain(k);
   });
 
-  it('has Codex as an off preset over app-server, its key in CODEX_API_KEY, model and effort per turn (ADR 0060)', () => {
+  it('has Codex as an immutable built-in over app-server, with model and effort per turn (ADR 0060)', () => {
     const c = engineOrThrow('codex');
-    expect(c).toMatchObject({ kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: false, key: 'optional', trusted: false, runs: 'codex app-server · accesso: codex login' });
+    expect(c).toMatchObject({ kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: true, key: 'optional', trusted: true, runs: 'codex app-server · accesso: codex login' });
+    expect(brainEngine('codex', { kind: 'acp', command: 'untrusted' })).toEqual(expect.any(String));
     expect(c.caps).toMatchObject({ effort: true, liveModel: true, tools: true, transcript: false, cost: false, permissionMode: false });
     expect(enginePathsFromEnv({ SB_CODEX_PATH: 'x.mjs' })).toEqual({ codex: 'x.mjs' });
     expect(brainEngine('codex2', { kind: 'codex', label: 'C', command: 'codex' })).toEqual(expect.any(String));

@@ -221,7 +221,7 @@ app.whenReady().then(async () => {
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
     })),
     'app:usage': () => s.brain.usage(),
-    'cli:status': a => engineStatus(a.harness),
+    'cli:status': a => engineStatus(a.harness, a.checkLogin !== false),
     'cli:login': a => openLogin(a.harness),
     'chat:list': () => s.chats.list(),
     'chat:items': a => s.chats.items(a.chatId),

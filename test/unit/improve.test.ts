@@ -315,8 +315,14 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     expect(created[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', space: 'app', appRegia: true, cwd: r.dir,
       route: { source: 'table', kind: 'regia', area: 'App', version: 5 } });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
-    // the app's chats only on appChats's engine (ADR 0032 hard rule, ADR 0046): refused on Cursor, nothing created
-    await expect(s.createRegia('cursor')).rejects.toThrow(/sull’app vanno solo su Claude/);
-    expect(created).toHaveLength(1);
+    // engine parity: the app's Regia runs on the engine the user picked, keeping its app scope and never Claude's model
+    await s.createRegia('cursor');
+    expect(created[1]).toMatchObject({ harness: 'cursor', space: 'app', appRegia: true, cwd: r.dir, route: { source: 'override', kind: 'regia', area: 'App' } });
+    expect(created[1]!.model ?? null).not.toBe('claude-opus-5-5');
+    expect(created[1]!.prompt).toBe(appRegiaPrompt(r.dir));
+    // an engine that is off is still refused for the user's own pick: nothing created
+    const off = service({ dir: r.dir, base: r.base, running: 'dev', stable: false, routing: { ...routing, engineOn: (h: string) => h !== 'cursor' } });
+    await expect(off.s.createRegia('cursor')).rejects.toThrow(/spento/);
+    expect(off.created).toHaveLength(0);
   });
 });

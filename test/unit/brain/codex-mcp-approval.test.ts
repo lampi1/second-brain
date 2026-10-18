@@ -1,27 +1,27 @@
-// Native MCP approval policy: only exact app read/mail tools on attached loopback servers are pre-approved.
+// Native MCP approval policy: Claude's app-control and exact mail grants on attached loopback servers.
 // Asserts the Codex configuration contract, not a live model or installed CLI run.
 import { describe, expect, it } from 'vitest';
 import { codexLaunch } from '../../../src/main/brain/adapters/codex';
 
 const urls = { mcpUrl: 'http://127.0.0.1:4329/mcp/chat/c_test/fixture', appMcpUrl: 'http://127.0.0.1:4329/mcp/app/r/regia/fixture', domains: [], brain: false };
 const overrides = (input = {}) => codexLaunch({ ...urls, ...input }).configArgs.filter((_, index) => index % 2 === 1);
-const approved = (values: string[]) => values.filter(value => value.endsWith('.approval_mode=approve'));
+const approved = (values: string[]) => values.filter(value => value.endsWith('approval_mode=approve'));
 
 describe('native Codex app tool approval', () => {
-  it('pre-approves exactly the ten requested mail/read tools, with prompt fallback for the two attached app servers', () => {
+  it('matches Claude: all app-control tools and only two browser-server mail tools', () => {
     const values = overrides();
     expect(approved(values)).toEqual([
       'mcp_servers.second-brain.tools.send_to_chat.approval_mode=approve',
       'mcp_servers.second-brain.tools.list_chats.approval_mode=approve',
-      ...['app_digest', 'app_send_to_chat', 'app_chats', 'app_chat_items', 'app_pending', 'app_feed', 'app_logs', 'app_state'].map(name => `mcp_servers.second-brain-app.tools.${name}.approval_mode=approve`),
+      'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');
-    expect(values).toContain('mcp_servers.second-brain-app.default_tools_approval_mode=prompt');
+    expect(values).toContain('mcp_servers.second-brain-app.default_tools_approval_mode=approve');
     expect(values).toContain('approval_policy=on-request');
     expect(values).toContain('sandbox_mode=workspace-write');
   });
 
-  it('leaves action tools, similar names and other servers outside the native approval overrides', () => {
+  it('does not individually approve browser actions, similar names or unrelated servers', () => {
     const values = overrides();
     for (const name of ['app_close_chat', 'app_reopen_chat', 'app_create_chat', 'app_ui', 'app_state_extra', 'APP_STATE', 'click', 'navigate', 'type']) {
       expect(values.some(value => value.includes(`.tools.${name}.`))).toBe(false);

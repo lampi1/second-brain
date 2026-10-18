@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- CLI login readiness selects available engines for new chats and untouched starter agents. Codex is available on
+  fresh installs without extra engine switches; explicit disabled settings remain disabled.
+- App-area chats support every enabled engine. Codex and Cursor pre-approve the same app-control and mail tools as
+  Claude, without extending approval to browser actions or unrelated MCP servers.
 - The Grindhouse (home, Ctrl+1) is the one place for the agents: a strip each, in the Orchestrator's order, the
   browser it drives right under it; the Chat page and its Mosaico and Corsie views are retired, old links still work
   (ADR 0068). One Orchestrator column stays open beside every page.
@@ -20,6 +24,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [0.1.0] - 2026-10-13
 
 First public version.
+
+### Known limitations
+- Codex cost and budget reporting is unavailable; Cursor agent-run costs and budget coverage remain incomplete.
+- Codex receives brain instructions and skills, but the brain's lifecycle hooks are not installed for Codex.
 
 ### Added
 - Developer experience: `npm run demo` (the whole UI on fictional data with a sample brain),

@@ -37,7 +37,7 @@ export interface EngineDef extends EngineInfo, EngineStart {
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
 export const ENGINE_ID = /^[a-z][a-z0-9-]{0,30}$/;
-const BUILT_IN = new Set(['claude', 'cursor']);
+const BUILT_IN = new Set(['claude', 'cursor', 'codex']);
 /** Engines the app no longer runs (ADR 0046: Gemini CLI, 15/10): a brain entry with their id is left out and logged once,
  *  the settings saved for them are dropped on load (brain/config.ts fromSaved). */
 export const REMOVED_ENGINES: ReadonlySet<string> = new Set(['gemini']);
@@ -63,7 +63,7 @@ export type EngineEntry = Omit<EngineDef, 'caps' | 'source' | 'key' | 'runs' | '
 const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
-  { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: false },
+  { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: true },
   // Kimi CLI defaults to mainland-cn when the region is omitted; Second Brain's Kimi login must use the global kimi.ai account.
   { id: 'kimi', label: 'Kimi', name: 'Kimi CLI', kind: 'acp', command: 'kimi', args: ['acp'], login: ['login', '--region', 'global'], defaultOn: false },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },

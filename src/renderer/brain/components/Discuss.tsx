@@ -200,7 +200,9 @@ async function createDirect(title: string, prompt: string): Promise<{ id: string
   const info = await window.sb.invoke('app:info', undefined).catch(() => null);
   const cwd = info?.brainRoot;
   if (!cwd) return null;
-  // through the routing table too (ADR 0032); no row: Claude with its default model, as before
-  const c = await window.sb.invoke('chat:createRouted', { title, prompt, cwd, defaults: { harness: 'claude' } });
+  const settings = await window.sb.invoke('settings:get', undefined);
+  const h = settings.regiaChats.harness;
+  const model = h === 'claude' ? settings.regiaChats.claudeModel : h === 'cursor' ? settings.regiaChats.cursorModel : '';
+  const c = await window.sb.invoke('chat:createRouted', { title, prompt, cwd, defaults: { harness: h, model } });
   return { id: c.id, title: c.title };
 }
