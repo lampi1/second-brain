@@ -82,7 +82,8 @@
 .page-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .page-body > .brain-page { flex: 1; padding: 16px; }
 .map-layer { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; animation: fadeIn var(--dur) var(--ease); }
-.map-layer > * { flex: 1; }
+/* the brain map is fixed full-window on its own; in the layer it fills the padded box, beside the Orchestrator column */
+.map-layer > .bx-map { flex: 1; min-width: 0; position: relative; inset: auto; }
 
 /* an element reached through a link: a short, calm pulse */
 .sb-highlight { animation: sbHighlight 1500ms var(--ease) !important; }

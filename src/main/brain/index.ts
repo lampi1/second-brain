@@ -19,7 +19,7 @@ import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
 import { ConfigStore } from './config';
 import { findBrainCandidates } from './detect';
-import { Live, KINDS, stamp, cut, type RawEvent } from './live';
+import { Live, KINDS, stamp, cut, feedAction, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
 import { cursorToday, installHook } from './cursor-ledger';
@@ -297,6 +297,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       publishRaw(events.filter(e => kindOk(e?.kind) && typeof e.title === 'string').map(e => ({
         kind: e.kind, title: cut(e.title, 200), detail: cut(e.detail ?? '', 400),
         ...(e.who ? { who: e.who } : {}), ...(e.chatId ? { chatId: e.chatId } : {}), ...(e.file ? { file: e.file } : {}),
+        ...(feedAction(e.action) ? { action: feedAction(e.action)! } : {}),
       })));
     },
     ingestRateLimits: msg => { usage?.ingest(msg); },

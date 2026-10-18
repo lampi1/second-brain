@@ -7,7 +7,7 @@ it('accepts only packaged versioned preset/template identifiers',()=>{
  for(const value of [null,{version:2,preset:'calm',templates:{agents:'list'}},{version:1,preset:'https://example.com/style.css',templates:{agents:'list'}},{version:1,preset:'calm',templates:{agents:'<script>'}}])expect(readAppearance(value)).toEqual(defaultAppearance());
 });
 it('gives fresh installs a dark coordinator column and compact new agent preferences',()=>{
- const prefs=loadPrefs(null,0);expect(prefs.theme).toBe('dark');expect(prefs.regiaOpen).toBe(true);expect(prefs.chatPanelsV).toBe(1);expect(prefs.chatExpanded).toEqual({});
+ const prefs=loadPrefs(null,0);expect(prefs.theme).toBe('dark');expect(prefs.regiaOpen).toBe(true);expect(prefs.chatPanelsV).toBe(2);expect(prefs.chatExpanded).toEqual({});
 });
 it('keeps existing open/theme/density choices until explicit migration of chat expansion',()=>{
  const prefs=loadPrefs(JSON.stringify({regiaOpen:false,theme:'dark',density:'compact',cols:{2:[.4,.6]},appearance:{version:1,preset:'calm',templates:{agents:'list'}}}),0);

@@ -5,7 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
-import type { AgentCatalog, AgentMetrics, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -244,7 +244,7 @@ export type ChatItem =
 // ```sb-ui fence inside an AskUserQuestion option's preview). Shapes only; validation and caps: shared/genui.ts ──
 /** ok = passed/done · fail = failed · blocked · running = in progress · todo = not run yet · info · warn */
 export type UiStatus = 'ok' | 'fail' | 'blocked' | 'running' | 'todo' | 'info' | 'warn';
-/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened through app:openPath) */
+/** href: an http(s) URL (system browser) or a local absolute path / file: URL (opened in the app's read-only file viewer) */
 export interface UiLink { label: string; href: string }
 export interface UiTable { columns: string[]; rows: { cells: string[]; status?: UiStatus; link?: UiLink }[] }
 export interface UiCards {
@@ -292,7 +292,7 @@ export interface PendingRequest {
  *  prod = why it looks like production (Esegui asks a second click, shared/runnable.ts prodRisk); lead = the chat's
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
-export type OpenPathResult = { how: 'opened' | 'folder' } | { how: 'missing' | 'refused'; reason: string };
+export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
 /** app:peekFile: a clicked file's preview (main/peek-file.ts): its first lines, an image thumbnail, or why not */
 export type PeekResult =
   | { kind: 'text'; path: string; size: number; text: string; more: boolean }
@@ -350,6 +350,10 @@ export interface NewChat {
   space?: ChatSpace;          // 'app': a chat of the "Migliora l'app" section
   appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
+  /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
+  skills?: string[];
+  /** run tags: the product the work is about, up to 40 characters */
+  app?: string;
 }
 
 /** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Regia
@@ -478,7 +482,10 @@ export interface FeedEvent {
   chatId?: string;
   file?: string;
   away?: boolean;             // happened while the app was closed
+  /** the card's one action (agent-retired: Ripristina) */
+  action?: FeedAction;
 }
+export type FeedAction = { kind: 'agent-restore'; agentId: string };
 
 // ---- DevOps (src/main/devops): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
@@ -1148,8 +1155,12 @@ export interface InvokeMap {
   'agents:archive': [{ id: string }, AgentProfile];
   'agents:restore': [{ id: string }, AgentProfile];
   'agents:history': [{ id: string }, AgentVersion[]];
-  /** the §5 metrics per agent and version (A6); since = only runs ended from then on */
-  'agents:metrics': [{ since?: number } | undefined, AgentMetrics[]];
+  /** the §5 metrics per agent and version (A6); since = only runs ended from then on; skill/app/repo = only runs with that
+   *  tag (untagged runs never match) */
+  'agents:metrics': [AgentMetricsFilter | undefined, AgentMetrics[]];
+  /** Brother's Tieni / Ritira on an agent in probation (AGENTS-DESIGN §4.7) */
+  'agents:keep': [{ id: string }, AgentProfile];
+  'agents:retire': [{ id: string; reason?: string }, AgentProfile];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
   'agents:draft': [AgentDraftRequest, AgentDraftResult];
   'setup:get': [void, SetupState];
@@ -1166,12 +1177,11 @@ export interface InvokeMap {
   'app:pickBrain': [void, string | null];
   'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
-  /** a local file named in a question's context (a report, a screenshot), opened on the user's click: documents and
-   *  images with their app, anything else only shown in its folder (main/open-path.ts) */
-  'app:openPath': [{ path: string }, OpenPathResult];
+  /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
+  'app:showInFolder': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
-  /** A user-opened citation, read within main-owned brain/project/chat roots. Main renderer only. */
+  /** A user-opened file link: any local file, never a network share, read-only and bounded. Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string }, FileViewResult];
   /** an image named in a question (main/ask-image.ts) */
   'app:askImage': [{ path: string }, AskImageResult];
@@ -1394,8 +1404,8 @@ export const INVOKE_CHANNELS = [
   'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:openPath', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'agents:list', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'agents:restoreVersion', 'agents:draft', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',

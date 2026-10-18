@@ -8,7 +8,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { launch, setSize, shot, goPage } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -31,7 +31,7 @@ test.afterAll(async () => { await app?.close(); });
 const settled = async () => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 }); await page.waitForTimeout(250); };
 
 test('Qualità: errors grouped by pattern with count, week comparison, chats and rule; Discutine drafts into the Regia', async () => {
-  await page.getByTestId('nav-qualita').click();
+  await goPage(page, 'qualita');
   const p = page.getByTestId('page-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
   await settled();
@@ -89,7 +89,7 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
 });
 
 test('Costi: the period against the one before, Discutine on the total and on every chart', async () => {
-  await page.getByTestId('nav-costi').click();
+  await goPage(page, 'costi');
   const p = page.getByTestId('page-costi');
   await expect(p.getByTestId('bx-cost-kpis')).toBeVisible({ timeout: 30000 });
   await settled();
