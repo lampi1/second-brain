@@ -35,18 +35,16 @@ ADR 41 (Fatto and appRepo), ADR 56 (timer registry), ADR 57 (IT/EN UI, app shell
 - The daily compaction and browser correction prompts are in English. They keep the user's reply language and the
   non-approval disclaimer.
 
-## Integrator: shared-file patch to apply
+## Integrator: shared-file change
 
-`src/main/wiring.ts` is integrator-only (AGENTS.md), so this branch does not touch it. Apply
-`tmp/integration-shared.patch` from the worktree, so the auto-close timer joins the registry:
+`src/main/wiring.ts` is integrator-only (AGENTS.md). The integrator applied the change in this PR's integration
+commit, after the last import, so the auto-close timer joins the registry:
 
 ```diff
- import type { BrowserWindow } from 'electron';
+ import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 +import { timersFor } from './timers';
 +const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 ```
-
-Until it is applied, the auto-close interval works as before but is missing from the timer snapshot.
 
 ## Validation (2026-10-18, this worktree, after `npm ci`)
 
@@ -105,4 +103,5 @@ Other limits:
 - ADR 60: packaging uses the existing directory-depth and file-size limits. Live CLI loading is unverified.
 - ADR 18: closes the await window. It is not a cross-process file lock.
 
-No Battito fallback, no changes to contract.ts, wiring.ts or index.ts, no app launch, no push.
+No Battito fallback, no changes to contract.ts or index.ts, no app launch. wiring.ts changes only by the integrator
+commit above.
