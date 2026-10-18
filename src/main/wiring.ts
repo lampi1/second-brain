@@ -147,14 +147,20 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): Co
 
 /** "Comando da eseguire" requests (run/asks.ts): they watch every event main sends to the page (the emitter is tapped
  *  here, for the real app and the demo alike) and notify through the feed like a question ("Domanda per te"). */
-export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number): CommandAsks {
+export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
     // through the emitter as it is when called: the taps added later (the Regia's news) hear it too
-    emit: (ch, p) => ctx.emitter.emit(ch, p),
+    emit: (ch, p) => {
+      ctx.emitter.emit(ch, p);
+      if (ch === 'pending:resolved') { const x = p as { chatId: string; requestId: string }; chats?.commandDone?.(x.chatId, x.requestId); }
+    },
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
     ...(now ? { now } : {}),
-    onAsk: (req, title) => brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]),
+    onAsk: (req, title) => {
+      chats?.commandAsked?.(req.chatId, req.id);
+      brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]);
+    },
   });
   ctx.emitter.emit = (ch, p) => { send(ch, p); asks.observe(ch, p); };
   return asks;
@@ -274,7 +280,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAllowed } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
@@ -401,6 +407,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
+  setBrowserAllowed(id => manager.browserAllowed(id));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
   manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
@@ -441,7 +448,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([showUiTool(artifacts)]);
 
   const runner = commandRunner(ctx, chats);
-  const asks = attachCommandAsks(ctx, runner, brain);
+  const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
   try {

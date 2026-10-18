@@ -5,7 +5,7 @@
 import type { SysCode, SysParams } from './sys';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
-import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -89,6 +89,8 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 export interface ChatSummary {
   id: string;                 // app id (stable across resumes)
   agent?: AgentOwnerSnapshot;
+  /** the agent run this chat is (a chat started from a catalog agent): a mirror of its agent-runs.json record */
+  run?: AgentRun;
   agentChildren?: AgentChildren;
   harness: Harness;
   origin: ChatOrigin;
@@ -756,6 +758,11 @@ export interface Settings {
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;
+  /** the Grindhouse's headline (SPEC 18, main/headline.ts): on/off, and the model and effort that write it (Anthropic
+   *  API engine; '' = the default, claude-opus-5-5 at low). Absent = the defaults. */
+  headlineOn?: boolean;
+  headlineModel?: string;
+  headlineEffort?: Effort | '';
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -781,7 +788,8 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots';
+  | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | 'headlineOn' | 'headlineModel' | 'headlineEffort';
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
   type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths'; // repo-paths: explicit existing repository roots
@@ -1290,6 +1298,20 @@ export interface InvokeMap {
   'sync:get': [void, SyncState];
   'sync:now': [{ domain?: string }, SyncState];
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
+  /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
+  'headline:get': [void, HeadlineState];
+}
+
+/** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
+ *  Anthropic API engine (main/headline.ts). source: model = the last answer; previous = an older answer kept after a
+ *  failed refresh; builtin = none yet, a line of the app's own list. month* = what the headline spent this month. */
+export interface HeadlineState {
+  text: string;
+  source: 'model' | 'previous' | 'builtin';
+  at: number | null;
+  model: string;
+  monthUsd: number;
+  monthCalls: number;
 }
 
 /** An image read from the system clipboard by main (bytes as they were; the renderer checks and scales them). */
@@ -1340,6 +1362,8 @@ export interface EventMap {
   'procedures:changed': void;
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
+  /** a new headline (or the same after a failed refresh, source previous) */
+  'headline:changed': HeadlineState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1367,7 +1391,7 @@ export const INVOKE_CHANNELS = [
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
-  'sync:get', 'sync:now', 'sync:resolve',
+  'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
@@ -1376,7 +1400,7 @@ export const EVENT_CHANNELS = [
   'chat:autoCloseStatus',
   'agents:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'procedures:changed', 'sync:state', 'headline:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

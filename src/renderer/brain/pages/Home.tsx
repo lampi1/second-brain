@@ -10,6 +10,7 @@ import { IconPlus } from '../../components/Icons';
 import { t } from '../../i18n';
 import { AgentStrips, AgentStripsActions } from '../../components/AgentStrips';
 import { orchestratorIdOf } from '../../lib/regia-route';
+import { HeadlineLine, useHeadline } from './HomeHeadline';
 import './home.css';
 
 export function Home({ nav }: { nav: (target: string) => void }) {
@@ -18,10 +19,12 @@ export function Home({ nav }: { nav: (target: string) => void }) {
   const byId = new Map(chats.map(c => [c.id, c]));
   const pending = useApp(s => [...s.pending].sort((a, b) => a.at - b.at), sameList);
   const working = chats.filter(isBusy).length;
+  const headline = useHeadline();
   return <div className="home-page" data-testid="home">
     <header className="home-heading">
       <span className="home-eyebrow">{t('home.title')}</span>
       <h1>{t('home.greeting', { name: 'Brother' })}</h1>
+      <HeadlineLine state={headline} />
       <p>{t('home.activityLead')}</p>
       <div className="home-overview"><span><i className={working ? 'home-live-dot' : ''} />{t('home.workingCount', { count: working })}</span><span>{t('home.reviewCount', { count: pending.length })}</span></div>
     </header>
@@ -37,6 +40,6 @@ export function Home({ nav }: { nav: (target: string) => void }) {
       <div className="home-section-head"><h2 id="home-agents-title">{t('home.agents')}</h2><span className="home-count">{chats.length}</span><span className="sp" /><AgentStripsActions /><button type="button" className="btn btn-ghost btn-s" onClick={() => openModal('newChat')}><IconPlus size={14} /> {t('home.newAgent')}</button></div>
       <AgentStrips />
     </section>
-    <footer className="home-footer"><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('agenti')}>{t('home.manageAgents')}</button><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('mappa')}>{t('home.map')} ↗</button><span className="sp" /><span>{t('home.regiaBeside')}</span></footer>
+    <footer className="home-footer"><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('agenti')} data-testid="home-manage-agents">{t('home.manageAgents')}</button><button type="button" className="btn btn-ghost btn-s" onClick={() => nav('mappa')}>{t('home.map')} ↗</button><span className="sp" /><span>{t('home.regiaBeside')}</span></footer>
   </div>;
 }

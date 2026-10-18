@@ -125,6 +125,14 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
   return app.evaluate(() => (globalThis as unknown as { __sbDemo: { layout(): Layout } }).__sbDemo.layout());
 }
 
+/** Opens the agent studio from where it lives since the Grindhouse (ADR 0068): the Home footer's "Gestisci agenti"
+ *  (the sidebar shows "Agenti" only when the chosen role lists it). */
+export async function openAgents(page: Page): Promise<void> {
+  await page.getByTestId('nav-home').click();
+  await page.getByTestId('home-manage-agents').click();
+  await expect(page.getByTestId('agent-studio')).toBeVisible();
+}
+
 /** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
 export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
   await page.getByTestId('topbar-more').click();

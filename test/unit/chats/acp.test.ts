@@ -479,6 +479,16 @@ describe('AcpSession as Cursor', () => {
     await expect(s.setEffort('high')).rejects.toThrow(/effort/i);
   });
 
+  it('an agent capped at plan takes the read-only mode whatever the chosen mode (A2)', async () => {
+    const { s, sink, logFile } = start({ permissionMode: 'acceptEdits', ceiling: 'plan' });
+    await waitFor(() => s.state === 'idle', 'ready');
+    const set = cursorLog(logFile).filter(l => l.method === 'session/set_mode').map(l => l.params?.modeId);
+    expect(set).toHaveLength(1);
+    expect(['ask', 'plan']).toContain(set[0]);
+    // Cursor's read-only "ask" shows as plan here, so the manager's ceiling guard does not fire on it
+    await waitFor(() => sink.patch.permissionMode === 'plan', 'shown as plan');
+  });
+
   it('applies the user\'s reasoning and fast with session/set_config_option and shows the variant really running', async () => {
     const { s, sink, logFile } = start({ model: 'gpt-5.6-sol', modelConfig: { reasoning: 'medium', fast: false } });
     await waitFor(() => s.state === 'idle', 'ready');
