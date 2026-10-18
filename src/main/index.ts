@@ -39,6 +39,7 @@ import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
+import { pulseStubHandlers } from './pulse/handlers';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -301,6 +302,7 @@ app.whenReady().then(async () => {
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => headline.get(),
+    ...pulseStubHandlers(),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.

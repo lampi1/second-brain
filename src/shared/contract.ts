@@ -3,6 +3,7 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
+import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
 import type { AgentCatalog, AgentMetrics, AgentDraft, AgentDraftRequest, AgentDraftResult, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
@@ -1303,12 +1304,24 @@ export interface InvokeMap {
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
+  'pulse:list': [{ place: PulsePlace }, PulseList];
+  'pulse:status': [void, PulseStatus];
+  'pulse:seen': [{ ids: string[] }, void];
+  'pulse:save': [{ id: string }, PulseResult];
+  'pulse:act': [{ id: string }, PulseActResult];
+  'pulse:dismiss': [{ id: string; reason?: PulseDismissReason }, PulseResult];
+  'pulse:runNow': [void, PulseResult];
+  'approvals:list': [{ agentId?: string }, ApprovalItem[]];
+  'approvals:decide': [ApprovalDecision, PulseResult];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
  *  Anthropic API engine (main/headline.ts). source: model = the last answer; previous = an older answer kept after a
  *  failed refresh; builtin = none yet, a line of the app's own list. month* = what the headline spent this month. */
 export interface HeadlineState {
+  /** Battito provenance; absent in legacy caches. */
+  engine?: string | null;
+  agentId?: string;
   text: string;
   source: 'model' | 'previous' | 'builtin';
   at: number | null;
@@ -1367,6 +1380,8 @@ export interface EventMap {
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
   'headline:changed': HeadlineState;
+  'pulse:changed': void;
+  'approvals:changed': void;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1376,6 +1391,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:brainCreation', 'app:createBrain',
@@ -1397,6 +1413,7 @@ export const INVOKE_CHANNELS = [
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
+  'pulse:changed', 'approvals:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'improve:proposals',
   'progress:changed',
