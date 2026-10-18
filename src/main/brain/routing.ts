@@ -15,11 +15,12 @@ import type { Effort, Harness, ModelRegistry, RegistryModel, RouteDecision, Rout
 import { TASK_KINDS } from '../../shared/contract';
 import { areaOf } from './brain-estimates';
 import { log } from '../log';
-import { engineLabel, engineOf } from '../engines/registry';
+import { engineLabel, engineOf, engines } from '../engines/registry';
+import { availableEngine } from '../../shared/engine-readiness';
+import { engineReadiness } from '../engines/readiness';
 
 export const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-/** the areas of the chats on the app itself: only on the engine of the registry's appChats model (the user's rule,
- *  harness/models.md) */
+/** The app's areas retain their routing priority and safety scope on every engine. */
 export const APP_AREAS = ['App', 'Pers · App'];
 
 const readJson = (f: string): unknown => { try { return JSON.parse(fs.readFileSync(f, 'utf8').replace(/^﻿/, '')) as unknown; } catch { return null; } };
@@ -56,9 +57,6 @@ const harnessAuto = (h: string, reg: ModelRegistry): boolean => reg.harnesses?.[
 /** Fable: never from the table nor from exploration, whatever the registry says (the user, 2026-10-14: "non userei fable
  *  costa troppo"); only an agent's override with a reason, or the user, names it. */
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
-/** the engine the app's own chats run on: appChats's model's engine (Claude without one) */
-const appEngine = (reg: ModelRegistry | null): Harness => modelRow(reg?.appChats?.model ?? null, reg)?.harness ?? 'claude';
-const appRefusal = (reg: ModelRegistry | null): string => `le chat sull’app vanno solo su ${engineLabel(appEngine(reg))}`;
 /** does the engine take an effort (Claude's thinking budget)? */
 const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
@@ -108,19 +106,11 @@ export function checkTable(routes: unknown, reg: ModelRegistry | null): string[]
     if (m.harness !== r.harness) errs.push(`${at}: ${m.id} gira solo su ${m.harness}, non su ${String(r.harness)}`);
     if (!harnessAuto(String(r.harness), reg) || m.routing !== 'auto') errs.push(`${at}: ${m.id} su ${String(r.harness)} è solo manuale (la tabella non lo sceglie da sola)`);
     if (isFable(m)) errs.push(`${at}: Fable mai dalla tabella (costa troppo)`);
-    const ac = reg.appChats;
-    if (ac && areas.some(isApp) && (modelRow(ac.model, reg) !== m || (r.effort ?? null) !== (ac.effort ?? null))) errs.push(`${at}: le chat sull’app vanno sempre su ${ac.model}${ac.effort ? ` ${ac.effort}` : ''} (altri modelli solo con l’esplorazione)`);
-    if (r.harness !== appEngine(reg) && (areas.some(isApp) || !areas.length)) errs.push(`${at}: ${appRefusal(reg)}`);
     if (r.onApi === true && r.kind !== 'writing') errs.push(`${at}: «Sui crediti API» solo sulle righe Scrittura (il motore API è solo testo)`);
     else if (r.onApi === true && m.provider !== 'anthropic') errs.push(`${at}: «Sui crediti API» solo con un modello Anthropic, non ${m.id}`);
     if (r.effort === 'max') errs.push(`${at}: sforzo max solo su richiesta, mai dalla tabella`);
     else if (r.effort && !(m.efforts ?? []).includes(r.effort)) errs.push(`${at}: ${m.id} non ha lo sforzo «${r.effort}»`);
   });
-  // a row without an area reaches the app's chats too: a table with rows needs "any kind · each app area" (checked above
-  // to be appChats), so no kind-only row ever routes them elsewhere
-  const ac = reg.appChats;
-  if (ac && routes.length && !APP_AREAS.every(a => routes.some((x: unknown) => { const r = (x ?? {}) as Partial<RoutingRow>; return r.kind === '*' && (areasOf(r as RoutingRow) ?? []).includes(a); })))
-    errs.push(`manca la riga «qualsiasi tipo · ${APP_AREAS.join(', ')}» su ${ac.model}${ac.effort ? ` ${ac.effort}` : ''}: senza, le chat sull’app prenderebbero le righe per tipo`);
   return errs;
 }
 
@@ -208,10 +198,16 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   const row = match(table?.routes, item);
   // a row on a harness the app cannot start (api) or may not start now (engine off, Claude <-> Cursor off for this
   // Regia) is not usable: the defaults decide, as before the table
-  const usable = row && engineOf(row.harness) && canRun(row.harness) ? row : null;
+  const readiness = engineReadiness();
+  const fallback = availableEngine(engines().map(e => e.id).filter(canRun), defaults.harness, readiness);
+  const readyAlternative = fallback && readiness[fallback]?.loggedIn === true;
+  const usable = row && engineOf(row.harness) && canRun(row.harness)
+    && (ask.harness === row.harness || !readyAlternative || readiness[row.harness]?.loggedIn === true || engineOf(row.harness)?.kind === 'api') ? row : null;
+  if (!ask.harness && !usable && !fallback) return { error: 'Nessun motore disponibile: verifica installazione, accesso e impostazioni.' };
+  const defaultHarness = fallback ?? defaults.harness;
   const base = usable
     ? { harness: usable.harness as Harness, model: usable.model as string | null, effort: usable.effort ?? null }
-    : { harness: defaults.harness, model: defaults.models[defaults.harness] || null, effort: takesEffort(defaults.harness) ? defaults.effort : null };
+    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: takesEffort(defaultHarness) ? defaults.effort : null };
   const harness = ask.harness ?? base.harness;
   // a model belongs to its harness: switching harness takes that harness's default model, never the other one's
   const sameEngine = harness === base.harness;
@@ -222,7 +218,6 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };
   if (harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
-  if (isApp(item.area) && harness !== appEngine(reg)) return { error: appRefusal(reg) };
   if (ask.model && harness === 'claude' && reg && !m) return { error: `modello «${ask.model}» non è in harness/models.json del cervello` };
   if (ask.effort && !takesEffort(harness)) return { error: `lo sforzo non vale per ${engineLabel(harness)}: scegli il modello` };
   if (effort && !EFFORTS.includes(effort)) return { error: `sforzo «${String(effort)}»: ${EFFORTS.join(' | ')}` };
@@ -257,7 +252,7 @@ export function explore(table: Pick<RoutingTable, 'exploration'> | null, item: {
   const arms: Arm[] = [];
   for (const m of reg.models) {
     const h = m.harness;
-    if (h !== base.harness || (isApp(item.area) && h !== appEngine(reg)) || !harnessAuto(h, reg) || m.routing !== 'auto' || isFable(m) || !canRun(h)) continue;
+    if (h !== base.harness || !harnessAuto(h, reg) || m.routing !== 'auto' || isFable(m) || !canRun(h)) continue;
     const efforts = takesEffort(h) ? (m.efforts ?? []).filter(e => e !== 'max') : [];
     for (const effort of efforts.length ? efforts : [null]) arms.push({ harness: h, model: m.id, effort });
   }

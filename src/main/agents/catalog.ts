@@ -253,7 +253,8 @@ export class AgentCatalogService {
   }
   private defaults(): AgentProfile[] {
     const choices = this.d.models();
-    const e = choices.find(x => x.enabled && x.trusted && x.defaultModel) ?? choices.find(x => x.defaultModel);
+    const usable = choices.filter(x => x.enabled && x.trusted && x.defaultModel && x.installed !== false && x.authenticated !== false);
+    const e = usable.find(x => x.installed === true && x.authenticated === true) ?? usable[0];
     if (!e) return [];
     const at = this.now();
     const manifests = this.d.language?.() === 'en' ? DEFAULT_MANIFESTS_EN : DEFAULT_MANIFESTS;
@@ -283,9 +284,43 @@ export class AgentCatalogService {
     return p;
   }
   list(): AgentCatalog {
+    this.refreshDefaults();
     return structuredClone({ profiles: this.profiles.filter(p => p.status === 'active'), archived: this.profiles.filter(p => p.status === 'archived'), models: this.d.models(), problem: this.problem ?? this.store.problem, legacyRouting: this.legacyRouting,
       builder: this.d.builder?.() ?? { available: false, engine: null, models: [], reason: 'La guida AI richiede un servizio testuale configurato. La creazione manuale funziona offline.' },
       imageGeneration: { available: false as const, reason: 'Nessun servizio di generazione immagini è collegato. Scegli un simbolo o carica un’immagine.' } });
+  }
+  /** Rebind only pristine, never-edited seeds after asynchronous login discovery. Customized versions stay pinned. */
+  private refreshDefaults(): void {
+    if (this.problem || this.store.problem) return;
+    const seeds = this.defaults();
+    if (!seeds.length) return;
+    const models = this.d.models();
+    const changed: AgentProfile[] = [];
+    const next = this.profiles.map(p => {
+      const current = models.find(e => e.engine === p.engine);
+      const seed = seeds.find(s => s.id === p.id);
+      if (!seed || seed.engine === p.engine) return p;
+      const preferred = models.find(e => e.engine === seed.engine);
+      const readyAlternative = preferred?.installed === true && preferred.authenticated === true;
+      if (current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false
+        && (current.authenticated === true || !readyAlternative)) return p;
+      if (p.origin.kind !== 'preset' || p.userLocked || p.lastEditedBy !== 'preset' || p.status !== 'active') return p;
+      const updated = { ...p, engine: seed.engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      changed.push(updated); return updated;
+    });
+    // Seed the starters only into a catalog born without any (no engine was usable then). A catalog that already holds a
+    // starter keeps the user's choice: a starter they never had or removed is not brought back. Generale does not count:
+    // ensureGeneral recreates it on its own (an agentless chat), possibly before this first seeding.
+    const unseeded = !next.some(p => p.id !== GENERAL_AGENT_ID && seeds.some(s => s.id === p.id));
+    if (unseeded) for (const seed of seeds) if (!next.some(p => p.id === seed.id) && next.length < MAX_AGENTS && next.filter(p => p.status === 'active').length < MAX_ACTIVE_AGENTS) { next.push(seed); changed.push(seed); }
+    if (changed.length) {
+      try {
+        this.commit(next, changed.map(p => ({ ...firstVersion(p, 'preset', 'Motore iniziale disponibile', this.now()), version: p.version,
+          parentVersion: this.profiles.find(old => old.id === p.id)?.activeVersion ?? null })),
+        changed.flatMap(p => { const old = this.profiles.find(x => x.id === p.id); return old ? [{ agentId: old.id, version: old.activeVersion, state: 'superseded' as const }] : []; }));
+      }
+      catch (e) { log.warn('agents', 'starter engine refresh failed', { cause: errText(e), hint: 'check the local catalog is writable' }); }
+    }
   }
   private validate(value: unknown, current: boolean, partial = false): CheckedDraft {
     const p = obj(value);

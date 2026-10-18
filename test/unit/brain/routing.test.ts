@@ -40,20 +40,16 @@ describe('routing: the table', () => {
     ], REG);
     expect(errs).toEqual([
       expect.stringMatching(/riga 1: tipo «boh» sconosciuto/), expect.stringMatching(/riga 2: .*non è in harness\/models\.json/),
-      // a Cursor row with no area would cover the app's chats too
-      expect.stringMatching(/riga 3: .*solo su claude/), expect.stringMatching(/riga 3: .*solo manuale/), expect.stringMatching(/riga 3: .*sull’app vanno solo su Claude/),
-      expect.stringMatching(/riga 4: .*solo manuale/), expect.stringMatching(/riga 4: .*sull’app vanno solo su Claude/),
+      expect.stringMatching(/riga 3: .*solo su claude/), expect.stringMatching(/riga 3: .*solo manuale/),
+      expect.stringMatching(/riga 4: .*solo manuale/),
       expect.stringMatching(/riga 5: sforzo max/), expect.stringMatching(/riga 7: area vuota/),
-      // no "any kind · App, Pers · App" row: a kind-only row would route the app's chats elsewhere
-      expect.stringMatching(/manca la riga «qualsiasi tipo · App, Pers · App» su claude-opus-5-5 medium/),
     ]);
-    // never Fable (too costly); a row for the app's chats only on the registry's appChats (Opus medium)
+    // Never Fable; app areas use the same model validation as work areas.
     expect(checkTable([row({ model: 'claude-fable-5-1' }), row({ area: 'App', model: 'claude-sonnet-5-5' }), row({ area: 'Pers · App', effort: 'high' })], REG)).toEqual([
-      expect.stringMatching(/riga 1: Fable mai/), expect.stringMatching(/riga 2: .*sempre su claude-opus-5-5 medium/), expect.stringMatching(/riga 3: .*sempre su claude-opus-5-5 medium/),
+      expect.stringMatching(/riga 1: Fable mai/),
     ]);
     expect(checkTable([row({ area: 'App', model: 'claude-sonnet-5-5' })], { ...REG, appChats: undefined })).toEqual([]);
-    // the app row must cover both app areas; an empty table (no routing) is valid
-    expect(checkTable([row({ area: 'App' }), row({ kind: 'bug-fix', model: 'claude-haiku-5-5' })], REG)).toEqual([expect.stringMatching(/manca la riga/)]);
+    expect(checkTable([row({ area: 'App' }), row({ kind: 'bug-fix', model: 'claude-haiku-5-5' })], REG)).toEqual([]);
     expect(checkTable([], REG)).toEqual([]);
     expect(checkTable('x', REG)).toHaveLength(1);
     expect(checkTable(ROUTES, null)[0]).toMatch(/models\.json/);
@@ -110,7 +106,7 @@ describe('routing: resolve', () => {
     const it0 = { kind: 'bug-fix' as const, area: 'Ordini' };
     expect(resolve(T, it0, { harness: 'cursor', model: 'claude-opus-5-5' }, DEF, REG)).toEqual({ error: expect.stringMatching(/solo su claude/) });
     expect(resolve(T, it0, { harness: 'cursor', model: 'opus-x' }, DEF, REG)).toEqual({ error: expect.stringMatching(/Claude gira solo/) });
-    expect(resolve(T, { kind: 'bug-fix', area: 'Pers · App' }, { harness: 'cursor', reason: 'r' }, DEF, REG)).toEqual({ error: expect.stringMatching(/sull’app vanno solo su Claude/) });
+    expect(resolve(T, { kind: 'bug-fix', area: 'Pers · App' }, { harness: 'cursor', reason: 'r' }, DEF, REG)).toMatchObject({ harness: 'cursor', source: 'override' });
     expect(resolve(T, it0, { harness: 'claude', model: 'claude-mistero' }, DEF, REG)).toEqual({ error: expect.stringMatching(/models\.json/) });
     expect(resolve(T, it0, { harness: 'cursor', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Cursor/) });
     expect(resolve(T, it0, { effort: 'max' }, DEF, REG)).toEqual({ error: expect.stringMatching(/max/) });
@@ -207,7 +203,8 @@ describe('routing: exploration', () => {
       models: [...REG.models.map(m => (m.id === 'grok-4.7' ? { ...m, routing: 'auto' as const } : m)),
         { ...REG.models.find(m => m.id === 'grok-4.7')!, id: 'gpt-5.6-terra', routing: 'auto' as const }] };
     expect(explore(T, item, cursorBase, auto, () => true, none, yes)).toEqual({ harness: 'cursor', model: 'gpt-5.6-terra', effort: null, samples: 0 });
-    expect(explore(T, { ...item, area: 'App' }, cursorBase, auto, () => true, none, yes)).toBeNull();
+    const appArm = explore(T, { ...item, area: 'App' }, cursorBase, auto, () => true, none, yes);
+    expect(appArm === null || appArm.harness === 'cursor').toBe(true);
     expect(explore(T, item, base, auto, () => true, none, yes)).toMatchObject({ harness: 'claude' });
   });
 

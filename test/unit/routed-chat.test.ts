@@ -66,20 +66,23 @@ describe('createRoutedChat', () => {
     expect(made[0]).toMatchObject({ model: 'claude-haiku-5-5', effort: 'low', route: { kind: 'review', area: 'Acme.Web', source: 'table' } });
   });
 
-  it('a row on an engine that is off falls to the defaults; a default on an engine that is off is refused', async () => {
+  it('an unavailable row or default falls back to an allowed engine; an explicit pick is refused', async () => {
     const { d, made } = deps({ claude: false, cursor: true });
     await createRoutedChat(d, base({ kind: 'bug-fix' }));
     expect(made[0]).toMatchObject({ harness: 'cursor', route: { source: 'default' } });
     const off = deps({ claude: true, cursor: false });
-    await expect(createRoutedChat(off.d, base({ routeText: 'x' }))).rejects.toThrow(/spento/);
-    expect(off.made).toHaveLength(0);
+    await createRoutedChat(off.d, base({ routeText: 'x' }));
+    expect(off.made[0]).toMatchObject({ harness: 'claude' });
+    await expect(createRoutedChat(off.d, base({ routeText: 'x', ask: { harness: 'cursor' } }))).rejects.toThrow(/spento/);
+    expect(off.made).toHaveLength(1);
   });
 
   it('«Le Regie possono usare Cursor» off: a table row or a default on Cursor is not used, the user’s own pick is; a Regia never moves there', async () => {
     const cursorRow: RoutingTable = { ...table, routes: [{ kind: 'bug-fix', harness: 'cursor', model: 'composer-2.5', effort: null, why: 'bug: Cursor', since: '2026-10-14', evidence: 'n=1' }] };
     const { d, made } = deps({ claude: true, cursor: true }, { claude: true, cursor: false });
     d.route = (req: RouteRequest) => routeChat(req, cursorRow, DEMO_REGISTRY, rules, 7);
-    await expect(createRoutedChat(d, base({ kind: 'bug-fix' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
+    await createRoutedChat(d, base({ kind: 'bug-fix' }));
+    expect(made.pop()).toMatchObject({ harness: 'claude', route: { source: 'default' } });
     await createRoutedChat(d, base({ kind: 'bug-fix', defaults: { harness: 'claude' } }));
     expect(made[0]).toMatchObject({ harness: 'claude', route: { source: 'default' } });
     await createRoutedChat(d, base({ kind: 'bug-fix', defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'scelta mia' } }));
@@ -152,7 +155,7 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     expect(asked[0]).toHaveProperty('counts', undefined);
     expect(made).toHaveLength(0);
     const off = deps({ claude: false, cursor: true });
-    expect(previewRoute(off.d, base({ routeText: 'x', defaults: { harness: 'claude' } }))).toEqual({ error: expect.stringMatching(/spento/) });
+    expect(previewRoute(off.d, base({ routeText: 'x', defaults: { harness: 'claude' } }))).toMatchObject({ harness: 'cursor' });
   });
 
   it('started by the user: no cap on the first message, no dice roll, the picked permission mode kept on the routed engine', async () => {

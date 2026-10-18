@@ -1,9 +1,9 @@
 // The engines the app drives (ADR 0010: Claude embedded; ADR 0046: any ACP CLI or HTTP model of the registry): where
 // they are, which version, whether the user is logged in, and opening the OFFICIAL login in a visible terminal. The app
 // never sees, stores or types a login: the engine's own login flow runs in a console window the user works in (API keys
-// are the one exception, typed in Settings: engines/secrets.ts). An ACP CLI's login state is checked only on the
-// user's request (a click), never automatically: no call to its service happens unless asked (each engine spends only
-// its own; agents testing the app must not trigger another vendor's CLI). Resolution and process primitives (the
+// are the one exception, typed in Settings: engines/secrets.ts). Built-in CLI status commands check login without
+// starting a model or reading credential files. Unknown engines stay unknown. Tests run only fake CLIs.
+// Resolution and process primitives (the
 // embedded binary, Cursor's node.exe, fake .mjs engines for tests, kill tree) live in chats/cli.ts; used by index.ts,
 // wiring.ts.
 import { execFile, spawn } from 'node:child_process';
@@ -14,6 +14,7 @@ import type { CliStatus, Harness } from '../shared/contract';
 import { commandFor, engineAllowed, findCli, resolveAcp, resolveClaude, resolveCursor } from './chats/cli';
 import { engineOrThrow, engines, type EngineDef } from './engines/registry';
 import { log } from './log';
+import { recordReadiness } from './engines/readiness';
 
 /** The same Claude engine the chats run (embedded binary, ADR 0010), so status and login match what chats use. */
 export const claudePath = (): string | null => resolveClaude()?.path ?? null;
@@ -30,22 +31,22 @@ export const cursorPath = (): string | null => {
 
 /** Run a fixed-flag command, async (never block the main process). .cmd shims (Cursor on Windows) go through cmd.exe;
  *  the arguments are constants of this file, never user text. */
-function runFixed(exe: string, args: string[], timeout = 20000): Promise<{ stdout: string; ok: boolean }> {
+function runFixed(exe: string, args: string[], timeout = 20000): Promise<{ stdout: string; stderr: string; ok: boolean }> {
   const shim = /\.(cmd|bat)$/i.test(exe);
   const c = shim
     ? { command: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/s', '/c', `""${exe}" ${args.join(' ')}"`], env: process.env }
     : commandFor(exe, args, process.env);
   return new Promise(res => execFile(c.command, c.args, { encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: shim, env: c.env },
-    (err, stdout) => res({ stdout: String(stdout ?? ''), ok: !err })));
+    (err, stdout, stderr) => res({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), ok: !err })));
 }
 const version = (out: string) => out.match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? (out.trim() || null);
 
-async function claudeStatus(): Promise<CliStatus> {
+async function claudeStatus(checkLogin: boolean): Promise<CliStatus> {
   const p = claudePath();
   if (!p) return { found: false, path: null, version: null, loggedIn: null };
   const v = await runFixed(p, ['--version']);
   let loggedIn: boolean | null = null, account: string | null = null;
-  if (!process.env.SB_DEMO) {
+  if (checkLogin && !process.env.SB_DEMO) {
     const a = await runFixed(p, ['auth', 'status']);
     try { const s = JSON.parse(a.stdout) as { loggedIn?: boolean; email?: string; authMethod?: string } | null; loggedIn = typeof s?.loggedIn === 'boolean' ? s.loggedIn : null; account = s?.email ? `${s.authMethod ?? ''} ${s.email}`.trim() : null; } catch { /* old or fake CLI: unknown */ }
   }
@@ -65,21 +66,36 @@ function acpRunnable(e: EngineDef): boolean {
   return !!c && engineAllowed(c) && e.trusted;
 }
 
-async function acpStatus(e: EngineDef): Promise<CliStatus> {
+/** Only explicit status markers count; timeouts, unsupported flags and transport errors remain unknown. */
+export function loginStatus(text: string): boolean | null {
+  const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+  if (/\bnot (?:logged in|authenticated)\b|\blogged out\b/i.test(clean)) return false;
+  if (/\blogged in\b|\bauthenticated\s*:\s*true\b/i.test(clean)) return true;
+  return null;
+}
+
+async function acpStatus(e: EngineDef, checkLogin: boolean): Promise<CliStatus> {
   const p = acpPath(e);
   if (!p) return { found: false, path: null, version: null, loggedIn: null };
   if (!acpRunnable(e)) return { found: true, path: p, version: null, loggedIn: null };
   const v = await runFixed(p, ['--version']);
-  return { found: true, path: p, version: version(v.stdout), loggedIn: null };
+  let loggedIn: boolean | null = null;
+  if (checkLogin && !process.env.SB_DEMO && (e.kind === 'codex' || e.id === 'cursor')) {
+    const auth = await runFixed(p, e.kind === 'codex' ? ['login', 'status'] : ['status']);
+    loggedIn = loginStatus(`${auth.stdout}\n${auth.stderr}`);
+  }
+  return { found: true, path: p, version: version(v.stdout), loggedIn };
 }
 
 /** One engine's status (found, version, login when it can be read without spending). An HTTP engine has no program:
  *  "found", with its endpoint as the path. */
-export function engineStatus(id: Harness): Promise<CliStatus> {
+export async function engineStatus(id: Harness, checkLogin = true): Promise<CliStatus> {
   const e = engineOrThrow(id);
-  if (e.kind === 'claude') return claudeStatus();
-  if (e.kind === 'api') return Promise.resolve({ found: true, path: e.baseUrl ?? null, version: null, loggedIn: null });
-  return acpStatus(e);
+  const status = e.kind === 'claude' ? await claudeStatus(checkLogin)
+    : e.kind === 'api' ? { found: true, path: e.baseUrl ?? null, version: null, loggedIn: null }
+    : await acpStatus(e, checkLogin);
+  if (checkLogin) recordReadiness(id, status);
+  return status;
 }
 
 /** Every engine's status, by id. */

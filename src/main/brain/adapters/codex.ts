@@ -2,9 +2,9 @@
 // the user's ~/.codex (repo rule 6): `-c key=value` overrides on its command line (approval policy, sandbox, the app's
 // MCP servers), the domains' AGENTS.md as the thread's developer instructions, the domains' skill folders for
 // skills/extraRoots/set. With the brain switched off (Settings) only the app's own part stays (approval, sandbox, MCP).
-// UNVERIFIED (docs read 16/10, no CLI run): the -c keys `approval_policy`, `sandbox_mode`, `mcp_servers.<name>.url`
-// (streamable HTTP) and their place before the subcommand; the values are left unquoted (TOML that does not parse is
-// taken as a string) because an npm-installed codex.cmd only takes plain arguments (chats/cli.ts cliArgv).
+// CLI 0.163.0-alpha.10.2 accepted these -c overrides and reported the streamable HTTP URL via `mcp get` (18/10).
+// Native approval keys follow the official config reference; live model/tool approval behavior is not verified.
+// Values stay unquoted (invalid TOML falls back to a string): codex.cmd takes plain arguments (chats/cli.ts cliArgv).
 // A Codex chat that starts with the brain switched on but no domain (no brain folder, or it is gone) logs it at info,
 // so "Codex does not follow my rules" is visible in `npm run logs`. Used by engines/sessions.ts.
 import { log } from '../../log';
@@ -12,6 +12,7 @@ import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './doma
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
 import type { AgentPolicy } from '../../agents/tool-policy';
+import { APP_MAIL_TOOLS, appEndpoint } from '../../chats/app-tool-approval';
 
 export interface CodexLaunch {
   configArgs: string[];
@@ -38,21 +39,13 @@ export interface CodexLaunchInput {
 /** A value safe on a cmd.exe command line and in a -c override (chats/cli.ts cliArgv's plain-argument rule). */
 const PLAIN = /^[\w.:@/=[\],-]+$/;
 
-// Native Codex per-tool policy, limited to the app's own attached loopback MCP servers. Claude already
-// pre-allows chat mail/list and app-control; Codex gets only these explicit read/mail tools, never a server wildcard.
-const APP_TOOL_APPROVALS = {
-  'second-brain': ['send_to_chat', 'list_chats'],
-  'second-brain-app': ['app_digest', 'app_send_to_chat', 'app_chats', 'app_chat_items', 'app_pending', 'app_feed', 'app_logs', 'app_state'],
-} as const;
-
-function attachMcp(config: string[], server: keyof typeof APP_TOOL_APPROVALS, raw: string | null): void {
+// Match Claude: every app-control tool, but only mail/list on the browser server.
+function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app', raw: string | null): void {
   if (!raw || !PLAIN.test(raw)) return;
   config.push(`mcp_servers.${server}.url=${raw}`);
-  let url: URL;
-  try { url = new URL(raw); } catch { return; }
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || !url.pathname.startsWith('/mcp/') || url.username || url.password || url.search || url.hash) return;
-  config.push(`mcp_servers.${server}.default_tools_approval_mode=prompt`);
-  for (const tool of APP_TOOL_APPROVALS[server]) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
+  if (!appEndpoint(raw)) return;
+  config.push(`mcp_servers.${server}.default_tools_approval_mode=${server === 'second-brain-app' ? 'approve' : 'prompt'}`);
+  if (server === 'second-brain') for (const tool of APP_MAIL_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
 }
 
 export function codexLaunch(i: CodexLaunchInput): CodexLaunch {

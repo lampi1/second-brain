@@ -7,6 +7,7 @@ import os from 'node:os';
 import type { CliStatus, Harness } from '../shared/contract';
 import { NEW_CHAT_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
+import { engineReadiness } from './engines/readiness';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
@@ -294,8 +295,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the dev instance records the shapes real CLIs send (sanitized, a few per kind): fixtures for the contract tests (ADR 0055)
   setRecorder(!releaseId() && !process.env.SB_TEST ? path.join(ctx.userData, 'cli-records') : null);
   let cliCache: Record<Harness, CliStatus> | null = null;
-  // not in e2e tests: a pending CLI check would delay the app exit by seconds
-  if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; ctx.emitter.emit('cli:ready', all); });
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
@@ -334,7 +333,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
-  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false, () => progressService.award('first-agent'));
+  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), false, () => progressService.award('first-agent'));
+  // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
+  // Tests never run installed vendors; their fake status is requested explicitly.
+  if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
   addChatTools([agentCatalogTool(() => agents.list()), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
@@ -574,7 +576,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
-    cli: () => cliCache,
+    cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
     shutdown: async () => { clearInterval(autoCloseTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };

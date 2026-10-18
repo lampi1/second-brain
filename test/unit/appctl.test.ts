@@ -273,13 +273,13 @@ describe('app control tools', () => {
     expect(await t.run({ title: 'Ordini · fix totale', prompt: 'p', harness: 'claude' })).toMatchObject({ harness: 'claude', effort: 'high', route: { source: 'override', reason: null } });
     // a known model brings its engine; an agent's kind wins over the words
     expect(await t.run({ title: 'Ordini · x', prompt: 'p', model: 'claude-haiku-5-5', kind: 'ops-read' })).toMatchObject({ harness: 'claude', route: { kind: 'ops-read' } });
-    // hard rules: max only with a reason, no Claude model on Cursor, app chats never on Cursor, a known kind only
+    // Hard rules: max needs a reason, models stay on their engine, and app chats may explicitly choose Cursor.
     await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', effort: 'max' }))).rejects.toThrow(/max/);
     await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'cursor', model: 'claude-opus-5-5' }))).rejects.toThrow(/solo su claude/);
-    await expect(Promise.resolve().then(() => t.run({ title: 'App · tema', prompt: 'p', harness: 'cursor', reason: 'prova' }))).rejects.toThrow(/sull’app vanno solo su Claude/);
+    expect(await t.run({ title: 'App · tema', prompt: 'p', harness: 'cursor', reason: 'prova' })).toMatchObject({ harness: 'cursor', route: { area: 'App', source: 'override' } });
     await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', kind: 'boh' }))).rejects.toThrow(/kind sconosciuto/);
     await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', model: 'claude-mistero-9' }))).rejects.toThrow(/models\.json/);
-    expect(made).toHaveLength(6);
+    expect(made).toHaveLength(7);
   });
 
   it('app_routing reads the table; app_routing_save writes a new version by itself, signed, with reason and data; hard rules hold', async () => {
@@ -302,8 +302,8 @@ describe('app control tools', () => {
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
     expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, exploration: 0.2, rows: 5 });
     expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Regia', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', exploration: { from: 0, to: 0.2 } });
-    // never Fable, the app's chats only on Opus medium: refused, nothing saved
-    await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/sempre su claude-opus-5-5/);
+    // Never Fable, and changing an app row must still preserve every locked row.
+    await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
     await expect(Promise.resolve().then(() => save.run({ routes: [{ kind: 'review', harness: 'claude', model: 'claude-fable-5-1', effort: 'high', why: 'w' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/Fable mai/);
     expect(routing.info().table!.version).toBe(4);
     // the demo's bug-fix row is locked by the user: the agent may not change it
