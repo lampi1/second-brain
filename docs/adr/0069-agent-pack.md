@@ -1,9 +1,9 @@
 # 0069 — Agent pack (`.sbagent`): an agent's know-how to export, share and load, also in Claude, Cursor, Codex
 
-Date: 2026-10-18. Status: proposed (design only, no product code). Builds on AGENTS-DESIGN (branch `docs/agent-first`:
-§1.1 definition, §4.4 trial versions, §4.7 probation, §4.8 agent = role, know-how = skills, run tags) and ADR 0018
-(skills section, `src/shared/skillmd.ts`), 0059 (brain domains, deny list per domain), 0060 (per-launch adapters),
-0061 (guard `tools/guard/scan.mjs`).
+Date: 2026-10-18. Status: proposed (design only, no product code; Brother's answers in). Builds on AGENTS-DESIGN
+(branch `docs/agent-first`: §1.1 definition, §4.4 trial versions, §4.7 probation, §4.8 agent = role, know-how =
+skills, run tags), ADR 0018 (skills, `src/shared/skillmd.ts`), 0059 (brain domains, deny list per domain), 0060
+(per-launch adapters), 0061 (guard `tools/guard/scan.mjs`), brain-pulse (scheduler, "Da approvare"; in progress).
 
 ## Context
 
@@ -71,31 +71,61 @@ codex/agents/<agent-id>.toml      generated Codex custom agent (header "generate
 
 ### 2. On disk in the app, owned vs shared, growth
 
-- **Per-agent folder in the brain**: `<domain>/agents/<agent-id>/skills/<agent-id>/…` + other owned skills, i.e. the
-  pack layout minus the generated files, so the know-how is versioned and synced with the brain (ADR 0059). The
-  definition stays in `agents.json` (versions, trial, probation); it gains `knowhow: { folder, linked: string[],
-  hash }` and `pack?: { id, revision, importedFrom? }`. `knowhow.hash` is a behavioural field (`BEHAVIOUR_FIELDS`):
-  changing the know-how makes a new version and goes through the §4.4 trial like any other change.
+- **Rule (Brother, 18/10): "agents are specific to each user, except the presets".** **Presets** (the built-in
+  `default-<role>` agents: today the `ROLES` table in `catalog.ts`, know-how in `src/main/agents/presets/<id>/` in
+  the pack layout, shipped as `out/agent-presets/` like `out/guard/`) are read-only templates; an untouched preset
+  follows app updates (a higher `presetRevision` = a new version on trial, §4.4). **Fork on edit**: the first edit
+  of a preset (instructions, know-how, an approved learned rule), an import or a new agent makes it the **user's
+  own**: files copied to the brain, `origin: {kind: 'preset', presetId, presetRevision}` (already in `catalog.ts`)
+  kept as the fork base. A newer preset never overwrites a fork: the agent page shows **"Preset aggiornato ·
+  Confronta"** (old preset → new preset diff beside the fork): Tieni il mio · Adotta il nuovo (new version on
+  trial) · Copia a mano; any choice moves the fork base to the new revision.
+- **The user's own agents live in the brain**: `<domain>/agents/<agent-id>/skills/<agent-id>/…` + other owned
+  skills (the pack layout minus generated files). Why not the app data folder: the rule makes an agent the *user's*
+  data; the brain is the user's (one per person, versioned, synced between their PCs, backed up, ADR 0059), app data
+  is per install and per machine (lost on reinstall); a colleague has their own brain, so a fork is never shared by
+  accident. Presets stay in the app: they are the app's, versioned with its releases. The definition stays in
+  `agents.v2.json` (versions, trial, probation are local run state) and gains `knowhow: { folder, linked: string[],
+  hash }` and `pack?: { id, revision, importedFrom? }`; `knowhow.hash` is a behavioural field (`BEHAVIOUR_FIELDS`):
+  a know-how change makes a new version and goes through the §4.4 trial.
 - **Owned** skills live in the agent's folder and travel with it. **Shared** skills are the brain's or the user's
   (`.claude/skills`, `.agents/skills`), referenced by name in `linked`; the Orchestrator still attaches extra skills
   per run (§4.8), and run tags keep recording them. At run start: Claude gets the folder in the per-run plugin
   (`claude-plugin.ts`), Codex as a skill root (`codex.ts`), Cursor UNVERIFIED (no per-launch skill root known; until
   then the own skill's SKILL.md and learned rules are appended to the injected instructions).
 - **Growth.** Writers: Brother (agent page, direct edit → `userLocked`, §1.1) and the Orchestrator, which only
-  proposes: after a run's feedback (§4.3) it calls `agent_learn_propose {agentId, rule, evidence}`. Proposals wait in
-  the agent page's "Regole imparate" tab: Approva · Modifica · Scarta. Approved rules are appended to
-  `learned-rules.md` (`- <rule> · <date> · <evidence ref>`), which opens a trial version. Caps: 200 lines of learned
-  rules, 50 knowledge files, 10 MB per agent; past a cap the proposal asks to merge instead.
+  proposes, through **periodic maintenance jobs**: scheduled app jobs run as agents on whatever engine routing picks
+  (engine-agnostic), read recent runs and feedback (§4.3) and call `agent_learn_propose {agentId, rule, evidence}`.
+  Never a popup: proposals wait in the asynchronous **"Da approvare"** section, opened when Brother wants (Approva ·
+  Modifica · Scarta). Scheduler and card surface are the brain-pulse ADR's (branch `docs/brain-pulse`, in progress);
+  this ADR only supplies the job and the card kind `learned-rule`. Approved → appended to `learned-rules.md`
+  (`- <rule> · <date> · <evidence ref>`) → a **new version in probation** (§4.4, §4.7); on a preset it forks first.
+  Caps: 200 lines of learned rules, 50 knowledge files, 10 MB per agent; past a cap the proposal asks to merge.
+- **Modern practice (checked 2026-10-18).** *Presets vs user copies*: Claude Code lets a user or project subagent
+  override a built-in or plugin one by name (managed > `--agents` > project > user > plugin) [2]; GitHub Copilot
+  dedups custom agents by file name, "lowest level takes precedence" (user > repo > org > enterprise) [15]; Cursor
+  loads user, project and plugin agents [7][8] (precedence on a clash UNVERIFIED). All shadow a whole file by name
+  and keep the user's copy as plain files in user scope; none of the docs read warns that the shadowed base changed,
+  so "Confronta" is above the norm. *Suggested memories*: ChatGPT saves memories itself, shows "Memory updated" and
+  lets the user review or delete them [16]; Copilot Memory stores repo facts with code citations and no approval,
+  re-validates them before use, drops unused ones after 28 days [17]; Claude Code auto memory writes `MEMORY.md`
+  with no approval (edit via `/memory`), while `/doctor prompt-audit` proposes edits and applies nothing unasked
+  [18]; Cursor removed Memories in 2.1 in favour of user-written rules [19]. Brother's queue + probation is stricter
+  than all four, which fits: a learned rule changes behaviour and travels in packs to colleagues.
+- **Recommendation differs (small, additive; Brother decides):** borrow Copilot's hygiene so "Da approvare" never
+  becomes a backlog: each proposal carries its evidence refs and the job re-checks them at review time (stale →
+  marked "superata"); pending proposals expire after 30 days and duplicates are merged by the job; an approved rule
+  whose evidence no longer holds (the job finds it on a later pass) is proposed for removal, never deleted silently.
 
 ### 3. Export: included, excluded, guard first
 
-- **Included**: the active version's behaviour, the own skill, owned skills, linked shared skills (pre-ticked, each
-  can be unticked), icon `{symbol, tone}`. **Excluded, always**: metrics, run records and tags, chats, feedback,
-  version history, trial/probation state, origin evidence, `userLocked`, raster avatars (fall back to the category
-  symbol), MCP server configs, hooks.
-- **Anonymous summary**: worth it as opt-in only (unticked by default): `stats: {runs, successHuman, failHuman,
-  versions, monthsUsed}`, counts only, no skill/app/repo slices (app and repo names are customer data), no dates
-  finer than months. It lets a colleague see "40 runs, 31 confirmed successes" without any content.
+- **Included**: the active version's behaviour, the own skill, owned skills, linked shared skills (decided 18/10:
+  pre-ticked, each can be unticked), icon `{symbol, tone}`. **Excluded, always**: metrics, run records and tags,
+  chats, feedback, version history, trial/probation state, origin evidence, `userLocked`, raster avatars (fall back
+  to the category symbol), MCP server configs, hooks.
+- **Anonymous summary** (decided 18/10: a checkbox at export, off by default): `stats: {runs, successHuman,
+  failHuman, versions, monthsUsed}`, counts only, no skill/app/repo slices (app and repo names are customer data),
+  no dates finer than months. A colleague sees "40 runs, 31 confirmed successes" without any content.
 - **Guard before the zip.** Export writes the files to a staging folder in the app's temp, runs the shipped
   `out/guard/scan.mjs --json` (secrets, emails other than example domains, private IPs, user paths, GUIDs, forbidden
   files) once per domain deny list (`brain/guard.ts` `findGuard`; a missing deny list blocks, fail-closed, as a push
@@ -173,14 +203,17 @@ them, as it does); Cursor with both `plugin.json` and `.cursor-plugin/plugin.jso
   list with ticks; stats opt-in; scan result with per-item fixes; save dialog in main). List header: **Importa…** and a
   window-wide drop overlay ("Rilascia per importare"), any page, for `.sbagent`, `.zip` or a folder; both open the
   same review dialog (kind, agent, skills, scripts to approve, permission clamps, findings, collision choice) →
-  **Importa in prova**. New tab "Regole imparate" (proposals + file).
+  **Importa in prova**. New tab "Regole imparate" (the file, with a link to its pending cards in "Da approvare",
+  brain-pulse). Presets: badge "Preset" (read-only until edited, then "Mio · da <preset>") and the "Preset
+  aggiornato · Confronta" banner (§2).
 - **IPC** (`contract.ts` map + `INVOKE_CHANNELS`, `test/unit/contract.test.ts`): `agents:exportPlan {id, target}` →
   `{token, items, findings, warnings}`; `agents:exportFix {token, item, action: 'exclude'|'rescan'|'allow'}` → plan;
   `agents:export {token, includeStats}` → `{ok, path} | {ok:false, findings}` (main picks the path);
   `agents:importInspect {pick: true} | {dropped: string}` (path from preload `webUtils.getPathForFile`, main checks it
   is an existing file or folder) → review `{token, kind, agents, skills, scripts, ignored, findings, clamps,
   collision}`; `agents:importApply {token, approveScripts, collision: 'update'|'copy'|'rename'}` → profiles;
-  `agents:importCancel {token}`; `agents:learnList|learnDecide {id, proposalId, decision, text?}`. Tokens live in
+  `agents:importCancel {token}`; `agents:learnList|learnDecide {id, proposalId, decision, text?}` (the
+  `learned-rule` card's backend in "Da approvare"); `agents:presetCompare|presetResolve {id, choice}`. Tokens live in
   main, 10 min, one use; the renderer never sends a path to read except the dropped one.
 - **PR 1 · pack core (main, no UI)**: `src/shared/agent-pack.ts` (types, validators, ToolClass maps), `agents/pack/
   zip.ts`, `pack/emit.ts` (zip + 3 tool targets), `pack/read.ts` (kind detection, TOML subset), `guard.ts`
@@ -191,9 +224,11 @@ them, as it does); Cursor with both `plugin.json` and `.cursor-plugin/plugin.jso
   and a real-looking email, passes `@example.com`; a live test runs `claude plugin validate --strict` on an unzipped
   pack when the CLI is present.
 - **PR 2 · flows + IPC**: export plan/fix/allow, import inspect/apply for every accepted kind, clamps, scripts
-  approval, collisions, probation source, `agent_learn_propose` + learn channels. Tests per channel (contract test,
+  approval, collisions, probation source, `agent_learn_propose` + learn channels, the learned-rules maintenance job
+  (registered with the brain-pulse scheduler), preset fork-on-edit and compare. Tests per channel (contract test,
   demo wiring): secret refuses import; `acceptEdits` clamped; update → trial version; rename; cap 10; scripts
-  unapproved → skill without scripts; foreign hooks/MCP listed as ignored, nothing written.
+  unapproved → skill without scripts; foreign hooks/MCP listed as ignored, nothing written; editing a preset writes
+  only to the brain; a higher `presetRevision` leaves the fork's files byte-identical and raises Confronta.
 - **PR 3 · UI**: dialogs, drop overlay, Regole imparate tab, it/en strings (ADR 0057). Fast e2e (ADR 0042): export →
   import round trip lands in "In prova"; drop a file; a blocked export shows the list and Escludi clears it; the
   review shows a script and needs the tick.
@@ -202,18 +237,10 @@ them, as it does); Cursor with both `plugin.json` and `.cursor-plugin/plugin.jso
 
 One package serves the app and the three tools; the price is three small manifests and one generated TOML per pack,
 and model/effort/permissions that only the app carries faithfully. The guard and the import checks make a pack a
-reviewed artifact, never auto-run code. A zip reader is code to own; it is small and fixture-tested.
-
-## Open questions for Brother
-
-1. Dove vive il know-how di un agente? **Consigliato: nel cervello** (`<dominio>/agents/<id>/`, versionato e
-   sincronizzato tra PC); alternativa: nella cartella dati dell'app (solo questo PC).
-2. Esportare un riepilogo anonimo (solo conteggi: run, successi confermati, versioni)? **Consigliato: sì, ma spento
-   di default** (una spunta all'export).
-3. Le skill condivise usate dall'agente vanno nel pacchetto? **Consigliato: sì, pre-spuntate, ognuna si può
-   togliere**; alternativa: solo le skill proprie.
-4. Le regole imparate proposte dall'Orchestrator: **Consigliato: le approvi tu una per una** (poi versione in prova);
-   alternativa: entrano subito come versione in prova e tu tieni o scarti con le metriche.
+reviewed artifact, never auto-run code. A zip reader is code to own; it is small and fixture-tested. Nothing is
+Claude-only: presets and forks share the pack layout and export to all three tools (§6); the job runs on any engine.
+The four open questions are closed (Brother, 18/10: §2 know-how and learned rules, §3 summary and shared skills);
+only the "Recommendation differs" hygiene (§2) awaits his call.
 
 ## Sources (read 2026-10-18)
 
@@ -225,4 +252,9 @@ reviewed artifact, never auto-run code. A zip reader is code to own; it is small
 [10] https://learn.chatgpt.com/docs/agent-configuration/agents-md ·
 [11] https://learn.chatgpt.com/docs/agent-configuration/subagents ·
 [12] https://developers.openai.com/codex/plugins/build · [13] https://agent-plugins.org ·
-[14] https://developers.openai.com/codex/custom-prompts (deprecation seen in the search result, page not opened)
+[14] https://developers.openai.com/codex/custom-prompts (deprecation seen in the search result, page not opened) ·
+[15] https://docs.github.com/en/copilot/reference/custom-agents-configuration (precedence seen in the search
+result, page not opened) · [16] https://help.openai.com/en/articles/8590148 (page returned 403; content from the
+search result and OpenAI's memory announcement, UNVERIFIED first-hand) ·
+[17] https://docs.github.com/en/copilot/concepts/agents/copilot-memory · [18] https://code.claude.com/docs/en/memory ·
+[19] https://forum.cursor.com/t/are-my-memories-gone/144057 (Cursor staff reply)
