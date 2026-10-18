@@ -133,7 +133,7 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
       } else {
         if (!regia) throw new Error(t('brainPages.discuss.errorNoRegia'));
         await window.sb.invoke('chat:send', { chatId: regia.id, text: box.text.trim() });
-        markDiscussed(key, { via: 'regia', chatId: regia.id, chatTitle: 'Regia', at: Date.now() });
+        markDiscussed(key, { via: 'regia', chatId: regia.id, chatTitle: 'Orchestrator', at: Date.now() });
         toast(t('brainPages.discuss.successRegiaSent'));
       }
       closeBox();

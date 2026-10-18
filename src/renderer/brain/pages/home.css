@@ -1,23 +1,35 @@
-/* Home uses the existing map engine in a bounded, non-modal region; cards wrap without hiding detail controls. */
-.home-page { width: 100%; }
-@keyframes home-settle { from { opacity: .7; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.home-map, .home-card { animation: home-settle 240ms ease-out both; }
-.home-card:nth-child(2) { animation-delay: 25ms; }
-.home-card:nth-child(3) { animation-delay: 50ms; }
-.home-card:nth-child(4) { animation-delay: 75ms; }
-@media (prefers-reduced-motion: reduce) { .home-map, .home-card { animation: none; } }
-.home-map { position: relative; width: 100%; height: clamp(320px, 43vh, 520px); overflow: hidden; border-radius: 12px; }
-.bx.bx-map.bx-map-embedded { position: relative; inset: auto; z-index: auto; width: 100%; height: 100%; min-height: 0; }
-.bx-map-embedded .bx-map-bar { flex-wrap: wrap; }
-.home-content { padding: 20px 0; }
-.home-content header p, .home-card small { color: var(--bx-text-3); }
-.home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; margin: 20px 0; }
-.home-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; }
-.home-card h2, .home-conversation h2 { font-size: 16px; margin: 0; }
-.home-card p { flex: 1; margin: 0; }
-.home-card small { overflow-wrap: anywhere; }
-.home-value { font-size: 28px; font-variant-numeric: tabular-nums; }
-.home-conversation textarea { display: block; box-sizing: border-box; width: 100%; min-height: 80px; margin: 8px 0; border: 1px solid var(--bx-border); border-radius: 8px; padding: 12px; color: var(--bx-text); background: var(--bx-surface); font: inherit; resize: vertical; }
-.home-conversation .bx-btn { margin: 4px 8px 4px 0; }
-.home-links { margin-top: 12px; }
-[data-testid="brain-page-home"] > .bx-inner { max-width: none; }
+/* The Grindhouse's hierarchy: generous heading, quiet section labels, dense request rows, then the agents' strips
+   (styles/agent-strips.css).
+   Entry and activity motion are bounded and fully disabled by reduced-motion preferences. */
+.home-page { width: 100%; min-width: 0; max-width: 1040px; margin: 0 auto; color: var(--text); padding: 12px 16px 24px; box-sizing: border-box; }
+.home-heading { padding: 12px 0 20px; }
+.home-eyebrow { font-size: 10px; letter-spacing: .16em; color: var(--text-3); font-weight: 600; }
+.home-heading h1 { font-size: clamp(24px, 2.4vw, 34px); letter-spacing: -1.1px; font-weight: 600; margin: 12px 0 8px; }
+.home-heading p { color: var(--text-3); font-size: 13px; margin: 0; }
+/* the headline (HomeHeadline.tsx): its place is kept while it loads, so nothing below moves when it arrives */
+.home-heading .home-headline { color: var(--text-2); font-size: 15px; font-style: italic; line-height: 1.45; min-height: 1.45em; margin: 0 0 10px; max-width: 72ch; }
+.home-overview { display: flex; gap: 18px; margin-top: 24px; color: var(--text-2); font-size: 12px; }
+.home-overview span { display: inline-flex; align-items: center; gap: 8px; }
+.home-live-dot { width: 6px; height: 6px; background: var(--blue); border-radius: 50%; animation: status-breathe 1.8s ease-in-out infinite; }
+.home-section { margin-bottom: 20px; }
+.home-section-head { display: flex; align-items: center; gap: 9px; min-height: 40px; margin-bottom: 8px; }
+.home-section-head h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.home-count { padding: 2px 6px; border-radius: 5px; font-size: 10px; background: var(--surface-3); color: var(--text-3); }
+.home-waiting .home-count { color: var(--amber); background: var(--amber-bg); }
+.home-request-list { display: flex; flex-direction: column; gap: 2px; }
+.home-request { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 66px; text-align: left; padding: 12px; background: transparent; border: 1px solid transparent; border-bottom-color: var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font: inherit; transition: background var(--dur), transform var(--dur), border-color var(--dur); animation: home-row-enter 260ms var(--ease) both; animation-delay: calc(var(--row-index, 0) * 30ms); }
+.home-request:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-1px); }
+.home-request:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.home-row-copy { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.home-row-copy strong { font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-row-copy small { color: var(--text-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-row-arrow { color: var(--text-4); font-size: 18px; }
+.home-request { background: var(--surface); border-color: var(--border); margin-bottom: 4px; }
+.home-request-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; background: var(--amber-bg); color: var(--amber); border-radius: 7px; font-family: var(--mono); }
+.home-calm { color: var(--text-3); border: 1px dashed var(--border-2); border-radius: 8px; padding: 20px; font-size: 12px; line-height: 1.7; }
+.home-footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 16px; color: var(--text-4); font-size: 10px; }
+[data-testid="brain-page-home"] > .bx-inner { max-width: none; min-width: 0; grid-template-columns: minmax(0, 1fr); padding: 16px 20px 32px; }
+.home-heading h1, .home-heading p { white-space: normal; overflow-wrap: anywhere; }
+@keyframes home-row-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1100px) { .home-page { padding: 0 4px 16px; } .home-footer > span:last-child { display: none; } }
+@media (prefers-reduced-motion: reduce) { .home-request, .home-live-dot { animation: none; transition: none; } .home-request:hover { transform: none; } }

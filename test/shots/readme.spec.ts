@@ -25,7 +25,7 @@ test.beforeAll(async () => {
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await expect(page.locator('html[data-clock="frozen"]')).toHaveCount(1);
-  await expect(page.getByTestId('regia-pill')).toBeVisible();
+  await expect(page.getByTestId('regia-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -67,27 +67,23 @@ const tool = (chatId: string, t: { id: string; name: string; input: unknown; sum
 test('README screenshots', async () => {
   test.setTimeout(180_000);
 
-  // 1. Mosaico: chats as tiles, their questions as panels, browser tabs next to the chats that drive them
-  await expect(page.getByTestId('view-mosaico')).toBeVisible();
+  // 1. The agents column: chats as strips, their questions as panels, each browser tab under the chat that drives it
+  await expect(page.getByTestId('view-agents')).toBeVisible();
   await waitThumbs(page);
   await save('mosaic');
 
-  // 2. The Regia: the coordinating chat, docked bottom-right, with its decision waiting
+  // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
   await openRegia(page);
   await waitThumbs(page);
   await save('regia');
-  await page.getByTestId('regia-collapse').click();
 
-  // 3. A browser driven by an agent, big next to its chat (Corsie view, a thumbnail opened)
-  await page.getByTestId('view-toggle-corsie').click();
-  await expect(page.getByTestId('view-corsie')).toBeVisible();
-  await waitThumbs(page);
-  await page.getByTestId('thumb-tab-qa').click();
-  await expect(page.getByTestId('corsie-pair')).toBeVisible();
+  // 3. A browser driven by an agent, big next to its chat (focus mode on the chat)
+  await page.getByTestId('tile-chat-qa').locator('.tile-head').click();
+  await page.keyboard.press('Control+Shift+F');
+  await expect(page.getByTestId('focus-view')).toBeVisible();
   await waitThumbs(page);
   await save('browser');
-  await page.keyboard.press('Escape');
-  await page.getByTestId('view-toggle-mosaico').click();
+  await page.getByTestId('focus-exit').click();
 
   // 4. The 3D brain map, lit where the chats are working right now
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });

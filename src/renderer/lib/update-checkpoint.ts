@@ -4,10 +4,9 @@ import {sb} from '../sb';
 import {enableChatDraftRecovery,chatDraftCheckpoint,chatDraftCheckpointProblem,restoreChatDraftCopy,validateChatDraftCopy} from '../components/ChatInput';
 import {enableAgentDraftRecovery,agentDraftCheckpoint,agentDraftCheckpointProblem,restoreAgentDraftCopy,validateAgentDraftCopy} from './agent-drafts';
 import {checkpointUi,restoreCheckpointUi,toast,ui} from '../store/ui';
-import {checkpointWorkspace,restoreCheckpointWorkspace} from '../store/workspace';
+import {checkpointWorkspace,readPurposes,restoreCheckpointWorkspace} from '../store/workspace';
 import {updateStoreProblem} from '../store/store';
 import {createCheckpointCoordinator,adoptUpdateRecovery,validateUpdateSnapshot} from './update-checkpoint-core';
-import {restoreWorkspace} from './agents-layout';
 import {freezeForUpdate,releaseUpdate,updateHoldProblem,updateIsFrozen,updateRecovery} from './update-barrier';
 import {suspendViews} from './viewports';
 let started=false,composing=false;
@@ -26,7 +25,7 @@ function validateRam(value:UpdateSnapshot):void{
   const chat=JSON.parse(value['sb.update.chat-drafts.v1']),agent=JSON.parse(value['sb.update.agent-drafts.v1']);
   if(chat!==null)validateChatDraftCopy(chat);if(agent!==null)validateAgentDraftCopy(agent);
   const layout=JSON.parse(value['sb.agents.workspace.v1']);
-  if(layout!==null&&(!layout||layout.version!==1||layout.root!==null&&!restoreWorkspace(layout)||!layout.purposes||typeof layout.purposes!=='object'||Object.keys(layout.purposes).length>500))throw Error('Disposizione della copia non valida.');
+  if(layout!==null&&!readPurposes(layout))throw Error('Disposizione della copia non valida.');
 }
 function adopt(value:UpdateSnapshot):void{
   const chat=JSON.parse(value['sb.update.chat-drafts.v1']),agent=JSON.parse(value['sb.update.agent-drafts.v1']);

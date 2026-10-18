@@ -4,9 +4,9 @@
 // question/permission/command panel (with "Domande in finestra" on, one line: the questions window shows it; while
 // "Rispondi dopo" is on, one "Da rispondere" line: the chat waits, lib/later.ts), an error bar with one action, and the always-visible input (the menu is ChatMenu). Small tiles render compact
 // (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
-// A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by Mosaico, Corsie and the
-// focus view.
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+// A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by the agents' strips in the
+// Grindhouse (AgentStrips.tsx) and the focus view.
+import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
@@ -61,7 +61,7 @@ export function useFlash(key: string): boolean {
   return on;
 }
 
-export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus, grip }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean; grip?: ReactNode }) {
+export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
@@ -110,7 +110,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
-          {grip}
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
           <StatePill chat={chat} testid={`chat-state-${chatId}`} />
@@ -158,7 +157,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       ))}
       {chat.queued && !chat.closedAt && (
         <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
-          <span className="queued-text" data-tip={`Il PC è sotto sforzo (CPU ${chat.queued.cpu}%, RAM libera ${chat.queued.freeRam}%): ${chat.queued.kind === 'start' ? 'questa chat parte' : 'il messaggio della Regia o di un’altra chat parte'} quando il carico scende, una alla volta: prima le chat di lavoro, poi quelle sull’app. I tuoi messaggi partono sempre subito.`}>
+          <span className="queued-text" data-tip={`Il PC è sotto sforzo (CPU ${chat.queued.cpu}%, RAM libera ${chat.queued.freeRam}%): ${chat.queued.kind === 'start' ? 'questa chat parte' : 'il messaggio dell’Orchestrator o di un’altra chat parte'} quando il carico scende, una alla volta: prima le chat di lavoro, poi quelle sull’app. I tuoi messaggi partono sempre subito.`}>
             In coda · {queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? 'la prossima' : `${chat.queued.position}ª in fila`}
           </span>
           <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>Avvia ora</button>

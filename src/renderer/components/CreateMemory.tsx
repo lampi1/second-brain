@@ -1,4 +1,6 @@
 // Explicit local first-run creation through the main-only picker/helper. Never configures hooks, accounts or trust.
+// Prefilled from the first interview's answers (initial), so name, role and language are not asked twice.
+import { Select } from './Select';
 import {useEffect,useRef,useState} from 'react';
 import type {BrainCreationCapability,CreatedBrain} from '@shared/brain-create';
 import {sb} from '../sb';
@@ -7,10 +9,10 @@ import {toast} from '../store/ui';
 import {useAgents} from '../store/agents';
 import {memoryCreationMessage,validMemoryFolder} from '../lib/memory-creation';
 
-export function CreateMemory({onBusy}:{onBusy:(busy:boolean)=>void}){
+export function CreateMemory({onBusy,initial}:{onBusy:(busy:boolean)=>void;initial?:{name:string;role:string;language:string}}){
   const {catalog}=useAgents();
   const [capability,setCapability]=useState<BrainCreationCapability|null>(null),[problem,setProblem]=useState<string|null>(null);
-  const [name,setName]=useState(''),[role,setRole]=useState(''),[folderName,setFolderName]=useState('Il mio lavoro'),[language,setLanguage]=useState<'it'|'en'>('it'),[engine,setEngine]=useState('');
+  const [name,setName]=useState(initial?.name.trim()??''),[role,setRole]=useState(initial?.role.trim()??''),[folderName,setFolderName]=useState('Il mio lavoro'),[language,setLanguage]=useState<'it'|'en'>(/^en/i.test(initial?.language.trim()??'')?'en':'it'),[engine,setEngine]=useState('');
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState<string|null>(null),[created,setCreated]=useState<CreatedBrain|null>(null);
   const active=useRef(false),working=useRef(false),revision=useRef(0);
   const load=async()=>{
@@ -43,8 +45,8 @@ export function CreateMemory({onBusy}:{onBusy:(busy:boolean)=>void}){
       <label className="field"><span>Il tuo nome</span><input value={name} maxLength={80} onChange={event=>setName(event.target.value)} data-testid="create-memory-name"/></label>
       <label className="field"><span>Il tuo ruolo, facoltativo</span><input value={role} maxLength={240} onChange={event=>setRole(event.target.value)}/></label>
       <label className="field"><span>Nome della nuova cartella</span><input value={folderName} maxLength={64} onChange={event=>setFolderName(event.target.value)} aria-invalid={!validMemoryFolder(folderName)} data-testid="create-memory-folder"/><small>Un nome semplice, senza percorso. La cartella deve essere nuova.</small></label>
-      <label className="field"><span>Lingua della memoria</span><select value={language} onChange={event=>setLanguage(event.target.value==='en'?'en':'it')}><option value="it">Italiano</option><option value="en">English</option></select></label>
-      <label className="field"><span>Motore iniziale</span><select value={chosen?.engine??''} onChange={event=>setEngine(event.target.value)}>{choices.map(choice=><option key={choice.engine} value={choice.engine}>{choice.label}</option>)}</select><small>Non vengono collegati account o modificati i permessi.</small></label>
+      <label className="field"><span>Lingua della memoria</span><Select value={language} onChange={event=>setLanguage(event.target.value==='en'?'en':'it')}><option value="it">Italiano</option><option value="en">English</option></Select></label>
+      <label className="field"><span>Motore iniziale</span><Select value={chosen?.engine??''} onChange={event=>setEngine(event.target.value)}>{choices.map(choice=><option key={choice.engine} value={choice.engine}>{choice.label}</option>)}</Select><small>Non vengono collegati account o modificati i permessi.</small></label>
       {!chosen&&<p role="status">Scegli un motore disponibile nelle impostazioni prima di creare la memoria.</p>}
       <button type="button" className="btn btn-ghost" disabled={!name.trim()||!validMemoryFolder(folderName)||!chosen||busy} onClick={()=>void create()} data-testid="create-memory-start">{busy?'Creazione in corso…':'Scegli dove creare la cartella'}</button>
     </fieldset>}

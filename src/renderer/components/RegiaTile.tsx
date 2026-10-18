@@ -15,7 +15,7 @@ import { ago, chatCost, prettyModel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
-import { stop, useApp } from '../store/store';
+import { ensureOrchestrator, stop, useApp } from '../store/store';
 import { openModal, setFocused, setPrefs, ui } from '../store/ui';
 import { t } from '../i18n';
 import { answerLater } from '../lib/later';
@@ -32,8 +32,35 @@ import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { HarnessMark, IconChevronDown, IconList, IconMore, IconPlus, IconStop } from './Icons';
+import { HarnessMark, IconChevronDown, IconList, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
+import { Select } from './Select';
+import { requestFocus, setRegiaTab } from '../store/ui';
+
+function RegiaSetup() {
+  const info = useApp(s => s.info), settings = useApp(s => s.settings);
+  const engines = (info?.engines ?? []).filter(e => e.trusted && settings?.engineOn[e.id] === true && settings.engines[e.id] !== false);
+  const [engine, setEngine] = useState('');
+  const [busy, setBusy] = useState(false);
+  const create = async () => {
+    const pick = engines.find(e => e.id === engine);
+    if (busy || !info?.brainRoot || !pick) return;
+    setBusy(true);
+    try { const chat = await ensureOrchestrator(pick.id); if (chat) { setRegiaTab(chat.id); requestFocus(chat.id); } }
+    finally { setBusy(false); }
+  };
+  return <div className="regia-setup">
+    <span className="regia-column-mark" aria-hidden="true">✦</span>
+    <h2>{t('home.regiaStart')}</h2>
+    <p>{t('home.regiaIntro')}</p>
+    <label htmlFor="regia-engine">{t('home.chooseEngine')}</label>
+    <Select id="regia-engine" value={engine} onChange={e => setEngine(e.target.value)} disabled={busy}>
+      <option value="">{t('home.chooseEngine')}</option>{engines.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+    </Select>
+    <button type="button" className="btn btn-primary btn-m" disabled={!engine || busy || !info?.brainRoot} onClick={() => void create()} data-testid="regia-create">{t('dialogs.regia.createButton')}</button>
+    {!info?.brainRoot && <button type="button" className="btn btn-ghost btn-m" onClick={() => openModal('newChat')}>{t('home.manageAgents')}</button>}
+  </div>;
+}
 
 const TONE: Record<string, string> = {
   idea: 'blue', error: 'red', win: 'green', 'chat-done': 'green', 'chat-waiting': 'amber', reflection: 'violet', journal: 'dim',
@@ -108,9 +135,7 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
         <div className="empty-state">
           {ready ? (
             <>
-              <p className="empty-title">{t('dialogs.regia.empty')}</p>
-              <p className="empty-text">{t('dialogs.regia.emptyDescription')}</p>
-              <button type="button" className="btn btn-regia btn-m" onClick={() => openModal('newChat')} data-testid="regia-create"><IconPlus size={14} /> {t('dialogs.regia.createButton')}</button>
+              <RegiaSetup />
             </>
           ) : (
             <div className="skeleton"><i /><i /><i className="short" /></div>
@@ -138,7 +163,7 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
         <div className="chat-topic-row"><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
         <div className="th-sub sr-only" data-testid="regia-sub">
           <span className="th-engine" data-tip={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.regia.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="regia-engine"><HarnessMark harness={chat.harness} size={14} /></span>
-          <span className="th-sub-text">{[chat.title.trim() !== 'Regia' ? chat.title : '', prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ')}</span>
+          <span className="th-sub-text">{[!['Regia', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.regia.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-regia" /> : null} />

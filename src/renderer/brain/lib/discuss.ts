@@ -148,7 +148,7 @@ export function chatPrompt(t: Topic, line: number | null): string {
   return [
     `Let's work ${what} (${where(t, line)} in the brain folder).`,
     `Read it completely${line ? ` from line ${line}` : ''}, then propose to me in 5 lines how to start and the first step, before touching anything.`,
-    'Only the Regia changes the state of the idea in ideas.md, when I ask it to.',
+    'Only the Orchestrator changes the state of the idea in ideas.md, when I ask it to.',
   ].join('\n');
 }
 

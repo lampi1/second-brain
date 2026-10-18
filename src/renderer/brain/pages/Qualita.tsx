@@ -108,7 +108,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                     `${rules.presto} ${rules.presto === 1 ? 'regola troppo recente' : 'regole troppo recenti'} per dirlo`],
                   question: 'Perché queste regole non hanno fermato il loro errore? Per ognuna: regola da riscrivere o controllo automatico?' } : undefined}
                 find={<><b>{rules.presto} regole troppo recenti</b> per dirlo (meno di {q.windowDays} giorni){rules.senzaTipo ? <>, {rules.senzaTipo} senza un tipo valido</> : null}.</>}
-                next={rules.tornato ? <>riscrivi la regola del primo «tornato» qui sotto: chiedilo alla Regia con le parole dell'errore</> : out.total ? <>correggi il tipo delle righe fuori conteggio (uno degli 11 dell'intestazione di ai-errors.md)</> : undefined}
+                next={rules.tornato ? <>riscrivi la regola del primo «tornato» qui sotto: chiedilo all’Orchestrator con le parole dell'errore</> : out.total ? <>correggi il tipo delle righe fuori conteggio (uno degli 11 dell'intestazione di ai-errors.md)</> : undefined}
                 source={<>ai-errors.md, righe con «regola:» ({range(q.from, q.to)}). Tornato = stesso tipo (gli 11 ufficiali; i sinonimi evidenti contano come il loro tipo) e un'area con una parola in comune, entro {q.windowDays} giorni dalla regola.</>}>
                 {out.total > 0 && <p className="bx-warnline" role="note" data-testid="bx-q-fuori">{out.total} righe su {q.lines} fuori dal conteggio: {out.unparsed} illeggibili (manca «detto:» o un campo), {out.invalid} senza tipo valido.</p>}
                 {out.total > 0 && (

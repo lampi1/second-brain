@@ -30,7 +30,7 @@ function report(): void {
     return {
       chatId: c.id, queued: s.queued[c.id]?.length ?? 0, draft: hasDraft(c.id),
       shown: u.maximized === `chat:${c.id}` || u.focusMode === c.id || u.focused === `chat:${c.id}` || u.hidden.includes(c.id),
-      browser: tabs.some(t => !!t.handoffId || u.maximized === `browser:${t.id}` || u.focused === `browser:${t.id}` || u.pair === t.id),
+      browser: tabs.some(t => !!t.handoffId || u.maximized === `browser:${t.id}` || u.focused === `browser:${t.id}`),
       touchedAt: interactions.get(c.id) ?? 0,
       ...(acknowledged ? { ackDeadline: row!.deadline!, ackGeneration: row!.generation } : {}),
     };

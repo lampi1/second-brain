@@ -154,5 +154,5 @@ describe.skipIf(process.platform !== 'win32')('verified first-run brain creation
     expect(fs.readFileSync(path.join(f.destination, 'me.md'), 'utf8')).toContain('Mario Rossi');
     expect(fs.readFileSync(path.join(f.destination, 'map.md'), 'utf8')).toContain(f.destination.replaceAll('\\', '/'));
     expect(fs.readdirSync(home)).toEqual([]);
-  });
+  }, 90_000); // Real children: install.mjs (60 s product limit, asserted above), the publish PowerShell (15 s), the copy.
 });

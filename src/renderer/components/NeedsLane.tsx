@@ -1,6 +1,6 @@
 // "Ti aspettano · N": every open question and permission, oldest first, as small cards answerable in place with
 // 1-9 / Enter / Esc (focus a card with Ctrl+J or a click). Answering here never opens the chat. Hidden when nothing
-// waits, and while "Rispondi dopo" is on (they wait in "Da rispondere", lib/later.ts). A polite live region announces new requests to screen readers. Used by App.tsx (focus mode's Ctrl+J peek only: the Mosaico dropped it on 2026-10-12).
+// waits, and while "Rispondi dopo" is on (they wait in "Da rispondere", lib/later.ts). A polite live region announces new requests to screen readers. Used by App.tsx (focus mode's Ctrl+J peek only: the workspace dropped it on 2026-10-12).
 import { memo } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { chatName } from '@shared/regia';

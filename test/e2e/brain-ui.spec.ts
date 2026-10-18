@@ -75,9 +75,11 @@ test('Idee: table with filters (state, area, who), side peek by keyboard, Esc cl
   const p = page.getByTestId('brain-page-idee');
   await settled();
   await expect(p.getByTestId('bx-table-idee')).toContainText('9 righe');
-  await p.getByLabel('Filtra per Chi').selectOption('IA');
+  await p.getByRole('button', { name: 'Filtra per Chi' }).click();
+  await page.locator('.ui-select-list [data-value="IA"]').click();
   await expect(p.getByTestId('bx-table-idee')).toContainText('4 di 9 righe');
-  await p.getByLabel('Filtra per Chi').selectOption('');
+  await p.getByRole('button', { name: 'Filtra per Chi' }).click();
+  await page.locator('.ui-select-list [data-value=""]').click();
   const grid = p.getByRole('grid', { name: 'Idee' });
   await grid.focus();
   await page.keyboard.press('ArrowDown');

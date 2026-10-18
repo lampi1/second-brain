@@ -1,5 +1,6 @@
 // Progressive agent details. The real profile name/avatar live in the compact header, never duplicated as a role label.
 // Work declarations prevent automatic close; provider observations and user-confirmed success remain separate facts.
+import { Select } from './Select';
 import type{ChatSummary}from'@shared/contract';
 import {useCallback,useRef,useState}from'react';
 import{useApp,setChat}from'../store/store';
@@ -21,9 +22,9 @@ export function AgentIdentity({chat}:{chat:ChatSummary}){
   <div className="agent-detail-content">
    {chat.agent?.purpose&&<p>{chat.agent.purpose}</p>}
    <button type="button" className="link-btn" onClick={()=>go({page:'agenti'})}>{t('product.profiles')}</button>
-   <label>{t('product.workDeclare')}<select value={chat.work?.status??''} onChange={e=>{const status=e.target.value;if(status==='assigned'||status==='waiting-mail'||status==='completed')void setChat(chat.id,{workStatus:status});}}>
+   <label>{t('product.workDeclare')}<Select value={chat.work?.status??''} onChange={e=>{const status=e.target.value;if(status==='assigned'||status==='waiting-mail'||status==='completed')void setChat(chat.id,{workStatus:status});}}>
     <option value="" disabled>{t('product.workUnset')}</option><option value="assigned">{t('product.workAssigned')}</option><option value="waiting-mail">{t('product.workWaiting')}</option><option value="completed">{t('product.workCompleted')}</option>
-   </select></label>
+   </Select></label>
    <p>{t('product.model')}: {chat.model||t('product.notReported')}</p>
    <p>{t('chat.menu.effortLabel')}: {chat.effortStatus?.effectiveSource==='provider'?chat.effortStatus.effective||t('product.notReported'):t('product.notReported')}</p>
    <b>{summary}</b><p>{t('product.teamExplain')}</p>

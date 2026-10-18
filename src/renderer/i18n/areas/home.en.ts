@@ -1,8 +1,21 @@
 // English counterparts of the Home dashboard dictionary.
 import type { homeIt } from './home.it';
 export const homeEn: typeof homeIt = {
+  'home.context': 'Context',
+  'home.activityLead': 'Work in motion. Decisions waiting for you.',
+  'home.workingCount': (p: { count: number }) => `${p.count} working`,
+  'home.reviewCount': (p: { count: number }) => `${p.count} to review`,
+  'home.waiting': 'Waiting for you', 'home.commandReview': 'Command to review', 'home.permissionReview': 'Permission requested', 'home.questionReview': 'Question',
+  'home.clear': 'All clear. No decisions waiting.', 'home.newAgent': 'New agent',
+  'home.emptyAgents': 'Tell the coordinator what you want to do, or create your first agent.',
+  'home.regiaBeside': 'Your coordinator is here, on the right →', 'home.startHere': 'Your starting point',
+  'home.regiaWidth': 'Coordinator width', 'home.regiaStart': 'Where shall we start?',
+  'home.regiaIntro': 'One place for your ideas, agents and next step. Your coordinator stays here while you work.',
   'home.greeting': (p: { name: string }) => `Hey ${p.name}, what shall we do today?`,
-  'home.agents': 'Agents', 'home.manageAgents': 'Manage agents', 'home.backAgents': 'Back to agents', 'home.workspace': 'The agents workspace',
+  'home.headlineBy': (p: { model: string }) => `Joke written by ${p.model} on today's events; renewed about every hour.`,
+  'home.headlineBuiltin': 'A joke from the app’s own list: the model’s one arrives with the next refresh.',
+  'home.orchestrator': 'Orchestrator',
+  'home.agents': 'Agents', 'home.manageAgents': 'Manage agents', 'home.back': 'Back to the Grindhouse', 'home.workspace': 'Your agents at work and the Orchestrator',
   'home.chooseEngine': 'Choose the coordinator engine', 'home.createRegia': 'Start the app coordinator',
   'home.title': 'Your workspace', 'home.lead': 'Read the data, open the details and discuss them with your coordinator.',
   'home.map': 'Your workspace map', 'home.summary': 'Summary from recorded data',

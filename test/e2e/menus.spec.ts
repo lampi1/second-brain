@@ -20,10 +20,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-gear');
     await page.keyboard.press('Escape');
 
-    // "…" is on the bar at any width with browsers, questions window, Credenziali and Migliora; those left the bar
-    for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-qwin', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
+    // "…" is on the bar at any width with browsers, Credenziali and Migliora; those left the bar (the popups switch is on it)
+    for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
     await page.getByTestId('topbar-more').click();
-    for (const id of ['more-browsers', 'more-qwin', 'more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
+    for (const id of ['more-browsers', 'more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
     await shot(page, 'menus-more');
     // hiding the browsers leaves a count on "…"
     await page.getByTestId('more-browsers').click();
@@ -48,14 +48,14 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await page.keyboard.press('Escape');
 
     // the sidebar: three groups, "Regole imparate" in Brain (no more "Miglioramento" next to "Migliora l'app")
-    await page.getByTestId('nav-collapse').click();
     const nav = page.getByTestId('sidebar');
-    if (!(await nav.locator('.nav-title').count())) await page.getByTestId('nav-collapse').click();
+    await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
     await expect(nav.locator('.nav-title')).toHaveCount(3);
     await expect(page.getByTestId('nav-miglioramento')).toHaveAttribute('aria-label', 'Regole imparate');
     const navOrder = await nav.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
     const ix = (id: string) => navOrder.indexOf(id);
-    expect(ix('nav-group-work')).toBeLessThan(ix('nav-workspace'));
+    expect(ix('nav-home')).toBeLessThan(ix('nav-group-work'));
+    expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
     expect(ix('nav-group-brain')).toBeLessThan(ix('nav-miglioramento'));
     expect(ix('nav-miglioramento')).toBeLessThan(ix('nav-group-app'));
     expect(ix('nav-group-app')).toBeLessThan(ix('nav-migliora'));

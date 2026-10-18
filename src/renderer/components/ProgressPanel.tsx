@@ -1,4 +1,5 @@
 // Optional local milestones. Only a deliberate user confirmation can award a useful result.
+import { Select } from './Select';
 import {useEffect,useRef,useState} from 'react';
 import type {ProgressState} from '@shared/progress';
 import type {ChatSummary} from '@shared/contract';
@@ -35,7 +36,7 @@ export function ProgressPanel(){
     <header><b>Il tuo spazio prende forma</b><span>{earned.size} di 3 traguardi</span><button type="button" className="link-btn" disabled={!state.available||busy} onClick={()=>void run(()=>sb.invoke('progress:setHidden',{hidden:true}))}>Nascondi</button></header>
     <ul>{Object.entries(MILESTONE_LABELS).map(([id,label])=><li key={id}><span aria-hidden="true">{earned.has(id as keyof typeof MILESTONE_LABELS)?'✓':'○'}</span> {label}<span className="sr-only">: {earned.has(id as keyof typeof MILESTONE_LABELS)?'raggiunto':'da raggiungere'}</span></li>)}</ul>
     {!state.available&&<p role="status">{state.reason||state.problem||'Traguardi in sola lettura.'}</p>}
-    {!earned.has('first-result')&&state.available&&candidate&&<div className="progress-result"><label>Un risultato da rivedere <select value={candidate.id} disabled={busy} onChange={event=>setSelected(event.target.value)}>{candidates.map(chat=><option key={chat.id} value={chat.id}>{chat.title}</option>)}</select></label><button type="button" className="link-btn" onClick={()=>focusChat(candidate.id)}>Apri il risultato</button><button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>void run(()=>sb.invoke('progress:confirmResult',{chatId:candidate.id,resultAt:candidate.lastResult!.at}))}>Confermo: ho ottenuto un risultato utile</button></div>}
+    {!earned.has('first-result')&&state.available&&candidate&&<div className="progress-result"><label>Un risultato da rivedere <Select value={candidate.id} disabled={busy} onChange={event=>setSelected(event.target.value)}>{candidates.map(chat=><option key={chat.id} value={chat.id}>{chat.title}</option>)}</Select></label><button type="button" className="link-btn" onClick={()=>focusChat(candidate.id)}>Apri il risultato</button><button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>void run(()=>sb.invoke('progress:confirmResult',{chatId:candidate.id,resultAt:candidate.lastResult!.at}))}>Confermo: ho ottenuto un risultato utile</button></div>}
     <p role="status">{notice}</p>{problem&&<p role="alert">{problem}</p>}
   </section>;
 }

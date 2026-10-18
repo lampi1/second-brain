@@ -1,10 +1,10 @@
 // Keeps the keyboard in the field the user is typing in when the UI redraws it (the user, 2026-10-12: "perdo il focus
-// del campo di testo su cui sto scrivendo"). Reproduced in Corsie: a chat that starts waiting moves from "Al lavoro" to
-// "Ti aspettano", React mounts its tile again and the focused input is gone, so the keys fell on the page. Rule: when
+// del campo di testo su cui sto scrivendo"). First seen in the retired Corsie view: a chat that started waiting moved
+// column, React mounted its tile again and the focused input was gone, so the keys fell on the page. Rule: when
 // the focused field (an input or textarea with a data-testid) leaves the page and the keyboard is left on nothing, the
 // field with the same testid that shows up within RESTORE_MS takes it back, caret and selection where they were. A
 // click elsewhere, a dialog or another field moving the focus on purpose is never undone. The drafts themselves survive
-// remounts in ChatInput.tsx. Started by main.tsx; pinned by test/e2e/questions.spec.ts (it needs a real DOM).
+// remounts in ChatInput.tsx. Started by main.tsx.
 
 export const RESTORE_MS = 2000;
 

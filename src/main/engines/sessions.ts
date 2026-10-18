@@ -50,12 +50,13 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     case 'codex': {
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
-      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId });
+      const agentPolicy = opts.toolPolicy || opts.ceiling ? { tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null } : null;
+      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
       return new CodexSession({
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: launch.skillRoots,
         approvalPolicy: launch.approvalPolicy, sandbox: launch.sandbox,
-        executionPolicy: () => codexPolicyFor(opts.cwd, opts.readOnly),
+        executionPolicy: () => codexPolicyFor(opts.cwd, opts.readOnly, agentPolicy),
         showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),

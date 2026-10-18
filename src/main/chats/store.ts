@@ -11,8 +11,10 @@ import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
-import type { AgentOwnerSnapshot, AgentChildren } from '../../shared/agents';
+import type { AgentOwnerSnapshot, AgentChildren, AgentRun } from '../../shared/agents';
+import { readRun } from '../agents/runs';
 import { readOwner } from '../agents/catalog';
+import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 
 export interface StoredChat {
@@ -21,6 +23,12 @@ export interface StoredChat {
   work?: NonNullable<ChatSummary['work']>;
   agentInstructions?: string;
   agentChildren?: AgentChildren;
+  /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
+  agentPolicy?: AgentPolicy;
+  /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. Additive: chats.json stays version 2 */
+  run?: AgentRun;
+  /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
+  runIdleSince?: number;
   harness: Harness;
   cwd: string;
   sessionId: string | null;
@@ -94,11 +102,13 @@ const mailAliases = (v: unknown): { mailAliases?: string[] } => {
 };
 function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
-  const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route);
+  const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route), run = readRun(c.run);
   return {
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
     ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= 8000 ? { agentInstructions: c.agentInstructions } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
+    ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
+    ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
     ...(route ? { route } : {}),
     ...(c.work !== undefined ? {work:readChatWork(c.work)} : {}),
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),

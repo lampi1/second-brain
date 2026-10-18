@@ -13,7 +13,8 @@ test('role selection previews, cancels, persists and restores the previous choic
     await expect(role).toBeVisible();
     const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}').role);
     const before = await saved();
-    await role.getByLabel('Ruolo', { exact: true }).selectOption('qa');
+    await role.getByRole('button', { name: 'Ruolo', exact: true }).click();
+    await page.locator('.ui-select-list [data-value="qa"]').click();
     await role.getByRole('button', { name: 'Anteprima', exact: true }).click();
     await expect(role.getByTestId('role-preview')).toContainText('Analisi');
     await shot(page, 'role-preview');

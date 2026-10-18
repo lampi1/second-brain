@@ -1,12 +1,12 @@
-// Manual browser creation reuses the native open channel with no agent ownership and navigates from Home.
+// Manual browser creation reuses the native open channel with no agent ownership and navigates to the Grindhouse.
 import{afterEach,expect,it,vi}from'vitest';
 const invoke=vi.fn();vi.mock('../../src/renderer/sb',()=>({sb:{invoke:(...args:unknown[])=>invoke(...args),on:()=>()=>{}}}));
 import{newBrowser,openFileViewer}from'../../src/renderer/actions';import{ui,dismissToast}from'../../src/renderer/store/ui';
 import{readFileViewArg}from'../../src/shared/file-view';
 afterEach(()=>{invoke.mockReset();for(const item of ui.get().toasts)dismissToast(item.id);});
-it('opens an unowned blank tab and makes the workspace visible',async()=>{
- invoke.mockResolvedValue({id:'manual-tab'});ui.set(state=>({...state,page:'home',map:false,focusMode:null,maximized:null,prefs:{...state.prefs,browsersHidden:false}}));
- await newBrowser();expect(invoke).toHaveBeenCalledWith('browser:open',{url:'about:blank',ownerChatId:null});expect(ui.get().page).toBeNull();
+it('opens an unowned blank tab and brings the Grindhouse, where it shows, on screen',async()=>{
+ invoke.mockResolvedValue({id:'manual-tab'});ui.set(state=>({...state,page:'costi',map:false,focusMode:null,maximized:null,prefs:{...state.prefs,browsersHidden:false}}));
+ await newBrowser();expect(invoke).toHaveBeenCalledWith('browser:open',{url:'about:blank',ownerChatId:null});expect(ui.get().page).toBe('home');
 });
 it('keeps the page and reports an unavailable browser without making a fake tile',async()=>{
  invoke.mockRejectedValue(new Error('unavailable'));ui.set(state=>({...state,page:'home'}));await newBrowser();expect(ui.get().page).toBe('home');expect(ui.get().toasts).toHaveLength(1);

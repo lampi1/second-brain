@@ -11,6 +11,7 @@
 // the «Peso del costo» (0-10, the λ the daily loop weighs cost against quality with). A writing row on an Anthropic model
 // also has «Sui crediti API» (ADR 0052, off until the user turns it on): its chats run on the Anthropic API engine, paid
 // by the API credits of the user's Max plan. Rendered by SettingsPage.tsx.
+import { Select } from './Select';
 import { useEffect, useState } from 'react';
 import type { RoutingInfo, TaskKind } from '@shared/contract';
 import { effortLabel } from '../lib/format';
@@ -74,10 +75,10 @@ export function RoutingGroup() {
         <div className="st-group-h"><h2>Instradamento modelli</h2>
           <HelpTip label="Instradamento modelli" title="Una tabella di regole" testid="st-help-routing"
             example="«Review» in qualsiasi area → Opus con sforzo alto; «Log e ops» → un modello più economico.">
-            Per ogni tipo di lavoro, ed eventualmente area, dice con quale modello e quanto sforzo la Regia apre la chat. Se più righe valgono, vince la più precisa: tipo e area, poi solo area, poi solo tipo, poi «qualsiasi». Così una riga d'area (per esempio App) vale per tutte le sue chat.
+            Per ogni tipo di lavoro, ed eventualmente area, dice con quale modello e quanto sforzo l’Orchestrator apre la chat. Se più righe valgono, vince la più precisa: tipo e area, poi solo area, poi solo tipo, poi «qualsiasi». Così una riga d'area (per esempio App) vale per tutte le sue chat.
           </HelpTip>
         </div>
-        <p>Con quale modello e sforzo la Regia apre una chat di lavoro, per tipo di lavoro e area. Vince la riga più precisa; nessuna riga = «Chat aperte dalla Regia». La Regia può cambiare la tabella da sola, con motivo e dati: lo vedi nella Cronologia e puoi ripristinare qualsiasi versione.</p>
+        <p>Con quale modello e sforzo l’Orchestrator apre una chat di lavoro, per tipo di lavoro e area. Vince la riga più precisa; nessuna riga = «Chat aperte dall’Orchestrator». L’Orchestrator può cambiare la tabella da solo, con motivo e dati: lo vedi nella Cronologia e puoi ripristinare qualsiasi versione.</p>
       </header>
       <div className="st-card">
         {!info ? <div className="st-row"><div className="st-desc">{error ?? 'Leggo la tabella…'}</div></div> : (
@@ -90,40 +91,40 @@ export function RoutingGroup() {
             </div>
             <div className="st-rt-wrap">
               <table className="st-rt" data-testid="st-routing-table">
-                <thead><tr><th>Tipo di lavoro</th><th aria-label="Area">Area<HelpTip label="Area" example="«App, Pers · App»">Le etichette all'inizio del titolo della chat, separate da virgole. Vuota = qualsiasi area.</HelpTip></th><th>Modello</th><th aria-label="Sforzo">Sforzo<HelpTip label="Sforzo">Quanto il modello ragiona prima di rispondere. «predefinito» = quello del modello; più alto costa di più.</HelpTip></th><th>Perché</th><th aria-label="L'AI può cambiarla">AI<HelpTip label="L'AI può cambiarla" testid="st-help-routing-ai">Acceso: la Regia e il loop giornaliero possono cambiare questa riga da soli, con motivo e dati. Spento: la riga resta come l'hai messa tu, e nemmeno l'esplorazione prova altri modelli per quelle chat.</HelpTip></th><th><span className="sr-only">Togli</span></th></tr></thead>
+                <thead><tr><th>Tipo di lavoro</th><th aria-label="Area">Area<HelpTip label="Area" example="«App, Pers · App»">Le etichette all'inizio del titolo della chat, separate da virgole. Vuota = qualsiasi area.</HelpTip></th><th>Modello</th><th aria-label="Sforzo">Sforzo<HelpTip label="Sforzo">Quanto il modello ragiona prima di rispondere. «predefinito» = quello del modello; più alto costa di più.</HelpTip></th><th>Perché</th><th aria-label="L'AI può cambiarla">AI<HelpTip label="L'AI può cambiarla" testid="st-help-routing-ai">Acceso: l’Orchestrator e il loop giornaliero possono cambiare questa riga da soli, con motivo e dati. Spento: la riga resta come l'hai messa tu, e nemmeno l'esplorazione prova altri modelli per quelle chat.</HelpTip></th><th><span className="sr-only">Togli</span></th></tr></thead>
                 <tbody>
                   {rows.map((r, i) => {
                     const m = reg?.models.find(x => x.id === r.model);
                     return (
                       <tr key={i} data-testid={`st-routing-row-${i}`}>
                         <td>
-                          <select className="st-select st-rt-s" value={r.kind} aria-label={`Riga ${i + 1}: tipo di lavoro`} onChange={e => put(i, { kind: e.target.value as TaskKind | '*' })}>
+                          <Select className="st-select st-rt-s" value={r.kind} aria-label={`Riga ${i + 1}: tipo di lavoro`} onChange={e => put(i, { kind: e.target.value as TaskKind | '*' })}>
                             {(['*', ...info.kinds] as const).map(k => <option key={k} value={k}>{getKindIt()[k] ?? k}</option>)}
-                          </select>
+                          </Select>
                         </td>
                         <td>
                           <input className="st-input st-rt-area" value={r.area} placeholder="qualsiasi" aria-label={`Riga ${i + 1}: area`} onChange={e => put(i, { area: e.target.value })} />
                         </td>
                         <td>
-                          <select className="st-select st-rt-s" value={r.model} aria-label={`Riga ${i + 1}: modello`}
+                          <Select className="st-select st-rt-s" value={r.model} aria-label={`Riga ${i + 1}: modello`}
                             onChange={e => { const nm = reg?.models.find(x => x.id === e.target.value); put(i, { model: e.target.value, effort: r.effort && tableEfforts(nm, takes).includes(r.effort) ? r.effort : startEffort(nm, takes) }); }}>
                             {models.map(x => <option key={x.id} value={x.id}>{x.id.replace(/^claude-/, '')}</option>)}
-                          </select>
+                          </Select>
                           {apiCapable(r, m) && (
                             <label className="st-rt-api" data-testid={`st-routing-api-${i}`}>
                               <input type="checkbox" checked={r.onApi} aria-label={`Riga ${i + 1}: sui crediti API`} onChange={e => put(i, { onApi: e.target.checked })} data-testid={`st-routing-api-${i}-check`} />
                               <span>sui crediti API</span>
                               <HelpTip label="Sui crediti API" title="Crediti API del piano Max" testid={`st-help-routing-api-${i}`}>
-                                Acceso: queste chat girano su Anthropic API con lo stesso modello e le pagano i crediti API del piano, non i limiti di Claude Code. Solo testo: niente file né strumenti. Servono, in «Motori»: Anthropic API acceso con la chiave e «Le Regie possono usare Anthropic API»; per le chat aperte da una Regia anche «Chat tra motori diversi». Se ne manca uno restano su Claude. Lo cambi solo tu.
+                                Acceso: queste chat girano su Anthropic API con lo stesso modello e le pagano i crediti API del piano, non i limiti di Claude Code. Solo testo: niente file né strumenti. Servono, in «Motori»: Anthropic API acceso con la chiave e «Le Regie possono usare Anthropic API»; per le chat aperte da un Orchestrator anche «Chat tra motori diversi». Se ne manca uno restano su Claude. Lo cambi solo tu.
                               </HelpTip>
                             </label>
                           )}
                         </td>
                         <td>
-                          <select className="st-select st-rt-e" value={r.effort} aria-label={`Riga ${i + 1}: sforzo`} onChange={e => put(i, { effort: e.target.value as EditRow['effort'] })}>
+                          <Select className="st-select st-rt-e" value={r.effort} aria-label={`Riga ${i + 1}: sforzo`} onChange={e => put(i, { effort: e.target.value as EditRow['effort'] })}>
                             <option value="">predefinito</option>
                             {tableEfforts(m, takes).map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}
-                          </select>
+                          </Select>
                         </td>
                         <td>
                           <input className="st-input st-rt-why" value={r.why} placeholder="perché (facoltativo: lo scrive l’AI)" aria-label={`Riga ${i + 1}: perché`} onChange={e => put(i, { why: e.target.value })} />
@@ -144,7 +145,7 @@ export function RoutingGroup() {
                 <div className="st-title">Esplorazione
                   <HelpTip label="Esplorazione" title="Provare anche altri modelli" testid="st-help-explore"
                     example="10% → circa 1 chat su 10 prova un modello che ha ancora pochi dati per quel tipo di lavoro.">
-                    La parte delle chat che, invece della riga della tabella, prova un altro modello dello stesso motore (Claude resta Claude, Cursor resta Cursor), quello con meno dati per quel tipo di lavoro. Serve a raccogliere esiti da confrontare. Mai sulle Regie, mai sforzo massimo, mai quando la Regia sceglie lei il modello. 0% = sempre la tabella.
+                    La parte delle chat che, invece della riga della tabella, prova un altro modello dello stesso motore (Claude resta Claude, Cursor resta Cursor), quello con meno dati per quel tipo di lavoro. Serve a raccogliere esiti da confrontare. Mai sulle Regie, mai sforzo massimo, mai quando l’Orchestrator sceglie lui il modello. 0% = sempre la tabella.
                   </HelpTip>
                 </div>
                 <div className="st-desc">Quante chat provano un modello diverso per raccogliere dati: da 0 a 50%.</div>
@@ -181,7 +182,7 @@ export function RoutingGroup() {
               <div className="st-rt-hist" data-testid="st-routing-history">
                 <div className="st-title">Cronologia
                   <HelpTip label="Cronologia" testid="st-help-routing-history">
-                    Ogni modifica della tabella, tua o della Regia, con il motivo e i dati. «Ripristina» rimette in vigore quella versione come versione nuova: niente si perde.
+                    Ogni modifica della tabella, tua o dell’Orchestrator, con il motivo e i dati. «Ripristina» rimette in vigore quella versione come versione nuova: niente si perde.
                   </HelpTip>
                 </div>
                 <ul>

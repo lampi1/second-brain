@@ -38,5 +38,5 @@ describe('publish guard', () => {
       .map(f => `${f.where}${f.line ? `:${f.line}` : ''}  ${f.rule}`);
     // a finding: use a generic placeholder (example.com, "Studio Demo", a made-up name); see the line, not this output
     expect(found).toEqual([]);
-  }, 60_000);
+  }, 120_000); // copies and scans every repo file: ~4 s alone, 64-70 s measured with two full suites in parallel
 });
