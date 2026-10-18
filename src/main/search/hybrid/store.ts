@@ -55,8 +55,14 @@ export class Store {
     let vec = false;
     if (extension) { try { this.db.loadExtension(extension); vec = true; } catch { /* JS cosine instead */ } }
     this.vec = vec;
-    this.db.exec('pragma journal_mode = wal; pragma synchronous = normal;');
-    this.db.exec(SCHEMA);
+    try {
+      this.db.exec('pragma journal_mode = wal; pragma synchronous = normal;');
+      this.db.exec(SCHEMA);
+    } catch (e) {
+      // a corrupt file ("file is not a database"): close it, or Windows keeps it locked and openStore cannot delete it
+      try { this.db.close(); } catch { /* already closed */ }
+      throw e;
+    }
   }
 
   docs(prefix: string): Map<string, DocMeta> {
@@ -154,4 +160,12 @@ export class Store {
   }
 
   close(): void { try { this.db.close(); } catch { /* already closed */ } }
+}
+
+/** The index, rebuilt from scratch when the file is unreadable (it is only a cache of the brain). */
+export function openStore(file: string, extension: string | null): Store {
+  try { return new Store(file, extension); } catch {
+    for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
+    return new Store(file, extension);
+  }
 }
