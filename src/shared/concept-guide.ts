@@ -47,8 +47,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     prominent: true,
     title: b('Ogni compito passa da un agente', 'Every task goes through an agent'),
     summary: b(
-      'Qui il lavoro lo fa sempre un agente: uno del catalogo, oppure una chat aperta al volo per quel compito.',
-      'Here work is always done by an agent: one from the catalog, or a chat opened on the fly for that task.'),
+      'Qui il lavoro passa da un agente: scegli uno specialista oppure la chat viene assegnata a Generale.',
+      'Here work goes through an agent: choose a specialist or the chat is assigned to Generale.'),
     points: [
       // src/renderer/components/AgentStartDialog.tsx (createChat with agentId); src/main/agents/catalog.ts resolve()
       b('Tu (o l’Orchestrator) avvii un agente del catalogo: la chat nasce con il suo motore, modello e istruzioni.',
@@ -56,23 +56,26 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog
       b('L’Orchestrator legge il catalogo con agent_catalog e apre il lavoro con app_create_chat, passando l’agentId scelto.',
         'The Orchestrator reads the catalog with agent_catalog and opens the work with app_create_chat, passing the chosen agentId.'),
-      // src/main/agents/catalog.ts resolve() → compatibleOwner(): 'routed-<sha12>' owner named "Assistente"
-      b('Se nessun agente è indicato nasce una chat ad hoc (proprietario «Assistente», id routed-…): motore e modello li sceglie la tabella di instradamento.',
-        'If no agent is named an ad-hoc chat is born (owner "Assistente", id routed-…): the routing table picks engine and model.'),
+      // src/main/agents/catalog.ts resolve(): Generale preserves the caller's engine/model/effort
+      b('Senza un agente indicato, le chat di lavoro vanno a Generale: mantengono motore, modello e sforzo scelti da te o dall’instradamento.',
+        'Without a named agent, work chats go to Generale: they keep the engine, model and effort chosen by you or routing.'),
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
-      b('Solo le chat di un agente del catalogo hanno una «run» con contatori e costo; le chat ad hoc no.',
-        'Only chats of a catalog agent get a "run" with counters and cost; ad-hoc chats do not.'),
+      b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. La Regia e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
+        'Catalog chats, including Generale, have a "run" with counters and cost. Regia and the compatible fallback when Generale is missing have no catalog run.'),
       // src/main/agents/catalog.ts save(): origin user, userLocked; draft() for the AI guide in Agent Studio
       b('Un agente nuovo oggi lo salvi tu in «Gestisci agenti» (anche partendo da una bozza scritta dall’AI): resta nel catalogo per la prossima volta.',
         'Today you save a new agent in "Manage agents" (also starting from a draft the AI wrote): it stays in the catalog for next time.'),
       // src/main/agents/discovery.ts CATALOG_GUIDANCE ("…or proposing a new agent")
       b('L’Orchestrator può solo proporre un agente nuovo nel testo: non scrive il catalogo.',
         'The Orchestrator can only propose a new agent in its reply: it does not write the catalog.'),
+      // src/main/agents/probation.ts; src/main/chats/manager.ts evaluateProbation
+      b('Per i profili già in prova, il servizio valuta risultati confermati, correzioni, rifacimenti e inattività per tenerli o ritirarli.',
+        'For profiles already on probation, the service evaluates confirmed results, corrections, rework and inactivity to keep or retire them.'),
     ],
     analogy: b(
       'Come uno studio con un elenco di specialisti: il coordinatore sceglie chi chiamare; se manca lo specialista giusto, per ora affida il lavoro a un generalista e ti suggerisce chi assumere.',
       'Like a practice with a list of specialists: the coordinator picks who to call; if the right one is missing, for now it hands the job to a generalist and suggests whom to hire.'),
-    diagram: { kind: 'cycle', steps: [b('Compito', 'Task'), b('Orchestrator', 'Orchestrator'), b('Agente o chat ad hoc', 'Agent or ad-hoc chat'), b('Risultato', 'Result'), b('Catalogo', 'Catalog')] },
+    diagram: { kind: 'cycle', steps: [b('Compito', 'Task'), b('Orchestrator', 'Orchestrator'), b('Specialista o Generale', 'Specialist or Generale'), b('Risultato', 'Result'), b('Catalogo', 'Catalog')] },
     tech: [
       // src/shared/agents.ts AgentProfile / AgentOrigin
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, manifest, engine, model, effort, tools, permissionCeiling, origin: preset | user | orchestrator, version }.',
@@ -84,16 +87,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(LIMITS, 'Al massimo 64 agenti attivi e 256 in tutto.', 'At most 64 active agents and 256 in total.'),
     ],
     target: [
-      // only in src/shared/agents.ts types (AgentOrigin 'orchestrator', trial) and ADR 0066: no code creates them
-      b('L’Orchestrator che crea da solo un agente quando manca (origine «orchestrator») e lo tiene in prova: previsto nei tipi, non implementato.',
-        'The Orchestrator creating an agent by itself when one is missing (origin "orchestrator") and keeping it on trial: in the types, not implemented.'),
+      // Automatic creation is absent; evaluation of existing probation profiles is implemented.
+      b('L’Orchestrator che crea da solo un agente quando manca (origine «orchestrator»): non implementato.',
+        'The Orchestrator creating an agent by itself when one is missing (origin "orchestrator"): not implemented.'),
       b('Riconoscere in automatico il «buco» (nessun agente adatto): oggi lo valuta solo l’Orchestrator leggendo il catalogo.',
         'Detecting the "gap" (no fitting agent) automatically: today only the Orchestrator judges it by reading the catalog.'),
       b('«Salva come agente» da una chat ad hoc riuscita: non esiste ancora.', '"Save as agent" from a successful ad-hoc chat: does not exist yet.'),
-      b('Tenere un agente nel catalogo perché ha lavorato bene (in base ai risultati): oggi resta perché lo salvi tu.',
-        'Keeping an agent in the catalog because it worked well (based on results): today it stays because you save it.'),
     ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/probation.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx'],
   },
   {
     id: 'agents',
@@ -102,8 +103,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'An agent is a saved profile: instructions, engine, model, tools and permission limits.'),
     points: [
       // src/main/agents/catalog.ts ROLES
-      b('L’app parte con sei agenti di base: Assistente, Ricerca, Scrittura e documenti, Analisi, Pianificazione, Sviluppo.',
-        'The app starts with six base agents: Assistant, Research, Writing and documents, Analysis, Planning, Development.'),
+      b('L’app parte con sei agenti di base: Generale, Ricerca, Scrittura e documenti, Analisi, Pianificazione, Sviluppo.',
+        'The app starts with six base agents: Generale, Research, Writing and documents, Analysis, Planning, Development.'),
       // src/shared/agents.ts BEHAVIOUR_FIELDS
       b('Cambiare istruzioni, manifesto, motore, modello, sforzo, strumenti o tetto dei permessi crea una nuova versione.',
         'Changing instructions, manifest, engine, model, effort, tools or permission ceiling creates a new version.'),
@@ -180,8 +181,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Nasce quando avvii una chat con un agente del catalogo; startedBy dice se l’hai avviata tu o l’Orchestrator.',
         'It starts when you open a chat with a catalog agent; startedBy says whether you or the Orchestrator started it.'),
       // src/main/chats/manager.ts countRequest
-      b('Conta domande, permessi e comandi (una volta per richiesta), le riaperture e il picco di contesto.',
-        'It counts questions, permissions and commands (once per request), reopenings and the context peak.'),
+      b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione.',
+        'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time.'),
       // src/main/agents/runs.ts addTurn
       b('Somma costo e token di ogni turno; se un turno non li riporta, il totale diventa «sconosciuto» (null), non zero.',
         'It adds each turn’s cost and tokens; if a turn does not report them, the total becomes "unknown" (null), not zero.'),
@@ -189,8 +190,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Finisce come completed (stato «Incarico concluso»), closed (chat chiusa o archiviata) o stale (72 ore senza turni).',
         'It ends as completed ("Assignment done" status), closed (chat closed or archived) or stale (72 hours without turns).'),
       // src/main/agents/runs.ts reopenRun; src/main/index.ts chat:send
-      b('Se scrivi di nuovo a una chat finita la run si riapre e il contatore «reopened» sale; i messaggi degli agenti non la riaprono.',
-        'If you write again to an ended chat the run reopens and "reopened" goes up; agents’ messages never reopen it.'),
+      b('Se scrivi di nuovo o riapri manualmente una chat finita, la run si riapre e «reopened» sale; i messaggi degli agenti non la riaprono.',
+        'Writing again or manually reopening an ended chat reopens its run and increases "reopened"; agent messages do not reopen it.'),
+      // src/main/chats/manager.ts continuation; src/main/agents/run-metrics.ts indexRuns
+      b('Una continuazione registra continuedFrom; le metriche lo considerano per i rifacimenti entro sette giorni dalla fine della run precedente.',
+        'A continuation records continuedFrom; metrics use it for rework within seven days of the previous run ending.'),
       // src/main/agents/runs.ts pruning
       b('Le run finite più vecchie vengono potate quando l’archivio supera i limiti.', 'The oldest ended runs are pruned when the store exceeds its limits.'),
     ],
@@ -199,8 +203,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'flow', steps: [b('Avvio', 'Start'), b('Turni e richieste', 'Turns and requests'), b('Fine', 'End'), b('Riapertura?', 'Reopened?')] },
     tech: [
       // src/shared/agents.ts AgentRun
-      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null }.',
-        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null }.'),
+      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null, report?, corrections?, executionMs?, parentRunId?, spawnedBy?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
+        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null, report?, corrections?, executionMs?, parentRunId?, spawnedBy?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
       tech(FILES, 'userData/agent-runs.json è la fonte; ChatSummary.run ne è una copia.', 'userData/agent-runs.json is the source; ChatSummary.run mirrors it.'),
       // src/main/agents/runs.ts RUNS_MAX, RUNS_BYTES, STALE_MS
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
@@ -209,16 +213,16 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager.ts markRun: no IPC channel, no UI
       b('Il verdetto umano su una run (successo, parziale, fallita) esiste nel codice ma non ha ancora un pulsante.',
         'The human verdict on a run (success, partial, fail) exists in code but has no button yet.'),
-      b('I legami tra run (sotto-incarichi, review, rifacimenti) sono previsti nell’archivio ma niente li imposta.',
-        'Links between runs (sub-assignments, reviews, reworks) are supported by the store but nothing sets them.'),
+      b('I legami di sotto-incarico e review sono supportati dall’archivio, ma manca ancora un percorso MCP per crearli.',
+        'Sub-assignment and review links are supported by the store, but an MCP path to create them is still missing.'),
     ],
     sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts'],
   },
   {
     id: 'metrics',
     title: b('Metriche e statistiche degli agenti', 'Agent metrics and statistics'),
-    summary: b('Costi e tempi per agente, letti dalle sessioni osservate e mai sommati tra fonti diverse.',
-      'Costs and times per agent, read from observed sessions and never summed across different sources.'),
+    summary: b('Statistiche dalle sessioni osservate e metriche dalle run: due letture distinte del lavoro degli agenti.',
+      'Statistics from observed sessions and metrics from runs: two separate views of agents’ work.'),
     points: [
       // src/shared/agent-analytics.ts
       b('Per ogni agente: costo reale, costo a listino e costo stimato, ciascuno con quante sessioni sono note e quante no.',
@@ -231,16 +235,19 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le vedi nella pagina Costi, «Per agente · tutte le sessioni osservate», aggiornate ogni 5 secondi; nessuna classifica.',
         'You see them on the Costs page, "By agent · all observed sessions", refreshed every 5 seconds; no ranking.'),
       // src/main/agents/analytics.ts, src/main/agents/collector.ts
-      b('Sono costruite dalle sessioni e dai registri osservati, non dal file delle run.', 'They are built from observed sessions and ledgers, not from the runs file.'),
+      b('Le statistiche della pagina Costi vengono dalle sessioni e dai registri osservati.', 'The Costs page statistics come from observed sessions and ledgers.'),
+      // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
+      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; non hanno ancora una vista dedicata.',
+        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; these have no dedicated view yet.'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
     tech: [
       tech(DATA, 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per categoria con medianMs.', 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per category with medianMs.'),
       // src/main/wiring.ts /api/agents/analytics
-      tech(WHERE, 'API del brain /api/agents/analytics servita dal main (non un canale IPC).', 'Brain API /api/agents/analytics served by main (not an IPC channel).'),
+      tech(WHERE, 'Statistiche delle sessioni: /api/agents/analytics; metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo.', 'Session statistics: /api/agents/analytics; run metrics: agents:metrics IPC, also filtered by skill, app and repo tags.'),
     ],
-    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
+    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
   },
   {
     id: 'errors-rules',
@@ -263,6 +270,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
+      // src/main/chats/manager.ts; src/main/agents/run-metrics.ts aiErrorRuns
+      b('Le run contano correzioni esplicite e riaperture dell’utente dopo un report valido; le metriche includono anche righe di ai-errors.md con runId e «visto da: Brother».',
+        'Runs count explicit corrections and user reopenings after a valid report; metrics also include ai-errors.md entries with a runId and "visto da: Brother".'),
     ],
     analogy: b('Come il registro degli incidenti di un reparto: si annota, si raggruppa, si scrive una regola e si guarda se l’incidente torna.',
       'Like a department’s incident log: write it down, group it, write a rule, and watch whether the incident comes back.'),
@@ -274,36 +284,33 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Messaggio: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; «Al prossimo passo» solo con Claude.',
         'Message: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; "At the next step" on Claude only.'),
     ],
-    target: [
-      b('Le correzioni non sono ancora contate nelle run né nelle metriche per agente.', 'Corrections are not counted in runs or per-agent metrics yet.'),
-    ],
-    sources: ['src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/Miglioramento.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
+    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/Miglioramento.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
   {
     id: 'milestones',
     title: b('Traguardi personali', 'Personal milestones'),
-    summary: b('Tre traguardi (primo agente, spazio configurato, primo risultato): oggi ritirati, si leggono ma non se ne assegnano di nuovi.',
-      'Three milestones (first agent, workspace set up, first result): retired today, readable but no new ones are awarded.'),
+    summary: b('Tre traguardi locali: primo agente personalizzato, spazio configurato e primo risultato confermato.',
+      'Three local milestones: first custom agent, workspace set up and first confirmed result.'),
     points: [
       // src/shared/progress.ts ACHIEVEMENTS; src/renderer/lib/progress-bridge.ts labels
       b('I traguardi sono: «Primo agente personalizzato», «Spazio di lavoro configurato», «Primo risultato confermato».',
         'The milestones are: "First custom agent", "Workspace set up", "First confirmed result".'),
       // src/main/agents/progress.ts
-      b('Erano salvati in progress.json nella cartella dati dell’app.', 'They were saved in progress.json in the app’s data folder.'),
-      // src/main/wiring.ts ProgressService enabled:false
-      b('Il servizio è costruito disattivato: i vecchi restano leggibili, nessuno nuovo viene assegnato.',
-        'The service is built disabled: old ones stay readable, no new one is awarded.'),
-      // src/renderer/components/AgentStudio.tsx ProgressPanel
-      b('Il pannello in «Gestisci agenti» c’è ancora e mostra il motivo per cui non sono disponibili.',
-        'The panel in "Manage agents" is still there and shows why they are unavailable.'),
+      b('Sono salvati in progress.json nella cartella dati dell’app.', 'They are saved in progress.json in the app’s data folder.'),
+      // src/main/wiring.ts ProgressService enabled:true; src/main/agents/progress.ts confirmResult
+      b('Personalizzare un agente e completare la configurazione assegnano i primi due; il primo risultato richiede una tua conferma su un risultato idoneo.',
+        'Customizing an agent and completing setup award the first two; the first result requires your confirmation of an eligible result.'),
+      // src/renderer/components/ProgressPanel.tsx
+      b('Il pannello in «Gestisci agenti» mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
+        'The panel in "Manage agents" shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
     ],
-    analogy: b('Come una tessera fedeltà sospesa: i timbri vecchi restano, ma il negozio non ne mette di nuovi.',
-      'Like a suspended loyalty card: the old stamps remain, but the shop adds no new ones.'),
+    analogy: b('Come tre caselle da spuntare quando prepari il tuo spazio e confermi il primo lavoro riuscito.',
+      'Like three boxes to tick as you prepare your workspace and confirm the first successful job.'),
     tech: [
       tech(DATA, "ACHIEVEMENTS = ['first-agent', 'setup-complete', 'first-result'].", "ACHIEVEMENTS = ['first-agent', 'setup-complete', 'first-result']."),
-      tech(FILES, 'userData/progress.json; servizio ProgressService con enabled: false.', 'userData/progress.json; ProgressService with enabled: false.'),
+      tech(FILES, 'userData/progress.json; servizio ProgressService con enabled: true nel profilo personale.', 'userData/progress.json; ProgressService with enabled: true in the personal profile.'),
     ],
-    sources: ['src/shared/progress.ts', 'src/main/agents/progress.ts', 'src/main/wiring.ts', 'src/renderer/lib/progress-bridge.ts', 'src/renderer/components/AgentStudio.tsx'],
+    sources: ['src/shared/progress.ts', 'src/main/agents/progress.ts', 'src/main/wiring.ts', 'src/renderer/lib/progress-bridge.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/ProgressPanel.tsx'],
   },
   {
     id: 'classifiers',
@@ -332,6 +339,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts
       b('Altri: messaggi non scritti da te (mostrati attenuati) e la coda per carico (CPU > 75% o RAM libera < 15%).',
         'Others: messages you did not type (shown muted) and the load queue (CPU > 75% or free RAM < 15%).'),
+      // brain-template/ops/tools/signals-regex.mjs; ADR 0047
+      b('Rilevare le correzioni nel testo libero e il giudice a campione dei lavori vivono negli strumenti del brain.',
+        'Detecting corrections in free text and the sample judge of works live in the brain’s tools.'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole fisse e scritte, e una casella «varie» quando non si capisce.',
       'Like mail sorting at the front desk: fixed written rules, and a "misc" box when it is unclear.'),
@@ -342,16 +352,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro.'),
       tech(LIMITS, 'Prompt letto per i primi 2000 caratteri; al massimo 3 comandi per risposta; blocco eseguibile ≤ 8000 caratteri.',
         'Prompt read for its first 2000 chars; at most 3 commands per reply; runnable block ≤ 8000 chars.'),
-      // src/main/headline.ts
-      tech(WHERE, 'L’unica chiamata a un modello dell’app è la battuta della Grindhouse (headline.ts), che non classifica nulla.',
-        'The app’s only model call is the Grindhouse headline (headline.ts), which classifies nothing.'),
+      // src/main/headline.ts; src/main/agents/catalog.ts draft()
+      tech(WHERE, 'Questi classificatori usano regole; altre funzioni chiamano un modello, tra cui la battuta della Dashboard e la guida AI per creare agenti.',
+        'These classifiers use rules; other features call a model, including the Dashboard headline and the AI agent builder.'),
     ],
-    target: [
-      // brain-template/ops/tools/signals-regex.mjs; ADR 0047
-      b('Rilevare le correzioni nel testo libero e il giudice a campione dei lavori vivono nel brain, non nell’app.',
-        'Detecting corrections in free text and the sample judge of works live in the brain, not in the app.'),
-    ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts', 'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/main/headline.ts'],
+    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts', 'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/main/headline.ts', 'src/main/agents/catalog.ts', 'src/main/wiring.ts'],
   },
   {
     id: 'permissions',
@@ -360,8 +365,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'When an agent wants to do something sensitive, the CLI asks: the app shows you the panel and enforces the agent’s ceiling.'),
     points: [
       // src/main/chats/claude.ts onControlRequest; src/main/chats/acp.ts
-      b('La richiesta arriva dalla CLI (Claude can_use_tool, Cursor session/request_permission) e diventa un pannello: Consenti, Consenti sempre, Rifiuta.',
-        'The request comes from the CLI (Claude can_use_tool, Cursor session/request_permission) and becomes a panel: Allow, Allow always, Deny.'),
+      b('La richiesta arriva dalla CLI (Claude can_use_tool, Cursor session/request_permission, Codex approvazioni di comandi e modifiche) e diventa un pannello con le risposte disponibili.',
+        'The request comes from the CLI (Claude can_use_tool, Cursor session/request_permission, Codex command and file-change approvals) and becomes a panel with the available responses.'),
       b('«Consenti sempre» vale solo per questa sessione: l’app non scrive mai i file di impostazioni di Claude o Cursor.',
         '"Allow always" lasts for this session only: the app never writes Claude’s or Cursor’s settings files.'),
       // src/shared/contract.ts PermissionMode; src/renderer/lib/format.ts labels
@@ -386,12 +391,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Order: plan 0 < default 1 < acceptEdits 2 < auto 3 < bypassPermissions 4; auto and bypass cannot be a ceiling.'),
       tech(WHERE, 'Su Cursor (ACP) «sempre» è ignorato e solo il tetto plan è applicato; gli altri tetti risultano «dichiarati, non applicati».',
         'On Cursor (ACP) "always" is ignored and only the plan ceiling is enforced; other ceilings are "declared, not enforced".'),
+      tech(WHERE, 'Su Codex plan/default impongono una sandbox in sola lettura; acceptEdits usa approvazioni on-request.',
+        'On Codex, plan/default enforce a read-only sandbox; acceptEdits uses on-request approvals.'),
     ],
     target: [
       b('Il tetto dei permessi non si modifica ancora dall’interfaccia: arriva solo con il salvataggio dell’agente.',
         'The permission ceiling cannot be edited from the UI yet: it only comes with the agent’s saved data.'),
     ],
-    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/shared/contract.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
+    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
   },
   {
     id: 'questions',
@@ -431,18 +438,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'grindhouse',
     title: b('La Grindhouse', 'The Grindhouse'),
-    summary: b('La pagina iniziale: una striscia per ogni agente al lavoro, con sotto i browser che guida.',
-      'The home page: one strip per working agent, with the browsers it drives below it.'),
+    summary: b('La pagina iniziale: una striscia per ogni agente al lavoro, con i browser che guida accanto alla chat aperta.',
+      'The home page: one strip per working agent, with the browsers it drives beside the expanded chat.'),
     points: [
       // src/renderer/brain/pages/Home.tsx
-      b('In alto: saluto, quanti agenti sono al lavoro e quanti da rivedere, poi «Aspetta te» con le richieste dalla più vecchia.',
-        'At the top: greeting, how many agents are working and how many to review, then "Waiting for you" with requests, oldest first.'),
+      b('La pagina mostra le strisce degli agenti; le richieste in attesa compaiono sulla striscia della chat interessata.',
+        'The page shows agent strips; pending requests appear on the strip of the relevant chat.'),
       // src/renderer/lib/agent-order.ts
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
       // src/renderer/lib/grid.ts workspaceTiles
-      b('Ogni chat è seguita dai suoi browser; poi vengono le schede aperte da te o rimaste senza chat.',
-        'Each chat is followed by its browsers; then come tabs you opened or that lost their chat.'),
+      b('Aprendo una striscia, i suoi browser stanno accanto alla chat, oppure sotto se lo spazio è stretto. A striscia chiusa si nascondono, salvo quelli che richiedono il tuo intervento o sono massimizzati.',
+        'Expanding a strip shows its browsers beside the chat, or below in a narrow space. Collapsing it hides them, except those awaiting your intervention or maximized.'),
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, sforzo e l’ultima risposta; aperta mostra la conversazione e l’input.',
         'A collapsed strip shows agent, state, effort and the last answer; expanded it shows the conversation and the input.'),
@@ -468,8 +475,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
         '"Agents map": open chats and who talks to whom (Orchestrator ownership, messages between chats).'),
       b('«Mappa brain»: le note del brain e i loro collegamenti, letti ogni 30 secondi.', '"Brain map": the brain’s notes and their links, read every 30 seconds.'),
-      b('«Costi» per giorno, modello, motore e agente; «Token e contesto» segnala i contesti sopra la soglia (default 200 000).',
-        '"Costs" by day, model, engine and agent; "Tokens & context" flags contexts above the threshold (default 200,000).'),
+      b('«Costi» per giorno, modello, motore e agente; «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
+        '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
       b('«Errori» da ai-errors.md e dagli eventi; «Spunti» deriva segnali come contesti lunghi e costi alti.',
         '"Errors" from ai-errors.md and events; "Tips" derives signals such as long contexts and high costs.'),
       b('Ogni pannello ha «Discutine»: mette una bozza all’Orchestrator, non la invia mai da solo.',
@@ -481,7 +488,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
       tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/data.ts'],
+    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
   },
   {
     id: 'brain',
@@ -495,9 +502,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // brain-template/ (map.md, now.md, ai-errors.md, ideas.md, journal/)
       b('Dentro: map.md (l’indice), now.md (il filo di adesso), ideas.md, ai-errors.md, journal/, rules/, playbooks/.',
         'Inside: map.md (the index), now.md (the current thread), ideas.md, ai-errors.md, journal/, rules/, playbooks/.'),
-      // brain-template/ops/tools/mem.mjs
-      b('Le note di memoria le scrive un solo strumento, ops/tools/mem.mjs, con un lucchetto; l’app scrive solo in ops/state/improve/.',
-        'Memory notes are written by one tool, ops/tools/mem.mjs, with a lock; the app writes only in ops/state/improve/.'),
+      // brain-template/ops/tools/mem.mjs; src/main/brain/profile.ts; src/main/chats/mail.ts; src/main/skills/service.ts
+      b('Gli strumenti del brain aggiornano le note con mem.mjs; l’app scrive anche il profilo me.md, la posta in ops/state/inbox/, brain-settings.json e file di skill/agenti, oltre allo stato in ops/state/improve/.',
+        'Brain tools update notes through mem.mjs; the app also writes the me.md profile, mail under ops/state/inbox/, brain-settings.json and skill/agent files, as well as state in ops/state/improve/.'),
       // src/main/brain/live.ts
       b('Il feed dal vivo osserva la cartella e mostra le novità (idee, errori, decisioni…); «mentre eri via» segna quelle arrivate a app chiusa.',
         'The live feed watches the folder and shows what changed (ideas, errors, decisions…); "while you were away" marks those that came while the app was closed.'),
@@ -525,7 +532,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole e hook consegnati dal prodotto invece che copiati nel brain (ADR 0062): non ancora implementato.',
         'Rules and hooks delivered by the product instead of copied into the brain (ADR 0062): not implemented yet.'),
     ],
-    sources: ['src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brain/procedures.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
+    sources: ['src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brain/procedures.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
   },
   {
     id: 'search',
@@ -594,7 +601,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'A table decides each chat’s engine, model and effort based on the kind of work and the area.'),
     points: [
       // src/main/brain/routing.ts taskOf, areaOf
-      b('L’app ricava il tipo di lavoro (vedi «I classificatori») e l’area dal titolo della chat.', 'The app works out the kind of work (see "The classifiers") and the area from the chat’s title.'),
+      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App forzata nello spazio dell’app.',
+        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller or title, with App forced in the app workspace.'),
       // src/main/brain/routing.ts match
       b('Vince la riga più specifica: tipo + area, poi area, poi tipo, poi «qualsiasi»; a pari merito la prima.',
         'The most specific row wins: kind + area, then area, then kind, then "any"; on a tie the first one.'),
@@ -609,6 +617,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/RoutingGroup.tsx
       b('In Impostazioni la modifichi riga per riga; «L’AI può cambiarla» spento blocca la riga agli agenti; ogni salvataggio è una versione.',
         'In Settings you edit it row by row; "AI may change it" off locks the row from agents; every save is a version.'),
+      // docs/adr/0047-routing-voted-and-priced-per-work.md
+      b('Il voto dei lavori e il ciclo che aggiorna la tabella vivono negli script del brain (ADR 0047).',
+        'Work votes and the loop that updates the table live in the brain’s scripts (ADR 0047).'),
     ],
     analogy: b('Come il centralino di un call center: in base al motivo della chiamata ti passa al reparto giusto.',
       'Like a call-centre switchboard: depending on why you call, it puts you through to the right department.'),
@@ -619,10 +630,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json.',
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
-    ],
-    target: [
-      b('Il voto dei lavori e il ciclo che aggiorna la tabella da soli vivono negli script del brain, non nell’app (ADR 0047).',
-        'Work votes and the loop that updates the table by itself live in the brain’s scripts, not in the app (ADR 0047).'),
     ],
     sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },
@@ -645,8 +652,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Spending limits (per day, per chat) warn at 80% and 100%, once each; at 100% an urgent alert comes too.'),
       b('Nessun limite ferma una chat da solo.', 'No limit stops a chat by itself.'),
       // src/main/brain/settings-schema.ts COMPACT_WINDOW
-      b('Vicino al limite di contesto le chat Claude ripartono compattate a 200 000 token (impostazione «Riparti le chat Claude a»).',
-        'Near the context limit Claude chats restart compacted at 200,000 tokens (setting "Restart Claude chats at").'),
+      b('Claude compatta automaticamente il contesto vicino alla finestra configurata da «Compatta le chat Claude a (token)», default 200 000.',
+        'Claude automatically compacts context near the window configured by "Compact Claude chats at (tokens)", default 200,000.'),
     ],
     analogy: b('Come il contachilometri con la spia della riserva: ti avvisa, ma l’auto non si spegne da sola.',
       'Like a fuel gauge with the reserve light: it warns you, but the car does not switch itself off.'),
@@ -743,8 +750,8 @@ export function regiaText(card: ConceptCard, lang: GuideLang): string {
 }
 
 export const EXPLAINER_NAME = 'Explainer';
-/** An agent counts as the explainer when its id, name or role says so (Explainer, Spiegazioni, Spiega…). */
-const EXPLAINER = /\b(explainer|explain|spiegazion\w*|spiega\w*)\b/i;
+/** Only explicit names/ids identify the explainer; role can be ordinary purpose prose. */
+const EXPLAINER = /^(explainer|spiegazioni)$/i;
 export function isExplainer(p: { id: string; name: string; role?: string | null }): boolean {
-  return EXPLAINER.test(p.id) || EXPLAINER.test(p.name) || (!!p.role && EXPLAINER.test(p.role));
+  return EXPLAINER.test(p.id.trim()) || EXPLAINER.test(p.name.trim());
 }

@@ -94,10 +94,12 @@ const catalog = (profiles: AgentProfile[], models = [choice()]): AgentCatalog =>
 
 describe('«Discutine» plan', () => {
   const card = CONCEPTS[0]!;
-  it('recognises an explainer agent by id, name or role', () => {
+  it('recognises only an explicitly named explainer, never incidental purpose prose', () => {
     expect(isExplainer({ id: 'x', name: 'Explainer' })).toBe(true);
-    expect(isExplainer({ id: 'x', name: 'Spiegazioni tecniche' })).toBe(true);
-    expect(isExplainer({ id: 'x', name: 'Tutor', role: 'spiega i concetti' })).toBe(true);
+    expect(isExplainer({ id: 'x', name: 'Spiegazioni' })).toBe(true);
+    expect(isExplainer({ id: 'explainer', name: 'Tutor' })).toBe(true);
+    expect(isExplainer({ id: 'x', name: 'Spiegazioni tecniche' })).toBe(false);
+    expect(isExplainer({ id: 'x', name: 'Tutor', role: 'spiega i concetti' })).toBe(false);
     expect(isExplainer({ id: 'default-research', name: 'Ricerca' })).toBe(false);
   });
 

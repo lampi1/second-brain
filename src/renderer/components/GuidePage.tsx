@@ -17,7 +17,18 @@ import { IconChevronDown, IconChevronRight } from './Icons';
 import '../styles/guide.css';
 
 /** «Discutine»: an explainer agent's new chat with the card in its input, else a draft in the Orchestrator. */
+const discussing = new Set<string>();
 async function discuss(card: ConceptCard, l: GuideLang): Promise<void> {
+  if (discussing.has(card.id)) return;
+  discussing.add(card.id);
+  try {
+    await startDiscussion(card, l);
+  } finally {
+    discussing.delete(card.id);
+  }
+}
+
+async function startDiscussion(card: ConceptCard, l: GuideLang): Promise<void> {
   const cwd = app.get().info?.brainRoot || ui.get().prefs.newChat.cwd || null;
   const plan = planDiscuss(card, l, agents.get().catalog, cwd);
   if (plan.via === 'agent') {
@@ -48,6 +59,13 @@ function Diagram({ d, title, l }: { d: ConceptDiagram; title: string; l: GuideLa
 
 function Card({ card, l, open, onToggle }: { card: ConceptCard; l: GuideLang; open: boolean; onToggle: () => void }) {
   const body = useId();
+  const [busy, setBusy] = useState(false);
+  const onDiscuss = async () => {
+    if (discussing.has(card.id)) return;
+    setBusy(true);
+    try { await discuss(card, l); }
+    finally { setBusy(false); }
+  };
   const L = (x: Parameters<typeof textOf>[0]) => textOf(x, l);
   const title = L(card.title);
   return (
@@ -64,7 +82,7 @@ function Card({ card, l, open, onToggle }: { card: ConceptCard; l: GuideLang; op
           {open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />} {open ? t('guide.hide') : t('guide.howItWorks')}
         </button>
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s guide-discuss" onClick={() => void discuss(card, l)} data-testid={`guide-discuss-${card.id}`}
+        <button type="button" className="btn btn-ghost btn-s guide-discuss" disabled={busy} onClick={() => void onDiscuss()} data-testid={`guide-discuss-${card.id}`}
           data-tip={t('guide.discussTip')} aria-label={`${t('guide.discuss')}: ${title}`}>
           <span aria-hidden="true">↗</span> {t('guide.discuss')}
         </button>
