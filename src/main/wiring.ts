@@ -302,7 +302,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
-  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false);
+  // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
+  // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
+  const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
+  const agents = createAgentCatalog(ctx, brain, engines, () => cliCache, false, () => progressService.award('first-agent'));
   addChatTools([agentCatalogTool(() => agents.list())]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
@@ -421,8 +424,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // brain domains (ADR 0059): a new chat reads the brain, so the remote's changes land first (bounded, throttled)
   syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
-  // Retired milestones remain readable for compatibility; no new awards or content deletion.
-  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
   if (!process.env.SB_TEST) sweeper.start();
@@ -533,7 +534,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       checkpoint: () => manager.checkpointForUpdate(),
     },
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
-    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
+    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache,
     shutdown: async () => { clearInterval(autoCloseTimer); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
