@@ -195,6 +195,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager.ts continuation; src/main/agents/run-metrics.ts indexRuns
       b('Una continuazione registra continuedFrom; le metriche lo considerano per i rifacimenti entro sette giorni dalla fine della run precedente.',
         'A continuation records continuedFrom; metrics use it for rework within seven days of the previous run ending.'),
+      // src/main/run/outcome.ts (run:outcome IPC) → src/main/chats/manager.ts markRun; src/renderer/components/RunSurface.tsx
+      b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): l’esito viene salvato con base «human».',
+        'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): the outcome is saved with basis "human".'),
       // src/main/agents/runs.ts pruning
       b('Le run finite più vecchie vengono potate quando l’archivio supera i limiti.', 'The oldest ended runs are pruned when the store exceeds its limits.'),
     ],
@@ -210,13 +213,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
     ],
     target: [
-      // src/main/chats/manager.ts markRun: no IPC channel, no UI
-      b('Il verdetto umano su una run (successo, parziale, fallita) esiste nel codice ma non ha ancora un pulsante.',
-        'The human verdict on a run (success, partial, fail) exists in code but has no button yet.'),
       b('I legami di sotto-incarico e review sono supportati dall’archivio, ma manca ancora un percorso MCP per crearli.',
         'Sub-assignment and review links are supported by the store, but an MCP path to create them is still missing.'),
     ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts'],
   },
   {
     id: 'metrics',

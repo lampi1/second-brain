@@ -43,6 +43,17 @@ it('blocks real calls in tests and with the global switch off', async () => {
   f.settings.pulse!.on = false; expect(await f.service.run('headline')).toMatchObject({ ok: false });
   expect(f.runOnce).not.toHaveBeenCalled();
 });
+it('filters search card types before applying the two-card cap', async () => {
+  const f = fixture();
+  f.runOnce.mockResolvedValue({ ok: true, engine: 'claude', model: 'sonnet', costUsd: 0.01, costBasis: 'reported', tokens: null, durationMs: 1,
+    text: JSON.stringify({ cards: [
+      { type: 'idea', title: 'Pianifica la settimana', body: 'Un piano.', why: 'Attività aperte.', refs: ['d1'], places: ['search'] },
+      { type: 'collegamento', title: 'Note e revisione condividono un obiettivo', body: 'Un collegamento.', why: 'Revisione aperta.', refs: ['d1'], places: ['search'] },
+      { type: 'curiosita', title: 'Un dettaglio da approfondire', body: 'Una curiosità.', why: 'Dal riepilogo.', refs: ['d1'], places: ['search'] },
+    ] }) });
+  expect(await f.service.run('pulse')).toEqual({ ok: true });
+  expect(f.service.list('search').cards.map(c => c.type)).toEqual(['collegamento', 'curiosita']);
+});
 it('keeps legacy headline opt-out unless new preference explicitly overrides it', () => {
   expect(fromSaved({ headlineOn: false }).pulse!.headline.on).toBe(false);
   expect(fromSaved({ headlineOn: false, pulse: { headline: { on: true } } }).pulse!.headline.on).toBe(true);

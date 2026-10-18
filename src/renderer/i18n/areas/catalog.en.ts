@@ -1,6 +1,15 @@
 // Catalogue overview strings for English users; parity checked against the Italian source.
 import type { catalogIt } from './catalog.it';
 export const catalogEn: typeof catalogIt = {
+  'runs.legacy': 'Legacy version: definition cannot be verified', 'runs.version': 'Version pinned at launch',
+  'runs.auto': 'Started by the Orchestrator', 'runs.outcome': 'How did it go?',
+  'runs.success': 'Success', 'runs.partial': 'Partial', 'runs.fail': 'Failed',
+  'runs.saved': 'Your outcome is saved', 'runs.error': 'Outcome not saved. Try again.',
+  'runs.run': 'Run', 'runs.started': 'Started, on the home', 'runs.startedShort': 'Started', 'runs.open': 'Open',
+  'runs.goal': 'Goal', 'runs.folder': 'Folder', 'runs.startError': 'Could not start. Try again.',
+  'contextPulse.title': 'From Battito', 'contextPulse.error': 'Cards unavailable.', 'contextPulse.actionError': 'Action failed. Try again.',
+  'contextPulse.save': 'Save to ideas', 'contextPulse.saved': 'Saved to ideas', 'contextPulse.act': 'Do it', 'contextPulse.dismiss': 'Not useful',
+  'contextPulse.sources': 'Sources', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Saving to ideas is unavailable.',
   'catalog.title': 'Agents', 'catalog.create': 'Create agent', 'catalog.studio': 'Open Agent Studio',
   'catalog.intro': 'Agents are reusable assistants with a role, instructions and an engine: start with a preset or create one with the Orchestrator.',
   'catalog.subtitle': 'Your team, its specialties and observed results.',

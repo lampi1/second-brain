@@ -45,6 +45,7 @@ import { Headline } from './headline';
 import { pulseStubHandlers } from './pulse/handlers';
 import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
+import { markRunOutcome } from './run/outcome';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -177,6 +178,7 @@ app.whenReady().then(async () => {
     'agents:history': a => s.agents.history(a.id),
     'agents:keep': a => s.agents.keep(a?.id, 'brother'),
     'agents:retire': a => s.agents.retire(a?.id, typeof a?.reason === 'string' ? a.reason.slice(0, 600) : '', 'brother'),
+    'run:outcome': a => markRunOutcome(s.chats, a),
     'agents:metrics': a => {
       const root = demo ? null : s.brain.info().brainRoot;
       let aiErrors: string | undefined;

@@ -27,6 +27,7 @@ import { ChatLinkChips } from './ChatLinkChips';
 import { EffortControl } from './EffortControl';
 import { AgentIdentity } from './AgentIdentity';
 import { AgentAvatar } from './AgentAvatar';
+import { RunChips, RunOutcomeControl } from './RunSurface';
 import { AutoCloseNotice } from './AutoCloseNotice';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
 import { turnActivity, Typing } from './ChatItems';
@@ -153,6 +154,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         {expanded && <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>}
         {renaming && !expanded && <TitleInput chat={chat} onDone={()=>setRenaming(false)}/>}
         <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
+          {chat.run && <RunChips run={chat.run} />}
           <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}{browsers && !expanded ? ` · ${t('product.browsersN', { n: browsers })}` : ''}</span>
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
@@ -166,6 +168,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
+      {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
       {expanded && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">

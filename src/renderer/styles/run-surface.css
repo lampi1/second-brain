@@ -1,0 +1,4 @@
+/* Run provenance stays compact in Home; verdict controls wrap within the expanded strip. */
+.run-chips{display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap}
+.run-outcome{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border);font-size:var(--fs-s)}
+.run-outcome button[aria-pressed=true]{background:var(--surface);color:var(--accent);border-color:var(--accent)}

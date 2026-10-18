@@ -2,16 +2,18 @@
 import { inProbation, type AgentMetrics, type AgentProfile } from '@shared/agents';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import type { CSSProperties, ReactNode } from 'react';
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, updateAvailable }: {
+export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, updateAvailable, index = 0, run }: {
   profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void; updateAvailable?: boolean;
+  index?: number; run?: ReactNode;
 }) {
   const stats = metrics?.all;
   const ended = loaded ? stats?.ended ?? 0 : null;
   const unknown = t('catalog.unknown');
   const rate = stats?.successRate, cost = stats?.costPerRun.median;
   const sample = (n: number) => loaded ? t('catalog.samples', { n, total: ended ?? 0 }) : unknown;
-  return <article className="catalog-card" data-testid={`catalog-card-${profile.id}`}>
+  return <article className="catalog-card" data-testid={`catalog-card-${profile.id}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
     <div className="catalog-card-top"><AgentAvatar avatar={profile.avatar} name={profile.name} size={48} />
       <span className="catalog-badge" data-probation={inProbation(profile)}>{inProbation(profile) ? t('catalog.probation') : t('catalog.active')}</span></div>
     <h3><button type="button" onClick={onOpen}>{profile.name}</button></h3>
@@ -26,5 +28,6 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
       <div><dt>{t('catalog.cost')}</dt><dd>{cost?.value != null ? new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(cost.value) : unknown}</dd><small>{sample(cost?.n ?? 0)}</small></div>
     </dl>
     <footer><span>{profile.origin.kind === 'preset' ? t('catalog.preset') : t('catalog.custom')} · v{profile.activeVersion}</span><span>{t('catalog.last')}: {lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale())}</span></footer>
+    {run}
   </article>;
 }
