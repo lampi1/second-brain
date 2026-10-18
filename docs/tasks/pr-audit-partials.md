@@ -59,7 +59,12 @@ Until it is applied, the auto-close interval works as before but is missing from
   - `default-brain` ("renders the actual bundled template…"): timed out at 15 s in the full run. Run alone it passed 4
     times out of 5, taking between 3 s and 28 s. This branch does not touch `src/modules/ai-first` or the template.
     The cause is the machine's disk speed, not this branch; it is left as is, not weakened.
-- `npm run check:branch`: see the commit note in the handoff.
+- `npm run check:branch` (on d1b2cf6, with the untracked tmp helper scripts moved out of the worktree): not green.
+  7 of 1911 tests failed: publish-guard on untracked `tmp/` only, plus 15 s timeouts in default-brain, chats/archive,
+  file-diff, compare/headless and correction-catch-hook. Re-run alone, all of these pass except `file-diff.test.ts`,
+  which still times out at 15 s on this machine (slow git spawns). The branch does not touch file-diff, and it passed
+  in the earlier full run.
+- Guard on the branch commits (`tools/guard/scan.mjs --commits`): clean.
 - E2E was not run, and the app was not launched (the brief forbids it). The English rendering of the converted labels
   is covered by unit assertions only.
 
