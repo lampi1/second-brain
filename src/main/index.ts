@@ -38,6 +38,7 @@ import { ProfileService } from './brain/profile';
 import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
+import { Headline } from './headline';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -109,6 +110,25 @@ app.whenReady().then(async () => {
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
     regiaChats: () => s.brain.settings().regiaChats,
+  });
+  // the Grindhouse's headline (SPEC 18): never a model call in the demo or under test
+  const readBrain = (rel: string): string => {
+    const root = demo ? null : s.brain.info().brainRoot;
+    try { return root ? fs.readFileSync(path.join(root, rel), 'utf8').slice(-20_000) : ''; } catch { return ''; }
+  };
+  const headline = new Headline({
+    file: path.join(app.getPath('userData'), 'headline.json'),
+    complete: (req, signal) => s.engines.text.complete(req, signal),
+    settings: () => s.brain.settings(),
+    lang: () => { const l = s.brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); },
+    material: () => {
+      const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { chats: s.chats.list(), nowMd: readBrain('now.md'), journal: readBrain(path.join('journal', `${day}.md`)), aiErrors: readBrain('ai-errors.md') };
+    },
+    visible: () => !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized(),
+    emit: st => emitter.emit('headline:changed', st),
+    calls: !demo && !process.env.SB_TEST,
+    ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
     const connectors = createAppConnectors(app.getPath('userData'));
     await connectors.ready;
@@ -274,11 +294,14 @@ app.whenReady().then(async () => {
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
+    'headline:get': () => headline.get(),
   };
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
+  // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
+  void windowReady.then(() => { const t = setTimeout(() => headline.start(), 15_000); t.unref(); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
@@ -299,6 +322,7 @@ app.whenReady().then(async () => {
     if (quitting) return;
     quitting = true;
     void connectors.service.cancelLogin();
+    headline.stop();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

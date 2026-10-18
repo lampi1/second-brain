@@ -133,6 +133,20 @@ describe('ClaudeSession', () => {
     expect(sink.last('assistant')?.text).toBe('Hai scelto Blu');
   });
 
+  it('never offers a suggested mode above an agent ceiling (A2)', async () => {
+    const free = start();
+    free.s.send('mode');
+    expect((await waitFor(() => free.sink.pendings[0], 'permission')).alwaysRules?.length).toBeGreaterThan(0);
+    const capped = start({ ceiling: 'default' });
+    capped.s.send('mode');
+    const p = await waitFor(() => capped.sink.pendings[0], 'permission');
+    expect(p.alwaysRules).toBeUndefined();
+    expect(p.noAlways).toBe(true);
+    capped.s.answer(p.id, { kind: 'permission', allow: true, always: true });
+    await resultOf(capped.sink);
+    expect(capped.sink.last('tool')?.output ?? '').not.toContain('setMode');
+  });
+
   it('allows a permission for the session only when "always" is chosen', async () => {
     const { s, sink } = start();
     s.send('run bash');

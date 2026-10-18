@@ -32,7 +32,9 @@ export function AppConnectorScreen({ connectionPort = port, onClose }: { connect
   useEffect(() => {
     live.current = true; let active = true;
     void connectionPort.list().then(value => { if (active) setValues(value); }, () => { if (active) setError(t('connector.loadError')); });
-    return () => { active = false; live.current = false; if (working.current) void connectionPort.cancelLogin().catch(() => {}); };
+    // closing the screen (wizard step, Settings, popover) never cancels a sign-in in progress: it ends in main on its own,
+    // and a reopened screen sees it in the list (signingIn) and offers the cancel again
+    return () => { active = false; live.current = false; };
   }, [connectionPort]);
   const run = async (action: () => Promise<unknown>) => {
     if (working.current) return;
@@ -42,11 +44,19 @@ export function AppConnectorScreen({ connectionPort = port, onClose }: { connect
     finally { working.current = false; if (live.current) setBusy(false); }
   };
   const login = (provider: ConnectorId) => void run(async () => { setSigningIn(true); setNotice(t('connector.notice')); try { await connectionPort.login(provider); } finally { if (live.current) setSigningIn(false); } });
+  // a sign-in started before this screen opened: main refuses other actions until it ends, so wait for it or cancel it
+  const pending = values.some(v => v.signingIn);
+  useEffect(() => {
+    if (!pending || signingIn) return;
+    const timer = setInterval(() => void connectionPort.list().then(value => { if (live.current) setValues(value); }, () => {}), 2000);
+    return () => clearInterval(timer);
+  }, [pending, signingIn, connectionPort]);
+  const cancel = () => void connectionPort.cancelLogin().then(() => connectionPort.list()).then(value => { if (live.current) setValues(value); }, () => { if (live.current) setError(t('connector.cancelError')); });
   return <section className="app-connectors" data-testid="app-connectors" aria-busy={busy}>
     <h2>{t('connector.title')}</h2><p>{t('connector.intro')}</p><small>{t('connector.scope')}</small>
-    <div className="app-connector-list">{values.map(value => <ConnectorCard key={value.provider} value={value} busy={busy} onLogin={() => login(value.provider)} onProbe={() => void run(() => connectionPort.probe(value.provider))} onSelect={ids => void run(() => connectionPort.select(value.provider, ids))} onDisconnect={() => void run(() => connectionPort.disconnect(value.provider))}/>)}</div>
+    <div className="app-connector-list">{values.map(value => <ConnectorCard key={value.provider} value={value} busy={busy || pending} onLogin={() => login(value.provider)} onProbe={() => void run(() => connectionPort.probe(value.provider))} onSelect={ids => void run(() => connectionPort.select(value.provider, ids))} onDisconnect={() => void run(() => connectionPort.disconnect(value.provider))}/>)}</div>
     {!values.length && !error && <p role="status">{t('connector.loading')}</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
-    {signingIn && <button type="button" className="btn" onClick={() => void connectionPort.cancelLogin().catch(() => setError(t('connector.cancelError')))}>{t('connector.cancel')}</button>}
+    {(signingIn || pending) && <button type="button" className="btn" onClick={cancel}>{t('connector.cancel')}</button>}
     {onClose && <button type="button" className="btn btn-primary" onClick={onClose}>{t(values.some(v => v.status === 'verified') ? 'connector.continue' : 'connector.later')}</button>}
   </section>;
 }

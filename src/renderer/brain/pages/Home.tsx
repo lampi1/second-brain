@@ -10,6 +10,7 @@ import { IconPlus } from '../../components/Icons';
 import { t } from '../../i18n';
 import { AgentStrips, AgentStripsActions } from '../../components/AgentStrips';
 import { orchestratorIdOf } from '../../lib/regia-route';
+import { HeadlineLine, useHeadline } from './HomeHeadline';
 import './home.css';
 
 export function Home({ nav }: { nav: (target: string) => void }) {
@@ -18,10 +19,12 @@ export function Home({ nav }: { nav: (target: string) => void }) {
   const byId = new Map(chats.map(c => [c.id, c]));
   const pending = useApp(s => [...s.pending].sort((a, b) => a.at - b.at), sameList);
   const working = chats.filter(isBusy).length;
+  const headline = useHeadline();
   return <div className="home-page" data-testid="home">
     <header className="home-heading">
       <span className="home-eyebrow">{t('home.title')}</span>
       <h1>{t('home.greeting', { name: 'Brother' })}</h1>
+      <HeadlineLine state={headline} />
       <p>{t('home.activityLead')}</p>
       <div className="home-overview"><span><i className={working ? 'home-live-dot' : ''} />{t('home.workingCount', { count: working })}</span><span>{t('home.reviewCount', { count: pending.length })}</span></div>
     </header>

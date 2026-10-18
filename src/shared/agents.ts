@@ -124,7 +124,10 @@ export interface SetupDraft {
   style: 'balanced' | 'concise' | 'detailed';
   agentIds: string[];
   guide?: SetupGuide;
+  /** the me.md answers the owner gave in this run (unanswered ones are read from me.md), written on confirm */
+  profile?: SetupProfile;
 }
+export interface SetupProfile { name?: string; role?: string; language?: string; areas?: string; style?: SetupDraft['style'] }
 export interface SetupState {
   version: 1;
   status: 'new' | 'existing' | 'draft' | 'completed' | 'skipped';

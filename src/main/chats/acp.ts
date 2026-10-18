@@ -498,13 +498,15 @@ export class AcpSession implements HarnessSession {
    *  either way. */
   private async applyChoices(): Promise<void> {
     await this.applyModelConfig();
-    if (this.opts.readOnly) {
+    // an agent capped at 'plan' (A2) takes the same read-only mode: Cursor's own allow rules would bypass any other limit
+    if (this.opts.readOnly || this.opts.ceiling === 'plan') {
+      const who = this.opts.readOnly ? 'il confronto' : 'l’Agente (limite «plan»)';
       const modeId = ['ask', 'plan'].find(m => this.modes.includes(m));
-      if (!modeId) throw new ReadOnlyModeMissing(`${this.label} non offre una modalità in sola lettura (ask o plan): il confronto non la avvia`, `modes offered: ${this.modes.join(', ') || 'none'}`);
+      if (!modeId) throw new ReadOnlyModeMissing(`${this.label} non offre una modalità in sola lettura (ask o plan): ${who} non la avvia`, `modes offered: ${this.modes.join(', ') || 'none'}`);
       try {
         await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
       } catch (e) {
-        throw new ReadOnlyModeMissing(`${this.label} non ha accettato la modalità in sola lettura (${modeId}): il confronto non la avvia`, `session/set_mode ${modeId} failed: ${errText(e)}`);
+        throw new ReadOnlyModeMissing(`${this.label} non ha accettato la modalità in sola lettura (${modeId}): ${who} non la avvia`, `session/set_mode ${modeId} failed: ${errText(e)}`);
       }
       if (modeId === 'plan') this.sink.changed({ permissionMode: 'plan' });
       return;
@@ -1031,7 +1033,8 @@ export class AcpSession implements HarnessSession {
         this.planItemId = id;
         return;
       }
-      case 'current_mode_update': this.sink.changed({ permissionMode: s(u.currentModeId) === 'plan' ? 'plan' : 'default' }); return;
+      // Cursor's read-only "ask" is shown as plan where it was asked for as one (read-only run, agent capped at plan)
+      case 'current_mode_update': this.sink.changed({ permissionMode: s(u.currentModeId) === 'plan' || (s(u.currentModeId) === 'ask' && (this.opts.readOnly || this.opts.ceiling === 'plan')) ? 'plan' : 'default' }); return;
       case 'config_option_update': { // the CLI changed a model parameter by itself: the chat's info follows it
         const next = modelParams(u.configOptions);
         if (next.length && this.models?.current) { this.params = next; this.sink.changed({ model: variantOf(this.models.current, next) }); }

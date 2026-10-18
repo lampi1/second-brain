@@ -1,11 +1,11 @@
 // Main-only acceptance for truthful unavailable capability; no picker, helper or filesystem creation.
 import {expect,test} from '@playwright/test';
-import {launchDemo,openAgents, shot} from './helpers';
+import {launchDemo,shot} from './helpers';
 test('setup offers existing memory when new memory creation is unavailable',async()=>{
   const {app,page}=await launchDemo();
   try{
-    await openAgents(page);
-    await page.getByTestId('agent-studio').getByRole('button',{name:'Configura il tuo lavoro',exact:true}).click();
+    await page.getByTestId('settings').click();await page.getByTestId('settings-all').click();
+    await page.getByRole('button',{name:'Configura il mio lavoro',exact:true}).click();
     const setup=page.getByTestId('first-interview');
     for(let step=0;step<4;step++)await setup.getByRole('button',{name:'Continua',exact:true}).click();
     const create=page.getByTestId('create-memory');await create.locator('summary').click();

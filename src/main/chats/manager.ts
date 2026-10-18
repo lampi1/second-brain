@@ -49,6 +49,7 @@ import { waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
 import { compatibleOwner } from '../agents/catalog';
+import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
 import type { AgentOwnerSnapshot } from '../../shared/agents';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
@@ -187,6 +188,8 @@ interface Rec {
   s: ChatSummary;
   createdAt: number;
   agentInstructions?: string;
+  /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
+  policy?: AgentPolicy | null;
   agentPrimed?: boolean;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
@@ -355,7 +358,7 @@ export class ChatManager implements ChatService {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
   }
 
-  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string }): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null }): Promise<ChatSummary> {
     updateActivity.assertOpen();
     if (this.opts.unifiedOrchestrator && (req.regia || req.appRegia)) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
@@ -364,8 +367,14 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, regia: true, appRegia: false, space: undefined, title: 'Orchestrator', regiaName: 'Orchestrator' };
     }
-    const agent = inherited ? { ...inherited, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '' };
+    const agent = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
+    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews, the chat that opens it
+    const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
+    const parent = forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? (by === 'agent' && req.regiaOf ? this.chats.get(req.regiaOf) : undefined);
+    const policy = narrowest(agent.policy, parent?.policy);
+    // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
+    if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
     this.needOn(engine.id);
     const caps = engine.caps;
@@ -384,6 +393,8 @@ export class ChatManager implements ChatService {
 
     // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
     const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !(req.space === 'app' && req.appRegia === true) && req.permissionMode !== 'bypassPermissions'
+      // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
+      && !policy
       ? this.warm.take(cwd) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
@@ -422,6 +433,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: now,
       agentInstructions: agent.instructions,
+      ...(policy ? { policy } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
       worktree: !!req.worktree && caps.worktree,
@@ -831,6 +843,7 @@ export class ChatManager implements ChatService {
     if (patch.permissionMode !== undefined) {
       if (!MODES.includes(patch.permissionMode)) throw new Error(`Modalità permessi non valida: ${patch.permissionMode}`);
       const pm = patch.permissionMode;
+      if (aboveCeiling(pm, r.policy?.ceiling ?? null)) throw new Error(`Questo Agente ha come limite la modalità «${r.policy!.ceiling}». Per alzarlo modifica l’Agente.`);
       r.choice.permissionMode = pm; r.s.permissionMode = pm;
       await apply('permissionMode', sess ? () => sess.setPermissionMode(pm) : undefined);
     }
@@ -916,7 +929,7 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '' });
+    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -1414,6 +1427,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
+      ...(c.agentPolicy ? { policy: c.agentPolicy } : {}),
       children,
       choice: { model: c.model, effort: c.effort, permissionMode: c.permissionMode },
       ...(c.forkFrom ? { forkFrom: c.forkFrom } : {}),
@@ -1435,6 +1449,7 @@ export class ChatManager implements ChatService {
     const rows: StoredChat[] = [...this.chats.values()].map(r => ({
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
+      ...(r.policy ? { agentPolicy: r.policy } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isRegia: r.s.isRegia,
@@ -1574,6 +1589,21 @@ export class ChatManager implements ChatService {
     }
   }
 
+  /** min(ceiling, Brother's mode) for this start. Claude without a chat choice follows his settings, so their default is
+   *  read here (passing --permission-mode replaces it); other engines narrow through their own options (ceiling). */
+  private modeFor(r: Rec): PermissionMode | null {
+    const ceiling = r.policy?.ceiling ?? null, chosen = r.choice.permissionMode;
+    if (!ceiling) return chosen;
+    const brother = chosen ?? (engineOf(r.s.harness)?.kind === 'claude' ? claudeDefaultMode(r.s.cwd, this.opts.env ?? process.env) : null);
+    return brother && aboveCeiling(brother, ceiling) ? ceiling : chosen;
+  }
+
+  /** false when the chat's agent has a tool policy without 'browser' (the per-chat MCP hides the browser tools) */
+  browserAllowed(chatId: string): boolean {
+    const tools = this.chats.get(chatId)?.policy?.tools;
+    return !tools || tools.allow.includes('browser');
+  }
+
   private mcpConfig(chatId: string): string | null {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
     const app = this.appMcpFor(this.chats.get(chatId));
@@ -1608,7 +1638,8 @@ export class ChatManager implements ChatService {
     r.s.agentChildren = r.children.snapshot();
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
     const opts: SessionOptions = {
-      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, title: r.s.title,
+      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
+      ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
@@ -1829,6 +1860,14 @@ export class ChatManager implements ChatService {
     // shown, never persisted: only the user's own choice (create / chat:set) is saved and used on the next start,
     // so a mode the CLI took from a suggestion or ExitPlanMode does not outlive this process
     if (p.permissionMode) r.s.permissionMode = p.permissionMode;
+    // second guard: a mode the engine took on its own (ExitPlanMode, a suggestion, its settings) above the ceiling is
+    // set back at once
+    if (p.permissionMode && r.policy && aboveCeiling(p.permissionMode, r.policy.ceiling) && r.session) {
+      const ceiling = r.policy.ceiling!;
+      log.warn('chats', 'agent mode above its ceiling, set back', { chat: r.s.id, data: { mode: p.permissionMode, ceiling } });
+      r.s.permissionMode = ceiling;
+      void r.session.setPermissionMode(ceiling).catch(e => log.error('chats', 'agent ceiling not restored', { chat: r.s.id, cause: errText(e), hint: 'stop the chat: its mode is above the agent ceiling' }));
+    }
     if (p.effort !== undefined) r.s.effort = p.effort;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;

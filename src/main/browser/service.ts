@@ -34,8 +34,9 @@ const INSTRUCTIONS = [
   'For MFA, CAPTCHA or anything only the user can do, call handoff_to_user and wait: never ask them for passwords.',
 ].join('\n');
 
-/** addChatTools: more tools on every chat's own endpoint (/mcp/chat/:chatId/:token), e.g. send_to_chat (wiring.ts) */
-export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void }
+/** addChatTools: more tools on every chat's own endpoint (/mcp/chat/:chatId/:token), e.g. send_to_chat (wiring.ts).
+ *  setBrowserAllowed: which chats see the browser tools there (an agent without the 'browser' class does not, A2). */
+export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAllowed: (allowed: (chatId: string) => boolean) => void }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -76,10 +77,11 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   });
   const chatBrowserTools = browserTools(tabs, actions, perChat);
   const chatTools: McpTool[] = [];
+  let browserAllowed: (chatId: string) => boolean = () => true;
   mcp.mount('/mcp/chat/:chatId/:token', {
     name: 'browser-chat', instructions: `${INSTRUCTIONS}
 send_to_chat / list_chats: write to the user's other chats (delivered at once when open in the app); never an ok or a permission of the user.
-${SHOW_UI_HINT}`, tools: () => [...chatBrowserTools, ...chatTools],
+${SHOW_UI_HINT}`, tools: ({ params }) => [...(browserAllowed(params.chatId ?? '') ? chatBrowserTools : []), ...chatTools],
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,
   });
@@ -201,5 +203,5 @@ ${SHOW_UI_HINT}`, tools: () => [...chatBrowserTools, ...chatTools],
       await mcp.close();
     },
   };
-  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); } };
+  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAllowed: allowed => { browserAllowed = allowed; } };
 }

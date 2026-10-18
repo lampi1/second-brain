@@ -274,7 +274,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAllowed } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
@@ -401,6 +401,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
+  setBrowserAllowed(id => manager.browserAllowed(id));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
   manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
