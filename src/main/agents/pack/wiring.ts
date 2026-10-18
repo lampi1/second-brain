@@ -60,6 +60,8 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
         monthsUsed: Math.max(0, Math.floor((Date.now() - profile.createdAt) / (30.4375 * 86400000))) };
     },
   });
+  // Every version change that swaps the know-how (IPC restore, trial decisions, the Orchestrator's rollback) republishes it.
+  catalog.onKnowhowChange((profile, previousHash) => packs.publishCurrent(profile, previousHash));
   const learning = new AgentPackLearning(packs, userData);
   return { packs, learning };
 }

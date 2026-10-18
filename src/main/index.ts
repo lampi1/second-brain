@@ -187,7 +187,7 @@ app.whenReady().then(async () => {
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
     'agents:learnList': a => s.agentPacks.learning.list(a.id),
     'agents:learnDecide': a => s.agentPacks.learning.decide(a.id, a.proposalId, a.decision, a.text),
-    'agents:trialDecide': a => { const before = s.agentPacks.packs.profile(a.id); const profile = s.agents.resolveTrial(a.id, a.decision); s.agentPacks.packs.publishCurrent(profile, before.knowhow?.hash); return profile; },
+    'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
     'agents:duplicate': a => s.agents.duplicate(a.id),
     'agents:archive': a => s.agents.archive(a.id),
     'agents:restore': a => s.agents.restore(a.id),
@@ -204,7 +204,7 @@ app.whenReady().then(async () => {
       return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
     },
-    'agents:restoreVersion': a => { const before = s.agentPacks.packs.profile(a.id); const profile = s.agents.restoreVersion(a.id, a.version); s.agentPacks.packs.publishCurrent(profile, before.knowhow?.hash); return profile; },
+    'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'agents:draft': a => s.agents.draft(a),
     'setup:get': () => s.setup.get(),
     'setup:save': a => s.setup.save(a.preferences, a.status),

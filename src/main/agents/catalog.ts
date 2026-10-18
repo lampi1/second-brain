@@ -136,6 +136,12 @@ export class AgentCatalogService {
   private profiles: AgentProfile[] = [];
   private problem: string | null = null;
   private legacyRouting: AgentCatalog['legacyRouting'] = { preserved: true, imported: 0, remaining: 0 };
+  /** Set by the agent packs: a version change that swaps the know-how republishes its editable brain copy. */
+  private knowhowListener: ((profile: AgentProfile, previousHash: string | undefined) => void) | null = null;
+  onKnowhowChange(listener: (profile: AgentProfile, previousHash: string | undefined) => void): void { this.knowhowListener = listener; }
+  private knowhowChanged(before: AgentProfile, after: AgentProfile): void {
+    if (before.knowhow?.hash !== after.knowhow?.hash) this.knowhowListener?.(structuredClone(after), before.knowhow?.hash);
+  }
   constructor(private readonly d: AgentCatalogDeps) {
     // v2 lives in its own file: agents.json (v1) stays as it was, so a rolled-back build still reads its catalog.
     this.file = path.join(d.userData, 'agents.v2.json');
@@ -535,11 +541,13 @@ export class AgentCatalogService {
     const old = this.find(id), entry = this.store.get(id, version);
     if (old.origin.kind !== 'orchestrator' || protectedAgent(old) || old.status !== 'active') throw new Error('Only owned, unlocked active agents may be rolled back.');
     if (!entry || !count(version) || version >= old.activeVersion) throw new Error('Choose an earlier version.');
-    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, ...entry.behaviour }, true);
+    // A version without know-how restores none: the newer skill files must not survive the rollback.
+    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, knowhow: undefined, ...entry.behaviour }, true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
-    const { trial: _trial, ...rest } = old; void _trial;
+    const { trial: _trial, knowhow: _k, ...rest } = old; void _trial; void _k;
     const p: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: Math.max(this.now(), old.updatedAt + 1), lastEditedBy: 'orchestrator' };
     this.commit(this.profiles.map(x => x.id === id ? p : x), [], [{ agentId: id, version: old.activeVersion, state: old.trial ? 'rejected' : 'superseded' }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(old, p);
     return structuredClone(p);
   }
 
@@ -605,6 +613,7 @@ export class AgentCatalogService {
     const states: Parameters<AgentHistory['commit']>[1] = [{ agentId: id, version: p.activeVersion, state: decision === 'keep' ? 'kept' : 'rejected' }];
     if (baseline) states.push({ agentId: id, version: baseline.version, state: 'active' });
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], states);
+    this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
   /** Out of the launch list and the active limit; definition and history stay. */
@@ -678,12 +687,13 @@ export class AgentCatalogService {
     if (!p.trial || p.trial.version !== p.activeVersion || p.trial.baseline !== baseline) throw new Error('Nessuna prova da annullare su questa versione.');
     const entry = this.store.get(id, baseline);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
-    const { manifest: _m, effort: _e, trial: _t, ...rest } = p;
-    void _m; void _e; void _t;
+    const { manifest: _m, effort: _e, trial: _t, knowhow: _k, ...rest } = p;
+    void _m; void _e; void _t; void _k;
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
     const profile: AgentProfile = { ...rest, ...draft, activeVersion: baseline, updatedAt: at, lastEditedBy: 'user', userLocked: true };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
@@ -705,6 +715,7 @@ export class AgentCatalogService {
     const judged = inProbation(p);
     const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'user', userLocked: true, ...(judged ? { probation: { ...p.probation!, keptBy: 'brother' as const } } : {}) };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded', ...(judged ? { probation: this.decision('kept', 'brother', 'Versione cambiata da Brother', at) } : {}) }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
     return structuredClone(profile);
   }

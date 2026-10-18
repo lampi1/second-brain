@@ -146,6 +146,21 @@ describe('async learning and brain forks', () => {
     learning.save({ ...first, name: 'Second' }, first.id);
     expect(learning.list(first.id).text).not.toContain('Later lesson.');
   });
+  it('drops and republishes later know-how when a trial is rejected or the Orchestrator rolls back', () => {
+    const f = setup(), learning = new AgentPackLearning(f.flows, f.data), preset = f.catalog.list().profiles[0]!;
+    f.catalog.onKnowhowChange((p, previous) => f.flows.publishCurrent(p, previous));
+    learning.decide(preset.id, learning.propose(preset.id, 'Rejected lesson.', 'run:example').id, 'approve');
+    const rejected = f.catalog.rejectTrial(preset.id, 1);
+    expect(rejected.knowhow).toBeUndefined();
+    expect(learning.list(preset.id).text).not.toContain('Rejected lesson.');
+    expect(learning.list(learning.save({ ...rejected, name: 'After reject' }, rejected.id).id).text).not.toContain('Rejected lesson.');
+    const owned = f.catalog.author({ ...draft(), name: 'Owned', tools: { allow: ['read'] }, permissionCeiling: 'default' }, { reason: 'Needed', evidence: [{ kind: 'run', ref: 'run:example', at: 1 }], presetId: preset.id, requestItemId: 'item-1' });
+    learning.decide(owned.id, learning.propose(owned.id, 'Rolled back lesson.', 'run:example').id, 'approve');
+    expect(f.flows.profile(owned.id).knowhow).toBeDefined();
+    const rolled = f.catalog.authorRollback(owned.id, 1);
+    expect(rolled.knowhow).toBeUndefined();
+    expect(learning.list(owned.id).text).not.toContain('Rolled back lesson.');
+  });
   it('preserves direct brain edits on save and learned-rule approval', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     const agent = learning.save(draft()), file = path.join(f.brain, 'agents', agent.id, 'skills', agent.id, 'learned-rules.md');
