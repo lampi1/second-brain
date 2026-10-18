@@ -53,16 +53,13 @@ Fixes from the fresh-eyes review, each with a regression test seen red first:
 - The authoring tools could pass `knowhow` / `pack` in a draft or patch: an automatic write could attach any brain
   folder as an agent's skills or forge a pack identity. They are stripped (`withoutPackFields`).
 
-Validation on this branch (Brother's decision of 2026-10-18 16:09: branch checks only, full gate and e2e once on
-main):
+Validation on this branch (rebased on main 34808a4; branch checks only, the full gate and the e2e run once on main):
 
-- `npm ci`, `npm run build`, `npm run lint` and `npx tsc --noEmit` pass, also after merging main a120c8a.
-- `npm run check:branch` (on a120c8a^, with the CPU at 100% from other sessions): 1913 tests passed and 6 failed.
-  Four suites failed on timing or timeouts and pass when run alone; none of them is touched by this branch:
-  correction-catch hook, release-writer, file-diff (passes with a 120 s timeout) and default-brain (passes with a
-  120 s timeout). The publish guard failed only on untracked scratch files in `tmp/`, which is not ignored in this
-  worktree. Limited to the branch's files (`SB_GUARD_FILES`), the guard passes.
-- After merging a120c8a: agent, contract and engine unit suites (33 files, 265 tests) pass.
-- Preset sync and comparison tests left with the feature (role-presets owns it). The probation and trial tests were
-  rewritten for keep/retire/resolveTrial, not dropped.
-- `test/e2e/agent-pack.spec.ts` was NOT run here; per the same decision, it runs in the final gate on main.
+- `npx tsc --noEmit`, `npm run lint`, `npm run build` pass.
+- `npm run check:branch`: 155 test files passed, 3 skipped, 1 failed: `visible-language` "keeps the app shell free of
+  hard-coded Italian UI text", on three strings of `AgentLifecyclePanel.tsx` (#46). This branch does not touch that file;
+  the same test fails on main 34808a4.
+- Agent authoring, lifecycle, role-preset and Orchestrator-preset suites (84 tests) pass; agent pack suites pass,
+  including the new `agent-pack-presets` and three new flow regressions.
+- Guard on the branch commits: clean.
+- `test/e2e/agent-pack.spec.ts` was NOT run here; it runs in the final gate on main.
