@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AGENT_LABEL, RESOLVED_LABEL, appControlTools, regiaEndpointAuth } from '../../src/main/appctl/tools';
+import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, regiaEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -437,6 +437,26 @@ describe('app control tools', () => {
     expect(await t(app, 'app_improve_state').run({})).toMatchObject({ repo: 'C:/code/app' });
     // no tool promotes, restarts or merges: the user presses Aggiorna
     expect(app.map(x => x.name).some(n => /promot|restart|merge|release/i.test(n))).toBe(false);
+  });
+
+  it('app_update_code (ADR 0074): only the Orchestrator, only right after the user wrote to it, never on the plain mount', async () => {
+    const now = Date.now();
+    let items: unknown[] = [];
+    const list = [{ id: 'ar', harness: 'claude', state: 'idle', appRegia: true, title: 'Orchestrator', lastText: '' }];
+    const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
+    let pulls = 0;
+    const improve = { repo: () => 'C:/code/app', state: async () => ({}) as never, pull: async () => { pulls++; return { ok: true, message: 'Aggiornata' }; } };
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
+    expect(appControlTools({ ...base, improve }).some(x => x.name === 'app_update_code')).toBe(false);
+    const tool = appControlTools({ ...base, sourceOnly: true, improve }).find(x => x.name === 'app_update_code')!;
+    // nothing from the user, an agent-labelled message, or an old one: refused
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/non ha chiesto/);
+    items = [{ kind: 'user', id: 'u', at: now - (PULL_ASK_MIN + 1) * 60_000, text: 'aggiornati' }, { kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} aggiornati` }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/non ha chiesto/);
+    expect(pulls).toBe(0);
+    items = [{ kind: 'user', id: 'u', at: now, text: 'aggiornati' }];
+    expect(await tool.run({})).toMatchObject({ ok: true });
+    expect(pulls).toBe(1);
   });
 
   it('app_close_chat closes like the ✕ (log + feed), never the Regia nor a chat waiting for the user', async () => {

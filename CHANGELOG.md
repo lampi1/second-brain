@@ -18,6 +18,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Pages fade in on every change and progress bars move smoothly, both off under reduced motion.
 
 ### Added
+- "Aggiornati": ask the Orchestrator and it brings a developer's clone to the latest `main` from GitHub
+  (fast-forward only, dependencies reinstalled only when the lockfile changed, then a build); `npm run pull` does the
+  same from a terminal (ADR 0074).
+- `npm run release:draft -- v<version>` makes the verified draft release from the maintainer's Windows PC, with
+  GitHub Actions off (ADR 0074). The README lists every version with its installer and source downloads.
 - Texts for colleagues (blocks tagged md, mail, teams, comment) show formatted in the chat, and Copia copies them
   formatted: bold, lists and links survive a paste into Outlook, Teams or DevOps (ADR 0043).
 

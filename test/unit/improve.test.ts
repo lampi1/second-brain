@@ -191,6 +191,18 @@ const fresh = () => ({ ...repo, base: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-
 
 describe('ImproveService', { timeout: 30_000 }, () => {
   beforeAll(() => { repo = repoWithHistory(); }, 120_000);
+  it('pull (ADR 0074): runs scripts/pull.mjs --json in the code folder, one at a time; a folder without it says how', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pull-svc-'));
+    const r = fresh();
+    const { s } = service({ dir, base: r.base, running: 'dev', stable: false });
+    await expect(s.pull()).rejects.toThrow(/manca scripts\/pull\.mjs/);
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.writeFileSync(path.join(dir, 'scripts', 'pull.mjs'), "setTimeout(() => console.log('build …\\n' + JSON.stringify({ ok: process.argv.includes('--json'), message: 'Aggiornata', from: 'a', to: 'b' })), 100);\n");
+    const first = s.pull();
+    await expect(s.pull()).rejects.toThrow(/già in corso/);
+    expect(await first).toEqual({ ok: true, message: 'Aggiornata', from: 'a', to: 'b' });
+  });
+
   it('refuses legacy promotion when the single staged updater owns updates', async () => {
     const r = fresh();
     const { s, restarts } = service({ dir: r.dir, base: r.base, running: `0.1.0-${r.m1.slice(0, 7)}`, allowLegacyPromotion: false });
@@ -301,7 +313,7 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     await s.createRegia('claude', 'claude-opus-5-5');
     expect(created[0]).toMatchObject({ harness: 'claude', cwd: r.dir, appRegia: true, model: 'claude-opus-5-5', title: 'Orchestrator' });
     expect(created[0]!.prompt).toBe(appRegiaPrompt(r.dir));
-    expect(appRegiaPrompt(r.dir)).toMatch(/Non aggiorni e non riavvii mai/);
+    expect(appRegiaPrompt(r.dir)).toMatch(/Non riavvii e non promuovi mai l’app. .*app_update_code/);
   });
 
   it('with the routing table: kind regia, area App, the engine the user picked; the route on the chat', async () => {
