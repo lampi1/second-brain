@@ -28,7 +28,8 @@ export function readFileView(raw:string,options:{cwd?:string}={}):FileViewResult
   fd=fs.openSync(real,'r');const opened=fs.fstatSync(fd);
   if(!opened.isFile()||opened.dev!==initial.dev||opened.ino!==initial.ino||key(fs.realpathSync.native(requested))!==key(real))return{kind:'refused',reason:'changed'};
   if(mime&&opened.size>cap)return{kind:'unsupported',reason:'image'};
-  const bytes=Buffer.alloc(Math.min(cap+1,opened.size+1));let count=0;
+  // cap+1 whatever fstat says: a procfs/sysfs file reports size 0 and has content, so only the read decides `more`
+  const bytes=Buffer.alloc(cap+1);let count=0;
   while(count<bytes.length){const n=fs.readSync(fd,bytes,count,bytes.length-count,null);if(!n)break;count+=n;}
   const final=fs.fstatSync(fd);if(final.dev!==opened.dev||final.ino!==opened.ino||key(fs.realpathSync.native(requested))!==key(real))return{kind:'refused',reason:'changed'};
   const read=bytes.subarray(0,Math.min(count,cap)),more=count>cap||final.size>read.length;
