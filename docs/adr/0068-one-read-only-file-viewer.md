@@ -37,5 +37,7 @@ as source (a table or a document cut from the middle would mislead).
 loaded only when a PDF opens, its worker bundled, offline). Pages are drawn to canvas when they scroll near, with no
 text or annotation layer: a PDF's links, forms and scripts do nothing. Images in JPEG 2000 or JBIG2 (pdf.js decodes
 them with WebAssembly files the app does not ship) and fonts neither embedded nor on the system may not show.
+pdfjs-dist's optional native `@napi-rs/canvas` (used by pdf.js only under Node, never in the renderer) is pinned to
+1.0.10 by `overrides` in package.json, so it too meets the 14-day rule.
 
 Next: a diff on request (vs HEAD, vs a ref, two files) with read-only git (argument allow-list, no shell) and jsdiff.
