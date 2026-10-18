@@ -24,8 +24,8 @@ export function ProfileSettings() {
     catch { if (live.current) setResult({ ok: false, reason: 'unreadable' }); return null; }
   };
   useEffect(() => { live.current = true; setForm(null); void load(); return () => { live.current = false; }; }, [root]);
-  if (!result) return <p className="st-desc" role="status">…</p>;
-  if (!result.ok) return <p className="st-desc" role="status" data-testid="profile-unavailable">{t(result.reason === 'no-brain' ? 'profile.noBrain' : result.reason === 'missing' ? 'profile.missing' : 'profile.unreadable')}</p>;
+  if (!result) return <p className="st-desc st-profile-note" role="status">…</p>;
+  if (!result.ok) return <p className="st-desc st-profile-note" role="status" data-testid="profile-unavailable">{t(result.reason === 'no-brain' ? 'profile.noBrain' : result.reason === 'missing' ? 'profile.missing' : 'profile.unreadable')}</p>;
   const profile = result.profile, locked = new Set(profile.locked);
   const save = async () => {
     if (!form || busy) return;
@@ -54,8 +54,8 @@ export function ProfileSettings() {
       <label className="field"><span>{t('profile.mainWork')}</span><textarea rows={4} value={form.mainWork} disabled={locked.has('mainWork')} onChange={e => setForm({ ...form, mainWork: e.target.value })} data-testid="profile-mainWork"/><small>{t('profile.mainWorkHint')}</small></label>
       <label className="field"><span>{t('profile.replyStyle')}</span><textarea rows={3} maxLength={PROFILE_LIMITS.replyStyle} value={form.replyStyle} disabled={locked.has('replyStyle')} onChange={e => setForm({ ...form, replyStyle: e.target.value })} data-testid="profile-replyStyle"/></label>
       {profile.locked.length > 0 && <p className="st-desc">{t('profile.locked')}</p>}
-      {problem && <p role="alert">{problem}</p>}
-      <div className="st-inline"><button type="submit" className="btn btn-primary" data-testid="profile-save">{t('profile.save')}</button><button type="button" className="btn btn-ghost" onClick={() => { setForm(null); setProblem(null); }}>{t('common.cancel')}</button></div>
+      {problem && <p role="alert" className="st-profile-problem">{problem}</p>}
+      <div className="st-inline st-actions"><button type="submit" className="btn btn-primary btn-m" data-testid="profile-save">{t('profile.save')}</button><button type="button" className="btn btn-subtle btn-m" onClick={() => { setForm(null); setProblem(null); }}>{t('common.cancel')}</button></div>
     </fieldset></form> : <>
       <dl className="st-profile-view">
         <dt>{t('profile.name')}</dt><dd>{value(profile.name)}</dd>
@@ -64,7 +64,7 @@ export function ProfileSettings() {
         <dt>{t('profile.mainWork')}</dt><dd>{profile.mainWork.length ? <ul>{profile.mainWork.map((a, i) => <li key={i}>{plain(a)}</li>)}</ul> : value('')}</dd>
         <dt>{t('profile.replyStyle')}</dt><dd>{value(profile.replyStyle)}</dd>
       </dl>
-      <div className="st-inline"><button type="button" className="btn btn-ghost" onClick={() => setForm(profileForm(profile))} data-testid="profile-edit">{t('profile.edit')}</button><button type="button" className="btn btn-ghost" onClick={() => void import('../actions').then(m => m.openFileViewer(profile.path))}>{t('profile.open')}</button></div>
+      <div className="st-inline st-actions"><button type="button" className="btn btn-ghost btn-m" onClick={() => setForm(profileForm(profile))} data-testid="profile-edit">{t('profile.edit')}</button><button type="button" className="btn btn-subtle btn-m" onClick={() => void import('../actions').then(m => m.openFileViewer(profile.path))}>{t('profile.open')}</button></div>
     </>}
     <details className="st-profile-rules"><summary>{t('profile.rules', { n: profile.rules.length })}</summary><ul>{profile.rules.map((r, i) => <li key={i}><b>{plain(r.title)}</b>: {plain(r.text)}</li>)}</ul></details>
     <div className="st-profile-growth" data-testid="profile-growth">

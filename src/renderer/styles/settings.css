@@ -1,21 +1,65 @@
-/* The Settings page (components/SettingsPage.tsx): groups as cards of rows (text left, control right), switches and
-   segmented choices. Only the app's tokens (tokens.css), so light and dark follow the theme by themselves. */
-.st-page { display: grid; gap: 22px; max-width: 880px; width: 100%; margin: 0 auto; }
-.st-group { display: grid; gap: 8px; }
+/* The Settings page (components/SettingsPage.tsx, ProfileSettings.tsx and the parts they host: RolePreferences,
+   CodexAutonomy, AppearancePreview, the onboarding connector cards): the same look as the Dashboard (dashboard.css):
+   a page header with eyebrow, title and search, section links, then one card per group with an icon, a title and a
+   one-line description; inside, rows with the text left and the control right. Buttons keep one hierarchy: primary
+   (the action), ghost (secondary), subtle (dismiss). Only the app's tokens (tokens.css): light and dark follow the
+   theme by themselves; narrow windows stack each row (container queries on the page). */
+.st-page { display: grid; gap: 20px; max-width: 920px; width: 100%; margin: 0 auto; container-type: inline-size; container-name: st; min-width: 0; }
+
+/* page header, like .dash-header */
+.st-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 8px 0 4px; }
+.st-hero-text { min-width: 0; }
+.st-eyebrow { font-size: 10px; letter-spacing: 0.16em; font-weight: 650; color: var(--text-3); }
+.st-hero h1 { font: 600 30px/1.15 var(--font-display); letter-spacing: -1.1px; margin: 7px 0 8px; color: var(--text); }
+.st-hero p { margin: 0; color: var(--text-3); font-size: 13px; line-height: 1.6; }
+.st-search { flex: 0 1 340px; min-width: 0; display: grid; gap: 6px; }
+.st-search-line { position: relative; display: flex; align-items: center; gap: 8px; }
+.st-search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-3); display: grid; pointer-events: none; }
+.st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 36px; padding: 0 12px 0 34px; text-align: left; font-size: var(--fs-m); background: var(--surface);
+  border-radius: var(--r-s); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.st-search-line > .st-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.st-search-line > button { flex: none; }
+
+/* section links */
+.st-nav { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.st-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface);
+  color: var(--text-2); font: 500 var(--fs-s) var(--font); cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.st-chip svg { width: 14px; height: 14px; color: var(--text-3); }
+.st-chip:hover { background: var(--surface-3); color: var(--text); border-color: var(--border-3); }
+.st-chip:hover svg { color: var(--blue); }
+.st-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* groups: a card with its own header, like .dash-panel */
+.st-results { display: grid; gap: 18px; min-width: 0; }
+.st-results > [hidden] { display: none; }
+.st-group { display: grid; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; scroll-margin-top: 16px;
+  transition: border-color var(--dur-slow) var(--ease); }
+.st-group:hover { border-color: var(--border-2); }
+.st-group-head { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border); background: linear-gradient(145deg, var(--surface-2), var(--surface)); }
+.st-group-icon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--blue-bg); color: var(--blue); }
+.st-group-head h2 { font: 600 var(--fs-xl)/1.3 var(--font-display); letter-spacing: -0.2px; margin: 0 0 3px; color: var(--text); }
+.st-group-head h2:focus { outline: none; }
+.st-group-head h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.st-group-head p { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; max-width: 70ch; }
 .st-group-h { display: flex; align-items: center; }
-.st-group > header h2 { font: 650 var(--fs-l) var(--font-display); margin: 0; }
-.st-group > header p { margin: 2px 0 0; color: var(--text-3); font-size: var(--fs-s); max-width: 80ch; }
-.st-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; }
-.st-row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; min-height: 56px; }
-.st-card > .st-row + .st-row, .st-card > .st-exp + .st-exp { border-top: 1px solid var(--border); }
-.st-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.st-title { font-weight: 600; color: var(--text); }
-.st-desc { color: var(--text-3); font-size: var(--fs-s); line-height: 1.45; }
+.st-card { min-width: 0; }
+.st-card > * + * { border-top: 1px solid var(--border); }
+
+/* rows: text left, control right */
+.st-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; min-height: 60px; }
+.st-row-block { display: block; min-height: 0; padding: 4px 20px 12px; }
+.st-row { flex-wrap: wrap; }
+.st-text { flex: 1 1 240px; min-width: 0; display: grid; gap: 3px; }
+.st-title { font-weight: 600; color: var(--text); font-size: var(--fs-m); }
+.st-desc { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; }
 .st-desc b { color: var(--text-2); font-weight: 600; }
 .st-meta { color: var(--text-4); font-size: var(--fs-xs); margin-top: 4px; font-variant-numeric: tabular-nums; }
-.st-ctl { flex: none; display: flex; align-items: center; }
+.st-ctl { flex: 0 1 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
+.st-tool > .st-row { flex-wrap: nowrap; }
 .st-row.dim .st-title, .st-row.dim .st-desc { opacity: 0.6; }
 .st-foot { color: var(--text-4); font-size: var(--fs-xs); margin: 0; }
+.st-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-empty { margin: 0; padding: 28px 20px; text-align: center; color: var(--text-3); font-size: var(--fs-m); border: 1px dashed var(--border-2); border-radius: var(--r-l); background: var(--surface); }
 
 /* an experiment and its agents */
 .st-sub { margin: 0 16px 12px 16px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
@@ -50,22 +94,7 @@
 .st-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .st-select option { background: var(--surface); color: var(--text); }
 
-/* a $ amount, and a read-only value */
-.st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
-.st-key { display: inline-flex; align-items: center; gap: 6px; }
-.st-key .st-input { width: 22ch; text-align: left; }
-.st-input { width: 110px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
-  font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
-.st-input::placeholder { color: var(--text-4); }
-.st-inline { display: flex; align-items: center; gap: 8px; }
-.st-input.st-path { width: 38ch; max-width: 100%; }
-.st-input:hover { border-color: var(--border-3); }
-.st-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.st-value { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s); }
-.st-value.mono { font-family: var(--mono); }
-
 @media (prefers-reduced-motion: reduce) { .st-switch, .st-switch .st-knob, .st-seg button { transition: none; } }
-@media (max-width: 720px) { .st-row { flex-wrap: wrap; } .st-ctl { width: 100%; } }
 
 /* «Instradamento modelli» (RoutingGroup.tsx): the table, one row per rule */
 .st-rt-wrap { overflow-x: auto; padding: 0 12px 4px; }
@@ -93,25 +122,102 @@
 .st-rt-hist li + li { border-top: 1px solid var(--border); }
 .st-rt-hist-text { flex: 1; min-width: 0; }
 
-/* Local search keeps the existing sections and their unsaved controls mounted. */
-.st-results { display: grid; gap: 22px; min-width: 0; }
-.st-results > [hidden] { display: none; }
-.st-search { display: grid; gap: 6px; }
-.st-search > label { font-weight: 600; }
-.st-search-line { display: flex; align-items: center; gap: 8px; }
-.st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 36px; text-align: left; }
-.st-search-line > button { flex: none; }
-.st-search p { margin: 0; }
-.st-autonomy { display: grid; justify-items: end; gap: 6px; max-width: 100%; }
-.st-autonomy textarea.st-input { width: 34ch; max-width: 100%; height: auto; min-height: 72px; padding: 6px 8px; text-align: left; resize: vertical; }
-.st-empty { padding: 20px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
-.st-empty p { margin: 6px 0 0; color: var(--text-3); font-size: var(--fs-s); }
-@media (max-width: 480px) { .st-search-line { flex-wrap: wrap; } }
 
-/* Essential settings use four groups; connection details appear only for the selected tool. */
-.st-essential .st-results{display:grid;gap:20px}.st-essential select{max-width:100%;padding:6px 10px;background:var(--surface-2);color:var(--text);border:1px solid var(--border-2);border-radius:var(--r-s)}.st-essential .st-ctl{gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:65%}.st-tool+.st-tool{border-top:1px solid var(--border)}.st-tool-connection{display:grid;gap:10px;padding:12px 16px;background:var(--surface-2)}.st-tool-connection code{overflow-wrap:anywhere}.st-tool-connection .st-key{display:flex;gap:8px;flex-wrap:wrap}.st-tool-connection label{display:grid;gap:6px}.st-tool-connection input{background:var(--surface);color:var(--text);border:1px solid var(--border-2);padding:6px}.st-essential .st-value{overflow:hidden;text-overflow:ellipsis;max-width:280px;white-space:nowrap}@media(max-width:720px){.st-essential .st-row{align-items:flex-start;flex-direction:column;gap:8px}.st-essential .st-ctl{max-width:100%;justify-content:flex-start}}
-/* Repository-scoped Codex consent stays readable for long Windows paths. */
-.st-autonomy{padding:16px 0;border-top:1px solid var(--border);display:grid;gap:10px}
-.st-autonomy h3,.st-autonomy p{margin:0}.st-autonomy ul{margin:0;padding-left:20px}
-.st-autonomy li{padding:6px 0;overflow-wrap:anywhere}.st-autonomy li button{margin-left:12px}
-.st-autonomy-confirm{padding:12px;border:1px solid var(--border);border-radius:8px;display:grid;gap:10px}
+/* inputs, selects and read-only values */
+.st-input { width: 110px; height: 32px; padding: 0 10px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
+  font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
+.st-input::placeholder { color: var(--text-4); }
+.st-input:hover { border-color: var(--border-3); }
+.st-input:focus-visible { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.st-input.st-path { width: 38ch; max-width: 100%; }
+.st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
+.st-value { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s);
+  padding: 5px 10px; border-radius: var(--r-s); background: var(--surface-2); border: 1px solid var(--border); }
+.st-value.mono { font-family: var(--mono); }
+.st-essential select { max-width: 100%; min-height: 32px; }
+/* a plain .btn inside the page (hosted parts) reads as secondary, never as the browser's grey button */
+.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-regia) {
+  background: var(--surface-2); border-color: var(--border-2); color: var(--text); }
+.st-essential .btn:not(.btn-s):not(.btn-m):not(.btn-l) { min-height: 32px; padding: 0 12px; font-size: var(--fs-m); }
+.st-essential .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Account e strumenti: one row per engine, its connection panel under it */
+.st-state { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
+.st-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
+.st-state.on { color: var(--green); }
+.st-state.on::before { background: var(--green); box-shadow: 0 0 8px var(--green-bg); }
+.st-expand[aria-expanded="true"] { background: var(--surface-3); border-color: var(--border-3); }
+.st-tool-connection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 8px; padding: 14px 20px 18px; background: var(--surface-2); border-top: 1px solid var(--border); }
+.st-tool-connection > p { margin: 0; color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
+.st-tool-connection code { font-family: var(--mono); font-size: var(--fs-s); color: var(--text-2); padding: 8px 10px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.st-tool-connection > :not(.btn):not(.st-inline) { flex-basis: 100%; }
+.st-tool-connection > .st-inline { display: contents; }
+.st-key { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.st-key label { display: grid; gap: 6px; font-size: var(--fs-s); font-weight: 600; color: var(--text-2); }
+.st-key .st-input { width: 30ch; max-width: 100%; text-align: left; background: var(--surface); }
+.st-key .st-desc { align-self: center; }
+
+/* Il mio spazio: the role picker (RolePreferences.tsx) */
+.st-card > section.st-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 20px; }
+.st-card > section.st-tool > :not(label):not(.btn) { flex-basis: 100%; }
+.st-card > section.st-tool h3 { margin: 0; font-size: var(--fs-m); font-weight: 600; color: var(--text); }
+.st-card > section.st-tool h4 { margin: 8px 0 2px; font-size: var(--fs-s); font-weight: 600; color: var(--text-2); }
+.st-card > section.st-tool p { margin: 0; font-size: var(--fs-s); color: var(--text-2); line-height: 1.5; }
+.st-card > section.st-tool p.st-desc { color: var(--text-3); }
+.st-card > section.st-tool p[role="status"]:empty { display: none; }
+.st-card > section.st-tool label { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-s); color: var(--text-2); font-weight: 500; }
+.st-card > section.st-tool [data-testid="role-preview"] { display: grid; gap: 6px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+
+/* Codex: repository-scoped consent (CodexAutonomy.tsx), readable with long Windows paths */
+.st-autonomy { display: grid; gap: 10px; justify-items: start; padding: 16px 20px 18px; border-top: 1px solid var(--border); }
+.st-autonomy h3 { margin: 0; font-size: var(--fs-m); font-weight: 600; color: var(--text); }
+.st-autonomy p { margin: 0; font-size: var(--fs-s); color: var(--text-2); line-height: 1.5; max-width: 80ch; }
+.st-autonomy p.st-desc { color: var(--text-3); }
+.st-autonomy ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; width: 100%; }
+.st-autonomy li { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface-2); overflow-wrap: anywhere; }
+.st-autonomy li code { flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--fs-s); }
+.st-autonomy-confirm { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--blue-line); border-radius: var(--r-m); background: var(--blue-bg); }
+.st-autonomy-confirm .btn { justify-self: start; }
+
+/* Strumenti e progetti: the onboarding connector cards inside the group (their own title is the group's) */
+.st-card > .app-connectors { padding: 16px 20px 20px; gap: 14px; }
+.st-card > .app-connectors > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.st-card > .app-connectors > p { color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
+.st-card > .app-connectors > small { color: var(--text-3); font-size: var(--fs-xs); }
+.st-card > .app-connectors .app-connector-list { gap: 12px; }
+.st-card > .app-connectors .app-connector-card { background: var(--surface-2); border-color: var(--border); border-radius: var(--r-m); padding: 16px; gap: 12px; transition: border-color var(--dur) var(--ease); }
+.st-card > .app-connectors .app-connector-card:hover { border-color: var(--border-3); }
+.st-card > .app-connectors .app-connector-card h3 { font-size: var(--fs-l); font-weight: 600; }
+.st-card > .app-connectors .app-connector-card p { font-size: var(--fs-s); color: var(--text-2); }
+.st-card > .app-connectors .app-connector-icon { background: var(--blue-bg); color: var(--blue); border-radius: 9px; }
+.st-card > .app-connectors .app-connector-card header [role=status] { color: var(--text-3); }
+.st-card > .app-connectors .app-connector-card header [data-status=verified] { color: var(--green); }
+.st-card > .app-connectors .app-connector-card header [data-status=failed] { color: var(--red); }
+.st-card > .app-connectors .app-connector-card details { color: var(--text-3); }
+.st-card > .app-connectors .app-connector-card summary { cursor: pointer; color: var(--text-2); }
+
+/* Aspetto e lingua: the appearance preview (AppearancePreview.tsx) */
+.st-card .appearance-picker { margin: 0; }
+.st-card .appearance-picker > summary { color: var(--text-2); font-weight: 600; padding: 8px 0; }
+.st-card .appearance-picker > summary:hover { color: var(--text); }
+.st-card .appearance-controls { background: var(--surface-2); border-color: var(--border); }
+
+/* narrow: rows stack, the controls go under their text */
+@container st (max-width: 640px) {
+  .st-hero { flex-direction: column; align-items: stretch; gap: 16px; }
+  .st-search { flex-basis: auto; }
+  .st-hero h1 { font-size: 26px; }
+  .st-row { padding: 14px 16px; }
+  .st-group-head { padding: 16px; }
+  .st-tool-connection { padding: 14px 16px 16px; }
+  .st-autonomy, .st-card > section.st-tool, .st-card > .app-connectors { padding-left: 16px; padding-right: 16px; }
+  .st-row-block { padding: 4px 16px 12px; }
+  .st-value { max-width: 100%; }
+}
+@container st (max-width: 420px) {
+  .st-group-icon { display: none; }
+  .st-nav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 12px; scrollbar-width: thin; }
+  .st-chip { flex: none; }
+}
+@media (prefers-reduced-motion: reduce) { .st-chip, .st-group, .st-search-line > .st-input { transition: none; } }
+
