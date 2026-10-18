@@ -25,7 +25,7 @@ import { answerLater, openQueue } from './lib/later';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, type Place,type BrainPageId,
+  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setBrowserOpen, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -317,7 +317,12 @@ export function showTab(tabId: string): void {
   if (u.focusMode) setFocusMode(null);
   const { browsersHidden } = ui.get().prefs;
   const maximized = ui.get().maximized;
-  if (!browsersHidden && (!maximized || maximized === 'regia')) { flashTile(`browser:${tabId}`); return; }
+  if (!browsersHidden && (!maximized || maximized === 'regia')) {
+    // a strip's browser is folded until opened: open it beside its (expanded) strip
+    const owner = app.get().tabs.find(tab => tab.id === tabId)?.ownerChatId;
+    if (owner) setBrowserOpen(owner, true);
+    flashTile(`browser:${tabId}`); return;
+  }
   setMaximized(`browser:${tabId}`);
 }
 

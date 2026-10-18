@@ -8,21 +8,23 @@
 // Grindhouse (AgentStrips.tsx) and the focus view. A strip (Brother, 18/10): a click anywhere on it expands it, a click on
 // the head of an expanded one collapses it; the key facts (model, effort, cost, work time, context) stay on screen
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
-// off); the inline panels show only on the expanded strip.
+// off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
+// browsers stay folded until it is pressed, then sit beside the expanded chat (AgentStrips.tsx).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
-import type { PendingRequest } from '@shared/contract';
+import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { chatCost, effortLabel, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
-import { callQuestions, setFocused, setChatExpanded, ui } from '../store/ui';
-import {t}from'../i18n';
+import { callQuestions, setBrowserOpen, setFocused, setChatExpanded, ui } from '../store/ui';
+import {locale,t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
 import { answerLater, openQueue } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
+import { estimateOf, useAgentMetricsAll } from '../lib/agent-estimates';
 import { ChatLinkChips } from './ChatLinkChips';
 import { EffortControl } from './EffortControl';
 import { AgentIdentity } from './AgentIdentity';
@@ -37,7 +39,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { IconAlert, IconChevronDown, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
+import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
 // the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
@@ -94,7 +96,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const size = useSize(ref);
   const pair = usePair(chatId);
   const browsers = useApp(s => s.tabs.filter(tab => tab.ownerChatId === chatId).length);
+  const browserShown = ui.use(s => s.prefs.browserOpen[chatId] === true && s.prefs.chatExpanded[chatId] === true);
   const now = useNow(15_000); // the running work span grows on screen
+  const agentMetrics = useAgentMetricsAll();
   useEffect(() => {
     if (!focusReq) return;
     reveal(true);
@@ -140,6 +144,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
               data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
           )}
           <div className="chat-header-actions">
+          {strip && browsers > 0 && <button type="button" className={`icon-btn chat-browser-toggle${browserShown ? ' on' : ''}`} aria-pressed={browserShown} aria-label={t(browserShown ? 'agentDetail.browserOn' : 'agentDetail.browserOff', { n: browsers })} data-tip={t(browserShown ? 'agentDetail.browserOn' : 'agentDetail.browserOff', { n: browsers })} onClick={() => setBrowserOpen(chatId, !browserShown)} data-testid={`chat-browser-${chatId}`}><IconGlobe size={13} />{browsers > 1 && <span className="chat-browser-n">{browsers}</span>}</button>}
           {strip&&<button ref={expansionButton} type="button" className="icon-btn chat-expand" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} aria-label={t(expanded?'product.collapse':'product.expand')} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>{setChatExpanded(chatId,!expanded);if(expanded)expansionButton.current?.focus();}} data-testid={`chat-expand-${chatId}`}><IconChevronDown size={14}/></button>}
           {(busy || chat.state === 'waiting') && (
             <IconButton label={t('chat.tile.stop')} shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
@@ -155,7 +160,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         {renaming && !expanded && <TitleInput chat={chat} onDone={()=>setRenaming(false)}/>}
         <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
           {chat.run && <RunChips run={chat.run} />}
-          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}{browsers && !expanded ? ` · ${t('product.browsersN', { n: browsers })}` : ''}</span>
+          <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
+          {(busy || chat.state === 'waiting') && <RunEstimateChip chat={chat} estimate={estimateOf(chat.run, agentMetrics, now)} />}
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
         </div>
@@ -192,3 +198,16 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     </section>
   );
 });
+
+/** The live estimate of an agent run still at work (lib/agent-estimates.ts): dashed and labelled "stima" so it never
+ *  reads as the run's own time or cost, which the facts beside it show. */
+function RunEstimateChip({ chat, estimate }: { chat: ChatSummary; estimate: ReturnType<typeof estimateOf> }) {
+  if (!estimate) return null;
+  const usd = estimate.costUsd === null ? null : `~${new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: estimate.costUsd < 1 ? 2 : 1 }).format(estimate.costUsd)}`;
+  const time = estimate.timeMs === null ? null : `~${minutes(estimate.timeMs)}`;
+  const left = estimate.over ? t('agentDetail.estimateOver') : estimate.leftMs !== null ? t('agentDetail.estimateLeft', { d: minutes(estimate.leftMs) }) : null;
+  const tip = t('agentDetail.estimateTip', { name: chat.agent?.name || chat.title, n: Math.max(estimate.timeRuns, estimate.costRuns) });
+  return <span className={`th-estimate${estimate.over ? ' over' : ''}`} data-testid={`chat-estimate-${chat.id}`} data-tip={tip} aria-label={`${t('agentDetail.estimate')}: ${[time, usd, left].filter(Boolean).join(', ')}. ${tip}`}>
+    <span className="th-estimate-label">{t('agentDetail.estimate')}</span>{[time, usd].filter(Boolean).join(' · ')}{left && <span className="th-estimate-left">{left}</span>}
+  </span>;
+}

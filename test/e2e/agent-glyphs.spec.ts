@@ -19,6 +19,7 @@ test('role glyphs and tones survive save and warn about exact duplicates', async
     const card = studio.locator('article').filter({ has: page.getByRole('heading', { name: 'Glyph test', exact: true }) });
     await expect(card.locator('[data-tone=teal] [data-glyph=role-implementer]')).toHaveCount(1);
     await expect(page.getByTestId('agent-avatar-duplicate')).toHaveCount(0);
+    await openAgents(page);
     await duplicate();
     await expect(page.getByTestId('agent-name')).toHaveValue('Generale (copia)');
     await studio.getByRole('button', { name: 'Icona dell’agente Implementatore', exact: true }).click();

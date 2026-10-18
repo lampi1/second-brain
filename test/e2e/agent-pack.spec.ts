@@ -24,10 +24,11 @@ test('exports and imports a pack through reviewed dialogs into probation', async
     await dialog.getByLabel('Includi riepilogo anonimo dei risultati').uncheck();
     await dialog.getByRole('button', { name: 'Salva pacchetto', exact: true }).click();
     await expect(dialog).not.toBeVisible(); expect(fs.existsSync(destination)).toBe(true);
+    await page.getByTestId('agent-studio').getByRole('button', { name: 'Tutti gli agenti', exact: true }).click();
     await page.getByRole('button', { name: 'Importa…', exact: true }).click();
     await expect(dialog).toContainText('Pacchetto già presente');
     await dialog.getByRole('button', { name: 'Importa in prova', exact: true }).click();
-    await expect(dialog).not.toBeVisible(); await expect(page.getByTestId('agent-studio')).toContainText('In prova');
+    await expect(dialog).not.toBeVisible(); await expect(page.getByTestId('agent-overview')).toContainText('In prova');
     await shot(page, 'agent-pack-roundtrip-probation');
   } finally { await app.close(); }
 });
@@ -36,7 +37,7 @@ test('an external agent update cannot be overwritten by a stale editor draft', a
   const { app, page } = await launchDemo();
   try {
     await openAgents(page);
-    await page.getByTestId('agent-studio').getByRole('button', { name: 'Modifica', exact: true }).first().click();
+    await page.getByTestId('agent-edit').click();
     await page.getByTestId('agent-name').fill('My unsaved draft');
     await page.evaluate(async () => { const catalog = await window.sb.invoke('agents:list', undefined); const source = catalog.profiles[0]!; await window.sb.invoke('agents:save', { id: source.id, profile: { ...source, instructions: 'New imported behavior.' } }); });
     await expect(page.getByTestId('agent-save')).toBeDisabled();

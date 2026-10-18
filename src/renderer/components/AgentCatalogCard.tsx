@@ -1,8 +1,9 @@
 // Agent card of the Agenti catalogue (AgentCatalogPage): identity (glyph, name, role), engine and model, a live status
 // and four compact run metrics, with the launch composer (CatalogRun) and an expandable details panel instead of a
-// tall strip. Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash
+// tall strip. The details float over the cards below (owner, 18/10: an expanding card must not push its neighbours) and
+// lead with the agent's prompt, its instructions in full; Esc or a click elsewhere folds them. Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash
 // with "Non disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css.
-import { useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { inProbation, type AgentMetrics, type AgentProfile } from '@shared/agents';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -23,6 +24,15 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
 }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
+  const card = useRef<HTMLElement>(null), toggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!expanded) return;
+    const away = (e: PointerEvent) => { if (!card.current?.contains(e.target as Node)) setExpanded(false); };
+    // capture, and stopped: Esc folds the details instead of leaving the page (the app's global Esc)
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); setExpanded(false); toggle.current?.focus(); } };
+    document.addEventListener('pointerdown', away); window.addEventListener('keydown', esc, true);
+    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc, true); };
+  }, [expanded]);
   const stats = metrics?.all;
   const ended = loaded ? stats?.ended ?? 0 : null;
   const open = loaded ? metrics?.open ?? 0 : null;
@@ -42,7 +52,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const origin = profile.origin.kind === 'preset' ? t('catalog.preset') : t('catalog.custom');
   const role = profile.role || origin;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
-  return <article className="catalog-card" data-testid={`catalog-card-${profile.id}`} data-state={state} data-tone={tone}
+  const prompt = profile.instructions.trim();
+  return <article ref={card} className="catalog-card" data-testid={`catalog-card-${profile.id}`} data-state={state} data-tone={tone} data-expanded={expanded}
     style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
     <header className="catalog-card-head">
       <span className="catalog-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={40} /></span>
@@ -67,18 +78,19 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     </dl>
     <footer className="catalog-card-foot">
       {run}
-      <button type="button" className="btn btn-ghost btn-s catalog-more" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(v => !v)}>
+      <button ref={toggle} type="button" className="btn btn-ghost btn-s catalog-more" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(v => !v)}>
         {t('agentsGrid.details')}<span aria-hidden="true" className="catalog-more-chevron">▾</span></button>
     </footer>
     <div className="catalog-details" id={detailsId} hidden={!expanded}>
-      {profile.purpose && <p>{profile.purpose}</p>}
+      <section className="catalog-prompt" aria-label={t('agentDetail.prompt')}>
+        <h4>{t('agentDetail.prompt')}{prompt && <small>{t('agentDetail.promptSize', { n: prompt.length })}</small>}</h4>
+        {prompt ? <pre tabIndex={0} data-testid={`catalog-prompt-${profile.id}`}>{prompt}</pre> : <p>{t('agentDetail.promptEmpty')}</p>}
+      </section>
       <dl>
-        <div><dt>{t('catalog.runs')}</dt><dd>{values.runs.text ?? unknown}</dd></div>
-        <div><dt>{t('catalog.open')}</dt><dd>{values.open.text ?? unknown}</dd></div>
-        <div><dt>{t('catalog.success')}</dt><dd>{values.success.text ?? unknown} <small>{values.success.samples}</small></dd></div>
-        <div><dt>{t('catalog.cost')}</dt><dd>{values.cost.text ?? unknown} <small>{values.cost.samples}</small></dd></div>
         <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? t('studio.defaultEngine')}</dd></div>
         <div><dt>{t('agentsGrid.origin')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
+        <div><dt>{t('catalog.success')}</dt><dd>{values.success.text ?? unknown} <small>{values.success.samples}</small></dd></div>
+        <div><dt>{t('catalog.cost')}</dt><dd>{values.cost.text ?? unknown} <small>{values.cost.samples}</small></dd></div>
         <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>
       </dl>
       <button type="button" className="btn btn-ghost btn-s" onClick={onOpen}>{t('agentsGrid.openProfile')}</button>

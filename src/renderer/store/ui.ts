@@ -34,6 +34,8 @@ export interface Prefs {
   appearance:AppearancePreference;
   chatPanelsV:0|1|2;
   chatExpanded:Record<string,boolean>;
+  /** an expanded strip shows its browsers beside it only when the user opened them (owner, 18/10: collapsed by default) */
+  browserOpen:Record<string,boolean>;
   density: Density;
   theme: Theme;
   /** the Regia widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
@@ -101,7 +103,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},
   density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42, feedOpen: false,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
   browsersHidden: false,
@@ -116,6 +118,9 @@ function readRead(): ReadState {
   } catch { return emptyRead; }
 }
 
+/** A remembered per-chat on/off map: valid ids and booleans only, the latest 1000. */
+const flags=(raw:unknown):Record<string,boolean>=>raw&&typeof raw==='object'&&!Array.isArray(raw)?Object.fromEntries(Object.entries(raw).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{};
+
 /** The remembered prefs, each field checked; `at` = now, the unread count's start when none was saved. */
 export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
   if (!raw) return { ...defaultPrefs, regiaSeenAt: at };
@@ -128,7 +133,8 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
       chatPanelsV:p.chatPanelsV===2?2:p.chatPanelsV===1?1:0,
-      chatExpanded:p.chatExpanded&&typeof p.chatExpanded==='object'&&!Array.isArray(p.chatExpanded)?Object.fromEntries(Object.entries(p.chatExpanded).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{},
+      chatExpanded:flags(p.chatExpanded),
+      browserOpen:flags(p.browserOpen),
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
@@ -185,6 +191,11 @@ export function saveRolePreference(role: RoleSelection | undefined, expected: st
 /** Expansion is independent of transcript/draft state. Collapsing never unmounts the input or item list. */
 export function setChatExpanded(id:string,expanded:boolean):void{
   setPrefs({chatExpanded:{...ui.get().prefs.chatExpanded,[id]:expanded}});
+}
+/** Show or hide a strip's own browsers beside it; showing them expands the strip too. */
+export function setBrowserOpen(id:string,open:boolean):void{
+  const {chatExpanded,browserOpen}=ui.get().prefs;
+  setPrefs({browserOpen:{...browserOpen,[id]:open},...(open&&chatExpanded[id]!==true?{chatExpanded:{...chatExpanded,[id]:true}}:{})});
 }
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });

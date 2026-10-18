@@ -34,6 +34,7 @@ export function AgentStrips() {
   const ready = useApp(s => s.ready);
   const panelsVersion = ui.use(s => s.prefs.chatPanelsV);
   const expansion = ui.use(s => s.prefs.chatExpanded);
+  const browserOpen = ui.use(s => s.prefs.browserOpen);
   const hidden = ui.use(s => s.hidden, sameList), hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
   const tiles = useApp(s => workspaceTiles(agentOrder(s.order, s.chats), s.chats, s.tabs), equalTiles);
   const owners = useApp(s => Object.fromEntries(s.tabs.filter(t => t.ownerChatId).map(t => [t.id, t.ownerChatId!])), (a, b) => JSON.stringify(a) === JSON.stringify(b));
@@ -45,11 +46,12 @@ export function AgentStrips() {
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
   // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs from before v2 expanded them all
   useEffect(() => { if (ready && panelsVersion !== 2) setPrefs({ chatPanelsV: 2, chatExpanded: {} }); }, [ready, panelsVersion]);
-  // a browser shows under its chat while that strip is expanded (a collapsed strip counts it in its facts); one waiting
-  // for the user (a login hand-off) or maximized always shows
-  // only a browser whose chat has a strip folds (the Orchestrator's own and orphan tabs have no strip to open)
+  // a browser shows beside its chat while that strip is expanded AND the user opened its browsers with the strip's globe
+  // button (owner, 18/10: collapsed by default, the strip only hints at it); one waiting for the user (a login hand-off)
+  // or maximized always shows. Only a browser whose chat has a strip folds (the Orchestrator's own and orphan tabs have
+  // no strip to open).
   const strips = new Set(tiles.filter(t => t.kind === 'chat').map(t => t.id));
-  const folded = (t: TileRef) => strips.has(owners[t.id] ?? '') && expansion[owners[t.id]!] !== true && !keep.includes(t.id) && maximized !== tileKey(t);
+  const folded = (t: TileRef) => strips.has(owners[t.id] ?? '') && !(expansion[owners[t.id]!] === true && browserOpen[owners[t.id]!] === true) && !keep.includes(t.id) && maximized !== tileKey(t);
   const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && (!hide || keep.includes(t.id)) && !folded(t);
   const visible = tiles.filter(isVisible);
   const max = maximized ? visible.find(t => tileKey(t) === maximized) ?? null : null;
@@ -67,7 +69,7 @@ export function AgentStrips() {
   const narrow = useNarrow(column);
   let lastArea: string | null = null;
   // native browser views follow their strip when strips expand, collapse or change
-  useLayoutEffect(() => { schedule(); }, [shown.map(tileKey).join('|'), expansion, narrow]);
+  useLayoutEffect(() => { schedule(); }, [shown.map(tileKey).join('|'), expansion, browserOpen, narrow]);
 
   const pane = (tile: TileRef) => {
     const key = tileKey(tile);

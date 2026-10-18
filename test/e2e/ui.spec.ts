@@ -3,11 +3,11 @@
 // pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
 // palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { demoLayout, expandChats, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { demoLayout, expandChats, showBrowsers, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'sms', 'feedback'); // open strips: their requests and browsers in sight
+  await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their requests and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
   await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Regia's own floats in the layer
@@ -114,7 +114,7 @@ test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', as
 
 test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', async () => {
   const { page, app } = await launchDemo();
-  await expandChats(page, 'qa'); // its browser is on the open strip; SMS stays collapsed
+  await showBrowsers(page, 'qa'); // its browser is beside the open strip; SMS stays collapsed
   await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(1);
   await page.keyboard.press('Control+K');
   await expect(page.getByTestId('palette')).toBeVisible();

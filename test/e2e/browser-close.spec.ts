@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BrowserTab, ChatSummary } from '../../src/shared/contract';
-import { demoLayout, launch, launchDemo, shot, waitThumbs } from './helpers';
+import { demoLayout, launch, launchDemo, shot, showBrowsers, waitThumbs } from './helpers';
 import { startSites, McpClient, type Sites } from './fixture-server';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
@@ -47,6 +47,7 @@ test.describe.serial('closing a browser tile', () => {
     await agent.ok('tabs_create', { url: `${sites.a}/` });
     await agent.ok('tabs_create', { url: `${sites.a}/app` });
     await expect.poll(async () => (await tabsOfChat()).length).toBe(2);
+    await showBrowsers(page, chat.id); // a strip's browsers are folded until its globe is pressed
     const [first, second] = await tabsOfChat();
     await agent.ok('tabs_select', { tabId: first!.id });             // the tab the user will close is the agent's active one
 

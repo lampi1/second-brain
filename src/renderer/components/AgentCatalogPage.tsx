@@ -1,5 +1,5 @@
 // Dedicated agent overview. "Crea agente" opens the questionnaire (AgentCreateDialog) that sends the user's request to
-// the Orchestrator; an existing profile opens in the Studio editor (AgentStudio). Rendered by App.tsx for page 'agenti'.
+// the Orchestrator; an existing profile opens on its own page (AgentStudio), with its lifecycle panel and pulse. Rendered by App.tsx for page 'agenti'.
 import { useEffect, useState } from 'react';
 import { inProbation, type AgentMetrics } from '@shared/agents';
 import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
@@ -45,7 +45,10 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
     return () => { alive = false; clearInterval(timer); };
   }, [catalog, refresh]);
   const profile = catalog?.profiles.find(p => p.id === arg);
-  if (arg === 'studio' || profile) return <><button type="button" className="btn btn-ghost catalog-back" onClick={() => go({ page: 'agenti' })}>{t('catalog.back')}</button><AgentStudio key={arg} initialProfile={profile} />{profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}{lifecycleApi && profile && <AgentLifecyclePanel api={lifecycleApi} agentId={profile.id} onReview={() => go({ page: 'agenti', arg: profile.id })} />}</>;
+  if (arg === 'studio' || profile) return <AgentStudio key={arg} initialProfile={profile}>
+    {lifecycleApi && profile && <AgentLifecyclePanel api={lifecycleApi} agentId={profile.id} onReview={() => go({ page: 'agenti', arg: profile.id })} />}
+    {profile && <ContextPulse key={profile.id} place={`agent:${profile.id}`} />}
+  </AgentStudio>;
   const profiles = catalog?.profiles ?? [];
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>

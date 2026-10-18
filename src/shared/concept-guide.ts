@@ -448,8 +448,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
       // src/renderer/lib/grid.ts workspaceTiles
-      b('Aprendo una striscia, i suoi browser stanno accanto alla chat, oppure sotto se lo spazio è stretto. A striscia chiusa si nascondono, salvo quelli che richiedono il tuo intervento o sono massimizzati.',
-        'Expanding a strip shows its browsers beside the chat, or below in a narrow space. Collapsing it hides them, except those awaiting your intervention or maximized.'),
+      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: allora stanno accanto alla chat aperta, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati.',
+        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: then they sit beside the expanded chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show.'),
+      // src/renderer/components/ChildStrips.tsx
+      b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro; quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»).',
+        'Under each strip appear the subagents and commands still at work; finished ones leave at once (the full list stays in "Details and collaborators").'),
+      // src/renderer/lib/agent-estimates.ts
+      b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
+        'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, sforzo e l’ultima risposta; aperta mostra la conversazione e l’input.',
         'A collapsed strip shows agent, state, effort and the last answer; expanded it shows the conversation and the input.'),
@@ -461,7 +467,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
-      tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id]; no saved order, no dragging.'),
+      tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
     ],
     sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/BrowserTile.tsx'],
   },

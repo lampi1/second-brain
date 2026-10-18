@@ -19,9 +19,10 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
       await expect(page.getByTestId(`chat-sub-${id}`)).toBeVisible(); // model, cost, work time, context: collapsed too
     }
     await expect(page.getByTestId('chat-input-fix')).toBeHidden();
-    // a collapsed strip's browser folds with it: counted in its facts, shown once the strip expands
+    // a strip's browser is folded: a quiet globe on the strip says it has one
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
-    await expect(page.getByTestId('chat-sub-sms')).toContainText('1 browser');
+    await expect(page.getByTestId('chat-browser-sms')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('chat-browser-fix')).toHaveCount(0);
     // a decision waiting: one pill on the strip, no panel inside the collapsed strip
     await expect(page.getByTestId('chat-wait-qa')).toBeVisible();
     await expect(page.getByTestId('chat-state-qa')).toBeHidden(); // the pill takes the state's place
@@ -33,7 +34,7 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
     await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByTestId('chat-input-sms')).toBeVisible();
-    await expect(page.getByTestId('tile-browser-tab-sms')).toBeVisible();
+    await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0); // still folded until its globe is pressed
     await page.mouse.move(2, 2);
     await shot(page, 'strips-expanded');
     await page.getByTestId('tile-chat-sms').locator('.th-title').click();
@@ -60,10 +61,12 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
   }
 });
 
-test('an expanded strip holds its own browser beside its chat, each with its own full-screen control', async () => {
+test('an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
     await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
+    await page.getByTestId('chat-browser-sms').click();
+    await expect(page.getByTestId('chat-browser-sms')).toHaveAttribute('aria-pressed', 'true');
     const browser = page.getByTestId('tile-browser-tab-sms');
     await expect(browser).toBeVisible();
     // one frame on the strip's accent: chat left, browser right, both in view
@@ -96,6 +99,7 @@ test('a narrow column stacks an expanded strip with its browser: the browser goe
   try {
     await expect(page.locator('.agent-strips.is-narrow')).toHaveCount(1);
     await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
+    await page.getByTestId('chat-browser-sms').click();
     const browser = page.getByTestId('strip-pair-sms').getByTestId('tile-browser-tab-sms');
     await expect(browser).toBeVisible();
     const chatBox = (await page.getByTestId('tile-chat-sms').boundingBox())!, browserBox = (await browser.boundingBox())!;

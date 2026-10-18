@@ -106,6 +106,16 @@ export async function expandChats(page: Page, ...ids: string[]): Promise<void> {
   }
 }
 
+/** Expands the strips and opens their browsers beside them (folded until the strip's globe is pressed: ChatTile.tsx). */
+export async function showBrowsers(page: Page, ...ids: string[]): Promise<void> {
+  await expandChats(page, ...ids);
+  for (const id of ids) {
+    const globe = page.getByTestId(`chat-browser-${id}`);
+    if ((await globe.getAttribute('aria-pressed')) !== 'true') await globe.click();
+    await expect(globe).toHaveAttribute('aria-pressed', 'true');
+  }
+}
+
 /** Picks `value` in a custom Select (components/Select.tsx: a trigger button and a portalled listbox, no native
  *  <select>, so no selectOption); its value is the trigger's data-value. */
 export async function choose(select: Locator, value: string): Promise<void> {
