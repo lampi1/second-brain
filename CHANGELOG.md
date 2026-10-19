@@ -30,6 +30,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Dove: Locale / Cloud" gated by each engine's readiness; `app_create_chat` takes `where: 'cloud'`; "Porta in locale"
   into a new worktree; the Cursor Cloud Agents key in Settings → Motori → Cursor; fake cloud agents in the demo.
   GitHub repos only; the app never pushes.
+- Role characters (#89): every role (Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe)
+  and Pulse is drawn as its own cartoon character, hand-written SVG in the app: a badge colour and a silhouette that
+  read at 16 px in the tree, a face and a prop from 24 px, in dark and light. Approval sheets:
+  `node scripts/agent-avatar-sheets.mjs` → `docs/screenshots/agent-avatars/`.
 
 ### Changed
 - **The Orchestrator changes agents by itself** (ADR 0082, #84 point 6): `agent_update`, `agent_propose`,

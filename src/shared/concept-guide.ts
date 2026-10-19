@@ -119,8 +119,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat, uno che legge ti arriva come permesso senza «sempre».',
         'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat, one that reads reaches you as a permission without "always".'),
       // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
-      b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: colore e copricapo a misura piccola, viso e attrezzo da 28 px.',
-        'Every role has a cartoon character recognisable even at 16 px: colour and headwear at small sizes, face and prop from 28 px.'),
+      b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: sotto i 24 px restano colore, capigliatura o copricapo e occhi; da 24 px anche viso e attrezzo.',
+        'Every role has a cartoon character recognisable even at 16 px: below 24 px the colour, the hair or headwear and the eyes stay; from 24 px the face and the prop too.'),
     ],
     analogy: b('Come le schede dei reparti di un’officina: chi fa cosa, con quali attrezzi e fin dove può spingersi senza chiedere; la scheda si aggiorna, il reparto resta.',
       'Like the department cards of a workshop: who does what, with which tools and how far they may go without asking; the card is updated, the department stays.'),

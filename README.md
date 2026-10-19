@@ -168,7 +168,8 @@ since when and why it waits, at no token cost.
 ![The Agenti page: the catalog of agents as cards, with runs, success and cost](docs/screenshots/agents.webp)
 
 Each agent is a card with its role, engine, model and observed results (runs, success, cost); a click flips it to its
-details and the skills it uses. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
+details and the skills it uses. Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
+for the Scout, a judge in a wig…), recognisable from the 16 px tree to the 96 px role page. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
 maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
 the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in
 **Agenti → Da approvare**: an agent's tools, permissions and engine, and new agents. An agent exports to a colleague
