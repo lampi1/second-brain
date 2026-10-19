@@ -431,7 +431,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
-          ...(orchestrator ? { independentOf: { engine: orchestrator.harness, model: orchestrator.model ?? null } } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
+          ...(orchestrator ? { independentOf: { engine: orchestrator.harness, model: orchestrator.model ?? null } } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent', undefined, undefined,
+          // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
+          { boundByOrchestrator: !authed() });
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };

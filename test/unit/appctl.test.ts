@@ -12,7 +12,7 @@ import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
 import { DemoRouting } from '../../src/main/brain/routing-demo';
-import type { RoutingRow, RoutingTable } from '../../src/shared/contract';
+import type { NewChat, RoutingRow, RoutingTable } from '../../src/shared/contract';
 
 /** a brain with no routing table and no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
 const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
@@ -173,6 +173,20 @@ describe('app control tools', () => {
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     expect(made).toHaveLength(2);
+  });
+
+  it('app_create_chat on the plain /mcp/app mount (any local process) asks for a chat bound by the Orchestrator; its own mount does not', async () => {
+    const opts: unknown[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }],
+      create: async (req: Record<string, unknown>, _by: unknown, _i: unknown, _l: unknown, o: unknown) => { opts.push(o); return { id: `n${opts.length}`, title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const deps = { chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: (req: NewChat) => catalog.resolve(req) };
+    const create = (caller?: string) => appControlTools(deps, caller).find(x => x.name === 'app_create_chat')!;
+    await create('r').run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan' });
+    await create().run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan' });
+    await create('not-an-orchestrator').run({ title: 'Ordini · Fix 3', prompt: 'p', roleId: 'artisan' });
+    expect(opts).toEqual([{ boundByOrchestrator: false }, { boundByOrchestrator: true }, { boundByOrchestrator: true }]);
   });
 
   it('long chats: hand-off and continuation cross engines with legacy false and keep their labels', async () => {

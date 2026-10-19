@@ -115,6 +115,25 @@ describe('agent policy on chats', () => {
     expect(f.starts.at(-1)?.toolPolicy).toBeUndefined();
   });
 
+  it('a chat from the unauthenticated /mcp/app mount runs no wider than the Orchestrator, and needs one open', async () => {
+    const f = fixture();
+    const artisanRole = agent({ tools: { allow: ['read', 'edit', 'shell', 'browser'] }, ceiling: 'acceptEdits' });
+    await expect(f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'agent', artisanRole, {}, { boundByOrchestrator: true })).rejects.toThrow(/Orchestrator aperto/);
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user', agent({ tools: { allow: ['read'] }, ceiling: 'plan' }));
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x', permissionMode: 'acceptEdits' }, 'agent', artisanRole, {}, { boundByOrchestrator: true });
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'plan', permissionMode: 'plan' });
+    // the Orchestrator's own mount is not bound: the Artisan writes
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'agent', artisanRole);
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read', 'edit', 'shell', 'browser'] }, ceiling: 'acceptEdits' });
+  });
+
+  it('an Orchestrator with no stored policy bounds the /mcp/app chats read-only, in plan mode (fail closed)', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'agent', agent({ tools: { allow: ['read', 'edit', 'shell'] }, ceiling: 'acceptEdits' }), {}, { boundByOrchestrator: true });
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'plan' });
+  });
+
   it('a fork of an agent chat keeps its policy', async () => {
     const f = fixture();
     const src = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent(reviewer));
