@@ -167,13 +167,13 @@ describe('agent_delegate', () => {
     const f = fixture();
     const parent = await f.root('strategist');
     const child = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Log', { skills: ['log-search'] })] })).children[0].chatId;
-    f.sinks.get(child)!.pending({ id: 's1', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'log-search' }, at: 1 });
+    f.sinks.get(child)!.pending({ id: 's1', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'agent-p:log-search' }, at: 1 });
     expect(f.answers.find(a => a.id === 's1')?.answer).toMatchObject({ allow: true });
     f.sinks.get(child)!.pending({ id: 's2', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'deploy-prod' }, at: 2 });
     expect(f.answers.find(a => a.id === 's2')?.answer).toMatchObject({ allow: false });
     expect(f.m.items(child).some(i => i.kind === 'system' && i.code === 'skillRefused')).toBe(true);
     const other = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Senza skill')] })).children[0].chatId;
-    f.sinks.get(other)!.pending({ id: 's3', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'log-search' }, at: 3 });
+    f.sinks.get(other)!.pending({ id: 's3', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'agent-p:log-search' }, at: 3 });
     expect(f.answers.find(a => a.id === 's3')?.answer).toMatchObject({ allow: false });
   });
 
@@ -277,7 +277,6 @@ describe('the pure parts', () => {
   it('the gate passes plain chats and non-permission requests', () => {
     expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'x' } }, { skills: [] }).kind).toBe('pass');
     expect(gateRequest({ type: 'question', tool: 'AskUserQuestion' }, { role: { id: 'scout', name: 'Scout' }, skills: [] }).kind).toBe('pass');
-    expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'plug:brain-edit' } }, { role: { id: 'scribe', name: 'Scribe' }, skills: ['brain-edit'] }).kind).toBe('allow');
   });
   it('a broken parent chain counts as too deep', () => {
     expect(depthOf('a', id => (id === 'a' ? 'b' : id === 'b' ? 'a' : undefined))).toBe(Number.MAX_SAFE_INTEGER);

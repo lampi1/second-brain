@@ -12,6 +12,7 @@ import { parseMd, setFields } from '../../../shared/skillmd';
 import type { AgentCatalogService, PackInstall } from '../catalog';
 import type { GuardPaths, GuardResult } from '../../brain/guard';
 import { log } from '../../log';
+import { runtimePluginName } from '../role-gate';
 import { approvedFiles, inspectPack, readPackSource, type PackInspection } from './read';
 import { emitPack, emitTarget, hashFiles, skillFiles } from './emit';
 import { checkPackPath, writeZip, type PackFiles } from './zip';
@@ -84,7 +85,7 @@ export class AgentPackFlows {
         // Reuse the foreign-import sanitizer: no hooks/configuration can enter the generated runtime plugin.
         const candidate = new Map(files); candidate.set('plugin.json', Buffer.from('{"name":"agent-runtime"}'));
         const safe = approvedFiles(inspectPack(candidate), true);
-        safe.set('.claude-plugin/plugin.json', Buffer.from(JSON.stringify({ name: `agent-${hash.slice(0, 16)}`, author: { name: 'second-brain' } })));
+        safe.set('.claude-plugin/plugin.json', Buffer.from(JSON.stringify({ name: runtimePluginName(hash), author: { name: 'second-brain' } })));
         writePackFiles(staging, safe); fs.renameSync(staging, pluginDir);
       } catch (e) { fs.rmSync(staging, { recursive: true, force: true }); throw e; }
     }

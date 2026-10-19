@@ -54,7 +54,7 @@ import { aboveCeiling, belowParent, browserAccess, claudeDefaultMode, commandsRe
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
-import { gateRequest } from '../agents/role-gate';
+import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
@@ -1784,6 +1784,7 @@ export class ChatManager implements ChatService {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
+      ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
     if (verdict.kind === 'allow') {
