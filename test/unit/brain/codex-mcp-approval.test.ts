@@ -16,6 +16,8 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.agent_delegate.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_report.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_children.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_ask_parent.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_answer_child.approval_mode=approve',
       'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');
