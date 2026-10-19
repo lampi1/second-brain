@@ -15,7 +15,9 @@ const PR = n => `https://dev.example.com/proj/_git/app/pullrequest/${n}`;
 const WI = n => `https://dev.example.com/proj/_workitems/edit/${n}`;
 const AREAS = ['Prodotto', 'Clienti', 'Produzione', 'Personale e OS', 'Altro'];
 
-export function build(now = Date.now()) {
+/** opts.mapExtra adds that many synthetic notes to the full map (clusters of linked notes under a few areas, plus
+ *  some loose ones), to see the brain map with a large brain (issue #77). */
+export function build(now = Date.now(), opts = {}) {
   const today = ymd(now);
   const d = n => ymd(now - n * DAY);
   const r = rng(42);
@@ -327,6 +329,17 @@ export function build(now = Date.now()) {
     ...['routines.md', 'people.md', 'hub.md', 'map.md', 'brain-rules.md'].map((f, i) => ({ id: `rule:${f}`, layer: i < 2 ? 'memoria' : 'regole', kind: 'file', label: f, what: `Il file ${f}.`, file: `${root}/${f}`, modified: iso(now - i * DAY), degree: 2 }))];
   const fullEdges = [...simpleEdges.filter(e => !e.from.startsWith('grp:') && !e.to.startsWith('grp:')), ...extra.map(m => E(m.kind === 'skill' ? 'chat:regia' : 'harness:claude', m.id, m.kind === 'skill' ? 'usa' : 'hook', m.kind === 'skill' ? 'usa' : 'scatta')),
     E('rule:hub.md', 'chat:regia', 'contesto', 'regole della Regia'), E('rule:map.md', 'tool:mem', 'cita', 'cita'), E('rule:brain-rules.md', 'rule:me', 'cita', 'cita')];
+  if (opts.mapExtra > 0) {
+    const r = rng(77), topics = ['Clienti', 'Prodotto', 'Rilasci', 'Persone', 'Idee', 'Ricerca', 'Fornitori', 'Viaggi'];
+    const words = ['piano', 'note', 'verbale', 'bozza', 'idea', 'domande', 'decisione', 'riepilogo', 'contatti', 'lista', 'analisi', 'appunti'];
+    topics.forEach((t, i) => { fullNodes.push({ id: `area:${i}`, layer: 'memoria', kind: 'cartella', label: t, what: `L'area ${t}.`, file: `${root}/${t.toLowerCase()}`, degree: 0 }); fullEdges.push(E('mem:now', `area:${i}`, 'cita', 'cita')); });
+    for (let i = 0; i < opts.mapExtra; i++) {
+      const area = Math.floor(r() * topics.length), id = `note:${i}`;
+      fullNodes.push({ id, layer: 'memoria', kind: 'file', label: `${topics[area]} · ${words[i % words.length]} ${i + 1}`, what: 'Nota sintetica.', file: `${root}/${topics[area].toLowerCase()}/n${i}.md`, degree: 1 });
+      if (r() < .85) fullEdges.push(E(`area:${area}`, id, 'cita', 'cita'));
+      if (i > 0 && r() < .2) fullEdges.push(E(id, `note:${Math.floor(r() * i)}`, 'cita', 'cita'));
+    }
+  }
   const map = {
     generated: iso(now), root, layers, nodes: fullNodes, edges: fullEdges, flows,
     weak: [

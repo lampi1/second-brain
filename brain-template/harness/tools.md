@@ -19,7 +19,7 @@ consapevole che sto usando le chat dal second brain"):
   its own chat, never via the Regia (`hub.md` "Worker questions and commands are the worker's"); in the app every shell
   block has Copia and Esegui (PowerShell 5.1 in the chat's folder, `src/renderer/components/CodeBlock.tsx`).
 - **His terminal**: no `read_terminal`; after Esegui read the outcome with `app_command_runs`.
-- **Browser**: the app's own (`mcp__second-brain__*`), shown as a tile next to its chat (no Ctrl+Shift+B); a remote
+- **Browser**: the app's own (`mcp__second-brain__*`), shown beside its chat's strip when the strip's globe is on; a remote
   sign-in → `handoff_to_user` kind "login", and the chat gives him URL, account and password (`rules/devops-qa.md`).
 - **His PC clock flips to UTC-3** (`tzautoupdate`): give him `Set-TimeZone -Id "W. Europe Standard Time"` (2026-10-06).
 - **Claude Desktop-only tools** (chip `spawn_task`, `ccd_*` sidebar, PushNotification, `read_terminal`): only if they

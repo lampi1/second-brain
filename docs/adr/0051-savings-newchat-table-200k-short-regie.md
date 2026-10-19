@@ -1,5 +1,8 @@
 # ADR 0051 · Savings: "Nuova chat" through the table, Claude chats compact at 200k, Regie compact on a new day
 
+> Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
+> effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
+
 Date: 2026-10-14 · Status: accepted · Amends: ADR 0031 (compaction window default), ADR 0032 (user-started chats)
 
 ## Context

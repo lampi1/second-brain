@@ -48,3 +48,9 @@ describe('browser MCP tools', () => {
     expect(ro).not.toContain('click');
   });
 });
+
+describe('screenshot attachments (issue #83)', () => {
+  it('the screenshot tool tells the agent to write the saved path to show it to the user', () => {
+    expect(tools.find(t => t.name === 'screenshot')?.description).toMatch(/write that Saved path in your message, question or report/);
+  });
+});

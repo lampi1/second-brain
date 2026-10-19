@@ -1,0 +1,3 @@
+Started a cloud session.
+Session: session_01AbCdEfGh
+Open https://claude.ai/code/session_01AbCdEfGh to follow it.

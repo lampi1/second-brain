@@ -307,17 +307,16 @@ export function focusChat(chatId: string): void {
   requestFocus(chatId);
 }
 
-/** Bring a browser tab on screen: under its agent's strip when browsers are shown and nothing is maximized; else
- *  maximized (Esc restores), leaving focus mode first (it shows only its own chat's tabs).
+/** Bring a browser tab on screen: beside its agent's strip when nothing is maximized; else maximized (Esc restores),
+ *  leaving focus mode first (it shows only its own chat's tabs).
  *  Why: the user, 2026-10-14, clicked a chat's DevOps chips four times and saw nothing: the tab opened behind a
- *  maximized chat (or hidden browsers). */
+ *  maximized chat. */
 export function showTab(tabId: string): void {
   const u = ui.get();
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode) setFocusMode(null);
-  const { browsersHidden } = ui.get().prefs;
   const maximized = ui.get().maximized;
-  if (!browsersHidden && (!maximized || maximized === 'regia')) {
+  if (!maximized || maximized === 'regia') {
     // a strip's browser is folded until opened: open it beside its (expanded) strip
     const owner = app.get().tabs.find(tab => tab.id === tabId)?.ownerChatId;
     if (owner) setBrowserOpen(owner, true);
@@ -509,7 +508,7 @@ export function closeFocused(): void {
   closeChat(c.id);
 }
 
-/** Ctrl+W on a selected browser tile: closed only while it is on screen (its tile rendered: not hidden by Ctrl+Shift+B;
+/** Ctrl+W on a selected browser tile: closed only while it is on screen (its tile rendered: its strip's browsers opened;
  *  no brain page or map in front, no other tile maximized, in focus mode only its chat's tabs). */
 function closeFocusedTab(tabId: string): void {
   const u = ui.get();

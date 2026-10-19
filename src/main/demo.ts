@@ -100,7 +100,8 @@ export function seed(E: number): Seed {
     harness: 'claude', origin: 'app', cwd: 'C:\\progetti\\brain', sessionId: `demo-${c.id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default',
     state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
-  // the sub-agents the engines report (ChildStrips.tsx shows them under their chat): what each does, its state, its start
+  // the sub-agents the engines report (ChildStrips.tsx shows them under their chat): what each does, the app agent it
+  // runs as (agentType: a catalog id, or an engine type the app does not know → "nessun agente"), its state, its start
   const child = (c: Partial<ChildObservation> & Pick<ChildObservation, 'key' | 'task' | 'state' | 'startedAt'>): ChildObservation =>
     ({ nativeId: c.key, toolCallId: null, parentNativeId: null, kind: 'agent', observedAt: c.startedAt ?? E, source: 'live', ...c });
   const children = (...list: ChildObservation[]): AgentChildren => {
@@ -110,7 +111,7 @@ export function seed(E: number): Seed {
   const chats: ChatSummary[] = [
     chat({ id: 'regia', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
-        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', state: 'running', startedAt: E - 6 * MIN }),
+        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
         child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', state: 'running', startedAt: E - 3 * MIN }),
         child({ key: 'claude:task:a0', task: 'Riassumi lo stato delle chat aperte', state: 'completed', startedAt: E - 12 * MIN, observedAt: E - 9 * MIN })) }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
@@ -118,7 +119,7 @@ export function seed(E: number): Seed {
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
       lastText: 'Lancio i test del modulo ordini.',
       agentChildren: children(
-        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', state: 'running', startedAt: E - 90_000 }),
+        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', agentType: 'default-general', state: 'running', startedAt: E - 90_000 }),
         child({ key: 'claude:task:f2', task: 'dotnet test test/Shop.Tests', kind: 'shell', state: 'running', startedAt: E - 35_000 }),
         child({ key: 'claude:task:f0', task: 'Leggi le regole di sconto', state: 'completed', startedAt: E - 4 * MIN, observedAt: E - 3 * MIN })) }),
     chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', contextTokens: 31_000, contextEstimated: true, cwd: 'C:\\progetti\\alfa-e2e',
@@ -878,6 +879,7 @@ export class DemoBrain implements BrainService {
   route(req: RouteRequest): RouteResult { return this.routingNow().route(req, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }
+  observeRoutingOutcome(): void { /* the demo keeps no ledger */ }
   // SB_BRAIN set (e2e: a fixture brain): its data server answers, so the brain pages work with the demo's chats
   private localApi: LocalApi = new Map();
   private realApi: BrainApi | null = process.env.SB_BRAIN ? new BrainApi(process.env.SB_BRAIN, electronNode(), undefined, this.localApi) : null;

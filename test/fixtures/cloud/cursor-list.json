@@ -1,0 +1,5 @@
+{"agents":[
+{"id":"bc_00000000-0000-4000-8000-000000000001","name":"Fix checkout total","status":"RUNNING","source":{"repository":"https://github.com/acme/shop","ref":"main"},"target":{"branchName":"cursor/fix-checkout-total-ab12","url":"https://cursor.com/agents?id=bc_00000000-0000-4000-8000-000000000001"},"latestRun":{"id":"run_0002","status":"RUNNING","summary":"Moving the total to a debounce"},"createdAt":"2026-10-19T08:00:00.000Z","updatedAt":"2026-10-19T08:10:00.000Z"},
+{"id":"bc_00000000-0000-4000-8000-000000000002","name":"Docs typo","status":"FINISHED","source":{"repository":"https://github.com/acme/docs.git","ref":"main"},"target":{"branchName":"cursor/docs-typo-zz99","url":"https://evil.example.com/phish"},"createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T09:00:00.000Z"},
+{"name":"no id: skipped"}
+],"nextCursor":null}

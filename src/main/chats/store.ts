@@ -34,6 +34,8 @@ export interface StoredChat {
   agentChildren?: AgentChildren;
   /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
   agentPolicy?: AgentPolicy;
+  /** the agent's "Contesto massimo" (tokens), frozen at start like its policy (#80) */
+  agentMaxContext?: number;
   /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. Additive: chats.json stays version 2 */
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
@@ -122,6 +124,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
+    ...(Number.isSafeInteger(c.agentMaxContext) && (c.agentMaxContext as number) >= 100_000 && (c.agentMaxContext as number) <= 1_000_000 ? { agentMaxContext: c.agentMaxContext as number } : {}),
     ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
     ...(typeof c.runPruned === 'string' && RUN_ID.test(c.runPruned) ? { runPruned: c.runPruned } : {}),
     ...(route ? { route } : {}),

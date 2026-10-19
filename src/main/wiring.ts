@@ -30,6 +30,9 @@ import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
+import { CloudService, cloudFile } from './cloud/service';
+import { realExec, realHttp } from './cloud/exec';
+import { CURSOR_CLOUD_KEY } from './cloud/cursor';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
@@ -40,7 +43,9 @@ import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
 import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
-import { predictionLine } from './brain/routing';
+import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
+import { runMetrics } from './agents/run-metrics';
+import { subagentTools } from './agents/subagent-tool';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
@@ -87,6 +92,8 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
+  cloud?: CloudService;
   agentAuthoring?: AgentAuthoring;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
   agentLifecycle?: LifecycleApi;
@@ -293,7 +300,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
-      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort,
+      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
         models: seen[e.id]?.ids ?? [], source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
@@ -343,6 +350,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
+  // cloud agents (ADR 0080): the vendors' lists polled only while the window is on screen; tests never reach a vendor
+  const cloud = new CloudService({
+    file: cloudFile(ctx.userData), emit: st => ctx.emitter.emit('cloud:changed', st), exec: realExec,
+    http: process.env.SB_TEST || process.env.VITEST ? () => Promise.reject(new Error('i test non chiamano Cursor')) : realHttp,
+    cursorKey: () => engines.keyFor(CURSOR_CLOUD_KEY), engineOn: h => engineOn(brain.settings(), h),
+    budget: () => { const b = brain.settings().budget; return { limitUsd: b.enabled && b.cursor.mode !== 'off' ? b.cursor.dailyUsd : null, localTodayUsd: brain.usage().cursorTodayUsd ?? 0 }; },
+    addSpend: usd => engines.addSpend(CURSOR_CLOUD_KEY, usd),
+    visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
+  });
+  cloud.startPolling();
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
@@ -356,7 +373,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o))]);
+  // agent_learn_propose also takes an agent's "Contesto massimo" (#80): an agent_update proposal for the user
+  const authoringRef: { current?: AgentAuthoring } = {};
+  const learnSetting: Parameters<typeof agentLearnTool>[1] = (agentId, patch, evidence, chatId) => {
+    if (!authoringRef.current) throw new Error('Agent proposals are not available yet.');
+    return authoringRef.current.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, chatId ?? 'agent');
+  };
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning, learnSetting), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -390,7 +413,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     probation: { catalog: agents, publish: events => brain.publish(events), propose: (agent, j) => loopRef.current?.probation(agent, j) },
     onRunStarted: run => loopRef.current?.started(run),
     onRunEnded: run => loopRef.current?.ended(run),
-    onRunOutcome: run => loopRef.current?.outcome(run),
+    onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
@@ -510,6 +533,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
+    sent: (fromId, toId, text) => manager.noteMail(fromId, toId, text), // a worker's report completes its assignment (ADR 0076)
   }));
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
@@ -529,7 +553,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   } catch { keptProblem = true; }
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : (brain.settings().autoCloseMin ?? 2) * 60_000,
-    candidates: () => manager.autoCloseCandidates(id => mail.hasWork(id) || asks.pending().some(p => p.chatId === id) || runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id)),
+    // what holds a chat open, named for its "In attesa di…" label (ADR 0076); an open tab alone no longer holds it (the
+    // archive closes its tabs): only a hand-off, a dialog or a page still loading
+    candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
+      : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
+      : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
+      : mail.hasWork(id) ? 'mail' : false),
     archive: async (id, _reservation, valid) => {
       const done = await manager.archiveAutomatic(id, valid);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
@@ -547,11 +576,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
+  // an agent run's verdict (the user's, a reviewed one, the Orchestrator's) is the known outcome of its chat's ledger
+  // line (issue #72, ADR 0078): the routing loop and the rows' reasons learn from the app's own results
+  function routingVerdict(run: AgentRun): void {
+    const outcome = knownOutcome(run), chat = manager.list().find(c => c.id === run.chatId);
+    if (!outcome || !chat?.route) return;
+    brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
+  }
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
     suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
     chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
+    onOutcome: run => routingVerdict(run),
   });
+  authoringRef.current = agentAuthoring;
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
   // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
   // works). One feedback store: the authoring store (agent-authoring.json) behind agent_feedback and agent_child_feedback;
@@ -575,7 +613,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get() }, source, false, regiaTokens);
+  // agent first (ADR 0078): an agent's route says how its active version has done so far
+  const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
+  const appDeps: Parameters<typeof attachAppTools>[1] = { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats };
+  attachAppTools(mcp, appDeps, source, false, regiaTokens);
+  // a worker starts a catalog agent as its own sub-agent, through its Orchestrator's app_create_chat (agents/subagent-tool.ts)
+  addChatTools(subagentTools({ chats: () => chats.list(), runs: () => manager.runs.list(),
+    create: async (regiaId, args) => {
+      const tool = appControlTools({ ...appDeps, unified: true, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, regiaId).find(t => t.name === 'app_create_chat')!;
+      return tool.run(args);
+    } }));
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -631,7 +678,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    cloud, chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -639,7 +686,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

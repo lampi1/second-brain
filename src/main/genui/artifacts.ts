@@ -14,6 +14,7 @@ import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, SUMMARY_MAX, TITLE_MAX, UI_COM
 import { regiaOfChat } from '../../shared/regia';
 import type { McpTool } from '../mcp/server';
 import { log, errText } from '../log';
+import { SCREENSHOT_HINT } from '../ask-image';
 
 export type Artifact = Extract<ChatItem, { kind: 'artifact' }>;
 /** how long a next-ask visual waits for the chat's question before it shows as a card in the chat */
@@ -232,6 +233,7 @@ export function showUiTool(store: Artifacts): McpTool {
       'barChart {unit?, bars: [{label, value, note?}]}',
       'status: ok|fail|blocked|running|todo|info|warn. href: an http(s) URL or an absolute local path.',
       'Inside an AskUserQuestion option\'s preview the same JSON {"component", "props", "title"?} goes in a ```sb-ui fence.',
+      SCREENSHOT_HINT,
     ].join('\n'),
     inputSchema: {
       type: 'object',

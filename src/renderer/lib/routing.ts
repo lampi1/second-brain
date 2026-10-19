@@ -66,7 +66,8 @@ export function routeLine(p: RoutePreview | null, engine: (h: Harness) => string
   const KIND_IT = getKindIt();
   const what = `${engine(p.harness)} · ${prettyModel(p.model, p.harness)}${p.effort ? ` · ${t('tools.routing.reasoning')} ${effortLabel(p.effort)}` : ''}`;
   const r = p.route, on = `${KIND_IT[r.kind]}${r.area && r.area !== 'altro' ? ` · ${r.area}` : ''}`;
-  const why = r.source === 'override' ? t('tools.routing.overrideSource')
+  const why = r.source === 'agent' ? `${t('tools.routing.agentSource')}${r.reason ? `: ${r.reason}` : ''}`
+    : r.source === 'override' ? t('tools.routing.overrideSource')
     : r.source === 'table' ? `${t('tools.routing.tableSource')} (${on})${r.reason ? `: ${r.reason}` : ''}`
       : r.source === 'explore' ? `${t('tools.routing.exploreSource')} (${on})`
         : `${t('tools.routing.defaultSource')} ${on}: ${t('tools.routing.defaultSourceEnd')}`;

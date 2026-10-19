@@ -379,6 +379,9 @@ export interface MailToolDeps {
   chainOf: (box: string) => { thread: string; hop: number } | null;
   /** the class of a mail to a Regia (the brain's words): the answer says when it arrives */
   classify?: () => MailClassifier;
+  /** a message went (sender id, the app chat it went to or null, its text): a worker's report to its Orchestrator
+   *  completes its assignment (ChatManager.noteMail, ADR 0076) */
+  sent?: (fromId: string, toId: string | null, text: string) => void;
 }
 
 /** A tool on each chat's own MCP endpoint (src/main/mcp/server.ts McpTool shape; the sender is the endpoint's chatId). */
@@ -421,6 +424,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';
         log.info('mail', 'chat sent mail', { chat: from.id, data: { to: msg.to, id: msg.id, hop: msg.hop } });
+        try { d.sent?.(from.id, target?.id ?? null, text); } catch (e) { log.warn('mail', 'report bookkeeping failed', { chat: from.id, cause: errText(e), hint: 'the mail went; the chat stays open until its Orchestrator completes it' }); }
         d.deliver();
         const live = target && LIVE.has(target.state);
         const gate = target && live && isRegiaChat(target) ? regiaGate(target, engineOf(target.harness)?.kind !== 'acp') : 'inject';

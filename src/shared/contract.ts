@@ -18,6 +18,8 @@ import type { ProgressState } from './progress';
 import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
+import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
@@ -50,6 +52,8 @@ export interface EngineCaps {
   preAllow: boolean;
   /** the engine works with tools (files, shell, MCP: the browser, the app's tools); false = text only (api) */
   tools: boolean;
+  /** the engine's cloud agents (ADR 0080; shared/cloud.ts CLOUD_CAPS): absent = none */
+  cloud?: CloudCaps;
 }
 /** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
 export interface EngineInfo {
@@ -159,6 +163,9 @@ export interface ChatSummary {
   /** its last turn's final answer says it waits for work still running (an agent, a QA run, a build: shared/waiting.ts):
    *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
   waitsOnWork?: boolean;
+  /** its last report or final answer says it waits for the user (or a decision from above) or for a colleague (another
+   *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0076) */
+  waitsOn?: 'user' | 'colleagues';
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
@@ -894,17 +901,24 @@ export interface RoutingTable {
 export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
 /** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
  *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
-/** How a chat's engine was chosen: table = its row; default = no row, the user's "Chat aperte dalla Regia"; override =
- *  the agent named something else, with a reason. */
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[];
+  /** per kind: the app's chats in the ledger, how many have a known outcome, how many succeeded (ADR 0078) */
+  kindStats?: Partial<Record<TaskKind, { chats: number; known: number; ok: number }>> }
+/** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
+ *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
+ *  "Chat aperte dalla Regia"; override = the agent named something else, with a reason. */
 export interface RouteDecision {
-  policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore';
+  policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore' | 'agent';
   reason: string | null; kind: TaskKind; area: string; at: number;
+  /** source agent: which agent, who picked it (the Orchestrator by agentId, the classifier, a worker for its sub-agent,
+   *  Generale as the fallback) and, when the classifier ranked it, its score against the threshold in force (ADR 0078) */
+  agent?: RouteAgent;
   /** a chat that continues a routed one ("Riprendi"): the ledger id of the first chat, so one job keeps one outcome */
   ledgerId?: string;
   /** how many hand-offs led to this chat */
   handoffs?: number;
 }
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'classifier' | 'parent' | 'fallback'; score?: number; threshold?: number; mode?: 'hybrid' | 'words'; modelFrom?: 'profile' | 'table' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
@@ -1341,6 +1355,20 @@ export interface InvokeMap {
   'pulse:runNow': [void, PulseResult];
   'approvals:list': [{ agentId?: string }, ApprovalItem[]];
   'approvals:decide': [ApprovalDecision, PulseResult];
+  /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
+  'cloud:list': [{ refresh?: boolean } | void, CloudState];
+  /** the user's click (or app_create_chat where:'cloud'): fails closed with the reason (not signed in, no GitHub remote…) */
+  'cloud:start': [CloudStartRequest, CloudAgent];
+  'cloud:followUp': [{ id: string; text: string }, CloudAgent];
+  'cloud:stop': [{ id: string }, CloudAgent];
+  /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
+  'cloud:apply': [{ id: string }, CloudApplyResult];
+  /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
+  'cloud:watch': [{ id: string | null }, void];
+  /** whether each engine can start a cloud agent from this folder now (key, sign-in, GitHub remote, pushed branch) */
+  'cloud:readiness': [{ cwd: string }, Record<string, { ok: boolean; why?: string }>];
+  /** forget a finished agent (the vendor keeps it) */
+  'cloud:dismiss': [{ id: string }, CloudState];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
@@ -1412,6 +1440,7 @@ export interface EventMap {
   'headline:changed': HeadlineState;
   'pulse:changed': void;
   'approvals:changed': void;
+  'cloud:changed': CloudState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1441,6 +1470,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
+  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'pulse:changed', 'approvals:changed',
@@ -1450,6 +1480,7 @@ export const EVENT_CHANNELS = [
   'agents:changed', 'agents:lifecycleChanged',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
+  'cloud:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

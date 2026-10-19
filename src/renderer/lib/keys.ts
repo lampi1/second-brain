@@ -13,7 +13,6 @@ export type Command =
   | { type: 'stopFocused' }
   | { type: 'closeFocused' }
   | { type: 'stopAll' }
-  | { type: 'toggleBrowsers' }
   | { type: 'maximize' }
   | { type: 'escape' }
   | { type: 'newChat' }
@@ -47,7 +46,6 @@ export const getKeymap = (): readonly { keys: string; what: string }[] => [
   { keys: t('tools.keys.stopChatKey'), what: t('tools.keys.stopChatWhat') },
   { keys: t('tools.keys.closeChatKey'), what: t('tools.keys.closeChatWhat') },
   { keys: t('tools.keys.stopAllKey'), what: t('tools.keys.stopAllWhat') },
-  { keys: t('tools.keys.toggleBrowsersKey'), what: t('tools.keys.toggleBrowsersWhat') },
   { keys: t('tools.keys.correctThoughtKey'), what: t('tools.keys.correctThoughtWhat') },
   { keys: t('tools.keys.maximizeKey'), what: t('tools.keys.maximizeWhat') },
   { keys: t('tools.keys.focusModeKey'), what: t('tools.keys.focusModeWhat') },
@@ -66,7 +64,6 @@ export function resolveShortcut(e: KeyLike): Command | null {
   }
   if (ctrl && e.shiftKey) {
     if (e.code === 'Period') return { type: 'stopAll' };
-    if (e.code === 'KeyB') return { type: 'toggleBrowsers' };
     if (e.code === 'KeyF') return { type: 'focusMode' };
     if (e.code === 'KeyN') return { type: 'center' };
     if (e.code === 'KeyM') return { type: 'map' };

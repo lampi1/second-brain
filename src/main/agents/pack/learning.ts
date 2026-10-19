@@ -62,10 +62,18 @@ export class AgentPackLearning {
   }
 }
 
-export function agentLearnTool(service: AgentPackLearning): McpTool {
-  return { name: 'agent_learn_propose', description: 'Propose one learned rule with evidence. Queues it on the agent card for Brother to approve, edit or discard; never applies it or interrupts the user.',
-    inputSchema: { type: 'object', properties: { agentId: { type: 'string' }, rule: { type: 'string' }, evidence: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
+/** The learned-rule tool. With `setting`, it also takes a "Contesto massimo" change (maxContext, issue #80): queued as an
+ *  agent_update proposal for the user (Agenti → Da approvare), never applied by itself. */
+export function agentLearnTool(service: AgentPackLearning, setting?: (agentId: string, patch: { maxContext: number | null }, evidence: string, callerChatId: string | undefined) => unknown): McpTool {
+  return { name: 'agent_learn_propose', description: `Propose one learned rule with evidence. Queues it on the agent card for Brother to approve, edit or discard; never applies it or interrupts the user.${setting ? ' To propose the agent\'s maximum context instead, pass maxContext (tokens, 100000-1000000, or null for the app setting) with evidence and no rule: it becomes a proposal in Agenti → Da approvare (only Claude engines apply it).' : ''}`,
+    inputSchema: { type: 'object', properties: { agentId: { type: 'string' }, rule: { type: 'string' }, evidence: { type: 'string' }, ...(setting ? { maxContext: { type: ['integer', 'null'], minimum: 100000, maximum: 1000000 } } : {}) }, required: setting ? ['agentId', 'evidence'] : ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    run: args => { if (Object.keys(args).some(k => !['agentId', 'rule', 'evidence'].includes(k)) || typeof args.agentId !== 'string' || typeof args.rule !== 'string' || typeof args.evidence !== 'string') throw new Error('Invalid learned-rule proposal'); return JSON.stringify(service.propose(args.agentId, args.rule, args.evidence)); } };
+    run: (args, ctx) => {
+      if (setting && args.maxContext !== undefined) {
+        if (Object.keys(args).some(k => !['agentId', 'evidence', 'maxContext'].includes(k)) || typeof args.agentId !== 'string' || typeof args.evidence !== 'string' || !(args.maxContext === null || Number.isSafeInteger(args.maxContext))) throw new Error('Invalid maximum-context proposal: agentId, evidence and maxContext (integer or null), no rule');
+        return Promise.resolve(setting(args.agentId, { maxContext: args.maxContext as number | null }, args.evidence, ctx?.params?.chatId)).then(r => JSON.stringify(r));
+      }
+      if (Object.keys(args).some(k => !['agentId', 'rule', 'evidence'].includes(k)) || typeof args.agentId !== 'string' || typeof args.rule !== 'string' || typeof args.evidence !== 'string') throw new Error('Invalid learned-rule proposal');
+      return JSON.stringify(service.propose(args.agentId, args.rule, args.evidence));
+    } };
 }
-

@@ -26,7 +26,6 @@ import { awaitingCard, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
-import { EffortControl } from './EffortControl';
 import { AgentIdentity } from './AgentIdentity';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
@@ -157,7 +156,6 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title regia-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
           <StatePill chat={chat} testid="regia-state" />
-          <EffortControl chat={chat} />
           <span className="sp" />
           <IconButton label={t('dialogs.regia.statusLabel')} shortcut={t('dialogs.regia.statusShortcut')} onClick={() => openModal('stato')} testid="regia-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.regia.stopLabel')} shortcut={t('dialogs.regia.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="regia-stop"><IconStop size={14} /></IconButton>}

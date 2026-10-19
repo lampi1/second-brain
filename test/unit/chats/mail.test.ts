@@ -26,10 +26,11 @@ function setup(list: ChatSummary[], send?: (id: string, text: string, from?: str
   const chats = { list: () => list, send: async (id: string, text: string, _i?: undefined, _r?: boolean, from?: string, liveOnly?: boolean) => { if (send) await send(id, text, from, liveOnly); sent.push({ id, text, ...(from ? { from } : {}) }); } };
   const mail = new ChatMail({ root: () => root, chats, instance: 'second-brain-dev' });
   mails.push(mail);
-  const tools = mailTools({ root: () => root, chats: () => list, crossRefusal: () => (cross.on ? null : 'bloccato'), agentsMayOpen: () => cross.regie, deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box) });
+  const reports: [string, string | null, string][] = [];
+  const tools = mailTools({ root: () => root, chats: () => list, crossRefusal: () => (cross.on ? null : 'bloccato'), agentsMayOpen: () => cross.regie, deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box), sent: (f, t, x) => { reports.push([f, t, x]); } });
   const cross = { on: true, regie: true };
   const call = (name: string, from: string, args: Record<string, unknown>) => tools.find(t => t.name === name)!.run(args, { params: { chatId: from } });
-  return { root, dir, sent, mail, call, cross };
+  return { root, dir, sent, mail, call, cross, reports };
 }
 
 describe('chat mail', () => {
@@ -358,5 +359,10 @@ describe('mail to an idle Regia', () => {
     clock.t += 2000;
     expect(await mail.tick()).toBe(1); // right after that turn, not 30 minutes after the send
     expect(sent).toHaveLength(1);
+  });
+  it('send_to_chat tells the manager who wrote to whom (a worker\'s report completes its assignment, ADR 0076)', () => {
+    const { call, reports } = setup([chat('w', 'Ricerca'), chat('o', 'Orchestrator', { isRegia: true })]);
+    call('send_to_chat', 'w', { to: 'Orchestrator', text: 'Report finale: fatto.' });
+    expect(reports).toEqual([['w', 'o', 'Report finale: fatto.']]);
   });
 });

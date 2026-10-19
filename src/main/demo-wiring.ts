@@ -24,6 +24,7 @@ import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
+import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
 import { SetupService } from './agents/setup';
@@ -56,6 +57,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => null, settings: brain });
   const agents = createAgentCatalog(ctx, brain, engines, () => null);
+  // fake cloud agents in the demo's areas (ADR 0080): no CLI, no network
+  const cloud = demoCloud({ emit: st => ctx.emitter.emit('cloud:changed', st), now });
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: new AgentRunStore(ctx.userData), items: id => chats.items(id), publish: events => brain.publish(events), suggestionSpend: () => 0, send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`) });
   const agentPacks = createAgentPacks(ctx.userData, brain, agents, true);
   const azureRun = demoDevopsRun(now);
@@ -100,7 +103,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const artifacts = attachArtifacts(ctx, chats, now);
   // The demo has no native collector observations. Empty evidence is explicit, never inferred from scripted chat text.
   brain.serveApi('/api/agents/analytics', () => aggregateAgentUsage([]));
-  attachAppTools(mcp, { agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  attachAppTools(mcp, { agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -159,7 +162,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, engines, later: createLater(ctx),
     agents, agentAuthoring, agentLifecycle, agentPacks,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

@@ -23,12 +23,12 @@ const text = (v: unknown, limit: number): string | null => {
 export function sanitizeChildObservation(raw: unknown): ChildObservation | null {
   const o = object(raw), key = identifier(o.key, 512), observedAt = stamp(o.observedAt);
   if (!key || observedAt === null || (o.source !== 'live' && o.source !== 'replay')) return null;
-  const startedAt = stamp(o.startedAt);
+  const startedAt = stamp(o.startedAt), agentType = identifier(o.agentType, 120);
   return {
     key, nativeId: identifier(o.nativeId, 300), toolCallId: identifier(o.toolCallId, 300), parentNativeId: identifier(o.parentNativeId, 300),
     kind: o.kind === 'agent' || o.kind === 'shell' ? o.kind : 'unknown',
     state: STATES.has(o.state as ChildState) ? o.state as ChildState : 'unknown',
-    task: text(o.task, 1200), observedAt, source: o.source,
+    task: text(o.task, 1200), ...(agentType !== null ? { agentType } : {}), observedAt, source: o.source,
     // a start time never later than the observation it comes with (a saved row from before it existed has none)
     ...(startedAt !== null ? { startedAt: Math.min(startedAt, observedAt) } : {}),
   };
@@ -73,6 +73,7 @@ export class AgentChildrenReducer {
         ...next, nativeId: next.nativeId ?? prev.nativeId, toolCallId: next.toolCallId ?? prev.toolCallId,
         parentNativeId: next.parentNativeId ?? prev.parentNativeId, kind: next.kind === 'unknown' ? prev.kind : next.kind,
         task: next.task ?? prev.task,
+        ...((next.agentType ?? prev.agentType) ? { agentType: next.agentType ?? prev.agentType } : {}),
         // the child started when the app first saw it: the earliest time any of its events carries
         startedAt: Math.min(prev.startedAt ?? prev.observedAt, next.startedAt ?? next.observedAt),
         ...(historical ? { state: prev.state, source: prev.source, observedAt: prev.observedAt } : {}),

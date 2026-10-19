@@ -49,7 +49,10 @@ import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { classifierRequest, classifyByWords } from './agents/classifier';
 import { ClassifierTuning } from './agents/classifier-calibration';
+import type { CloudService } from './cloud/service';
 
+/** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
+const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
 // userData (ADR 0007): a stable release (started by the launcher, SB_RELEASE set) uses %APPDATA%/second-brain; a build run
@@ -255,7 +258,12 @@ app.whenReady().then(async () => {
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': async a => { const before = s.chats.items(a.chatId).map(i => i.id); await s.chats.send(a.chatId, a.text, a.images); s.agentAuthoring?.rememberHumanMessage(a.chatId, a.text, before); s.chats.resumedByUser?.(a.chatId, a.text); },
-    'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
+    'chat:answer': a => {
+      // the user's own answer in a question panel may approve one agent creation (agent_create, issue #73)
+      const q = a.answer?.kind === 'question' ? s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId && r.type === 'question') : undefined;
+      if (q && a.answer.kind === 'question') s.agentAuthoring?.rememberHumanAnswer(a.chatId, a.requestId, q.questions?.map(x => x.question).join(' / ') || q.title, a.answer.answers);
+      return s.chats.answer(a.chatId, a.requestId, a.answer);
+    },
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
     'chat:close': a => s.chats.close(a.chatId),
@@ -287,6 +295,15 @@ app.whenReady().then(async () => {
     'secrets:delete': a => s.engines.deleteSecret(a.engine),
     'engines:trust': a => s.engines.trust(a.engine),
     'engines:spend': () => s.engines.apiSpend(),
+    // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
+    'cloud:list': a => cloudOf(s).list(a?.refresh === true),
+    'cloud:start': a => cloudOf(s).start(a, 'user'),
+    'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
+    'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
+    'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),
+    'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
+    'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
+    'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
     'settings:set': a => s.brain.setSettings(a),
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),

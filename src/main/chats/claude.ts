@@ -618,7 +618,7 @@ export class ClaudeSession implements HarnessSession {
     const raw = o(input);
     this.childTelemetry.observe({
       key: `claude:tool:${id}`, nativeId: null, toolCallId: id, parentNativeId: null,
-      kind: 'agent', state, task: s(raw.description) || s(raw.prompt) || null, observedAt: Date.now(), source: 'live',
+      kind: 'agent', state, task: s(raw.description) || s(raw.prompt) || null, agentType: s(raw.subagent_type) || null, observedAt: Date.now(), source: 'live',
     });
   }
 
