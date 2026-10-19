@@ -417,8 +417,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
             try {
               const c = await d.classifyAgents(`${title}\n\n${prompt}`.slice(0, 2000), catalog);
               for (const cand of c.candidates) {
-                if (cand.score < c.threshold) break;
-                const p = catalog.profiles.find(x => x.id === cand.id && x.status === 'active' && x.routable !== false && x.id !== GENERAL_AGENT_ID && x.id !== ORCHESTRATOR_AGENT_ID);
+                // Generale ranked first is a match of Generale: the fallback, not the next agent down
+                if (cand.score < c.threshold || cand.id === GENERAL_AGENT_ID) break;
+                const p = catalog.profiles.find(x => x.id === cand.id && x.status === 'active' && x.routable !== false && x.id !== ORCHESTRATOR_AGENT_ID);
                 const e = p && catalog.models.find(m => m.engine === p.engine);
                 if (!p || !e?.enabled || !e.trusted || openRefusal(s, from, p.engine)) continue;
                 selected = p; chosenBy = 'classifier'; scored = { score: cand.score, threshold: c.threshold, mode: c.mode };

@@ -61,6 +61,15 @@ describe('app_create_chat without agentId (#70)', () => {
     expect(create.mock.calls[0]?.[0].route).toMatchObject({ source: 'default', agent: { id: 'default-general', chosenBy: 'fallback', score: 10, threshold: 20 } });
   });
 
+  it('keeps Generale when Generale itself ranks first above the threshold', async () => {
+    const catalog = new AgentCatalogService({ userData: tmp(), models });
+    const fixer = catalog.save(draft());
+    const { create, tool } = appTools(catalog, () => ({ candidates: [{ id: 'default-general', score: 50, why: { field: 'purpose' } }, { id: fixer.id, score: 40, why: { field: 'name' } }], mode: 'words', threshold: 20, noneCloseEnough: false, proposal: null }));
+    await tool.run({ title: 'Varie · Organizza', prompt: 'Organizza il lavoro' });
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('agentId');
+    expect(create.mock.calls[0]?.[0].route).toMatchObject({ agent: { id: 'default-general', chosenBy: 'fallback', score: 50 } });
+  });
+
   it('skips the classifier when the caller names the engine or model', async () => {
     const catalog = new AgentCatalogService({ userData: tmp(), models });
     const classify = vi.fn(() => ({ candidates: [], mode: 'words' as const, threshold: 20, noneCloseEnough: true, proposal: null }));
