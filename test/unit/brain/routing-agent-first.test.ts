@@ -103,5 +103,6 @@ describe('verdicts in the ledger (#72)', () => {
     again.observe(measured(1.2));
     expect(again.kindStats('bug-fix')).toEqual({ chats: 1, known: 1, ok: 1 });
     expect(again.kindStats('writing')).toEqual({ chats: 1, known: 0, ok: 0 });
+    expect(again.info().kindStats).toEqual({ 'bug-fix': { chats: 1, known: 1, ok: 1 }, writing: { chats: 1, known: 0, ok: 0 } });
   });
 });

@@ -922,7 +922,9 @@ export interface RoutingTable {
 export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
 /** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
  *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[];
+  /** per kind: the app's chats in the ledger, how many have a known outcome, how many succeeded (ADR 0078) */
+  kindStats?: Partial<Record<TaskKind, { chats: number; known: number; ok: number }>> }
 /** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
  *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
  *  "Chat aperte dalla Regia"; override = the agent named something else, with a reason. */

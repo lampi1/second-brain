@@ -513,7 +513,7 @@ export class Routing {
     const t = this.stored();
     const broken = t ? checkTable(t.routes, reg) : [];
     return { table: t, registry: reg, kinds: TASK_KINDS, error: !this.root() ? 'nessun cervello collegato' : !reg ? 'il cervello non ha harness/models.json'
-      : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history() };
+      : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history(), kindStats: this.allKindStats() };
   }
 
   /** The table's last changes (audit.jsonl, domain routing), newest first: who, when, why, with what data. */
@@ -672,23 +672,30 @@ export class Routing {
 
   /** One task kind in the ledger (issue #72): the app's chats predicted for it, how many have a known outcome (any
    *  source: an agent run's verdict, the brain's settlement or judge), how many of those succeeded. Later line wins. */
-  kindStats(kind: TaskKind): KindStats {
+  kindStats(kind: TaskKind): KindStats { return this.allKindStats()[kind] ?? { chats: 0, known: 0, ok: 0 }; }
+
+  /** kindStats for every kind in one pass (RoutingInfo.kindStats: the outcomes behind each row, ADR 0078). */
+  allKindStats(): Partial<Record<TaskKind, KindStats>> {
     const d = this.dir();
-    if (!d) return { chats: 0, known: 0, ok: 0 };
+    if (!d) return {};
     let text: string;
-    try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { return { chats: 0, known: 0, ok: 0 }; }
-    const ids = new Set<string>(), result = new Map<string, boolean>();
+    try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { return {}; }
+    const kindOf = new Map<string, TaskKind>(), result = new Map<string, boolean>();
     for (const line of text.split('\n')) {
       if (!line.includes('"routing"')) continue;
       try {
         const j = JSON.parse(line) as Partial<RoutingPrediction> & Partial<RoutingActual> & { outcome?: { known?: unknown; success?: unknown } };
         if (j.domain !== 'routing' || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
-        if (j.predicted && j.item?.kind === kind) ids.add(j.id);
+        if (j.predicted && j.item && (TASK_KINDS as readonly string[]).includes(j.item.kind)) kindOf.set(j.id, j.item.kind);
         if (j.outcome) { if (j.outcome.known === true && typeof j.outcome.success === 'boolean') result.set(j.id, j.outcome.success); else if (j.outcome.known === false) result.delete(j.id); }
       } catch { /* a torn line */ }
     }
-    let known = 0, ok = 0;
-    for (const id of ids) if (result.has(id)) { known++; if (result.get(id)) ok++; }
-    return { chats: ids.size, known, ok };
+    const out: Partial<Record<TaskKind, KindStats>> = {};
+    for (const [id, kind] of kindOf) {
+      const s = out[kind] ??= { chats: 0, known: 0, ok: 0 };
+      s.chats++;
+      if (result.has(id)) { s.known++; if (result.get(id)) s.ok++; }
+    }
+    return out;
   }
 }
