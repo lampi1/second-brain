@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions } from '../../../src/main/chats/session';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 
 const dirs: string[] = [], managers: ChatManager[] = [];
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-maxctx-')); dirs.push(d); return d; };
@@ -14,7 +14,7 @@ afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(50)
 
 function manager(userData: string, seen: SessionOptions[]) {
   const m = new ChatManager({ userData, emitter: { emit: () => {} }, compactWindowTokens: () => 200_000,
-    resolveAgent: req => ({ request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null, ...(req.title === 'Lungo' ? { maxContext: 500_000 } : {}) }),
+    resolveAgent: req => ({ request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null, skills: [], launches: [], ...(req.title === 'Lungo' ? { maxContext: 500_000 } : {}) }),
     sessionFactory: (harness, options, sink): HarnessSession => { seen.push(options); return { harness, state: 'idle', sessionId: options.sessionId ?? null, pid: null, root: null, busy: false, alive: true,
       start: () => { sink.changed({ state: 'idle' }); }, send: () => {}, answer: () => false, interrupt: async () => {}, setModel: async () => {}, setPermissionMode: async () => {}, setEffort: async () => {},
       rename: async () => {}, contextUsage: async () => null, usage: async () => null, close: async () => {}, killNow: () => {} }; } });

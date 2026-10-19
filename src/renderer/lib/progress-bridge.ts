@@ -1,7 +1,7 @@
 // Main owns milestones. This bridge suppresses initial/replayed feedback and stale async reads.
 import type {AchievementId,ProgressState} from '@shared/progress';
 export const MILESTONE_LABELS:Record<AchievementId,string>={
-  'first-agent':'Primo agente personalizzato','setup-complete':'Spazio di lavoro configurato','first-result':'Primo risultato confermato',
+  'first-agent':'Primo ruolo personalizzato','setup-complete':'Spazio di lavoro configurato','first-result':'Primo risultato confermato',
 };
 interface Bridge {
   get():Promise<ProgressState>;

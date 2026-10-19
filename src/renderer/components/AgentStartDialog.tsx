@@ -1,39 +1,39 @@
-// Starts a conversation owned by an explicit catalog agent. Engine/model come from that profile in main, with
-// technical permissions kept progressive and no per-task routing matrix in the ordinary work flow. "Dove: Locale /
-// Cloud" (CloudWhere.tsx, ADR 0080): Cloud starts the task as an agent in a vendor's cloud (Cursor, Codex, Claude Code).
+// "Nuovo agente" (Ctrl+N): starts a chat as one of the eight work roles, or the Orchestrator. The role decides engine and
+// model in main (its tier's model on its engine); the dialog shows the brain skills that fit the task (skills_suggest,
+// advisory) and the ones ticked go to the launch, so the role may use them besides its own. "Dove: Locale / Cloud"
+// (CloudWhere.tsx, ADR 0080): Cloud starts the task as an agent in a vendor's cloud (Cursor, Codex, Claude Code).
 import { useEffect, useRef, useState } from 'react';
 import { createChat, useApp } from '../store/store';
 import { useAgents } from '../store/agents';
-import { BRAIN_PAGES, closeModal, openModal, setPrefs, ui } from '../store/ui';
+import { closeModal, openModal, setPrefs, ui } from '../store/ui';
 import { focusChat, go } from '../actions';
 import { workBrief } from '@shared/work-brief';
-import { ORCHESTRATOR_AGENT_ID } from '@shared/agents';
+import { ORCHESTRATOR_ROLE_ID, type WorkRoleId } from '@shared/roles';
+import type { SkillSuggestions } from '@shared/skill-suggest';
 import { engineCan } from '../lib/engines';
 import { PERMISSION_MODES, permissionLabel } from '../lib/format';
 import type { PermissionMode } from '@shared/contract';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { Keys, Modal } from './ui';
-import {roleAgents,profileCanStart} from '../lib/role-consumers';
-import {t} from '../i18n';
+import { workRoles, profileCanStart } from '../lib/role-consumers';
+import { t } from '../i18n';
 import { Select } from './Select';
-import type { AgentClassification } from '@shared/agent-classifier';
 import type { CloudEngine } from '@shared/contract';
 import { CloudWhere, type Where } from './CloudWhere';
 import { startCloud } from '../store/cloud';
 import { toast } from '../store/ui';
 import { engineLabel } from '../lib/engines';
 
+/** The skills a fresh suggestion ticks: the ones that fit well (the user can untick them). */
+const PRESELECT = 60;
+
 export function AgentStartDialog() {
-  const { catalog, setup, error: catalogError } = useAgents();
+  const { catalog, error: catalogError } = useAgents();
   const info = useApp(s => s.info);
   const hasOrchestrator = useApp(s => s.order.some(x => { const c = s.chats[x]; return !!c?.isOrchestrator && !c.closedAt; }));
   const prefs = ui.use(s => s.prefs.newChat);
-  const role=ui.use(s=>s.prefs.role);
-  // The coordinator preset only shapes the Orchestrator chat: main refuses it as a work chat's agent.
-  const startable=(p:{id:string})=>p.id!==ORCHESTRATOR_AGENT_ID;
-  const suggested=(role===undefined?[]:roleAgents(role,catalog,BRAIN_PAGES.map(page=>page.id))).filter(startable);
-  const [chosen, choose] = useState<string|null>(null), [prompt, setPrompt] = useState(''), [context, setContext] = useState(''), [outcome, setOutcome] = useState('');
+  const [chosen, choose] = useState<WorkRoleId | null>(null), [prompt, setPrompt] = useState(''), [context, setContext] = useState(''), [outcome, setOutcome] = useState('');
   const [title, setTitle] = useState('');
   const [orchestrator, setOrchestrator] = useState(!hasOrchestrator), [worktree, setWorktree] = useState(false);
   const [cwd, setCwd] = useState(info?.brainRoot || prefs.cwd || '');
@@ -41,28 +41,33 @@ export function AgentStartDialog() {
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
   const [where, setWhere] = useState<Where>('local'), [cloudEngine, setCloudEngine] = useState<CloudEngine | null>(null), [cloudEnv, setCloudEnv] = useState('');
   const cloud = where === 'cloud' && !orchestrator;
-  const [matching, setMatching] = useState<{ request: string; result: AgentClassification } | null>(null);
-  // the task field alone: context and expected result describe the case, not which agent fits it, and dilute the match
+  const [suggested, setSuggested] = useState<{ request: string; result: SkillSuggestions } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // the task field alone: context and expected result describe the case, and dilute the match
   const request = prompt.trim().slice(0, 2000);
-  const ranking = matching?.request === request ? matching.result : null;
+  const ranking = suggested?.request === request ? suggested.result : null;
   useEffect(() => {
     let stale = false;
     if (!request || orchestrator) return;
     const timer = setTimeout(() => {
-      void window.sb.invoke('agents:classify', { request }).then(result => {
-        if (!stale) setMatching({ request, result });
-      }).catch(() => { if (!stale) setMatching(null); });
+      void window.sb.invoke('skills:suggest', { request }).then(result => {
+        if (stale) return;
+        setSuggested({ request, result });
+        setPicked(new Set(result.candidates.filter(c => c.score >= PRESELECT).map(c => c.name)));
+      }).catch(() => { if (!stale) setSuggested(null); });
     }, 400);
     return () => { stale = true; clearTimeout(timer); };
-  }, [request, orchestrator, catalog]);
+  }, [request, orchestrator]);
   const creating = useRef(false);
   const live = useRef(true);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
-  const preferred = setup?.preferences.agentIds ?? [];
-  const profiles = (catalog?.profiles ?? []).filter(startable);
-  const profile = chosen===null?(suggested[0]??profiles.find(p => preferred.includes(p.id))??profiles[0]):profiles.find(p=>p.id===chosen);
+  const roles = workRoles(catalog);
+  const lead = catalog?.profiles.find(p => p.id === ORCHESTRATOR_ROLE_ID);
+  const role = roles.find(p => p.id === (chosen ?? 'artisan')) ?? roles[0];
+  const profile = orchestrator ? lead : role;
   const choice = catalog?.models.find(e => e.engine === profile?.engine);
-  const unavailable = !profileCanStart(profile,choice) || !!catalog?.problem;
+  const unavailable = !profileCanStart(profile, choice) || !!catalog?.problem;
+  const skills = (ranking?.candidates ?? []).filter(c => !role?.skills.includes(c.name));
   const createCloud = async () => {
     const folder = cwd.trim() || info?.brainRoot || '';
     if (creating.current) return;
@@ -85,9 +90,9 @@ export function AgentStartDialog() {
     if (!orchestrator && !prompt.trim()) { setProblem(t('start.needTask')); return; }
     creating.current = true; setBusy(true); setProblem(null);
     try {
-      const chat = await createChat({ agentId: profile.id, harness: profile.engine, cwd: folder,
+      const given = [...picked].filter(name => skills.some(c => c.name === name)).slice(0, 16);
+      const chat = await createChat({ ...(orchestrator ? { orchestrator: true } : { roleId: profile.id, ...(given.length ? { skills: given } : {}) }), harness: profile.engine, cwd: folder,
         title: title.trim() || undefined, prompt: workBrief({ path: 'general', request: prompt, context, outcome }) || undefined,
-        ...(orchestrator && !hasOrchestrator ? { orchestrator: true } : {}),
         ...(engineCan(profile.engine, 'permissionMode') && permissionMode ? { permissionMode } : {}),
         ...(engineCan(profile.engine, 'worktree') && worktree ? { worktree: true } : {}),
       });
@@ -99,20 +104,19 @@ export function AgentStartDialog() {
     <form onSubmit={e => { e.preventDefault(); void create(); }} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (!e.repeat) void create(); } }}>
       <div className="modal-head"><h2>{t('start.agentTitle')}</h2><span className="sp" /><Keys combo={t('start.shortcut')} /></div>
       <div className="modal-body">
-        <label className="field"><span>{t('roleFlow.agent')}</span><Select value={chosen??profile?.id??''} onChange={e => choose(e.target.value)} disabled={busy} data-testid="newchat-agent">
-          {chosen&&!profile&&<option value={chosen}>{t('roleFlow.unavailable')}</option>}
-          {suggested.length>0&&<optgroup label={t('roleFlow.suggested')}>{suggested.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
-          <optgroup label={t('roleFlow.catalog')}>{profiles.filter(p=>!suggested.some(item=>item.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
-        </Select></label>
-        {!orchestrator && ranking && <p role="status" data-testid="agent-classification">
-          {ranking.noneCloseEnough ? t('start.matchNone') : t('start.matchSuggestion', { name: profiles.find(p => p.id === ranking.candidates[0]?.id)?.name ?? '', score: ranking.candidates[0]?.score ?? 0, high: (ranking.candidates[0]?.score ?? 0) >= 80 })}
-          {' '}{t(ranking.mode === 'words' ? 'start.matchWords' : 'start.matchLocal')}
-          {!ranking.noneCloseEnough && <button type="button" className="link-btn" disabled={busy} onClick={() => choose(ranking.candidates[0]!.id)}>{t('start.matchChoose')}</button>}
-        </p>}
-        {unavailable&&<p role="status">{t('roleFlow.unavailable')}</p>}
-        {profile && <div className="agent-start-owner"><AgentAvatar avatar={profile.avatar} name={profile.name} /><p>{profile.purpose}</p></div>}
+        {!orchestrator && <fieldset className="role-pick" data-testid="newchat-role"><legend>{t('roleFlow.agent')}</legend>
+          <div className="role-pick-grid">{roles.map(p => <button key={p.id} type="button" className="role-pick-item" aria-pressed={p.id === role?.id} disabled={busy} onClick={() => choose(p.id as WorkRoleId)} data-testid={`newchat-role-${p.id}`}>
+            <AgentAvatar avatar={p.avatar} name={p.name} size={28} /><span>{p.name}</span></button>)}</div></fieldset>}
+        {unavailable && <p role="status">{t('roleFlow.unavailable')}</p>}
+        {profile && <div className="agent-start-owner"><AgentAvatar avatar={profile.avatar} name={profile.name} size={40} /><p><strong>{profile.name}</strong> · {profile.purpose}</p></div>}
         <button type="button" className="link-btn" onClick={() => { closeModal(); go({ page: 'agenti' }); }}>{t('start.editAgent')}</button>
         <label className="field"><span>{t(orchestrator?'start.firstMessage':'start.task')}</span><textarea rows={4} value={prompt} onChange={e => setPrompt(e.target.value)} autoFocus data-testid="newchat-prompt" placeholder={t('start.promptHint')} /></label>
+        {!orchestrator && !cloud && ranking && <fieldset className="role-skills" data-testid="newchat-skills"><legend>{t('start.skillsSuggested')}</legend>
+          {skills.length ? skills.map(c => <label key={c.name} className="check"><input type="checkbox" checked={picked.has(c.name)} disabled={busy}
+            onChange={e => setPicked(prev => { const next = new Set(prev); if (e.target.checked) next.add(c.name); else next.delete(c.name); return next; })} data-testid={`newchat-skill-${c.name}`} /><span>{c.name} <small>{c.score}/100</small></span></label>)
+            : <p>{t('start.skillsNone')}</p>}
+          {role && role.skills.length > 0 && <small>{t('start.roleSkills', { list: role.skills.join(', ') })}</small>}
+          <small>{t('start.skillsHint')}{ranking.mode === 'words' ? ` ${t('start.skillsWords')}` : ''}</small></fieldset>}
         <details className="advanced" data-testid="newchat-work-context"><summary>{t('start.contextTitle')}</summary><label className="field"><span>{t('start.context')}</span><textarea rows={2} value={context} onChange={e => setContext(e.target.value)} data-testid="newchat-context" /></label><label className="field"><span>{t('start.outcome')}</span><input value={outcome} onChange={e => setOutcome(e.target.value)} data-testid="newchat-outcome" /></label></details>
         {!orchestrator && <CloudWhere cwd={cwd.trim() || info?.brainRoot || ''} where={where} onWhere={w => { setWhere(w); setProblem(null); }} engine={cloudEngine} onEngine={setCloudEngine} env={cloudEnv} onEnv={setCloudEnv} />}
         {!cloud && <AgentReadiness choice={choice} />}

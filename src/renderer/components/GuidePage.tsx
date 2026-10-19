@@ -3,49 +3,22 @@
 // («Come funziona») opens a reading panel that slides in over the grid with the numbered points, the diagram, an
 // everyday analogy, the technical details with the source files, what is in an open pull request («in arrivo») and what
 // is still a target. Esc, the close button or a click outside closes it and gives the focus back to the card.
-// «Discutine» opens a chat about it with the card as a draft (lib/concept-discuss.ts: an explainer agent's own chat,
-// else the Orchestrator). The prominent card («Ogni compito passa da un agente») sits on top as a wide hero with its
+// «Discuti» puts the card, as a ready message, in the Orchestrator's input: it never opens a work chat. The prominent
+// card («Ogni compito passa da un ruolo») sits on top as a wide hero with its
 // diagram always visible. A filter narrows the cards by any text of theirs. Mounted by App.tsx PageFrame for the page
 // 'guida' (left rail, Ctrl+K, G E). Hooks in GuidePage and Card stay useId/useMemo/useState: the unit test
 // test/unit/concept-discuss-click.test.ts renders them without a DOM.
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CONCEPTS, orchestratorText, textOf, type ConceptCard, type ConceptDiagram, type GuideLang } from '@shared/concept-guide';
 import { lang, t } from '../i18n';
-import { planDiscuss } from '../lib/concept-discuss';
-import { agents, useAgents } from '../store/agents';
-import { app, createChat } from '../store/store';
-import { toast, ui } from '../store/ui';
-import { brainBridge, focusChat } from '../actions';
-import { setDraft } from './ChatInput';
+import { toast } from '../store/ui';
+import { brainBridge } from '../actions';
 import { IconChevronRight } from './Icons';
 import '../styles/guide.css';
 
-/** «Discutine»: an explainer agent's new chat with the card in its input, else a draft in the Orchestrator. */
-const discussing = new Set<string>();
-async function discuss(card: ConceptCard, l: GuideLang): Promise<void> {
-  if (discussing.has(card.id)) return;
-  discussing.add(card.id);
-  try {
-    await startDiscussion(card, l);
-  } finally {
-    discussing.delete(card.id);
-  }
-}
-
-async function startDiscussion(card: ConceptCard, l: GuideLang): Promise<void> {
-  const cwd = app.get().info?.brainRoot || ui.get().prefs.newChat.cwd || null;
-  const plan = planDiscuss(card, l, agents.get().catalog, cwd);
-  if (plan.via === 'agent') {
-    const chat = await createChat({ agentId: plan.agentId, harness: plan.harness, cwd: plan.cwd, title: plan.title, prompt: '' });
-    if (chat) {
-      setDraft(chat.id, plan.draft);
-      focusChat(chat.id);
-      toast(t('guide.toAgent', { name: plan.agentName }), 'ok');
-      return;
-    } // not created (told by createChat): the Orchestrator still can take it
-  }
-  const draft = plan.via === 'orchestrator' ? plan.draft : orchestratorText(card, l);
-  if (brainBridge.draftToOrchestrator(draft, () => {})) toast(t('guide.toOrchestrator'), 'ok');
+/** «Discuti»: the card goes to the Orchestrator's input as a ready message; no work chat is opened. */
+function discuss(card: ConceptCard, l: GuideLang): void {
+  if (brainBridge.draftToOrchestrator(orchestratorText(card, l), () => {})) toast(t('guide.toOrchestrator'), 'ok');
   else toast(t('guide.noOrchestrator'), 'warn');
 }
 
@@ -109,16 +82,9 @@ function Badges({ card }: { card: ConceptCard }) {
 }
 
 function DiscussButton({ card, l, compact }: { card: ConceptCard; l: GuideLang; compact?: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const onDiscuss = async () => {
-    if (discussing.has(card.id)) return;
-    setBusy(true);
-    try { await discuss(card, l); }
-    finally { setBusy(false); }
-  };
   const title = textOf(card.title, l);
   return (
-    <button type="button" className={`btn btn-ghost btn-s guide-discuss${compact ? ' guide-discuss-compact' : ''}`} disabled={busy} onClick={() => void onDiscuss()}
+    <button type="button" className={`btn btn-ghost btn-s guide-discuss${compact ? ' guide-discuss-compact' : ''}`} onClick={() => discuss(card, l)}
       data-testid={compact ? `guide-panel-discuss-${card.id}` : `guide-discuss-${card.id}`} data-tip={t('guide.discussTip')} aria-label={`${t('guide.discuss')}: ${title}`}>
       <span aria-hidden="true">↗</span> {t('guide.discuss')}
     </button>
@@ -229,7 +195,6 @@ function refocus(id: string): void {
 }
 
 export function GuidePage() {
-  useAgents(); // the catalog, for «Discutine» to find an explainer agent
   const l: GuideLang = lang();
   const panel = useId();
   const [q, setQ] = useState('');

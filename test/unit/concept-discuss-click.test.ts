@@ -1,10 +1,10 @@
-// Exercise the actual GuidePage click handler without a DOM: duplicate clicks must not spend two agent runs,
-// and completion or a failed creation must release the guard so the user can try again.
-import { expect, it, vi } from 'vitest';
+// Exercise the actual GuidePage «Discuti» click handler without a DOM: the card goes to the Orchestrator's input as a
+// ready message and no work chat is ever created; without an Orchestrator the user is told how to start one.
+import { beforeEach, expect, it, vi } from 'vitest';
 import type * as React from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
-const { createChat, setDraft, fallback } = vi.hoisted(() => ({ createChat: vi.fn(), setDraft: vi.fn(), fallback: vi.fn(() => true) }));
+const { createChat, toast, draft } = vi.hoisted(() => ({ createChat: vi.fn(), toast: vi.fn(), draft: vi.fn((_text: string, _sent: () => void) => true) }));
 vi.mock('react', async importOriginal => ({
   ...await importOriginal<typeof React>(),
   useId: () => 'id',
@@ -14,18 +14,9 @@ vi.mock('react', async importOriginal => ({
 vi.mock('../../src/renderer/styles/guide.css', () => ({}));
 vi.mock('../../src/renderer/i18n', () => ({ lang: () => 'it', t: (k: string) => k }));
 vi.mock('../../src/renderer/components/Icons', () => ({ IconChevronDown: () => null, IconChevronRight: () => null }));
-vi.mock('../../src/renderer/components/ChatInput', () => ({ setDraft }));
-vi.mock('../../src/renderer/actions', () => ({ brainBridge: { draftToOrchestrator: fallback }, focusChat: vi.fn(), orchestratorId: () => null }));
-vi.mock('../../src/renderer/store/ui', () => ({ toast: vi.fn(), ui: { get: () => ({ prefs: { newChat: { cwd: null } } }) } }));
-vi.mock('../../src/renderer/store/store', () => ({ app: { get: () => ({ info: { brainRoot: '/brain' } }) }, createChat }));
-vi.mock('../../src/renderer/store/agents', () => ({
-  useAgents: () => ({}),
-  agents: { get: () => ({ catalog: {
-    profiles: [{ id: 'explainer', name: 'Explainer', purpose: 'p', instructions: '', engine: 'claude', model: null, status: 'active' }],
-    archived: [], problem: null,
-    models: [{ engine: 'claude', enabled: true, trusted: true, installed: true, authenticated: true, defaultModel: true, modelSelectable: true, effort: true, models: [] }],
-  } }) },
-}));
+vi.mock('../../src/renderer/actions', () => ({ brainBridge: { draftToOrchestrator: draft } }));
+vi.mock('../../src/renderer/store/ui', () => ({ toast }));
+vi.mock('../../src/renderer/store/store', () => ({ createChat }));
 
 function walk(node: ReactNode, out: ReactElement<Record<string, unknown>>[] = []): ReactElement<Record<string, unknown>>[] {
   if (node === null || node === undefined || typeof node === 'boolean' || typeof node === 'string' || typeof node === 'number') return out;
@@ -36,25 +27,24 @@ function walk(node: ReactNode, out: ReactElement<Record<string, unknown>>[] = []
   walk(el.props?.children as ReactNode, out);
   return out;
 }
-
-it('creates one chat across rapid clicks and remounts, then permits another deliberate discussion', async () => {
-  let finish!: (chat: { id: string } | null) => void;
-  createChat.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+const click = async () => {
   const { GuidePage } = await import('../../src/renderer/components/GuidePage');
-  const click = () => {
-    const button = walk(GuidePage()).find(e => e.props['data-testid'] === 'guide-discuss-every-task-agent')!;
-    (button.props.onClick as () => void)();
-  };
-  click(); click();
-  expect(createChat).toHaveBeenCalledTimes(1);
-  finish({ id: 'new-chat' });
-  await vi.waitFor(() => expect(setDraft).toHaveBeenCalledTimes(1));
-  click(); click();
-  expect(createChat).toHaveBeenCalledTimes(2);
-  finish(null);
-  await vi.waitFor(() => expect(fallback).toHaveBeenCalledTimes(1));
-  click();
-  expect(createChat).toHaveBeenCalledTimes(3);
-  finish({ id: 'retry-chat' });
-  await vi.waitFor(() => expect(setDraft).toHaveBeenCalledTimes(2));
+  const button = walk(GuidePage()).find(e => e.props['data-testid'] === 'guide-discuss-every-task-agent')!;
+  (button.props.onClick as () => void)();
+};
+beforeEach(() => { createChat.mockReset(); toast.mockReset(); draft.mockClear(); });
+
+it('puts the card in the Orchestrator input and creates no work chat', async () => {
+  await click();
+  expect(draft).toHaveBeenCalledTimes(1);
+  expect(draft.mock.calls[0]![0]).toContain('Ogni compito passa da un ruolo');
+  expect(toast).toHaveBeenCalledWith('guide.toOrchestrator', 'ok');
+  expect(createChat).not.toHaveBeenCalled();
+});
+
+it('says how to start the Orchestrator when none is open', async () => {
+  draft.mockReturnValueOnce(false);
+  await click();
+  expect(toast).toHaveBeenCalledWith('guide.noOrchestrator', 'warn');
+  expect(createChat).not.toHaveBeenCalled();
 });

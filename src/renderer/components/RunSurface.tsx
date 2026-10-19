@@ -1,7 +1,6 @@
 // Home run provenance and explicit human verdicts; main remains authoritative for the run lifecycle.
 import { useRef, useState } from 'react';
 import type { AgentRun } from '@shared/agents';
-import { inProbation } from '@shared/agents';
 import { useAgents } from '../store/agents';
 import { sb } from '../sb';
 import { t } from '../i18n';
@@ -9,11 +8,11 @@ import '../styles/run-surface.css';
 
 export function RunChips({ run }: { run: AgentRun }) {
   const { catalog } = useAgents();
-  const profile = [...catalog?.profiles ?? [], ...catalog?.archived ?? []].find(p => p.id === run.agentId);
+  const profile = catalog?.profiles.find(p => p.id === run.agentId);
   return <span className="run-chips" data-testid="run-chips">
-    <span className="th-badge" title={run.version === 0 ? t('runs.legacy') : t('runs.version')}>v{run.version}</span>
+    <span className="th-badge" title={t('runs.version')}>v{run.version}</span>
     {run.startedBy === 'orchestrator' && <span className="th-badge" title={t('runs.auto')}>auto</span>}
-    {profile && inProbation(profile) && <span className="th-badge">{t('catalog.probation')}</span>}
+    {profile?.trial?.version === run.version && <span className="th-badge">{t('pack.trial')}</span>}
   </span>;
 }
 

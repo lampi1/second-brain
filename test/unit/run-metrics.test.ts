@@ -22,8 +22,8 @@ describe('agent metrics', () => {
       run(outcome('success', 'human')), run(outcome('partial', 'reviewed-evidence')), run(outcome('fail', 'human')),
       run(outcome('success', 'orchestrator-opinion')), run(outcome('unknown', 'human')),
       run({ ...outcome('fail', 'self-report') }),
-      run({ report: { ok: true, at: 1, outcome: 'partial', verified: 'yes', summary: 's' } }),
-      run({ report: { ok: false, at: 1 } }),
+      run({ report: { at: 1, outcome: 'partial', verified: 'yes', summary: 's' } }),
+      run(),
     ]).versions[0]!;
     expect(m.ended).toBe(8);
     expect(m.successRate).toEqual({ value: 0.5, n: 3, coverage: 3 / 8 });
@@ -73,17 +73,16 @@ describe('agent metrics', () => {
     expect(m).toMatchObject({ agentId: 'coder', open: 1, versions: [], all: null });
   });
 
-  it('v0 has its own legacy row but never enters the all-versions row', () => {
-    const m = one([run({ version: 0, ...outcome('fail', 'human') }), run({ version: 1, ...outcome('success', 'human') }), run({ version: 2, ...outcome('partial', 'human') })]);
-    expect(m.versions.map(v => [v.version, v.legacy])).toEqual([[0, true], [1, false], [2, false]]);
+  it('every version has its own row and the all-versions row adds them up', () => {
+    const m = one([run({ version: 1, ...outcome('success', 'human') }), run({ version: 2, ...outcome('partial', 'human') })]);
+    expect(m.versions.map(v => v.version)).toEqual([1, 2]);
     expect(m.all).toMatchObject({ version: null, ended: 2, successRate: { value: 0.75, n: 2, coverage: 1 } });
-    expect(one([run({ version: 0 })]).all).toBeNull();
   });
 
   it('reviewer findings: per reviewer version, the first parsed review of each run', () => {
     const target = run();
     const review = (version: number, at: number, findings?: number, blocking?: number) => run({ agentId: 'reviewer', version, reviewOf: target.runId,
-      report: { ok: true, at, outcome: 'done', verified: 'yes', summary: 's', ...(findings !== undefined ? { findings } : {}), ...(blocking !== undefined ? { blocking } : {}) } });
+      report: { at, outcome: 'done', verified: 'yes', summary: 's', ...(findings !== undefined ? { findings } : {}), ...(blocking !== undefined ? { blocking } : {}) } });
     const m = runMetrics([target, review(1, 20, 9, 9), review(1, 10, 4, 1), review(2, 5, 2), review(3, 5)]).find(x => x.agentId === 'coder')!.versions[0]!;
     expect(m.reviews).toEqual([
       { reviewer: { agentId: 'reviewer', version: 1 }, runs: 1, findingsPerRun: 4, blockingPerRun: { value: 1, n: 1, coverage: 1 } },

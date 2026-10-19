@@ -1,12 +1,9 @@
-/* An agent's own page (AgentStudio.tsx: AgentDetail) and the hand editor, in the Dashboard's language: a hero with the
-   agent's identity and actions, a row of run numbers, then cards (the prompt in full, configuration, learned rules,
-   lifecycle). Gradient surfaces, 12px radii, one tone hairline per agent; only theme tokens (tokens.css), so dark and
-   light follow the app; motion off under reduced motion; one column on narrow windows. The avatar, readiness and
-   interview rules at the end are shared with the rest of the app. */
+/* A role's own page (AgentStudio.tsx) and its editor, in the Dashboard's language: a hero with the role's character,
+   identity and actions, a row of run numbers, then cards (the instructions in full, configuration, skills, versions).
+   Gradient surfaces, 12px radii, one hairline in the character's colour (--tone, set inline); only theme tokens
+   (tokens.css), so dark and light follow the app; motion off under reduced motion; one column on narrow windows. The
+   readiness and interview rules at the end are shared with the rest of the app. */
 .agent-detail{--tone:var(--blue);max-width:1240px;margin:auto;padding:22px 32px 56px;box-sizing:border-box;width:100%;color:var(--text);overflow-wrap:anywhere;container:agent-detail/inline-size}
-.agent-detail[data-tone=violet],.agent-detail[data-tone=indigo]{--tone:var(--violet)}.agent-detail[data-tone=amber]{--tone:var(--amber)}
-.agent-detail[data-tone=green]{--tone:var(--green)}.agent-detail[data-tone=red]{--tone:var(--red)}
-.agent-detail[data-tone=teal],.agent-detail[data-tone=cyan]{--tone:var(--pair-0)}.agent-detail[data-tone=pink]{--tone:var(--pair-1)}.agent-detail[data-tone=slate]{--tone:var(--text-3)}
 .ad-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;padding:4px 8px 4px 4px;border:0;border-radius:var(--r-s);background:none;color:var(--text-3);font:inherit;font-size:var(--fs-s);cursor:pointer}
 .ad-back:hover{color:var(--text);background:var(--surface-2)}.ad-back:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .ad-body{display:grid;gap:16px;min-width:0}
@@ -14,9 +11,7 @@
 /* hero: identity left, actions right; the tone glows faintly behind the glyph */
 .ad-hero{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:start;padding:24px 24px 22px;border:1px solid var(--border);border-radius:var(--r-l);background:radial-gradient(120% 140% at 0% 0%,color-mix(in srgb,var(--tone) 9%,transparent),transparent 55%),linear-gradient(160deg,var(--surface-2),var(--surface) 62%);overflow:hidden;animation:ad-enter 320ms var(--ease) both}
 .ad-hero::before{content:"";position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,var(--tone),transparent 80%);opacity:.8}
-.ad-hero-plain{grid-template-columns:minmax(0,1fr);margin-bottom:16px}
-.ad-avatar{display:grid;place-items:center;width:64px;height:64px;border-radius:18px;background:color-mix(in srgb,var(--tone) 12%,var(--surface-3));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 30%,transparent),0 0 32px -12px var(--tone)}
-.ad-avatar .agent-avatar.symbol{color:var(--tone)}
+.ad-avatar{display:grid;place-items:center;width:104px;height:104px;border-radius:50%;background:color-mix(in srgb,var(--tone) 12%,var(--surface-3));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 30%,transparent),0 0 32px -12px var(--tone)}
 .ad-id{min-width:0}
 .ad-eyebrow{margin:2px 0 4px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
 .ad-id h2{margin:0;font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing:-1.1px;line-height:1.15}
@@ -28,7 +23,7 @@
 .ad-badge{font-weight:550}.ad-badge i{width:7px;height:7px;border-radius:50%;background:var(--green)}
 .ad-badge[data-state=working]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
 .ad-badge[data-state=working] i{box-shadow:0 0 0 3px var(--green-bg);animation:catalog-beat 2.2s ease-in-out infinite}
-.ad-badge[data-state=probation]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}.ad-badge[data-state=probation] i{background:var(--amber)}
+.ad-badge[data-state=trial]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}.ad-badge[data-state=trial] i{background:var(--amber)}
 .ad-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;gap:8px;max-width:340px}
 .ad-actions .catalog-run{display:contents}
 .ad-actions .catalog-run form{order:5;flex-basis:100%;display:grid;gap:10px;margin-top:6px;padding:12px;border:1px solid var(--border-2);border-radius:var(--r-m);background:var(--surface)}
@@ -60,13 +55,6 @@
 .ad-prompt::before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:2px;border-radius:2px;background:linear-gradient(var(--tone),transparent)}
 .ad-prompt-text{margin:0;max-height:min(62vh,640px);overflow:auto;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 55%,transparent);font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--md-text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 .ad-prompt-text:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.ad-prompt .agent-manifest{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
-.agent-manifest{min-width:0;overflow-wrap:anywhere}
-.agent-manifest summary{cursor:pointer;font-weight:600;font-size:var(--fs-m);color:var(--text-2)}.agent-manifest summary:hover{color:var(--text)}
-.agent-manifest>p{margin:8px 0 0;font-size:var(--fs-s);color:var(--text-3);line-height:1.6}
-.agent-manifest>div{margin-top:10px}.agent-manifest>div>strong{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);font-weight:600}
-.agent-manifest>div>p{margin:3px 0 0;font-size:var(--fs-m);color:var(--text-2)}
-.agent-manifest>label{margin-top:8px}
 .ad-config{display:grid;gap:0;margin:4px 0 0}
 .ad-config>div{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:8px 0;border-bottom:1px solid var(--border);font-size:var(--fs-s)}
 .ad-config>div:last-child{border-bottom:0}
@@ -75,7 +63,6 @@
 .ad-card .pack-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ad-card .pack-details summary{cursor:pointer;color:var(--text-2)}
 .ad-card .pack-details pre{white-space:pre-wrap;max-height:240px;overflow:auto;font-size:var(--fs-xs)}
-.ad-body>div:has(>.agent-lifecycle) .agent-lifecycle{margin:0}
 
 /* the editor: a card with two columns (text left, identity and engine right) and its actions at the foot */
 .agent-editor{padding:20px 22px;border:1px solid color-mix(in srgb,var(--tone) 35%,var(--border-2));border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%);box-shadow:0 18px 40px -28px var(--tone);min-width:0;animation:ad-enter 240ms var(--ease) both}
@@ -91,9 +78,16 @@
 .agent-editor p{margin:0;font-size:var(--fs-s);color:var(--text-2)}
 .agent-editor pre{white-space:pre-wrap;max-height:180px;overflow:auto}
 .agent-editor details{border-top:1px solid var(--border);padding-top:10px}.agent-editor summary{cursor:pointer;font-weight:600}
-.agent-editor-avatar{display:grid;gap:10px;border:1px solid var(--border);border-radius:var(--r-m);padding:12px;margin:0;min-width:0}
-.agent-editor-avatar legend{padding:0 4px;font-size:var(--fs-s);color:var(--text-3)}
-.agent-editor-avatar fieldset{border:0;padding:0;margin:0}
+.agent-editor-checks{display:grid;gap:8px;border:1px solid var(--border);border-radius:var(--r-m);padding:12px;margin:0;min-width:0}
+.agent-editor-checks legend{padding:0 4px;font-size:var(--fs-s);color:var(--text-3)}
+.agent-editor-checkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 12px}
+.agent-editor .field-check{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--text-2);min-width:0}
+.agent-editor .field-check input{width:auto;flex:none}
+.agent-editor .field-check small{display:block;color:var(--text-3)}
+.agent-editor .bm-chip .link-btn{margin-left:6px;padding:0 2px}
+.ad-versions{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:8px;font-size:var(--fs-s)}
+.ad-versions li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.ad-versions li:last-child{border-bottom:0}.ad-versions small{color:var(--text-3)}.ad-versions p{flex-basis:100%;margin:0;color:var(--text-3)}
 .agent-editor-foot{display:flex;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
 
 @keyframes ad-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -102,11 +96,6 @@
 @container agent-detail (max-width:620px){.ad-hero{grid-template-columns:auto minmax(0,1fr)}.ad-actions{grid-column:1/-1;justify-content:flex-start;max-width:none}.ad-id h2{font-size:24px}}
 @media(max-width:600px){.agent-detail{padding:16px 16px 32px}}
 
-.agent-avatar { display:inline-flex; flex:none; align-items:center; justify-content:center; border-radius:8px; object-fit:cover; background:var(--surface2,#7a8cff22); color:var(--accent,#aab6ff); }
-.agent-avatar[data-tone] { --tone:#7a8cff; background:color-mix(in srgb,var(--tone) 18%,transparent); color:var(--tone); }
-.agent-avatar[data-tone=blue]{--tone:#5b8def}.agent-avatar[data-tone=violet]{--tone:#9b7bf0}.agent-avatar[data-tone=amber]{--tone:#e0a33a}.agent-avatar[data-tone=teal]{--tone:#2fb3a3}.agent-avatar[data-tone=red]{--tone:#e06060}
-.agent-avatar[data-tone=slate]{--tone:#8a97a8}.agent-avatar[data-tone=cyan]{--tone:#38b6d8}.agent-avatar[data-tone=pink]{--tone:#e070b0}.agent-avatar[data-tone=indigo]{--tone:#6c72e8}.agent-avatar[data-tone=green]{--tone:#4fb36a}
-.avatar-options { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }.avatar-options button { border:1px solid transparent; padding:3px; border-radius:8px; background:transparent; }.avatar-options button[aria-pressed=true] { border-color:var(--accent,#7a8cff); }
 .agent-readiness { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
 .interview-steps { display:flex; gap:12px; list-style:none; padding:0; flex-wrap:wrap; font-size:12px; }.interview-steps [aria-current=step] { font-weight:700; text-decoration:underline; text-underline-offset:4px; }
 .interview-choice { display:flex; align-items:center; gap:12px; margin:10px 0; padding:10px; border:1px solid var(--line,#8884); border-radius:8px; }.interview-choice small { display:block; margin-top:3px; }

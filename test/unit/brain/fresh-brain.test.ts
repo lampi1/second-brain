@@ -15,7 +15,7 @@ import { claudeLaunch } from '../../../src/main/brain/adapters/claude-plugin';
 import { productInstructions } from '../../../src/main/rules/instructions';
 import { runHook } from '../../../src/main/rules/runtime';
 import { isBrainFolder } from '../../../src/main/brain/detect';
-import { legacySections } from '../../../src/main/brainmodel/legacy-sources';
+import { procedureSections } from '../../../src/main/brainmodel/procedure-sources';
 import { readMemory, readRules, readSkills } from '../../../src/main/brainmodel/model';
 import { SkillsService } from '../../../src/main/skills/service';
 import { parseProfile } from '../../../src/main/brain/profile';
@@ -67,7 +67,7 @@ describe('a fresh brain is empty of app content', () => {
 
   it('shows no skills, rules, memory or former runbooks on the brain pages', () => {
     const root = fresh();
-    expect(legacySections(root)).toEqual([]); // nothing for the one-time migration
+    expect(procedureSections(root)).toEqual([]); // nothing for the one-time migration
     expect(readSkills([{ dir: path.join(root, '.claude', 'skills'), home: 'brain' }], root, [])).toEqual([]);
     expect(readRules(root)).toEqual([]);
     expect(readMemory(root, [])).toEqual([]);

@@ -1,4 +1,5 @@
-// The run-report block an agent ends its run with (AGENTS-DESIGN §3, A6): valid, missing and garbage replies.
+// The run-report block a role chat ends its run with (agent_report writes the same fields): valid, missing and garbage
+// replies; garbage counts as no report.
 import { expect, it } from 'vitest';
 import { parseRunReport, reportOf, REPORT_MAX } from '../../src/main/agents/run-report';
 
@@ -9,7 +10,7 @@ it('reads a valid report, collapsing and cutting the summary', () => {
   const p = parseRunReport(block(JSON.stringify({ outcome: 'done', verified: 'yes', summary: long, extra: 'ignored' })), 5);
   expect(p.status).toBe('ok');
   if (p.status !== 'ok') return;
-  expect(p.report).toMatchObject({ ok: true, at: 5, outcome: 'done', verified: 'yes' });
+  expect(p.report).toMatchObject({ at: 5, outcome: 'done', verified: 'yes' });
   expect(p.report.summary.startsWith('Fixed the login x')).toBe(true);
   expect(p.report.summary).toHaveLength(140);
   expect(p.report.summary.endsWith('…')).toBe(true);
@@ -18,7 +19,7 @@ it('reads a valid report, collapsing and cutting the summary', () => {
 
 it('keeps the reviewer counts and takes the last block', () => {
   const text = block(JSON.stringify({ outcome: 'blocked', verified: 'no', summary: 'old' })) + block(JSON.stringify({ outcome: 'partial', verified: 'partial', summary: 'new', findings: 3, blocking: 1 }));
-  expect(reportOf(text, 1)).toEqual({ ok: true, at: 1, outcome: 'partial', verified: 'partial', summary: 'new', findings: 3, blocking: 1 });
+  expect(reportOf(text, 1)).toEqual({ at: 1, outcome: 'partial', verified: 'partial', summary: 'new', findings: 3, blocking: 1 });
 });
 
 it('reports missing when there is no block (an inline mention is not one)', () => {
@@ -40,5 +41,5 @@ it('marks garbage: bad JSON, wrong values, missing summary, bad counts, too long
     [JSON.stringify({ outcome: 'done', verified: 'yes', summary: 'x'.repeat(REPORT_MAX) }), 'too long'],
   ];
   for (const [body, reason] of cases) expect(parseRunReport(block(body), 1)).toEqual({ status: 'garbage', reason });
-  expect(reportOf(block('{not json'), 7)).toEqual({ ok: false, at: 7 });
+  expect(reportOf(block('{not json'), 7)).toBeNull();
 });

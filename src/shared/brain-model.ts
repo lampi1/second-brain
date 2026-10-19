@@ -60,13 +60,13 @@ export interface MemoryFile {
 export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration';
 export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory'];
 
-/** One change a maintenance job, the Orchestrator (an agent definition change, ADR 0082) or the user's link toggle made. target: a skill name, an agent id, a rule or memory
- *  file. canRollback false = undone already, or what it changed moved on since (a newer change on the same target). */
+/** One change a maintenance job or the user's link toggle made. target: a skill name, a role id, a rule or memory file.
+ *  canRollback false = undone already, or what it changed moved on since (a newer change on the same target). */
 export interface BrainChange {
   id: string; at: number;
-  job: MaintenanceJobId | 'user' | 'orchestrator';
+  job: MaintenanceJobId | 'user';
   kind: 'skill' | 'agent' | 'rule' | 'memory';
-  action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove' | 'archive' | 'restore';
+  action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove';
   target: string;
   /** what changed, one line (Italian, shown as is) */
   summary: string;
@@ -82,15 +82,12 @@ export interface MigrationItem {
   source: string; title: string;
   /** the skill it became, or null when it was not moved (see note) */
   skill: string | null;
-  agents: string[];
   status: 'moved' | 'existing' | 'skipped';
   note?: string;
 }
 export interface MigrationReport {
   at: number;
   items: MigrationItem[];
-  /** learned rules that lived inside an agent's own skill, moved to the agent's role */
-  lessons: { agentId: string; lines: number }[];
 }
 
 export interface MaintenanceRun { at: number; jobs: { job: MaintenanceJobId; changes: number; note?: string }[] }
@@ -117,9 +114,12 @@ export interface ClassifierRoute {
 }
 export interface ClassifierChoice {
   at: number; chatId: string; goal: string;
-  /** the agent the classifier ranks first for the goal now (words channel), null when nothing passes */
-  suggested: { id: string; name: string; score: number } | null;
-  used: { id: string; name: string; score: number | null; rank: number | null; mode: string | null };
+  /** the role that ran it */
+  role: { id: string; name: string };
+  /** the skills skills_suggest ranks for the goal now, best first (empty = none fits) */
+  suggested: string[];
+  /** the skills the launch gave the run */
+  used: string[];
 }
 export interface ClassifiersState {
   routing: { version: number | null; appliedAt: string | null; by: string | null; routes: ClassifierRoute[]; error: string | null };
@@ -129,6 +129,6 @@ export interface ClassifiersState {
   kinds: { kind: string; chats: number; known: number; ok: number }[];
   /** how the model of the app's chats was chosen: by the table, by the agent's profile, by default or override */
   sources: { source: string; chats: number }[];
-  /** success and cost per route and per classifier channel, by week; a row without runs has no data yet */
+  /** success and cost per route, by week; a row without runs has no data yet */
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
 }

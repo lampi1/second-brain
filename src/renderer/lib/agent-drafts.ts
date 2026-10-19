@@ -1,47 +1,66 @@
-// Unsaved editor state survives navigation/profile switches in a bounded memory cache.
-// An explicitly applied update may adopt a private local restart copy, then keeps it current to avoid stale replay.
-import {validateRecoveryRaster} from './recovery-raster';
-import {checkedManifest} from '@shared/agent-manifest';
-import {AGENT_SYMBOLS,type AgentDraft} from '@shared/agents';
-export interface AgentEditorDraft { id?:string; baseRevision?:number; draft:AgentDraft; message:string; history:{role:'user'|'assistant';text:string}[]; suggestion:AgentDraft|null }
-const drafts=new Map<string,AgentEditorDraft>();
-let active:string|null=null;
-const key=(id?:string)=>id ?? '__new';
-export function rememberAgentEditor(state:AgentEditorDraft):void {
-  const id=key(state.id); drafts.delete(id); drafts.set(id,structuredClone(state)); active=id;
-  while(drafts.size>20) drafts.delete(drafts.keys().next().value!);
+// Unsaved role edits (Brain → Agenti, AgentStudio.tsx) survive navigation in a bounded memory cache, one per role, and an
+// app update (update-checkpoint.ts copies them into localStorage before the restart and restores them after). A copy is
+// checked field by field before it is trusted: a role draft holds only the editable behaviour, never a name or avatar.
+import { EFFORTS } from './format';
+import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft } from '@shared/agents';
+import { MODEL_TIERS, isWorkRole } from '@shared/roles';
+import { isCharacterId } from '@shared/characters';
+
+export interface AgentEditorDraft { id: string; baseRevision?: number; draft: AgentDraft }
+const drafts = new Map<string, AgentEditorDraft>();
+let active: string | null = null;
+export function rememberAgentEditor(state: AgentEditorDraft): void {
+  drafts.delete(state.id); drafts.set(state.id, structuredClone(state)); active = state.id;
+  while (drafts.size > 20) drafts.delete(drafts.keys().next().value!);
   persistAgentRecovery();
 }
-export function readAgentEditor(id?:string, last=false):AgentEditorDraft|null {
-  const value=drafts.get(last ? active ?? '__new' : key(id)); return value ? structuredClone(value) : null;
+export function readAgentEditor(id: string): AgentEditorDraft | null {
+  const value = drafts.get(id); return value ? structuredClone(value) : null;
 }
-export function forgetAgentEditor(id?:string):void { drafts.delete(key(id)); if(active===key(id)) active=null; persistAgentRecovery(); }
+export function forgetAgentEditor(id: string): void { drafts.delete(id); if (active === id) active = null; persistAgentRecovery(); }
 
-const AGENT_RECOVERY_KEY='sb.update.agent-drafts.v1';
-let recoveredAgents=false,agentStorageProblem=false;
-export function agentDraftCheckpointProblem():string|null{return agentStorageProblem?'La copia locale delle bozze Agenti non è stata salvata. Libera spazio prima di aggiornare.':null;}
-export function agentDraftCheckpoint(){return {version:1,active,entries:[...drafts.entries()]};}
-function validDraft(value:unknown):value is AgentDraft{
-  try { checkedManifest((value as AgentDraft | null)?.manifest); } catch { return false; }
-  const draft=value as AgentDraft;if(!draft||typeof draft.name!=='string'||draft.name.length>80||typeof draft.purpose!=='string'||draft.purpose.length>400||typeof draft.instructions!=='string'||draft.instructions.length>8000||typeof draft.engine!=='string'||draft.engine.length>160||draft.model!==null&&(typeof draft.model!=='string'||draft.model.length>300)||draft.effort!==undefined&&!['low','medium','high','xhigh','max'].includes(draft.effort))return false;
-  const avatar=draft.avatar;return !!avatar&&(avatar.kind==='symbol'?AGENT_SYMBOLS.includes(avatar.value):avatar.kind==='image'&&typeof avatar.dataUrl==='string'&&avatar.dataUrl.length<=350000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(avatar.dataUrl));
+const AGENT_RECOVERY_KEY = 'sb.update.agent-drafts.v1';
+let recoveredAgents = false, agentStorageProblem = false;
+export function agentDraftCheckpointProblem(): string | null { return agentStorageProblem ? 'La copia locale delle modifiche ai ruoli non è stata salvata. Libera spazio prima di aggiornare.' : null; }
+export function agentDraftCheckpoint() { return { version: 1, active, entries: [...drafts.entries()] }; }
+
+const text = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
+const list = (v: unknown, ok: (x: unknown) => boolean, max: number) => Array.isArray(v) && v.length <= max && v.every(ok);
+const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
+function validDraft(value: unknown): value is AgentDraft {
+  const d = value as AgentDraft | null;
+  if (!d || typeof d !== 'object' || !text(d.name, 80) || !text(d.purpose, 400) || !text(d.instructions, 8000) || !text(d.engine, 160)) return false;
+  if (d.model !== null && !text(d.model, 300) || d.effort !== undefined && !EFFORTS.includes(d.effort)) return false;
+  if (d.avatar?.kind !== 'character' || !isCharacterId(d.avatar.value)) return false;
+  if (d.tools !== null && (!d.tools || !list(d.tools.allow, c => TOOL_CLASSES.includes(c as never), TOOL_CLASSES.length))) return false;
+  if (d.permissionCeiling !== null && !PERMISSION_CEILINGS.includes(d.permissionCeiling)) return false;
+  if (d.maxContext !== undefined && d.maxContext !== null && !Number.isSafeInteger(d.maxContext)) return false;
+  return MODEL_TIERS.includes(d.tier) && MODEL_TIERS.includes(d.tierMax) && typeof d.independent === 'boolean'
+    && list(d.launches, isWorkRole, 8) && list(d.skills, s => typeof s === 'string' && SKILL.test(s), 40);
 }
-export function validateAgentDraftCopy(value:unknown):ReturnType<typeof agentDraftCheckpoint>{
-  const copy=value as ReturnType<typeof agentDraftCheckpoint>;
-  if(!copy||copy.version!==1||!Array.isArray(copy.entries)||copy.entries.length>20||copy.active!==null&&typeof copy.active!=='string')throw Error('Copia delle bozze Agenti non valida.');
-  const keys=new Set<string>();
-  for(const entry of copy.entries){
-    if(!Array.isArray(entry)||entry.length!==2)throw Error('Copia delle bozze Agenti non valida.');
-    const [id,state]=entry;
-    if (state?.baseRevision !== undefined && (!Number.isFinite(state.baseRevision) || state.baseRevision < 0)) throw Error('Revisione della bozza Agente non valida.');
-    if(typeof id!=='string'||id.length>160||keys.has(id)||!state||state.id!==undefined&&typeof state.id!=='string'||key(state.id)!==id||!validDraft(state.draft)||typeof state.message!=='string'||state.message.length>6000||!Array.isArray(state.history)||state.history.length>1000||state.history.some(line=>!line||!['user','assistant'].includes(line.role)||typeof line.text!=='string'||line.text.length>20000)||state.suggestion!==null&&!validDraft(state.suggestion))throw Error('Copia delle bozze Agenti non valida.');keys.add(id);
+export function validateAgentDraftCopy(value: unknown): ReturnType<typeof agentDraftCheckpoint> {
+  const copy = value as ReturnType<typeof agentDraftCheckpoint>;
+  const bad = () => Error('Copia delle modifiche ai ruoli non valida.');
+  if (!copy || copy.version !== 1 || !Array.isArray(copy.entries) || copy.entries.length > 20 || copy.active !== null && typeof copy.active !== 'string') throw bad();
+  const keys = new Set<string>();
+  for (const entry of copy.entries) {
+    if (!Array.isArray(entry) || entry.length !== 2) throw bad();
+    const [id, state] = entry;
+    if (typeof id !== 'string' || id.length > 80 || keys.has(id) || !state || state.id !== id || !validDraft(state.draft)) throw bad();
+    if (state.baseRevision !== undefined && (!Number.isFinite(state.baseRevision) || state.baseRevision < 0)) throw bad();
+    keys.add(id);
   }
-  for(const [,state]of copy.entries)for(const draft of [state.draft,state.suggestion])if(draft?.avatar.kind==='image')validateRecoveryRaster(draft.avatar.dataUrl,1024,16,256000);
-  if(copy.active!==null&&!keys.has(copy.active))throw Error('Bozza Agente attiva non presente.');return copy;
+  if (copy.active !== null && !keys.has(copy.active)) throw bad();
+  return copy;
 }
-export function restoreAgentDraftCopy(value:unknown):void{
-  const copy=validateAgentDraftCopy(value);drafts.clear();for(const [id,state]of copy.entries)drafts.set(id,structuredClone(state));active=copy.active;recoveredAgents=true;persistAgentRecovery();
+export function restoreAgentDraftCopy(value: unknown): void {
+  const copy = validateAgentDraftCopy(value);
+  drafts.clear();
+  for (const [id, state] of copy.entries) drafts.set(id, { id, ...(state.baseRevision !== undefined ? { baseRevision: state.baseRevision } : {}), draft: structuredClone(state.draft) });
+  active = copy.active; recoveredAgents = true; persistAgentRecovery();
 }
-function persistAgentRecovery():void{if(!recoveredAgents)return;try{localStorage.setItem(AGENT_RECOVERY_KEY,JSON.stringify(agentDraftCheckpoint()));agentStorageProblem=false;}catch{agentStorageProblem=true;}}
-
-export function enableAgentDraftRecovery():void{recoveredAgents=true;persistAgentRecovery();}
+function persistAgentRecovery(): void {
+  if (!recoveredAgents) return;
+  try { localStorage.setItem(AGENT_RECOVERY_KEY, JSON.stringify(agentDraftCheckpoint())); agentStorageProblem = false; } catch { agentStorageProblem = true; }
+}
+export function enableAgentDraftRecovery(): void { recoveredAgents = true; persistAgentRecovery(); }

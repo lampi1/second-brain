@@ -9,14 +9,14 @@
 // mid-chat restarts the prompt cache. With the table's `exploration` rate a chat may try a little-sampled arm
 // instead (source 'explore'), so the loop can compare arms; never on a row the user locked («L'AI può cambiarla» off),
 // which no agent may change either (agentLimits). Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
-// Agent first (ADR 0078, issue #70): a chat started from a catalog agent takes the agent's engine, model and effort; the
-// table only fills the model of a profile that has none (a default, never an override) and never refuses such a chat.
-// The known outcomes of agent runs (the user's, the Orchestrator's or a reviewed verdict, issue #72) go to the same
+// Role first (ADR 0083): a role chat takes the engine, model (its tier's) and effort the role resolved to; the table
+// never overrides nor refuses such a chat, it only records its kind and area. The known outcomes of role runs (the user's, the Orchestrator's or a reviewed verdict, issue #72) go to the same
 // ledger, and a row's reason is refreshed from the current counts at every routing (statsLine).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, RoutingChange, RoutingInfo, RoutingRow, RoutingTable, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
+import { MODEL_TIERS } from '../../shared/roles';
 import { builtinTask } from '../../shared/work-concepts';
 import { areaOf } from './brain-estimates';
 import { log } from '../log';
@@ -295,16 +295,16 @@ export interface RouteRequest {
   /** the ledger's samples per arm for a kind (Routing.armCounts) and the dice, for exploration; none = no exploration */
   counts?: (kind: TaskKind) => Map<string, number>;
   rnd?: () => number;
-  /** the catalog agent the chat starts from (ADR 0078): its profile decides; absent = the table / the defaults */
+  /** the role the chat starts from (ADR 0083): it decides; absent = the table / the defaults */
   agent?: AgentChoice;
   /** the ledger's counts for a kind (Routing.kindStats): a table row's reason is refreshed from them */
   stats?: (kind: TaskKind) => KindStats;
 }
-/** The agent a chat starts from: its active profile's engine, model (null = none named) and effort, and who chose it;
- *  stats = its own results line (agentStatsLine), shown as the route's reason. */
+/** The role a chat starts from, as the catalog resolved it: engine, model (null = the engine's default), effort, tier,
+ *  and who launched it; stats = its own results line (agentStatsLine), shown as the route's reason. */
 export interface AgentChoice {
   id: string; name: string; version: number; harness: Harness; model: string | null; effort: Effort | null;
-  chosenBy: RouteAgent['chosenBy']; score?: number; threshold?: number; mode?: RouteAgent['mode']; stats?: string | null;
+  chosenBy: RouteAgent['chosenBy']; tier?: RouteAgent['tier']; stats?: string | null;
 }
 /** One task kind in the ledger: app chats predicted, how many have a known outcome, how many of those succeeded. */
 export interface KindStats { chats: number; known: number; ok: number }
@@ -329,32 +329,25 @@ export function agentStatsLine(m: { ended: number; successRate: { value: number 
   if (!m.successRate.n || m.successRate.value === null) return `${m.ended} run, nessuna con esito`;
   return `${m.ended} run, ${m.successRate.n} con esito, ${Math.round(100 * m.successRate.value)}% riuscite`;
 }
-const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'scelto dall’Orchestrator', classifier: 'scelto dal classificatore', parent: 'sotto-agente di un agente', fallback: 'nessun agente adatto: Generale' };
+const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avviato dall’Orchestrator', parent: 'avviato dal suo genitore', app: 'avviato dall’app' };
 
-/** The route of a chat started from a catalog agent (ADR 0078): the profile's engine, model and effort as they are; a
- *  profile with no model takes the table row's (same engine only) as a default, and that row's effort when the profile
- *  names none. Never 'override', never exploration, never the API switch of a writing row: nothing overrides the agent. */
-export function routeAgent(req: RouteRequest & { agent: AgentChoice }, table: RoutingTable | null, reg: ModelRegistry | null,
+/** The route of a role chat (ADR 0083): the resolved engine, model and effort as they are. Never 'override', never
+ *  exploration, never the API switch of a writing row: nothing overrides the role. */
+export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: ModelRegistry | null,
   rules: { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   const a = req.agent;
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
-  let model = a.model, effort = a.effort, from: RouteAgent['modelFrom'] = a.model ? 'profile' : 'engine';
-  const row = !model ? match(table?.routes, { kind, area }) : null;
-  if (row && row.harness === a.harness && engineOf(row.harness)) {
-    model = row.model; from = 'table';
-    const m = modelRow(model, reg);
-    // the row's effort only where the profile names none and the model has it
-    if (effort === null && row.effort && takesEffort(a.harness) && (!m || (m.efforts ?? []).includes(row.effort))) effort = row.effort;
-  }
+  const model = a.model;
+  let effort = a.effort;
+  const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.tier ? 'tier' : 'role';
   const m = modelRow(model, reg);
   if (model && m && m.harness !== a.harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${a.harness}` };
   if (a.harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
   if (effort && !takesEffort(a.harness)) effort = null;
-  const reason = [`agente «${a.name}» v${a.version}`, CHOSEN_BY[a.chosenBy], a.score !== undefined ? `punteggio ${a.score}/${a.threshold ?? '?'}` : null,
-    a.stats ?? null, from === 'table' && row ? `modello dalla tabella (${rowName(row)})` : null].filter(Boolean).join(' · ').slice(0, 300);
-  return { harness: a.harness, model, effort, route: { policy: 'routing', version: from === 'table' ? table?.version ?? null : null, source: 'agent', reason, kind, area, at: now,
-    agent: { id: a.id, version: a.version, chosenBy: a.chosenBy, modelFrom: from, ...(a.score !== undefined ? { score: a.score } : {}), ...(a.threshold !== undefined ? { threshold: a.threshold } : {}), ...(a.mode ? { mode: a.mode } : {}) } } };
+  const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
+  return { harness: a.harness, model, effort, route: { policy: 'routing', version: null, source: 'agent', reason, kind, area, at: now,
+    agent: { id: a.id, version: a.version, chosenBy: a.chosenBy, modelFrom: from, ...(a.tier ? { tier: a.tier } : {}) } } };
 }
 export type RouteResult = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
 
@@ -362,7 +355,7 @@ export type RouteResult = { harness: Harness; model: string | null; effort: Effo
  *  estimates.json (`kinds` for the area, `tasks` for the kind); without them every chat is 'altro'. */
 export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: ModelRegistry | null,
   rules: { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
-  if (req.agent) return routeAgent({ ...req, agent: req.agent }, table, reg, rules, now);
+  if (req.agent) return routeAgent({ ...req, agent: req.agent }, reg, rules, now);
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
   const r = resolve(table, { kind, area }, req.ask, req.defaults, reg, req.canRun);
@@ -397,10 +390,9 @@ export function validRoute(v: unknown): RouteDecision | null {
 function validAgent(v: unknown): RouteAgent | null {
   const a = v as Partial<RouteAgent> | null;
   if (!a || typeof a !== 'object' || typeof a.id !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(a.id) || !Number.isSafeInteger(a.version) || (a.version as number) < 0
-    || !['orchestrator', 'classifier', 'parent', 'fallback'].includes(String(a.chosenBy))) return null;
-  const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100;
-  return { id: a.id, version: a.version as number, chosenBy: a.chosenBy as RouteAgent['chosenBy'], ...(n(a.score) ? { score: a.score } : {}), ...(n(a.threshold) ? { threshold: a.threshold } : {}),
-    ...(a.mode === 'hybrid' || a.mode === 'words' ? { mode: a.mode } : {}), ...(a.modelFrom === 'profile' || a.modelFrom === 'table' || a.modelFrom === 'engine' ? { modelFrom: a.modelFrom } : {}) };
+    || !['orchestrator', 'parent', 'app'].includes(String(a.chosenBy))) return null;
+  return { id: a.id, version: a.version as number, chosenBy: a.chosenBy as RouteAgent['chosenBy'], ...((MODEL_TIERS as readonly unknown[]).includes(a.tier) ? { tier: a.tier } : {}),
+    ...(a.modelFrom === 'role' || a.modelFrom === 'tier' || a.modelFrom === 'engine' ? { modelFrom: a.modelFrom } : {}) };
 }
 
 // ── the shared ledger (ops/state/improve/outcomes.jsonl) ────────────────────────────────────────────────────────────

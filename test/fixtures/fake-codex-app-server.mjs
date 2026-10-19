@@ -198,7 +198,7 @@ function onRequest(id, method, p) {
       if (p.model) model = p.model;
       turn = { id: `turn_${uuid()}`, interrupted: false, steer: null };
       const t = turn;
-      const text = (p.input ?? []).filter(i => i.type === 'text').map(i => i.text).join('\n').replace(/\[Orchestrator role supplied by the app\][\s\S]*?\[End Orchestrator role\]\n*/, ''); // the app's Orchestrator role text triggers nothing
+      const text = (p.input ?? []).filter(i => i.type === 'text').map(i => i.text).join('\n').replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, ''); // the app's Orchestrator role text triggers nothing
       const go = () => { ok({ turn: { id: t.id, items: [], status: 'inProgress', error: null } }); void runTurn(text); };
       const wait = Number(process.env.FAKE_CODEX_TURN_START_DELAY ?? 0);
       if (wait > 0) setTimeout(go, wait); else go();

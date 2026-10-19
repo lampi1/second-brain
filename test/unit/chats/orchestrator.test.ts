@@ -5,13 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager, restoredOwner } from '../../../src/main/chats/manager';
+import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { StoredChat } from '../../../src/main/chats/store';
-import { ORCHESTRATOR_ROLE } from '../../../src/main/agents/orchestrator-preset';
+import { ORCHESTRATOR_ROLE } from '../../../src/main/agents/orchestrator-role';
 import { OrchestratorService } from '../../../src/main/chats/orchestrator-service';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
-import { ORCHESTRATOR_AGENT_ID } from '../../../src/main/agents/orchestrator-preset';
+import { ORCHESTRATOR_AGENT_ID } from '../../../src/shared/agents';
 import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
@@ -84,23 +84,18 @@ describe('ChatManager with the Orchestrator', () => {
     expect(by.w1!.title).not.toBe('Orchestrator');
   });
 
-  it('gives a Orchestrator saved with the old "Assistente" owner the Orchestrator\'s face back (#61)', () => {
-    const old = { id: 'routed-abc', name: 'Assistente', purpose: 'x', avatar: { kind: 'symbol' as const, value: 'briefcase' as const }, engine: 'claude', model: null, revision: 1, source: 'routed' as const };
-    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isOrchestrator: true })).toMatchObject({ id: 'routed-abc', name: 'Orchestrator', avatar: { value: 'compass' }, source: 'routed' });
-    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isOrchestrator: false }).name).toBe('Assistente');
-  });
   it('primes the first message with the Orchestrator role', async () => {
     const f = fixture();
     await f.m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
-    expect(f.sent[0]!.startsWith(ORCHESTRATOR_ROLE)).toBe(true);
+    expect(f.sent[0]!.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
+    expect(ORCHESTRATOR_ROLE.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
   });
-  it('starts from the edited catalog preset and composes its instructions once', async () => {
+  it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
     f.agents.save({ ...seed, instructions: 'My custom coordination brief' }, seed.id);
     const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
-    expect(chat.agent?.source).toBe('routed');
-    // the tile shows the Orchestrator's face, not the generic "Assistente" (#61)
+    expect(chat.agent?.source).toBe('catalog');
     expect(chat.agent).toMatchObject({ name: seed.name, purpose: seed.purpose, avatar: seed.avatar });
     expect(chat.run).toBeUndefined();
     expect(f.sent[0]!.split('My custom coordination brief')).toHaveLength(2);
@@ -169,7 +164,9 @@ describe('app control scope', () => {
     const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const code = { repo: () => 'C:/repo', inRepo: async (d: string) => d.replace(/\\/g, '/').startsWith('C:/repo') };
-    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', code }, caller);
+    const catalog = new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-orch-roles-')), models: () => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }] });
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', code,
+      agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, caller);
     return { made, create: all.find(t => t.name === 'app_create_chat')!, all };
   }
   const orch = summary({ id: 'o', isOrchestrator: true, title: 'Orchestrator' });
@@ -177,17 +174,17 @@ describe('app control scope', () => {
 
   it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never a Orchestrator', async () => {
     const t = tools([orch, work], 'o');
-    expect(await t.create.run({ title: 'A', prompt: 'p' })).toMatchObject({ cwd: 'C:/brain' });
-    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
+    expect(await t.create.run({ title: 'A', prompt: 'p', roleId: 'artisan' })).toMatchObject({ cwd: 'C:/brain' });
+    expect(await t.create.run({ title: 'B', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
     expect(t.made[1]).toMatchObject({ orchestrator: false });
-    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
+    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', roleId: 'artisan', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
     expect(t.made).toHaveLength(2);
   });
 
   it('derives app-code routing from cwd (ADR 0079: no app space any more)', async () => {
     const t = tools([orch, work], 'o');
-    await t.create.run({ title: 'Neutral title', prompt: 'p', cwd: 'C:/repo' });
-    await t.create.run({ title: 'Other', prompt: 'p', cwd: 'C:/elsewhere' });
+    await t.create.run({ title: 'Neutral title', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' });
+    await t.create.run({ title: 'Other', prompt: 'p', roleId: 'artisan', cwd: 'C:/elsewhere' });
     expect(t.made[0]).toMatchObject({ cwd: 'C:/repo', route: { area: 'App' } });
     expect(t.made[1]).toMatchObject({ cwd: 'C:/elsewhere' });
     expect((t.made[1] as { route?: { area?: string } }).route?.area).not.toBe('App');
@@ -197,14 +194,14 @@ describe('app control scope', () => {
 
   it('another chat on the same mount gets no union scope', async () => {
     const t = tools([orch, work], 'w');
-    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
+    expect(await t.create.run({ title: 'B', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
     expect(t.made).toHaveLength(1);
     expect(t.made[0]).not.toHaveProperty('space');
   });
 
   it('a new chat may not take the Orchestrator\'s title (its mail box)', async () => {
     const t = tools([orch, work], 'o');
-    await expect(Promise.resolve(t.create.run({ title: 'orchestrator', prompt: 'p' }))).rejects.toThrow(/reserved/);
+    await expect(Promise.resolve(t.create.run({ title: 'orchestrator', prompt: 'p', roleId: 'artisan' }))).rejects.toThrow(/reserved/);
     expect(t.made).toHaveLength(0);
   });
 

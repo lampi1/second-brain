@@ -1,128 +1,94 @@
-// Agent catalog and session identity contracts, shared by main, renderer and read-only discovery.
+// Role catalog and session identity contracts, shared by main, renderer and read-only discovery.
 import type { Effort, Harness } from './contract';
 import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
-import { ROLE_GLYPHS } from './agent-glyphs';
 
-/** Untrusted routing declarations. Never authorization, verified capability or executable configuration. */
-export interface AgentManifest {
-  whenToUse?: string;
-  whenNotToUse?: string;
-  input?: string;
-  output?: string;
-  declaredTools?: string[];
-  accessScopes?: string[];
-  successCriteria?: string[];
-}
+import type { CharacterId } from './characters';
+import type { ModelTier } from './roles';
 
-export const AGENT_SYMBOLS = ['briefcase', 'search', 'pen', 'chart', 'compass', 'code', 'spark', 'bug', 'eye', 'globe', 'server', 'mail', 'calendar', 'book', 'shield', 'wrench', 'check', ...ROLE_GLYPHS] as const;
-export type AgentSymbol = (typeof AGENT_SYMBOLS)[number];
-export const AGENT_TONES = ['blue', 'violet', 'amber', 'teal', 'red', 'slate', 'cyan', 'pink', 'indigo', 'green'] as const;
-export type AgentTone = (typeof AGENT_TONES)[number];
-/** Raster data only. Main validates bytes, decoding and dimensions before persistence. */
-export type AgentAvatar = { kind: 'symbol'; value: AgentSymbol; tone?: AgentTone } | { kind: 'image'; dataUrl: string };
+/** The cartoon character a role is drawn as (renderer/lib/character-art.ts): fixed per role, never user content. */
+export type AgentAvatar = { kind: 'character'; value: CharacterId };
 
-export const AGENT_CATEGORIES = ['development', 'ops', 'personal', 'other'] as const;
-export type AgentCategory = (typeof AGENT_CATEGORIES)[number];
-/** Abstract tool classes. A definition only narrows what the engine and Brother's settings already allow. */
-export const TOOL_CLASSES = ['read', 'edit', 'shell', 'web', 'browser', 'mail-draft', 'calendar-read', 'brain-write', 'mcp'] as const;
+/** Abstract tool classes. A definition only narrows what the engine and the user's settings already allow.
+ *  shell-read = read-only commands only (agents/shell-readonly.ts); browser-read = navigate and read pages, no typing. */
+export const TOOL_CLASSES = ['read', 'edit', 'shell', 'shell-read', 'web', 'browser', 'browser-read', 'mail-draft', 'calendar-read', 'brain-write', 'mcp'] as const;
 export type ToolClass = (typeof TOOL_CLASSES)[number];
 export interface AgentToolPolicy { allow: ToolClass[]; mcp?: string[] }
 /** Upper bound for a run's permission mode. 'auto' and 'bypassPermissions' are deliberately not representable. */
 export const PERMISSION_CEILINGS = ['plan', 'default', 'acceptEdits'] as const;
 export type PermissionCeiling = (typeof PERMISSION_CEILINGS)[number];
+/** The user's "Annulla" on a change the app applied (a maintenance change, a trial): back to `version` while the role
+ *  is still at `expectedRevision`. */
+export interface AgentUndo { agentId: string; expectedRevision: number; version: number }
 export interface AgentEvidenceRef { kind: 'journal' | 'chat' | 'ai-error' | 'cost' | 'run' | 'feedback'; ref: string; at: number }
-export type AgentOrigin =
-  | { kind: 'preset'; presetId: string; presetRevision: number }
-  | { kind: 'user' }
-  | { kind: 'orchestrator'; reason: string; evidence: AgentEvidenceRef[] };
-export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration' | 'maintenance';
+/** Who wrote a version: the shipped default, the user, or the app's maintenance (skills and role text, ADR 0083). */
+export type AgentAuthor = 'default' | 'user' | 'maintenance';
 
+/** The editable part of a role (Brain → Agenti). Name, summary and character are fixed by the role. */
 export interface AgentDraft {
+  /** the role's default skills (and its own know-how files), loaded at every launch */
   knowhow?: AgentKnowhow;
   pack?: AgentPackIdentity;
   name: string;
   purpose: string;
   instructions: string;
-  manifest?: AgentManifest;
   engine: Harness;
-  /** null = the engine's own default, explicitly unknown until reported by the session. */
+  /** null = the model of the role's tier on its engine (Impostazioni → Ruoli e deleghe), else this exact model */
   model: string | null;
   effort?: Effort;
   avatar: AgentAvatar;
-  /** One line, what the agent is. Omitted by older clients: the purpose stands in. */
-  role?: string;
-  category?: AgentCategory;
-  /** null/omitted = inherit the engine defaults, as before definitions could narrow tools. */
-  tools?: AgentToolPolicy | null;
-  /** null/omitted = inherit Brother's own permission settings. */
-  permissionCeiling?: PermissionCeiling | null;
-  /** "Contesto massimo": the context (tokens) the agent's chat may fill before its engine compacts it (issue #80);
+  tools: AgentToolPolicy | null;
+  permissionCeiling: PermissionCeiling | null;
+  /** "Contesto massimo": the context (tokens) the role's chat may fill before its engine compacts it (issue #80);
    *  null/omitted = the user's setting (Impostazioni → compattazione). Honoured where the engine supports it
    *  (AgentModelChoice.maxContext; today the Claude engines, CLAUDE_CODE_AUTO_COMPACT_WINDOW). */
   maxContext?: number | null;
+  tier: ModelTier;
+  tierMax: ModelTier;
+  independent: boolean;
+  /** the roles it may launch with agent_delegate */
+  launches: string[];
+  /** the brain's skills it loads at every launch (and may use; any other is refused, agents/role-gate.ts) */
+  skills: string[];
 }
-/** The bounds of an agent's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */
+/** The bounds of a role's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */
 export const MAX_CONTEXT_RANGE = { min: 100_000, max: 1_000_000 } as const;
-/** The agents.json v1 record, still produced by the legacy routing import and read by the v1 → v2 migration. */
-export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updatedAt: number };
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext'] as const;
-export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'maxContext'>;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'independent', 'launches', 'skills'] as const;
+export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
-  /** Canonical behaviour digest at the last packaged install/update; absent on legacy/user definitions. */
-  presetHash?: string;
-  /** Background presets are visible/editable, but never offered as task delegates. */
-  routable?: boolean;
   id: string; createdAt: number; updatedAt: number;
-  role: string;
-  category: AgentCategory;
-  tools: AgentToolPolicy | null;
-  permissionCeiling: PermissionCeiling | null;
-  origin: AgentOrigin;
+  /** role = one of the nine roles; background = Pulse, a catalog entry that is never offered as a delegate */
+  scope: 'role' | 'background';
   /** Highest version ever created. */
   version: number;
   /** The version new runs use; lower than `version` after a restore. The profile's behaviour fields are this version. */
   activeVersion: number;
-  /** At most one open trial per agent; no other behavioural change while it is open. */
+  /** At most one open trial per role; no other behavioural change while it is open. */
   trial?: { version: number; baseline: number; startedAt: number };
-  /** Created on the fly for a task (AGENTS-DESIGN §4.7): on trial until its runs keep or retire it. A retired agent keeps
-   *  it while archived (the 14-day no-recreate check); one kept by the evaluator loses it; one kept by Brother (Tieni, an
-   *  edit, a restore) keeps it with `keptBy: 'brother'`, which ends the probation. */
-  probation?: AgentProbation;
   lastEditedBy: AgentAuthor;
-  /** Brother edited it: the Orchestrator may only propose changes. */
+  /** the user changed it from the defaults ("Ripristina predefinito" clears it) */
   userLocked: boolean;
-  status: 'active' | 'archived';
-  archivedAt?: number;
 }
-/** since = when the probation began. It names its cause: requestItemId = the task message that asked for the agent (A7
- *  sets it), or source = the reviewed agent pack it was imported from. */
-export interface AgentProbation { since: number; requestItemId?: string; source?: AgentProbationSource; keptBy?: 'brother' }
-export interface AgentProbationSource { kind: 'import'; packId: string; revision: number }
-/** Still being judged: a probation Brother has not ended. */
-export const inProbation = (p: Pick<AgentProfile, 'probation'>): boolean => p.probation !== undefined && p.probation.keptBy === undefined;
-/** How a probation ended, written on the version that was active then. */
-export interface AgentProbationDecision { decision: 'kept' | 'retired'; by: 'brother' | 'evaluator'; reason: string; at: number }
 export type AgentVersionState = 'active' | 'trial' | 'kept' | 'rejected' | 'superseded';
 /** Immutable behaviour snapshot of one version (no avatar or images: history stays small). */
 export interface AgentVersion {
   agentId: string; version: number; parentVersion: number | null;
   behaviour: AgentBehaviour; author: AgentAuthor; reason: string; at: number; state: AgentVersionState;
-  probation?: AgentProbationDecision;
 }
-/** The built-in agent a chat started without an agent runs as (AGENTS-DESIGN §4.7): it can never be archived. */
-export const GENERAL_AGENT_ID = 'default-general';
-/** The coordinator preset: it shapes the Orchestrator chat only and never starts a work chat. */
-export const ORCHESTRATOR_AGENT_ID = 'default-orchestrator';
-/** Frozen when a chat starts; editing the catalog never relabels existing sessions. */
+/** The Orchestrator's role: it shapes the Orchestrator chat only and never starts a work chat. */
+export const ORCHESTRATOR_AGENT_ID = 'orchestrator';
+/** Frozen when a chat starts; editing the catalog never relabels existing sessions. catalog = a role's run, plain = a
+ *  chat started without a role (the user's own permissions). */
 export interface AgentOwnerSnapshot {
-  id: string; name: string; purpose: string; avatar: AgentAvatar;
+  id: string; name: string; purpose: string;
+  /** absent on a plain chat */
+  avatar?: AgentAvatar;
   engine: Harness; model: string | null; revision: number;
-  source: 'catalog' | 'legacy' | 'routed';
-  /** Definition version the chat runs. Absent on chats started before versions existed (= v0 legacy). */
+  source: 'catalog' | 'plain';
+  /** Definition version the chat runs. */
   version?: number;
 }
-/** How a run ended: its work was marked completed (by the Orchestrator or Brother), its chat was closed, or it sat idle. */
+/** How a run ended: its work was marked completed (by agent_report, the Orchestrator or the user), its chat was closed, or it sat idle. */
 export type AgentRunEnd = 'completed' | 'closed' | 'stale';
 /** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). */
 export interface AgentRunOutcome {
@@ -132,22 +98,18 @@ export interface AgentRunOutcome {
 }
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
 export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
-/** The fenced `run-report` block an agent ends its run with (AGENTS-DESIGN §3 preamble): the latest one of the run.
- *  `ok: false` = a block was there but did not parse; no block at all leaves the field out. */
-export type AgentRunReport =
-  | { ok: true; at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number }
-  | { ok: false; at: number };
-/** Brother's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) his reopen of a run whose agent had
+/** The run's agent_report (agents/delegation.ts): the child's self-report of its delegation contract. */
+export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number }
+/** The user's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) a reopen of a run whose agent had
  *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
 export interface AgentRunCorrections { tagged: number; afterReport: number }
-// Agent metrics (AGENTS-DESIGN §5), computed in main (agents/run-metrics.ts) from agent-runs.json.
+// Role metrics (AGENTS-DESIGN §5), computed in main (agents/run-metrics.ts) from agent-runs.json.
 /** One §5 metric: n = the runs it rests on, coverage = n / ended runs (null: no ended run). */
 export interface Metric { value: number | null; n: number; coverage: number | null }
 export interface VersionMetrics {
   agentId: string;
-  /** null = all versions from 1 up (v0 left out) */
+  /** null = all versions */
   version: number | null;
-  legacy: boolean;
   ended: number;
   successRate: Metric;
   opinion: { value: number | null; n: number }; selfReport: { value: number | null; n: number };
@@ -162,18 +124,17 @@ export interface VersionMetrics {
   reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
 }
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number }
-/** One run = a chat started from an agent definition (agent-runs.json is the source of truth; the chat keeps a mirror). */
+/** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {
   source?: 'chat' | 'oneshot';
   oneshot?: { engine: string; job: 'pulse' | 'headline'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
-  /** pinned at start; 0 = started before versions existed (v0 legacy: never a baseline) */
   version: number;
-  goal: string; startedBy: 'user' | 'orchestrator'; startedAt: number;
-  /** a reviewer run of an implementer run, or a child started by agent_spawn */
+  goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;
+  /** the model tier and the model the run started on (role × skills × tier is the loop's unit of comparison) */
+  tier?: ModelTier; model?: string | null;
+  /** the run of the chat that delegated this one (agent_delegate), or of the run a Judge review is about */
   parentRunId?: string;
-  /** the parent run that spawned it: it ends when the parent ends */
-  spawnedBy?: string;
   reviewOf?: string; reworkOf?: string;
   /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): counts as rework of it */
   continuedFrom?: string;
@@ -186,23 +147,12 @@ export interface AgentRun {
   tokens: AgentRunTokens | null;
   report?: AgentRunReport;
   corrections?: AgentRunCorrections;
-  /** time the chat spent running (not waiting on Brother, a permission or the queue) while the run was open; missing on
+  /** time the chat spent running (not waiting on the user, a permission or the queue) while the run was open; missing on
    *  runs recorded before it was measured */
   executionMs?: number;
   /** what the run was about (AGENTS-DESIGN §4.8), set at start and frozen at its end; missing on runs recorded before tags
    *  existed: unknown in every filter, never a match */
   tags?: AgentRunTags;
-  /** how the run was routed, captured just after its start (agents/routing-snapshot.ts): the local classifier's view of
-   *  this request, and during a trial whether the parent (baseline) version would also have won it; missing = unknown */
-  routing?: AgentRunRouting;
-}
-/** The local classifier (#40) on the run's goal at its start. score/rank/mode null = nothing scored (empty goal, no
- *  classifier). trial.parentWins: the agent with its baseline definition still ranks first for this request (true),
- *  another agent ranks above it (false), unknown (null). Only parentWins true runs are compared with the baseline. */
-export interface AgentRunRouting {
-  at: number; agentId: string; version: number;
-  mode: 'hybrid' | 'words' | null; score: number | null; rank: number | null;
-  trial?: { baseline: number; parentWins: boolean | null };
 }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
@@ -211,7 +161,7 @@ export interface AgentRunTags { skills: string[]; app: string | null; repo: stri
 export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
 export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
-  /** the engine honours an agent's maxContext ("Contesto massimo"); absent = no */
+  /** the engine honours a role's maxContext ("Contesto massimo"); absent = no */
   maxContext?: boolean;
   models: { id: string; name: string }[];
   source: 'observed' | 'registry' | 'unknown';
@@ -223,15 +173,10 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
-  /** Read-only candidates. Applying one uses the normal explicit user save (or fork-on-edit). */
-  presetUpdates?: { agentId: string; presetRevision: number; draft: AgentDraft; differences: { field: string; before: unknown; after: unknown }[] }[];
-  /** Active definitions only: the launchable ones. */
+  /** The nine roles in their fixed order, then the background entries (Pulse). */
   profiles: AgentProfile[];
-  archived: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;
-  legacyRouting: { preserved: true; imported: number; remaining: number };
-  imageGeneration: { available: false; reason: string };
 }
 
 export type SetupGuide = { stage: 'choosing' | 'fallback' } | { stage: 'connecting' | 'guided'; engine: 'claude' | 'codex' | 'cursor'; chatId: string };
@@ -241,7 +186,6 @@ export interface SetupDraft {
   goals: string;
   tools: string;
   style: 'balanced' | 'concise' | 'detailed';
-  agentIds: string[];
   /** Explicit engine preferences; never a trust or login grant. */
   engines?: string[];
   guide?: SetupGuide;

@@ -1,55 +1,55 @@
-// Main-only UI acceptance for an agent's page and its editor; no provider or image-generation
-// requests. New agents come from "Crea agente" (agent-create.spec.ts): here an existing agent or its duplicate is edited.
-import { expect,test } from '@playwright/test';
-import { launchDemo,openAgents, shot } from './helpers';
-test('an agent page opens its editor on Modifica and the draft survives page navigation',async()=>{
-  const {app,page}=await launchDemo();
+// UI acceptance for a role's page and its editor (AgentStudio.tsx), demo services only, no provider requests: Modifica
+// opens the editor and a draft survives page navigation; an edit (a skill, the tier, a launch) is a new version that
+// survives a restart; "Ripristina predefinito" brings the shipped role back. Screenshots dark and light.
+import { expect, test } from '@playwright/test';
+import { launchDemo, openAgents, shot } from './helpers';
+
+test('a role page opens its editor on Modifica and the draft survives page navigation', async () => {
+  const { app, page } = await launchDemo();
   try {
-    await openAgents(page);
-    const studio=page.getByTestId('agent-studio');await expect(studio).toBeVisible();
-    await expect(page.getByTestId('agent-prompt')).toBeVisible(); // the agent's prompt, in full
-    await expect(page.getByTestId('agent-name')).toHaveCount(0);   // the editor opens on request
+    await openAgents(page, 'scout');
+    const studio = page.getByTestId('agent-studio'); await expect(studio).toBeVisible();
+    await expect(studio.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
+    await expect(page.getByTestId('agent-prompt')).toBeVisible(); // the role's instructions, in full
+    await expect(page.getByTestId('agent-editor')).toHaveCount(0);  // the editor opens on request
+    await shot(page, 'role-page-dark');
     await studio.getByTestId('agent-edit').click();
-    await expect(page.getByTestId('agent-name')).toHaveValue('Generale');
-    await page.getByTestId('agent-name').fill('Assistente offerte');
+    await page.getByTestId('agent-instructions').fill('Cerca prima nel repository, poi sul web.');
     await page.getByTestId('nav-task').click();
-    await openAgents(page);
-    await expect(page.getByTestId('agent-name')).toHaveValue('Assistente offerte');
-    await shot(page,'agent-editor-local-draft');
-  } finally {await app.close();}
+    await openAgents(page, 'scout');
+    await expect(page.getByTestId('agent-instructions')).toHaveValue('Cerca prima nel repository, poi sul web.');
+    await shot(page, 'role-editor-dark');
+  } finally { await app.close(); }
 });
 
-test('agent manifest edits survive navigation, save and restart, with safe read-only display',async()=>{
-  const first=await launchDemo();
+test('a role edit is a version that survives a restart; Ripristina predefinito brings the shipped role back', async () => {
+  const first = await launchDemo({ scheme: 'light' });
   try {
-    await openAgents(first.page);
-    const studio=first.page.getByTestId('agent-studio');
-    await studio.locator('article').filter({has:first.page.getByRole('heading',{name:'Generale',exact:true})}).getByRole('button',{name:'Duplica',exact:true}).click();
-    await expect(first.page.getByTestId('agent-name')).toHaveValue('Generale (copia)');
-    await first.page.getByTestId('agent-name').fill('Manifest test');
-    await first.page.getByTestId('agent-purpose').fill('Check persisted delegation criteria');
-    await first.page.getByTestId('agent-manifest-editor').locator('summary').click();
-    await first.page.getByTestId('agent-manifest-whenToUse').fill('<script>untrusted declaration</script>');
-    await first.page.getByTestId('agent-manifest-input').fill('Question and constraints');
-    await first.page.getByTestId('agent-manifest-output').fill('Cited result');
-    await first.page.getByTestId('agent-manifest-accessScopes').fill('Authorized sources only');
-    await first.page.getByTestId('agent-manifest-successCriteria').fill('Checkable references\nUnknowns explicit');
-    await first.page.getByTestId('nav-task').click();
-    await openAgents(first.page,'Generale (copia)');
-    await expect(first.page.getByTestId('agent-manifest-whenToUse')).toHaveValue('<script>untrusted declaration</script>');
+    await openAgents(first.page, 'artisan');
+    await expect(first.page.getByTestId('agent-reset')).toBeDisabled(); // nothing to reset on a shipped role
+    await first.page.getByTestId('agent-edit').click();
+    await first.page.getByTestId('agent-skill-input').fill('brain-edit');
+    await first.page.getByTestId('agent-skill-add').click();
+    await first.page.getByTestId('agent-tier').selectOption('top');
+    await first.page.getByTestId('agent-launches').getByRole('checkbox', { name: 'Scribe' }).check();
+    await shot(first.page, 'role-editor-light');
     await first.page.getByTestId('agent-save').click();
-    const card=studio.locator('article').filter({has: first.page.getByRole('heading',{name:'Manifest test',exact:true})});
-    await card.getByTestId('agent-manifest-view').locator('summary').click();
-    await expect(card).toContainText('<script>untrusted declaration</script>');
-    await expect(card.locator('script')).toHaveCount(0);
-    await shot(first.page,'agent-manifest-saved');
-  } finally {await first.app.close();}
-  const second=await launchDemo({userData:first.userData});
+    await expect(first.page.getByTestId('agent-editor')).toHaveCount(0);
+    await expect(first.page.getByTestId('agent-skills')).toContainText('brain-edit');
+    await expect(first.page.getByTestId('agent-versions')).toContainText('v2');
+    await shot(first.page, 'role-page-light');
+  } finally { await first.app.close(); }
+  const second = await launchDemo({ userData: first.userData, scheme: 'light' });
   try {
-    await openAgents(second.page,'Manifest test');
-    const card=second.page.getByTestId('agent-studio').locator('article').filter({has:second.page.getByRole('heading',{name:'Manifest test',exact:true})});
-    await card.getByRole('button',{name:'Modifica',exact:true}).click();
-    await expect(second.page.getByTestId('agent-manifest-input')).toHaveValue('Question and constraints');
-    await expect(second.page.getByTestId('agent-manifest-successCriteria')).toHaveValue('Checkable references\nUnknowns explicit');
-  } finally {await second.app.close();}
+    await openAgents(second.page, 'artisan');
+    const studio = second.page.getByTestId('agent-studio');
+    await expect(studio.getByTestId('agent-skills')).toContainText('brain-edit');
+    await expect(studio).toContainText('Scribe');
+    await studio.getByTestId('agent-reset').click();
+    await second.page.getByTestId('agent-reset-confirm').getByRole('button', { name: /^(Conferma il ripristino|Confirm the restore)$/ }).click();
+    await expect(studio.getByTestId('agent-skills')).not.toContainText('brain-edit');
+    await expect(studio.getByTestId('agent-reset')).toBeDisabled();
+    const artisan = await second.page.evaluate(async () => (await window.sb.invoke('agents:list', undefined)).profiles.find(p => p.id === 'artisan')!);
+    expect(artisan).toMatchObject({ userLocked: false, lastEditedBy: 'default', skills: [] });
+  } finally { await second.app.close(); }
 });

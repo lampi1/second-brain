@@ -77,8 +77,8 @@ export function linkGraph(state: BrainModelState | null): { nodes: LinkNode[]; e
   return { nodes, edges };
 }
 
-/** An agent choice: the agent suggested today is the one used, another one, or none passes the threshold. */
-export const choiceMatch = (c: ClassifierChoice): 'same' | 'differ' | 'none' => (!c.suggested ? 'none' : c.suggested.id === c.used.id ? 'same' : 'differ');
+/** A skill choice: every skill used is among those suggested today, some are not, or nothing is suggested. */
+export const choiceMatch = (c: ClassifierChoice): 'same' | 'differ' | 'none' => (!c.suggested.length ? 'none' : c.used.every(s => c.suggested.includes(s)) ? 'same' : 'differ');
 
 /** 0.5 → "50%"; null stays null (the page says "no data yet"). */
 export const pct = (v: number | null, locale = 'it-IT'): string | null => (v === null ? null : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(v));

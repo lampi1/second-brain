@@ -85,7 +85,6 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.FirstInterview.context": "Context",
   "audit.FirstInterview.goals": "Goals",
   "audit.FirstInterview.toolsAndMaterials": "Tools and materials",
-  "audit.FirstInterview.favouriteAgents": "Favourite agents",
   "audit.FirstInterview.workMemory": "Work memory",
   "audit.FirstInterview.detectedAvailability": "Detected availability",
   "audit.FirstInterview.setupDoesNotChangePermissionsOr": "Setup does not change permissions or accounts. Agents will start working when their engine is available and signed in.",

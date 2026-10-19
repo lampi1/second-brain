@@ -9,7 +9,7 @@ import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { AutoCloseService, autoCloseNow } from '../../../src/main/chats/auto-close';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -50,7 +50,7 @@ function fixture() {
   const worker = async (orchestratorId: string, ...turns: Turn[]) => {
     const pending: Turn[] = [...turns];
     const c = await m.create({ harness: 'claude', cwd: dir }, 'agent',
-      { owner: { ...compatibleOwner('claude', null), source: 'catalog', id: 'researcher', version: 1 }, instructions: 'Ricerca.', policy: null });
+      { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'researcher', version: 1 }, instructions: 'Ricerca.', policy: null });
     sinks.set(c.id, creating!); script.set(c.id, pending);
     await m.send(c.id, 'Cerca tre fonti sul tema e mandami il report.', undefined, false, 'Orchestrator');
     return c;

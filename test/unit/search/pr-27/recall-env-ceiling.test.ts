@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions } from '../../../../src/main/chats/session';
-import { compatibleOwner } from '../../../../src/main/agents/catalog';
+import { plainOwner } from '../../../../src/main/agents/catalog';
 import type { AgentPolicy } from '../../../../src/main/agents/tool-policy';
 import { RECALL_ENV } from '../../../../src/main/search/hybrid/recall';
 
@@ -36,7 +36,7 @@ function manager(env: ChatManagerOptions['env']) {
   return { m, starts };
 }
 const reviewer: AgentPolicy = { tools: { allow: ['read'] }, ceiling: 'default' };
-const agent = { owner: compatibleOwner('claude', null), instructions: 'Sei un revisore.', policy: reviewer };
+const agent = { owner: plainOwner('claude', null), instructions: 'Sei un revisore.', policy: reviewer };
 
 describe('PR #27: the recall env passed to ChatManager', () => {
   it("keeps an agent's ceiling when Brother's Claude settings live in CLAUDE_CONFIG_DIR", async () => {

@@ -3,8 +3,6 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { SysCode, SysParams } from './sys';
-import type { AgentClassification, ClassifierCalibration, ClassifierDecision } from './agent-classifier';
-import type { AgentProposal, AgentUndo } from './agent-authoring';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
 import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from './agent-pack';
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -12,7 +10,9 @@ import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
-import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { DelegationSettings, ModelTier, WorkRoleId } from './roles';
+import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
@@ -322,14 +322,18 @@ export interface RunInfo {
 }
 
 export interface NewChat {
-  /** Expected catalog version and run links; validated before a new engine starts. */
-  agentVersion?: number;
+  /** Expected role version and run links; validated before a new engine starts. */
+  roleVersion?: number;
   parentRunId?: string;
   reviewOf?: string;
   reworkOf?: string;
   goal?: string;
-  /** Catalog owner. Main resolves its frozen configuration; never changes an existing session. */
-  agentId?: string;
+  /** The role the chat runs (shared/roles.ts). Main resolves its frozen configuration; never changes an existing session. */
+  roleId?: string;
+  /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
+  tier?: ModelTier;
+  /** an independent role picks a model other than this one (its parent's) */
+  independentOf?: { engine: string; model: string | null };
   harness: Harness;
   cwd: string;
   prompt?: string;
@@ -478,7 +482,7 @@ export interface FeedEvent {
   /** the card's one action (agent-retired: Ripristina) */
   action?: FeedAction;
 }
-export type FeedAction = { kind: 'agent-restore'; agentId: string } | { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
+export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
@@ -707,6 +711,10 @@ export interface Settings {
   /** Explicit repository/worktree roots where Codex uses never + workspace-write. Empty = on-request everywhere.
    *  Each chat gets only its matching root; sibling repositories and worktrees require their own entry. */
   codexAutonomyRoots?: string[];
+  /** limits of delegation between role chats (Impostazioni → Ruoli e deleghe; shared/roles.ts DELEGATION_DEFAULTS) */
+  delegation: DelegationSettings;
+  /** the model each tier means on an engine (engine id → tier → model id; '' or absent = the brain's registry) */
+  modelTiers: Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
@@ -772,7 +780,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'headlineOn' | 'headlineModel' | 'headlineEffort';
+  | 'headlineOn' | 'headlineModel' | 'headlineEffort' | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
   type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths' | 'slots'; // slots: 1-3 local HH:MM times
@@ -902,7 +910,9 @@ export interface RouteDecision {
   /** how many hand-offs led to this chat */
   handoffs?: number;
 }
-export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'classifier' | 'parent' | 'fallback'; score?: number; threshold?: number; mode?: 'hybrid' | 'words'; modelFrom?: 'profile' | 'table' | 'engine' }
+/** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
+ *  its tier on the engine, or the engine's default). */
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
@@ -1142,36 +1152,30 @@ export interface InvokeMap {
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
-  'agents:classify': [{ request: string }, AgentClassification];
-  /** the agent classifier's threshold per channel against the user's confirmed runs (agents/classifier-calibration.ts) */
-  'agents:classifierCalibration': [void, ClassifierCalibration[]];
-  /** the user's decision on a suggested threshold (apply / dismiss) or back to the default (reset); agents have no tool for it */
-  'agents:classifierDecide': [ClassifierDecision, ClassifierCalibration[]];
-  'agents:proposals': [void, AgentProposal[]];
-  'agents:proposalDecide': [{ id: string; accept: boolean }, AgentProfile | null];
+  /** the brain skills that fit a request, best first (skills/suggest.ts; advisory: the user picks what a role chat may use) */
+  'skills:suggest': [{ request: string }, SkillSuggestions];
+  /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];
   'agents:exportPlan': [{ id: string; target: PackTarget }, PackExportPlan];
   'agents:exportFix': [{ token: string; item: string; action: 'exclude' | 'rescan' | 'allow' | 'open' }, PackExportPlan];
   'agents:export': [{ token: string; includeStats: boolean }, { ok: true; path: string } | { ok: false; findings: PackFinding[] }];
   'agents:importInspect': [{ pick: true } | { dropped: string }, PackImportReview | null];
-  'agents:importApply': [{ token: string; approveScripts: boolean; approvePersonalData?: boolean; collision: 'update' | 'copy' | 'rename' }, AgentProfile[]];
+  /** attaches the reviewed pack's skills to `roleId` (a trial version of that role) and writes its rules when absent */
+  'agents:importApply': [{ token: string; approveScripts: boolean; approvePersonalData?: boolean; roleId: WorkRoleId }, AgentProfile[]];
   'agents:importCancel': [{ token: string }, void];
-  /** ends the open trial of a pack update; a new agent's probation uses agents:keep/agents:retire */
+  /** ends a role's open trial: keep its version or roll back to the baseline */
   'agents:trialDecide': [{ id: string; decision: 'keep' | 'rollback' }, AgentProfile];
   /** the user's decision on one "Da approvare" entry (AgentLifecycleProposal, read at /api/agents/lifecycle): approve does
    *  what its kind says (agent-lifecycle.ts), dismiss drops it for a while; returns the queue after the decision */
   'agents:lifecycleDecide': [AgentLifecycleDecide, AgentLifecycleSnapshot];
-  'agents:save': [{ profile: AgentDraft; id?: string }, AgentProfile];
-  'agents:duplicate': [{ id: string }, AgentProfile];
-  'agents:archive': [{ id: string }, AgentProfile];
-  'agents:restore': [{ id: string }, AgentProfile];
+  /** the user's edit of a role (Brain → Agenti) */
+  'agents:save': [{ profile: AgentDraft; id: string }, AgentProfile];
+  /** "Ripristina predefinito": the shipped role again */
+  'agents:reset': [{ id: string }, AgentProfile];
   'agents:history': [{ id: string }, AgentVersion[]];
   /** the §5 metrics per agent and version (A6); since = only runs ended from then on; skill/app/repo = only runs with that
    *  tag (untagged runs never match) */
   'agents:metrics': [AgentMetricsFilter | undefined, AgentMetrics[]];
-  /** Brother's Tieni / Ritira on an agent in probation (AGENTS-DESIGN §4.7) */
-  'agents:keep': [{ id: string }, AgentProfile];
-  'agents:retire': [{ id: string; reason?: string }, AgentProfile];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
@@ -1467,7 +1471,7 @@ export const INVOKE_CHANNELS = [
   'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:classify', 'agents:classifierCalibration', 'agents:classifierDecide', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',

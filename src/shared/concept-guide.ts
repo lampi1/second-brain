@@ -3,8 +3,8 @@
 // the source files its claims come from (`sources`, checked to exist by test/unit/concept-guide.test.ts) and a comment
 // beside each part cites the file it was read from; a statement about what the app does NOT do yet goes in `target`,
 // never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discutine»:
-// the text that carries a card into a chat (discussText) and the instruction for the Orchestrator when no explainer agent
-// exists (orchestratorText); lib/concept-discuss.ts decides where it goes.
+// the text that carries a card into a chat (discussText) and the message «Discuti» sends to the Orchestrator
+// (orchestratorText).
 
 export type GuideLang = 'it' | 'en';
 /** One text in both UI languages (ADR 0057). */
@@ -45,160 +45,154 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'every-task-agent',
     prominent: true,
-    title: b('Ogni compito passa da un agente', 'Every task goes through an agent'),
+    title: b('Ogni compito passa da un ruolo', 'Every task goes through a role'),
     summary: b(
-      'Qui il lavoro passa da un agente: scegli uno specialista oppure la chat viene assegnata a Generale.',
-      'Here work goes through an agent: choose a specialist or the chat is assigned to Generale.'),
+      'Il lavoro lo fanno nove ruoli fissi: l’Orchestrator coordina, otto ruoli di lavoro eseguono, ognuno in una chat che vedi.',
+      'Nine fixed roles do the work: the Orchestrator coordinates, eight work roles carry it out, each in a chat you can see.'),
     points: [
-      // src/renderer/components/AgentStartDialog.tsx (createChat with agentId); src/main/agents/catalog.ts resolve()
-      b('Tu (o l’Orchestrator) avvii un agente del catalogo: la chat nasce con il suo motore, modello e istruzioni.',
-        'You (or the Orchestrator) start a catalog agent: the chat is born with its engine, model and instructions.'),
-      // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog
-      b('L’Orchestrator legge il catalogo con agent_catalog (con la richiesta: i punteggi del classificatore) e apre il lavoro con app_create_chat, passando l’agentId scelto: motore, modello, sforzo e contesto massimo sono quelli del profilo, nient’altro li scavalca.',
-        'The Orchestrator reads the catalog with agent_catalog (with the request: the classifier’s scores) and opens the work with app_create_chat, passing the chosen agentId: engine, model, effort and maximum context are the profile’s, nothing overrides them.'),
-      // src/main/appctl/tools.ts app_create_chat (classifyAgents); src/main/agents/catalog.ts resolve(): Generale
-      b('Senza un agente indicato, l’app chiede al classificatore locale: sopra la soglia la chat va a quell’agente, altrimenti a Generale, con motore e modello dalla tabella di instradamento o dai tuoi predefiniti.',
-        'Without a named agent, the app asks the local classifier: above its threshold the chat goes to that agent, otherwise to Generale, with engine and model from the routing table or your defaults.'),
-      // src/main/agents/subagent-tool.ts agent_start_subagent
-      b('Un agente al lavoro può avviare un altro agente del catalogo come suo sotto-agente: è collegato alla sua run, risponde allo stesso Orchestrator e gli manda il risultato. Il sotto-agente non ha mai più strumenti, server MCP o permessi di chi lo avvia e lavora nella sua cartella o in un suo worktree.',
-        'A working agent can start another catalog agent as its own sub-agent: it is linked to its run, answers to the same Orchestrator and sends it the result. The sub-agent never has more tools, MCP servers or permissions than the agent that starts it, and works in its folder or one of its worktrees.'),
+      // src/shared/roles.ts ROLE_IDS, ROLE_DEFAULTS
+      b('I ruoli sono sempre gli stessi: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nessuno se ne crea uno nuovo: un saper fare che manca diventa una skill.',
+        'The roles are always the same: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nobody creates a new one: missing know-how becomes a skill.'),
+      // src/renderer/components/AgentStartDialog.tsx (createChat with roleId and skills); src/main/agents/catalog.ts resolve()
+      b('Tu avvii un ruolo da «Avvia un ruolo» (Ctrl+N): scegli il ruolo e le skill che l’app ti suggerisce; la chat nasce con motore, modello del suo livello e istruzioni del ruolo.',
+        'You start a role from "Start a role" (Ctrl+N): pick the role and the skills the app suggests; the chat is born with the role’s engine, its tier’s model and the role’s instructions.'),
+      // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog, skills_suggest
+      b('L’Orchestrator legge i ruoli con agent_catalog, sceglie le skill con skills_suggest e apre il lavoro con app_create_chat indicando roleId: motore, modello e sforzo li decide il ruolo, nient’altro li scavalca.',
+        'The Orchestrator reads the roles with agent_catalog, picks skills with skills_suggest and opens the work with app_create_chat naming a roleId: the role decides engine, model and effort, nothing overrides them.'),
+      // src/shared/roles.ts canLaunch, launches; src/main/appctl/tools.ts
+      b('Un ruolo al lavoro delega una parte a un altro ruolo che può avviare: il figlio è una chat visibile sotto il genitore, mai un sotto-agente nascosto, e non ha mai più permessi del genitore.',
+        'A working role delegates a part to another role it may launch: the child is a visible chat under its parent, never a hidden sub-agent, and never gets more permissions than its parent.'),
+      // src/main/agents/run-report.ts; src/shared/roles.ts ROLE_PREAMBLE
+      b('Ogni ruolo chiude il suo incarico con agent_report: esito, riassunto, risultato e i criteri del contratto con le prove. È un’autovalutazione, non una verifica indipendente.',
+        'Every role closes its assignment with agent_report: outcome, summary, output and the contract’s criteria with their evidence. It is a self-report, not an independent check.'),
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
-      b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. L’Orchestrator e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
-        'Catalog chats, including Generale, have a "run" with counters and cost. The Orchestrator and the compatible fallback when Generale is missing have no catalog run.'),
-      // src/renderer/components/AgentCreateDialog.tsx; src/main/agents/authoring.ts agent_create, author-policy.ts checkCreationRequest
-      b('Un agente nuovo nasce da «Crea agente» in Agenti: un breve questionario diventa un tuo messaggio all’Orchestrator, che lo crea con agent_create.',
-        'A new agent starts from "Create agent" in Agents: a short questionnaire becomes your message to the Orchestrator, which creates it with agent_create.'),
-      // src/main/agents/authoring.ts agent_suggest; rememberHumanMessage (only the UI's chat:create/chat:send)
-      b('L’Orchestrator crea un agente solo con il tuo ok: un messaggio scritto da te nell’app negli ultimi 30 minuti, o la tua risposta in un pannello che glielo propone. Una chiamata rifiutata (un valore sbagliato) non consuma il tuo ok. Altrimenti può solo proporlo, e decidi tu in Agenti.',
-        'The Orchestrator creates an agent only with your ok: a message you wrote in the app in the last 30 minutes, or your answer in a panel proposing it. A refused call (a wrong value) does not use up your ok. Otherwise it can only suggest one, and you decide in Agents.'),
-      // src/main/agents/probation.ts; src/main/chats/manager.ts evaluateProbation
-      b('Per i profili già in prova, il servizio valuta risultati confermati, correzioni, rifacimenti e inattività per tenerli o ritirarli.',
-        'For profiles already on probation, the service evaluates confirmed results, corrections, rework and inactivity to keep or retire them.'),
+      b('Le chat dei ruoli di lavoro hanno una «run» con contatori e costo; l’Orchestrator e le chat avviate senza ruolo (con i tuoi permessi) no.',
+        'Work-role chats have a "run" with counters and cost; the Orchestrator and chats started without a role (with your permissions) do not.'),
+      // src/main/agents/loop.ts; src/main/agents/trials.ts; src/main/agents/suggestions.ts
+      b('L’app migliora i ruoli da sola: testi e skill subito, con «Annulla»; livello di modello, strumenti e permessi solo con il tuo sì in «Da approvare», come versione in prova.',
+        'The app improves the roles by itself: texts and skills at once, with "Undo"; model tier, tools and permissions only with your yes in "To approve", as a trial version.'),
     ],
     analogy: b(
-      'Come uno studio con un elenco di specialisti: il coordinatore sceglie chi chiamare; se manca lo specialista giusto, per ora affida il lavoro a un generalista e ti suggerisce chi assumere.',
-      'Like a practice with a list of specialists: the coordinator picks who to call; if the right one is missing, for now it hands the job to a generalist and suggests whom to hire.'),
-    diagram: { kind: 'cycle', steps: [b('Compito', 'Task'), b('Orchestrator', 'Orchestrator'), b('Specialista o Generale', 'Specialist or Generale'), b('Risultato', 'Result'), b('Catalogo', 'Catalog')] },
+      'Come una squadra con ruoli fissi: il coordinatore assegna, ognuno fa il suo pezzo in vista di tutti e torna con il risultato; se manca un saper fare, si scrive il manuale, non si assume un altro.',
+      'Like a team with fixed roles: the coordinator assigns, each does their part in plain sight and comes back with the result; when know-how is missing, you write the manual, you do not hire someone else.'),
+    diagram: { kind: 'cycle', steps: [b('Compito', 'Task'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Risultato', 'Result'), b('Miglioramento', 'Improvement')] },
     tech: [
-      // src/shared/agents.ts AgentProfile / AgentOrigin
-      tech(DATA, 'AgentProfile { id, name, purpose, instructions, manifest, engine, model, effort, tools, permissionCeiling, origin: preset | user | orchestrator, version }.',
-        'AgentProfile { id, name, purpose, instructions, manifest, engine, model, effort, tools, permissionCeiling, origin: preset | user | orchestrator, version }.'),
-      // src/main/agents/catalog.ts (agents.v2.json), src/main/agents/versions.ts (agent-history.json)
-      tech(FILES, 'userData/agents.v2.json (catalogo) e agent-history.json (versioni, max 50 per agente).',
-        'userData/agents.v2.json (catalog) and agent-history.json (versions, max 50 per agent).'),
-      // src/main/agents/catalog.ts MAX_ACTIVE_AGENTS / MAX_AGENTS
-      tech(LIMITS, 'Al massimo 64 agenti attivi e 256 in tutto.', 'At most 64 active agents and 256 in total.'),
+      // src/shared/agents.ts AgentProfile
+      tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, independent, launches, skills, version, activeVersion, trial?, userLocked }.',
+        'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, independent, launches, skills, version, activeVersion, trial?, userLocked }.'),
+      // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
+      tech(FILES, 'userData/roles.json (i nove ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the nine roles and Pulse) and role-history.json (each role’s versions).'),
+      // src/shared/roles.ts DELEGATION_DEFAULTS
+      tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
     ],
     target: [
-      // Automatic creation is absent; evaluation of existing probation profiles is implemented.
-      b('L’Orchestrator che crea da solo un agente quando manca (origine «orchestrator»): non implementato.',
-        'The Orchestrator creating an agent by itself when one is missing (origin "orchestrator"): not implemented.'),
-      b('Riconoscere in automatico il «buco» (nessun agente adatto): oggi lo valuta solo l’Orchestrator leggendo il catalogo.',
-        'Detecting the "gap" (no fitting agent) automatically: today only the Orchestrator judges it by reading the catalog.'),
-      b('«Salva come agente» da una chat ad hoc riuscita: non esiste ancora.', '"Save as agent" from a successful ad-hoc chat: does not exist yet.'),
+      b('Su Codex e Cursor il divieto dei sotto-agenti interni del motore è scritto nelle istruzioni, non applicato dall’app.',
+        'On Codex and Cursor the ban on the engine’s internal sub-agents is written in the instructions, not enforced by the app.'),
+      b('Router smista solo i lotti che gli dai tu: l’app non gli manda da sola il lavoro in arrivo.',
+        'Router triages only the batches you give it: the app does not send it incoming work by itself.'),
     ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/probation.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx', 'src/main/agents/subagent-tool.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts'],
   },
   {
     id: 'agents',
-    title: b('Agenti e preset', 'Agents and presets'),
-    summary: b('Un agente è un profilo salvato: istruzioni, motore, modello, strumenti e limiti di permesso.',
-      'An agent is a saved profile: instructions, engine, model, tools and permission limits.'),
+    title: b('I ruoli e il loro editor', 'The roles and their editor'),
+    summary: b('Un ruolo è un profilo fisso con istruzioni, motore, livello di modello, strumenti, tetto dei permessi, ruoli che può avviare e skill di serie.',
+      'A role is a fixed profile with instructions, engine, model tier, tools, permission ceiling, the roles it may launch and its default skills.'),
     points: [
-      // src/main/agents/catalog.ts ROLES
-      b('L’app parte con sei agenti di base: Generale, Ricerca, Scrittura e documenti, Analisi, Pianificazione, Sviluppo.',
-        'The app starts with six base agents: Generale, Research, Writing and documents, Analysis, Planning, Development.'),
-      // src/shared/agents.ts BEHAVIOUR_FIELDS
-      b('Cambiare istruzioni, manifesto, motore, modello, sforzo, contesto massimo, strumenti o tetto dei permessi crea una nuova versione.',
-        'Changing instructions, manifest, engine, model, effort, maximum context, tools or permission ceiling creates a new version.'),
-      // src/main/chats/manager.ts startSession compactWindowTokens; src/renderer/components/AgentStudio.tsx
-      b('«Contesto massimo»: oltre quella soglia la chat dell’agente si compatta da sola. Lo applicano i motori Claude, gli altri lo ignorano (l’editor lo dice); vuoto = l’impostazione dell’app.',
-        '"Maximum context": past it the agent’s chat compacts itself. Claude engines apply it, the others ignore it (the editor says so); empty = the app setting.'),
-      // src/shared/agents.ts AgentManifest; src/shared/agent-manifest.ts
-      b('Il manifesto dice quando usarlo e quando no, input, output e criteri di successo: sono dichiarazioni, non concedono permessi.',
-        'The manifest says when to use it and when not, input, output and success criteria: declarations only, they grant no permissions.'),
-      // src/main/chats/manager.ts (profile block on the first message)
-      b('Le istruzioni del profilo entrano una volta, nel primo messaggio della chat, marcate come profilo che non approva azioni.',
-        'The profile’s instructions go in once, in the chat’s first message, marked as a profile that approves no actions.'),
-      // src/shared/role-presets.ts, src/shared/role-preset-catalog.ts, src/renderer/lib/role-consumers.ts
-      b('I «ruoli» (dev, qa, po, cto) sono un’altra cosa: scelgono quali agenti consigliarti e quali pagine mostrarti.',
-        '"Roles" (dev, qa, po, cto) are a different thing: they choose which agents to suggest and which pages to show you.'),
-      // src/main/agents/catalog.ts resolve()
-      b('All’avvio l’app controlla che motore, modello e sforzo della chat siano quelli dell’agente; se no rifiuta. Se il profilo non indica un modello, la chat prende quello della tabella di instradamento.',
-        'At start the app checks the chat’s engine, model and effort match the agent’s; otherwise it refuses. If the profile names no model, the chat takes the routing table’s.'),
+      // src/shared/roles.ts ROLE_DEFAULTS
+      b('Strategist pianifica, Scout cerca e legge, Artisan costruisce, Sentinel verifica, Herald comunica, Router smista lotti, Judge valuta in modo indipendente, Scribe scrive nel brain.',
+        'Strategist plans, Scout searches and reads, Artisan builds, Sentinel verifies, Herald communicates, Router triages batches, Judge evaluates independently, Scribe writes to the brain.'),
+      // src/renderer/components/AgentStudio.tsx RoleEditor
+      b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, strumenti, tetto, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
+        'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, tools, ceiling, launchable roles and maximum context; name, purpose and character stay the role’s.'),
+      // src/main/agents/catalog.ts reset()
+      b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma; le skill arrivate da un pacchetto restano.',
+        '"Restore default" brings the role back as the app ships it, after a confirmation; skills that came from a pack stay.'),
+      // src/shared/agents.ts BEHAVIOUR_FIELDS; src/main/agents/versions.ts
+      b('Ogni cambio di comportamento è una versione nuova: la pagina ne mostra le ultime e ne riattiva una vecchia con un clic.',
+        'Every behaviour change is a new version: the page shows the latest ones and brings an older one back with a click.'),
+      // src/main/agents/model-tier.ts tierModel, independentModel
+      b('Il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge prendono un modello diverso da quello del genitore quando c’è.',
+        'The tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge take a model other than their parent’s when there is one.'),
+      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand
+      b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat, uno che legge ti arriva come permesso senza «sempre».',
+        'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat, one that reads reaches you as a permission without "always".'),
+      // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
+      b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: colore e copricapo a misura piccola, viso e attrezzo da 28 px.',
+        'Every role has a cartoon character recognisable even at 16 px: colour and headwear at small sizes, face and prop from 28 px.'),
     ],
-    analogy: b('Come la scheda di un collaboratore: cosa sa fare, con quali attrezzi, fin dove può spingersi senza chiedere.',
-      'Like a colleague’s profile card: what they do, with which tools, how far they may go without asking.'),
+    analogy: b('Come le schede dei reparti di un’officina: chi fa cosa, con quali attrezzi e fin dove può spingersi senza chiedere; la scheda si aggiorna, il reparto resta.',
+      'Like the department cards of a workshop: who does what, with which tools and how far they may go without asking; the card is updated, the department stays.'),
     tech: [
-      tech(DATA, 'Categorie: development, ops, personal, other. Classi di strumenti: read, edit, shell, web, browser, mail-draft, calendar-read, brain-write, mcp.',
-        'Categories: development, ops, personal, other. Tool classes: read, edit, shell, web, browser, mail-draft, calendar-read, brain-write, mcp.'),
-      // src/main/agents/catalog.ts text limits
-      tech(LIMITS, 'Nome ≤ 80 caratteri, scopo ≤ 400, istruzioni ≤ 8000; manifesto: liste di al massimo 12 voci.',
-        'Name ≤ 80 chars, purpose ≤ 400, instructions ≤ 8000; manifest: lists of at most 12 items.'),
-      tech(WHERE, 'Pagina Agenti (AgentCatalogPage, l’editor è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agenti page (AgentCatalogPage, the editor is AgentStudio); catalog in the main process (AgentCatalogService).'),
+      tech(DATA, 'Classi di strumenti: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Tetti: plan, default, acceptEdits.',
+        'Tool classes: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Ceilings: plan, default, acceptEdits.'),
+      // src/main/agents/catalog.ts behaviour()
+      tech(LIMITS, 'Istruzioni ≤ 8000 caratteri; al massimo 40 skill di serie; un ruolo non avvia mai sé stesso né l’Orchestrator.',
+        'Instructions ≤ 8000 chars; at most 40 default skills; a role never launches itself or the Orchestrator.'),
+      tech(WHERE, 'Pagina Agenti (AgentCatalogPage, la pagina del ruolo è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agents page (AgentCatalogPage, the role page is AgentStudio); catalog in the main process (AgentCatalogService).'),
     ],
-    sources: ['src/shared/agents.ts', 'src/shared/agent-manifest.ts', 'src/main/agents/catalog.ts', 'src/shared/role-presets.ts', 'src/shared/role-preset-catalog.ts', 'src/renderer/lib/role-consumers.ts', 'src/renderer/components/AgentStudio.tsx'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
   },
   {
     id: 'skills',
-    title: b('Agenti e skill: la sezione Brain', 'Agents and skills: the Brain section'),
-    summary: b('Due concetti soli: l’agente è chi lavora, la skill è come si fa un lavoro. Si mantengono da soli, e ogni modifica si annulla con un clic.',
-      'Two concepts only: the agent is who works, the skill is how a job is done. They keep themselves up to date, and every change is undone with one click.'),
+    title: b('Ruoli e skill: la sezione Brain', 'Roles and skills: the Brain section'),
+    summary: b('Due concetti soli: il ruolo è chi lavora, la skill è come si fa un lavoro. Si mantengono da soli, e ogni modifica si annulla con un clic.',
+      'Two concepts only: the role is who works, the skill is how a job is done. They keep themselves up to date, and every change is undone with one click.'),
     points: [
       // src/main/brainmodel/model.ts readSkills; src/main/agents/pack/flows.ts runtime
-      b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle; l’agente che la dichiara la trova caricata quando parte.',
-        'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders; the agent that declares it finds it loaded when it starts.'),
+      b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle. Un ruolo usa le sue skill di serie e quelle che il suo avvio gli dà; una skill che non ha gli viene rifiutata.',
+        'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders. A role uses its default skills and the ones its launch gives it; a skill it does not have is refused.'),
       // src/renderer/components/SkillsPage.tsx; src/main/brainmodel/service.ts link
-      b('La pagina Skill mostra chi usa ogni skill e quali strumenti chiama; «Agenti» su una scheda la collega o la toglie subito, senza approvazione.',
-        'The Skill page shows who uses each skill and which tools it calls; "Agents" on a card links or drops it at once, with no approval.'),
+      b('La pagina Skill mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
+        'The Skill page shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
       b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
         'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
-      // src/main/brainmodel/changes.ts
-      // src/main/agents/authoring.ts applyNow, USER_ONLY_FIELDS (ADR 0082)
-      b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era; anche quelle dell’Orchestrator a un agente (modello, sforzo, istruzioni: una versione in prova). Il tuo sì resta solo per produzione, permessi (strumenti e tetto di un agente), impostazioni (anche il suo motore), agenti nuovi e testi per altri.',
-        'Every change is logged with what, why and the evidence, and "Undo" puts it back; the Orchestrator’s changes to an agent too (model, effort, instructions: a trial version). Your yes is needed only for production, permissions (an agent’s tools and ceiling), settings (its engine too), new agents and texts for others.'),
-      // src/main/brainmodel/legacy-sources.ts
-      b('Una volta sola, i runbook e le routine di prima diventano skill collegate agli agenti giusti, senza perdere testo: il resoconto è sulla pagina Skill.',
-        'Once, the former runbooks and routines become skills linked to the right agents, losing no text: the report is on the Skill page.'),
+      // src/main/brainmodel/changes.ts; src/main/agents/catalog.ts maintain (ADR 0083)
+      b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
+        'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
+      // src/main/brainmodel/procedure-sources.ts
+      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è sulla pagina Skill.',
+        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is on the Skill page.'),
       // src/renderer/components/brain-model/
-      b('Regole valgono per tutti gli agenti; Memoria tiene conoscenza, quello che è successo e una memoria per agente; Mappa mostra agente → skill → regole → memoria.',
-        'Rules apply to every agent; Memory holds knowledge, what happened and one memory per agent; Map shows agent → skills → rules → memory.'),
+      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo; Mappa mostra ruolo → skill → regole → memoria.',
+        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role; Map shows role → skills → rules → memory.'),
       // src/main/agents/pack/emit.ts, rules.ts
-      b('Esportare un agente porta profilo, skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importarlo rimette tutto, senza toccare le tue skill.',
-        'Exporting an agent carries the profile, skills, the tools list (TOOLS.md) and the rules; never memory. Importing restores it all, without touching your skills.'),
+      b('Esportare un ruolo porta il suo testo, le skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importare un pacchetto aggiunge skill e regole al ruolo che scegli, come versione in prova: il ruolo tiene i suoi permessi.',
+        'Exporting a role carries its text, skills, the tools list (TOOLS.md) and the rules; never memory. Importing a pack adds skills and rules to the role you pick, as a trial version: the role keeps its permissions.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: la tabella che sceglie il modello con i risultati di ogni riga, l’agente suggerito contro quello usato, la qualità per settimana.',
-        'Classifiers, read only: the table that picks the model with each row’s results, the suggested agent versus the one used, quality by week.'),
+      b('Classificatori, in sola lettura: la tabella che sceglie il modello con i risultati di ogni riga, le skill suggerite contro quelle date, la qualità per settimana.',
+        'Classifiers, read only: the table that picks the model with each row’s results, the suggested skills versus the ones given, quality by week.'),
     ],
-    analogy: b('Come una squadra con un manuale condiviso: le persone sono gli agenti, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
-      'Like a team with a shared manual: the people are the agents, the manual’s pages are the skills, and someone keeps it tidy every night.'),
+    analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
+      'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
     tech: [
-      tech(DATA, 'Registro delle modifiche e resoconto della migrazione nella cartella dati dell’app; memoria di un agente in agents/<id>/memory.md, quella comune in memory/shared.md.',
-        'Change log and migration report in the app’s data folder; an agent’s memory in agents/<id>/memory.md, the shared one in memory/shared.md.'),
+      tech(DATA, 'Registro delle modifiche e resoconto della migrazione nella cartella dati dell’app; memoria di un ruolo in agents/<id>/memory.md, quella comune in memory/shared.md.',
+        'Change log and migration report in the app’s data folder; a role’s memory in agents/<id>/memory.md, the shared one in memory/shared.md.'),
       tech(WHERE, 'IPC brainmodel:state, :maintain, :rollback, :link e classifiers:state; pagine in src/renderer/components/brain-model/ (ADR 0077).',
         'IPC brainmodel:state, :maintain, :rollback, :link and classifiers:state; pages in src/renderer/components/brain-model/ (ADR 0077).'),
     ],
-    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/legacy-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'docs/adr/0077-agents-and-skills-only.md'],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'docs/adr/0077-agents-and-skills-only.md'],
   },
   {
     id: 'orchestrator',
-    title: b('L’Orchestrator e lo smistamento', 'The Orchestrator and routing work'),
-    summary: b('La chat di coordinamento nella colonna a destra: pianifica, apre le chat di lavoro e legge la loro posta.',
-      'The coordinating chat in the right column: it plans, opens work chats and reads their mail.'),
+    title: b('L’Orchestrator', 'The Orchestrator'),
+    summary: b('La chat di coordinamento nella colonna a destra: pianifica, delega ai ruoli e segue a che punto sono, senza leggerne il lavoro.',
+      'The coordinating chat in the right column: it plans, delegates to the roles and follows where they stand, without reading their work.'),
     points: [
       // src/renderer/lib/orchestrator-route.ts, src/main/chats/orchestrator-service.ts, ADR 0068
-      b('Ce n’è uno solo, sempre nella colonna di destra (Ctrl+R). Lo crei tu: un agente non può crearne un altro.',
-        'There is only one, always in the right column (Ctrl+R). You create it: an agent cannot create another.'),
-      // src/main/chats/orchestrator.ts ORCHESTRATOR_ROLE; src/main/chats/manager.ts agentCatalogBrief
-      b('A ogni messaggio riceve il suo ruolo e un elenco compatto del catalogo agenti (id, nome, motore, quando usarlo).',
-        'With every message it gets its role and a compact list of the agent catalog (id, name, engine, when to use it).'),
-      // src/main/agents/discovery.ts agent_catalog
-      b('Per scegliere chi fa il lavoro legge agent_catalog (4 profili per pagina, mai le istruzioni).',
-        'To choose who does the work it reads agent_catalog (4 profiles per page, never the instructions).'),
+      b('Ce n’è uno solo, sempre nella colonna di destra (Ctrl+R). Lo crei tu: un ruolo non può crearne un altro.',
+        'There is only one, always in the right column (Ctrl+R). You create it: a role cannot create another.'),
+      // src/main/agents/orchestrator-role.ts; src/main/agents/discovery.ts roleCatalogBrief
+      b('Riceve il suo ruolo e l’elenco dei ruoli di lavoro (id, nome, a cosa serve); i dettagli li legge con agent_catalog, mai le istruzioni dei ruoli.',
+        'It gets its role and the list of work roles (id, name, what each is for); it reads the details with agent_catalog, never the roles’ instructions.'),
       // src/main/appctl/tools.ts app_create_chat
-      b('Apre il lavoro con app_create_chat: con un agentId valgono motore, modello e sforzo dell’agente; senza, sceglie il classificatore (sopra soglia) o Generale con la tabella di instradamento.',
-        'It opens the work with app_create_chat: with an agentId the agent’s engine, model and effort apply; without, the classifier picks (above its threshold) or Generale with the routing table.'),
+      b('Delega con app_create_chat: roleId obbligatorio, un titolo «Area · cosa», il contratto come primo messaggio e le skill scelte con skills_suggest. Il ruolo decide motore e modello; tier chiede un livello più alto fino al massimo del ruolo.',
+        'It delegates with app_create_chat: roleId required, an "Area · what" title, the contract as the first message and the skills picked with skills_suggest. The role decides engine and model; tier asks for a higher level up to the role’s maximum.'),
+      // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
+      b('Dei figli vede solo lo stato e i numeri (agent_metrics): mai il loro testo. Il risultato gli arriva quando il figlio chiude con agent_report.',
+        'Of its children it sees only state and numbers (agent_metrics): never their text. The result reaches it when the child closes with agent_report.'),
       // src/shared/newchat.ts
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
@@ -209,62 +203,58 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
         'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
     ],
-    analogy: b('Come un caporedattore: non scrive ogni pezzo, sceglie chi lo scrive e tiene le fila.',
-      'Like an editor-in-chief: does not write every piece, picks who writes it and keeps the threads together.'),
-    diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('agent_catalog', 'agent_catalog'), b('app_create_chat', 'app_create_chat'), b('Chat di lavoro', 'Work chat')] },
+    analogy: b('Come un caporedattore: non scrive ogni pezzo, sceglie chi lo scrive, sa a che punto è ognuno e legge il pezzo finito.',
+      'Like an editor-in-chief: does not write every piece, picks who writes it, knows where each one stands and reads the finished piece.'),
+    diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Chat di lavoro', 'Work chat'), b('agent_report', 'agent_report')] },
     tech: [
-      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source (agent | table | default | override | explore), kind, area, tableVersion, reason, agent? { id, version, chosenBy, score?, threshold?, modelFrom } } }.',
-        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source (agent | table | default | override | explore), kind, area, tableVersion, reason, agent? { id, version, chosenBy, score?, threshold?, modelFrom } } }.'),
-      // src/main/agents/discovery.ts
-      tech(LIMITS, 'Elenco del catalogo nel prompt ≤ 8000 caratteri; «quando usarlo» tagliato a 240.', 'Catalog list in the prompt ≤ 8000 chars; "when to use" cut at 240.'),
-      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_* e agent_catalog); l’agente lo sceglie l’Orchestrator con agentId, oppure, se non lo indica, il classificatore locale dell’app (ADR 0078).',
-        'The app’s MCP on 127.0.0.1 (app_* and agent_catalog tools); the agent is chosen by the Orchestrator with agentId or, when it names none, by the app’s local classifier (ADR 0078).'),
+      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom } } }.',
+        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom } } }.'),
+      tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
+      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
+        'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
     ],
-    sources: ['src/main/agents/orchestrator-preset.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
+    sources: ['src/main/agents/orchestrator-role.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
   },
   {
     id: 'runs',
-    title: b('Le run degli agenti', 'Agent runs'),
-    summary: b('Una run è un incarico di un agente del catalogo, dall’avvio alla fine, con i suoi contatori e il costo.',
-      'A run is one assignment of a catalog agent, from start to end, with its counters and cost.'),
+    title: b('Le run dei ruoli', 'Role runs'),
+    summary: b('Una run è un incarico di un ruolo, dall’avvio al suo agent_report, con contatori, costo e risultato.',
+      'A run is one assignment of a role, from start to its agent_report, with counters, cost and result.'),
     points: [
       // src/main/chats/manager.ts startRun (owner.source === 'catalog')
-      b('Nasce quando avvii una chat con un agente del catalogo; startedBy dice se l’hai avviata tu o l’Orchestrator.',
-        'It starts when you open a chat with a catalog agent; startedBy says whether you or the Orchestrator started it.'),
+      b('Nasce quando una chat parte con un ruolo di lavoro; startedBy dice se l’hai avviata tu o l’Orchestrator, parentRunId di quale run è figlia.',
+        'It starts when a chat starts with a work role; startedBy says whether you or the Orchestrator started it, parentRunId which run it is a child of.'),
       // src/main/chats/manager.ts countRequest
       b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione.',
         'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time.'),
       // src/main/agents/runs.ts addTurn
       b('Somma costo e token di ogni turno; se un turno non li riporta, il totale diventa «sconosciuto» (null), non zero.',
         'It adds each turn’s cost and tokens; if a turn does not report them, the total becomes "unknown" (null), not zero.'),
+      // src/main/agents/run-report.ts parseRunReport
+      b('Il rapporto finale del ruolo (esito, verificato sì/in parte/no, riassunto) resta sulla run; un rapporto illeggibile conta come nessun rapporto.',
+        'The role’s final report (outcome, verified yes/partly/no, summary) stays on the run; an unreadable report counts as none.'),
       // src/main/chats/manager.ts ends: completed / closed / stale
-      b('Finisce come completed (stato «Incarico concluso»), closed (chat chiusa o archiviata) o stale (72 ore senza turni).',
-        'It ends as completed ("Assignment done" status), closed (chat closed or archived) or stale (72 hours without turns).'),
-      // src/main/agents/runs.ts reopenRun; src/main/index.ts chat:send
-      b('Se scrivi di nuovo o riapri manualmente una chat finita, la run si riapre e «reopened» sale; i messaggi degli agenti non la riaprono.',
-        'Writing again or manually reopening an ended chat reopens its run and increases "reopened"; agent messages do not reopen it.'),
-      // src/main/chats/manager.ts continuation; src/main/agents/run-metrics.ts indexRuns
-      // src/main/appctl/tools.ts app_create_chat (parentRunId, reviewOf, reworkOf); src/main/agents/subagent-tool.ts
-      b('Una run si collega alle altre: continuedFrom (una continuazione), parentRunId (un sotto-agente, anche da agent_start_subagent), reviewOf e reworkOf (una revisione, un rifacimento); le metriche contano i rifacimenti entro sette giorni.',
-        'A run links to others: continuedFrom (a continuation), parentRunId (a sub-agent, from agent_start_subagent too), reviewOf and reworkOf (a review, a rework); metrics count rework within seven days.'),
-      // src/main/run/outcome.ts (run:outcome IPC) → src/main/chats/manager.ts markRun; src/renderer/components/RunSurface.tsx
-      b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): l’esito viene salvato con base «human».',
-        'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): the outcome is saved with basis "human".'),
-      // src/main/agents/runs.ts pruning
-      b('Le run finite più vecchie vengono potate quando l’archivio supera i limiti.', 'The oldest ended runs are pruned when the store exceeds its limits.'),
+      b('Finisce come completed, closed (chat chiusa o archiviata) o stale (72 ore senza turni); scrivere di nuovo a mano la riapre.',
+        'It ends as completed, closed (chat closed or archived) or stale (72 hours without turns); writing to it again by hand reopens it.'),
+      // src/main/agents/run-feedback.ts recordFeedback
+      b('Un giudizio vale come prova solo se viene da una revisione di Judge finita, verificata, su un modello diverso da quello della run; il parere di un genitore resta un parere.',
+        'A verdict counts as evidence only if it comes from an ended Judge review, verified, on a model other than the run’s; a parent’s opinion stays an opinion.'),
+      // src/main/run/outcome.ts (run:outcome IPC); src/renderer/components/RunSurface.tsx
+      b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): il tuo esito vince sempre.',
+        'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): your verdict always wins.'),
     ],
-    analogy: b('Come una commessa in officina: si apre, accumula ore e materiali, si chiude; se il cliente torna, si riapre.',
-      'Like a work order in a workshop: it opens, adds up hours and parts, closes; if the customer comes back, it reopens.'),
-    diagram: { kind: 'flow', steps: [b('Avvio', 'Start'), b('Turni e richieste', 'Turns and requests'), b('Fine', 'End'), b('Riapertura?', 'Reopened?')] },
+    analogy: b('Come una commessa in officina: si apre, accumula ore e materiali, si chiude con il verbale; se il cliente torna, si riapre.',
+      'Like a work order in a workshop: it opens, adds up hours and parts, closes with its report; if the customer comes back, it reopens.'),
+    diagram: { kind: 'flow', steps: [b('Avvio', 'Start'), b('Turni e richieste', 'Turns and requests'), b('agent_report', 'agent_report'), b('Esito', 'Outcome')] },
     tech: [
       // src/shared/agents.ts AgentRun
-      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null, report?, corrections?, executionMs?, parentRunId?, spawnedBy?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
-        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters { questions, permissions, commands, reopened, contextPeak }, costUsd | null, tokens | null, report?, corrections?, executionMs?, parentRunId?, spawnedBy?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
-      tech(FILES, 'userData/agent-runs.json è la fonte; ChatSummary.run ne è una copia.', 'userData/agent-runs.json is the source; ChatSummary.run mirrors it.'),
+      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
+        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
+      tech(FILES, 'userData/agent-runs.json è la fonte; ChatSummary.run ne è una copia; i giudizi in run-feedback.json.', 'userData/agent-runs.json is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.'),
       // src/main/agents/runs.ts RUNS_MAX, RUNS_BYTES, STALE_MS
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
     ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts', 'src/main/appctl/tools.ts', 'src/main/agents/subagent-tool.ts'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/agents/run-report.ts', 'src/main/agents/run-feedback.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts'],
   },
   {
     id: 'metrics',
@@ -372,20 +362,20 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'milestones',
     title: b('Traguardi personali', 'Personal milestones'),
-    summary: b('Tre traguardi locali: primo agente personalizzato, spazio configurato e primo risultato confermato.',
-      'Three local milestones: first custom agent, workspace set up and first confirmed result.'),
+    summary: b('Tre traguardi locali: primo ruolo personalizzato, spazio configurato e primo risultato confermato.',
+      'Three local milestones: first custom role, workspace set up and first confirmed result.'),
     points: [
       // src/shared/progress.ts ACHIEVEMENTS; src/renderer/lib/progress-bridge.ts labels
-      b('I traguardi sono: «Primo agente personalizzato», «Spazio di lavoro configurato», «Primo risultato confermato».',
-        'The milestones are: "First custom agent", "Workspace set up", "First confirmed result".'),
+      b('I traguardi sono: «Primo ruolo personalizzato», «Spazio di lavoro configurato», «Primo risultato confermato».',
+        'The milestones are: "First custom role", "Workspace set up", "First confirmed result".'),
       // src/main/agents/progress.ts
       b('Sono salvati in progress.json nella cartella dati dell’app.', 'They are saved in progress.json in the app’s data folder.'),
       // src/main/wiring.ts ProgressService enabled:true; src/main/agents/progress.ts confirmResult
-      b('Personalizzare un agente e completare la configurazione assegnano i primi due; il primo risultato richiede una tua conferma su un risultato idoneo.',
-        'Customizing an agent and completing setup award the first two; the first result requires your confirmation of an eligible result.'),
+      b('Personalizzare un ruolo e completare la configurazione assegnano i primi due; il primo risultato richiede una tua conferma su un risultato idoneo.',
+        'Customizing a role and completing setup award the first two; the first result requires your confirmation of an eligible result.'),
       // src/renderer/components/ProgressPanel.tsx
-      b('Il pannello nell’editor degli agenti (pagina Agenti) mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
-        'The panel in the agent editor (Agenti page) shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
+      b('Il pannello nella pagina Agenti mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
+        'The panel on the Agenti page shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
     ],
     analogy: b('Come tre caselle da spuntare quando prepari il tuo spazio e confermi il primo lavoro riuscito.',
       'Like three boxes to tick as you prepare your workspace and confirm the first successful job.'),
@@ -398,67 +388,54 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'classifiers',
     title: b('I classificatori', 'The classifiers'),
-    summary: b('Dove l’app smista qualcosa da sola senza spendere token: regole scritte, un modello locale per scegliere l’agente, e una soglia che impara dai tuoi esiti solo con il tuo sì.',
-      'Where the app sorts something by itself without spending tokens: written rules, a local model to pick the agent, and a threshold that learns from your outcomes only with your yes.'),
+    summary: b('Dove l’app smista qualcosa da sola senza spendere token: le skill adatte a un compito, il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',
+      'Where the app sorts something by itself without spending tokens: the skills that fit a task, the kind of work, the Orchestrator’s mail, sensitive commands.'),
     points: [
-      // src/main/agents/classifier.ts classify(); src/main/agents/discovery.ts agent_catalog; src/renderer/components/AgentStartDialog.tsx
-      b('Scelta dell’agente: la richiesta è confrontata con nome, «quando usarlo», scopo, istruzioni e richieste già riuscite di ogni agente, per parole (BM25) e per significato (modello locale multilingual-e5, offline). Vince il punteggio più alto; sotto la soglia l’app propone di creare un agente. È un indizio per te e per l’Orchestrator, mai un permesso.',
-        'Agent matching: the request is compared with each agent’s name, "when to use", purpose, instructions and past successful requests, by words (BM25) and by meaning (local multilingual-e5 model, offline). The highest score wins; below the threshold the app offers to create an agent. It is a hint for you and the Orchestrator, never a permission.'),
-      // src/shared/work-concepts.ts CONCEPTS; src/main/agents/classifier.ts words(), FIELD_WEIGHT, PRESET_PREAMBLE
-      b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le descrizioni in inglese. Una parola trovata solo nelle istruzioni conta meno; il preambolo comune agli agenti forniti è ignorato.',
-        'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and English descriptions. A word found only in the instructions counts less; the preamble shared by the packaged agents is ignored.'),
-      // src/main/agents/routing-snapshot.ts; src/main/agents/classifier-calibration.ts calibrate(); src/renderer/lib/agent-approvals.ts
-      b('Impara dai tuoi esiti: ogni esecuzione registra il punteggio dell’agente usato. Con almeno 20 esecuzioni confermate riuscite per canale, l’app calcola la soglia che lascia sotto al massimo 1 caso giusto su 10 e la propone in «Da approvare». Cambia solo con il tuo clic, e si annulla.',
-        'Learns from your outcomes: every run records the score of the agent used. With at least 20 runs confirmed successful per channel, the app computes the threshold that leaves at most 1 right match in 10 below it and proposes it in "To approve". It changes only on your click, and can be undone.'),
+      // src/main/skills/suggest.ts; src/main/agents/discovery.ts skills_suggest; src/renderer/components/AgentStartDialog.tsx
+      b('Skill per un compito (skills_suggest): la richiesta è confrontata con nome e descrizione di ogni skill del brain, per parole (BM25) e, quando il modello locale è pronto, per significato; le migliori sono preselezionate in «Avvia un ruolo» e l’Orchestrator le passa al ruolo. È un consiglio: un ruolo usa solo le skill che il suo avvio gli dà.',
+        'Skills for a task (skills_suggest): the request is compared with each brain skill’s name and description, by words (BM25) and, when the local model is ready, by meaning; the best are preselected in "Start a role" and the Orchestrator passes them to the role. It is advice: a role uses only the skills its launch gives it.'),
+      // src/shared/work-concepts.ts CONCEPTS
+      b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
+        'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
       // src/main/brain/routing.ts taskOf; src/shared/work-concepts.ts builtinTask
-      b('Tipo di lavoro per l’instradamento: prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Su un brain nuovo, senza regole, non finisce più tutto in «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
-        'Kind of work for routing: the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". On a fresh brain with no rules, not everything lands in "altro" any more. A request that builds or fixes wins over a title that only names a topic.'),
+      b('Tipo di lavoro per l’instradamento: prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
+        'Kind of work for routing: the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic.'),
       // src/main/brain/estimates.ts classify
       b('Tipo di lavoro nel registro dei costi (correzione, QA, revisione, funzionalità, indagine, domanda, altro): espressioni in italiano e inglese, vince il tipo con più indizi.',
         'Kind of work in the cost ledger (fix, QA, review, feature, research, question, other): Italian and English patterns, the kind with the most clues wins.'),
       // src/main/chats/orchestrator-delivery.ts mailClassifier
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
-      // src/shared/runnable.ts prodRisk; src/shared/command-ask.ts; src/shared/waiting.ts; src/main/chats/claude.ts
-      b('Sicurezza e attese: i comandi di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; «Comando da eseguire» e «Aspetta un lavoro» sono regole sul testo. Permessi e domande non sono indovinati: arrivano già strutturati dalla CLI.',
-        'Safety and waits: production commands (az, sqlcmd, ops scripts) ask for a second click and main checks again; "Command to run" and "Waits for work" are rules on the text. Permissions and questions are not guessed: they arrive already structured from the CLI.'),
-      // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; brain-template/ops/tools/signals-regex.mjs
-      b('Altri: messaggi non scritti da te (mostrati attenuati), la coda per carico (CPU > 75% o RAM libera < 15%), le correzioni nel testo libero e il giudice a campione negli strumenti del brain.',
-        'Others: messages you did not type (shown muted), the load queue (CPU > 75% or free RAM < 15%), corrections in free text and the sample judge in the brain’s tools.'),
+      // src/shared/runnable.ts prodRisk; src/main/agents/tool-policy.ts readOnlyCommand
+      b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni né redirezioni.',
+        'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining or redirection.'),
+      // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
+      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI.',
+        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI.'),
+      // src/shared/roles.ts ROLE_DEFAULTS.router
+      b('Smistare un lotto di lavoro (una inbox, una lista di ticket) è il compito del ruolo Router, quando glielo affidi: non è un classificatore che gira da solo.',
+        'Triaging a batch of work (an inbox, a list of tickets) is the Router role’s job, when you hand it one: it is not a classifier that runs by itself.'),
     ],
-    analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e il portiere che chiede a te prima di cambiare il modo di smistare.',
-      'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and a clerk who asks you before changing how mail is sorted.'),
-    diagram: { kind: 'cycle', steps: [b('Richiesta', 'Request'), b('Parole e significato', 'Words and meaning'), b('Punteggio e soglia', 'Score and threshold'), b('Esito confermato', 'Confirmed outcome'), b('Soglia da approvare', 'Threshold to approve')] },
+    analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
+      'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
+    diagram: { kind: 'flow', steps: [b('Richiesta', 'Request'), b('Parole e lessico', 'Words and lexicon'), b('Skill suggerite', 'Suggested skills'), b('Avvio del ruolo', 'Role launch')] },
     tech: [
-      // test/unit/classifiers/evaluation.test.ts, test/fixtures/classifiers/requests.ts
-      tech(b('Quanto sono precisi', 'How accurate they are'),
-        'Misurati il 18/10/2026 su richieste scritte a mano (non tuoi dati reali), 30 mai usate per tarare le regole: scelta dell’agente solo a parole da 7 a 18 giuste su 30; tipo di lavoro senza regole del brain da 6 a 28; registro costi da 26 a 28. La posta: 17 casi tipici su 17. Il canale con il modello non è misurato su queste richieste: per questo la sua soglia si tara sui tuoi esiti.',
-        'Measured on 18/10/2026 on hand-written requests (not your real data), 30 never used to tune the rules: agent matching by words only from 7 to 18 right of 30; kind of work without brain rules from 6 to 28; cost ledger from 26 to 28. Mail: 17 typical cases of 17. The model channel is not measured on these requests: that is why its threshold is tuned on your outcomes.'),
-      // src/shared/agent-classifier.ts DEFAULT_CLASSIFIER_THRESHOLDS, CALIBRATION_MIN_RUNS, CALIBRATION_ALPHA; classifier-calibration.ts SUGGEST_MIN_STEP
-      tech(LIMITS, 'Soglia di partenza: 60 con il modello, 20 a sole parole (i punteggi a parole sono più bassi: 4 parole trovate valgono il massimo). Taratura: almeno 20 esecuzioni confermate per canale, al massimo 1 su 10 sotto la soglia, proposta solo se cambia di almeno 5 punti. Contano solo esiti confermati da te o da una revisione con evidenza; Generale è escluso. Richiesta letta fino a 2000 caratteri.',
-        'Starting threshold: 60 with the model, 20 by words only (word scores are lower: 4 matched words are full marks). Calibration: at least 20 confirmed runs per channel, at most 1 in 10 below the line, proposed only when it moves by 5 points or more. Only outcomes confirmed by you or by a review with evidence count; Generale is left out. Request read up to 2000 characters.'),
-      tech(b('Fonti', 'Sources'),
-        'Parole: Robertson e Zaragoza, «The Probabilistic Relevance Framework: BM25 and Beyond» (2009). Lessico bilingue: Ballesteros e Croft, «Phrasal translation and query expansion techniques for cross-language information retrieval» (SIGIR 1997). Modello: scheda di intfloat/multilingual-e5 su Hugging Face (i punteggi coseno stanno tra 0,7 e 1,0 anche per testi diversi: conta l’ordine, non il valore). Soglia: Angelopoulos e Bates, «A Gentle Introduction to Conformal Prediction» (arXiv 2107.07511, 2021).',
-        'Words: Robertson and Zaragoza, "The Probabilistic Relevance Framework: BM25 and Beyond" (2009). Bilingual lexicon: Ballesteros and Croft, "Phrasal translation and query expansion techniques for cross-language information retrieval" (SIGIR 1997). Model: the intfloat/multilingual-e5 model card on Hugging Face (cosine scores sit between 0.7 and 1.0 even for unrelated texts: the order counts, not the value). Threshold: Angelopoulos and Bates, "A Gentle Introduction to Conformal Prediction" (arXiv 2107.07511, 2021).'),
+      // src/shared/skill-suggest.ts
+      tech(DATA, 'SkillSuggestions { candidates: { name, score 0–100, why }[] (al massimo 5, la migliore prima), mode: hybrid | words }; «Avvia un ruolo» preseleziona da 60 in su.',
+        'SkillSuggestions { candidates: { name, score 0–100, why }[] (at most 5, best first), mode: hybrid | words }; "Start a role" preselects from 60 up.'),
       // src/shared/contract.ts TaskKind
-      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro. Soglie approvate in userData/agent-classifier.json.',
-        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro. Approved thresholds in userData/agent-classifier.json.'),
+      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.',
+        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
+      tech(LIMITS, 'Richiesta letta fino a 2000 caratteri; il modello locale ha 2,5 s, poi si risponde a sole parole; nessun token speso.', 'Request read up to 2000 characters; the local model gets 2.5 s, then the answer is words only; no token spent.'),
     ],
-    target: [
-      b('Unire parole e significato con una media pesata tarata su pochi esempi invece di prendere il più alto dei due (Bruch, Gai e Ingber, «An Analysis of Fusion Functions for Hybrid Retrieval», ACM TOIS 2023).',
-        'Join words and meaning with a weighted average tuned on a few examples instead of taking the higher of the two (Bruch, Gai and Ingber, "An Analysis of Fusion Functions for Hybrid Retrieval", ACM TOIS 2023).'),
-      b('Usare anche le esecuzioni fallite come esempi di «non questo agente», e tarare allo stesso modo il tipo di lavoro.',
-        'Also use failed runs as "not this agent" examples, and calibrate the kind of work the same way.'),
-    ],
-    sources: ['src/main/agents/classifier.ts', 'src/main/agents/classifier-calibration.ts', 'src/shared/agent-classifier.ts', 'src/shared/work-concepts.ts', 'src/main/agents/routing-snapshot.ts',
-      'src/renderer/lib/agent-approvals.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts',
-      'src/shared/waiting.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'test/unit/classifiers/evaluation.test.ts'],
+    sources: ['src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+      'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
     id: 'permissions',
     title: b('Permessi e tetto dei permessi', 'Permissions and the permission ceiling'),
-    summary: b('Quando un agente vuole fare qualcosa di delicato, la CLI chiede: l’app ti mostra il pannello e rispetta il tetto dell’agente.',
-      'When an agent wants to do something sensitive, the CLI asks: the app shows you the panel and enforces the agent’s ceiling.'),
+    summary: b('Quando un ruolo vuole fare qualcosa di delicato, la CLI chiede: l’app ti mostra il pannello e rispetta il tetto del ruolo.',
+      'When a role wants to do something sensitive, the CLI asks: the app shows you the panel and enforces the role’s ceiling.'),
     points: [
       // src/main/chats/claude.ts onControlRequest; src/main/chats/acp.ts
       b('La richiesta arriva dalla CLI (Claude can_use_tool, Cursor session/request_permission, Codex approvazioni di comandi e modifiche) e diventa un pannello con le risposte disponibili.',
@@ -469,8 +446,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Modalità: Chiedi ogni volta, Accetta le modifiche, Automatico, Solo piano, Senza permessi; si sceglie all’avvio o dal menu ⋯ (solo Claude).',
         'Modes: Ask every time, Accept edits, Automatic, Plan only, No permissions; chosen at start or from the ⋯ menu (Claude only).'),
       // src/shared/agents.ts PERMISSION_CEILINGS; src/main/agents/tool-policy.ts
-      b('Il tetto di un agente può essere plan, default o acceptEdits: una modalità più alta viene abbassata al tetto.',
-        'An agent’s ceiling can be plan, default or acceptEdits: a higher mode is lowered to the ceiling.'),
+      b('Il tetto di un ruolo può essere plan, default o acceptEdits (lo cambi nella pagina Agenti, dopo la tua approvazione): una modalità più alta viene abbassata al tetto.',
+        'A role’s ceiling can be plan, default or acceptEdits (changed on the Agenti page, after your approval): a higher mode is lowered to the ceiling.'),
       // src/main/chats/manager.ts (reset above ceiling, chat:set refusal)
       b('Se il motore sale da solo sopra il tetto, l’app lo riporta giù; cambiarlo a mano sopra il tetto è rifiutato.',
         'If the engine climbs above the ceiling by itself, the app sets it back; raising it by hand above the ceiling is refused.'),
@@ -479,7 +456,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     analogy: b('Come la carta aziendale con un massimale: puoi chiedere un’autorizzazione, ma oltre il tetto non passa.',
       'Like a company card with a limit: you can ask for approval, but above the limit it does not go through.'),
-    diagram: { kind: 'flow', steps: [b('Agente vuole agire', 'Agent wants to act'), b('Richiesta della CLI', 'CLI request'), b('Pannello', 'Panel'), b('Tua risposta', 'Your answer')] },
+    diagram: { kind: 'flow', steps: [b('Il ruolo vuole agire', 'Role wants to act'), b('Richiesta della CLI', 'CLI request'), b('Pannello', 'Panel'), b('Tua risposta', 'Your answer')] },
     tech: [
       tech(DATA, "PendingRequest { id, chatId, type: 'permission' | 'question' | 'command', tool, title, detail, input, noAlways?, alwaysRules? }.",
         "PendingRequest { id, chatId, type: 'permission' | 'question' | 'command', tool, title, detail, input, noAlways?, alwaysRules? }."),
@@ -489,10 +466,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'On Cursor (ACP) "always" is ignored and only the plan ceiling is enforced; other ceilings are "declared, not enforced".'),
       tech(WHERE, 'Su Codex plan/default impongono una sandbox in sola lettura; acceptEdits usa approvazioni on-request.',
         'On Codex, plan/default enforce a read-only sandbox; acceptEdits uses on-request approvals.'),
-    ],
-    target: [
-      b('Il tetto dei permessi non si modifica ancora dall’interfaccia: arriva solo con il salvataggio dell’agente.',
-        'The permission ceiling cannot be edited from the UI yet: it only comes with the agent’s saved data.'),
     ],
     sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
   },
@@ -650,7 +623,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/live.ts
       b('Il feed dal vivo osserva la cartella e mostra le novità (idee, errori, decisioni…); «mentre eri via» segna quelle arrivate a app chiusa.',
         'The live feed watches the folder and shows what changed (ideas, errors, decisions…); "while you were away" marks those that came while the app was closed.'),
-      // src/main/brainmodel/legacy-sources.ts (ADR 0077)
+      // src/main/brainmodel/procedure-sources.ts (ADR 0077)
       b('Runbook e routine di un brain di prima diventano skill una volta sola; i file originali restano dove sono, le righe che sembrano credenziali non passano mai.',
         'Runbooks and routines of an older brain become skills once; the original files stay where they are, lines that look like credentials never pass.'),
       // src/main/brain/domains.ts, src/main/brain/sync.ts
@@ -669,7 +642,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Il server dati del brain (brain-site.mjs) gira su una porta 127.0.0.1; il main inoltra solo GET su percorsi ammessi.',
         'The brain’s data server (brain-site.mjs) runs on a 127.0.0.1 port; main forwards only GETs on allowed paths.'),
     ],
-    sources: ['src/main/rules/new-brain.ts', 'src/main/rules/tools.ts', 'src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brainmodel/legacy-sources.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
+    sources: ['src/main/rules/new-brain.ts', 'src/main/rules/tools.ts', 'src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
   },
   {
     id: 'search',
@@ -735,8 +708,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'routing',
     title: b('Instradamento modelli', 'Model routing'),
-    summary: b('Una tabella dà motore, modello e sforzo alle chat senza un agente specifico (Generale) e il modello agli agenti che non ne indicano uno.',
-      'A table gives engine, model and effort to chats without a specific agent (Generale), and the model to agents that name none.'),
+    summary: b('Una tabella dà motore, modello e sforzo alle chat avviate senza un ruolo; una chat di un ruolo prende il modello del livello del ruolo.',
+      'A table gives engine, model and effort to chats started without a role; a role’s chat takes its role tier’s model.'),
     points: [
       // src/main/brain/routing.ts taskOf, areaOf
       b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App per le chat nella cartella del codice dell’app.',
@@ -747,12 +720,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/routing.ts resolve
       b('Se la riga indica un motore che non si può avviare, valgono i tuoi predefiniti «Chat aperte dall’Orchestrator».',
         'If the row names an engine that cannot start, your "Chats opened by the Orchestrator" defaults apply.'),
-      // src/main/brain/routing.ts routeAgent (ADR 0078)
-      b('Un agente scelto non viene mai scavalcato: la tabella riempie solo il modello che il suo profilo non indica. Senza agente, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
-        'A chosen agent is never overridden: the table only fills the model its profile leaves open. Without an agent, a model other than the table’s needs a reason; max effort never from the table.'),
+      // src/main/brain/routing.ts routeAgent (ADR 0083)
+      b('Un ruolo non viene mai scavalcato: la sua chat ha il modello del suo livello e la rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
+        'A role is never overridden: its chat has its tier’s model and the route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
       // src/main/brain/routing.ts knownOutcome, kindStats, freshReason; src/main/wiring.ts routingVerdict
-      b('Il tuo esito su una run di un agente (o quello della revisione o dell’Orchestrator) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
-        'Your verdict on an agent run (or the review’s or the Orchestrator’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
+      b('Il tuo esito su una run di un ruolo (o quello di una revisione di Judge) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
+        'Your verdict on a role run (or a Judge review’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
       // src/main/brain/routing.ts explore
       b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
         '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),
@@ -773,7 +746,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
     ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md', 'docs/adr/0078-agent-first-routing.md'],
+    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },
   {
     id: 'costs',
@@ -885,18 +858,11 @@ export function discussText(card: ConceptCard, lang: GuideLang): string {
   return `${cardText(card, lang)}\n\n${ask}`;
 }
 
-/** What goes to the Orchestrator when no explainer agent exists: reuse one from the catalog, else propose one in a
- *  panel and create it only after the user's yes (agent_create, ADR 0078), and the card as context. */
+/** What «Discuti» sends to the Orchestrator: the request to explain the card (delegating the code reading to a Scout
+ *  when needed) and the card as context. */
 export function orchestratorText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
-    ? `I want to discuss the concept «${card.title.en}» from the app's guide. Look in agent_catalog for an explainer agent ("${EXPLAINER_NAME}"): if there is one, open a chat with it through app_create_chat with its agentId and pass it the context below. If there is none, propose it to me in a panel (name "${EXPLAINER_NAME}", what it does, engine) and create it with agent_create only after my yes; meanwhile explain the concept to me yourself.`
-    : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Cerca in agent_catalog un agente che spiega ("${EXPLAINER_NAME}"): se c'è, apri una chat con lui con app_create_chat e il suo agentId e passagli il contesto qui sotto. Se non c'è, proponimelo in un pannello (nome "${EXPLAINER_NAME}", cosa fa, motore) e crealo con agent_create solo dopo il mio sì; intanto spiegami tu il concetto.`;
+    ? `I want to discuss the concept «${card.title.en}» from the app's guide. Explain it to me yourself; if it needs reading the code first, delegate that to a Scout and tell me what it found.`
+    : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Spiegamelo tu; se prima serve leggere il codice, delega la lettura a uno Scout e dimmi cosa ha trovato.`;
   return `${ask}\n\n---\n${discussText(card, lang)}`;
-}
-
-export const EXPLAINER_NAME = 'Explainer';
-/** Only explicit names/ids identify the explainer; role can be ordinary purpose prose. */
-const EXPLAINER = /^(explainer|spiegazioni)$/i;
-export function isExplainer(p: { id: string; name: string; role?: string | null }): boolean {
-  return EXPLAINER.test(p.id.trim()) || EXPLAINER.test(p.name.trim());
 }

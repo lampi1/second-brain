@@ -1,14 +1,28 @@
+// The app-control MCP tools (main/appctl/tools.ts): effort changes, messages labelled as an agent's, role delegation
+// (app_create_chat with roleId), long-chat hand-offs, the routing table tools, logs and UI steering, endpoint auth.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { AgentCatalogService } from '../../src/main/agents/catalog';
+import type { AgentModelChoice } from '../../src/shared/agents';
 import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
-import { DEMO_REGISTRY, DemoRouting } from '../../src/main/brain/routing-demo';
+import { DemoRouting } from '../../src/main/brain/routing-demo';
 import type { RoutingRow, RoutingTable } from '../../src/shared/contract';
 
-/** a brain with no routing table and no registry: every chat gets the user's "Chat aperte dall'Orchestrator" */
+/** a brain with no routing table and no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
 const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
+/** the real role catalog with a Claude engine whose tiers map to m-top / m-mid / m-light */
+function roleCatalog(): AgentCatalogService {
+  const models = (): AgentModelChoice[] => [
+    { engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true },
+    { engine: 'cursor', label: 'Cursor', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: false, authenticated: null }];
+  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => ({ model: `m-${tier}`, independent: true }) });
+}
 
 function deps() {
   const sent: { chatId: string; text: string }[] = [];
@@ -134,33 +148,31 @@ describe('app control tools', () => {
     expect(sent).toEqual(['cur', 'cl', 'cl']);
   });
 
-  it('the Orchestrator creates work chats in the brain folder, labelled, and obeys the engine switches', async () => {
+  it('the Orchestrator delegates a role chat in the brain folder, labelled; the role decides engine and model; the engine switches hold', async () => {
     const made: Record<string, unknown>[] = [];
-    let cross = true, cursorOn = true, orchestrator: 'claude' | 'cursor' = 'claude';
-    const chats = { list: () => [{ id: 'r', harness: orchestrator, isOrchestrator: true }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
+    let cursorOn = true;
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
     const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: cross }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: cursorOn }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain' });
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: cursorOn }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
+    expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale', roleId: 'artisan' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain', model: 'm-mid', route: { source: 'agent', agent: { id: 'artisan', chosenBy: 'orchestrator' } } });
     expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
-    expect(made[0]).not.toHaveProperty('model');
-    expect(made[0]).not.toHaveProperty('effort');
-    // never a second Orchestrator, not even silently: the role is the user's choice
-    expect(made[0]!.orchestrator).toBe(false);
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
-    expect(made).toHaveLength(1);
-    cross = false;
-    expect(await t.run({ title: 'X', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
-    // A legacy false does not restrict either engine; engine launch permissions below still apply.
-    orchestrator = 'cursor';
-    expect(await t.run({ title: 'Cursor · Prova', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
-    expect(await t.run({ title: 'X', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
-    cross = true;
-    expect(await t.run({ title: 'Claude · Prova', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
-    expect(made.map(m => [m.harness, m.orchestrator])).toEqual([['claude', false], ['cursor', false], ['cursor', false], ['claude', false], ['claude', false]]);
-    // «Gli Orchestrator possono usare Cursor» off: refused to every Orchestrator, a Cursor one too (review 2026-10-14)
+    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false, independentOf: { engine: 'claude', model: 'claude-opus-5-5' } });
+    // the role decides: no engine, model or effort from the caller; never a second Orchestrator; a role is required
+    for (const extra of [{ harness: 'cursor' }, { model: 'opus' }, { effort: 'high' }]) await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', ...extra }))).rejects.toThrow(/the role decides it/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y' }))).rejects.toThrow(/roleId required/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'reviewer' }))).rejects.toThrow(/roleId required/);
+    // a tier up to the role's maximum; above it, refused
+    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' })).toMatchObject({ model: 'm-top', route: { agent: { tier: 'top' } } });
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', tier: 'top' }))).rejects.toThrow(/massimo/);
+    expect(made).toHaveLength(2);
+    // a role on Cursor while «Gli Orchestrator possono usare Cursor» is off: refused, nothing created
+    catalog.save({ ...catalog.list().profiles.find(p => p.id === 'scout')!, engine: 'cursor', model: null }, 'scout');
     cursorOn = false;
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
+    expect(made).toHaveLength(2);
   });
 
   it('long chats: hand-off and continuation cross engines with legacy false and keep their labels', async () => {
@@ -201,69 +213,6 @@ describe('app control tools', () => {
     cross = true;
     await t('app_continue_chat').run({ chatId: 'cl' });
     expect(calls.at(-1)![2].allowStart).toBe(false);
-  });
-
-  it('what the Orchestrator does not say comes from "Chat aperte dall’Orchestrator", read at each call', async () => {
-    const made: Record<string, unknown>[] = [];
-    const orchestratorChats = { harness: 'cursor', claudeModel: 'claude-opus-5-5', cursorModel: 'grok-4.7', claudeEffort: 'high' };
-    const chats = { list: () => [], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    // nothing said: the default engine and its model; no effort for Cursor
-    expect(await t.run({ title: 'A', prompt: 'p' })).toMatchObject({ harness: 'cursor', model: 'grok-4.7', effort: null });
-    expect(made[0]).toMatchObject({ harness: 'cursor', model: 'grok-4.7' });
-    expect(made[0]).not.toHaveProperty('effort');
-    // the engine said: that engine's default model and the Claude effort
-    await t.run({ title: 'B', prompt: 'p', harness: 'claude' });
-    expect(made[1]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high' });
-    // the model said: kept as is
-    await t.run({ title: 'C', prompt: 'p', harness: 'cursor', model: 'gpt-5' });
-    expect(made[2]).toMatchObject({ harness: 'cursor', model: 'gpt-5' });
-    // a model without its engine is refused: "opus" must never become a Cursor chat because Cursor is the default
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', model: 'opus' }))).rejects.toThrow(/harness/);
-    expect(made).toHaveLength(3);
-    // a change applies at the next call, no restart
-    orchestratorChats.harness = 'claude'; orchestratorChats.claudeModel = ''; orchestratorChats.claudeEffort = '';
-    await t.run({ title: 'D', prompt: 'p' });
-    expect(made[3]).toMatchObject({ harness: 'claude' });
-    expect(made[3]).not.toHaveProperty('model');
-    expect(made[3]).not.toHaveProperty('effort');
-  });
-
-  it('routes by the table: omitted engine = its row; an override needs a reason; hard rules hold; the route travels with the chat', async () => {
-    const made: Record<string, unknown>[] = [];
-    const table: RoutingTable = { version: 4, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
-      { kind: '*', area: ['App', 'Pers · App'], harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'app: Opus', since: '2026-10-12', evidence: 'regola' },
-      { kind: 'triage', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', why: 'smistare: Sonnet', since: '2026-10-12', evidence: 'n=31' },
-    ] };
-    const rules = { tasks: [['triage', String.raw`\b(triage|smista\w*)\b`, 'i'], ['bug-fix', String.raw`\b(fix|bug)\b`, 'i']] as [string, string, string][] };
-    const orchestratorChats = { harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high' };
-    const chats = { list: () => [], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
-    const brain = {
-      routingInfo: () => ({ registry: DEMO_REGISTRY }), route: (req: RouteRequest) => routeChat(req, table, DEMO_REGISTRY, rules, 7),
-      settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }),
-    } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    // the kind read from the title picks the row
-    expect(await t.run({ title: 'Posta · smista la inbox', prompt: 'p' })).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', route: { source: 'table', kind: 'triage', tableVersion: 4 } });
-    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', route: { policy: 'routing', source: 'table', kind: 'triage', area: 'Posta', version: 4, at: 7 } });
-    // naming what the row says is no override
-    expect(await t.run({ title: 'Posta · smista', prompt: 'p', model: 'claude-sonnet-5-5' })).toMatchObject({ route: { source: 'table' } });
-    // something else without a reason: refused, nothing created; with a reason: an override, logged with it
-    await expect(Promise.resolve().then(() => t.run({ title: 'Posta · smista', prompt: 'p', model: 'claude-opus-5-5' }))).rejects.toThrow(/override senza motivo/);
-    expect(await t.run({ title: 'Posta · smista', prompt: 'p', model: 'opus', reason: 'mail delicate' })).toMatchObject({ model: 'opus', route: { source: 'override', reason: 'mail delicate' } });
-    // no row: the user's defaults (Cursor here), and naming another engine stays free as before
-    expect(await t.run({ title: 'Ordini · fix totale', prompt: 'p' })).toMatchObject({ harness: 'cursor', model: 'grok-4.7', effort: null, route: { source: 'default', kind: 'bug-fix' } });
-    expect(await t.run({ title: 'Ordini · fix totale', prompt: 'p', harness: 'claude' })).toMatchObject({ harness: 'claude', effort: 'high', route: { source: 'override', reason: null } });
-    // a known model brings its engine; an agent's kind wins over the words
-    expect(await t.run({ title: 'Ordini · x', prompt: 'p', model: 'claude-haiku-5-5', kind: 'ops-read' })).toMatchObject({ harness: 'claude', route: { kind: 'ops-read' } });
-    // Hard rules: max needs a reason, models stay on their engine, and app chats may explicitly choose Cursor.
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', effort: 'max' }))).rejects.toThrow(/max/);
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'cursor', model: 'claude-opus-5-5' }))).rejects.toThrow(/solo su claude/);
-    expect(await t.run({ title: 'App · tema', prompt: 'p', harness: 'cursor', reason: 'prova' })).toMatchObject({ harness: 'cursor', route: { area: 'App', source: 'override' } });
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', kind: 'boh' }))).rejects.toThrow(/kind sconosciuto/);
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', model: 'claude-mistero-9' }))).rejects.toThrow(/models\.json/);
-    expect(made).toHaveLength(7);
   });
 
   it('app_routing reads the table; app_routing_save writes a new version by itself, signed, with reason and data; hard rules hold', async () => {
@@ -377,21 +326,16 @@ describe('app control tools', () => {
   });
 
   it('the Orchestrator\'s messages carry its title, on its own endpoint and on /mcp/app', async () => {
-    const made: Record<string, unknown>[] = [];
     const sent: (string | undefined)[] = [];
     const list = [{ id: 'r1', title: 'Orchestrator', harness: 'cursor', isOrchestrator: true, state: 'idle' }, { id: 'w', title: 'W', harness: 'cursor', state: 'idle' }];
     const chats = {
-      list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n', title: req.title }; },
+      list: () => list,
       send: async (_id: string, _t: string, _i?: unknown, _r?: boolean, from?: string) => { sent.push(from); },
     } as unknown as ChatService;
     const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: false }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const tools = (caller?: string) => appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }, caller);
     const run = (caller: string | undefined, n: string, a: Record<string, unknown>) => tools(caller).find(t => t.name === n)!.run(a);
-    // (not an "App · …" title: the app's own chats never go to Cursor, a hard rule of the routing, ADR 0032)
-    await run('r1', 'app_create_chat', { title: 'Sms · Fix', prompt: 'x', harness: 'cursor' });
-    expect(made[0]).toMatchObject({ harness: 'cursor' });
-    expect(String(made[0]!.prompt)).toContain('Il tuo Orchestrator è «Orchestrator»: scrivigli con send_to_chat.');
     await run('r1', 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
     // no caller (test agents on /mcp/app) acts for the Orchestrator too
     await run(undefined, 'app_send_to_chat', { chatId: 'w', text: 'ciao' });

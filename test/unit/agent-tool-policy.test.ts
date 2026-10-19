@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { FAIL_CLOSED, aboveCeiling, narrowest, suggestedAbove, browserAllowed, checkedTools, claudeDefaultMode, claudeMcp, claudeTools, clampMode, narrowCodex, readPolicy, unenforced, type AgentPolicy } from '../../src/main/agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, narrowest, suggestedAbove, browserAccess, BROWSER_READ_TOOLS, checkedTools, commandsReadOnly, readOnlyCommand, claudeDefaultMode, claudeMcp, claudeTools, clampMode, narrowCodex, readPolicy, unenforced, type AgentPolicy } from '../../src/main/agents/tool-policy';
 import { ClaudeSession } from '../../src/main/chats/claude';
 import { codexPolicyFor, type CodexExecutionPolicy } from '../../src/main/brain/adapters/codex-policy';
 import { recSink } from './chats/helpers';
@@ -72,17 +72,20 @@ describe('agent tool policy', () => {
     expect(unenforced('claude', policy(['read', 'edit', 'mail-draft']))).toEqual(['calendar-read', 'brain-write', 'mcp']);
     expect(unenforced('claude', policy(['read', 'mcp'], null, ['github']))).toEqual(['mail-draft', 'calendar-read', 'mcp']);
     // Codex: read-only sandbox only without edits and commands, or with a ceiling up to default
-    expect(unenforced('codex', policy(['read']))).toEqual(['web', 'mail-draft', 'calendar-read', 'mcp']);
-    expect(unenforced('codex', policy(['read', 'edit']))).toEqual(['shell', 'web', 'mail-draft', 'calendar-read', 'brain-write', 'mcp']);
-    expect(unenforced('codex', policy(['read', 'edit'], 'default'))).toEqual(['web', 'mail-draft', 'calendar-read', 'mcp']);
+    // a read-only sandbox still runs commands that read
+    expect(unenforced('codex', policy(['read']))).toEqual(['shell-read', 'web', 'mail-draft', 'calendar-read', 'mcp']);
+    expect(unenforced('codex', policy(['read', 'edit']))).toEqual(['shell', 'shell-read', 'web', 'mail-draft', 'calendar-read', 'brain-write', 'mcp']);
+    expect(unenforced('codex', policy(['read', 'edit'], 'default'))).toEqual(['shell-read', 'web', 'mail-draft', 'calendar-read', 'mcp']);
     // ACP: only plan holds; a higher ceiling is declared, not enforced
-    expect(unenforced('acp', policy(['read'], 'plan'))).toEqual(['web', 'mail-draft', 'calendar-read', 'mcp']);
+    expect(unenforced('acp', policy(['read'], 'plan'))).toEqual(['shell-read', 'web', 'mail-draft', 'calendar-read', 'mcp']);
+    // Claude with read-only commands: the app checks each command it is asked about; the user's own allow rules are not
+    expect(unenforced('claude', policy(['read', 'shell-read']))).toEqual(['shell']);
     expect(unenforced('acp', { tools: null, ceiling: 'default' })).toEqual(['ceiling']);
     expect(unenforced('api', policy(['read']))).toEqual([]);
   });
 
   it('commands reach files and the network on Claude and Cursor: an allowed shell is reported', () => {
-    expect(unenforced('claude', policy(['read', 'shell']))).toEqual(['edit', 'web', 'brain-write']);
+    expect(unenforced('claude', policy(['read', 'shell']))).toEqual(['edit', 'shell-read', 'web', 'brain-write']);
     // Cursor's read-only mode runs no command: an allowed shell changes nothing there
     expect(unenforced('acp', policy(['read', 'shell'], 'plan'))).toEqual(unenforced('acp', policy(['read'], 'plan')));
   });
@@ -107,10 +110,13 @@ describe('agent tool policy', () => {
   });
 
   it('hides the browser only for agents whose policy leaves it out', () => {
-    expect(browserAllowed(null)).toBe(true);
-    expect(browserAllowed({ tools: null, ceiling: 'plan' })).toBe(true);
-    expect(browserAllowed(policy(['read']))).toBe(false);
-    expect(browserAllowed(policy(['read', 'browser']))).toBe(true);
+    expect(browserAccess(null)).toBe('all');
+    expect(browserAccess({ tools: null, ceiling: 'plan' })).toBe('all');
+    expect(browserAccess(policy(['read']))).toBe('none');
+    expect(browserAccess(policy(['read', 'browser-read']))).toBe('read');
+    expect(browserAccess(policy(['read', 'browser', 'browser-read']))).toBe('all');
+    // the reading set never clicks, types, fills forms, answers dialogs or runs JavaScript
+    for (const t of ['click', 'type', 'key', 'fill_form', 'select_option', 'handle_dialog', 'javascript', 'drag', 'handoff_to_user']) expect(BROWSER_READ_TOOLS).not.toContain(t);
   });
 });
 
@@ -160,5 +166,22 @@ describe('Codex launch with an agent policy', () => {
   it('applies through codexPolicyFor', () => {
     expect(codexPolicyFor(tmp(), false, { tools: null, ceiling: 'plan' })).toEqual({ approvalPolicy: 'on-request', sandbox: 'read-only', writableRoots: [] });
     expect(codexPolicyFor(tmp(), false, null).sandbox).toBe('workspace-write');
+  });
+});
+
+describe('read-only commands (shell-read)', () => {
+  it('applies only without shell, and gives Claude the command tools', () => {
+    expect(commandsReadOnly({ tools: { allow: ['read', 'shell-read'] }, ceiling: 'default' })).toBe(true);
+    expect(commandsReadOnly({ tools: { allow: ['read', 'shell', 'shell-read'] }, ceiling: 'default' })).toBe(false);
+    expect(commandsReadOnly({ tools: null, ceiling: 'default' })).toBe(false);
+    expect(claudeTools({ allow: ['read', 'shell-read'] })).toEqual(expect.arrayContaining(['Bash', 'Read']));
+    expect(claudeTools({ allow: ['shell', 'shell-read'] }).filter(t => t === 'Bash')).toHaveLength(1);
+  });
+  it.each(['ls -la src', 'git status', 'git log --oneline -5', 'git diff HEAD~1', 'rg -n "TODO" src', 'cat package.json | head -20', 'find . -name "*.ts"', 'git branch -a', 'Get-ChildItem -Recurse', 'git remote -v'])('reads: %s', c => {
+    expect(readOnlyCommand(c)).toBe(true);
+  });
+  it.each(['rm -rf out', 'npm install', 'git commit -m x', 'git branch new-feature', 'git tag v1', 'git push', 'echo x > a.txt', 'ls; rm a', 'cat a && rm a', 'ls $(rm a)', 'find . -delete', 'find . -exec rm {} ;',
+    'git diff --output=x', 'rg --pre ./run.sh x', 'sort -o a a', 'cat a | tee b', 'node script.js', 'git -c core.pager=sh log', '', 42])('does not read only: %s', c => {
+    expect(readOnlyCommand(c)).toBe(false);
   });
 });

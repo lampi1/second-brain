@@ -38,6 +38,7 @@ export const SYS_IT = {
   'sys.compacted': (p: { pre: string | number; post: string | number }) => `Contesto compattato (${p.pre} → ${p.post} token).`,
   'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `Nuovo tentativo API ${p.attempt}/${p.max} (${p.error || 'errore'}).`,
   'sys.permissionDenied': (p: { tool: string; message: string }) => `Permesso negato: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
+  'sys.commandReadOnly': (p: { command: string }) => `Comando rifiutato: questo ruolo può solo leggere (${p.command}).`,
   'sys.modelRefusal': 'Il modello ha rifiutato la richiesta.',
 
   // ---- transcript.ts ----
@@ -166,6 +167,7 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.compacted': (p: { pre: string | number; post: string | number }) => `Context compacted (${p.pre} → ${p.post} tokens).`,
   'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `New API attempt ${p.attempt}/${p.max} (${p.error || 'error'}).`,
   'sys.permissionDenied': (p: { tool: string; message: string }) => `Permission denied: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
+  'sys.commandReadOnly': (p: { command: string }) => `Command refused: this role may only read (${p.command}).`,
   'sys.modelRefusal': 'The model refused the request.',
 
   'sys.compactedPlain': 'Context compacted.',

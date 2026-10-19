@@ -14,6 +14,7 @@ import type {
 } from '../shared/contract';
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
+import { ROLE_DEFAULTS } from '../shared/roles';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
@@ -118,7 +119,7 @@ export function seed(E: number): Seed {
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
       lastText: 'Lancio i test del modulo ordini.',
       agentChildren: children(
-        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', agentType: 'default-general', state: 'running', startedAt: E - 90_000 }),
+        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', agentType: 'scout', state: 'running', startedAt: E - 90_000 }),
         child({ key: 'claude:task:f2', task: 'dotnet test test/Shop.Tests', kind: 'shell', state: 'running', startedAt: E - 35_000 }),
         child({ key: 'claude:task:f0', task: 'Leggi le regole di sconto', state: 'completed', startedAt: E - 4 * MIN, observedAt: E - 3 * MIN })) }),
     chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', contextTokens: 31_000, contextEstimated: true, cwd: 'C:\\progetti\\alfa-e2e',
@@ -132,11 +133,11 @@ export function seed(E: number): Seed {
     chat({ id: 'report', title: 'Report settimanale', model: 'claude-sonnet-4-5', costUsd: 1.2, updatedAt: E - 26 * 60 * MIN, ...closedBy(E - 26 * 60 * MIN + 2 * MIN), lastText: 'Report pronto: 9 PR, 3 bug chiusi.' }),
     chat({ id: 'note', title: 'Note personali', model: 'claude-haiku-4-5', effort: 'low', costUsd: 0.8, updatedAt: E - 180 * MIN, ...closedBy(E - 178 * MIN), lastText: 'Fatto: lista aggiornata.' }),
   ];
-  // One settled run for the human outcome controls; other seeded chats retain their legacy identities.
+  // One settled role run for the human outcome controls.
   const settled = chats.find(c => c.id === 'mappa')!;
-  settled.agent = { id: 'default-general', name: 'Generale', purpose: 'Assistente generale', avatar: { kind: 'symbol', value: 'compass' },
+  settled.agent = { id: 'artisan', name: 'Artisan', purpose: ROLE_DEFAULTS.artisan.summary, avatar: { kind: 'character', value: 'artisan' },
     engine: settled.harness, model: settled.model, revision: 1, version: 1, source: 'catalog' };
-  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'default-general', version: 1, goal: settled.title,
+  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'artisan', version: 1, goal: settled.title,
     startedBy: 'orchestrator', startedAt: E - 30 * MIN, costUsd: settled.costUsd, tokens: null,
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: settled.contextTokens ?? null } };
   const items: Record<string, ChatItem[]> = {

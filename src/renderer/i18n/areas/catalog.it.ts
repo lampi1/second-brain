@@ -1,6 +1,6 @@
 // Catalogue overview strings for Italian users; composed into the typed UI dictionary.
 export const catalogIt = {
-  'runs.legacy': 'Versione precedente: definizione non verificabile', 'runs.version': 'Versione fissata all’avvio',
+  'runs.version': 'Versione fissata all’avvio',
   'runs.auto': 'Avviata dall’Orchestrator', 'runs.outcome': 'Com’è andata?',
   'runs.success': 'Riuscita', 'runs.partial': 'In parte', 'runs.fail': 'Non riuscita',
   'runs.saved': 'Il tuo esito è salvato', 'runs.error': 'Esito non salvato. Riprova.',
@@ -9,15 +9,14 @@ export const catalogIt = {
   'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',
   'contextPulse.save': 'Salva nelle idee', 'contextPulse.saved': 'Salvata nelle idee', 'contextPulse.act': 'Fallo', 'contextPulse.dismiss': 'Non mi serve',
   'contextPulse.sources': 'Fonti', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Salvataggio nelle idee non disponibile.',
-  'catalog.title': 'Agenti', 'catalog.create': 'Crea agente',
-  'catalog.intro': 'Gli agenti sono assistenti riutilizzabili con un ruolo, istruzioni e un motore: parti da un preset o creane uno con l’Orchestratore.',
-  'catalog.subtitle': 'La tua squadra, le sue specialità e i risultati osservati.',
-  'catalog.role': 'Ruolo', 'catalog.engine': 'Motore', 'catalog.all': 'Tutti', 'catalog.sort': 'Ordina per', 'catalog.name': 'Nome',
-  'catalog.empty': 'Nessun agente corrisponde ai filtri.', 'catalog.active': 'Attivo', 'catalog.presetUpdate': 'Aggiornamento preset disponibile', 'catalog.probation': 'In prova',
+  'catalog.title': 'Agenti',
+  'catalog.intro': 'Ogni lavoro va a uno di questi ruoli: l’Orchestrator lo delega, il ruolo può delegare a sua volta in chat visibili sotto la sua. Puoi cambiarne istruzioni, motore, modello, strumenti e skill; «Ripristina predefinito» torna all’originale.',
+  'catalog.subtitle': 'I ruoli della tua squadra, cosa fanno e i risultati osservati.',
+  'catalog.engine': 'Motore',
+  'catalog.active': 'Attivo', 
   'catalog.runs': 'Esecuzioni concluse', 'catalog.open': 'In corso', 'catalog.success': 'Successi verificati',
   'catalog.cost': 'Costo mediano / esecuzione', 'catalog.last': 'Ultimo avvio osservato', 'catalog.unknown': 'Non disponibile',
   'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} esecuzioni`,
   'catalog.note': 'Statistiche sulle versioni note. I successi contano solo esiti verificati; l’ultimo avvio riguarda le chat disponibili. Dati mancanti non significano zero.',
   'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
-  'catalog.preset': 'Preset', 'catalog.custom': 'Personalizzato',
 };

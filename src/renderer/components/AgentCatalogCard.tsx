@@ -1,13 +1,14 @@
-// Agent card of the Agenti catalogue (AgentCatalogPage): identity (glyph, name, role), engine and model, a live status
-// and four compact run metrics on the front; a click anywhere on the card flips it in 3D (#81, owner 2026-10-19: no
-// "Avvia", no "Dettagli") to the back: the agent's prompt, the skills it declares (preloaded when it starts, ADR 0077),
-// its memory, the run facts and "Apri profilo". A second click, or Esc, flips it back; the hidden face is inert, so
+// Role card of the Agenti catalogue (AgentCatalogPage): identity (character, English name, what it is for), engine and
+// model tier, a live status and four compact run metrics on the front; a click anywhere on the card flips it in 3D (#81)
+// to the back: the role's instructions, the skills it loads at every launch, its memory, the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
 // keyboard and screen readers only reach the visible one. Under prefers-reduced-motion the faces fade instead of turning.
 // Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash with "Non
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
 // styles/brain-model.css (flip).
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
-import { inProbation, type AgentMetrics, type AgentProfile } from '@shared/agents';
+import type { AgentMetrics, AgentProfile } from '@shared/agents';
+import { characterOf } from '@shared/characters';
+import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -22,10 +23,9 @@ function Metric({ label, full, value, unknown }: { label: string; full: string; 
   </div>;
 }
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, updateAvailable, index = 0, skills = [], memory = null }: {
-  profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void; updateAvailable?: boolean;
+export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, memory = null }: {
+  profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void;
   index?: number;
-  /** the skills the agent declares (brain model), shown on the back */ skills?: string[];
   /** its own memory file, when it has one */ memory?: MemoryFile | null;
   /** a skill chip on the back: go to that skill */ onSkill?: (name: string) => void;
 }) {
@@ -54,16 +54,16 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     success: { text: rate?.value != null ? new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(rate.value) : null, samples: sample(rate?.n ?? 0) },
     cost: { text: cost?.value != null ? new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
-  const probation = inProbation(profile);
-  const working = !probation && (open ?? 0) > 0;
-  const state = probation ? 'probation' : working ? 'working' : 'active';
-  const tone = profile.avatar?.kind === 'symbol' ? profile.avatar.tone ?? 'blue' : 'blue';
-  const origin = profile.origin.kind === 'preset' ? t('catalog.preset') : t('catalog.custom');
-  const role = profile.role || origin;
+  const trial = !!profile.trial;
+  const working = !trial && (open ?? 0) > 0;
+  const state = trial ? 'trial' : working ? 'working' : 'active';
+  const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
+  const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
+  const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
-  return <article className="catalog-card bm-flip" data-testid={`catalog-card-${profile.id}`} data-state={state} data-tone={tone} data-flipped={flipped}
-    style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
+  return <article className="catalog-card bm-flip" data-testid={`catalog-card-${profile.id}`} data-state={state} data-flipped={flipped}
+    style={{ '--row-index': Math.min(index, 8), '--tone': characterTone(characterOf(profile.id)) } as CSSProperties}>
     <div className="bm-flip-inner">
       <div className="bm-face bm-face-front" inert={flipped} aria-hidden={flipped || undefined} data-testid={`catalog-front-${profile.id}`}>
         <header className="catalog-card-head">
@@ -71,17 +71,16 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <div className="catalog-card-id">
             <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
             <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
-            <p className="catalog-role" title={role}>{role}</p>
+            <p className="catalog-role">{origin}</p>
           </div>
-          <span className="catalog-badge" data-probation={probation} data-state={state}>
-            <i aria-hidden="true" />{probation ? t('catalog.probation') : working ? t('agentsGrid.working') : t('catalog.active')}</span>
+          <span className="catalog-badge" data-state={state}>
+            <i aria-hidden="true" />{trial ? t('studio.trial') : working ? t('agentsGrid.working') : t('catalog.active')}</span>
         </header>
         <p className="catalog-purpose" title={profile.purpose || undefined}>{profile.purpose}</p>
         <div className="catalog-chips">
           <span className="catalog-chip" data-kind="engine">{engine}</span>
-          <span className="catalog-chip" data-kind="model" title={profile.model ?? t('studio.defaultEngine')}>{profile.model ?? t('studio.defaultEngine')}</span>
+          <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span>
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
-          {updateAvailable && <button type="button" className="catalog-chip catalog-update" onClick={onOpen}>{t('catalog.presetUpdate')}</button>}
         </div>
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />
@@ -109,8 +108,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
         </section>
         <dl>
           <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
-          <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? t('studio.defaultEngine')}</dd></div>
-          <div><dt>{t('agentsGrid.origin')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
+          <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>
+          <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
           <div><dt>{t('catalog.success')}</dt><dd>{values.success.text ?? unknown} <small>{values.success.samples}</small></dd></div>
           <div><dt>{t('catalog.cost')}</dt><dd>{values.cost.text ?? unknown} <small>{values.cost.samples}</small></dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>

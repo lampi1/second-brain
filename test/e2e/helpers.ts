@@ -158,8 +158,8 @@ export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void>
   await page.keyboard.press(GO_KEY[id]);
 }
 
-/** Opens the agents overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
- *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. "Crea agente" lives here (AgentCreateDialog). */
+/** Opens the roles overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
+ *  "Agenti" only when the chosen profile lists it; Ctrl+K reaches it too. */
 export async function openAgentOverview(page: Page): Promise<void> {
   await page.getByTestId('nav-home').click();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
@@ -168,14 +168,12 @@ export async function openAgentOverview(page: Page): Promise<void> {
   await expect(page.getByTestId('agent-overview')).toBeVisible();
 }
 
-/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card: a
- *  click flips the card (#81), "Apri profilo" on its back opens the page; Generale is in every catalog. */
-export async function openAgents(page: Page, agent = 'Generale'): Promise<void> {
+/** Opens one role's page (its editor, versions and progress) from its overview card: a click flips the card (#81),
+ *  "Apri profilo" on its back opens the page. */
+export async function openAgents(page: Page, role = 'scout'): Promise<void> {
   await openAgentOverview(page);
-  const card = page.getByTestId('agent-overview').locator('article.catalog-card').filter({ has: page.getByRole('heading', { name: agent, exact: true }) });
-  await card.getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
-  await expect(card).toHaveAttribute('data-flipped', 'true');
-  await card.getByRole('button', { name: /^(Apri profilo|Open profile)$/ }).click();
+  await page.getByTestId(`catalog-flip-${role}`).click();
+  await page.getByTestId(`catalog-open-${role}`).click();
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 

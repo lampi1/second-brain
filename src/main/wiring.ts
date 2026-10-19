@@ -2,7 +2,7 @@
 // the app-control tools are mounted on the same local MCP server. Used by index.ts (one call at start).
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 import type { BrowserWindow } from 'electron';
-import { app, nativeImage, safeStorage, shell } from 'electron';
+import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import type { CliStatus, Harness } from '../shared/contract';
 import { NEW_CHAT_RULE } from '../shared/newchat';
@@ -11,12 +11,12 @@ import { engineReadiness } from './engines/readiness';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
-import { AgentAuthoring } from './agents/authoring';
-import { SuggestionBudget } from './agents/suggestion-budget';
+import { RunFeedback } from './agents/run-feedback';
+import { independentModel } from './agents/model-tier';
 import { createAgentPacks } from './agents/pack/wiring';
 import { chatLearnTool } from './agents/pack/learning';
-import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
-import { systemLang } from './lang';
+import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
+import { SkillSuggester } from './skills/suggest';
 import { SetupService } from './agents/setup';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
@@ -24,8 +24,8 @@ import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
-import type { ProbationJudgement } from './agents/probation';
-import type { AgentProfile, AgentRun } from '../shared/agents';
+import type { AgentRun } from '../shared/agents';
+import type { SkillSuggestions } from '../shared/skill-suggest';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
@@ -39,7 +39,6 @@ import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
 import { BrainModelService } from './brainmodel/service';
-import { classifyByWords } from './agents/classifier';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
@@ -47,7 +46,6 @@ import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
 import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
 import { runMetrics } from './agents/run-metrics';
-import { subagentTools } from './agents/subagent-tool';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
@@ -69,7 +67,7 @@ import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
 import { Quality } from './brain/quality';
 import { AppSourceService, cleanEnv, findNode } from './update/source';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
@@ -85,9 +83,6 @@ import { CompareQueue, queueAllowed } from './compare/queue';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
-import { AgentClassifier } from './agents/classifier';
-import { ClassifierTuning } from './agents/classifier-calibration';
-import type { ClassifyAgents } from './agents/discovery';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
@@ -100,16 +95,16 @@ export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; use
 export interface Wired {
   /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
   cloud?: CloudService;
-  agentAuthoring?: AgentAuthoring;
+  /** the verdicts on role runs (a parent's, a Judge's) and the user's Annulla on a change the app applied */
+  runFeedback?: RunFeedback;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
   agentLifecycle?: LifecycleApi;
   oneShot?: OneShotService;
   agentRuns?: AgentRunStore;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
-  classifyAgents?: ClassifyAgents;
-  /** the agent classifier's thresholds and their calibration from confirmed runs (decided only by the user) */
-  classifierTuning?: ClassifierTuning;
+  /** the brain skills that fit a request, best first (skills/suggest.ts) */
+  suggestSkills?: (request: string) => Promise<SkillSuggestions>;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   progress: ProgressService;
   autoClose: AutoCloseService;
@@ -294,20 +289,17 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
-    presetEvent: detail => brain.publish([{ kind: 'proposal', title: 'Preset Agenti aggiornati', detail }]),
-    approvedRoots: () => [brain.info().brainRoot, brain.settings().appRepo, ...(brain.settings().codexAutonomyRoots ?? [])].filter((p): p is string => typeof p === 'string' && !!p),
+    tierModel: (engine, tier, avoid) => independentModel(engine, tier, avoid, brain.routingInfo().registry, brain.settings().modelTiers),
     pulsePreset: () => {
       const choices = engineInfos();
       let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
         ?? choices.find(e => e.kind === 'claude');
-      const legacy = brain.settings();
-      if (legacy.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
+      const s = brain.settings();
+      if (s.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
       const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
-      return { engine: e?.id ?? 'claude', model: legacy.headlineModel || model,
-        ...(e?.caps.effort ? { effort: legacy.headlineEffort || 'low' as const } : {}) };
+      return { engine: e?.id ?? 'claude', model: s.headlineModel || model,
+        ...(e?.caps.effort ? { effort: s.headlineEffort || 'low' as const } : {}) };
     },
-    language: () => brain.settings().language === 'system' ? systemLang() : brain.settings().language as 'it' | 'en',
-    legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
@@ -315,7 +307,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
         modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
-    }, imageSize: bytes => { const image = nativeImage.createFromBuffer(bytes); return image.isEmpty() ? null : image.getSize(); },
+    },
     emit: catalog => ctx.emitter.emit('agents:changed', catalog),
   });
 }
@@ -328,7 +320,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAllowed } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
@@ -393,14 +385,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
   // Tests never run installed vendors; their fake status is requested explicitly.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
-  // The search's own HybridSearch: one worker and one model for search, recall, corrections and agent matching.
-  // Its thresholds: the user's approved calibration from confirmed runs (classifier-calibration.ts, ADR 0074), else defaults.
-  const classifierTuning = new ClassifierTuning(path.join(ctx.userData, 'agent-classifier.json'), () => ({ runs: manager.runs.list(), profiles: agents.list().profiles }));
-  const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
-  const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
+  // skills_suggest: the brain's skills that fit a request, on the search's own HybridSearch (one worker and one model for
+  // search, recall, corrections and skill suggestions); the skills are read when asked (the Brain pages' reader)
+  const brainModelRef: { current?: BrainModelService } = {};
+  const suggester = new SkillSuggester(hybrid);
+  const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModelRef.current?.skillList() ?? [], manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  // agent_learn_propose on a work chat's endpoint: only its own agent's lessons, queued for the Orchestrator and the user
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
+  addChatTools([agentCatalogTool(() => agents.list()), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -416,26 +408,22 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
   const autoCloseRef: { current?: AutoCloseService } = {};
-  // the agents' improvement loop (set below, once the lifecycle exists): run start → routing snapshot, run end → feedback
-  // queue + trial evaluation, the user's verdict → evaluation, the probation verdict → a proposal for the user
-  const loopRef: { current?: { started(run: AgentRun): void; ended(run: AgentRun): void; outcome(run: AgentRun): void; probation(agent: AgentProfile, j: ProbationJudgement): void } } = {};
+  // the roles' improvement loop (set below, once the lifecycle exists): a run's end or the user's verdict → its role's
+  // trial evaluated again
+  const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const manager = new ChatManager({
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
       const resolved = agents.resolve(req);
-      if (!req.agentId) return resolved;
-      const runtime = agentPacks.packs.runtime(req.agentId);
+      if (req.roleId === undefined || req.orchestrator) return resolved;
+      const runtime = agentPacks.packs.runtime(req.roleId);
+      const resolvedHarness = resolved.request.harness;
       return { ...resolved, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
-        instructions: req.harness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
+        instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
     },
-    // probation agents are judged at each run end and once a day; the daily pass stays off in the test suites
-    // the verdict is never applied by itself: it becomes a probation:<id> entry of "Da approvare" (agents/lifecycle.ts)
-    probation: { catalog: agents, publish: events => brain.publish(events), propose: (agent, j) => loopRef.current?.probation(agent, j) },
-    onRunStarted: run => loopRef.current?.started(run),
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
-    ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
-    agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
+    roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
     userData: ctx.userData,
     env: { [RECALL_ENV]: recall.url() },
@@ -521,7 +509,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
-  setBrowserAllowed(id => manager.browserAllowed(id));
+  setBrowserAccess(id => manager.browserAccess(id));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
   manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
@@ -594,7 +582,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
-  const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
   // an agent run's verdict (the user's, a reviewed one, the Orchestrator's) is the known outcome of its chat's ledger
@@ -604,49 +591,29 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (!outcome || !chat?.route) return;
     brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
   }
-  const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
-    suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
-    chat: chatOf,
+  // the verdicts on role runs that are not the user's (a parent's agent_child_feedback, a Judge's review) and the user's
+  // Annulla on a change the app applied (agents/run-feedback.ts)
+  const runFeedback = new RunFeedback({ userData: ctx.userData, catalog: agents, runs: manager.runs, publish: events => brain.publish(events), chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
-    onOutcome: run => routingVerdict(run),
-    isOrchestrator: id => chats.list().some(c => c.id === id && c.isOrchestrator && !c.closedAt),
-  });
-  // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
-  // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
-  // works). One feedback store: the authoring store (agent-authoring.json) behind agent_feedback and agent_child_feedback;
-  // the lifecycle reads it, and its facade is the tools' entry point, so a gap named on two runs becomes a proposal.
-  // Every entry is applied only by the user's click (agents:lifecycleDecide, sender-checked IPC).
-  // The feedback wake: ended runs without the user's verdict wait in agent-lifecycle.json; one batched request goes to the
-  // Orchestrator at most 3 times a day, 2 h apart, once 5 runs wait or the oldest waited 3 h (WAKE_POLICY), and only
-  // while the gate holds (feedback-wake.ts: an open, idle Orchestrator on an engine the user left on, quiet for 5 min,
-  // nothing waiting for the user; off with the setting orchestratorEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
+    onOutcome: run => routingVerdict(run) });
+  // the roles' lifecycle (agents/lifecycle.ts, ADR 0083): the "Da approvare" queue, the trial evaluations and the local
+  // daily tier suggestions ($0, no model, at most once a day after 18:00 while nothing works). Every entry is applied
+  // only by the user's click (agents:lifecycleDecide, sender-checked IPC).
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
-  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring,
-    classify: (q, profiles, runs) => classifier.classify(q, profiles, runs), chats,
-    engineOn: h => engineOn(brain.settings(), h), userWaiting: () => manager.pending().length > 0 || asks.pending().length > 0,
-    wakeEnabled: () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
+  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, feedback: runFeedback, chats,
     idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null) });
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
-  // a parent agent's own sub-agent runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
+  // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
   addChatTools(childFeedbackTools(lifecycleApi, () => manager.runs.list()));
-  loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
-  const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
+  loopRef.current = { ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run) };
+  const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
   lifecycleTimer?.unref();
-  // agent first (ADR 0078): an agent's route says how its active version has done so far
+  // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { runFeedback, resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
-  // a worker starts a catalog agent as its own sub-agent, through its Orchestrator's app_create_chat (agents/subagent-tool.ts)
-  addChatTools(subagentTools({ chats: () => chats.list(), runs: () => manager.runs.list(),
-    create: async (orchestratorId, args) => {
-      const tool = appControlTools({ ...appDeps, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, orchestratorId).find(t => t.name === 'app_create_chat')!;
-      return tool.run(args);
-    },
-    policy: chatId => manager.agentPolicy(chatId),
-    profile: id => { const p = agents.list().profiles.find(x => x.id === id && x.status === 'active'); return p ? { tools: p.tools, ceiling: p.permissionCeiling } : undefined; },
-    worktrees: cwd => gitWorktrees(cwd) }));
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -704,15 +671,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
-    top: async (text, profiles) => { const c = await classifyByWords(text, profiles); const best = c.candidates[0]; return best && !c.noneCloseEnough && best.score >= c.threshold ? { id: best.id, score: best.score } : null; },
+    suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1' });
+  brainModelRef.current = brainModel;
   brainModel.start();
-  // the Orchestrator's agent changes apply at once (ADR 0082): each one lands in the change log with "Annulla"
-  agentAuthoring.onApplied = change => brainModel.recordAgentChange(change);
 
   return {
     brainModel,
-    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -723,14 +689,4 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     shutdown: async () => { brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
-}
-
-/** The git worktrees of the repository at `cwd` (agent_start_subagent's allowed folders); none when it is no repository. */
-function gitWorktrees(cwd: string): Promise<string[]> {
-  return new Promise(resolve => {
-    execFile('git', ['-C', cwd, 'worktree', 'list', '--porcelain'], { timeout: 5000, windowsHide: true }, (error, stdout) => {
-      if (error) { resolve([]); return; }
-      resolve(String(stdout).split(/\r?\n/).filter(l => l.startsWith('worktree ')).map(l => path.resolve(l.slice(9).trim())));
-    });
-  });
 }

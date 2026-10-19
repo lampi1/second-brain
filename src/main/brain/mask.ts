@@ -1,6 +1,6 @@
 // Credential masking for brain text that leaves main or is copied by the app: every line that may hold a credential
 // (password=, keys, tokens, connection strings with a password, a URL with user:password, a private key) is replaced.
-// Used by agents/analytics.ts (usage evidence), brain/scripts.ts and brain/changelog.ts (ADR 0076) and brainmodel/legacy-sources.ts (the one-time migration of former
+// Used by agents/analytics.ts (usage evidence), brain/scripts.ts and brain/changelog.ts (ADR 0076) and brainmodel/procedure-sources.ts (the one-time migration of former
 // runbook sections into skills, ADR 0077). Unit tests: test/unit/brain/mask.test.ts.
 
 /** What a masked line shows instead (Italian UI). */

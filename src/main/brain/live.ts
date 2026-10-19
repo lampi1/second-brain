@@ -19,14 +19,10 @@ import { brainScript } from '../rules/tools';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
-  'agent-created': { label: 'Agente creato', priority: 'quiet' },
-  'agent-suggested': { label: 'Agente suggerito', priority: 'normal' },
-  'agent-proposal': { label: 'Modifica proposta', priority: 'normal' },
-  'agent-updated': { label: 'Agente aggiornato', priority: 'quiet' },
-  'agent-archived': { label: 'Agente archiviato', priority: 'quiet' },
-  'agent-restored': { label: 'Agente ripristinato', priority: 'quiet' },
+  'agent-proposal': { label: 'Proposta su un ruolo', priority: 'normal' },  // Agenti → Da approvare (agents/lifecycle.ts)
+  'agent-updated': { label: 'Ruolo aggiornato', priority: 'quiet' },          // a maintenance change, with Annulla
   'agent-rolledback': { label: 'Versione ripristinata', priority: 'quiet' },
-  'agent-feedback': { label: 'Feedback Agente', priority: 'quiet' },
+  'agent-feedback': { label: 'Giudizio su un ruolo', priority: 'quiet' },
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
   login: { label: 'Accesso da rifare', priority: 'urgent' },   // browser: an agent waits for the user to sign in to an environment
   question: { label: 'Domanda per te', priority: 'urgent' },
@@ -51,8 +47,6 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'brain-sync': { label: 'Sincronizzazione del cervello ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
   task: { label: 'Task', priority: 'normal' },   // tasks/service.ts: news on my work items, PRs and the tickets I follow
   'task-alert': { label: 'Task per te', priority: 'normal' },  // tasks/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
-  'agent-kept': { label: 'Agente tenuto', priority: 'quiet' },      // chats/manager.ts: a probation agent passed (AGENTS-DESIGN §4.7)
-  'agent-retired': { label: 'Agente ritirato', priority: 'normal' }, // a probation agent was archived; the card offers Ripristina
 };
 
 /** An event before stamping. `priority` overrides the kind's default (a budget alert at 100 % is urgent). */
@@ -63,10 +57,9 @@ export function feedAction(v: unknown): FeedAction | undefined {
   if (a?.kind === 'agent-proposals') return { kind: 'agent-proposals' };
   if (a?.kind === 'agent-undo') {
     const u = a.undo;
-    if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && ['archive', 'restore', 'version'].includes(u.operation) && (u.operation !== 'version' || Number.isSafeInteger(u.version) && u.version! > 0)) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, operation: u.operation, ...(u.operation === 'version' ? { version: u.version } : {}) } };
-    return undefined;
+    if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && Number.isSafeInteger(u.version) && u.version > 0) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, version: u.version } };
   }
-  return a && typeof a === 'object' && a.kind === 'agent-restore' && typeof a.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId) ? { kind: 'agent-restore', agentId: a.agentId } : undefined;
+  return undefined;
 }
 
 export function stamp(e: RawEvent, at = Date.now()): FeedEvent {

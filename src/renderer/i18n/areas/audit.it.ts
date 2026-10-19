@@ -84,7 +84,6 @@ export const auditIt = {
   "audit.FirstInterview.context": "Contesto",
   "audit.FirstInterview.goals": "Obiettivi",
   "audit.FirstInterview.toolsAndMaterials": "Strumenti e materiali",
-  "audit.FirstInterview.favouriteAgents": "Agenti preferiti",
   "audit.FirstInterview.workMemory": "Memoria di lavoro",
   "audit.FirstInterview.detectedAvailability": "Disponibilità rilevata",
   "audit.FirstInterview.setupDoesNotChangePermissionsOr": "Il setup non modifica permessi o account. Gli agenti inizieranno a lavorare quando il rispettivo motore sarà disponibile e avrà accesso.",

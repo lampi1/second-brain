@@ -26,7 +26,7 @@ describe('agent run store', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(readRun(run)).toEqual(run);
     for (const bad of [{ runId: 'x' }, { agentId: 'Bad Id' }, { version: -1 }, { startedBy: 'agent' }, { endedAt: 5 }, { endReason: 'done', endedAt: 5 },
-      { counters: { ...run.counters, questions: 1.5 } }, { costUsd: -1 }, { tokens: { input: 1 } }, { outcome: { verdict: 'ok', basis: 'human', at: 1, by: 'user' } }, { spawnedBy: 'nope' }])
+      { counters: { ...run.counters, questions: 1.5 } }, { costUsd: -1 }, { tokens: { input: 1 } }, { outcome: { verdict: 'ok', basis: 'human', at: 1, by: 'user' } }])
       expect(readRun({ ...run, ...bad })).toBeNull();
   });
 
@@ -73,12 +73,11 @@ describe('agent run store', () => {
     expect(other).toMatchObject({ costUsd: 0, tokens: { input: 0 } });
   });
 
-  it('refuses unknown links and a spawned run with another parent', () => {
+  it('refuses unknown links and lists a parent’s open children', () => {
     const s = new AgentRunStore(tmp());
-    const a = s.start(start()), b = s.start(start());
+    const a = s.start(start());
     expect(() => s.start(start({ reworkOf: 'r_000000000000' }))).toThrow(/non trovata/);
-    expect(() => s.start(start({ spawnedBy: a.runId, parentRunId: b.runId }))).toThrow(/genitore/);
-    const k = s.start(start({ spawnedBy: a.runId }));
+    const k = s.start(start({ parentRunId: a.runId }));
     expect(k.parentRunId).toBe(a.runId);
     expect(s.children(a.runId)).toEqual([k]);
     endRun(k, 'closed', 3);
@@ -122,16 +121,17 @@ describe('agent run store: A6 fields and rollups', () => {
   it('reads back the report, corrections, execution time and continuation, and refuses them out of shape', () => {
     const s = new AgentRunStore(tmp());
     const prev = s.start(start());
-    const run = { ...s.start(start()), continuedFrom: prev.runId, report: { ok: true as const, at: 5, outcome: 'done' as const, verified: 'yes' as const, summary: 'ok', findings: 2, blocking: 1 }, corrections: { tagged: 1, afterReport: 0 }, executionMs: 1500 };
+    const run = { ...s.start(start()), continuedFrom: prev.runId, report: { at: 5, outcome: 'done' as const, verified: 'yes' as const, summary: 'ok', findings: 2, blocking: 1 }, corrections: { tagged: 1, afterReport: 0 }, executionMs: 1500 };
     expect(run.executionMs).toBe(1500);
     expect(readRun(run)).toEqual(run);
-    expect(readRun({ ...run, report: { ok: false, at: 5 } })).toEqual({ ...run, report: { ok: false, at: 5 } });
-    for (const bad of [{ continuedFrom: 'x' }, { report: { ok: true, at: 5, outcome: 'great', verified: 'yes', summary: 'ok' } }, { report: { ...run.report, summary: 'x'.repeat(141) } },
+    const { report: _r, ...bare } = run; void _r;
+    expect(readRun({ ...run, report: { ok: false, at: 5 } })).toEqual(bare);
+    for (const bad of [{ continuedFrom: 'x' }, { report: { at: 5, outcome: 'great', verified: 'yes', summary: 'ok' } }, { report: { ...run.report, summary: 'x'.repeat(141) } },
       { report: { ...run.report, blocking: 3 } }, { corrections: { tagged: -1, afterReport: 0 } }, { corrections: { tagged: 0 } }, { executionMs: -1 }, { executionMs: null }])
       expect(readRun({ ...run, ...bad })).toBeNull();
-    const legacy: Record<string, unknown> = { ...run };
-    delete legacy.corrections; delete legacy.executionMs; delete legacy.report; delete legacy.continuedFrom;
-    expect(readRun(legacy)).toEqual(legacy); // pre-A6 runs: unknown, not refused
+    const older: Record<string, unknown> = { ...run };
+    delete older.corrections; delete older.executionMs; delete older.report; delete older.continuedFrom;
+    expect(readRun(older)).toEqual(older); // runs recorded before these fields: unknown, not refused
   });
 
   it('a pruned run is folded into its rollup, which survives a reload; a review whose target stays is kept', () => {
@@ -140,7 +140,7 @@ describe('agent run store: A6 fields and rollups', () => {
     const target = s.start(start({ agentId: 'coder' }), false);
     endRun(target, 'completed', 100);
     const review = s.start(start({ agentId: 'reviewer', version: 3, reviewOf: target.runId }), false);
-    review.report = { ok: true, at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4 };
+    review.report = { at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4 };
     endRun(review, 'completed', 1); // the oldest end, but its target is kept: it stays with it
     const old = s.start(start({ agentId: 'coder', startedAt: 0 }), false);
     old.costUsd = 0.25;
@@ -190,7 +190,7 @@ describe('agent run store: A6 fields and rollups', () => {
     const target = s.start(start({ agentId: 'coder' }), false);
     endRun(target, 'completed', 1);
     const review = s.start(start({ agentId: 'reviewer', version: 3, reviewOf: target.runId }), false);
-    review.report = { ok: true, at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4, blocking: 1 };
+    review.report = { at: 2, outcome: 'done', verified: 'yes', summary: 's', findings: 4, blocking: 1 };
     endRun(review, 'completed', 5000);
     for (let i = 0; i < RUNS_MAX - 1; i++) endRun(s.start(start({ startedAt: 10 }), false), 'closed', 1000 + i);
     s.save();

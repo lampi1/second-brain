@@ -1054,6 +1054,17 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .brain-setup-err { color: var(--red); }
 
 /* new chat: the rarely needed fields folded away */
+/* "Nuovo agente": the eight roles as a grid of character buttons, the role it starts as, and the suggested skills */
+.modal-newchat .role-pick, .modal-newchat .role-skills { border: 1px solid var(--border); border-radius: var(--r-m); padding: 8px 12px 10px; margin: 0; min-width: 0; display: grid; gap: 6px; }
+.modal-newchat .role-pick legend, .modal-newchat .role-skills legend { padding: 0 4px; font-size: var(--fs-s); color: var(--text-3); }
+.modal-newchat .role-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.modal-newchat .role-pick-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px 5px 5px; border: 1px solid var(--border-2); border-radius: 20px; background: var(--surface-2); color: var(--text-2); font: inherit; font-size: var(--fs-s); cursor: pointer; }
+.modal-newchat .role-pick-item:hover { border-color: var(--border-3); color: var(--text); }
+.modal-newchat .role-pick-item[aria-pressed=true] { border-color: var(--blue); background: var(--blue-bg); color: var(--text); font-weight: 600; }
+.modal-newchat .role-pick-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.modal-newchat .role-skills small { color: var(--text-3); }
+.modal-newchat .agent-start-owner { display: flex; align-items: center; gap: 10px; }
+.modal-newchat .agent-start-owner p { margin: 0; font-size: var(--fs-s); color: var(--text-2); }
 .modal-newchat details.advanced { border: 1px solid var(--border); border-radius: var(--r-m); padding: 8px 12px; }
 .modal-newchat details.advanced > summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-m); }
 .modal-newchat details.advanced > summary small { color: var(--text-4); margin-left: 6px; }

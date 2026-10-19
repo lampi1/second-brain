@@ -1,4 +1,5 @@
-// Catalog launch composer and success feedback. A run starts only after the user supplies its goal and folder.
+// A role's launch composer on its page, and the success feedback. A run starts only after the user supplies its goal and
+// folder; the role decides engine and model (main resolves them).
 import { useEffect, useRef, useState } from 'react';
 import type { AgentProfile } from '@shared/agents';
 import { createChat, useApp } from '../store/store';
@@ -17,7 +18,7 @@ export function CatalogRun({ profile, available }: { profile: AgentProfile; avai
     if (working.current || !available || !goal.trim() || !cwd) return;
     working.current = true; setBusy(true); setError(false);
     try {
-      const chat = await createChat({ agentId: profile.id, harness: profile.engine, cwd, prompt: goal.trim() });
+      const chat = await createChat({ roleId: profile.id, harness: profile.engine, cwd, prompt: goal.trim() });
       if (!chat) { setError(true); return; }
       setStarted(true); setOpen(false); setGoal('');
       toast(t('runs.started'), 'ok', { label: t('runs.open'), run: () => focusChat(chat.id) });

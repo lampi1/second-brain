@@ -58,7 +58,6 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
     approve: async item => {
       const agent = s.agents.list().profiles.find(p => p.id === item.agentId); if (!agent) throw Error('Agente non disponibile');
       if (item.kind === 'learned-rule') s.agents.save({ ...agent, instructions: `${agent.instructions}\n${item.text}` }, agent.id);
-      else if (item.kind === 'agent-suggestion') s.agents.save({ ...agent, name: item.title, purpose: item.text.slice(0, 400), instructions: item.text });
       else throw Error('Questa proposta richiede un’applicazione manuale.');
     },
   });

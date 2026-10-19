@@ -1,6 +1,6 @@
-/* Agenti catalogue (AgentCatalogPage, AgentCatalogCard, CatalogRun): page header, filter toolbar, team summary and a
-   responsive grid of agent cards in the Dashboard's language (gradient surfaces, 12px radii, tabular numbers, a tone
-   hairline per agent). Only theme tokens (tokens.css), so dark and light follow the app; motion is off under reduced
+/* Agenti catalogue (AgentCatalogPage, AgentCatalogCard, CatalogRun): page header, team summary and a responsive grid of
+   role cards in the Dashboard's language (gradient surfaces, 12px radii, tabular numbers, a hairline in each role's
+   character colour). Only theme tokens (tokens.css), so dark and light follow the app; motion is off under reduced
    motion; readable down to narrow windows (one column, metrics two by two). */
 .agent-overview{max-width:1400px;margin:auto;padding:28px 32px 48px;overflow-wrap:anywhere;color:var(--text)}
 /* agent-strips.css styles a chat strip's own .agent-overview (grid, 12px, one-line paragraphs): undone for this page */
@@ -16,10 +16,6 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-create{display:grid;gap:12px;max-width:700px}.catalog-create h3{margin:0;font-size:var(--fs-l)}.catalog-create p{margin:0}.catalog-create textarea,.catalog-create input{width:100%}
 
 /* filter toolbar */
-.catalog-filters{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:0 0 18px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:var(--surface)}
-.catalog-filters .field{flex:1;min-width:150px;max-width:280px}
-.catalog-filters .field>span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
-.catalog-filters>.btn{margin-left:auto}
 
 /* team summary above the grid */
 .catalog-summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;margin:22px 0 14px}
@@ -28,7 +24,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-count span{display:inline-flex;align-items:center;gap:6px}
 .catalog-summary .catalog-note{font-size:var(--fs-s);max-width:72ch}
 .catalog-count i,.catalog-badge i{width:7px;height:7px;border-radius:50%;flex:none;background:var(--green)}
-[data-state=probation]>i{background:var(--amber)}
+[data-state=trial]>i{background:var(--amber)}
 [data-state=working]>i{box-shadow:0 0 0 3px var(--green-bg),0 0 10px var(--green);animation:catalog-beat 2.2s ease-in-out infinite}
 
 /* the grid of cards */
@@ -36,13 +32,9 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-card{--tone:var(--blue);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
 .catalog-card::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
 .catalog-card:hover,.catalog-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 16px 36px -22px var(--tone)}
-.catalog-card[data-tone=violet],.catalog-card[data-tone=indigo]{--tone:var(--violet)}.catalog-card[data-tone=amber]{--tone:var(--amber)}
-.catalog-card[data-tone=green]{--tone:var(--green)}.catalog-card[data-tone=red]{--tone:var(--red)}
-.catalog-card[data-tone=teal],.catalog-card[data-tone=cyan]{--tone:var(--pair-0)}.catalog-card[data-tone=pink]{--tone:var(--pair-1)}.catalog-card[data-tone=slate]{--tone:var(--text-3)}
 
 .catalog-card-head{display:flex;align-items:center;gap:12px;min-width:0}
-.catalog-avatar{display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:14px;background:color-mix(in srgb,var(--tone) 12%,var(--surface-3));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 30%,transparent),0 0 24px -12px var(--tone)}
-.catalog-avatar .agent-avatar.symbol{display:grid;place-items:center;border-radius:12px;color:var(--tone)}
+.catalog-avatar{display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:50%;background:color-mix(in srgb,var(--tone) 12%,var(--surface-3));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 30%,transparent),0 0 24px -12px var(--tone)}
 .catalog-card-id{flex:1;min-width:0}
 .catalog-card h3{margin:0;font-size:var(--fs-xl);font-weight:600;letter-spacing:-.25px;line-height:1.3}
 .catalog-card h3 button{font:inherit;color:inherit;text-align:left;background:none;border:0;padding:0;cursor:pointer;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -51,14 +43,12 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .agent-overview .catalog-role{margin:3px 0 0;font-size:var(--fs-s);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catalog-badge{display:inline-flex;align-items:center;gap:6px;flex:none;align-self:flex-start;font-size:var(--fs-xs);font-weight:550;color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:3px 9px 3px 8px;white-space:nowrap}
 .catalog-badge[data-state=working]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
-.catalog-badge[data-probation=true]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.catalog-badge[data-state=trial]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
 
 .agent-overview .catalog-purpose{margin:-4px 0 0;min-height:calc(2 * 1.55em);font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .catalog-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
 .catalog-chip{max-width:100%;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-3);border-radius:var(--r-xs);padding:3px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catalog-chip[data-kind=model]{font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:transparent}
-.catalog-update{position:relative;z-index:1;cursor:pointer;color:var(--blue);border-color:var(--blue-line);background:var(--blue-bg);font:inherit;font-size:var(--fs-xs)}
-.catalog-update:hover{background:color-mix(in srgb,var(--blue) 20%,transparent)}
 
 .catalog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
 .catalog-stats>div{min-width:0;padding:10px 10px 9px;border-left:1px solid var(--border)}.catalog-stats>div:first-child{border-left:0}

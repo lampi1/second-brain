@@ -1,7 +1,8 @@
-// An agent pack brings everything the agent needs and nothing private (ADR 0077): the profile, all its skills (its own
+// A role's pack brings everything the role needs and nothing private (ADR 0077, 0083): the role, all its skills (its own
 // and the shared ones it declares), the tools they call as a list (TOOLS.md) and the brain's rules; never memory, the
-// journal, now.md or the always-loaded files. Import restores it: shared skills back to the brain's shared skills and
-// declared by the agent, rules written when absent and listed as topic files. Real catalog and flows, temp folders only.
+// journal, now.md or the always-loaded files. Import attaches it to a built-in role: shared skills back to the brain's
+// shared skills and declared by the role, rules written when absent and listed as topic files. Real catalog and flows,
+// temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,13 +11,12 @@ import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentPackFlows, portableId } from '../../../src/main/agents/pack/flows';
 import { installRules, packRules, packTools } from '../../../src/main/agents/pack/rules';
 import { readZip } from '../../../src/main/agents/pack/zip';
-import type { AgentDraft, AgentModelChoice } from '../../../src/shared/agents';
+import type { AgentModelChoice } from '../../../src/shared/agents';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
 const put = (root: string, rel: string, text: string) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'known-model', name: 'Known model' }], installed: null, authenticated: null }];
-const draft = (): AgentDraft => ({ name: 'Reviewer', purpose: 'Review changes', instructions: 'Cite evidence.', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'eye' }, tools: { allow: ['read', 'shell'] }, permissionCeiling: 'default' });
 const WHEN = '---\nwhen: {"prompt":["stile"],"tools":[],"paths":[]}\n---\n';
 
 function world(seed: (brain: string) => void) {
@@ -41,7 +41,7 @@ describe('packRules and packTools', () => {
     expect([...packRules(w.brain).keys()]).toEqual(['rules/stile.md', 'rules/code.md', 'rules/altro.md']);
   });
   it('lists tool classes, MCP servers and what each skill calls', () => {
-    const text = packTools({ id: 'r', name: 'Reviewer', role: 'x', category: 'development', instructionsFile: 'agents/r.md', manifest: {}, engine: 'claude', model: null, tools: { allow: ['read', 'mcp'], mcp: ['jira'] }, permissionCeiling: 'plan' },
+    const text = packTools({ id: 'r', name: 'Judge', role: 'judge', summary: 'x', instructionsFile: 'agents/r.md', engine: 'claude', model: null, tools: { allow: ['read', 'mcp'], mcp: ['jira'] }, permissionCeiling: 'plan' },
       new Map([['skills/r/SKILL.md', Buffer.from('---\nname: r\ndescription: d\nallowed-tools: Read Grep\n---\nx')], ['skills/r/scripts/check.py', Buffer.from('print(1)')]]));
     expect(text).toContain('Classi di strumenti: read, mcp');
     expect(text).toContain('Server MCP: jira');
@@ -58,7 +58,7 @@ describe('packRules and packTools', () => {
   });
 });
 
-describe('export and import of a whole agent', () => {
+describe('export and import of a whole role', () => {
   it('round-trips the profile, its own and shared skills, TOOLS.md and the rules; memory stays home', async () => {
     const src = world(b => {
       put(b, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['rules/stile.md'], appRules: true } }));
@@ -66,7 +66,7 @@ describe('export and import of a whole agent', () => {
       put(b, '.claude/skills/fatture/SKILL.md', '---\nname: fatture\ndescription: Esportare le fatture\nallowed-tools: Bash\n---\n1. Esporta.\n');
       put(b, 'now.md', '- filo privato\n');
     });
-    const saved = src.catalog.save(draft());
+    const saved = src.catalog.list().profiles.find(p => p.id === 'sentinel')!;
     const knowhow = src.flows.persistSkills(saved.id, src.flows.ownSkills(saved, true), ['fatture']);
     const agent = src.catalog.save({ ...saved, knowhow }, saved.id);
     put(src.brain, `agents/${portableId(agent.id)}/memory.md`, '- ricordo privato\n');
@@ -81,7 +81,7 @@ describe('export and import of a whole agent', () => {
     const dst = world(() => {});
     const review = (await dst.flows.importInspect({ dropped: src.destination }))!;
     expect(review.rules).toEqual(['rules/stile.md']);
-    const [imported] = await dst.flows.importApply(review.token, false, 'rename');
+    const [imported] = await dst.flows.importApply(review.token, false, 'sentinel');
     expect(imported!.knowhow!.linked).toEqual(['fatture']);
     expect(fs.existsSync(path.join(dst.brain, '.claude/skills/fatture/SKILL.md'))).toBe(true);
     expect(fs.readFileSync(path.join(dst.brain, 'rules/stile.md'), 'utf8')).toContain('Frasi brevi.');

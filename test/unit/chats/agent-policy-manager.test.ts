@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 import { FAIL_CLOSED, type AgentPolicy } from '../../../src/main/agents/tool-policy';
 import type { PermissionMode } from '../../../src/shared/contract';
 
@@ -17,20 +17,20 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const dir = extra.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-policy-'));
   if (!extra.userData) roots.push(dir);
   const home = path.join(dir, 'home');
-  const starts: SessionOptions[] = [], modes: PermissionMode[] = [];
+  const starts: SessionOptions[] = [], modes: PermissionMode[] = [], answers: { id: string; answer: unknown }[] = [];
   let sink!: SessionSink;
   const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, env: { CLAUDE_CONFIG_DIR: home }, ...extra, sessionFactory: (_h, o, s) => {
     sink = s; starts.push(o);
     return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
       start() { sink.changed({ state: 'idle' }); }, send() {},
-      close: async () => { sink.changed({ state: 'closed' }); sink.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: () => false,
+      close: async () => { sink.changed({ state: 'closed' }); sink.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: (id: string, answer: unknown) => { answers.push({ id, answer }); return true; },
       rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async (pm: PermissionMode) => { modes.push(pm); }, contextUsage: async () => null, usage: async () => null,
     } as unknown as HarnessSession;
   } });
   managers.push(m);
-  return { m, dir, home, starts, modes, sink: () => sink };
+  return { m, dir, home, starts, modes, answers, sink: () => sink };
 }
-const agent = (policy: AgentPolicy) => ({ owner: compatibleOwner('claude', null), instructions: 'Sei un revisore.', policy });
+const agent = (policy: AgentPolicy) => ({ owner: plainOwner('claude', null), instructions: 'Sei un revisore.', policy });
 const reviewer: AgentPolicy = { tools: { allow: ['read'] }, ceiling: 'default' };
 
 describe('agent policy on chats', () => {
@@ -68,20 +68,34 @@ describe('agent policy on chats', () => {
     expect(f.m.list().find(x => x.id === c.id)?.permissionMode).toBe('default');
   });
 
+  it('a role that may only read commands: a writing command is refused visibly, a reading one reaches the user without always', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: { allow: ['read', 'shell-read'] }, ceiling: 'default' }));
+    const ask = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: `Bash: ${command}`, detail: command, input: { command }, at: 1, alwaysRules: ['Bash(git:*)'] });
+    ask('p1', 'rm -rf src');
+    expect(f.answers).toEqual([{ id: 'p1', answer: expect.objectContaining({ kind: 'permission', allow: false }) }]);
+    expect(f.m.pending().filter(p => p.chatId === c.id)).toEqual([]);
+    expect(f.m.items(c.id).some(i => i.kind === 'system' && i.code === 'commandReadOnly')).toBe(true);
+    ask('p2', 'git status');
+    expect(f.answers).toHaveLength(1);
+    expect(f.m.pending().find(p => p.id === 'p2')).toMatchObject({ noAlways: true });
+    expect(f.m.pending().find(p => p.id === 'p2')?.alwaysRules).toBeUndefined();
+  });
+
   it('a chat without an agent policy is untouched', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, permissionMode: 'bypassPermissions', prompt: 'x' });
     expect(f.starts.at(-1)?.permissionMode).toBe('bypassPermissions');
     expect(f.starts.at(-1)?.toolPolicy).toBeUndefined();
-    expect(f.m.browserAllowed(c.id)).toBe(true);
+    expect(f.m.browserAccess(c.id)).toBe('all');
   });
 
   it('hides the browser for an agent without the browser class', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent(reviewer));
     const b = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: { allow: ['read', 'browser'] }, ceiling: null }));
-    expect(f.m.browserAllowed(c.id)).toBe(false);
-    expect(f.m.browserAllowed(b.id)).toBe(true);
+    expect(f.m.browserAccess(c.id)).toBe('none');
+    expect(f.m.browserAccess(b.id)).toBe('all');
   });
 
   it('a renewed Orchestrator and the chats an agent opens never run wider than their origin', async () => {
@@ -91,7 +105,7 @@ describe('agent policy on chats', () => {
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
     const work = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'modifica X', permissionMode: 'acceptEdits' }, 'agent');
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default', permissionMode: 'default' });
-    expect(f.m.browserAllowed(work.id)).toBe(false);
+    expect(f.m.browserAccess(work.id)).toBe('none');
     // an agent chosen for the work is narrowed by its opener too
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'agent', agent({ tools: { allow: ['read', 'edit', 'browser'] }, ceiling: 'acceptEdits' }));
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
@@ -123,7 +137,7 @@ describe('agent policy on chats', () => {
     fs.writeFileSync(file, JSON.stringify(stored));
     const damaged = fixture({ userData: f.dir });
     await expect(damaged.m.set(c.id, { permissionMode: 'default' })).rejects.toThrow(/limite la modalità «plan»/);
-    expect(damaged.m.browserAllowed(c.id)).toBe(false);
+    expect(damaged.m.browserAccess(c.id)).toBe('none');
     expect(FAIL_CLOSED.ceiling).toBe('plan');
   });
 });

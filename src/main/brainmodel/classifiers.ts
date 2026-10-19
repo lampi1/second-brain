@@ -2,10 +2,10 @@
 // table in force (task kind → engine, model, effort, why), its change history, and per row the measured results of the
 // chats it routed (runs, verified success rate, average cost per chat) from the improvement loop's ledger
 // (<brain>/ops/state/improve/outcomes.jsonl, predictions joined with their actuals and the verdicts of the agent runs of
-// the same chats). Agent choice: for recent runs, the agent the words classifier ranks first for the goal now, and the
-// one actually used with its score at start (AgentRun.routing). Per kind of work: the known outcomes (routing:get's
-// kindStats); per source: how many chats the table, the agent's profile (ADR 0078) or a default chose the model of. Quality over time: success and cost per route and per
-// classifier channel, by week; a row without runs says so (null values), never zero. Nothing here writes: changes go
+// the same chats). Skill choice: for recent role runs, the skills skills_suggest ranks for the goal now against the
+// skills the launch actually gave (AgentRun.tags.skills). Per kind of work: the known outcomes (routing:get's
+// kindStats); per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
+// time: success and cost per route, by week; a row without runs says so (null values), never zero. Nothing here writes: changes go
 // through the routing save and the maintenance jobs, logged with their rollback. Used by brainmodel/service.ts;
 // unit tests: test/unit/brainmodel/classifiers.test.ts.
 import fs from 'node:fs';
@@ -21,8 +21,8 @@ export interface ClassifierInputs {
   routing: RoutingInfo;
   runs: AgentRun[];
   profiles: AgentProfile[];
-  /** the agent ranked first for a goal now (words channel), with its score; null = none passes the threshold */
-  top(goal: string): Promise<{ id: string; score: number } | null>;
+  /** the skill names skills_suggest ranks for a goal now, best first */
+  suggest(goal: string): Promise<string[]>;
 }
 
 /** The ledger's routing predictions of the app's chats (one per chat) and their latest actuals. */
@@ -71,26 +71,18 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
   const perRow = routes.map(() => [] as string[]);
   for (const p of predictions) { if (p.source !== 'table') continue; const k = rowOf(routes, p); if (k >= 0) perRow[k]!.push(p.id); }
   const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat) }));
-  // agent choice: the latest runs with a routing snapshot
+  // skill choice: the latest role runs with their launch's skills
   const name = (id: string) => i.profiles.find(p => p.id === id)?.name ?? id;
-  const recent = i.runs.filter(r => r.routing && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 15);
+  const recent = i.runs.filter(r => r.tags && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 15);
   const choices: ClassifierChoice[] = [];
   for (const r of recent) {
-    const top = await i.top(r.goal).catch(() => null);
-    choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), suggested: top ? { id: top.id, name: name(top.id), score: Math.round(top.score) } : null,
-      used: { id: r.agentId, name: name(r.agentId), score: r.routing!.score === null ? null : Math.round(r.routing!.score), rank: r.routing!.rank, mode: r.routing!.mode } });
+    const suggested = await i.suggest(r.goal).catch(() => [] as string[]);
+    choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
   }
-  // quality by week: per route (its predictions) and per classifier channel (the runs routed with it)
+  // quality by week: per route (its predictions)
   const weeks = lastWeeks(now, 6);
   const quality: ClassifiersState['quality'] = rows.map((row, k) => ({ key: `route:${k}`, label: `${row.kind}${row.area ? ` · ${row.area}` : ''} → ${row.model}`,
     weeks: weeks.map(w => { const ids = perRow[k]!.filter(id => weekOf(predictions.find(p => p.id === id)!.at) === w), res = result(ids, actuals, runByChat); return { week: w, runs: res.runs, success: res.success.value, avgCostUsd: res.avgCostUsd }; }) }));
-  for (const mode of ['words', 'hybrid'] as const) {
-    const runs = i.runs.filter(r => r.routing?.mode === mode);
-    quality.push({ key: `agent:${mode}`, label: mode === 'words' ? 'Scelta agente · parole' : 'Scelta agente · ibrido', weeks: weeks.map(w => {
-      const inWeek = runs.filter(r => weekOf(r.startedAt) === w), ok = inWeek.filter(verified), costs = inWeek.map(r => r.costUsd).filter((x): x is number => typeof x === 'number');
-      return { week: w, runs: inWeek.length, success: ok.length ? ok.filter(r => r.outcome!.verdict === 'success').length / ok.length : null, avgCostUsd: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null };
-    }) });
-  }
   return {
     routing: { version: table?.version ?? null, appliedAt: table?.appliedAt ?? null, by: table?.by ?? null, routes: rows, error: i.routing.error },
     history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),

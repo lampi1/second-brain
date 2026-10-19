@@ -12,6 +12,7 @@ import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shar
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
 import { PULSE_TYPES } from '../pulse/cards';
+import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } from '../../shared/roles';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
@@ -130,12 +131,29 @@ const BASE: readonly SettingDef[] = [
   // the app's own code: "Aggiorna" (Settings → Aggiornamenti, ADR 0075) updates and builds it; a chat working there is app work
   { key: 'appRepo', type: 'path', nullable: true, default: null, protected: true, label: "Cartella del codice dell'app",
     description: "Da dove «Aggiorna» prende la nuova versione (una cartella git); le chat che lavorano lì lavorano sull'app. Vuoto = quella da cui è stata fatta la versione in uso." },
+  // delegation between role chats (ADR 0083). Protected: an agent raising its own limits would launch more than the user allowed
+  { key: 'delegation.maxDepth', type: 'int', ...DELEGATION_RANGE.maxDepth, default: DELEGATION_DEFAULTS.maxDepth, protected: true, label: 'Deleghe: profondità massima',
+    description: 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.' },
+  { key: 'delegation.maxParallel', type: 'int', ...DELEGATION_RANGE.maxParallel, default: DELEGATION_DEFAULTS.maxParallel, protected: true, label: 'Deleghe: figlie in parallelo',
+    description: 'Quante chat figlie di uno stesso genitore lavorano insieme. Oltre, la delega è rifiutata e il genitore lo vede.' },
+  { key: 'delegation.stallMin', type: 'int', ...DELEGATION_RANGE.stallMin, default: DELEGATION_DEFAULTS.stallMin, protected: true, label: 'Deleghe: ferma dopo (minuti)',
+    description: 'Una chat figlia senza alcun evento per tanti minuti risulta ferma: l’Orchestrator e il genitore lo sanno.' },
+  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni del Judge al giorno',
+    description: 'Quante esecuzioni finite il Judge rivede ogni giorno, su un modello diverso, per misurare i ruoli. 0 = nessuna.' },
 ];
 /** a CLI model id as the CLIs accept it ("claude-opus-5-5", "grok-4.7", "gpt-5.6-sol[effort=high]"), '' = the default */
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
 
 const MUTE_KEY = /^mute\.([a-z][a-z-]{0,40})$/;
 const ENGINE_KEY = /^(engineOn|engines)\.(.+)$/;
+const TIER_KEY = /^modelTiers\.([^.]+)\.(light|mid|top)$/;
+const TIER_LABEL: Record<ModelTier, string> = { light: 'leggero', mid: 'medio', top: 'alto' };
+
+// the model a role's tier means on an engine (agents/model-tier.ts). Protected: the model decides whose credits and how many
+function tierDef(id: string, tier: ModelTier): SettingDef {
+  return { key: `modelTiers.${id}.${tier}`, type: 'model', default: '', protected: true, label: `${engineLabel(id)}: modello di livello ${TIER_LABEL[tier]}`,
+    description: 'Il modello che i ruoli di questo livello usano su questo motore. Vuoto = quello del registro dei modelli del cervello.' };
+}
 
 // the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Orchestrators may use it; engines.* keeps the key
 // older releases read, with the same meaning (safe rollback). Default: on only for the built-ins (registry defaultOn)
@@ -156,7 +174,7 @@ function orchestratorEngineDef(): SettingDef {
 
 /** Every setting, the engines' ones for the engines in the registry now. */
 export function schema(): SettingDef[] {
-  return [...BASE, orchestratorEngineDef(), ...engines().flatMap(e => [engineDef('engineOn', e.id), engineDef('engines', e.id)])];
+  return [...BASE, orchestratorEngineDef(), ...engines().flatMap(e => [engineDef('engineOn', e.id), engineDef('engines', e.id), ...MODEL_TIERS.map(t => tierDef(e.id, t))])];
 }
 
 export function defOf(key: string): SettingDef | null {
@@ -164,6 +182,8 @@ export function defOf(key: string): SettingDef | null {
   const eng = ENGINE_KEY.exec(key);
   if (eng) return ENGINE_ID.test(eng[2]!) ? engineDef(eng[1] as 'engineOn' | 'engines', eng[2]!) : null;
   if (key === 'orchestratorChats.harness') return orchestratorEngineDef();
+  const tier = TIER_KEY.exec(key);
+  if (tier) return ENGINE_ID.test(tier[1]!) ? tierDef(tier[1]!, tier[2] as ModelTier) : null;
   return BASE.find(d => d.key === key && d.key !== 'mute.*') ?? null;
 }
 
@@ -232,6 +252,7 @@ export function defaults(): Settings {
     appRepo: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     headlineOn: true, headlineModel: '', headlineEffort: '',
+    delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }
 
@@ -249,7 +270,7 @@ export function setAt(s: Settings, key: SettingKey, value: unknown): Settings {
   if (m) { if (value) out.mute[m[1]!] = true; else delete out.mute[m[1]!]; return out; }
   const parts = key.split('.');
   let o = out as unknown as Record<string, unknown>;
-  for (const p of parts.slice(0, -1)) o = o[p] as Record<string, unknown>;
+  for (const p of parts.slice(0, -1)) o = (o[p] ??= {}) as Record<string, unknown>;
   o[parts.at(-1)!] = value;
   return out;
 }
@@ -261,7 +282,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
+      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor' || key === 'delegation' || key === 'modelTiers' || /^modelTiers\.[^.]+$/.test(key))) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

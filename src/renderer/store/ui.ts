@@ -5,7 +5,6 @@
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, PermissionMode } from '@shared/contract';
-import type { RoleSelection } from '@shared/role-presets';
 import { readFileViewArg } from '@shared/file-view';
 import {readAppearance,type AppearancePreference} from '@shared/appearance';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
@@ -29,8 +28,8 @@ export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.p
 export interface Place { page: 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
 
 export interface Prefs {
-  /** Validate against the loaded agent/page catalogs before use; preserve invalid saved data for explicit recovery. */
-  role?: RoleSelection;
+  /** the work profile's id (shared/work-profiles.ts): which Brain pages the sidebar shows; absent = all of them */
+  workProfile?: string;
   appearance:AppearancePreference;
   chatPanelsV:0|1|2;
   chatExpanded:Record<string,boolean>;
@@ -122,9 +121,9 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
     // Retired and dropped: orchestratorRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
     // Corsie views); navCollapsed (the icon-only sidebar); orchestratorPlacement, orchestratorTopHeight (the Orchestrator at the top);
     // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows); feedOpen (the Orchestrator's
-    // "Novità" feed, replaced by "N novità in attesa", #88).
-    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen', unknown>;
+    // "Novità" feed, replaced by "N novità in attesa", #88); role (a composition of pages and agents, now workProfile).
+    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, workProfile, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
@@ -139,6 +138,7 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       orchestratorSize: p.orchestratorSizeV === DEFAULT_V ? sizeOf(p.orchestratorSize) : null,
       orchestratorSizeV: DEFAULT_V,
       orchestratorSeenAt: typeof p.orchestratorSeenAt === 'number' && Number.isFinite(p.orchestratorSeenAt) ? p.orchestratorSeenAt : at,
+      ...(typeof workProfile === 'string' ? { workProfile } : {}),
     };
   } catch { return { ...defaultPrefs, orchestratorSeenAt: at }; }
 }
@@ -174,11 +174,12 @@ export function savePrefs(): void {
   saveTimer = null;
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(ui.get().prefs)); } catch { /* storage off: keep in memory */ }
 }
-/** Explicit role commits are durable before publishing; stale previews cannot overwrite a newer choice. */
-export function saveRolePreference(role: RoleSelection | undefined, expected: string | undefined): void {
+/** The work profile, saved at once (a stale choice from another window cannot overwrite a newer one: `expected`). */
+export function saveWorkProfile(id: string | undefined, expected: string | undefined): void {
   const current = ui.get().prefs;
-  if (JSON.stringify(current.role) !== expected) throw new Error('Role preference changed; preview again.');
-  const next = { ...current, role };
+  if (current.workProfile !== expected) throw new Error('Work profile changed; choose again.');
+  const { workProfile: _w, ...rest } = current;
+  const next: Prefs = id === undefined ? rest : { ...rest, workProfile: id };
   localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   ui.set(s => ({ ...s, prefs: next }));
 }

@@ -5,15 +5,14 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { OneShotService } from '../../../src/main/agents/oneshot';
 import { AgentRunStore } from '../../../src/main/agents/runs';
-import { upgradeProfile } from '../../../src/main/agents/versions';
+import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { setBrainEngines, setTrust, fingerprint, brainEngine } from '../../../src/main/engines/registry';
 import type { EngineEntry } from '../../../src/main/engines/registry';
 const dirs: string[] = [];
 afterEach(() => { setBrainEngines([]); setTrust({}); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 function setup(engine = 'cursor') {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-once-')); dirs.push(userData);
-  const profile = upgradeProfile({ id: 'default-pulse', name: 'Battito', purpose: 'digest', instructions: 'Use digest', engine, model: null,
-    avatar: { kind: 'symbol', value: 'eye' }, createdAt: 0, updatedAt: 0 }, true);
+  const profile = new AgentCatalogService({ userData, models: () => [], pulsePreset: () => ({ engine, model: null }) }).list().profiles.find(p => p.id === 'pulse')!;
   const run = vi.fn(async (req: { cwd: string }) => {
     expect(fs.readdirSync(req.cwd)).toEqual([]);
     return { ok: true as const, text: 'done', model: null, effort: null, costUsd: 0.01, tokens: null, turns: 1, durationMs: 1 };
@@ -25,7 +24,7 @@ function setup(engine = 'cursor') {
   const service = new OneShotService(deps);
   return { deps, service, run, runs, userData, off: () => { fallback = 'off'; } };
 }
-const request = { agentId: 'default-pulse', system: 'system', prompt: 'digest', maxOutputTokens: 1200, timeoutMs: 120000, purpose: 'pulse' as const };
+const request = { agentId: 'pulse', system: 'system', prompt: 'digest', maxOutputTokens: 1200, timeoutMs: 120000, purpose: 'pulse' as const };
 it('falls back from Cursor to tool-free Claude in a fresh folder and persists provenance', async () => {
   const f = setup(); const r = await f.service.runOnce(request);
   expect(r).toMatchObject({ ok: true, engine: 'claude', costBasis: 'reported' });

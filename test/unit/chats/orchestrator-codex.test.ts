@@ -1,5 +1,5 @@
-// A Codex Orchestrator's app_create_chat path over an isolated real MCP server and ChatManager, ending at a fake Codex
-// app-server's turn/start. Proves title, engine, ownership and the full labelled brief survive without duplicate
+// A Codex Orchestrator's app_create_chat path (a role chat whose role runs on Codex) over an isolated real MCP server
+// and ChatManager, ending at a fake Codex app-server's turn/start. Proves title, engine, ownership and the full labelled brief survive without duplicate
 // real chats, credentials, network services or model calls. Also checks the existing engine policy stays enforced.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -10,6 +10,7 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import { engineOf, fingerprint, setTrust } from '../../../src/main/engines/registry';
 import { McpServer, type McpTool } from '../../../src/main/mcp/server';
 import type { BrainService, BrowserService } from '../../../src/main/services';
+import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { recEmitter, tmp, waitFor } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '../../fixtures/fake-codex-app-server.mjs');
@@ -35,7 +36,9 @@ async function setup() {
       orchestratorChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
     info: () => ({ brainRoot: cwd }),
   } as unknown as BrainService;
-  const tools = appControlTools({ chats: manager, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }, orchestrator.id);
+  // the roles start on Codex, the only engine here
+  const catalog = new AgentCatalogService({ userData, models: () => [{ engine: 'codex', label: 'Codex', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true }] });
+  const tools = appControlTools({ chats: manager, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, orchestrator.id);
   server.mount('/mcp/app', { name: 'app', instructions: 'Isolated app-control test', tools: tools.map((t): McpTool => ({ ...t, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => JSON.stringify(await t.run(a)) })) });
   const port = await server.listen(0);
   const rpc = async (method: string, params: object = {}): Promise<{ result: { content: { text: string }[]; isError?: boolean; tools?: { name: string; inputSchema: { properties: { harness: { description: string } } } }[] } }> => {
@@ -47,13 +50,11 @@ async function setup() {
 }
 
 describe('Codex app_create_chat', () => {
-  it('advertises Codex and delivers one work chat with the informative title and complete brief', async () => {
-    const { manager, orchestrator, cwd, log, rpc } = await setup();
-    const listed = await rpc('tools/list');
-    expect(listed.result.tools?.find(t => t.name === 'app_create_chat')?.inputSchema.properties.harness.description).toContain('codex');
+  it('delegates one role chat on Codex with the informative title and complete brief', async () => {
+    const { manager, cwd, log, rpc } = await setup();
     const title = 'Alfa · Conferme MCP e consegna brief';
     const prompt = `Contesto: progetto Alfa.\nObiettivo: verifica il passaggio completo.\n${'Dettaglio del lavoro. '.repeat(300)}\nConsegna: report finale integrale.`;
-    const reply = await rpc('tools/call', { name: 'app_create_chat', arguments: { title, prompt, cwd, harness: 'codex' } });
+    const reply = await rpc('tools/call', { name: 'app_create_chat', arguments: { title, prompt, cwd, roleId: 'scout' } });
     expect(reply.result.isError).not.toBe(true);
     const made = JSON.parse(reply.result.content[0]!.text) as { chatId: string; title: string; harness: string; cwd: string };
     expect(made).toMatchObject({ title, harness: 'codex', cwd });
@@ -66,7 +67,6 @@ describe('Codex app_create_chat', () => {
     expect(turns).toHaveLength(1);
     const text = turns[0]!.msg!.params!.input!.find(i => i.type === 'text')!.text;
     expect(text.startsWith(AGENT_LABEL)).toBe(true);
-    expect(text).toContain(`Il tuo Orchestrator è «${orchestrator.title}»`);
     expect(text.endsWith(prompt)).toBe(true);
     expect(lines().filter(l => l.cwd).every(l => l.cwd === cwd)).toBe(true);
     expect(manager.list().filter(c => c.isOrchestrator)).toHaveLength(1);
@@ -75,7 +75,7 @@ describe('Codex app_create_chat', () => {
   it('keeps an explicit engine refusal visible and does not create a chat', async () => {
     const { manager, rpc, disable } = await setup();
     disable();
-    const reply = await rpc('tools/call', { name: 'app_create_chat', arguments: { title: 'Alfa · Non avviare', prompt: 'Brief', harness: 'codex' } });
+    const reply = await rpc('tools/call', { name: 'app_create_chat', arguments: { title: 'Alfa · Non avviare', prompt: 'Brief', roleId: 'scout' } });
     expect(reply.result.isError).toBe(true);
     expect(reply.result.content[0]!.text).toContain('spento');
     expect(manager.list()).toHaveLength(1);

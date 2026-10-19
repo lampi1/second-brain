@@ -6,7 +6,6 @@ import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
 import { componentsIt } from './areas/components.it';
 import { catalogIt } from './areas/catalog.it';
-import { agentCreateIt } from './areas/agent-create.it';
 import { connectorsIt } from './areas/connectors.it';
 // The Italian UI texts (ADR 0057): the source dictionary. Every key the UI shows lives here; en.ts must have the same
 // keys (its type is this object's: a missing or extra key fails the typecheck). Keys are "area.what"; a value is a
@@ -21,7 +20,6 @@ import { brainPagesIt } from './areas/brainPages.it';
 import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
-import {lifecycleIt}from'./areas/lifecycle.it';
 import { agentsGridIt } from './areas/agents-grid.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { approvalsIt } from './areas/approvals.it';
@@ -38,7 +36,6 @@ export const it = {
   ...componentsIt,
   ...agentPackIt,
   ...catalogIt,
-  ...agentCreateIt,
   ...costsIt,
   ...connectorsIt,
   ...reviewedContextIt,
@@ -65,7 +62,6 @@ export const it = {
   ...studioIt,
   ...brainModelIt,
   ...productIt,
-  ...lifecycleIt,
   ...agentsGridIt,
   ...agentDetailIt,
   ...approvalsIt,

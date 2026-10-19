@@ -16,7 +16,7 @@ it('prepares a demo export through the shipped scanner', async () => {
     // Reproduce a profile from the previous demo version, which created an empty deny file.
     fs.writeFileSync(path.join(data, 'demo-agent-deny.txt'), '');
     const service = createAgentPacks(data, {} as BrainService, catalog, true);
-    const plan = await service.packs.exportPlan(catalog.list().profiles[0]!.id, 'sbagent');
+    const plan = await service.packs.exportPlan('scout', 'sbagent');
     expect(plan.findings).toEqual([]); service.packs.close();
   } finally { fs.rmSync(data, { recursive: true, force: true }); }
 });

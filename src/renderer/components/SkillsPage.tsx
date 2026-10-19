@@ -253,8 +253,6 @@ export function SkillsPage() {
 
   const rows = useMemo(() => skillRows(state, cat), [state, cat]);
   const shown = useMemo(() => filterSkills(rows, q, filter), [rows, q, filter]);
-  const agents = state?.agents ?? [];
-  const agentName = (id: string) => agents.find(a => a.id === id)?.name ?? id;
   const used = rows.filter(r => r.usedBy.length).length;
 
   return (
@@ -277,8 +275,8 @@ export function SkillsPage() {
       </div>
       {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
         : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>
-          : <div className="catalog-grid" data-testid="bm-skill-grid">{shown.map((r, i) => <SkillCard key={`${r.home}|${r.file}`} row={r} agents={state?.root ? agents : []} busy={busy} onEdit={open} index={i} />)}</div>}
-      {state?.migration && <MigrationReportPanel report={state.migration} agentName={agentName} />}
+          : <div className="catalog-grid" data-testid="bm-skill-grid">{shown.map((r, i) => <SkillCard key={`${r.home}|${r.file}`} row={r} agents={state?.root ? state.agents : []} busy={busy} onEdit={open} index={i} />)}</div>}
+      {state?.migration && <MigrationReportPanel report={state.migration} />}
       <MaintenancePanel kinds={['skill', 'agent']} />
     </div>
   );

@@ -1,18 +1,13 @@
-// Resolve saved role references for navigation and new-chat suggestions; never grants engine permissions.
-import type {AgentCatalog,AgentProfile,AgentModelChoice} from '@shared/agents';
-import {savedRole} from './role-preferences';
-export function activeRole(raw:unknown,catalog:AgentCatalog|null,pageIds:readonly string[]){
- if(raw===undefined||!catalog)return null;
- // Archived agents stay valid references (a restore brings them back); roleAgents lists only launchable ones.
- try{return savedRole(raw,{agentIds:[...catalog.profiles,...catalog.archived].map(profile=>profile.id),pageIds}).resolved;}catch{return null;}
+// Which roles a new chat can start as, for the start dialog and the catalog page: the eight work roles in the
+// catalog's order, and whether a role's engine and model can run now. Never grants a permission.
+import type { AgentCatalog, AgentModelChoice, AgentProfile } from '@shared/agents';
+import { WORK_ROLE_IDS } from '@shared/roles';
+
+export function workRoles(catalog: AgentCatalog | null): AgentProfile[] {
+  if (!catalog) return [];
+  return WORK_ROLE_IDS.flatMap(id => catalog.profiles.find(p => p.id === id) ?? []);
 }
-export function roleAgents(raw:unknown,catalog:AgentCatalog|null,pageIds:readonly string[]){
- if(!catalog)return[];
- const role=activeRole(raw,catalog,pageIds);
- const ids=role?[role.defaults.primaryAgentId,...role.agentIds.filter(id=>id!==role.defaults.primaryAgentId)]:['default-general'];
- return ids.flatMap(id=>catalog.profiles.find(profile=>profile.id===id)??[]);
-}
-export function profileCanStart(profile:AgentProfile|undefined,choice:AgentModelChoice|undefined):boolean{
- return !!profile&&!!choice&&choice.enabled&&choice.trusted&&choice.installed!==false&&choice.authenticated!==false&&
-  (profile.model?choice.modelSelectable&&choice.models.some(model=>model.id===profile.model):choice.defaultModel)&&(!profile.effort||choice.effort);
+export function profileCanStart(profile: AgentProfile | undefined, choice: AgentModelChoice | undefined): boolean {
+  return !!profile && !!choice && choice.enabled && choice.trusted && choice.installed !== false && choice.authenticated !== false
+    && (profile.model ? choice.modelSelectable && choice.models.some(model => model.id === profile.model) : choice.defaultModel) && (!profile.effort || choice.effort);
 }

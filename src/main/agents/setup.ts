@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { SetupDraft, SetupState, SetupGuide, SetupProfile } from '../../shared/agents';
 import { readLocal, writeLocal } from './local-store';
 
-const blank = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] });
+const blank = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', style: 'balanced' });
 export function checkSetup(value: unknown): SetupDraft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Preferenze non valide.');
   const v = value as Record<string, unknown>;
@@ -30,8 +30,8 @@ export function checkSetup(value: unknown): SetupDraft {
     }
     if (p.style !== undefined) { if (!['balanced', 'concise', 'detailed'].includes(String(p.style))) throw new Error('Preferenze non valide.'); profile.style = p.style as SetupDraft['style']; }
   }
-  if (!Number.isInteger(v.step) || Number(v.step) < 0 || Number(v.step) > 20 || !['', 'employee', 'independent', 'other'].includes(String(v.work)) || !['balanced', 'concise', 'detailed'].includes(String(v.style)) || typeof v.goals !== 'string' || v.goals.length > 2000 || typeof v.tools !== 'string' || v.tools.length > 2000 || !Array.isArray(v.agentIds) || v.agentIds.length > 64 || !v.agentIds.every(x => typeof x === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(x))) throw new Error('Preferenze non valide.');
-  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], agentIds: [...new Set(v.agentIds as string[])], ...(v.engines ? { engines: [...new Set(v.engines as string[])] } : {}), ...(guide ? { guide } : {}), ...(profile ? { profile } : {}) };
+  if (!Number.isInteger(v.step) || Number(v.step) < 0 || Number(v.step) > 20 || !['', 'employee', 'independent', 'other'].includes(String(v.work)) || !['balanced', 'concise', 'detailed'].includes(String(v.style)) || typeof v.goals !== 'string' || v.goals.length > 2000 || typeof v.tools !== 'string' || v.tools.length > 2000) throw new Error('Preferenze non valide.');
+  return { step: Number(v.step), work: v.work as SetupDraft['work'], goals: v.goals.trim(), tools: v.tools.trim(), style: v.style as SetupDraft['style'], ...(v.engines ? { engines: [...new Set(v.engines as string[])] } : {}), ...(guide ? { guide } : {}), ...(profile ? { profile } : {}) };
 }
 /** Local preferences only. Never applies brain paths, engine trust, permissions or account changes. */
 export class SetupService {

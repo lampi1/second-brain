@@ -85,15 +85,54 @@ const CLAUDE_TOOLS: Partial<Record<ToolClass, readonly string[]>> = {
   read: ['Read', 'Grep', 'Glob'],
   edit: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'],
   shell: ['Bash', 'PowerShell', 'BashOutput', 'KillShell', 'TaskOutput', 'TaskStop', 'Monitor'],
+  // the same command tools; every command the engine asks to run is checked by readOnlyCommand (manager.ts)
+  'shell-read': ['Bash', 'PowerShell', 'BashOutput'],
   web: ['WebFetch', 'WebSearch'],
 };
 export function claudeTools(tools: AgentToolPolicy): string[] {
-  return [...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? [])];
+  return [...new Set([...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? [])])];
 }
 
-/** The app's own browser tools (second-brain MCP) are served per chat: an agent without 'browser' never sees them,
- *  on every engine. send_to_chat/list_chats stay (the agent must reach the Orchestrator). */
-export const browserAllowed = (p: AgentPolicy | null | undefined): boolean => !p?.tools || p.tools.allow.includes('browser');
+/** Commands only (shell-read without shell): a command request is shown to the user only when it reads, else it is
+ *  refused with this reason. */
+export const commandsReadOnly = (p: AgentPolicy | null | undefined): boolean => !!p?.tools && p.tools.allow.includes('shell-read') && !p.tools.allow.includes('shell');
+const READ_COMMANDS = new Set(['ls', 'dir', 'cat', 'type', 'head', 'tail', 'grep', 'rg', 'findstr', 'wc', 'pwd', 'stat', 'file', 'tree', 'du', 'df', 'which', 'whoami',
+  'sort', 'uniq', 'cut', 'get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-item', 'get-location', 'test-path', 'resolve-path', 'measure-object']);
+const READ_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep']);
+/** `git branch`, `git tag`, `git remote` only list with these flags; any other argument creates, moves or deletes. */
+const GIT_LISTS: Record<string, ReadonlySet<string>> = {
+  branch: new Set(['-a', '-r', '-v', '-vv', '--all', '--remotes', '--list', '--show-current', '--verbose']),
+  tag: new Set(['-l', '--list']),
+  remote: new Set(['-v', '--verbose']),
+};
+const WRITING_FLAG = /^(?:-o|-O|--output.*|--pre(?:=.*)?|--ext-diff|--open-files-in-pager.*|--exec.*|-exec|-execdir|-ok|-okdir|-delete|-fprint0?|-fprintf|-fls)$/;
+/** One read-only command: a known reader, `git` reading or listing, `find` without actions; no chaining, redirection or
+ *  substitution, and a pipe only into another reader. Anything else is not read-only (refused under shell-read). */
+export function readOnlyCommand(raw: unknown): boolean {
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return false;
+  if (/[;&<>`\r\n]|\$\(|\$\{/.test(raw)) return false;
+  return raw.split('|').every(part => {
+    const words = part.trim().split(/\s+/).filter(Boolean);
+    const cmd = words[0]?.toLowerCase().replace(/\.exe$/, '');
+    if (!cmd || words.some(w => WRITING_FLAG.test(w))) return false;
+    if (cmd === 'git') {
+      const [sub, ...rest] = words.slice(1);
+      if (!sub) return false;
+      const lists = GIT_LISTS[sub];
+      return lists ? rest.every(w => lists.has(w)) : READ_GIT.has(sub);
+    }
+    return cmd === 'find' || READ_COMMANDS.has(cmd);
+  });
+}
+
+/** The app's own browser tools (second-brain MCP) are served per chat, on every engine: 'browser' = all of them,
+ *  'browser-read' = only the ones that look (tabs, navigate, read, screenshot, scroll: never click, type, forms,
+ *  dialogs or JavaScript), neither = none. send_to_chat/list_chats stay (the chat must reach its parent). */
+export type BrowserAccess = 'all' | 'read' | 'none';
+export const browserAccess = (p: AgentPolicy | null | undefined): BrowserAccess =>
+  !p?.tools || p.tools.allow.includes('browser') ? 'all' : p.tools.allow.includes('browser-read') ? 'read' : 'none';
+export const BROWSER_READ_TOOLS: readonly string[] = ['tabs_list', 'tabs_create', 'environments', 'tabs_select', 'tabs_close', 'navigate', 'screenshot', 'read_page', 'find', 'get_page_text',
+  'scroll', 'wait_for', 'network_requests', 'console_messages'];
 
 /** Claude MCP narrowing for a run with a tool policy. Without 'mcp': only the app's own servers (strict config) and no
  *  claude.ai connectors, unless mail/calendar need them. 'mcp' with or without names: not narrowed here (named servers
@@ -123,16 +162,27 @@ export function unenforced(kind: EngineKind, p: AgentPolicy): (ToolClass | 'ceil
       const connectors = !!p.tools && claudeMcp(p.tools).connectors;
       // brain-write is an edit: allowed edits reach the brain folder too; commands reach files and the network. A named
       // MCP list is not narrowed (claudeMcp).
-      const gaps = reachable(c => (c === 'edit' || c === 'brain-write' || c === 'web') && can('shell') ? false : c === 'brain-write' ? !can('edit') : (c === 'mail-draft' || c === 'calendar-read' || c === 'mcp') ? !connectors : true);
+      // read-only commands: the app refuses a writing command it is asked about, but one the user's own allow rules
+      // approve never reaches it
+      const gaps = reachable(c => (c === 'edit' || c === 'brain-write' || c === 'web') && can('shell') ? false : c === 'brain-write' ? !can('edit')
+        : c === 'shell' ? !can('shell-read') : c === 'shell-read' ? !can('shell') : (c === 'mail-draft' || c === 'calendar-read' || c === 'mcp') ? !connectors : true);
       return p.tools?.mcp?.length ? [...gaps, 'mcp'] : gaps;
     }
     case 'codex': {
       // the sandbox is read-only only when neither edits nor commands are allowed (one reaches the other)
       const sandboxed = !can('edit') && !can('shell') || p.ceiling === 'plan' || p.ceiling === 'default';
-      return reachable(c => c === 'browser' || c === 'read' || ((c === 'edit' || c === 'shell' || c === 'brain-write') && sandboxed));
+      // a read-only sandbox still runs commands that read: shell-read is reachable unless allowed
+      return reachable(c => c === 'browser' || c === 'browser-read' || c === 'read' || ((c === 'edit' || c === 'shell' || c === 'brain-write') && sandboxed));
     }
     // Cursor's own allow rules can approve tools without a request reaching the app: only 'plan' (read-only) holds
-    case 'acp': return [...reachable(c => c === 'browser' || c === 'read' || (p.ceiling === 'plan' && (c === 'edit' || c === 'shell' || c === 'brain-write'))), ...(p.ceiling !== null && p.ceiling !== 'plan' ? ['ceiling' as const] : [])];
+    case 'acp': return [...reachable(c => c === 'browser' || c === 'browser-read' || c === 'read' || (p.ceiling === 'plan' && (c === 'edit' || c === 'shell' || c === 'brain-write'))), ...(p.ceiling !== null && p.ceiling !== 'plan' ? ['ceiling' as const] : [])];
     case 'api': return [];
   }
+}
+
+/** Free text that ends up in a role's instructions, a skill or a rule (a lesson, pack/learning.ts and the maintenance
+ *  jobs) never grants a permission: such a text is refused. */
+export function checkPermissionText(raw: string): void {
+  const text = raw.normalize('NFKC');
+  if (/auto[\s-]*approv|bypass\s*permissions|skip\s+(?:all\s+)?permissions|you\s+(?:may|can|are allowed to)\s+(?:deploy|approve)|(?:permesso|autorizzat[oa])\s+(?:di|a)\s+(?:deploy|distribuire|approvare)|approv[ae]\s+(?:automaticamente|tutto)/i.test(text)) throw new Error('Instructions cannot grant permissions.');
 }

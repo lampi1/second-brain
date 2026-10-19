@@ -76,13 +76,13 @@ describe('links and sections', () => {
     expect([s.knowledge.length, s.happened.length, s.agents.length]).toEqual([1, 1, 2]);
     expect(changesOf(state.changes, ['skill']).map(c => c.id)).toEqual(['c2']);
   });
-  it('says no data instead of zero and matches agent choices', () => {
+  it('says no data instead of zero and matches skill choices', () => {
     expect(pct(null)).toBeNull(); expect(usd(null)).toBeNull();
     expect(pct(0.5, 'en-US')).toBe('50%');
     expect(noData([{ runs: 0, success: null, avgCostUsd: null }])).toBe(true);
     expect(noData([{ runs: 1, success: null, avgCostUsd: null }])).toBe(false);
-    const c = (suggested: string | null, used: string): ClassifierChoice => ({ at: 1, chatId: 'c', goal: 'g', suggested: suggested ? { id: suggested, name: suggested, score: 9 } : null, used: { id: used, name: used, score: null, rank: null, mode: null } });
-    expect([choiceMatch(c('a', 'a')), choiceMatch(c('a', 'b')), choiceMatch(c(null, 'b'))]).toEqual(['same', 'differ', 'none']);
+    const c = (suggested: string[], used: string[]): ClassifierChoice => ({ at: 1, chatId: 'c', goal: 'g', role: { id: 'scout', name: 'Scout' }, suggested, used });
+    expect([choiceMatch(c(['a', 'b'], ['a'])), choiceMatch(c(['a'], ['a', 'x'])), choiceMatch(c([], ['b']))]).toEqual(['same', 'differ', 'none']);
   });
 });
 

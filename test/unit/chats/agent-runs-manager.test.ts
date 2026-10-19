@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 import { STALE_MS } from '../../../src/main/agents/runs';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
 
@@ -30,7 +30,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   managers.push(m);
   const create = async (by: 'user' | 'agent' = 'user', links = {}, owner: Partial<AgentOwnerSnapshot> = {}) => {
     const c = await m.create({ harness: 'claude', cwd: dir, prompt: 'Rivedi il PR' }, by,
-      { owner: { ...compatibleOwner('claude', null), source: 'catalog', id: 'reviewer', version: 3, ...owner }, instructions: 'Sei un revisore.', policy: null }, links);
+      { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'reviewer', version: 3, ...owner }, instructions: 'Sei un revisore.', policy: null }, links);
     sinks.set(c.id, last);
     return c;
   };
@@ -126,8 +126,8 @@ describe('agent runs on chats', () => {
     const f = fixture();
     const p = await f.create('agent');
     const parent = f.run(p.id)!.runId;
-    const k1 = await f.create('agent', { spawnedBy: parent }), k2 = await f.create('agent', { spawnedBy: parent });
-    expect(f.run(k1.id)).toMatchObject({ parentRunId: parent, spawnedBy: parent });
+    const k1 = await f.create('agent', { parentRunId: parent }), k2 = await f.create('agent', { parentRunId: parent });
+    expect(f.run(k1.id)).toMatchObject({ parentRunId: parent });
     await f.m.archive(k1.id);
     expect(f.run(p.id)?.endedAt).toBeUndefined();
     await f.m.set(p.id, { workStatus: 'completed' });
@@ -201,7 +201,7 @@ describe('agent runs on chats', () => {
     expect(stored.chats.find(x => x.id === c.id)?.run?.endReason).toBe('closed');
   });
 
-  it('takes back a mirror the store lost, and backfills v0 runs for older catalog chats', async () => {
+  it('takes back a mirror the store lost', async () => {
     const f = fixture();
     const c = await f.create();
     const id = f.run(c.id)!.runId;
@@ -210,15 +210,6 @@ describe('agent runs on chats', () => {
     fs.rmSync(path.join(f.dir, 'agent-runs.json'));
     const g = fixture({ userData: f.dir });
     expect(g.m.runs.get(id)).toMatchObject({ endReason: 'closed' });
-    await g.m.shutdown(); managers.splice(managers.indexOf(g.m), 1);
-
-    const chats = JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')) as { chats: Record<string, unknown>[] };
-    for (const x of chats.chats) delete x.run;
-    fs.writeFileSync(path.join(f.dir, 'chats.json'), JSON.stringify(chats));
-    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
-    const h = fixture({ userData: f.dir });
-    expect(h.run(c.id)).toMatchObject({ version: 0, costUsd: null, tokens: null, endReason: 'closed', outcome: { verdict: 'unknown', basis: 'unknown', by: 'migration' } });
-    expect(h.file().runs).toHaveLength(1);
   });
 
   it('a damaged runs file is kept and no run is recorded, while chats still start', async () => {
@@ -241,18 +232,18 @@ describe('agent run evidence (A6)', () => {
   };
   const report = (o: object) => `Fatto.\n\n\`\`\`run-report\n${JSON.stringify(o)}\n\`\`\``;
 
-  it('keeps the run-report of the latest turn that has one, a garbage mark for a bad one', async () => {
+  it('keeps the run-report of the latest turn that has a valid one', async () => {
     const f = fixture();
     const c = await f.create();
     reply(f, c.id, report({ outcome: 'partial', verified: 'no', summary: 'metà' }), 10);
-    expect(f.run(c.id)?.report).toEqual({ ok: true, at: 10, outcome: 'partial', verified: 'no', summary: 'metà' });
+    expect(f.run(c.id)?.report).toEqual({ at: 10, outcome: 'partial', verified: 'no', summary: 'metà' });
     reply(f, c.id, 'nessun report', 20);
     expect(f.run(c.id)?.report).toMatchObject({ at: 10 });
-    reply(f, c.id, report({ outcome: 'done' }), 30);
-    expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
+    reply(f, c.id, report({ outcome: 'done' }), 30); // out of shape: the last valid report stays
+    expect(f.run(c.id)?.report).toMatchObject({ at: 10 });
     await f.m.set(c.id, { workStatus: 'completed' });
     reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'dopo' }), 40); // an ended run takes nothing
-    expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
+    expect(f.run(c.id)?.report).toMatchObject({ at: 10 });
   });
 
   it('a run ended during the turn (its Orchestrator marked it completed) still takes that turn’s report', async () => {
@@ -261,7 +252,7 @@ describe('agent run evidence (A6)', () => {
     f.sink(c.id).changed({ state: 'running' });
     await f.m.set(c.id, { workStatus: 'completed' });
     reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'chiuso a metà turno', findings: 3 }), Date.now() + 1);
-    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, findings: 3 } });
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { findings: 3 } });
     expect(f.file().runs[0]).toMatchObject({ report: { findings: 3 } });
   });
 

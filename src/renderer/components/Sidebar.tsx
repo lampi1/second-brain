@@ -12,8 +12,7 @@ import {
   IconBook, IconBrain, IconBranch, IconChart, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
-import {useAgents} from '../store/agents';
-import {activeRole} from '../lib/role-consumers';
+import {workProfile} from '../../shared/work-profiles';
 import { useApprovalCount } from '../store/agent-approvals';
 
 const ICON: Record<BrainPageId, ReactNode> = {
@@ -37,8 +36,8 @@ function Badge({ n, warn }: { n: number; warn?: boolean }) {
 }
 
 export function Sidebar() {
-  const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
-  const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
+  const saved=ui.use(s=>s.prefs.workProfile);
+  const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
   const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','task','fatto','impostazioni',...BRAIN_CORE].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);

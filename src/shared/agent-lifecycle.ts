@@ -1,16 +1,16 @@
-// Feedback and approval-only lifecycle records, shared by agent services and their UI/API adapters.
+// Feedback and approval-only lifecycle records, shared by the role services and their UI/API adapters.
 import type { AgentEvidenceRef, AgentRunOutcome, VersionMetrics } from './agents';
-import type { AgentProposal } from './agent-authoring';
+import type { ModelTier } from './roles';
 
 export const DEFINITION_GAPS = ['instructions', 'tools', 'model-effort', 'unclear-goal', 'none'] as const;
 export type DefinitionGap = typeof DEFINITION_GAPS[number];
 const VERDICTS = ['success', 'partial', 'fail', 'unknown'] as const;
 const EVIDENCE_KINDS = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'] as const;
 
-/** The arguments of the Orchestrator's `agent_feedback` MCP tool: the ONE shape the tool's schema, its validation and the
- *  lifecycle facade share. `notes` is the free-text opinion (it becomes the outcome note); worked/failed/gap/gapKey are
- *  optional detail for the repeated-gap proposals. The agent, its version and the outcome's basis are never arguments:
- *  main reads them from the authoritative run and its own evidence checks. */
+/** The arguments of `agent_child_feedback` (a parent's opinion of its child's run) and of a Judge's review: the ONE shape
+ *  the tool's schema, its validation and the lifecycle facade share. `notes` is the free-text opinion (it becomes the
+ *  outcome note); worked/failed/gap/gapKey are optional detail the maintenance reads. The role, its version and the
+ *  outcome's basis are never arguments: main reads them from the authoritative run and its own evidence checks. */
 export interface AgentFeedbackArgs {
   runId: string; verdict: AgentRunOutcome['verdict']; notes: string; evidence: AgentEvidenceRef[];
   worked?: string; failed?: string; gap?: DefinitionGap; gapKey?: string;
@@ -18,8 +18,8 @@ export interface AgentFeedbackArgs {
   sendToRun?: boolean;
 }
 export const AGENT_FEEDBACK_REQUIRED = ['runId', 'verdict', 'notes', 'evidence'] as const;
-/** Where a runId comes from: the Orchestrator reads it in app_chats (each agent chat's run.runId), never a chat id. */
-export const RUN_ID_DESCRIPTION = 'The agent run id (runId) from app_chats, not the chat id: each agent chat lists it as run.runId (r_ followed by 12 hex digits).';
+/** Where a runId comes from: agent_children lists each child's run.runId, never a chat id. */
+export const RUN_ID_DESCRIPTION = 'The run id (runId) from agent_children, not the chat id: each child lists it as runId (r_ followed by 12 hex digits).';
 /** JSON schema of the tool's input, derived from the same limits parseAgentFeedbackArgs enforces. */
 export const AGENT_FEEDBACK_SCHEMA = {
   type: 'object', additionalProperties: false, required: [...AGENT_FEEDBACK_REQUIRED],
@@ -29,7 +29,7 @@ export const AGENT_FEEDBACK_SCHEMA = {
     evidence: { type: 'array', maxItems: 20, items: { type: 'object', required: ['kind', 'ref', 'at'], properties: { kind: { type: 'string', enum: [...EVIDENCE_KINDS] }, ref: { type: 'string', maxLength: 200 }, at: { type: 'number' } } } },
     worked: { type: 'string', maxLength: 1200 }, failed: { type: 'string', maxLength: 1200 },
     gap: { type: 'string', enum: [...DEFINITION_GAPS], description: 'Which part of the definition fell short, if any.' },
-    gapKey: { type: 'string', maxLength: 120, description: 'A short stable name for that gap; the same name on two runs proposes an update.' },
+    gapKey: { type: 'string', maxLength: 120, description: 'A short stable name for that gap.' },
     sendToRun: { type: 'boolean' },
   },
 } as const;
@@ -42,7 +42,7 @@ const str = (v: unknown, key: string, max: number, optional = false): string | u
   if (typeof v !== 'string' || !v.trim() || v.length > max) throw new Error(`${key}: text required, at most ${max} characters.`);
   return v.trim();
 };
-/** Evidence references: at most 20, known kinds, a short ref and a finite time (the authoring store's own rule). */
+/** Evidence references: at most 20, known kinds, a short ref and a finite time. */
 export function parseEvidence(value: unknown): AgentEvidenceRef[] {
   if (!Array.isArray(value) || value.length > 20) throw new Error('At most 20 evidence references required.');
   return value.map(v => {
@@ -54,9 +54,9 @@ export function parseEvidence(value: unknown): AgentEvidenceRef[] {
 /** Strict: any other key (agentId, version, basis, outcome…) is refused, so a caller cannot choose whose record it writes
  *  or how much it counts. */
 export function parseAgentFeedbackArgs(value: unknown): AgentFeedbackArgs {
-  const a = obj(value, 'agent_feedback');
+  const a = obj(value, 'feedback');
   const extra = Object.keys(a).filter(k => !(k in AGENT_FEEDBACK_SCHEMA.properties));
-  if (extra.length) throw new Error(`agent_feedback: unknown argument ${extra.join(', ')} (agent, version and basis come from the run).`);
+  if (extra.length) throw new Error(`feedback: unknown argument ${extra.join(', ')} (role, version and basis come from the run).`);
   if (!VERDICTS.includes(a.verdict as never)) throw new Error('Invalid verdict.');
   if (a.gap !== undefined && !DEFINITION_GAPS.includes(a.gap as never)) throw new Error('Invalid gap.');
   if (a.gapKey !== undefined && a.gap === undefined) throw new Error('gapKey needs gap.');
@@ -69,7 +69,7 @@ export function parseAgentFeedbackArgs(value: unknown): AgentFeedbackArgs {
     ...(a.sendToRun !== undefined ? { sendToRun: a.sendToRun } : {}),
   };
 }
-/** One stored feedback record (the authoring store's `feedback` list). agent/run/version come from the run, the outcome's
+/** One stored feedback record (agents/run-feedback.ts). agent/run/version come from the run, the outcome's
  *  basis from main's evidence check; version and the gap detail are absent on records written before they existed. */
 export interface AgentFeedback {
   id: string; at: number; agentId: string; runId: string; outcome: AgentRunOutcome; evidence: AgentEvidenceRef[];
@@ -78,23 +78,22 @@ export interface AgentFeedback {
 export interface TrialEvaluation {
   decision: 'wait' | 'keep' | 'revert'; reason: string; at: number;
   before: VersionMetrics | null; after: VersionMetrics | null; other: VersionMetrics | null;
-  comparable: number; otherRuns: number; unknownRouting: number;
+  comparable: number; otherRuns: number; untagged: number;
 }
 /**
- * One entry of the "Da approvare" queue. Nothing in it is applied before the user's agents:lifecycleDecide:
- * - key `trial:<agentId>:<version>`, kind keep | revert: approve = end the trial that way (resolveTrial keep | rollback);
- * - key `probation:<agentId>`, kind keep | retire: approve = keep or retire the agent created for a task, as the user;
- * - kind model-trial: approve = a trial version of the agent on the cheaper model (`model`);
- * - kind update (a gap named on two runs) | create | merge | split: approve = ask the Orchestrator for a concrete draft,
- *   which comes back in agents:proposals for a second, final approval (nothing changes before that);
- * - dismiss (any) = drop it; the same key is not proposed again for a while (trial/probation 7 days, the rest 14).
+ * One entry of the "Da approvare" queue: what changes a role's reach or cost waits for the user (ADR 0083). Nothing in it
+ * is applied before the user's agents:lifecycleDecide:
+ * - key `trial:<roleId>:<version>`, kind keep | revert: approve = end the trial that way (resolveTrial keep | rollback);
+ * - kind tier: approve = a trial version of the role on `tier` (raising its tierMax when needed), measured like any trial;
+ * - dismiss (any) = drop it; the same key is not proposed again for a while (trials 7 days, tiers 14).
+ * Role text and skills never queue here: the maintenance applies them at once with an Annulla.
  */
 export interface AgentLifecycleProposal {
-  key: string; kind: 'update' | 'create' | 'merge' | 'model-trial' | 'split' | 'keep' | 'revert' | 'retire';
+  key: string; kind: 'tier' | 'keep' | 'revert';
   agentIds: string[]; reason: string; evidence: AgentEvidenceRef[]; at: number;
   state: 'pending'; metrics?: { before: VersionMetrics | null; after: VersionMetrics | null };
-  /** model-trial: the model the trial would use */
-  model?: string;
+  /** tier: the tier the trial would use; `skills` = the skill set (sorted) the evidence is about */
+  tier?: ModelTier; skills?: string[];
 }
 export type AgentLifecycleDecision = 'approve' | 'dismiss';
 export interface AgentLifecycleDecide { key: string; decision: AgentLifecycleDecision }
@@ -104,8 +103,6 @@ export interface AgentLifecycleSnapshot {
   evaluations: { agentId: string; version: number; result: TrialEvaluation }[];
   feedback: AgentFeedback[];
   problem: string | null;
-  /** pending Orchestrator drafts (agents:proposals, decided with agents:proposalDecide) */
-  drafts?: AgentProposal[];
 }
 export interface AgentLifecycleQuery { agentId?: string }
 export interface AgentLifecycleClient {

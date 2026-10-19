@@ -50,12 +50,10 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
-import { compatibleOwner, orchestratorOwner } from '../agents/catalog';
-import { aboveCeiling, claudeDefaultMode, narrowest, type AgentPolicy } from '../agents/tool-policy';
-import { inProbation, type AgentOwnerSnapshot, type AgentProfile, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
+import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
+import { aboveCeiling, browserAccess, claudeDefaultMode, commandsReadOnly, narrowest, readOnlyCommand, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
-import { judge, type ProbationJudgement } from '../agents/probation';
-import type { FeedInput } from '../services';
 import { reportOf } from '../agents/run-report';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { isCorrection } from '../../shared/correction';
@@ -65,12 +63,13 @@ import type { AutoCloseWaiting } from '../../shared/auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
-import { orchestratorRole } from '../agents/orchestrator-preset';
+import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
-  agentCatalogBrief?: () => string;
+  /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
+  roleCatalogBrief?: () => string;
   resolveAgent?: AgentCatalogService['resolve'];
   onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
@@ -112,10 +111,8 @@ export interface ChatManagerOptions {
   onModels?: (harness: Harness, list: { id: string; name: string }[]) => void;
   /** a turn ended (→ the job ledger: real cost and time) */
   onTurnEnd?: (info: TurnEndInfo) => void;
-  /** Once per actual run end (not per turn); the lifecycle service batches Orchestrator feedback requests. */
+  /** Once per actual run end (not per turn): the improvement loop evaluates the role's trial again. */
   onRunEnded?: (run: AgentRun) => void;
-  /** Once per recorded run start (a copy): wiring.ts takes its routing snapshot (agents/routing-snapshot.ts). */
-  onRunStarted?: (run: AgentRun) => void;
   /** The user's verdict landed on a run (run:outcome), also on one that had already ended: its trial is evaluated again. */
   onRunOutcome?: (run: AgentRun) => void;
   /** a question or permission opened in an app chat (→ feed "chat waiting") */
@@ -145,12 +142,6 @@ export interface ChatManagerOptions {
   coldEveryMs?: number;
   /** ms between two checks for stale agent runs (default 10 min; 0 = no timer, tests call staleRuns) */
   runEveryMs?: number;
-  /** probation agents (AGENTS-DESIGN §4.7): judged at each run end and once a day. With `propose` the verdict only goes
-   *  to the user's approval queue (wiring.ts: the lifecycle's probation:<id> entry; the owner, 2026-10-18: "sempre sotto
-   *  approvazione"); without it (embedders with no queue, older tests) the catalog applies keep/retire. */
-  probation?: { catalog: Pick<AgentCatalogService, 'list' | 'keep' | 'retire'>; publish?: (events: FeedInput[]) => void; propose?: (agent: AgentProfile, judgement: ProbationJudgement) => void };
-  /** ms between two daily probation passes (default 24 h, first one a minute after start; 0 = no timer, tests call probationTick) */
-  probationEveryMs?: number;
   /** absolute path of the brain's mem.mjs, when it has one: the hand-off request asks to update the now.md line too */
   memTool?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */
@@ -303,7 +294,7 @@ interface Rec {
   runningSince?: number;
   /** when the current turn started running: a run ended during it (completed by its Orchestrator) still takes its report */
   turnAt?: number;
-  /** its run (this id) was pruned into the rollups: counted there only, never backfilled again (kept in chats.json) */
+  /** its run (this id) was pruned into the rollups: counted there only (the mirror stays in chats.json) */
   runPruned?: string;
 }
 
@@ -327,10 +318,10 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
-/** A saved chat's owner; an Orchestrator saved with the generic "Assistente" face gets the Orchestrator's back (issue #61). */
+/** A saved chat's owner: its snapshot, else a plain chat's (the Orchestrator always shows the Orchestrator's face). */
 export function restoredOwner(c: Pick<StoredChat, 'agent' | 'harness' | 'model' | 'isOrchestrator'>): AgentOwnerSnapshot {
-  const owner = c.agent ?? compatibleOwner(c.harness, c.model, true);
-  return c.isOrchestrator && owner.source !== 'catalog' && owner.name === 'Assistente' ? orchestratorOwner(owner) : owner;
+  const owner = c.agent ?? plainOwner(c.harness, c.model);
+  return c.isOrchestrator && owner.id !== 'orchestrator' ? orchestratorOwner(c.harness, c.model) : owner;
 }
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 /** A model id as the CLIs take it; never starting with '-', which an ACP CLI would read as one of its flags. */
@@ -368,7 +359,6 @@ export class ChatManager implements ChatService {
   /** agent-runs.json: the runs of chats started from catalog agents (AGENTS-DESIGN §1.2, §5) */
   readonly runs: AgentRunStore;
   private runTimer: NodeJS.Timeout | null = null;
-  private probationTimers: NodeJS.Timeout[] = [];
   private chats = new Map<string, Rec>();
   private deliveries = new Map<string, Promise<void>>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
@@ -411,18 +401,12 @@ export class ChatManager implements ChatService {
     this.max = opts.maxItems ?? 2000;
     const stored = this.store.load();
     for (const c of stored) this.chats.set(c.id, this.restore(c));
-    const backfilled = this.backfillRuns();
-    if (backfilled || stored.some(c => !c.agent)) this.persist();
+    if (stored.some(c => !c.agent)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
     if ((opts.coldEveryMs ?? 60_000) > 0) { this.coldTimer = setInterval(() => this.coldTick(), opts.coldEveryMs ?? 60_000); this.coldTimer.unref?.(); }
     if ((opts.runEveryMs ?? 600_000) > 0) { this.runTimer = setInterval(() => this.staleRuns(), opts.runEveryMs ?? 600_000); this.runTimer.unref?.(); }
-    const daily = opts.probationEveryMs ?? 86_400_000;
-    if (opts.probation && daily > 0) {
-      this.probationTimers = [setTimeout(() => this.probationTick(), Math.min(60_000, daily)), setInterval(() => this.probationTick(), daily)];
-      for (const t of this.probationTimers) t.unref?.();
-    }
     if (opts.prewarm) {
       const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
@@ -469,7 +453,8 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+      : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews, the chat that opens it
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
@@ -525,7 +510,7 @@ export class ChatManager implements ChatService {
       },
       createdAt: now,
       agentInstructions: agent.instructions,
-      ...('assets' in agent && agent.assets ? { agentAssets: agent.assets } : {}),
+      ...(agent.assets ? { agentAssets: agent.assets } : {}),
       ...(policy ? { policy } : {}),
       ...(agent.maxContext ? { maxContext: agent.maxContext } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
@@ -536,8 +521,8 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    if (agent.owner.source === 'catalog') this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 0, goal: req.goal ?? prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
-      tags: { ...asked, repo: repoOf(cwd) } });
+    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
+      tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     this.chats.set(id, r);
     if (old) {
       this.demoteOrchestrator(old);
@@ -703,11 +688,11 @@ export class ChatManager implements ChatService {
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
     const body = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
-    const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
+    // the role once per session: the Orchestrator's with the role catalog, a role chat's composed instructions
+    const role = r.agentPrimed ? '' : r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
+      : r.agentInstructions ? `${roleFrame(r.s.agent?.name ?? 'Chat', r.agentInstructions)}\n\n` : '';
     try {
-      const catalog = r.s.isOrchestrator ? this.opts.agentCatalogBrief?.() ?? '' : '';
-      const role = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined)}\n\n` : '';
-      r.session.send(`${role}${r.s.isOrchestrator ? '' : profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
+      r.session.send(`${role}${warning}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }
@@ -912,7 +897,7 @@ export class ChatManager implements ChatService {
     if (!r || !run) return;
     // Brother's corrections (AGENTS-DESIGN §5): (a) a "[Reasoning correction]", else (b) his reopen of a run whose
     // agent had reported; runs recorded before they were counted have no tally (unknown, not zero)
-    const tagged = text !== undefined && isCorrection(text), reported = run.report?.ok === true;
+    const tagged = text !== undefined && isCorrection(text), reported = !!run.report;
     const reopened = reopenRun(run);
     if (run.corrections && (tagged || (reopened && reported))) run.corrections[tagged ? 'tagged' : 'afterReport']++;
     if (!reopened && !tagged) return;
@@ -945,7 +930,6 @@ export class ChatManager implements ChatService {
     const text = typeof note === 'string' ? note.trim().slice(0, 600) : '';
     run.outcome = { verdict, basis: 'human', at: Date.now(), by: 'user', ...(text ? { note: text } : {}) };
     this.finishRun(run, 'completed');
-    this.probationTick(run.agentId);
     this.runSave(); this.persist(); this.updated(r);
     this.hook('agent lifecycle', () => this.opts.onRunOutcome?.(structuredClone(run)));
     return { ...r.s };
@@ -1127,7 +1111,7 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.maxContext ? { maxContext: r.maxContext } : {}) });
+    }, 'user', { owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.maxContext ? { maxContext: r.maxContext } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -1332,7 +1316,6 @@ export class ChatManager implements ChatService {
     if (this.usageTimer) clearInterval(this.usageTimer);
     if (this.coldTimer) clearInterval(this.coldTimer);
     if (this.runTimer) clearInterval(this.runTimer);
-    for (const t of this.probationTimers) clearTimeout(t);
     this.counters.flush();
     if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
     process.off('exit', this.onExit);
@@ -1574,7 +1557,7 @@ export class ChatManager implements ChatService {
       if (runReport) { run.report = runReport; this.runSave(); }
     }
     // a run-report block is a final report too (the Orchestrator reads it with the turn's end): "blocked" waits on it
-    if (runReport?.ok) r.report = { text: runReport.summary, at: item.at, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
+    if (runReport) r.report = { text: runReport.summary, at: item.at, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
     this.settleReport(r, item);
     const first = r.firstPrompt;
     r.firstPrompt = null;
@@ -1640,14 +1623,12 @@ export class ChatManager implements ChatService {
     }
   }
 
-  /** A chat started from a catalog agent is a run; a store that cannot record leaves the chat as it is (logged). */
+  /** A chat started from a role is a run; a store that cannot record leaves the chat as it is (logged). */
   private startRun(r: Rec, s: Omit<Parameters<AgentRunStore['start']>[0], 'chatId' | 'startedAt'>): void {
     if (this.runs.problem) return;
     try {
       r.s.run = this.runs.start({ ...s, chatId: r.s.id, startedAt: r.createdAt });
       r.idleSince = r.createdAt;
-      const started = r.s.run;
-      this.hook('agent lifecycle', () => this.opts.onRunStarted?.(structuredClone(started)));
     } catch (e) { log.warn('chats', 'agent run not recorded', { chat: r.s.id, cause: errText(e), hint: 'the chat works; this run is missing from the agent metrics' }); }
   }
 
@@ -1660,7 +1641,6 @@ export class ChatManager implements ChatService {
     this.hook('agent lifecycle', () => this.opts.onRunEnded?.(structuredClone(run)));
     log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
     for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
-    this.probationTick(run.agentId);
     if (!mine) return;
     // its cost, tokens and time now live in the run: the analytics row may be pruned when the archive is full
     this.hook('analytics', () => this.analytics.rolledUp(r!.s));
@@ -1684,35 +1664,23 @@ export class ChatManager implements ChatService {
     r.idleSince = Date.now();
     if (r.s.run && r.s.run.endedAt === undefined) this.persist();
   }
-  /**
-   * Judges the agents in probation (all, or only `agentId` at its run's end) and applies keep/retire through the catalog.
-   * Never throws: a refused decision is logged and judged again at the next pass.
-   */
-  probationTick(agentId?: string): void {
-    const p = this.opts.probation;
-    if (!p || this.runs.problem) return;
-    try {
-      const now = Date.now(), runs = this.runs.list();
-      for (const agent of p.catalog.list().profiles) {
-        if ((agentId !== undefined && agent.id !== agentId) || !inProbation(agent)) continue;
-        const j = judge(agent, runs, now);
-        if (j.decision === 'wait') continue;
-        if (p.propose) { const propose = p.propose; this.hook('probation proposal', () => propose(structuredClone(agent), j)); continue; }
-        try {
-          if (j.decision === 'keep') p.catalog.keep(agent.id, 'evaluator', j.reason);
-          else p.catalog.retire(agent.id, j.reason, 'evaluator');
-          log.info('chats', `probation agent ${j.decision === 'keep' ? 'kept' : 'retired'}`, { data: { agentId: agent.id, reason: j.reason } });
-          const publish = p.publish;
-          if (publish) this.hook('probation feed', () => publish([j.decision === 'keep'
-            ? { kind: 'agent-kept', title: `Agente «${agent.name}» tenuto`, detail: j.reason }
-            : { kind: 'agent-retired', title: `Agente «${agent.name}» ritirato`, detail: j.reason, action: { kind: 'agent-restore', agentId: agent.id } }]));
-        } catch (e) { log.warn('chats', 'probation decision not applied', { cause: errText(e), data: { agentId: agent.id, decision: j.decision }, hint: 'the next run end or the daily pass tries again' }); }
-      }
-    } catch (e) { log.warn('chats', 'probation pass failed', { cause: errText(e) }); }
-  }
   private runSave(): void {
     if (this.runs.problem) return;
     try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+  }
+
+  /** A role that may only read commands (shell-read): a command it asks to run that does not only read is refused at
+   *  once, visibly, and never reaches the user; one that reads reaches the user without "always" (a rule would let
+   *  later commands through unchecked). */
+  private refusedCommand(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    if (req.type !== 'permission' || req.tool !== 'Bash' && req.tool !== 'PowerShell' && req.tool !== 'Shell' || !commandsReadOnly(r.policy)) return false;
+    const command = (req.input as { command?: unknown } | null)?.command;
+    if (readOnlyCommand(command)) { req.noAlways = true; delete req.alwaysRules; return false; }
+    const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
+    log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
+    this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
+    r.session?.answer(req.id, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` });
+    return true;
   }
 
   /** Each request once per run, by its id: question, permission or command. */
@@ -1725,26 +1693,6 @@ export class ChatManager implements ChatService {
     if (seen.size > 1000) seen.delete(seen.values().next().value!);
     run.counters[req.type === 'question' ? 'questions' : req.type === 'permission' ? 'permissions' : 'commands']++;
     this.runSave();
-  }
-
-  /** Chats owned by a catalog agent before runs were recorded: one v0 run each (never a baseline), ended if archived. */
-  private backfillRuns(): boolean {
-    if (this.runs.problem) return false;
-    let added = false;
-    for (const r of this.chats.values()) {
-      const owner = r.s.agent;
-      // a chat whose run was pruned has it in the rollups: a new v0 run would count it again on every start
-      if (r.s.run || r.runPruned || owner?.source !== 'catalog') continue;
-      try {
-        const run = this.runs.start({ chatId: r.s.id, agentId: owner.id, version: 0, goal: r.s.title, startedBy: r.s.work ? 'orchestrator' : 'user', startedAt: r.createdAt, costKnown: false }, false);
-        run.tokens = null;
-        run.outcome = { verdict: 'unknown', basis: 'unknown', at: r.createdAt, by: 'migration' };
-        if (r.s.closedAt) endRun(run, 'closed', r.s.closedAt);
-        r.s.run = run; added = true;
-      } catch (e) { log.warn('chats', 'agent run not backfilled', { chat: r.s.id, cause: errText(e) }); }
-    }
-    try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e) }); }
-    return added;
   }
 
   private need(chatId: string): Rec {
@@ -1955,10 +1903,10 @@ export class ChatManager implements ChatService {
     return brother && aboveCeiling(brother, ceiling) ? ceiling : chosen;
   }
 
-  /** false when the chat's agent has a tool policy without 'browser' (the per-chat MCP hides the browser tools) */
-  browserAllowed(chatId: string): boolean {
-    const tools = this.chats.get(chatId)?.policy?.tools;
-    return !tools || tools.allow.includes('browser');
+  /** Which of the app's browser tools the chat's role may use (tool-policy.ts browserAccess): the per-chat MCP serves
+   *  all of them, only the reading ones, or none. */
+  browserAccess(chatId: string): BrowserAccess {
+    return browserAccess(this.chats.get(chatId)?.policy);
   }
 
   private mcpConfig(chatId: string): string | null {
@@ -2128,6 +2076,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
+        if (this.refusedCommand(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

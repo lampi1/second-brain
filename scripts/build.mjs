@@ -44,5 +44,4 @@ for (const f of ['icon.ico', 'icon.png']) fs.copyFileSync(path.join(root, 'build
 // travels with out/, so the dev build and every release (a copy of out/, scripts/release.mjs) find it at out/guard/
 fs.mkdirSync(path.join(root, 'out', 'guard'), { recursive: true });
 fs.copyFileSync(path.join(root, 'tools', 'guard', 'scan.mjs'), path.join(root, 'out', 'guard', 'scan.mjs'));
-fs.cpSync(path.join(root, 'src', 'main', 'agents', 'presets'), path.join(root, 'out', 'agent-presets'), { recursive: true });
 console.log(`built ${dev ? '(dev) ' : ''}→ out/`);

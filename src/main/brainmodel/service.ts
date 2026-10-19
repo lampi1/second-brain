@@ -12,7 +12,6 @@ import type { BrainModelState, ClassifiersState, MaintenanceJobId, MaintenanceRu
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
-import type { AppliedAgentChange } from '../agents/authoring';
 import type { AgentPackFlows } from '../agents/pack/flows';
 import { portableId } from '../agents/pack/flows';
 import type { AgentPackLearning } from '../agents/pack/learning';
@@ -21,7 +20,7 @@ import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState } from './classifiers';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
-import { legacySections } from './legacy-sources';
+import { procedureSections } from './procedure-sources';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
 
 export interface BrainModelDeps {
@@ -34,8 +33,8 @@ export interface BrainModelDeps {
   learning: AgentPackLearning;
   runs: () => AgentRun[];
   routing: () => RoutingInfo;
-  /** the agent the local classifier ranks first for a text (above its threshold), or null */
-  top: (text: string, profiles: AgentProfile[]) => Promise<{ id: string; score: number } | null>;
+  /** the skill names skills_suggest ranks for a request (skills/suggest.ts), best first */
+  suggestSkills: (request: string) => Promise<string[]>;
   emit: () => void;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
@@ -68,14 +67,12 @@ export class BrainModelService {
   private restorer(): AgentRestorer {
     return {
       activeVersion: id => this.profiles().find(p => p.id === id)?.activeVersion ?? null,
-      // an Orchestrator update opened a trial (ADR 0082): undoing it rejects the trial, as the feed's undo does
+      // a change that opened a trial: undoing it rejects the trial, as the feed's undo does
       restore: (id, version, expected) => {
         const p = this.profiles().find(x => x.id === id);
         if (p?.trial && p.trial.version === expected && p.activeVersion === expected && p.trial.baseline === version) this.d.catalog.rejectTrial(id, version);
         else this.d.catalog.maintainRestore(id, version, expected);
       },
-      status: id => { try { const c = this.d.catalog.list(); return [...c.profiles, ...c.archived].find(p => p.id === id)?.status ?? null; } catch { return null; } },
-      setStatus: (id, status) => { if (status === 'archived') this.d.catalog.archive(id); else this.d.catalog.restore(id); },
     };
   }
   private writer(): AgentWriter {
@@ -83,16 +80,12 @@ export class BrainModelService {
       update: (id, patch, reason): AgentSnapshot | null => {
         const p = this.d.packs.profile(id);
         let knowhow: AgentProfile['knowhow'] | undefined;
-        if (patch.linked !== undefined || patch.dropOwn?.length) {
+        if (patch.linked !== undefined) {
           const files = this.d.packs.ownSkills(p, true);
-          for (const n of patch.dropOwn ?? []) files.delete(`skills/${portableId(id)}/${n}`);
           knowhow = this.d.packs.persistSkills(id, files, patch.linked ?? p.knowhow?.linked ?? []);
         }
         const r = this.d.catalog.maintain(id, { ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(knowhow ? { knowhow } : {}) }, reason);
         return r ? { id, before: r.before, after: r.profile.activeVersion } : null;
-      },
-      ownFile: (id, name) => {
-        try { const p = this.d.packs.profile(id); const f = this.d.packs.ownSkills(p, true).get(`skills/${portableId(id)}/${name}`); return f ? f.toString('utf8') : null; } catch { return null; }
       },
     };
   }
@@ -100,23 +93,11 @@ export class BrainModelService {
     return {
       root, skillDir: path.join(root, '.claude', 'skills'),
       skills: () => readSkills(this.skillDirs(root), root, this.profiles()),
-      profiles: () => this.profiles().filter(p => p.status === 'active'),
+      profiles: () => this.profiles().filter(p => p.scope === 'role'),
       runs: () => { try { return this.d.runs(); } catch { return []; } },
       lessons: this.d.learning, agents: this.writer(), log: this.log,
-      classify: async text => (await this.d.top(text, this.profiles()))?.id ?? null,
       now: () => this.now(),
     };
-  }
-  /** An agent change the Orchestrator applied without approval (AgentAuthoring.onApplied, ADR 0082): one entry of the
-   *  change log, undone like a job's. */
-  recordAgentChange(c: AppliedAgentChange): void {
-    const summary = c.op === 'update' ? `${c.name}: nuova versione v${c.version?.after} in prova (era v${c.version?.before})`
-      : c.op === 'rollback' ? `${c.name}: di nuovo la v${c.version?.after} (era v${c.version?.before})`
-        : c.op === 'archive' ? `${c.name}: archiviato` : `${c.name}: di nuovo attivo`;
-    const version = c.version ?? { before: 0, after: 0 };
-    this.log.record({ job: 'orchestrator', kind: 'agent', action: c.op === 'archive' ? 'archive' : c.op === 'restore' ? 'restore' : 'update', target: c.agentId,
-      summary, reason: c.reason, evidence: c.evidence }, [], { id: c.agentId, ...version, ...(c.status ? { status: c.status } : {}) });
-    this.d.emit();
   }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
   private lastRun(): MaintenanceRun | null { try { return (readLocal(this.runFile) as MaintenanceRun | undefined) ?? null; } catch { return null; } }
@@ -126,8 +107,8 @@ export class BrainModelService {
     const skills = readSkills(this.skillDirs(root), root, profiles).map(s => ({ ...s, madeBy: this.log.madeBy(s.file) }));
     return {
       root,
-      agents: profiles.filter(p => p.status === 'active').map(p => ({ id: p.id, name: p.name, role: p.role, skills: p.knowhow?.linked ?? [], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
-      skills, rules: readRules(root), memory: readMemory(root, profiles.filter(p => p.status === 'active')),
+      agents: profiles.filter(p => p.scope === 'role').map(p => ({ id: p.id, name: p.name, role: p.purpose, skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
+      skills, rules: readRules(root), memory: readMemory(root, profiles.filter(p => p.scope === 'role')),
       changes: this.log.list(restorer), migration: this.report(), lastRun: this.lastRun(),
     };
   }
@@ -176,9 +157,14 @@ export class BrainModelService {
     this.d.emit();
     return this.state();
   }
+  /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
+  skillList(): { name: string; description: string }[] {
+    const root = this.root();
+    return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, description: s.description }));
+  }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      top: goal => this.d.top(goal, this.profiles()) }, this.now());
+      suggest: goal => this.d.suggestSkills(goal) }, this.now());
   }
 
   /** Timers: the one-time migration a minute after start (when there is something to move), then every job every 6 h. */
@@ -186,7 +172,7 @@ export class BrainModelService {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
-      try { if (root && !this.report() && legacySections(root).length) void this.maintain('migration').catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
+      try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration').catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
     const every = setInterval(() => { void this.maintain().catch(() => { /* logged */ }); }, SIX_HOURS);
     first.unref?.(); every.unref?.();
@@ -200,7 +186,5 @@ function mergeReport(old: MigrationReport | null, next: MigrationReport): Migrat
   if (!old) return next;
   const items = new Map(old.items.map(i => [i.source, i]));
   for (const i of next.items) if (!items.has(i.source) || i.status === 'moved') items.set(i.source, i);
-  const lessons = new Map(old.lessons.map(l => [l.agentId, l]));
-  for (const l of next.lessons) lessons.set(l.agentId, l);
-  return { at: next.at, items: [...items.values()], lessons: [...lessons.values()] };
+  return { at: next.at, items: [...items.values()] };
 }

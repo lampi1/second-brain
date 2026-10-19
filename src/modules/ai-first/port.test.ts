@@ -8,7 +8,7 @@ vi.mock('../../renderer/store/agents', () => ({ saveSetup: mock.save }));
 vi.mock('../../renderer/actions', () => ({ focusChat: mock.focus }));
 vi.mock('../../renderer/store/ui', () => ({ closeModal: mock.close }));
 import { createAiSetupPort } from './port';
-const state: SetupState = { version: 1, status: 'new', updatedAt: 0, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] } };
+const state: SetupState = { version: 1, status: 'new', updatedAt: 0, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced' } };
 const info = { brainRoot: 'authoritative-root', brainProblem: null, engines: [{ id: 'claude', source: 'app', trusted: true, runs: 'claude' }] };
 beforeEach(() => {
   vi.clearAllMocks(); mock.save.mockImplementation(async preferences => ({ ...state, status: 'draft', preferences })); mock.refresh.mockResolvedValue(undefined);

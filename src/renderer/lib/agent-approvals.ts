@@ -1,180 +1,68 @@
-// The "Da approvare" inbox's read model and decisions (pure, no window): it gathers every pending change to an agent
-// (new-agent suggestions and the Orchestrator changes only the user decides: tools, permissions, engine, name or look
-// (ADR 0082; the rest applies at once), open version
-// trials, agents in probation, lifecycle suggestions, a new threshold for the agent classifier) from the typed IPC channels and the lifecycle queue into one list,
-// and maps each user decision to its one channel (agents:lifecycleDecide for the queue's own entries).
-// Nothing here decides by itself: every write runs only from a click in components/AgentApprovals.tsx.
-// Used by store/agent-approvals.ts (loading, sidebar count) and components/AgentApprovals.tsx (cards, undo).
-import type { AgentDraft, AgentMetrics, AgentProfile, VersionMetrics } from '@shared/agents';
-import { inProbation } from '@shared/agents';
-import type { AgentProposal } from '@shared/agent-authoring';
-import type { ClassifierCalibration } from '@shared/agent-classifier';
+// The "Da approvare" inbox's read model and decisions (pure, no window): what changes a role's reach or cost and waits
+// for the user (ADR 0083): an open version trial (a pack's skills, a new tier) with the loop's keep/revert advice, and
+// the loop's tier suggestions. Role text and skills never wait here: the app applies them at once with an Annulla.
+// Each user decision maps to its one channel (agents:trialDecide, agents:lifecycleDecide). Nothing here decides by
+// itself: every write runs only from a click in components/AgentApprovals.tsx. Used by store/agent-approvals.ts
+// (loading, sidebar count) and components/AgentApprovals.tsx (cards).
+import type { AgentMetrics, AgentProfile, VersionMetrics } from '@shared/agents';
 import type { AgentLifecycleClient, AgentLifecycleProposal } from '@shared/agent-lifecycle';
 import type { Bridge } from '@shared/contract';
 
 export interface ApprovalsClient { invoke: Bridge['invoke']; lifecycle: AgentLifecycleClient }
 
-/** One changed field of a definition; null = not set (the engine's or the app's default applies). */
-export interface FieldChange { field: DefinitionField; before: string | null; after: string | null }
-export const DEFINITION_FIELDS = ['name', 'role', 'purpose', 'category', 'instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'manifest'] as const;
-export type DefinitionField = typeof DEFINITION_FIELDS[number];
-
 export type ApprovalItem =
-  /** An Orchestrator proposal (a new agent or a changed definition): agents:proposalDecide. stale = the agent changed since. */
-  | { type: 'definition'; key: string; at: number; proposal: AgentProposal; agent: AgentProfile | null; stale: boolean; changes: FieldChange[] }
-  /** An open version trial (pack update): agents:trialDecide. advice = the lifecycle's keep/revert, when it has one. */
+  /** An open version trial: agents:trialDecide. advice = the loop's keep/revert, when it has one. */
   | { type: 'trial'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; reason: string | null; before: VersionMetrics | null; after: VersionMetrics | null }
-  /** A new agent (imported or made for a task) still being judged: agents:keep / agents:retire. */
-  | { type: 'probation'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; metrics: VersionMetrics | null }
-  /** A lifecycle suggestion: approve = agents:lifecycleDecide (a model trial opens; update/create/merge/split ask the
-   *  Orchestrator for a draft that comes back as a 'definition' item), dismiss = hidden for a while. */
-  | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] }
-  /** A threshold for the agent classifier calibrated on the user's confirmed runs: agents:classifierDecide. */
-  | { type: 'classifier'; key: string; at: number; calibration: ClassifierCalibration & { suggested: number } };
-export type ApprovalSource = 'definitions' | 'lifecycle' | 'metrics' | 'classifier';
+  /** A tier suggestion: approve = agents:lifecycleDecide (a trial version on that tier opens), dismiss = hidden for a while. */
+  | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] };
+export type ApprovalSource = 'lifecycle' | 'metrics';
 export interface ApprovalsState { items: ApprovalItem[]; problems: ApprovalSource[]; lifecycleProblem: string | null }
 
-const ORDER: Record<ApprovalItem['type'], number> = { definition: 0, trial: 2, probation: 3, lifecycle: 4, classifier: 5 };
-
-function show(field: DefinitionField, d: AgentDraft): string | null {
-  const v = d[field];
-  if (v === undefined || v === null || v === '') return null;
-  if (field === 'tools') { const p = v as NonNullable<AgentDraft['tools']>; return [p.allow.join(', '), p.mcp?.length ? `MCP: ${p.mcp.join(', ')}` : ''].filter(Boolean).join(' · ') || '—'; }
-  if (field === 'manifest') {
-    const m = v as NonNullable<AgentDraft['manifest']>;
-    const lines = Object.entries(m).filter(([, x]) => x !== undefined && (!Array.isArray(x) || x.length)).map(([k, x]) => `${k}: ${Array.isArray(x) ? x.join('; ') : String(x)}`);
-    return lines.length ? lines.join('\n') : null;
-  }
-  return String(v);
-}
-/** The fields that differ between the current definition (absent for a new agent) and the proposed one. */
-export function diffDefinition(before: AgentDraft | null | undefined, after: AgentDraft): FieldChange[] {
-  return DEFINITION_FIELDS.flatMap(field => {
-    const b = before ? show(field, before) : null, a = show(field, after);
-    return b === a ? [] : [{ field, before: b, after: a }];
-  });
-}
-export interface DiffLine { op: 'same' | 'add' | 'del'; text: string }
-/** Line diff (LCS) of two texts; past ~250k cells it degrades to "all removed, all added" rather than freeze the UI. */
-export function lineDiff(before: string, after: string): DiffLine[] {
-  const a = before ? before.split(/\r?\n/) : [], b = after ? after.split(/\r?\n/) : [];
-  if (a.length * b.length > 250_000) return [...a.map(text => ({ op: 'del' as const, text })), ...b.map(text => ({ op: 'add' as const, text }))];
-  const w = b.length + 1, lcs = new Uint32Array((a.length + 1) * w);
-  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--)
-    lcs[i * w + j] = a[i] === b[j] ? lcs[(i + 1) * w + j + 1]! + 1 : Math.max(lcs[(i + 1) * w + j]!, lcs[i * w + j + 1]!);
-  const out: DiffLine[] = [];
-  let i = 0, j = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { out.push({ op: 'same', text: a[i]! }); i++; j++; }
-    else if (lcs[(i + 1) * w + j]! >= lcs[i * w + j + 1]!) out.push({ op: 'del', text: a[i++]! });
-    else out.push({ op: 'add', text: b[j++]! });
-  }
-  while (i < a.length) out.push({ op: 'del', text: a[i++]! });
-  while (j < b.length) out.push({ op: 'add', text: b[j++]! });
-  return out;
-}
+const ORDER: Record<ApprovalItem['type'], number> = { trial: 0, lifecycle: 1 };
 
 const versionOf = (m: AgentMetrics | undefined, version: number): VersionMetrics | null => m?.versions.find(v => v.version === version) ?? null;
 
 /** Reads every source; one failing source is reported in `problems` and the others still show. The catalog is required. */
 export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsState> {
   const catalog = await c.invoke('agents:list', undefined);
-  const active = catalog.profiles.filter(p => p.status === 'active'), all = [...catalog.profiles, ...catalog.archived];
-  const [proposals, lifecycle, metrics, calibration] = await Promise.allSettled([c.invoke('agents:proposals', undefined), c.lifecycle.read({}), c.invoke('agents:metrics', undefined),
-    c.invoke('agents:classifierCalibration', undefined)]);
+  const roles = catalog.profiles.filter(p => p.scope === 'role');
+  const [lifecycle, metrics] = await Promise.allSettled([c.lifecycle.read({}), c.invoke('agents:metrics', undefined)]);
   const snapshot = lifecycle.status === 'fulfilled' ? lifecycle.value : null;
   const problems: ApprovalSource[] = [];
-  // the queue carries the pending drafts too: either source is enough
-  const drafts = proposals.status === 'fulfilled' ? proposals.value : snapshot?.drafts ?? null;
-  if (!drafts) problems.push('definitions');
   if (lifecycle.status === 'rejected') problems.push('lifecycle');
   if (metrics.status === 'rejected') problems.push('metrics');
-  if (calibration.status === 'rejected') problems.push('classifier');
   const items: ApprovalItem[] = [];
-  for (const p of drafts ?? []) {
-    if (p.state !== 'pending') continue;
-    const agent = p.agentId ? all.find(a => a.id === p.agentId) ?? null : null;
-    const stale = !!p.agentId && (!agent || agent.updatedAt !== p.baseRevision);
-    const op = p.op ?? 'update';
-    items.push({ type: 'definition', key: `def:${p.id}`, at: p.at, proposal: p, agent, stale, changes: op === 'update' ? diffDefinition(p.before ?? agent, p.draft) : [] });
-  }
   const stats = metrics.status === 'fulfilled' ? metrics.value : [];
-  for (const agent of active) {
-    const m = stats.find(x => x.agentId === agent.id);
-    if (agent.trial) {
-      const trial = agent.trial, advice = snapshot?.proposals.find(p => p.key === `trial:${agent.id}:${trial.version}`) ?? null;
-      const evaluation = snapshot?.evaluations.find(e => e.agentId === agent.id && e.version === trial.version)?.result;
-      const before = advice?.metrics?.before ?? evaluation?.before ?? versionOf(m, trial.baseline), after = advice?.metrics?.after ?? evaluation?.after ?? versionOf(m, trial.version);
-      items.push({ type: 'trial', key: `trial:${agent.id}:${trial.version}`, at: trial.startedAt, agent, advice, reason: advice?.reason ?? evaluation?.reason ?? null, before, after });
-    } else if (inProbation(agent)) {
-      const advice = snapshot?.proposals.find(p => p.key === `probation:${agent.id}`) ?? null;
-      items.push({ type: 'probation', key: `probation:${agent.id}`, at: advice?.at ?? agent.probation!.since, agent, advice, metrics: versionOf(m, agent.activeVersion) ?? m?.all ?? null });
-    }
+  for (const agent of roles) {
+    if (!agent.trial) continue;
+    const m = stats.find(x => x.agentId === agent.id), trial = agent.trial;
+    const advice = snapshot?.proposals.find(p => p.key === `trial:${agent.id}:${trial.version}`) ?? null;
+    const evaluation = snapshot?.evaluations.find(e => e.agentId === agent.id && e.version === trial.version)?.result;
+    const before = advice?.metrics?.before ?? evaluation?.before ?? versionOf(m, trial.baseline), after = advice?.metrics?.after ?? evaluation?.after ?? versionOf(m, trial.version);
+    items.push({ type: 'trial', key: `trial:${agent.id}:${trial.version}`, at: trial.startedAt, agent, advice, reason: advice?.reason ?? evaluation?.reason ?? null, before, after });
   }
-  // trial and probation advice belongs to its agent's card (above); advice whose trial or probation already ended has
-  // nothing left to decide
-  for (const p of snapshot?.proposals ?? []) if (p.state === 'pending' && !/^(trial|probation):/.test(p.key) && p.kind !== 'keep' && p.kind !== 'revert' && p.kind !== 'retire')
-    items.push({ type: 'lifecycle', key: `life:${p.key}`, at: p.at, proposal: p, agents: p.agentIds.map(id => all.find(a => a.id === id)).filter((a): a is AgentProfile => !!a) });
-  // the key carries the value: a suggestion that moved is a new card, never a stale one decided by mistake
-  if (calibration.status === 'fulfilled' && Array.isArray(calibration.value)) for (const cal of calibration.value) if (cal.pending && cal.suggested !== null)
-    items.push({ type: 'classifier', key: `classifier:${cal.mode}:${cal.suggested}`, at: Date.now(), calibration: { ...cal, suggested: cal.suggested } });
+  // trial advice belongs to its role's card (above); advice whose trial already ended has nothing left to decide
+  for (const p of snapshot?.proposals ?? []) if (p.state === 'pending' && p.kind === 'tier')
+    items.push({ type: 'lifecycle', key: `life:${p.key}`, at: p.at, proposal: p, agents: p.agentIds.map(id => roles.find(a => a.id === id)).filter((a): a is AgentProfile => !!a) });
   items.sort((x, y) => ORDER[x.type] - ORDER[y.type] || y.at - x.at);
   return { items, problems, lifecycleProblem: snapshot?.problem ?? null };
 }
 
 export type ApprovalDecision =
-  | { type: 'definition'; accept: boolean }
   | { type: 'trial'; decision: 'keep' | 'rollback' }
-  | { type: 'probation'; decision: 'keep' } | { type: 'probation'; decision: 'retire'; reason: string }
-  /** the lifecycle queue's own entry: a lifecycle suggestion, or the advice on a trial/probation card */
-  | { type: 'queue'; decision: 'approve' | 'dismiss' }
-  | { type: 'classifier'; decision: 'apply' | 'dismiss' };
-/** What a just-made decision can be taken back with, when its backend supports it. */
-export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'retire' | 'classifier'; agentId: string; run(): Promise<unknown> }
+  /** the lifecycle queue's own entry: a tier suggestion, or the advice on a trial card */
+  | { type: 'queue'; decision: 'approve' | 'dismiss' };
 /** The queue entry a card carries, if any (decided with agents:lifecycleDecide). */
-export const queueEntry = (item: ApprovalItem): AgentLifecycleProposal | null =>
-  item.type === 'lifecycle' ? item.proposal : item.type === 'trial' || item.type === 'probation' ? item.advice : null;
+export const queueEntry = (item: ApprovalItem): AgentLifecycleProposal | null => (item.type === 'lifecycle' ? item.proposal : item.advice);
 
-/** Runs one decision through its typed channel; returns how to undo it, or null when it cannot be undone from here. */
-export async function decideApproval(c: ApprovalsClient, item: ApprovalItem, d: ApprovalDecision): Promise<ApprovalUndo | null> {
+/** Runs one decision through its typed channel. */
+export async function decideApproval(c: ApprovalsClient, item: ApprovalItem, d: ApprovalDecision): Promise<void> {
   if (d.type === 'queue') {
     const entry = queueEntry(item);
     if (!entry) throw new Error('No queue entry on this item');
     await c.invoke('agents:lifecycleDecide', { key: entry.key, decision: d.decision });
-    return null;
+    return;
   }
-  if (item.type === 'definition' && d.type === 'definition') {
-    const profile = await c.invoke('agents:proposalDecide', { id: item.proposal.id, accept: d.accept });
-    if (!d.accept || !profile) return null;
-    const op = item.proposal.op ?? 'update';
-    if (op === 'archive' || op === 'restore') {
-      const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: op === 'archive' ? 'restore' as const : 'archive' as const };
-      return { kind: op === 'archive' ? 'definition-archive' : 'definition-restore', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };
-    }
-    if (item.agent) {
-      const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: 'version' as const, version: item.agent.activeVersion };
-      return { kind: 'definition-version', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };
-    }
-    const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: 'archive' as const };
-    return { kind: 'definition-new', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };
-  }
-  if (item.type === 'trial' && d.type === 'trial') { await c.invoke('agents:trialDecide', { id: item.agent.id, decision: d.decision }); return null; }
-  if (item.type === 'probation' && d.type === 'probation') {
-    const id = item.agent.id;
-    if (d.decision === 'keep') { await c.invoke('agents:keep', { id }); return null; }
-    await c.invoke('agents:retire', { id, reason: d.reason });
-    return { kind: 'retire', agentId: id, run: () => c.invoke('agents:restore', { id }) };
-  }
-  if (item.type === 'classifier' && d.type === 'classifier') {
-    const { mode, suggested, approved } = item.calibration;
-    await c.invoke('agents:classifierDecide', { mode, decision: d.decision, value: suggested });
-    if (d.decision === 'dismiss') return null;
-    // undo = the threshold that was in force before: the earlier approved value, or the default
-    return { kind: 'classifier', agentId: '', run: () => c.invoke('agents:classifierDecide', approved === null ? { mode, decision: 'reset' } : { mode, decision: 'apply', value: approved }) };
-  }
+  if (item.type === 'trial') { await c.invoke('agents:trialDecide', { id: item.agent.id, decision: d.decision }); return; }
   throw new Error('Decision does not match the item');
 }
-
-/** Where a lifecycle suggestion is prepared: the editor of its (first known) agent, or a new definition. */
-export const lifecycleTarget = (item: Extract<ApprovalItem, { type: 'lifecycle' }>): string =>
-  item.proposal.kind === 'create' || !item.agents.length ? 'studio' : item.agents[0]!.id;

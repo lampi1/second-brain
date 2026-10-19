@@ -1,8 +1,6 @@
-// Offline interview recommendations: use existing catalog IDs, editable proposals, no permissions or remote calls.
-// Also the interview ⇄ me.md mapping: what the owner already told the brain is prefilled, never asked again, and on
+// The first-run interview ⇄ me.md mapping, offline (no permissions, no remote calls): what the owner already told the brain is prefilled, never asked again, and on
 // confirm only the answers that add something are written (a custom reply style or a locked field is never touched).
-import type { AgentProfile, SetupDraft, SetupProfile } from '@shared/agents';
-import { LEGACY_ROLE_REPLACEMENTS } from '@shared/agent-presets';
+import type { SetupDraft, SetupProfile } from '@shared/agents';
 import type { OwnerProfile, ProfileFields } from '@shared/profile';
 import { PROFILE_FORBIDDEN, PROFILE_LIMITS, PROFILE_PLACEHOLDERS, REPLY_PRESETS } from '@shared/profile';
 import { workAreas } from './profile';
@@ -10,7 +8,7 @@ import { workAreas } from './profile';
 const placeholder = (key: keyof typeof PROFILE_PLACEHOLDERS, value: string) => !value || (PROFILE_PLACEHOLDERS[key] as readonly string[]).includes(value);
 /** the owner's name is already known: the interview shows it instead of asking */
 export const knownName = (current: OwnerProfile | null) => !!current && !placeholder('name', current.name);
-/** a reply style the owner wrote themselves (or brain-editor did): the interview leaves it alone */
+/** a reply style the owner wrote themselves (or an agent with the brain-edit skill did): the interview leaves it alone */
 export const customReplyStyle = (current: OwnerProfile) => !!current.replyStyle && current.replyStyle !== current.replyStyleDefault && !(Object.values(REPLY_PRESETS) as string[]).includes(current.replyStyle);
 export const replyStyleOf = (current: OwnerProfile): SetupDraft['style'] => current.replyStyle === REPLY_PRESETS.concise ? 'concise' : current.replyStyle === REPLY_PRESETS.detailed ? 'detailed' : 'balanced';
 export type InterviewAnswers = Required<SetupProfile>;
@@ -63,16 +61,4 @@ export function wizardProfile(draft: SetupDraft, current: OwnerProfile): Partial
   if (reply && reply !== current.replyStyle && !customReplyStyle(current) && !locked.has('replyStyle')) out.replyStyle = reply;
   return out;
 }
-export const emptySetup = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] });
-export function recommendedAgents(draft: SetupDraft, catalog: readonly AgentProfile[]): string[] {
-  const ids = new Set(['default-general', 'default-planning']);
-  if (draft.work === 'independent' || /scriv|document|test[oi]|offert|client/i.test(draft.goals)) ids.add('default-writing');
-  if (/anal|dat[oi]|confront|report|numer/i.test(draft.goals)) ids.add('default-analysis');
-  if (/ricerc|font|informaz|stud/i.test(draft.goals)) ids.add('default-research');
-  if (/svilupp|software|codice|programmaz/i.test(draft.goals)) ids.add('default-development');
-  const resolved = new Set([...ids].map(id => {
-    const replacement = LEGACY_ROLE_REPLACEMENTS[id];
-    return replacement && catalog.some(p => p.id === replacement) ? replacement : id;
-  }));
-  return catalog.filter(p => resolved.has(p.id)).map(p => p.id);
-}
+export const emptySetup = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', style: 'balanced' });
