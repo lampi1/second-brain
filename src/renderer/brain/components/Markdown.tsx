@@ -4,8 +4,11 @@
 // in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. With `copy` (Procedure)
 // every code block gets a "Copia" button and a click on inline code copies it; with `copyBlocks` (the file viewer) only
 // the blocks get it: copy only, nothing here ever runs. Code blocks wrap their long lines (brain.css .bx-md pre), so
-// nothing is cut off on the right. Used by Fatto, Idee, Confronto, Esplora, Procedure, FileViewer.
-import { useMemo, type MouseEvent } from 'react';
+// nothing is cut off on the right. With `imageBase` (the file viewer: the path of the report shown) its images show,
+// rewritten and loaded by ReportImages.tsx: embedded rasters, local files read by main, never a remote URL; a click
+// opens one large. Used by Fatto, Idee, Confronto, Esplora, Procedure, FileViewer.
+import { useMemo, useState, type MouseEvent } from 'react';
+import { localizeImages, useReportImages } from './ReportImages';
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { copyText, download, toast } from './ui';
@@ -58,8 +61,10 @@ const wrapTables = (html: string) => {
   return html.replace(/<table>/g, () => `<div class="bx-mdtable"><table data-i="${i++}">`).replace(/<\/table>/g, '</table></div>');
 };
 
-export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, copyBlocks = false, images = true }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; copyBlocks?: boolean; images?:boolean }) {
-  const html = useMemo(() => { const h = renderMarkdown(text, files, root,images); return copy || copyBlocks ? withCopy(h, copy) : h; }, [text, files, root, copy, copyBlocks, images]);
+export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, copyBlocks = false, images = true, imageBase }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; copyBlocks?: boolean; images?:boolean; imageBase?: string }) {
+  const html = useMemo(() => { let h = renderMarkdown(text, files, root, images || imageBase !== undefined); if (imageBase !== undefined) h = localizeImages(h, imageBase); return copy || copyBlocks ? withCopy(h, copy) : h; }, [text, files, root, copy, copyBlocks, images, imageBase]);
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
+  const zoom = useReportImages(imageBase !== undefined ? body : null, html);
   const act = (e: MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     const c = copy || copyBlocks ? t.closest<HTMLElement>('[data-copy]') : null;
@@ -104,12 +109,13 @@ export function Markdown({ text, files, root, onOpenFile, name = 'tabella', test
   };
   return (
     <div className="bx-mdwrap" data-testid={testId}>
-      <div className="bx-md" onClick={act} onKeyDown={e => { const t = e.target as HTMLElement; if ((e.key === 'Enter' || (e.key === ' ' && t.dataset.copy === 'inline')) && !t.closest('button')) { if (e.key === ' ') e.preventDefault(); act(e as unknown as MouseEvent<HTMLDivElement>); } }} dangerouslySetInnerHTML={{ __html: html }} />
+      <div ref={setBody} className="bx-md" onClick={act} onKeyDown={e => { const t = e.target as HTMLElement; if ((e.key === 'Enter' || (e.key === ' ' && t.dataset.copy === 'inline')) && !t.closest('button')) { if (e.key === ' ') e.preventDefault(); act(e as unknown as MouseEvent<HTMLDivElement>); } }} dangerouslySetInnerHTML={{ __html: html }} />
       {tables.length > 0 && (
         <div className="bx-row bx-mdcsv">
           {tables.map((_, i) => <button key={i} type="button" className="bx-btn s" onClick={() => csv(i)}>Tabella {tables.length > 1 ? i + 1 : ''} in CSV</button>)}
         </div>
       )}
+      {zoom}
     </div>
   );
 }

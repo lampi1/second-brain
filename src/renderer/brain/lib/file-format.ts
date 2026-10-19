@@ -32,7 +32,7 @@ lang('ini', () => import('highlight.js/lib/languages/ini'), 'ini', 'toml', 'cfg'
 lang('diff', () => import('highlight.js/lib/languages/diff'), 'diff', 'patch');
 lang('dockerfile', () => import('highlight.js/lib/languages/dockerfile'), 'dockerfile');
 
-export type FileView = 'markdown' | 'csv' | 'jsonl' | 'json' | 'code';
+export type FileView = 'markdown' | 'html' | 'csv' | 'jsonl' | 'json' | 'code';
 
 /** The lowercase extension of a path (a dotfile like `.env` → `env`, `Dockerfile` → `dockerfile`). */
 export function extOf(p: string): string {
@@ -45,6 +45,7 @@ export function extOf(p: string): string {
 export function viewOf(p: string): FileView {
   const ext = extOf(p);
   if (ext === 'md' || ext === 'markdown') return 'markdown';
+  if (ext === 'html' || ext === 'htm') return 'html';
   if (ext === 'csv' || ext === 'tsv') return 'csv';
   if (ext === 'jsonl' || ext === 'ndjson') return 'jsonl';
   if (ext === 'json') return 'json';
