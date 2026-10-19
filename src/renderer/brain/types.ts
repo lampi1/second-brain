@@ -3,7 +3,7 @@
 // /api/quality and /api/procedures, /api/procedure, answered by main itself (AppQuality, Procedure). The server is another program that may be older
 // or newer than the app, so every read goes through a normalizer that fills what is missing (lists → [], text → '')
 // instead of trusting the shape. Used by the pages.
-import type { AppQuality, Procedure, ProcedureSummary } from '@shared/contract';
+import type { AppQuality, BrainScript, BrainScriptSummary, ChangelogAction, ChangelogEntry, ChangelogKind, Procedure, ProcedureSummary } from '@shared/contract';
 
 export interface ErrorRow { data: string; ora: string; chi: string; area: string; tipo: string; detto: string; vero: string; visto: string; regola: string; riga?: string; responsibleEpisode?: unknown; reporterOrigin?: unknown }
 export interface WinRow { data: string; ora: string; harness: string; chat: string; area: string; esito: string; parole: string; consegnato: string; origin?: unknown }
@@ -172,6 +172,37 @@ const procedureOf = (p: Obj): ProcedureSummary => ({
 export function normProcedure(v: unknown): Procedure {
   const o = obj(v);
   return { ...procedureOf(o), path: str(o.path), markdown: str(o.markdown), masked: num(o.masked) };
+}
+
+/** /api/scripts (ADR 0076): the brain's scripts, newest change first. */
+export function normScripts(v: unknown): { root: string | null; scripts: BrainScriptSummary[] } {
+  const o = obj(v);
+  return { root: str(o.root) || null, scripts: arr(o.scripts).filter(isObj).map(scriptOf).filter(s => s.id && s.file) };
+}
+const TESTED = new Set(['ok', 'failed', 'untested']);
+const scriptOf = (s: Obj): BrainScriptSummary => {
+  const t = obj(s.tested);
+  return {
+    id: str(s.id), file: str(s.file), title: str(s.title), description: str(s.description), usage: str(s.usage), language: str(s.language),
+    tags: arr(s.tags).filter((x): x is string => typeof x === 'string'),
+    tested: { state: TESTED.has(str(t.state)) ? str(t.state) as BrainScriptSummary['tested']['state'] : 'untested', at: t.at ? str(t.at) : null, note: str(t.note) },
+    changedAt: s.changedAt ? str(s.changedAt) : null, bytes: num(s.bytes),
+  };
+};
+/** /api/script?id=…: one script with its code (credentials already masked by main). */
+export function normScript(v: unknown): BrainScript {
+  const o = obj(v);
+  return { ...scriptOf(o), path: str(o.path), code: str(o.code), masked: num(o.masked) };
+}
+const KINDS = new Set<string>(['script', 'rule', 'procedure', 'note', 'agent', 'skill', 'other']);
+const ACTIONS = new Set<string>(['added', 'edited', 'fixed', 'deleted', 'restored']);
+/** /api/changelog: the brain's changelog lines, newest first. */
+export function normChangelog(v: unknown): { root: string | null; entries: ChangelogEntry[] } {
+  const o = obj(v);
+  return { root: str(o.root) || null, entries: arr(o.entries).filter(isObj).map(e => ({
+    at: str(e.at), kind: (KINDS.has(str(e.kind)) ? str(e.kind) : 'other') as ChangelogKind, action: (ACTIONS.has(str(e.action)) ? str(e.action) : 'edited') as ChangelogAction,
+    target: str(e.target), by: str(e.by), summary: str(e.summary),
+  })).filter(e => e.at) };
 }
 
 export function normCost(v: unknown): CostData {

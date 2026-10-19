@@ -31,7 +31,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida';
+export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'script' | 'changelog' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -45,6 +45,9 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('costi', 'G C'),
   page('qualita', 'G Q'),
   page('procedure', 'G L'),
+  // rendered by the app (App.tsx PageFrame) in the Dashboard's look: the brain's scripts and its changelog (ADR 0076)
+  page('script', 'G T'),
+  page('changelog', 'G N'),
   page('confronto', 'G M'),
   page('miglioramento', 'G R'),
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
@@ -102,7 +105,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'miglioramento': page = <Miglioramento nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': case 'guida': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'guida': case 'script': case 'changelog': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'devops': page = <Devops nav={nav} />; break;
   }
   return (

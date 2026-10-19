@@ -40,6 +40,9 @@ import type { AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
+import type { BrainScripts } from '../brain/scripts';
+import type { BrainChangelog } from '../brain/changelog';
+import { scriptWriteTools } from '../brain/scripts-tools';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -66,6 +69,8 @@ export interface AppCtlDeps {
   improveEvidence?: (selection: ImproveEvidenceSelection) => ReturnType<ImproveService['evidence']>;
   /** the DevOps page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
   devops?: () => DevopsState | null;
+  /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
+  brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
 }
 
 /** app_digest since "last": when each caller (Regia endpoint) last asked, for this app run */
@@ -133,6 +138,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (Object.keys(a).some(k => !['agentId', 'rule', 'evidence'].includes(k)) || typeof a.agentId !== 'string' || typeof a.rule !== 'string' || typeof a.evidence !== 'string') throw new Error('Invalid learned-rule proposal');
         return d.agentLearning!.propose(a.agentId, a.rule, a.evidence);
       } }] : []),
+    ...(d.brainScripts && unified() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',

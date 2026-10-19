@@ -105,6 +105,8 @@ export function brainClient(): BrainClient {
   try { window.sb.on('feed:events', () => client?.invalidate('/api/tables')); } catch { /* no bridge (tests) */ }
   // a procedure file changed (main's brain watcher): the Procedure page's list and the open procedure
   try { window.sb.on('procedures:changed', () => client?.invalidate('/api/procedure')); } catch { /* no bridge (tests) */ }
+  // a script of the brain or its changelog changed (main's brain watcher): the Script and Changelog pages
+  try { window.sb.on('scripts:changed', () => { client?.invalidate('/api/script'); client?.invalidate('/api/changelog'); }); } catch { /* no bridge (tests) */ }
   return client;
 }
 

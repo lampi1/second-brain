@@ -8,7 +8,7 @@ import { useDevops } from '../store/devops';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconBrain, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconQuestion, IconSettings, IconSparkle, IconTarget, IconTicket,
+  IconBook, IconBrain, IconHistory, IconTerminal, IconChart, IconCoins, IconCompass, IconGrid, IconLayers, IconLightbulb, IconQuestion, IconSettings, IconSparkle, IconTarget, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {useAgents} from '../store/agents';
@@ -19,12 +19,14 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, script: <IconTerminal />, changelog: <IconHistory />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
   dashboard: <IconChart />, guida: <IconQuestion />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: DevOps can hide; the Dashboard shows under any role). */
-const BRAIN_GROUP: BrainPageId[] = ['procedure', 'miglioramento'];
+const BRAIN_GROUP: BrainPageId[] = ['procedure', 'script', 'changelog', 'miglioramento'];
+/** always in the Brain group, whatever the role (the owner, 2026-10-19: the brain must be visible; ADR 0076) */
+const BRAIN_ALWAYS: BrainPageId[] = ['script', 'changelog'];
 const APP_GROUP: BrainPageId[] = ['skill'];
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
@@ -37,6 +39,7 @@ export function Sidebar() {
   const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
   const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','agenti','dashboard','guida','devops','fatto','impostazioni','migliora'].includes(id)):BRAIN_GROUP;
+  for(const id of BRAIN_ALWAYS)if(!brainPages.includes(id))brainPages.push(id);
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
