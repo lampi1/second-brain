@@ -27,11 +27,11 @@ const catalog = (): AgentCatalog => ({ problem: null, archived: [], models: [], 
     launches: r.launches, skills: r.skills, tools: { allow: r.tools }, permissionCeiling: r.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string } }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0,
+  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
       if (!id || !isWorkRole(id)) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -49,7 +49,7 @@ function fixture(limits: Partial<DelegationSettings> = {}) {
       } as unknown as HarnessSession;
     } });
   managers.push(m);
-  const tools = delegationTools({ chats: m, roles: catalog, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list() });
+  const tools = delegationTools({ chats: m, roles: catalog, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}) });
   const tool = (name: string): McpTool => tools.find(t => t.name === name)!;
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
   const root = (role: RoleId, cwd = dir) => m.create({ harness: 'claude', cwd, roleId: role, title: `${ROLE_DEFAULTS[role].name} root`, prompt: 'PARENT SECRET HISTORY' }, 'user');
@@ -146,6 +146,21 @@ describe('agent_delegate', () => {
     expect(start.ceiling).toBe(ROLE_DEFAULTS.strategist.ceiling);
     const scout = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'S')] })).children[0].chatId;
     await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/may not launch Artisan/);
+  });
+
+  it('a child may work in a worktree of its parent\'s repository, never in another folder', async () => {
+    const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-wt-')); roots.push(outer);
+    const repo = path.join(outer, 'repo'), wt = path.join(outer, 'repo-wt'), elsewhere = path.join(outer, 'elsewhere');
+    for (const d of [repo, wt, elsewhere]) fs.mkdirSync(d);
+    const asked: string[] = [];
+    const f = fixture({}, async cwd => { asked.push(cwd); return cwd === repo ? [repo, wt] : []; });
+    const parent = await f.root('strategist', repo);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Nel worktree'), cwd: wt }] });
+    expect(f.m.list().find(c => c.id === out.children[0].chatId)?.cwd).toBe(wt);
+    expect(asked).toContain(repo);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: elsewhere }] })).rejects.toThrow(/worktrees/);
+    // the manager checks again at create, the check that counts
+    await expect(f.m.create({ harness: 'claude', cwd: elsewhere, roleId: 'scout', parentId: parent.id, prompt: 'x' }, 'agent')).rejects.toThrow(/worktree/);
   });
 
   it('a child asking for a permission beyond its parent is refused visibly; a hidden sub-agent too; a search is fine', async () => {

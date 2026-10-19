@@ -82,6 +82,7 @@ import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
+import { gitWorktrees } from './agents/worktrees';
 import { JudgeSampler } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
@@ -416,6 +417,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const manager = new ChatManager({
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
+    worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
       if (req.roleId === undefined || req.orchestrator) return resolved;
@@ -614,7 +616,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list() }));
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees }));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
   // user's stable app outside tests (or with SB_JUDGE_SAMPLE=1), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),

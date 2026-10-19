@@ -17,7 +17,8 @@ import { canLaunch, isWorkRole, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSet
 import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import type { McpTool } from '../mcp/server';
-import { allowsClass, within, type AgentPolicy } from './tool-policy';
+import { allowsClass, type AgentPolicy } from './tool-policy';
+import { withinParent } from './worktrees';
 import { log } from '../log';
 
 /** What delegation needs from the chats (ChatManager). */
@@ -38,6 +39,8 @@ export interface DelegationDeps {
   engineRefusal: (from: Harness, to: Harness) => string | null;
   /** the label every agent-written first message starts with (appctl AGENT_LABEL) */
   label: string;
+  /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
+  worktrees?: (cwd: string) => Promise<string[]>;
   runs: () => readonly AgentRun[];
 }
 
@@ -69,6 +72,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!own) throw new Error('agent_delegate: your role is not in the catalog.');
     const raw = a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
+    // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
+    const trees = d.worktrees ? await d.worktrees(parent.cwd) : [];
     const limits = d.settings(), all = d.chats.list();
     const parentOf = (id: string) => all.find(c => c.id === id)?.parentId;
     const depth = depthOf(parent.id, parentOf) + 1;
@@ -102,7 +107,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const outside = (contract.tools ?? []).filter(c => !(profile.tools?.allow ?? []).includes(c));
       if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
-      if (!within(parent.cwd, cwd)) throw new Error(`tasks[${i}].cwd: a folder inside yours (${parent.cwd}); a child never leaves its parent's folder.`);
+      if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: a folder inside yours (${parent.cwd}) or one of your repository's worktrees; a child never leaves its parent's repository.`);
       const refused = d.engineRefusal(parent.harness, profile.engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       return { role, title, contract, cwd, profile };

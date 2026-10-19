@@ -50,6 +50,7 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
+import { withinParent } from '../agents/worktrees';
 import { aboveCeiling, belowParent, browserAccess, claudeDefaultMode, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
@@ -74,6 +75,8 @@ export interface ChatManagerOptions {
   roleCatalogBrief?: () => string;
   /** the role a new chat runs (catalog.resolve), with the plugin of its launch (only the skills it was given) */
   resolveAgent?: (req: NewChat) => ResolvedRole & { assets?: { pluginDir: string; skillRoot: string } };
+  /** the git worktrees of the repository at a folder (agents/worktrees.ts): a delegated chat may work in its parent's */
+  worktrees?: (cwd: string) => Promise<string[]>;
   onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
   userData: string;
@@ -474,7 +477,7 @@ export class ChatManager implements ChatService {
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
-    const delegator = req.parentId !== undefined ? this.delegator(req, by) : undefined;
+    const delegator = req.parentId !== undefined ? await this.delegator(req, by) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
     // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews. A root chat the
     // Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's read-only policy:
@@ -575,10 +578,16 @@ export class ChatManager implements ChatService {
 
   /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
    *  Orchestrator opens root chats with app_create_chat), and the child's folder lies inside the parent's. */
-  private delegator(req: NewChat, by: 'user' | 'agent' | 'app'): Rec {
+  private async delegator(req: NewChat, by: 'user' | 'agent' | 'app'): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
     if (by !== 'agent' || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
-    if (!within(parent.s.cwd, typeof req.cwd === 'string' ? req.cwd.trim() : '')) throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}).`);
+    const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
+    // the parent's folder, or a worktree of its repository (agents/worktrees.ts); git is asked only when it matters, and
+    // the parent may have closed meanwhile
+    if (!within(parent.s.cwd, cwd) && !withinParent(parent.s.cwd, cwd, this.opts.worktrees ? await this.opts.worktrees(parent.s.cwd) : [])) {
+      throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}) o in un worktree del suo repository.`);
+    }
+    if (parent.s.closedAt) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     return parent;
   }
 
