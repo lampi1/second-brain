@@ -16,7 +16,7 @@ import { branchStages, checkAt, launchOutcome, nextSeen, promoteGate, promoteSte
 import { buildImproveEvidence, type ImproveEvidenceSelection } from './evidence';
 
 /** scripts/pull.mjs --json */
-export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean; behind?: number; canUpdate?: boolean }
+export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean; behind?: number; ahead?: number; canUpdate?: boolean; depsChanged?: boolean }
 
 export interface ImproveDeps {
   /** Production uses the single staged updater; legacy promotion remains only for historical fixtures. */
@@ -284,11 +284,16 @@ export class ImproveService {
     return this.st;
   }
 
+  /** The folder "Aggiorna" updates: a dev build its own checkout (the one it relaunches from), a stable copy its code folder. */
+  private updateRepo(): string | null { return this.d.stable ? this.repo() : this.d.devRepo; }
+  /** pull.mjs flags: a stable copy is promoted, which needs a tree without untracked files too */
+  private pullFlags(): string[] { return this.d.stable ? ['--strict'] : []; }
+
   /** Where the code folder stands against GitHub's main (git fetch only): the "Aggiorna" button's count. */
   async sourceCheck(): Promise<ImproveState> {
     if (this.pulling || this.st.source.state === 'updating' || this.st.source.state === 'restarting') return this.st;
     if (this.d.offline) return this.setSource({ state: 'idle', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
-    const repo = this.repo();
+    const repo = this.updateRepo();
     if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) {
       return this.setSource({ state: 'idle', behind: null, commits: [], canUpdate: false,
         message: !repo ? "Questa installazione non viene da un clone del codice: aggiorna con il nuovo installer." : !this.d.node ? 'Serve Node.js installato per aggiornare.' : `In ${repo} manca scripts/pull.mjs: aggiorna a mano una volta (git pull, npm run setup).` });
@@ -296,16 +301,23 @@ export class ImproveService {
     this.pulling = true;
     this.setSource({ state: 'checking', message: 'Controllo GitHub…' });
     try {
-      const r = await this.runPull(repo, ['--check']);
-      // a stable copy may be behind its own code folder even when the folder matches GitHub
+      const r = await this.runPull(repo, ['--check', ...this.pullFlags()]);
+      // a stable copy may be behind its own code folder even when the folder matches GitHub (never its local commits)
       const st = await this.read();
-      const pending = this.d.stable && !!st.candidate;
-      const canUpdate = r.ok && (!!r.canUpdate || (pending && r.behind === 0 && !st.repoProblem));
+      const pending = this.d.stable && !!st.candidate && (r.ahead ?? 0) === 0;
+      const deps = this.depsBlock(r);
+      const canUpdate = r.ok && !deps && (!!r.canUpdate || (pending && r.behind === 0 && !st.repoProblem));
       return this.setSource({ state: 'idle', behind: r.behind ?? null, commits: r.commits ?? [], canUpdate,
-        message: r.ok && r.behind === 0 ? (pending ? 'Il codice ha già la versione nuova: premi «Aggiorna» per passarci.' : 'Hai già l’ultima versione.') : r.message });
+        message: deps ?? (r.ok && r.behind === 0 ? (pending ? 'Il codice ha già la versione nuova: premi «Aggiorna» per passarci.' : 'Hai già l’ultima versione.') : r.message) });
     } catch (e) {
       return this.setSource({ state: 'error', canUpdate: false, message: errText(e).slice(0, 300) });
     } finally { this.pulling = false; }
+  }
+
+  /** A dev build on Windows runs Electron from node_modules: npm ci cannot replace it while the app is open. */
+  private depsBlock(r: PullResult): string | null {
+    return !this.d.stable && process.platform === 'win32' && r.depsChanged
+      ? 'Questa versione cambia le dipendenze: chiudi l’app, esegui npm run pull nella cartella del codice e riaprila.' : null;
   }
 
   /** The user's click on "Aggiorna" (ADR 0075): the latest main from GitHub, built, and the app on it at once, no tests.
@@ -314,12 +326,18 @@ export class ImproveService {
   async updateNow(): Promise<ImproveState> {
     if (this.pulling || this.promoting) throw new Error('Un aggiornamento è già in corso.');
     if (this.d.offline) throw new Error('Nella demo l’app non si aggiorna.');
-    const repo = this.repo();
+    const repo = this.updateRepo();
     if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) { await this.sourceCheck(); throw new Error(this.st.source.message || 'Aggiornamento non possibile adesso.'); }
     this.pulling = true;
     this.setSource({ state: 'updating', message: 'Scarico la versione nuova da GitHub…' });
     let r: PullResult;
-    try { r = await this.runPull(repo, []); } catch (e) { r = { ok: false, message: errText(e) }; } finally { this.pulling = false; }
+    try {
+      const check = await this.runPull(repo, ['--check', ...this.pullFlags()]);
+      const deps = this.depsBlock(check);
+      r = !check.ok ? check : deps ? { ok: false, message: deps } : this.d.stable && (check.ahead ?? 0) > 0
+        ? { ok: false, message: `main ha ${check.ahead} commit locali che GitHub non ha: «Aggiorna» non li promuove senza test. Usa npm run promote.` }
+        : await this.runPull(repo, this.pullFlags());
+    } catch (e) { r = { ok: false, message: errText(e) }; } finally { this.pulling = false; }
     log.info('improve', 'update now: code folder', { data: { ok: r.ok, from: r.from, to: r.to, upToDate: r.upToDate } });
     if (!r.ok) return this.setSource({ state: 'error', canUpdate: false, message: r.message.slice(0, 400) });
     if (!this.d.stable) {

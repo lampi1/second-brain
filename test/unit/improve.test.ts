@@ -176,7 +176,7 @@ function service(o: { dir: string; base: string; running: string; stable?: boole
   let restarts = 0, relaunches = 0;
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ud-'));
   const s = new ImproveService({
-    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: null, ...(o.allowLegacyPromotion !== undefined ? { allowLegacyPromotion: o.allowLegacyPromotion } : {}),
+    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: o.dir, ...(o.allowLegacyPromotion !== undefined ? { allowLegacyPromotion: o.allowLegacyPromotion } : {}),
     chats: { list: () => [] as ChatSummary[], create: async (r: NewChat) => { created.push(r); return { id: 'x', harness: r.harness } as ChatSummary; } },
     emit: st => states.push(st), restart: failed => { restarts++; if (o.restartFails) failed(); }, relaunch: () => { relaunches++; }, node: process.execPath,
     ...(o.routing ? { routing: o.routing } : {}),

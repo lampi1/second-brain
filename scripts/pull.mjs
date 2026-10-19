@@ -4,7 +4,8 @@
 // It never promotes, restarts or touches the stable release: "Aggiorna" (the user's click) does that.
 // Used by `npm run pull`, by the app's Orchestrator through the app_update_code tool (main/improve/service.ts), and
 // by test/unit/pull.test.ts (pullPlan, changedDeps).
-//   node scripts/pull.mjs [--json] [--remote origin] [--no-build] [--check]
+//   node scripts/pull.mjs [--json] [--remote origin] [--no-build] [--check] [--strict]
+// --strict counts untracked files as local changes too (a stable copy's promotion needs a fully clean tree).
 // --check only fetches and reports what GitHub has that the folder does not (the "Aggiorna" button's count).
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -38,7 +39,7 @@ function main() {
   const out = r => { if (json) console.log(JSON.stringify(r)); else console.log(r.message); if (!r.ok) process.exitCode = 1; };
 
   const branch = git('branch', '--show-current');
-  const dirty = git('status', '--porcelain', '--untracked-files=no') !== '';
+  const dirty = git('status', '--porcelain', ...(args.includes('--strict') ? [] : ['--untracked-files=no'])) !== '';
   if (branch !== 'main' || dirty) { out({ ok: false, message: pullPlan({ branch, dirty, ahead: 0, behind: 0 }).why }); return; }
   git('fetch', '--no-tags', '--quiet', remote, '+refs/heads/main:refs/remotes/' + remote + '/main');
   const upstream = `refs/remotes/${remote}/main`;
@@ -47,11 +48,12 @@ function main() {
   const from = git('rev-parse', '--short', 'HEAD');
   if (args.includes('--check')) {
     const commits = behind > 0 ? git('log', '--format=%h %s', '--max-count=20', `HEAD..${upstream}`).split('\n').filter(Boolean) : [];
-    out({ ok: true, check: true, upToDate: behind === 0, canUpdate: plan.ok && !plan.upToDate, from, behind, ahead, commits,
+    const depsChanged = behind > 0 && changedDeps(git('diff', '--name-only', `HEAD..${upstream}`).split('\n').filter(Boolean));
+    out({ ok: true, check: true, upToDate: behind === 0, canUpdate: plan.ok && !plan.upToDate, from, behind, ahead, commits, depsChanged,
       message: plan.ok && !plan.upToDate ? `${behind} ${behind === 1 ? 'aggiornamento' : 'aggiornamenti'} su GitHub.` : plan.why });
     return;
   }
-  if (!plan.ok || plan.upToDate) { out({ ok: plan.ok, upToDate: !!plan.upToDate, from, to: from, commits: [], message: plan.why }); return; }
+  if (!plan.ok || plan.upToDate) { out({ ok: plan.ok, upToDate: !!plan.upToDate, from, to: from, ahead, commits: [], message: plan.why }); return; }
 
   const commits = git('log', '--format=%h %s', '--max-count=20', `HEAD..${upstream}`).split('\n').filter(Boolean);
   const files = git('diff', '--name-only', `HEAD..${upstream}`).split('\n').filter(Boolean);
