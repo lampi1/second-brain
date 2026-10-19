@@ -37,7 +37,9 @@ export interface RoleDefaults {
   tierMax: ModelTier;
   /** runs on a model other than its parent's (a review is worth more from another model) */
   independent: boolean;
-  /** the roles it may launch with agent_delegate (the Orchestrator opens root chats with app_create_chat) */
+  /** the roles it may launch with agent_delegate (the Orchestrator opens root chats with app_create_chat). The Scribe
+   *  only from a role with brain-write: a child is narrowed by its parent, and a Scribe without it can edit nothing
+   *  (agents/delegation.ts refuses that launch; otherwise the Orchestrator starts the Scribe as a root chat) */
   launches: RoleId[];
   /** default skills, loaded at every launch */
   skills: string[];
@@ -61,9 +63,9 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
   },
   strategist: {
     id: 'strategist', name: 'Strategist', summary: 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
-    instructions: 'Turn the goal into a plan of independent parts with clear owners and done-criteria. Delegate each part with agent_delegate (Scout for facts, Artisan for changes, Sentinel for checks, Judge for an independent verdict, Scribe for the write-up), run independent parts in parallel, then merge the results into one decision-ready answer. Do not do the parts yourself.',
+    instructions: 'Turn the goal into a plan of independent parts with clear owners and done-criteria. Delegate each part with agent_delegate (Scout for facts, Artisan for changes, Sentinel for checks, Judge for an independent verdict; what the brain should record goes in your report, and the Orchestrator starts a Scribe), run independent parts in parallel, then merge the results into one decision-ready answer. Do not do the parts yourself.',
     output: 'The plan, each part’s result with its evidence, and the decision or next step it supports.',
-    tools: ['read', 'web'], ceiling: 'plan', tier: 'top', tierMax: 'top', independent: false, launches: ['scout', 'artisan', 'sentinel', 'judge', 'scribe'], skills: [],
+    tools: ['read', 'web'], ceiling: 'plan', tier: 'top', tierMax: 'top', independent: false, launches: ['scout', 'artisan', 'sentinel', 'judge'], skills: [],
   },
   scout: {
     id: 'scout', name: 'Scout', summary: 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
@@ -93,7 +95,7 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
     id: 'router', name: 'Router', summary: 'Smista molte richieste insieme: per ognuna il ruolo e il compito giusti.',
     instructions: 'Triage a batch of requests: for each one pick the role that fits, write a self-contained contract (goal, done-criteria, output) and delegate it with agent_delegate. Group what belongs together; say which requests you could not place and why.',
     output: 'One line per request: the role, the delegated chat, or why it was not placed.',
-    tools: ['read'], ceiling: 'plan', tier: 'light', tierMax: 'mid', independent: false, launches: ALL_WORK.filter(id => id !== 'router'), skills: [],
+    tools: ['read'], ceiling: 'plan', tier: 'light', tierMax: 'mid', independent: false, launches: ALL_WORK.filter(id => id !== 'router' && id !== 'scribe'), skills: [],
   },
   judge: {
     id: 'judge', name: 'Judge', summary: 'Dà un giudizio indipendente su un risultato: rispetta i criteri? È fatto bene?',

@@ -98,6 +98,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (!canLaunch(own.launches, role)) throw new Error(`tasks[${i}]: ${own.name} may not launch ${ROLE_DEFAULTS[role].name} (it launches ${own.launches.join(', ') || 'none'}).`);
       const profile = catalog.profiles.find(p => p.id === role);
       if (!profile) throw new Error(`tasks[${i}]: ${role} is not in the catalog.`);
+      // a child is narrowed by its parent: a Scribe under a parent without brain-write could edit nothing
+      if (role === 'scribe' && !allowsClass(parentPolicy, 'brain-write')) throw new Error(`tasks[${i}]: a Scribe needs brain-write, which you do not have; say in your report what the brain should record and the Orchestrator starts a Scribe.`);
       const title = typeof t.title === 'string' ? t.title.trim() : '';
       if (!title || title.length > TITLE_MAX) throw new Error(`tasks[${i}].title: 1 to ${TITLE_MAX} characters ("Area · what").`);
       if (title.toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`tasks[${i}].title: «${title}» is reserved for the Orchestrator.`);
