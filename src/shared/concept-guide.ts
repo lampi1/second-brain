@@ -228,6 +228,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/appctl/tools.ts app_create_chat
       b('Delega con app_create_chat: roleId obbligatorio, un titolo «Area · cosa», il contratto come primo messaggio e le skill scelte con skills_suggest. Il ruolo decide motore e modello; tier chiede un livello più alto fino al massimo del ruolo.',
         'It delegates with app_create_chat: roleId required, an "Area · what" title, the contract as the first message and the skills picked with skills_suggest. The role decides engine and model; tier asks for a higher level up to the role’s maximum.'),
+      // src/main/agents/task-estimate.ts estimateTool; src/main/agents/orchestrator-role.ts (ADR 0087)
+      b('Prima di partire stima la richiesta sui task simili già finiti (task_estimate: tempo, costo, su quanti task, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Sotto la sua testata, il piano: gli agenti avviati oggi con la stima, il segno «via rapida» e la precisione delle stime settimana per settimana.',
+        'Before starting it estimates the request on similar finished tasks (task_estimate: time, cost, how many tasks, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Under its head, the plan: the agents started today with their estimate, the "fast path" mark and the estimates’ accuracy week by week.'),
       // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
       b('Dei figli vede solo lo stato e i numeri (agent_metrics): mai il loro testo. Il risultato gli arriva quando il figlio chiude con agent_report.',
         'Of its children it sees only state and numbers (agent_metrics): never their text. The result reaches it when the child closes with agent_report.'),
@@ -251,7 +254,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
         'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
     ],
-    sources: ['src/main/agents/orchestrator-role.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
+    sources: ['src/main/agents/orchestrator-role.ts', 'src/main/agents/task-estimate.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
   },
   {
     id: 'runs',
@@ -566,9 +569,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/ChildStrips.tsx
       b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro, ciascuno con il nome dell’agente dell’app con cui gira (o «nessun agente»); quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»). Finché un sottoagente lavora, la striscia madre dice «in attesa», non «finito».',
         'Under each strip appear the subagents and commands still at work, each with the name of the app agent it runs as (or "no agent"); finished ones leave at once (the full list stays in "Details and collaborators"). While a subagent works, the parent strip says "waiting", not "finished".'),
-      // src/renderer/lib/agent-estimates.ts
-      b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
-        'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
+      // src/renderer/components/RunEstimate.tsx, src/main/agents/task-estimate.ts (ADR 0087)
+      b('Una striscia di un agente mostra una stima tratteggiata, «stima ~4 min · ~0,12 $ · su 12 task simili»: la mediana dei task simili già finiti (stesso agente e stesso tipo, poi stesso tipo, poi stesso agente; almeno 3), mai il tempo né il costo di questa esecuzione. Finito il lavoro diventa «~4 min → 6 min» con ✓ se il reale sta tra la metà e il doppio. Il «?» spiega il calcolo e quanto sono state precise le stime.',
+        'An agent strip shows a dashed estimate, "estimate ~4 min · ~0,12 $ · from 12 similar tasks": the median of similar finished tasks (same agent and kind, then same kind, then same agent; at least 3), never this run’s own time or cost. Once done it becomes "~4 min → 6 min" with ✓ when the actual is between half and double. The "?" explains the computation and how accurate the estimates have been.'),
       // src/main/chats/manager.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0084)
       b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
         'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
@@ -586,7 +589,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
     ],
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
   },
   {
     id: 'dashboard',
