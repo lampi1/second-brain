@@ -186,8 +186,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.keys.closeChatWhat': 'Close the selected chat or browser tab (Undo for 6 seconds; not the Orchestrator)',
   'tools.keys.stopAllKey': 'Ctrl Shift .',
   'tools.keys.stopAllWhat': 'Stop everything',
-  'tools.keys.toggleBrowsersKey': 'Ctrl Shift B',
-  'tools.keys.toggleBrowsersWhat': 'Hide / show browsers (keep working)',
   'tools.keys.correctThoughtKey': 'Ctrl Shift X',
   'tools.keys.correctThoughtWhat': "Correct the selected sentence in a chat's reasoning (then Enter: stop and restart; Shift+Enter: at the next step)",
   'tools.keys.maximizeKey': 'F11',

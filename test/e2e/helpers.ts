@@ -176,8 +176,8 @@ export async function openAgents(page: Page, agent = 'Generale'): Promise<void> 
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 
-/** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
-export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
+/** Runs an action of the top bar's "…" menu (Credenziali, Migliora: TopBar.tsx MoreButton). */
+export async function moreAction(page: Page, item: 'more-credentials' | 'more-improve'): Promise<void> {
   await page.getByTestId('topbar-more').click();
   await page.getByTestId(item).click();
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);

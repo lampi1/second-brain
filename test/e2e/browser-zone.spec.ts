@@ -1,13 +1,13 @@
-// Browsers in the agents column and "Nascondi browser": on the demo, each browser strip sits right under the chat that
-// drives it; the top-bar toggle and Ctrl+Shift+B hide every browser strip, the choice survives a reload.
-// On the real app with an MCP agent: with the browsers hidden the tab is parked off screen and the agent keeps reading and taking screenshots at the same size as on screen; a hand-off brings its tab back until it
-// is resolved. Hiding with a browser maximized restores the column.
+// Browsers in the agents column: on the demo, each browser sits right beside the chat that drives it, opened and folded
+// by the strip's globe; the retired "Nascondi browser" switch (#82) is gone and a saved "on" from before hides nothing.
+// On the real app with an MCP agent: with the Grindhouse off screen (another page) the tab is parked and the agent keeps
+// reading and taking screenshots at the same size as on screen.
 // Screenshots in test-results/shots/zones-*.png.
 import { expect, test } from '@playwright/test';
 import { closeSetup, showBrowsers, launch, launchDemo, shot, waitThumbs } from './helpers';
 import { McpClient, imageSize, startSites } from './fixture-server';
 
-test('each browser under its chat; Nascondi browser hides them, the choice is remembered', async () => {
+test('each browser beside its chat, folded by its globe; a saved hide-browsers choice hides nothing', async () => {
   const { app, page } = await launchDemo();
   await showBrowsers(page, 'qa', 'sms'); // a strip's browser shows once opened beside the open strip
   await waitThumbs(page);
@@ -19,39 +19,29 @@ test('each browser under its chat; Nascondi browser hides them, the choice is re
   for (const [chat, tab] of [['qa', 'tab-qa'], ['sms', 'tab-sms']]) expect(panes.indexOf(`browser:${tab}`)).toBe(panes.indexOf(`chat:${chat}`) + 1);
   await shot(page, 'zones-agents');
 
-  // the toggle in the top bar's "…"
-  await page.getByTestId('topbar-more').click();
-  await expect(page.getByTestId('more-browsers')).toHaveAttribute('aria-checked', 'false');
-  await page.getByTestId('more-browsers').click();
-  await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
-  await expect(page.getByTestId('topbar-browsers-count')).toHaveText('2');
-  await page.mouse.move(2, 2);
-  await shot(page, 'zones-browser-nascosti');
+  // the strip's globe folds its browser again; the strip stays open
+  await page.getByTestId('chat-browser-qa').click();
+  await expect(page.getByTestId('chat-browser-qa')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('tile-browser-tab-qa')).toHaveCount(0);
+  await expect(page.getByTestId('chat-expand-qa')).toHaveAttribute('aria-expanded', 'true');
 
-  // remembered across a reload
-  await page.waitForTimeout(300);
+  // the retired "Nascondi browser" switch (#82): no menu item, no shortcut, a saved "on" no longer hides anything
+  await page.getByTestId('topbar-more').click();
+  await expect(page.getByTestId('more-browsers')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+B');
+  await expect(page.getByTestId('tile-browser-tab-sms')).toBeVisible();
+  await page.waitForTimeout(300); // the prefs are saved 150 ms after a change
+  await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}'); localStorage.setItem('sb.prefs.v1', JSON.stringify({ ...p, browsersHidden: true })); });
   await page.reload();
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await expect(page.getByTestId('topbar-browsers-count')).toHaveText('2');
-  await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
-
-  // Ctrl+Shift+B brings them back
-  await page.keyboard.press('Control+Shift+B');
-  await expect(page.getByTestId('topbar-browsers-count')).toHaveCount(0);
-  await expect(column.locator('[data-testid^="tile-browser-"]')).toHaveCount(2);
-
-  // hiding with a browser maximized (F11) restores the column
-  await page.getByTestId('tile-browser-tab-qa').locator('.tile-head').click();
-  await page.keyboard.press('F11');
-  await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'browser:tab-qa');
-  await page.keyboard.press('Control+Shift+B');
-  await expect(page.getByTestId('maximized')).toHaveCount(0);
-  await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
-  await page.keyboard.press('Control+Shift+B');
+  await expect(page.getByTestId('view-agents').getByTestId('tile-browser-tab-sms')).toBeVisible();
+  await page.mouse.move(2, 2);
+  await shot(page, 'zones-browser-migrated');
   await app.close();
 });
 
-test('with the browsers hidden, an agent tab keeps working off screen at the same size', async () => {
+test('with the Grindhouse off screen, an agent tab keeps working parked at the same size', async () => {
   const sites = await startSites();
   const { app, page } = await launch();
   try {
@@ -72,21 +62,17 @@ test('with the browsers hidden, an agent tab keeps working off screen at the sam
     expect(ui.text).toMatch(/image 1: app UI \d+x\d+, image \d+x\d+ \(UI px = image px × [\d.]+\)/);
     expect(ui.text).toMatch(/image 2: browser tab http:\/\/\S+\/index\.html at x=/);
 
-    await page.keyboard.press('Control+Shift+B');
-    await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
+    // another page in front: the tab is parked, still alive
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('g');
+    await page.keyboard.press('d');
+    await expect(page.getByTestId('dashboard')).toBeVisible();
     await expect.poll(async () => agent.ok('tabs_list'), { timeout: 10_000 }).not.toMatch(/\[on screen\]/);
-    // parked, still alive: reads, acts and screenshots like before, at the size it had on screen
+    // parked: reads, acts and screenshots like before, at the size it had on screen
     expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
     const parked = imageSize((await agent.call('screenshot')).images[0]!.data);
     expect(parked).toEqual(onScreen);
     await shot(page, 'zones-agente-nascosto');
-
-    // a hand-off (the agent waits for the user) brings its tab back until it is resolved
-    expect(await agent.ok('handoff_to_user', { reason: 'Login richiesto', wait_seconds: 1 })).toMatch(/Still waiting/);
-    await expect(page.getByTestId('view-agents').getByTestId(/^handoff-t[0-9]+$/)).toBeVisible();
-    const [h] = await page.evaluate(() => window.sb.invoke('browser:handoffs', undefined));
-    await page.evaluate(id => window.sb.invoke('browser:handoffResolve', { id, outcome: 'done' }), h!.id);
-    await expect(page.locator('[data-testid^="tile-browser-"]')).toHaveCount(0);
   } finally {
     await app.close();
     await sites.close();

@@ -23,16 +23,14 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-gear');
     await page.keyboard.press('Escape');
 
-    // "…" is on the bar at any width with browsers, Credenziali and Migliora; those left the bar (the popups switch is on it)
+    // "…" is on the bar at any width with Credenziali and Migliora; those left the bar (the popups switch is on it).
+    // The hide-browsers switch is gone (#82): an opened browser always shows.
     for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
     await page.getByTestId('topbar-more').click();
-    for (const id of ['more-browsers', 'more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
+    for (const id of ['more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
+    await expect(page.getByTestId('more-browsers')).toHaveCount(0);
     await shot(page, 'menus-more');
-    // hiding the browsers leaves a count on "…"
-    await page.getByTestId('more-browsers').click();
-    await expect(page.getByTestId('topbar-browsers-count')).toBeVisible();
-    await page.keyboard.press('Control+Shift+B');
-    await expect(page.getByTestId('topbar-browsers-count')).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     // a chat's ⋯: the everyday actions first, then the engine's choices, the continuation group, close last
     await page.getByTestId('chat-menu-qa').click();

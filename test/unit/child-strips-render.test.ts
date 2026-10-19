@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentChildren, ChildObservation } from '../../src/shared/agents';
 vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn() }));
 vi.mock('../../src/renderer/lib/clock', () => ({ useNow: () => 100_000 }));
+const profiles = [{ id: 'indagine', name: 'Indagine', avatar: { kind: 'symbol', value: 'search' } }];
+vi.mock('../../src/renderer/store/agents', () => ({ useAgents: () => ({ catalog: { profiles } }) }));
 import { useApp } from '../../src/renderer/store/store';
 import { ChildStrips } from '../../src/renderer/components/ChildStrips';
 import { setLang } from '../../src/renderer/i18n';
@@ -29,6 +31,16 @@ describe('child strips', () => {
     expect(html.match(/role="listitem"/g)).toHaveLength(2);
     setLang('en');
     expect(render([row('running')])).toContain('Subagents of Parent');
+  });
+  it('names the app agent each sub-agent runs as, or "nessun agente" (#69); a command names none', () => {
+    const html = render([{ ...row('running'), key: 'a', agentType: 'indagine' }, { ...row('running'), key: 'b', agentType: 'general-purpose' }, { ...row('running'), key: 'c' }, { ...row('running'), key: 'd', kind: 'shell' }]);
+    expect(html).toContain('data-agent-id="indagine"');
+    expect(html).toContain('Indagine');
+    expect(html.match(/nessun agente/g)).toHaveLength(2);
+    expect(html).toContain('data-agent-type="general-purpose"');
+    expect(html.match(/data-testid="child-agent"/g)).toHaveLength(3);
+    setLang('en');
+    expect(render([{ ...row('running'), key: 'b' }])).toContain('no agent');
   });
   it('renders no empty group, also when every child has ended', () => {
     expect(render()).toBe('');

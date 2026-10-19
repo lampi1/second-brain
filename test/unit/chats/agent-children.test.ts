@@ -137,8 +137,9 @@ describe('provider child observations', () => {
   it('keeps a Claude background launch running after acknowledgment and retains its final state', async () => {
     const { sink, state } = recording();
     const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);
-    line(session, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'spawn', name: 'Agent', input: { description: 'Review', run_in_background: true } }] } });
+    line(session, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'spawn', name: 'Agent', input: { description: 'Review', run_in_background: true, subagent_type: 'indagine' } }] } });
     line(session, { type: 'system', subtype: 'task_started', task_id: 'native', tool_use_id: 'spawn', task_type: 'local_agent', description: 'Review' });
+    expect(state.snapshot().children[0]).toMatchObject({ nativeId: 'native', agentType: 'indagine' }); // the agent it runs as (#69)
     const startedAt = state.snapshot().children[0]?.startedAt;
     line(session, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'spawn', content: 'Async agent launched successfully.' }] } });
     expect(state.snapshot().children).toHaveLength(1);
@@ -183,7 +184,7 @@ describe('provider child observations', () => {
     update({ sessionUpdate: 'tool_call', toolCallId: 'shell', status: 'in_progress', kind: 'execute', rawInput: { _toolName: 'shell', command: 'npm test' } });
     line(session, { method: 'cursor/task', params: { toolCallId: 'agent', description: 'Review the change', model: 'model' } });
     expect(state.snapshot()).toMatchObject({ coverage: 'partial', active: null, total: null, observedActive: 1, observedTotal: 1 });
-    expect(state.snapshot().children[0]).toMatchObject({ nativeId: null, parentNativeId: null, toolCallId: 'agent', task: 'Review the change', state: 'waiting' });
+    expect(state.snapshot().children[0]).toMatchObject({ nativeId: null, parentNativeId: null, toolCallId: 'agent', task: 'Review the change', state: 'waiting', agentType: 'reviewer' });
     update({ sessionUpdate: 'tool_call_update', toolCallId: 'agent', status: 'completed' });
     await session.close();
     expect(state.snapshot()).toMatchObject({ coverage: 'unknown', observedActive: 0 });

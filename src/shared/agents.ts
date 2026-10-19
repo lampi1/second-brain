@@ -258,6 +258,9 @@ export interface ChildObservation {
   kind: 'agent' | 'shell' | 'unknown';
   state: ChildState;
   task: string | null;
+  /** The agent type the engine was asked to run the child as (Claude's subagent_type, Cursor's subagentType), as the
+   *  engine sent it; the UI matches it to an app agent (lib/agent-children.ts childAgent). Missing = not reported. */
+  agentType?: string | null;
   observedAt: number;
   source: 'live' | 'replay';
   /** When the app first saw this child (its start as far as the app knows: the first event's time, kept across the

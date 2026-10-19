@@ -55,7 +55,7 @@ attention management and the memory.
   permissions surface as panels wherever the user is looking, a Regia (a coordinating chat, always at the top, full
   width) decides what comes next, and notifications fire only when there is something to do.
 - **Chat management is a core strength, not a thin layer.** Chats are compact strips, collapsed by default, with
-  reliable estimates, expanding smoothly. Stop, costs, estimates, model routing and the link with the brain get the
+  reliable estimates, expanding on one click, every time. Stop, costs, estimates, model routing and the link with the brain get the
   same care as the brain itself. View state, tile behaviours and key bindings are data, so the user and the AI can
   reshape them live (ADR 0008). Visual templates change without rebuilding features.
 - **The brain is data, the app is product.** The app points to a brain folder: plain Markdown files and small Node

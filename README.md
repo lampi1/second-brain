@@ -134,10 +134,13 @@ first, `npm run rollback` goes back by hand.
 Every Claude Code, Codex or Cursor agent is a strip in the **Grindhouse** with its streaming text, tool calls, diffs,
 cost and context size. When an agent asks a question or a permission, it shows up as a panel right in its strip (or in
 a floating layer, wherever you are in the app): answer with one key, with the context the agent had when it asked.
-Strips are grouped by area and ordered by the Orchestrator; each expands inline, maximizes or opens in focus mode,
-and the browser an agent drives sits right under it. A worker that sent its final report to the Orchestrator and went
-idle closes by itself after a short delay (Settings → Archivia lavori conclusi dopo; transcript kept, Ctrl+K reopens
-it); one that waits for you, a permission, colleagues or background work stays open with an "In attesa di…" label.
+Strips are grouped by area and ordered by the Orchestrator; a click anywhere on one expands it inline, and it
+maximizes or opens in focus mode. The globe on a strip shows the browser its agent drives beside it (expanding the
+strip if needed). The sub-agents at work hang under their strip, each with the app agent it runs as, and a parent
+waiting on them reads "in attesa", not "finito". Model and effort come from the agent's profile. A worker that sent
+its final report to the Orchestrator and went idle closes by itself after a short delay (Settings → Archivia lavori
+conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
+work stays open with an "In attesa di…" label.
 
 ### The Orchestrator: one chat that coordinates the others
 

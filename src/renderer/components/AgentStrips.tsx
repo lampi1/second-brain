@@ -23,7 +23,7 @@ const NARROW_PX = 640;
 
 const equalTiles = (a: TileRef[], b: TileRef[]) => sameList(a.map(tileKey), b.map(tileKey));
 
-/** The one control above the strips: back from a maximized strip (hiding the browsers is in "…" and Ctrl+Shift+B). */
+/** The one control above the strips: back from a maximized strip. */
 export function AgentStripsActions() {
   const maximized = ui.use(s => s.maximized);
   if (!maximized || maximized === 'regia') return null;
@@ -41,7 +41,6 @@ export function AgentStrips() {
   const areas = useApp(s => tiles.map(t => t.kind === 'chat' ? areaOf(s.chats[t.id] ?? { cwd: '' }) : ''), sameList);
   const pairs = useApp(s => tiles.map(t => t.kind === 'browser' ? pairOf(s, s.tabs.find(tab => tab.id === t.id)?.ownerChatId) : null), sameList);
   const maximized = ui.use(s => s.maximized);
-  const hide = ui.use(s => s.prefs.browsersHidden);
   const keep = useHandoffTabs();
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
   // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs from before v2 expanded them all
@@ -52,7 +51,7 @@ export function AgentStrips() {
   // no strip to open).
   const strips = new Set(tiles.filter(t => t.kind === 'chat').map(t => t.id));
   const folded = (t: TileRef) => strips.has(owners[t.id] ?? '') && !(expansion[owners[t.id]!] === true && browserOpen[owners[t.id]!] === true) && !keep.includes(t.id) && maximized !== tileKey(t);
-  const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && (!hide || keep.includes(t.id)) && !folded(t);
+  const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && !folded(t);
   const visible = tiles.filter(isVisible);
   const max = maximized ? visible.find(t => tileKey(t) === maximized) ?? null : null;
   const shown = max ? [max] : visible;

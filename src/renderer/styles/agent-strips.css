@@ -114,3 +114,6 @@
 .th-estimate.over { border-color:var(--amber-line); color:var(--amber); }
 .th-estimate.over .th-estimate-left { color:var(--amber); }
 .strip-facts .run-chips { flex:none; flex-wrap:nowrap; }
+/* The app agent a sub-agent runs as (ChildStrips.tsx, #69): its face and name, or a quiet "nessun agente". */
+.child-strip-agent { flex:none; display:inline-flex; align-items:center; gap:5px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--text); }
+.child-strip-agent.is-none { font-weight:500; font-style:italic; color:var(--text-3); }
