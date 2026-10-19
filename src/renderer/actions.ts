@@ -1,7 +1,7 @@
 // App-level actions that combine the data store, the UI store and DOM focus: going places (chat grid, brain pages, the
 // map) with back/forward history and internal links (sb://<page>/<element>, highlighted on arrival), jump to a chat,
 // the next thing that needs the user (Ctrl+J), stop (one / all with a confirm only when more than one is running),
-// maximize, focus mode, Esc backing out one level, the floating Regia and its tabs (ADR 0021), a new Regia in place of
+// maximize, focus mode, Esc backing out one level, the floating Orchestrator and its tabs (ADR 0021), a new Orchestrator in place of
 // one ("Ricomincia da capo" on the same engine, "Cambia motore" on the other, optionally starting from a handoff of the
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
 // in a new one, the brain pages' bridge ("Discutine" / "Apri una chat") and the ui:command event from main.
@@ -33,7 +33,7 @@ export const regiaId = (): string | null => orchestratorIdOf(app.get());
 
 const HANDOFF_CHARS = 6000;
 
-/** "Porta un riassunto": what the new Regia starts from. For now the old Regia's last exchanges (text only, newest kept)
+/** "Porta un riassunto": what the new Orchestrator starts from. For now the old Orchestrator's last exchanges (text only, newest kept)
  *  plus now.md; the context-handoff work (chat "contesto chat") will produce a real handoff and plug in here. */
 export function regiaHandoff(chatId: string): string {
   const s = app.get();
@@ -62,7 +62,7 @@ export function regiaHandoff(chatId: string): string {
   ].join('\n');
 }
 
-/** A new Regia in place of one, same folder and name, on `to` (the same engine = "Ricomincia da capo" or "Pulisci", the
+/** A new Orchestrator in place of one, same folder and name, on `to` (the same engine = "Ricomincia da capo" or "Pulisci", the
  *  other = "Cambia motore"): main moves that one's role and work chats to it (`replaces`); the old one goes on as a
  *  normal chat with its history (its process closes), renamed "<title> precedente · <engine> · <when>" so the mail
  *  address (the title) stays the new one's. `summary`: the new one starts from the handoff (regiaHandoff), else empty
@@ -92,7 +92,7 @@ export async function renewRegia(chatId: string, to: Harness, summary: boolean, 
   return true;
 }
 
-/** Ctrl+Shift+R, the palette and the Regia's menu: the confirm dialog for a new Regia (`to` preselected; default the
+/** Ctrl+Shift+R, the palette and the Orchestrator's menu: the confirm dialog for a new Orchestrator (`to` preselected; default the
  *  current engine = "Ricomincia da capo"). */
 export function askRenewRegia(to?: Harness): void {
   const id = regiaId();
@@ -101,7 +101,7 @@ export function askRenewRegia(to?: Harness): void {
   openRegiaRenew({ chatId: id, to: to ?? c.harness });
 }
 
-/** "Pulisci" (the Regia's ⋯ menu, the palette): after a confirm, a new Regia on the same engine started empty; the
+/** "Pulisci" (the Orchestrator's ⋯ menu, the palette): after a confirm, a new Orchestrator on the same engine started empty; the
  *  old conversation stays as a closed chat to read (ADR 0021; the user, 2026-10-12: "che sia disponibile il clear"). */
 export function askClearRegia(chatId: string | null = regiaId()): void {
   const c = chatId ? app.get().chats[chatId] : null;
@@ -136,7 +136,7 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file' };
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
@@ -214,8 +214,8 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
   toast(`Link copiato: ${link}`, 'ok');
 }
 
-/** "Chiudi questa Regia" (her ⋯ menu, only for a Regia after the first): after a confirm she is archived like a
- *  finished chat; main moves her work chats to the first Regia, whose tab then takes the keyboard. */
+/** "Chiudi questa Orchestrator" (her ⋯ menu, only for an Orchestrator after the first): after a confirm she is archived like a
+ *  finished chat; main moves her work chats to the first Orchestrator, whose tab then takes the keyboard. */
 export function askCloseRegia(chatId: string): void {
   const c = app.get().chats[chatId];
   const regie = regieIdsOf(app.get());
@@ -251,7 +251,7 @@ export function toggleQuestionsModal(): void {
   void setSetting({ questionsModal: !questionsModalOn(app.get()) });
 }
 
-/** What the brain pages get for "Discutine" (the Regia next to the page, a ready draft in its input, not sent) and
+/** What the brain pages get for "Discutine" (the Orchestrator next to the page, a ready draft in its input, not sent) and
  *  "Apri una chat" / DevOps "Apri chat" (a work chat in the brain folder or the given one, e.g. a PR's repo; the page
  *  stays, a toast leads to the chat; both go through the routing table, ADR 0032). */
 export const brainBridge: DiscussBridge = {
@@ -340,7 +340,7 @@ export function newBrowser():Promise<void>{return openInAppBrowser('about:blank'
 
 /** Opening a file is navigation only. Main resolves its scope when Esplora requests the bounded contents. */
 export function openFileViewer(raw:string,chatId?:string):void{
-  // A Regia artifact remains mounted across page navigation; release its focus trap before showing the file.
+  // An Orchestrator artifact remains mounted across page navigation; release its focus trap before showing the file.
   if(ui.get().modal==='visual')closeModal();
   // a link in the questions window (the window is on screen, so the click came from it): the window steps aside, else
   // the file page would open behind its full-screen backdrop and nothing would visibly change
@@ -348,7 +348,7 @@ export function openFileViewer(raw:string,chatId?:string):void{
   go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
 }
 
-/** "Apri" on a chat a Regia opened or wrote to (ChatRefChips, ADR 0034): that chat on screen from any place; a closed
+/** "Apri" on a chat an Orchestrator opened or wrote to (ChatRefChips, ADR 0034): that chat on screen from any place; a closed
  *  one goes back on the grid first (no message, no tokens). */
 export function openChatRef(chatId: string): void {
   const c = app.get().chats[chatId];
@@ -408,11 +408,11 @@ export async function admitNow(chatId: string): Promise<void> {
 }
 
 // the card a focusRequest still waits for: it takes the keyboard in the same commit it mounts in (RequestPanel's
-// claimFocus), before a key typed right after Ctrl+J can land elsewhere (the Regia opening gave her input a quick "1")
+// claimFocus), before a key typed right after Ctrl+J can land elsewhere (the Orchestrator opening gave her input a quick "1")
 let awaited: string | null = null;
 /** For a card mounting: true (once) when focusRequest is waiting for it, the card then focuses itself. */
 export const claimFocus = (key: string): boolean => { if (awaited !== key) return false; awaited = null; return true; };
-/** A focusRequest is still waiting for its card: a default focus (the Regia's input) keeps off. */
+/** A focusRequest is still waiting for its card: a default focus (the Orchestrator's input) keeps off. */
 export const awaitingCard = (): boolean => awaited !== null;
 
 /** Focus a request card: in the global layer if it floats there, else where it is on screen, else go and show it. */
@@ -421,16 +421,16 @@ export function focusRequest(req: PendingRequest): void {
   if (ui.get().later) { openQueue(reqKey(req)); return; }
   // "Domande in finestra" or the queue already open: the window shows it first, at once, with the keyboard
   if (questionsModalOn(app.get()) || ui.get().qwin.open) { void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); callQuestions(reqKey(req)); return; }
-  // the Regia's own request: always answered in her widget (the layer's card that held the keyboard lets go of it)
+  // the Orchestrator's own request: always answered in her widget (the layer's card that held the keyboard lets go of it)
   const regiaOwn = req.chatId === orchestratorIdOf(app.get());
   if (regiaOwn) setLayerHeld(null);
-  // it would float there but the Regia widget shows a card (one popup at a time): the layer's card takes the keyboard
+  // it would float there but the Orchestrator widget shows a card (one popup at a time): the layer's card takes the keyboard
   // and is the popup while it has it (ui layerHeld), the widget's card waits on "Poi:". Not another request of the
-  // Regia's own: that one takes the widget's card below
+  // Orchestrator's own: that one takes the widget's card below
   const shown = regiaCardOnScreen();
   if (shown && shown !== reqKey(req) && !regiaOwn && floatsBehindPopup(reqKey(req))) { focusLayer(reqKey(req)); return; }
-  // already on screen (lane, tile, Regia): just take it, nothing moves. Checked before the layer: the layer's list is
-  // recomputed a moment later, so right after the Regia opens it can still hold a card that is now on the page
+  // already on screen (lane, tile, Orchestrator): just take it, nothing moves. Checked before the layer: the layer's list is
+  // recomputed a moment later, so right after the Orchestrator opens it can still hold a card that is now on the page
   const sel = `[data-request-key="${CSS.escape(reqKey(req))}"]`;
   const here = visibleRequestKeys().has(reqKey(req)) ? document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel) : null;
   // floating in the global layer (not visible elsewhere): the keyboard goes there, the page stays where it is
@@ -440,7 +440,7 @@ export function focusRequest(req: PendingRequest): void {
   if (here) { here.focus(); here.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
   const c = app.get().chats[req.chatId];
   const u = ui.get();
-  // the Regia's own requests: answered in her tile
+  // the Orchestrator's own requests: answered in her tile
   const inRegia = regiaOwn;
   // her tab, over anything, with this request as the card shown (the widget shows one at a time)
   if (inRegia) { const r = regiaOfIn(app.get(), req.chatId); if (r) setRegiaTab(r); setRegiaFirst(reqKey(req)); setRegiaOpen(true); }
@@ -477,7 +477,7 @@ export function nextThing(from?: string): void {
 
 const chatOfTile = (key: string | null): string | null => {
   if (!key) return null;
-  // the Regia tile shows the overlay's tab: the app's Regia too (Ctrl+. stops the one on screen)
+  // the Orchestrator tile shows the overlay's tab: the app's Orchestrator too (Ctrl+. stops the one on screen)
   if (key === 'regia') return orchestratorIdOf(app.get());
   return key.startsWith('chat:') ? key.slice(5) : null;
 };
@@ -490,7 +490,7 @@ export function stopFocused(): void {
   void stop(c.id);
 }
 
-/** Ctrl+W: close the selected chat (or browser tile) with the usual 6-second undo. Never the Regia (only its ⋯ menu closes it), never a
+/** Ctrl+W: close the selected chat (or browser tile) with the usual 6-second undo. Never the Orchestrator (only its ⋯ menu closes it), never a
  *  chat that is not on screen (archived by the auto-close, a brain page or the map in front, another tile maximized or in
  *  focus mode). The selected chat already closing: nothing, not even a toast (a
  *  burst of toasts would push "Annulla" out, ui.ts MAX_TOASTS). */
@@ -594,7 +594,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
       const s = app.get();
       setFocusMode(null);
       if (s.chats[v]?.isRegia) {
-        // the Regia is the overlay: it opens (visual only, app_ui never moves the keyboard); her tab only while the
+        // the Orchestrator is the overlay: it opens (visual only, app_ui never moves the keyboard); her tab only while the
         // user is not typing in the overlay (a new tab mounts its input, which the focus keeper would refill)
         const inside = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-regia-overlay]');
         if (!inside) setRegiaTab(v);

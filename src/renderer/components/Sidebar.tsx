@@ -9,7 +9,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconBrain, IconBranch, IconChart, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTarget, IconTicket,
+  IconBook, IconBrain, IconBranch, IconChart, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {useAgents} from '../store/agents';
@@ -20,13 +20,13 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  costi: <IconCoins />, qualita: <IconChart />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   dashboard: <IconChart />, guida: <IconQuestion />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide; the Dashboard shows under any role). */
-const BRAIN_GROUP: BrainPageId[] = ['miglioramento'];
+const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'skill', 'regole', 'memoria', 'classificatori', 'collegamenti'];
 

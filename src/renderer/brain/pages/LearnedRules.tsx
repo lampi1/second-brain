@@ -1,18 +1,18 @@
-// Miglioramento: what the brain's shared self-improvement loop has learned (ADR 0030). One card per policy (time and
+// Regole imparate, the section of the Regole page with what the brain's shared self-improvement loop has learned
+// (ADR 0030; a page of its own until ADR 0082 folded it into Regole, old links open Regole). One card per policy (time and
 // cost estimates, model choice, notification thresholds): the version in force and since when, its typical error now
 // with the last ones as bars, how often the 80% range held, results out of the count, a proposal waiting with
 // [Applica] / [No], the after-check of the last change and [Ripristina v<N-1>]. Nothing changes without a click here
 // (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy; a
-// brain without that CLI gets main's "loop missing" answer and this page says what it needs, with no error); a
+// brain without that CLI gets main's "loop missing" answer and the section stays hidden, as it does with no policy yet); a
 // click goes to main ('learn:act'), which runs the brain's own improve.mjs. Words and numbers: lib/learn.ts. A short
 // intro and a "?" beside every term that is not obvious (HELP), shown on hover or focus.
 import { useState } from 'react';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
 import { HELP, WAITING, checkLine, coverageLine, errorLine, factor, gainLine, normLearnData, policyLabel, type LearnPolicy } from '../lib/learn';
-import { Async, Empty, PageHead } from '../components/States';
 import { Sparkline } from '../components/Charts';
-import { Pill, toast, type Navigate } from '../components/ui';
+import { Pill, toast } from '../components/ui';
 import type { LearnAction } from '@shared/contract';
 import { t } from '../../i18n';
 
@@ -71,7 +71,9 @@ function Policy({ p, busy, act }: { p: LearnPolicy; busy: boolean; act: (a: Lear
   );
 }
 
-export function Miglioramento(_: { nav: Navigate }) {
+/** The learned rules section of the Regole page (components/brain-model/RulesPage.tsx). Hidden while the brain has no
+ *  loop or no policy yet: a fresh brain shows no machinery (the owner's clean-install rule). */
+export function LearnedRules() {
   const d = useBrain('/api/improve', normLearnData);
   const [busy, setBusy] = useState(false);
   const list = d.data?.policies ?? [];
@@ -82,18 +84,15 @@ export function Miglioramento(_: { nav: Navigate }) {
     window.sb.invoke('learn:act', a).then(r => { toast(r.ok ? r.message : r.error); }, (e: unknown) => { toast(t('brainPages.miglioramento.actionFailed', { error: String(e) })); })
       .finally(() => { setBusy(false); d.reload(true); });
   };
+  if (missing || !list.length) return null;
   return (
-    <>
-      <PageHead title={t('brainPages.miglioramento.pageTitle')} at={d.at} refreshing={d.refreshing} onRefresh={() => d.reload(true)}
-        lead={list.length ? <>{t('brainPages.miglioramento.lead', { count: list.length })}{pending ? <b>{t('brainPages.miglioramento.leadPending', { pending })}</b> : t('brainPages.miglioramento.leadNoPending')}.</> : undefined}
-        what={HELP().intro} />
-      <Async loading={d.loading && !d.data} error={d.data ? null : d.error} onRetry={() => d.reload(true)} lines={5} block>
-        {() => missing
-          ? <Empty title={t('brainPages.miglioramento.loopMissingTitle')}>{t('brainPages.miglioramento.loopMissingDesc')}</Empty>
-          : !list.length
-            ? <Empty title={t('brainPages.miglioramento.emptyTitle')}>{t('brainPages.miglioramento.emptyDesc')}</Empty>
-            : <div className="bx-learn-list">{list.map(p => <Policy key={p.domain} p={p} busy={busy} act={act} />)}</div>}
-      </Async>
-    </>
+    <section className="bx-learned" data-testid="page-miglioramento" aria-labelledby="bx-learned-h">
+      <header className="bx-learned-head">
+        <h2 id="bx-learned-h">{t('brainPages.miglioramento.pageTitle')}</h2>
+        <p className="bx-lead" data-testid="bx-learned-lead">{t('brainPages.miglioramento.lead', { count: list.length })}{pending ? <b>{t('brainPages.miglioramento.leadPending', { pending })}</b> : t('brainPages.miglioramento.leadNoPending')}.</p>
+        <p className="bx-what">{HELP().intro}</p>
+      </header>
+      <div className="bx-learn-list">{list.map(p => <Policy key={p.domain} p={p} busy={busy} act={act} />)}</div>
+    </section>
   );
 }

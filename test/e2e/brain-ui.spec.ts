@@ -7,7 +7,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, shot } from './helpers';
+import { goPage, launch, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 
@@ -217,20 +217,27 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
   await shot(page,'brain-map-flat');await page.getByTestId('bx-map-close').click();
 });
 
-test('Regole imparate: a brain without ops/improve/improve.mjs gets a plain empty state, never an error or a stack', async () => {
-  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts)
-  await open('miglioramento');
-  const p = page.getByTestId('brain-page-miglioramento');
-  await settled();
-  await expect(p.getByTestId('bx-empty')).toContainText('Nessuna regola imparata ancora');
-  await expect(p.getByTestId('bx-empty')).toContainText('Non è un errore'); // plain words, no program path (a fresh brain, ADR 0072)
-  await expect(p.getByTestId('bx-error')).toHaveCount(0);
-  await expect(p.getByTestId('bx-error-details')).toHaveCount(0);
-  await expect(p).not.toContainText('Cannot find module');
-  await expect(p).not.toContainText('MODULE_NOT_FOUND');
-  // a stack frame ("at fn (file:1:2)" or "at file:1:2"); a plain '    at ' would match "aggiornato" once whitespace is normalized
-  await expect(p).not.toContainText(/\bat (?:\S+ \()?\S+:\d+:\d+\)?/);
-  await shot(page, 'brain-miglioramento-senza-ciclo');
+test('Regole imparate: a brain without ops/improve/improve.mjs shows Regole without that section, never an error or a stack', async () => {
+  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts), and the
+  // learned rules, a section of Regole since ADR 0082, stay hidden (a fresh brain, ADR 0072)
+  await page.evaluate(() => { location.hash = ''; location.reload(); });
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.getByTestId('app')).toBeVisible();
+  try {
+    await goPage(page, 'regole');
+    const p = page.getByTestId('bm-rules-page');
+    await expect(p).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId('page-miglioramento')).toHaveCount(0);
+    await expect(p.getByTestId('bx-error')).toHaveCount(0);
+    await expect(p).not.toContainText('Cannot find module');
+    await expect(p).not.toContainText('MODULE_NOT_FOUND');
+    // a stack frame ("at fn (file:1:2)" or "at file:1:2"); a plain '    at ' would match "aggiornato" once whitespace is normalized
+    await expect(p).not.toContainText(/\bat (?:\S+ \()?\S+:\d+:\d+\)?/);
+    await shot(page, 'brain-regole-senza-ciclo');
+  } finally {
+    await open('fatto', true);
+  }
 });
 
 test('States: technical details stay collapsed until requested', async () => {

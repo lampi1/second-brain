@@ -10,7 +10,6 @@ export const brainPagesIt = {
   'brainPages.nav.costi': 'Costi',
   'brainPages.nav.qualita': 'Qualità',
   'brainPages.nav.confronto': 'Confronto modelli',
-  'brainPages.nav.miglioramento': 'Regole imparate',
   'brainPages.nav.agenti': 'Agenti',
   'brainPages.nav.skill': 'Skill',
   'brainPages.nav.impostazioni': 'Impostazioni',
@@ -175,10 +174,6 @@ export const brainPagesIt = {
   'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "politica" : "politiche"} che imparano dai risultati; `,
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposta" : "proposte"} da decidere`,
   'brainPages.miglioramento.leadNoPending': 'nessuna proposta da decidere',
-  'brainPages.miglioramento.emptyTitle': 'Nessuna politica',
-  'brainPages.miglioramento.emptyDesc': 'Il ciclo di miglioramento del cervello non ha ancora politiche: appena ne avrà una, la vedrai qui.',
-  'brainPages.miglioramento.loopMissingTitle': 'Nessuna regola imparata ancora',
-  'brainPages.miglioramento.loopMissingDesc': 'Il cervello parte vuoto e impara usandolo: quando il ciclo di miglioramento avrà risultati da cui imparare (stime di tempo e costo, scelta del modello, avvisi), qui vedrai ogni regola con la sua versione, l’errore tipico e le proposte da decidere. Non è un errore.',
 
   // Composer.tsx
   'brainPages.composer.empty': "Per scrivere da qui serve l’Orchestrator aperto nell'app",

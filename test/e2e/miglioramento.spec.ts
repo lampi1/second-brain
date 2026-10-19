@@ -1,4 +1,5 @@
-// End-to-end: the Miglioramento page (ADR 0030) in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) with the demo's
+// End-to-end: the "Regole imparate" section of the Regole page (ADR 0030, folded into Regole by ADR 0082; the old
+// page id and its G R shortcut open Regole) in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) with the demo's
 // /api/improve and 'learn:act' (demo.ts demoLearn): estimates with its typical error, coverage and n, results out of
 // the count, a proposal with its gain and [Applica] / [No], the after-check, [Ripristina]; routing "senza dati". The
 // clicks go through main and change the page. Screenshots: test-results/shots/miglioramento-*.png.
@@ -6,7 +7,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { goPage, launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -26,12 +27,13 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Miglioramento: one card per policy with its numbers and n; Applica, Ripristina and No change it', async () => {
-  await page.getByTestId('nav-miglioramento').click();
+test('Regole imparate: one card per policy with its numbers and n; Applica, Ripristina and No change it', async () => {
+  await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0); // no page of its own any more
+  await goPage(page, 'regole');
   const p = page.getByTestId('page-miglioramento');
   const est = p.getByTestId('bx-learn-estimates');
   await expect(est).toBeVisible({ timeout: 30000 });
-  await expect(p.getByTestId('bx-lead')).toContainText('1 proposta da decidere');
+  await expect(p.getByTestId('bx-learned-lead')).toContainText('1 proposta da decidere');
 
   await expect(est).toContainText('Stime di tempo e costo');
   await expect(est).toContainText('v2');
@@ -59,11 +61,20 @@ test('Miglioramento: one card per policy with its numbers and n; Applica, Ripris
   await expect(est).toContainText('v3');
   await expect(est.getByTestId('bx-learn-proposal')).toHaveCount(0);
   await expect(est.getByTestId('bx-learn-check')).toContainText('in attesa dei primi 20 casi dopo il cambio');
-  await expect(p.getByTestId('bx-lead')).toContainText('nessuna proposta da decidere');
+  await expect(p.getByTestId('bx-learned-lead')).toContainText('nessuna proposta da decidere');
   await shot(page, 'miglioramento-applicata');
 
   // [Ripristina v2]: back to v2, nothing more to go back to
   await est.getByTestId('bx-learn-rollback').click();
   await expect(est).toContainText('v2');
   await expect(est.getByTestId('bx-learn-rollback')).toHaveCount(0);
+});
+
+test('the old page id and its G R shortcut land on Regole, with the learned rules in it', async () => {
+  await page.getByTestId('nav-home').click();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press('r');
+  await expect(page.getByTestId('nav-regole')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('page-miglioramento')).toBeVisible();
 });

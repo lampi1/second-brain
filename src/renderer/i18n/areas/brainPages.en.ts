@@ -12,7 +12,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.costi': 'Costs',
   'brainPages.nav.qualita': 'Quality',
   'brainPages.nav.confronto': 'Model comparison',
-  'brainPages.nav.miglioramento': 'Learned rules',
   'brainPages.nav.agenti': 'Agents',
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Settings',
@@ -177,10 +176,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "policy" : "policies"} learning from results; `,
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposal" : "proposals"} to decide`,
   'brainPages.miglioramento.leadNoPending': 'no proposals to decide',
-  'brainPages.miglioramento.emptyTitle': 'No policies',
-  'brainPages.miglioramento.emptyDesc': 'The brain’s improvement loop has no policies yet: as soon as it has one, it shows up here.',
-  'brainPages.miglioramento.loopMissingTitle': 'No learned rules yet',
-  'brainPages.miglioramento.loopMissingDesc': 'The brain starts empty and learns as you use it: once the improvement loop has results to learn from (time and cost estimates, model choice, alerts), you will see every rule here with its version, its typical error and the proposals to decide. Not an error.',
 
   // Composer.tsx
   'brainPages.composer.empty': 'To write from here you need the Orchestrator open in the app',

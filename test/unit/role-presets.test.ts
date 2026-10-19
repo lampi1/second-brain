@@ -6,7 +6,7 @@ import { previewRoleChange, resolveRole, restoreRole, RoleValidationError, selec
 
 const refs = {
   agentIds: ['general', 'researcher', 'writer', 'reviewer', 'day-planner', 'implementer'].map(id => `default-${id}`),
-  pageIds: ['agenti', 'task', 'fatto', 'idee', 'costi', 'qualita', 'confronto', 'miglioramento', 'skill', 'impostazioni'],
+  pageIds: ['agenti', 'task', 'fatto', 'idee', 'costi', 'qualita', 'confronto', 'regole', 'skill', 'impostazioni'],
 };
 const dev = () => initialRolePreset('dev', refs);
 const selection = () => selectRole(dev(), {}, refs);

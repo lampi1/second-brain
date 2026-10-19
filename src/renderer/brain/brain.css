@@ -743,8 +743,8 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-q { display: grid; gap: 8px; align-content: start; }
 .bx-q-v { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .bx-q-v .u { color: var(--bx-text-2); font-size: var(--bx-fs-m); }
-/* Miglioramento (pages/Miglioramento.tsx): one card per policy of the brain's self-improvement loop */
-.bx-learn-list { display: grid; gap: 12px; }
+/* Regole imparate (pages/LearnedRules.tsx, a section of Regole since ADR 0082): one card per policy of the brain's self-improvement loop */
+.bx-learn-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .bx-learn { display: grid; gap: 8px; }
 .bx-learn-meta, .bx-learn-out { color: var(--bx-text-2); font-size: var(--bx-fs-s); }
 .bx-help { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
@@ -835,3 +835,7 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
 .bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
 .bx-chip[aria-pressed="true"] { background: var(--bx-blue-bg); border-color: var(--bx-blue-line); color: var(--bx-text); }
+/* Regole imparate inside the Regole page (brain/pages/LearnedRules.tsx, ADR 0082) */
+.bx-learned { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 24px; min-width: 0; }
+.bx-learned-head { display: grid; gap: 6px; }
+.bx-learned-head h2 { font-size: var(--bx-fs-xl, 18px); font-weight: 650; }
