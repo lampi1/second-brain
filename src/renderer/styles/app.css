@@ -107,7 +107,6 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar-end { flex: none; display: flex; align-items: center; gap: 10px; }
 .topbar-more { position: relative; display: inline-flex; }
 .topbar-more .icon-btn.on { color: var(--blue); }
-.topbar-more .more-badge { position: absolute; top: -2px; right: -4px; pointer-events: none; background: var(--blue); color: #fff; }
 .topbar[data-fit~="1"] .segmented button span, .topbar[data-fit~="1"] .btn-danger > span:not(.count-badge) { display: none; }
 .topbar[data-fit~="2"] .ub-reset, .topbar[data-fit~="2"] .ub-today .ub-k, .topbar[data-fit~="2"] .ub-win-week .ub-meter { display: none; }
 .topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,

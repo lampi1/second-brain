@@ -51,8 +51,6 @@ export interface Prefs {
   feedOpen: boolean;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
   lastFocus: string | null;
-  /** "Nascondi browser" (Ctrl+Shift+B): browser tiles off screen, the chats take the room; the tabs keep working parked */
-  browsersHidden: boolean;
 }
 
 export interface Toast { id: number; text: string;labelKey?:TextKey; tone: 'info' | 'ok' | 'warn' | 'err'; action?: { label: string; run: () => void }; ttl: number;expiresAt:number }
@@ -106,7 +104,6 @@ export const defaultPrefs: Prefs = {
   appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},
   density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42, feedOpen: false,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
-  browsersHidden: false,
 };
 const READ_KEY = 'sb.read.v1';
 function readRead(): ReadState {
@@ -126,9 +123,10 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
   if (!raw) return { ...defaultPrefs, regiaSeenAt: at };
   try {
     // Retired and dropped: regiaRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
-    // Corsie views); navCollapsed (the icon-only sidebar); regiaPlacement, regiaTopHeight (the Orchestrator at the top).
-    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight', unknown>;
+    // Corsie views); navCollapsed (the icon-only sidebar); regiaPlacement, regiaTopHeight (the Orchestrator at the top);
+    // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows).
+    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, browsersHidden: _i, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight' | 'browsersHidden', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
@@ -138,7 +136,6 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
-      browsersHidden: p.browsersHidden === true,
       regiaOpen: p.regiaOpen === true,
       // a size saved under an older default goes back to the new default once (ADR 0028, 2026-10-13: wider and lower)
       regiaSize: p.regiaSizeV === DEFAULT_V ? sizeOf(p.regiaSize) : null,
@@ -200,12 +197,6 @@ export function setBrowserOpen(id:string,open:boolean):void{
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });
 
-/** "Nascondi browser" on/off (remembered); a maximized browser closes with it. */
-export function toggleBrowsers(): void {
-  const hide = !ui.get().prefs.browsersHidden;
-  setPrefs({ browsersHidden: hide });
-  ui.set(s => ({ ...s, maximized: hide && s.maximized?.startsWith('browser:') ? null : s.maximized, announce: hide ? 'Browser nascosti: continuano a lavorare' : 'Browser visibili' }));
-}
 export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal, newChatRegia: false }));
 /** "Nuova chat" as "Nuova Regia" (the overlay's +): name instead of title, no first message needed */
 export const openNewRegia = () => ui.set(s => ({ ...s, modal: 'newChat', newChatRegia: true }));

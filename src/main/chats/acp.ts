@@ -1155,13 +1155,14 @@ export class AcpSession implements HarnessSession {
       : st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : st === 'cancelled' ? 'stopped'
         : st === 'in_progress' ? 'running' : st === 'pending' ? 'waiting' : 'unknown';
     const task = s(raw.description) || s(raw.prompt) || (extension ? s(u.description) || s(u.prompt) : '') || prev?.task || null;
+    const agentType = typeof raw.subagentType === 'string' ? raw.subagentType : s(o(raw.subagentType).custom) || null;
     // Descriptive metadata alone does not make a replayed running state current again after a resume.
     const source = this.loading ? 'replay' : !st && prev ? prev.source : 'live';
     if (source === 'replay' && prev && (prev.source === 'live' || ['completed', 'failed', 'stopped'].includes(prev.state))) state = prev.state;
     this.childTasks.set(id, { task, state, source: prev?.source === 'live' ? 'live' : source });
     this.childTelemetry.observe({
       key: `acp:tool:${id}`, nativeId: null, toolCallId: id, parentNativeId: null, kind: 'agent', state, task,
-      observedAt: Date.now(), source,
+      agentType: agentType || null, observedAt: Date.now(), source,
     });
   }
 

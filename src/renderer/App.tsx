@@ -14,7 +14,7 @@ import { makeLink } from './lib/notify';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleBrowsers, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
   back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia, askRenewRegia,
 } from './actions';
@@ -84,7 +84,6 @@ function onKey(e: KeyboardEvent): void {
     case 'stopFocused': stopFocused(); break;
     case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
-    case 'toggleBrowsers': toggleBrowsers(); break;
     case 'maximize': toggleMaximize(); break;
     case 'focusMode': toggleFocusMode(); break;
     case 'focusTile': focusTile(cmd.index); break;

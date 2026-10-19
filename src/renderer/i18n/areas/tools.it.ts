@@ -184,8 +184,6 @@ export const toolsIt = {
   'tools.keys.closeChatWhat': 'Chiudi la chat o la scheda del browser selezionata (Annulla per 6 secondi; non l’Orchestrator)',
   'tools.keys.stopAllKey': 'Ctrl Shift .',
   'tools.keys.stopAllWhat': 'Ferma tutto',
-  'tools.keys.toggleBrowsersKey': 'Ctrl Shift B',
-  'tools.keys.toggleBrowsersWhat': 'Nascondi / mostra i browser (continuano a lavorare)',
   'tools.keys.correctThoughtKey': 'Ctrl Shift X',
   'tools.keys.correctThoughtWhat': 'Correggi la frase selezionata nel ragionamento di una chat (poi Invio: ferma e riparte; Maiusc+Invio: al prossimo passo)',
   'tools.keys.maximizeKey': 'F11',

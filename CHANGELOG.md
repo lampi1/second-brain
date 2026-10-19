@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Grindhouse strips: a click expands an agent every time again (text selected elsewhere, such as an Orchestrator
+  answer, swallowed every strip click, #78); the globe shows the chat's browser from a collapsed strip too (#74).
+- Sub-agent strips name the app agent they run as, or "nessun agente"; a parent whose turn ended reads "in attesa"
+  while a sub-agent still works, "finito" only once none does (#69).
+- Agent cards and the Orchestrator's head no longer show a per-chat effort ("Attivo: …", "Prossimo turno: …"): the
+  agent's profile decides it and shows it (#75).
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
   in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
@@ -19,6 +25,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Top bar: the full-screen popups switch and the connectors (GitHub, Jira) with their status are one click away; the
   "Nuova chat" button is gone (Nuovo agente in the Grindhouse, Ctrl+N or Ctrl+K start one).
 - Pages fade in on every change and progress bars move smoothly, both off under reduced motion.
+
+### Removed
+- The "Nascondi browser" switch (top bar "…", Ctrl+Shift+B): it hid the browser a strip's globe had just opened
+  (#82, the cause of #74). A saved "on" is dropped at start; a strip's globe folds and shows its own browsers.
 
 ### Added
 - Settings → Aggiornamenti: what is new on GitHub, and an "Aggiorna" button that downloads it, rebuilds and restarts

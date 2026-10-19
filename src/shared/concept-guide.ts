@@ -461,19 +461,19 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
       // src/renderer/lib/grid.ts workspaceTiles
-      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: allora stanno accanto alla chat aperta, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati.',
-        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: then they sit beside the expanded chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show.'),
+      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: il globo apre anche la striscia, se è chiusa, e i browser stanno accanto alla chat, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati.',
+        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: the globe also expands a collapsed strip, and the browsers sit beside the chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show.'),
       // src/renderer/components/ChildStrips.tsx
-      b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro; quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»).',
-        'Under each strip appear the subagents and commands still at work; finished ones leave at once (the full list stays in "Details and collaborators").'),
+      b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro, ciascuno con il nome dell’agente dell’app con cui gira (o «nessun agente»); quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»). Finché un sottoagente lavora, la striscia madre dice «in attesa», non «finito».',
+        'Under each strip appear the subagents and commands still at work, each with the name of the app agent it runs as (or "no agent"); finished ones leave at once (the full list stays in "Details and collaborators"). While a subagent works, the parent strip says "waiting", not "finished".'),
       // src/renderer/lib/agent-estimates.ts
       b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
         'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, sforzo e l’ultima risposta; aperta mostra la conversazione e l’input.',
-        'A collapsed strip shows agent, state, effort and the last answer; expanded it shows the conversation and the input.'),
+      b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
+        'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
       // src/renderer/components/BrowserTile.tsx
-      b('I browser nascosti (Ctrl+Shift+B) continuano a lavorare fuori schermo.', 'Hidden browsers (Ctrl+Shift+B) keep working off screen.'),
+      b('Un browser chiuso con il globo continua a lavorare fuori schermo.', 'A browser folded with the globe keeps working off screen.'),
     ],
     analogy: b('Come il banco di regia di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),

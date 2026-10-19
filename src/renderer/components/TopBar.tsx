@@ -9,7 +9,7 @@ import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
-import { openModal, toggleBrowsers, ui } from '../store/ui';
+import { openModal, ui } from '../store/ui';
 import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import { bellCount } from '../lib/notify';
@@ -138,22 +138,17 @@ function PopupsSwitch() {
   );
 }
 
-/** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width): the
- *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, Migliora l'app (the questions window moved
- *  onto the bar, PopupsSwitch). */
+/** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width):
+ *  Credenziali, Migliora l'app (the questions window moved onto the bar, PopupsSwitch). */
 function MoreButton() {
-  const hide = ui.use(s => s.prefs.browsersHidden);
-  const tabs = useApp(s => s.tabs.length);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const run = (f: () => void) => () => { setOpen(false); f(); };
   const toggle = () => setOpen(o => !o);
   return (
     <span className="topbar-more">
-      <IconButton ref={ref} className={hide ? 'on' : ''} label={hide ? (tabs > 0 ? auditText('auditExpression.TopBar.text186', { v0: tabs }) : auditText('auditExpression.TopBar.text187')) : auditText('auditExpression.TopBar.text188')} data-tip={hide ? auditText('auditExpression.TopBar.text189') : auditText('auditExpression.TopBar.text190')} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
-      {hide && tabs > 0 && <span className="count-badge more-badge" aria-hidden="true" data-testid="topbar-browsers-count">{tabs}</span>}
+      <IconButton ref={ref} label={auditText('auditExpression.TopBar.text188')} data-tip={auditText('auditExpression.TopBar.text190')} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
-        <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? auditText('auditExpression.TopBar.text191', { v0: tabs }) : auditText('auditExpression.TopBar.text192')}</MenuItem>
         <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
         <MenuSep />
         <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">{auditText('audit.TopBar.improveTheApp')}</MenuItem>
