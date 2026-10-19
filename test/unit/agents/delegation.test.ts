@@ -164,6 +164,30 @@ describe('agent_delegate', () => {
     expect(f.m.pending().some(p => p.id === 't2')).toBe(true); // the user decides, as for any request
   });
 
+  it('a command beyond a parent that may only read commands is refused, never shown; beyond the role but within the parent it is the user\'s call', async () => {
+    const f = fixture();
+    // a Sentinel under a Scout: the Scout reads commands only, so the Sentinel's writing command goes beyond its parent
+    const scout = await f.root('scout');
+    const sentinel = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'sentinel', parentId: scout.id }, 'agent');
+    f.sinks.get(sentinel.id)!.pending({ id: 'c1', type: 'permission', tool: 'Shell', title: 'Shell: rm -rf src', detail: '', input: { command: 'rm -rf src' }, at: 1 });
+    expect(f.answers.find(a => a.id === 'c1')?.answer).toMatchObject({ allow: false });
+    expect(f.m.pending().some(p => p.id === 'c1')).toBe(false);
+    expect(f.m.items(sentinel.id).some(i => i.kind === 'system' && i.code === 'aboveParent')).toBe(true);
+    f.sinks.get(sentinel.id)!.pending({ id: 'c2', type: 'permission', tool: 'Shell', title: 'Shell: git status', detail: '', input: { command: 'git status' }, at: 2 });
+    expect(f.m.pending().some(p => p.id === 'c2')).toBe(true);
+    // a Scout under a chat that may run any command: its writing command reaches the user, without "always"
+    const plain = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Plain', prompt: 'x' }, 'user');
+    const child = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', parentId: plain.id }, 'agent');
+    f.sinks.get(child.id)!.pending({ id: 'c3', type: 'permission', tool: 'Bash', title: 'Bash: npm install', detail: '', input: { command: 'npm install' }, at: 3, alwaysRules: ['Bash(npm:*)'] });
+    expect(f.answers.some(a => a.id === 'c3')).toBe(false);
+    expect(f.m.pending().find(p => p.id === 'c3')).toMatchObject({ noAlways: true });
+    expect(f.m.pending().find(p => p.id === 'c3')?.alwaysRules).toBeUndefined();
+    // the same Scout as a root chat: refused, as before
+    f.sinks.get(scout.id)!.pending({ id: 'c4', type: 'permission', tool: 'Bash', title: 'Bash: npm install', detail: '', input: { command: 'npm install' }, at: 4 });
+    expect(f.answers.find(a => a.id === 'c4')?.answer).toMatchObject({ allow: false });
+    expect(f.m.items(scout.id).some(i => i.kind === 'system' && i.code === 'commandReadOnly')).toBe(true);
+  });
+
   it('a skill works only when the launch gave it', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
@@ -325,6 +349,17 @@ describe('the pure parts', () => {
   it('the gate passes plain chats and non-permission requests', () => {
     expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'x' } }, { skills: [] }).kind).toBe('pass');
     expect(gateRequest({ type: 'question', tool: 'AskUserQuestion' }, { role: { id: 'scout', name: 'Scout' }, skills: [] }).kind).toBe('pass');
+  });
+  it('the gate reads the command under a parent that may only read commands', () => {
+    const chat = { role: { id: 'sentinel', name: 'Sentinel' }, skills: [], parent: { policy: { tools: { allow: ['read', 'shell-read'] }, ceiling: 'default' } as const, title: 'Scout' } };
+    const gate = (tool: string, command?: string) => gateRequest({ type: 'permission', tool, input: command === undefined ? {} : { command } }, chat as never).kind;
+    expect(gate('Bash', 'git log -5')).toBe('pass');
+    expect(gate('Bash', 'git grep -Ovim x')).toBe('deny');
+    expect(gate('PowerShell', 'Get-Content (Remove-Item x)')).toBe('deny');
+    expect(gate('Shell', 'sort -o/tmp/x a')).toBe('deny');
+    expect(gate('BashOutput')).toBe('pass');
+    expect(gate('KillShell')).toBe('deny');
+    expect(gateRequest({ type: 'permission', tool: 'Bash', input: { command: 'rm x' } }, { ...chat, parent: { policy: null, title: 'P' } }).kind).toBe('pass');
   });
   it('a broken parent chain counts as too deep', () => {
     expect(depthOf('a', id => (id === 'a' ? 'b' : id === 'b' ? 'a' : undefined))).toBe(Number.MAX_SAFE_INTEGER);

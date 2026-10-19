@@ -3,7 +3,8 @@
 // it is named through the launch's own runtime plugin (`agent-<hash16>:<name>`, agents/pack/flows.ts runtime()), and
 // refused otherwise: a bare name or another prefix could be a user, project or plugin skill of the same name; an engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
 // any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
-// delegated chat whose tool class goes beyond its parent's permissions is refused. Everything else passes to the user
+// delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
+// commands, a command that does not only read goes beyond it too). Everything else passes to the user
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
 // brain (brain-write without edit, e.g. the Scribe) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
 // edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link).
@@ -12,8 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SysCode, SysParams } from '../../shared/sys';
-import path from 'node:path';
-import { allowsClass, toolClassOf, type AgentPolicy } from './tool-policy';
+import { allowsClass, shellWithin, toolClassOf, type AgentPolicy } from './tool-policy';
 
 export interface GateRequest { type: string; tool: string; input?: unknown }
 export interface GateChat {
@@ -106,7 +106,7 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
       message: `${req.tool} on «${shown}» was refused: your role (${chat.role.name}) may write only files inside the brain folder${chat.brainRoot ? ` (${chat.brainRoot})` : ' and no brain is set'}, with Edit or Write, by their absolute path.` };
   }
   const cls = brainEdit && !allowsClass(chat.parent?.policy, 'edit') ? 'brain-write' : tool;
-  if (chat.parent && cls && !allowsClass(chat.parent.policy, cls)) {
+  if (chat.parent && cls && (cls === 'shell' ? !shellWithin(chat.parent.policy, req.tool, req.input) : !allowsClass(chat.parent.policy, cls))) {
     return { kind: 'deny', code: 'aboveParent', params: { tool: req.tool, parent: chat.parent.title },
       message: `${req.tool} goes beyond the permissions of the chat that delegated you («${chat.parent.title}»): it was refused. Do it within your permissions, or report to your parent with agent_report what you need.` };
   }

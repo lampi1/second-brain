@@ -39,6 +39,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ### Fixed
 - The Scribe can write on Claude again: its brain-write class gives Edit and Write, and each edit is refused unless
   the file's real path is inside the brain folder (no "..", no link or hard link out of it).
+- **Read-only commands are checked strictly** (#89 review): a role that may only read commands no longer runs
+  `sort -o`, `uniq a out`, `git grep -O`, PowerShell `( … )`/`@( … )`/`{ … }` or abbreviated `--output`; a command
+  beyond a delegating chat that may only read is refused, one beyond the role but within its parent asks you.
 - Security review fixes: a work chat's lessons (agent_learn_propose) apply only to its own agent, never as a rule for
   every agent, and wait until the Orchestrator accepts them with you; agent changes check the Orchestrator inside the
   authoring service; a sub-agent never gets more tools, MCP servers or permissions than its parent and runs in its

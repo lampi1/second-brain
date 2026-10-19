@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { FAIL_CLOSED, aboveCeiling, narrowest, suggestedAbove, browserAccess, BROWSER_READ_TOOLS, checkedTools, commandsReadOnly, readOnlyCommand, claudeDefaultMode, claudeMcp, claudeTools, clampMode, narrowCodex, readPolicy, unenforced, type AgentPolicy } from '../../src/main/agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, narrowest, suggestedAbove, browserAccess, BROWSER_READ_TOOLS, checkedTools, commandsReadOnly, readOnlyCommand, shellWithin, claudeDefaultMode, claudeMcp, claudeTools, clampMode, narrowCodex, readPolicy, unenforced, type AgentPolicy } from '../../src/main/agents/tool-policy';
 import { ClaudeSession } from '../../src/main/chats/claude';
 import { codexPolicyFor, type CodexExecutionPolicy } from '../../src/main/brain/adapters/codex-policy';
 import { recSink } from './chats/helpers';
@@ -191,5 +191,35 @@ describe('read-only commands (shell-read)', () => {
   it.each(['rm -rf out', 'npm install', 'git commit -m x', 'git branch new-feature', 'git tag v1', 'git push', 'echo x > a.txt', 'ls; rm a', 'cat a && rm a', 'ls $(rm a)', 'find . -delete', 'find . -exec rm {} ;',
     'git diff --output=x', 'rg --pre ./run.sh x', 'sort -o a a', 'cat a | tee b', 'node script.js', 'git -c core.pager=sh log', '', 42])('does not read only: %s', c => {
     expect(readOnlyCommand(c)).toBe(false);
+  });
+  // review of #89: write and run forms the first classifier took for reads, and their neighbours
+  it.each([
+    'sort -o/tmp/x a', 'sort -uo /tmp/x a', 'sort --output=/tmp/x a', 'sort --out=/tmp/x a', 'sort a', 'cat a | sort -o x', 'cat a | sort b', 'cat a | sort -k', 'cat a | sort /o x',
+    'uniq a out', 'uniq a', 'cat a | uniq b', 'cat a | uniq -c out',
+    'git grep -Ovim x', 'git grep -O x', 'git grep -iO x', 'git grep --open-files-in-pager=vim x', 'git grep --open x', 'git log --out=x', 'git diff --output-directory=d', 'git diff --ext-diff', 'git log --ext',
+    'Get-Content (Remove-Item x)', 'Get-ChildItem @(Remove-Item x)', 'gc $(rm x)', 'ls | Get-Content -Path { Remove-Item x }', 'gci @{a=Remove-Item x}', '& rm x', 'ls `rm x`', 'cat <(rm x)', 'ls >(rm x)', 'ls ${x}',
+    'cat a >> b', 'cat a 2> b', 'cat < a', 'ls\nrm a', 'ls || rm a', 'ls |& rm a',
+    'find . "-delete"', "find . -de'let'e", 'find . -de\\lete', 'find . -fprint x', 'find . -execdir rm', 'find . -okdir rm', 'find *', 'git diff *', 'rg x *',
+    'rg --pre=./run.sh x', 'rg --hostname-bin=./x y', 'tree -o out', 'tree -ao out', 'tree -R -H .', 'file -C -m magic', 'file --compile x',
+    'cat "\\"" | rm -rf x "\\""', "cat \\' | rm x", 'cat "a', 'FOO=1 ls', 'git -C .. log', '| ls', 'ls |',
+  ])('closes: %s', c => {
+    expect(readOnlyCommand(c)).toBe(false);
+  });
+  it.each(['grep -o foo a.txt', 'cat a | sort -u', 'cat a | sort -rn -k 2,3 -t ,', 'cat a | sort -nk2', 'git log | uniq -c', 'cat a | uniq -f 2', 'grep -E "foo|bar" src/a.ts', "rg 'a b' src",
+    'git log --format="%h %s" HEAD^', 'git log @{u}..', 'git show HEAD@{1}', 'git diff --cached --stat', 'git log --pretty=oneline', 'cat *.ts', 'ls src/*', 'find . -name "*.ts" -o -name "*.tsx"',
+    'git grep -o foo', 'rg --hidden -n x', 'Select-String -Path a.txt -Pattern x', 'gci -Filter *.ts | Measure-Object', 'git diff --no-ext-diff', 'git.exe status'])('still reads: %s', c => {
+    expect(readOnlyCommand(c)).toBe(true);
+  });
+  it('a policy lets a command through only as far as it goes', () => {
+    const scout: AgentPolicy = { tools: { allow: ['read', 'shell-read'] }, ceiling: 'default' };
+    expect(shellWithin(scout, 'Bash', { command: 'git status' })).toBe(true);
+    expect(shellWithin(scout, 'Shell', { command: 'rm -rf x' })).toBe(false);
+    expect(shellWithin(scout, 'BashOutput', {})).toBe(true);
+    expect(shellWithin(scout, 'KillShell', {})).toBe(false);
+    expect(shellWithin(scout, 'Monitor', { command: 'ls' })).toBe(false);
+    expect(shellWithin(scout, 'Bash', null)).toBe(false);
+    expect(shellWithin({ tools: { allow: ['read'] }, ceiling: null }, 'Bash', { command: 'ls' })).toBe(false);
+    expect(shellWithin({ tools: { allow: ['shell'] }, ceiling: null }, 'Bash', { command: 'rm x' })).toBe(true);
+    expect(shellWithin(null, 'Bash', { command: 'rm x' })).toBe(true);
   });
 });

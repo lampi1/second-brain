@@ -153,9 +153,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/model-tier.ts tierModel, independentModel
       b('Il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge prendono un modello diverso da quello del genitore quando c’è.',
         'The tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge take a model other than their parent’s when there is one.'),
-      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand
-      b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat, uno che legge ti arriva come permesso senza «sempre».',
-        'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat, one that reads reaches you as a permission without "always".'),
+      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand
+      b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat (se l’ha delegato una chat che può eseguirlo, decidi tu), uno che legge ti arriva come permesso senza «sempre».',
+        'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat (when a chat that may run it delegated Scout, you decide), one that reads reaches you as a permission without "always".'),
       // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
       b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: sotto i 24 px restano colore, capigliatura o copricapo e occhi; da 24 px anche viso e attrezzo.',
         'Every role has a cartoon character recognisable even at 16 px: below 24 px the colour, the hair or headwear and the eyes stay; from 24 px the face and the prop too.'),
@@ -448,8 +448,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
       // src/shared/runnable.ts prodRisk; src/main/agents/tool-policy.ts readOnlyCommand
-      b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni né redirezioni.',
-        'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining or redirection.'),
+      b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni, redirezioni, sottoespressioni né opzioni che scrivono o eseguono (sort e uniq solo dopo una pipe).',
+        'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI.'),
