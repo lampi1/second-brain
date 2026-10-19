@@ -16,6 +16,7 @@ const PATHS: Record<CardId | 'mail' | 'cmd', ReactNode> = {
   model: <><rect x="5" y="5" width="14" height="14" rx="3" /><path d="M10 10h4v4h-4zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></>,
   skills: <path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z" />,
   estimates: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l3 2M9 2h6" /></>,
+  tasks: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   jobkind: <><path d="M4 7h16v12H4z" /><path d="M9 7V4h6v3M4 12h16" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>,
   cmd: <path d="M4 17l6-6-6-6M12 19h8" />,
@@ -43,8 +44,10 @@ export function Progress({ c }: { c: CardView }) {
   </div>;
 }
 
-/** The third number of a card that has no verified outcomes: the estimates' typical error, else the average cost. */
+/** The third number of a card that has no verified outcomes: the estimates' typical error, the task estimator's
+ *  median gap, else the average cost. */
 export function third(c: CardView): { label: string; value: string | null; help: string } {
+  if (c.id === 'tasks') return { label: ct('tasks', 'err'), value: c.tasks?.medianErr == null ? null : pctFmt(c.tasks.medianErr), help: ct('tasks', 'errHelp') };
   if (c.id === 'estimates') return { label: ct('estimates', 'typical'), value: c.estimates?.typical == null ? null : `×${c.estimates.typical.toLocaleString(locale(), { maximumFractionDigits: 1 })}`, help: ct('estimates', 'typicalHelp') };
   return { label: t('stats.cls.cost'), value: usdOf(c.avgCostUsd), help: t('stats.cls.costHelp') };
 }

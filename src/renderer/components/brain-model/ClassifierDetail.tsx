@@ -94,7 +94,7 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
     <div className="cls-summary">
       <Num label={t('stats.cls.decisions')} value={c.decisions ? c.decisions.toLocaleString(locale()) : null} help={ct(c.id, 'decisionsHelp')} />
       <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={t('stats.cls.n', { n: c.hit.n })} help={ct(c.id, 'hitHelp')} />
-      {c.id !== 'estimates' && c.id !== 'jobkind' && <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={t('stats.cls.n', { n: c.success.n })} help={t('stats.cls.successHelp')} />}
+      {c.id !== 'estimates' && c.id !== 'jobkind' && c.id !== 'tasks' && <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={t('stats.cls.n', { n: c.success.n })} help={t('stats.cls.successHelp')} />}
       <Num label={k3.label} value={k3.value} help={k3.help} />
       {c.id === 'skills' && <Num label={t('stats.cls.threshold')} value={c.threshold === null ? null : String(c.threshold)} help={t('stats.cls.thresholdHelp')} />}
     </div>
@@ -105,7 +105,7 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
     {c.weeks && <div className="cls-detail-charts">
       <Panel testId="cls-learning" title={t('stats.cls.learning')} lead={t('stats.cls.learningLead')}>
         {hasWeeks ? <div className="cls-pad"><TrendChart labels={weeks.map(w => weekLabel(w.week))} label={t('stats.cls.learning')} format={pctFmt}
-          series={[{ label: ct(c.id, 'hit'), values: hitSeries(weeks) }, ...(c.id === 'jobkind' ? [] : [{ label: t('stats.cls.series.success'), values: successSeries(weeks) }])]}
+          series={[{ label: ct(c.id, 'hit'), values: hitSeries(weeks) }, ...(c.id === 'jobkind' ? [] : c.id === 'tasks' ? [{ label: ct('tasks', 'specific'), values: c.tasks?.specific ?? [] }] : [{ label: t('stats.cls.series.success'), values: successSeries(weeks) }])]}
           extra={i => `${t('stats.cls.decisions')}: ${weeks[i]!.decisions}`} /></div> : <p className="bm-empty">{t('stats.cls.chartEmpty')}</p>}
       </Panel>
       {hasWeeks && <BarChart title={t('stats.cls.perWeek')} name={`${c.id}-per-week`} labels={weeks.map(w => weekLabel(w.week))} values={weeks.map(w => w.decisions)} highlight={weeks.length - 1} testId="cls-per-week" />}

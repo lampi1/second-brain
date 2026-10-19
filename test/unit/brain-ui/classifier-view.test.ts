@@ -3,16 +3,16 @@
 // progress, and the curious facts, which need at least 5 cases and come out in plain Italian.
 import { describe, expect, it } from 'vitest';
 import type { ClassifierCard, ClassifierWeek, ClassifiersState } from '../../../src/shared/brain-model';
-import { cardViews, emptyCard, facts, fromEstimates, fromMain, hitSeries, hitTrend, progressState, sliceLabel, successSeries, weekLabel } from '../../../src/renderer/lib/classifier-view';
+import { cardViews, emptyCard, facts, fromEstimates, fromMain, fromTaskAccuracy, isoWeekOf, hitSeries, hitTrend, progressState, sliceLabel, successSeries, weekLabel } from '../../../src/renderer/lib/classifier-view';
 import type { LearnPolicy } from '../../../src/renderer/brain/lib/learn';
 
 const wk = (week: string, decisions: number, hits: number, known = 0, ok = 0): ClassifierWeek => ({ week, decisions, hits, known, ok, avgCostUsd: null });
 const card = (o: Partial<ClassifierCard>): ClassifierCard => ({ ...emptyCard('kind'), ...o });
 
 describe('classifier view', () => {
-  it('lists the five cards in order, empty when main sent nothing', () => {
+  it('lists the six cards in order, empty when main sent nothing', () => {
     const v = cardViews(null, undefined);
-    expect(v.map(c => c.id)).toEqual(['kind', 'model', 'skills', 'estimates', 'jobkind']);
+    expect(v.map(c => c.id)).toEqual(['kind', 'model', 'skills', 'tasks', 'estimates', 'jobkind']);
     expect(v.every(c => c.decisions === 0 && c.hit.value === null)).toBe(true);
     expect(progressState(v[0]!)).toBe('idle');
   });
@@ -28,6 +28,25 @@ describe('classifier view', () => {
       'Le regole v2, approvate da te, hanno migliorato le stime rispetto alle precedenti.',
     ]);
     expect(fromEstimates(undefined).hit).toEqual({ value: null, n: 0 });
+  });
+
+  it('turns the task estimator’s weekly backtest into a card', () => {
+    const mon = new Date(2026, 9, 12).getTime(), prev = new Date(2026, 9, 5).getTime(), old = new Date(2026, 8, 28).getTime();
+    expect(isoWeekOf(mon)).toBe('2026-W42');
+    const c = fromTaskAccuracy({ n: 20, hitRate: 0.7, trend: 0.3, points: [
+      { weekStart: old, n: 0, hitRate: null, medianErr: null, specificShare: null },
+      { weekStart: prev, n: 10, hitRate: 0.5, medianErr: 0.6, specificShare: 0.2 },
+      { weekStart: mon, n: 10, hitRate: 0.8, medianErr: 0.3, specificShare: 0.6 },
+    ] });
+    expect(c).toMatchObject({ id: 'tasks', decisions: 20, hit: { value: 0.7, n: 20 }, progress: { n: 20, need: 20 }, tasks: { specific: [null, 0.2, 0.6], medianErr: 0.3, lastSpecific: 0.6 } });
+    expect(c.weeks!.map(w => [w.week, w.decisions, w.hits])).toEqual([['2026-W40', 0, 0], ['2026-W41', 10, 5], ['2026-W42', 10, 8]]);
+    expect(facts(c).slice(0, 4)).toEqual([
+      '7 task su 10 sono durati fra la metà e il doppio della stima.',
+      'Sta imparando: le stime giuste sono salite di 30 punti in 2 settimane.',
+      'L’ultima settimana 60% delle stime veniva da task dello stesso ruolo e dello stesso tipo.',
+      'Di solito il tempo vero si scosta del 30% dalla stima.',
+    ]);
+    expect(fromTaskAccuracy(null)).toMatchObject({ decisions: 0, hit: { value: null, n: 0 }, weeks: [] });
   });
 
   it('leaves a gap for a week without data and compares the halves', () => {

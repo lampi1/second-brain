@@ -8,7 +8,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ### Changed
 - **Statistics you can read**: Brain → Classificatori is a grid of cards, one per classifier, with what it decides
   and why, runs, verified success, cost, weekly trend, learning progress (20 cases) and a curious fact; a click opens
-  its history. The Dashboard's Errori tab groups recurring errors by cause with count, trend, last seen, where and
+  its history. The task estimator (ADR 0087) has its card too, with its weekly backtest. The Dashboard's Errori tab groups recurring errors by cause with count, trend, last seen, where and
   what to do; Costi gains per-day and per-model charts and facts; every number has a "?" saying how it is computed.
 - **Quick chats and readable estimates** (ADR 0087): the Orchestrator estimates each request from similar past tasks
   (`task_estimate`: median work time, cost, the middle-half range, how many tasks, confidence, the parts) and takes the

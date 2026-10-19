@@ -17,6 +17,7 @@
 .cls-card[data-id=model],.cls-detail-head[data-id=model]{--tone:var(--bx-cat-7)}
 .cls-card[data-id=skills],.cls-detail-head[data-id=skills]{--tone:var(--bx-cat-3)}
 .cls-card[data-id=estimates],.cls-detail-head[data-id=estimates]{--tone:var(--bx-cat-4)}
+.cls-card[data-id=tasks],.cls-detail-head[data-id=tasks]{--tone:var(--bx-cat-5)}
 .cls-card[data-id=jobkind],.cls-detail-head[data-id=jobkind]{--tone:var(--bx-cat-2)}
 .cls-card.cls-plain{--tone:var(--text-4);gap:10px}
 .cls-card{gap:12px}

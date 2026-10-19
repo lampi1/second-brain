@@ -1,20 +1,22 @@
 // Pure view helpers of the Classificatori grid (owner, 2026-10-19: "card e statistiche per ciascuno, con spiegazione",
 // "cose curiose che catturano l'attenzione e ti facciano capire a cosa servono"). One CardView per classifier: the
-// four record-keeping ones from main (ClassifiersState.cards) and the estimates one from the brain's loop
-// (/api/improve, LearnPolicy 'estimates'); the weekly hit series, the learning progress toward the 20 verified cases
+// four record-keeping ones from main (ClassifiersState.cards), the estimates one from the brain's loop
+// (/api/improve, LearnPolicy 'estimates') and the task estimator's weekly backtest (IPC agents:estimates → accuracy,
+// ADR 0087); the weekly hit series, the learning progress toward the 20 verified cases
 // and the "curious facts", each built only from data and only above a minimum count (no fact from 2 cases). A value
 // without data stays null ("nessun dato ancora"), never zero. No React, no IPC: unit-tested in
 // test/unit/brain-ui/classifier-view.test.ts; used by components/brain-model/ClassifiersPage.tsx and ClassifierDetail.tsx.
 import type { ClassifierCard, ClassifierCardId, ClassifierStat, ClassifierWeek, ClassifiersState } from '@shared/brain-model';
 import { CLASSIFIER_NEED } from '@shared/brain-model';
 import { roleName } from '@shared/roles';
+import type { EstimateAccuracy } from '@shared/task-estimate';
 import type { LearnPolicy } from '../brain/lib/learn';
 import { t, locale } from '../i18n';
 import { getKindIt } from './routing';
 import { prettyModel } from './format';
 
-export type CardId = ClassifierCardId | 'estimates';
-export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'estimates', 'jobkind'];
+export type CardId = ClassifierCardId | 'estimates' | 'tasks';
+export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'tasks', 'estimates', 'jobkind'];
 
 export interface CardView {
   id: CardId;
@@ -34,6 +36,9 @@ export interface CardView {
   progress: { n: number; need: number };
   /** the estimates loop's own figures */
   estimates?: { typical: number | null; version: number | null; check: string | null; pending: boolean };
+  /** the task estimator's own figures: per week the share resting on the same role and kind, the last median gap,
+   *  the change in hit share between the first and the last week with data (0..1 points) */
+  tasks?: { specific: (number | null)[]; medianErr: number | null; trend: number | null; lastSpecific: number | null };
 }
 
 const MIN_FACT = 5; // no fact rests on fewer cases
@@ -74,10 +79,33 @@ export function fromEstimates(p: LearnPolicy | undefined): CardView {
   };
 }
 
+/** ISO week label ("2026-W42") of a local Monday: the week's Thursday decides the year (as main's isoWeek). */
+export function isoWeekOf(weekStart: number): string {
+  const d = new Date(weekStart + 3 * 86400e3); d.setHours(0, 0, 0, 0);
+  const thu = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const y = thu.getUTCFullYear(), w = Math.ceil(((thu.getTime() - Date.UTC(y, 0, 1)) / 86400e3 + 1) / 7);
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+
+/** The task estimator's backtest as a card: decisions = ended tasks that had an estimate, hit = the share that held
+ *  (real time between half and double), weeks = its 8 weeks, progress = estimated tasks toward the need. */
+export function fromTaskAccuracy(a: EstimateAccuracy | null | undefined): CardView {
+  const points = a?.points ?? [];
+  const withData = points.filter(p => p.n > 0);
+  const last = withData[withData.length - 1];
+  return {
+    id: 'tasks', decisions: a?.n ?? 0, hit: { value: a?.hitRate ?? null, n: a?.n ?? 0 }, success: { value: null, n: 0 },
+    avgCostUsd: null, threshold: null, spark: [], slices: [], compare: null, lastAt: null,
+    weeks: points.map(p => ({ week: isoWeekOf(p.weekStart), decisions: p.n, hits: p.hitRate === null ? 0 : Math.round(p.hitRate * p.n), known: 0, ok: 0, avgCostUsd: null })),
+    progress: { n: a?.n ?? 0, need: CLASSIFIER_NEED },
+    tasks: { specific: points.map(p => (p.n ? p.specificShare : null)), medianErr: last?.medianErr ?? null, trend: a?.trend ?? null, lastSpecific: last?.specificShare ?? null },
+  };
+}
+
 /** Every card in the page's order (a classifier main did not report gets an empty card, never a hidden one). */
-export function cardViews(state: ClassifiersState | null, estimates: LearnPolicy | undefined): CardView[] {
+export function cardViews(state: ClassifiersState | null, estimates: LearnPolicy | undefined, tasks?: EstimateAccuracy | null): CardView[] {
   const byId = new Map((state?.cards ?? []).map(c => [c.id, fromMain(c)]));
-  return CARD_ORDER.map(id => (id === 'estimates' ? fromEstimates(estimates) : byId.get(id) ?? fromMain(emptyCard(id))));
+  return CARD_ORDER.map(id => (id === 'estimates' ? fromEstimates(estimates) : id === 'tasks' ? fromTaskAccuracy(tasks) : byId.get(id) ?? fromMain(emptyCard(id))));
 }
 export function emptyCard(id: ClassifierCardId): ClassifierCard {
   return { id, decisions: 0, hit: { value: null, n: 0 }, success: { value: null, n: 0 }, avgCostUsd: null, threshold: null, weeks: [], slices: [], compare: null, lastAt: null };
@@ -136,6 +164,13 @@ export function facts(c: CardView, sources: ClassifiersState['sources'] = []): s
     if (c.hit.value !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.estCover', { k: Math.round(c.hit.value * 10), n: 10 }));
     if (c.estimates?.typical != null && c.progress.n >= MIN_FACT) out.push(t('stats.fact.estTypical', { x: num(c.estimates.typical) }));
     if (c.estimates?.check === 'migliorata' && c.estimates.version !== null) out.push(t('stats.fact.estBetter', { v: c.estimates.version }));
+  }
+  if (c.id === 'tasks' && c.tasks) {
+    const weeksWith = (c.weeks ?? []).filter(w => w.decisions > 0).length;
+    if (c.hit.value !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskHeld', { k: Math.round(c.hit.value * 10), n: 10 }));
+    if (c.tasks.trend !== null && c.tasks.trend >= 0.02 && c.hit.n >= MIN_FACT && weeksWith >= 2) out.push(t('stats.fact.taskLearns', { d: Math.round(c.tasks.trend * 100), w: weeksWith }));
+    if (c.tasks.lastSpecific !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskSpecific', { pct: pctFmt(c.tasks.lastSpecific) }));
+    if (c.tasks.medianErr !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskErr', { pct: pctFmt(c.tasks.medianErr) }));
   }
   if (week && prev && week.decisions + prev.decisions >= MIN_FACT && c.id !== 'skills') {
     const d = week.decisions - prev.decisions;

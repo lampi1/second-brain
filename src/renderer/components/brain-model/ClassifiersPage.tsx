@@ -7,7 +7,8 @@
 // tables of before (routing table, outcomes per kind, skill choices, quality by week). Two classifiers that keep no
 // record (the Orchestrator's mail, sensitive commands) get a small explained card. Every number has a "?" saying how
 // it is computed. A clean install shows the cards empty with what will appear. Data: 'classifiers:state'
-// (main/brainmodel/classifiers.ts + classifier-cards.ts) and /api/improve (the estimates loop). Rendered by App.tsx
+// (main/brainmodel/classifiers.ts + classifier-cards.ts), /api/improve (the estimates loop) and agents:estimates (the
+// task estimator's weekly backtest, ADR 0087, via lib/run-estimates.ts). Rendered by App.tsx
 // PageFrame for 'classificatori'; view helpers in lib/classifier-view.ts; styles in styles/classifiers.css.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassifiersState } from '@shared/brain-model';
@@ -15,6 +16,7 @@ import { t } from '../../i18n';
 import { sb } from '../../sb';
 import { useBrain } from '../../brain/api';
 import { normLearnData } from '../../brain/lib/learn';
+import { useRunEstimates } from '../../lib/run-estimates';
 import { cardViews, facts, hitSeries, pctOf, weekLabel, type CardId, type CardView } from '../../lib/classifier-view';
 import { ClsIcon, Num, Progress, ct, intFmt, pctFmt, third } from './ClassifierParts';
 import { when } from './MaintenancePanel';
@@ -40,7 +42,7 @@ function Card({ c, sources, onOpen }: { c: CardView; sources: ClassifiersState['
     <div className="cls-nums">
       <Num label={t('stats.cls.decisions')} value={empty ? null : intFmt(c.decisions)} help={ct(c.id, 'decisionsHelp')} testId={`cls-${c.id}-decisions`} />
       <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={t('stats.cls.n', { n: c.hit.n })} help={ct(c.id, 'hitHelp')} testId={`cls-${c.id}-hit`} />
-      {c.id === 'estimates' || c.id === 'jobkind'
+      {c.id === 'estimates' || c.id === 'jobkind' || c.id === 'tasks'
         ? <Num label={k3.label} value={k3.value} help={k3.help} />
         : <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={t('stats.cls.n', { n: c.success.n })} help={t('stats.cls.successHelp')} />}
     </div>
@@ -74,12 +76,13 @@ export function ClassifiersPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<CardId | null>(null);
   const learn = useBrain('/api/improve', normLearnData);
+  const taskEst = useRunEstimates();
   const load = useCallback(async () => {
     try { setState(await sb.invoke('classifiers:state', undefined)); setError(null); } catch (e) { setError(errText(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   const estimates = learn.data?.policies.find(p => p.domain === 'estimates');
-  const cards = useMemo(() => cardViews(state, estimates), [state, estimates]);
+  const cards = useMemo(() => cardViews(state, estimates, taskEst?.accuracy), [state, estimates, taskEst]);
   const total = cards.reduce((s, c) => s + c.decisions, 0);
   const week = cards.reduce((s, c) => s + (c.weeks?.[c.weeks.length - 1]?.decisions ?? 0), 0);
   const verified = cards.find(c => c.id === 'kind')?.success.n ?? 0;

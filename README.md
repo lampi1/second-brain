@@ -205,7 +205,8 @@ and the rules learned from them. A fresh brain starts empty: the app's own rules
 (who uses each skill, linked with one click), Regole (the brain's rules and, once the brain has some, the rules it
 learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent),
 Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
-how far it has learned, a curious fact from the data, and a detail view with its history) and Mappa (agent → skills → rules → memory, the
+how far it has learned, a curious fact from the data, and a detail view with its history; the task estimator's card
+shows week by week how often its estimate held) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
 Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
 
