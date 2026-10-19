@@ -196,7 +196,8 @@ and the rules learned from them. A fresh brain starts empty: the app's own rules
 (ADR 0072). The Brain section of the menu shows it as two concepts only, agents and skills (ADR 0077): Agenti, Skill
 (who uses each skill, linked with one click), Regole (the brain's rules and, once the brain has some, the rules it
 learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent),
-Classificatori (how the app picks model and agent, and how it is going) and Mappa (agent → skills → rules → memory, the
+Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
+how far it has learned, a curious fact from the data, and a detail view with its history) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
 Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
 
@@ -225,7 +226,9 @@ what, who (you, or the agent or engine of a chat), when and its link.
 
 Four metrics computed from real logs, each with its source and the days it covers: errors you had to catch yourself
 per 100 turns, rules that did not stop their error, pull requests held by QA or builds, bugs reopened after a fix.
-Costs, budgets and estimates per agent and per day sit next to them.
+Costs, budgets and estimates per agent and per day sit next to them, with charts per day and per model and a few
+facts drawn from the numbers. The Errori tab groups recurring errors by cause, with how often, the trend, when last
+seen, which chats, roles and skills, what it means and what to do. Every number has a "?" that says how it is computed.
 
 ### And more
 

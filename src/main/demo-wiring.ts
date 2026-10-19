@@ -12,6 +12,8 @@ import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from
 import { DemoBrowser } from './demo-browser';
 import { writeDemoBrain } from './brainmodel/demo';
 import { BrainModelService } from './brainmodel/service';
+import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
+import type { AgentRun } from '../shared/agents';
 import { SkillSuggester } from './skills/suggest';
 import type { SkillSuggestions } from '../shared/skill-suggest';
 import { demoDevopsRun } from './tasks/demo';
@@ -93,9 +95,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   mountLifecycleApi(brain, agentLifecycle);
   // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
   // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
+  // the Classificatori grid's eight weeks of made-up history (demo-classifiers.ts), written on the first read
+  let demoCls: DemoClassifierData | undefined;
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
-  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: () => [], routing: () => brain.routingInfo(), now,
+  const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
+    runs: (): AgentRun[] => (demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name))).runs, routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));

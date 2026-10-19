@@ -246,6 +246,13 @@ export function seed(E: number): Seed {
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
+    // older app errors that repeat, for the Dashboard's grouped Errori view (dashboard/errors.ts)
+    ev('f-e1', 26 * 60 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'qa', away: true }),
+    ev('f-e2', 3 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'sms', away: true }),
+    ev('f-e3', 6 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: usage limit reached', { chatId: 'feedback', away: true }),
+    ev('f-e4', 2 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Strumento MCP', 'MCP server "browser" disconnected (code 1006)', { chatId: 'qa', away: true }),
+    ev('f-e5', 9 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Strumento MCP', 'MCP server "browser" disconnected (code 1006)', { chatId: 'mappa', away: true }),
+    ev('f-e6', 4 * 1440 * MIN, 'error', 'Errore', 'quiet', 'File mancante', "ENOENT: no such file or directory, open 'C:\\progetti\\shop\\config\\test.json'", { chatId: 'sms', away: true }),
   ];
   const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
   return { chats, items, pending, tabs, feed, usage };

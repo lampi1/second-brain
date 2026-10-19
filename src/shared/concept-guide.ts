@@ -200,8 +200,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Esportare un ruolo porta il suo testo, le skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importare un pacchetto aggiunge skill e regole al ruolo che scegli, come versione in prova: il ruolo tiene i suoi permessi.',
         'Exporting a role carries its text, skills, the tools list (TOOLS.md) and the rules; never memory. Importing a pack adds skills and rules to the role you pick, as a trial version: the role keeps its permissions.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: la tabella che sceglie il modello con i risultati di ogni riga, le skill suggerite contro quelle date, la qualità per settimana.',
-        'Classifiers, read only: the table that picks the model with each row’s results, the suggested skills versus the ones given, quality by week.'),
+      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, skill, stime, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello, le skill suggerite contro quelle date).',
+        'Classifiers, read only: one card per classifier (kind of work, model, skills, estimates, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table, the suggested skills versus the ones given).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
@@ -451,11 +451,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni, redirezioni, sottoespressioni né opzioni che scrivono o eseguono (sort e uniq solo dopo una pipe).',
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
-      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI.',
-        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI.'),
       // src/shared/roles.ts ROLE_DEFAULTS.router
-      b('Smistare un lotto di lavoro (una inbox, una lista di ticket) è il compito del ruolo Router, quando glielo affidi: non è un classificatore che gira da solo.',
-        'Triaging a batch of work (an inbox, a list of tickets) is the Router role’s job, when you hand it one: it is not a classifier that runs by itself.'),
+      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) è invece il compito del ruolo Router, quando glielo affidi.',
+        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Router role’s job, when you hand it one.'),
+      // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
+      b('Brain → Classificatori ne mostra cinque come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
+        'Brain → Classifiers shows five of them as cards: decisions, how often they "get it" (kind recognised, skills spot on, cost inside the range), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -469,7 +470,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
       tech(LIMITS, 'Richiesta letta fino a 2000 caratteri; il modello locale ha 2,5 s, poi si risponde a sole parole; nessun token speso.', 'Request read up to 2000 characters; the local model gets 2.5 s, then the answer is words only; no token spent.'),
     ],
-    sources: ['src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -600,10 +601,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
       b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
         'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
-      b('«Costi» per giorno, modello, motore e agente; «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
-        '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
-      b('«Errori» conta ai-errors.md e gli eventi (la lezione di ogni errore è in Memoria); «Spunti» deriva segnali come contesti lunghi e costi alti.',
-        '"Errors" counts ai-errors.md and events (each error’s lesson is in Memory); "Tips" derives signals such as long contexts and high costs.'),
+      b('«Costi» per giorno, modello, motore e agente, in grafici con una riga di curiosità (il giorno più caro, il modello che pesa di più); «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
+        '"Costs" by day, model, engine and agent, as charts under a row of curious facts (the priciest day, the model that weighs most); "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
+      // src/renderer/dashboard/ErrorsTab.tsx, src/renderer/dashboard/errors.ts
+      b('«Errori» raggruppa gli errori che si ripetono in schede: causa in parole semplici (limite d’uso, rete, accesso, contesto pieno…), quante volte, l’andamento su 14 giorni, l’ultima volta, dove (chat, ruolo, skill), cosa vuol dire e cosa fare; sotto, gli errori dell’AI che hai corretto per tipo, con la regola nata e se l’errore è tornato.',
+        '"Errors" groups recurring errors into cards: the cause in plain words (usage limit, network, login, full context…), how many times, the 14-day trend, the last time, where (chat, role, skill), what it means and what to do; below, the AI errors you corrected by type, with the rule produced and whether the error came back.'),
+      b('Ogni numero ha un «?»: dice esattamente come è calcolato. «Spunti» deriva segnali come contesti lunghi e costi alti.',
+        'Every number has a "?": it says exactly how it is computed. "Tips" derives signals such as long contexts and high costs.'),
       b('Ogni pannello ha «Discuti»: mette una bozza all’Orchestrator, non la invia mai da solo.',
         'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
     ],
@@ -613,7 +617,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
       tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/facts.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
   },
   {
     id: 'task-fatto',

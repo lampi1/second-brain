@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Statistics you can read**: Brain → Classificatori is a grid of cards, one per classifier, with what it decides
+  and why, runs, verified success, cost, weekly trend, learning progress (20 cases) and a curious fact; a click opens
+  its history. The Dashboard's Errori tab groups recurring errors by cause with count, trend, last seen, where and
+  what to do; Costi gains per-day and per-model charts and facts; every number has a "?" saying how it is computed.
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its

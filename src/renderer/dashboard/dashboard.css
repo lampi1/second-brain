@@ -199,3 +199,7 @@
 .dash-dup p{margin:0;overflow-wrap:anywhere}
 .dash-dup small{display:block;margin-bottom:3px}
 .dash-dups>.btn{align-self:flex-start}
+/* a "?" beside a tile's label (HelpTip: how the number is computed); four tiles in a row on the Errori tab */
+.dash-stat>.dash-stat-label{display:flex;align-items:center;gap:5px}
+.dash-stats.dash-stats-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@container (max-width:760px){.dash-stats.dash-stats-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
