@@ -47,7 +47,7 @@ test('expanded run records all three human verdicts and handles failure without 
   } finally { await app.close(); }
 });
 
-test('catalog Run confirms only a successful launch, respects reduced motion and opens Home', async () => {
+test('Run on the agent page confirms only a successful launch, respects reduced motion and opens Home', async () => {
   const { app, page } = await launchDemo();
   try {
     const catalog = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
@@ -68,9 +68,13 @@ test('catalog Run confirms only a successful launch, respects reduced motion and
       });
     }, { catalog, profile, source });
     await visit(page, 'sb://agenti');
-    const card = page.getByTestId(`catalog-card-${profile.id}`);
-    await expect(card).toBeVisible();
-    await expect(card).toHaveCSS('animation-name', 'none');
+    const overview = page.getByTestId(`catalog-card-${profile.id}`);
+    await expect(overview).toBeVisible();
+    await expect(overview).toHaveCSS('animation-name', 'none');
+    // the card has no Avvia (#81): the launch lives on the agent's own page
+    await expect(overview.getByTestId(`catalog-run-${profile.id}`)).toHaveCount(0);
+    await visit(page, `sb://agenti/${profile.id}`);
+    const card = page.getByTestId('agent-studio');
     await card.getByTestId(`catalog-run-${profile.id}`).click();
     await card.getByLabel('Obiettivo', { exact: true }).fill('Verify catalog launch');
     await card.getByLabel('Cartella', { exact: true }).fill(source.cwd);

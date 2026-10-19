@@ -11,7 +11,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { launch, setSize, shot, openNotesMap } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -49,8 +49,7 @@ async function rate(ms: number): Promise<number> {
   return Math.round(((await frames()) - a) / (ms / 1000) * 10) / 10;
 }
 const openMap = async () => {
-  await page.getByTestId('nav-dashboard').click();
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+  await openNotesMap(page);
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.getByTestId('bx-map-live').locator('summary').click();

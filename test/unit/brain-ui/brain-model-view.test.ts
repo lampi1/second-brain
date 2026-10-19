@@ -56,7 +56,8 @@ describe('skill rows', () => {
     expect(rows[0]!.entry?.name).toBe('code-review');
     expect(rows[1]!.home).toBe('cursor');
     expect(rows[2]!.entry).toBeNull();
-    expect(filterSkills(rows, '', 'unused').map(r => r.name)).toEqual(['cursor-only', 'deploy-check']);
+    expect(rows.map(r => r.linkable)).toEqual([true, false, true]);
+    expect(filterSkills(rows, '', 'unused').map(r => r.name)).toEqual(['deploy-check']);
     expect(filterSkills(rows, 'review bash', 'used').map(r => r.name)).toEqual(['code-review']);
     expect(skillRows(null, null)).toEqual([]);
   });

@@ -45,7 +45,7 @@ export function MapPage() {
   const g = useMemo(() => linkGraph(state), [state]);
   return <div className="dashboard bm-dash bm-map" data-testid="bm-map-page">
     <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.map.eyebrow')}</span><h1>{t('bm.map.title')}</h1><p>{t('bm.map.lead')}</p></div></header>
-    <div className="bm-map-views"><Seg items={[{ id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={v => { setView(v); setSelected(null); }} label={t('bm.map.viewLabel')} /></div>
+    <div className="bx bm-map-views"><Seg items={[{ id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={v => { setView(v); setSelected(null); }} label={t('bm.map.viewLabel')} /></div>
     {view === 'notes' ? <BrainNotesMap /> : <section className="dash-panel" data-testid="bm-map-links">
       <header><div><h3>{t('bm.map.view.links')}</h3><p>{t('bm.map.lead')}</p></div></header>
       <div className="dash-network">

@@ -1,13 +1,13 @@
-// Dashboard tabs: the title and the tab bar stay in the same place on every tab (the brain map included, so the
-// content does not jump when switching), and the brain map's controls (search, overview, 3D, zoom, legend) sit inside
-// the map as an overlay toolbar. Frozen demo with the brain-ui fixture; screenshots in test-results/shots/dashboard-*.png.
+// Dashboard tabs: the title and the tab bar stay in the same place on every tab (the content does not jump when
+// switching); the Dashboard holds statistics only (ADR 0077), and the brain map, now the Mappa page's "Note del brain"
+// view, keeps its controls (search, overview, 3D, zoom, legend) inside the map as an overlay toolbar. Frozen demo with the brain-ui fixture; screenshots in test-results/shots/dashboard-*.png.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, openNotesMap, shot } from './helpers';
 
-test('the Dashboard header keeps its place on every tab and the map hosts its own controls', async () => {
+test('the Dashboard header keeps its place on every tab and the notes map hosts its own controls', async () => {
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-dash-tabs-'));
   const tools = path.join(brain, 'ops', 'tools');
   fs.mkdirSync(tools, { recursive: true });
@@ -26,18 +26,19 @@ test('the Dashboard header keeps its place on every tab and the map hosts its ow
       return h && t ? `${Math.round(h.y)}/${Math.round(t.y)}/${Math.round(t.height)}` : 'hidden';
     };
     const seen: Record<string, string> = {};
-    for (const [name, file] of [['Mappa agenti', 'agents'], ['Mappa brain', 'brain'], ['Costi', 'costs'], ['Errori', 'errors']] as const) {
+    await expect(page.getByRole('tab', { name: 'Mappa brain' })).toHaveCount(0);
+    for (const [name, file] of [['Mappa agenti', 'agents'], ['Costi', 'costs'], ['Errori', 'errors']] as const) {
       await page.getByRole('tab', { name }).click();
       await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
-      if (file === 'brain') await expect(page.locator('.dash-label').first()).toBeVisible();
       await shot(page, `dashboard-tab-${file}`);
       await expect(title).toBeVisible();
       seen[name] = await place();
     }
     expect(new Set(Object.values(seen)).size, JSON.stringify(seen)).toBe(1);
 
-    // the map's commands are drawn inside the map itself
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    // the map's commands are drawn inside the map itself (Mappa → Note del brain)
+    await openNotesMap(page);
+    await expect(page.locator('.dash-label').first()).toBeVisible();
     const map = page.getByTestId('dash-map');
     await expect(map).toBeVisible();
     const toolbar = map.getByTestId('dash-map-toolbar');

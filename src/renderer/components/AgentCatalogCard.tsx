@@ -69,7 +69,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
         <header className="catalog-card-head">
           <span className="catalog-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={40} /></span>
           <div className="catalog-card-id">
-            <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-label={t('bm.card.flip', { name: profile.name })} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
+            <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
+            <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
             <p className="catalog-role" title={role}>{role}</p>
           </div>
           <span className="catalog-badge" data-probation={probation} data-state={state}>
@@ -92,7 +93,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
       <div className="bm-face bm-face-back" id={backId} inert={!flipped} aria-hidden={!flipped || undefined} data-testid={`catalog-back-${profile.id}`}>
         <header className="bm-back-head">
           <span className="catalog-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={34} /></span>
-          <h3><button ref={back} type="button" onClick={() => flip(false)} aria-label={t('bm.card.flipBack', { name: profile.name })} data-testid={`catalog-unflip-${profile.id}`}>{profile.name}</button></h3>
+          <h3><button ref={back} type="button" onClick={() => flip(false)} aria-describedby={`${backId}-b`} data-testid={`catalog-unflip-${profile.id}`}>{profile.name}</button></h3>
+          <span id={`${backId}-b`} className="sr-only">{t('bm.card.flipBack', { name: profile.name })}</span>
         </header>
         <section className="catalog-prompt" aria-label={t('agentDetail.prompt')}>
           <h4>{t('agentDetail.prompt')}{prompt && <small>{t('agentDetail.promptSize', { n: prompt.length })}</small>}</h4>

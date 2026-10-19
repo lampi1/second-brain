@@ -1,15 +1,15 @@
-// E2E of "Skill e agenti" (ADR 0018) on the real app with a fixture home (SB_SKILLS_HOME: a few Claude and Cursor
-// skills and agents, a generated copy, a broken agent, and a settings.json whose PreToolUse hook for Write refuses any
-// content with "VIETATO"): the list with filters and search; a new skill from the form, saved to disk; the markdown
-// view checked live; the hook's refusal shown with its own message; a generated copy read-only; delete after a
-// confirmation. Then the "/" list of a chat input (fake Claude CLI reporting its commands): filtered, Tab completes.
-// Screenshots dark and light.
+// E2E of the Skill page (ADR 0018, ADR 0077) on the real app with a fixture home (SB_SKILLS_HOME: two Claude skills,
+// CLI agents that the page no longer lists, and a settings.json whose PreToolUse hook for Write refuses any content
+// with "VIETATO"): skill cards only, with "Non usata", search and the used/unused filter; a new skill from the form,
+// saved to disk; the markdown view checked live; the hook's refusal shown with its own message; an unsaved edit kept
+// across pages; delete after a confirmation. Then the "/" list of a chat input (fake Claude CLI reporting its
+// commands): filtered, Tab completes. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatSummary } from '../../src/shared/contract';
-import { launch, setSize, shot } from './helpers';
+import { closeSetup, expandChats, launch, setSize, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 const md = (name: string, desc: string, body = 'Istruzioni.') => `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}\n`;
@@ -31,7 +31,7 @@ function fixtureHome(): string {
   return home;
 }
 
-test('Skill e agenti: list, create from the form, live check, hook refusal, read-only copy, delete; "/" in a chat input', async () => {
+test('Skill: skill cards only, create from the form, live check, hook refusal, unsaved edit kept, delete; "/" in a chat input', async () => {
   test.setTimeout(120_000); // one long journey: two app pages and a chat
   const home = fixtureHome();
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
@@ -39,18 +39,24 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
   try {
     await setSize(app, 1600, 1000);
     await page.emulateMedia({ colorScheme: 'dark' });
+    // a fresh profile may open the first interview: it waits, the Skill page does not need it
+    if (await page.getByTestId('first-interview').isVisible({ timeout: 5000 }).catch(() => false)) await closeSetup(page);
     await page.getByTestId('nav-skill').click();
     const pg = page.getByTestId('skills-page');
-    await expect(pg.getByTestId('bx-lead')).toContainText('2 skill e 3 agenti');
-    await expect(pg.getByTestId('sk-item-claude-skill-spiega')).toContainText('Spiega un argomento');
-    await expect(pg.getByTestId('sk-item-cursor-agent-Rotto')).toContainText('2 errori');
-    await expect(pg.getByTestId('sk-item-claude-agent-revisore')).toContainText('sola lettura');
+    await expect(pg.getByTestId('bm-skill-spiega')).toContainText('Spiega un argomento');
+    await expect(pg.getByTestId('bm-skill-spiega').getByTestId('bm-unused')).toHaveText('Non usata');
+    await expect(pg.getByTestId('bm-skill-rivedi-pr')).toBeVisible();
+    // two concepts only: the CLI agents are not skills, they are not listed here
+    await expect(pg.getByTestId('bm-skill-tester')).toHaveCount(0);
+    await expect(pg.getByTestId('bm-skill-revisore')).toHaveCount(0);
+    await expect(pg.getByTestId('sk-new-agent')).toHaveCount(0);
     // filters and search
-    await pg.getByRole('group', { name: 'Tipo' }).getByRole('button', { name: 'Agenti' }).click();
-    await expect(pg.getByTestId('sk-item-claude-skill-spiega')).toHaveCount(0);
-    await pg.getByRole('group', { name: 'Tipo' }).getByRole('button', { name: 'Tutti' }).click();
+    await pg.getByRole('group', { name: 'Mostra' }).getByRole('button', { name: 'Usate', exact: true }).click();
+    await expect(pg.getByTestId('bm-skill-spiega')).toHaveCount(0);
+    await expect(pg.getByTestId('sk-empty')).toBeVisible();
+    await pg.getByRole('group', { name: 'Mostra' }).getByRole('button', { name: 'Tutte' }).click();
     await pg.getByTestId('sk-search').fill('pull request');
-    await expect(pg.locator('[data-testid^="sk-item-"]')).toHaveCount(1);
+    await expect(pg.locator('[data-testid^="bm-skill-"]:not([data-testid="bm-skill-grid"])')).toHaveCount(1);
     await pg.getByTestId('sk-search').fill('');
 
     // a new skill from the form: errors until name and description are there, then "Crea" writes it
@@ -70,7 +76,7 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
     // (main red, 2026-10-16); the product waits up to the hook's own timeout, 20 s here
     await expect.poll(() => fs.existsSync(file), { timeout: 30_000 }).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe('---\nname: riassunto-giornata\ndescription: "Riassume la giornata in cinque righe: fatto, aperto, bloccato."\n---\n\nLeggi le chat di oggi e scrivi cinque righe.');
-    await expect(pg.getByTestId('sk-item-claude-skill-riassunto-giornata')).toBeVisible();
+    await expect(pg.getByTestId('bm-skill-riassunto-giornata')).toBeVisible();
     await expect(pg.getByTestId('sk-path')).toContainText('riassunto-giornata');
 
     // markdown view: the same text, checked live
@@ -90,37 +96,30 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
     await pg.getByTestId('sk-revert').click();
     await expect(pg.getByTestId('sk-refused')).toHaveCount(0);
 
-    // an agent: tools and model in the form; a generated copy cannot be saved
-    await pg.getByTestId('sk-item-claude-agent-tester').click();
+    // "Modifica" on a card opens it; leaving the page (Esc) and coming back keeps the unsaved edit
+    await pg.getByTestId('bm-edit-spiega').click();
     await pg.getByRole('group', { name: 'Vista dell’editor' }).getByRole('button', { name: 'Modulo' }).click();
-    await expect(pg.getByTestId('sk-tools')).toHaveValue('Bash, Read');
-    await expect(pg.getByTestId('sk-model')).toHaveValue('sonnet');
-    // leaving the page (Esc) and coming back keeps the unsaved edit
+    await expect(pg.getByTestId('sk-name')).toHaveValue('spiega');
     await pg.getByTestId('sk-desc').fill('Bozza non salvata.');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('skills-page')).toHaveCount(0);
     await page.getByTestId('nav-skill').click();
     await expect(pg.getByTestId('sk-desc')).toHaveValue('Bozza non salvata.');
     await pg.getByTestId('sk-revert').click();
-    await pg.getByTestId('sk-item-claude-agent-revisore').click();
-    await expect(pg.getByTestId('sk-readonly')).toContainText('sync-agents.mjs');
-    await expect(pg.getByTestId('sk-save')).toBeDisabled();
-    await expect(pg.getByTestId('sk-delete')).toHaveCount(0);
 
     // light theme
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
-    await pg.getByTestId('sk-item-claude-skill-spiega').click();
     await page.waitForTimeout(300);
     await shot(page, 'skills-light');
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
     await page.emulateMedia({ colorScheme: 'dark' });
 
     // delete after a confirmation
-    await pg.getByTestId('sk-item-claude-skill-riassunto-giornata').click();
+    await pg.getByTestId('bm-edit-riassunto-giornata').click();
     await pg.getByTestId('sk-delete').click();
     await page.getByTestId('confirm-ok').click();
-    await expect(pg.getByTestId('sk-item-claude-skill-riassunto-giornata')).toHaveCount(0);
+    await expect(pg.getByTestId('bm-skill-riassunto-giornata')).toHaveCount(0);
     expect(fs.existsSync(path.dirname(file))).toBe(false);
 
     // "/" in a chat input: the engine's commands (fake CLI: spiega as a skill, compact; an MCP name with a space is left out)
@@ -128,6 +127,7 @@ test('Skill e agenti: list, create from the form, live check, hook refusal, read
     const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, title: 'Skill' }), cwd);
     await expect.poll(async () => (await page.evaluate(id => window.sb.invoke('chat:commands', { chatId: id }), chat.id)).map(c => c.name), { timeout: 30_000 }).toEqual(['spiega', 'compact']);
     await page.getByTestId('page-back').click();
+    await expandChats(page, chat.id); // strips are folded by default (ADR 0068)
     const input = page.getByTestId(`chat-input-${chat.id}`);
     await input.click();
     await input.pressSequentially('/');

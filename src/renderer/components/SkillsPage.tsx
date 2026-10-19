@@ -17,7 +17,7 @@ import { Seg } from '../brain/components/ui';
 import { brainBridge } from '../actions';
 import { askConfirm, toast, ui } from '../store/ui';
 import { t } from '../i18n';
-import { useBrainModel, linkSkill } from '../store/brain-model';
+import { useBrainModel, linkSkill, refreshBrainModel } from '../store/brain-model';
 import { filterSkills, skillRows, type SkillFilter, type SkillRow } from '../lib/brain-model-view';
 import { MaintenancePanel, MigrationReportPanel, when } from './brain-model/MaintenancePanel';
 import '../styles/skills.css';
@@ -188,7 +188,7 @@ function AgentToggles({ row, agents, busy }: { row: SkillRow; agents: { id: stri
 
 function SkillCard({ row, agents, busy, onEdit, index }: { row: SkillRow; agents: { id: string; name: string }[]; busy: boolean; onEdit: (e: SkillEntry) => void; index: number }) {
   const names = row.usedBy.map(id => agents.find(a => a.id === id)?.name ?? id);
-  const unused = row.home !== 'cursor' && !row.usedBy.length;
+  const unused = row.linkable && !row.usedBy.length;
   return <article className="catalog-card" data-kind="skill" data-unused={unused} data-testid={`bm-skill-${row.name}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
     <header className="bm-card-head">
       <div><h3><code>/{row.name}</code></h3><p className="bm-card-sub" title={row.file}>{row.rel ?? row.file}</p></div>
@@ -198,12 +198,12 @@ function SkillCard({ row, agents, busy, onEdit, index }: { row: SkillRow; agents
       </span>
     </header>
     <p className="bm-desc">{row.description || <i>{t('tools.skillsPage.noDescription')}</i>}</p>
-    {row.home === 'cursor' ? <p className="bm-note">{t('bm.skills.cursorOnly')}</p> : <dl className="bm-row"><dt>{t('bm.skills.usedBy')}</dt><dd className="bm-chips">{names.length ? names.map(n => <span key={n} className="bm-chip">{n}</span>) : <span className="bm-card-sub">—</span>}</dd></dl>}
+    {row.home === 'cursor' ? <p className="bm-note">{t('bm.skills.cursorOnly')}</p> : !row.linkable ? null : <dl className="bm-row"><dt>{t('bm.skills.usedBy')}</dt><dd className="bm-chips">{names.length ? names.map(n => <span key={n} className="bm-chip">{n}</span>) : <span className="bm-card-sub">—</span>}</dd></dl>}
     {row.tools.length > 0 && <dl className="bm-row"><dt>{t('bm.skills.tools')}</dt><dd className="bm-chips">{row.tools.slice(0, 8).map(x => <span key={x} className="bm-chip" data-kind="tool">{x}</span>)}{row.tools.length > 8 && <span className="bm-chip" data-kind="tool">+{row.tools.length - 8}</span>}</dd></dl>}
     <footer className="bm-card-foot">
       <span>{row.madeBy ? t('bm.madeBy', { job: t(`bm.job.${row.madeBy}`) }) : row.changedAt ? t('bm.changed', { at: when(row.changedAt) }) : ''}</span>
       <span className="sp" />
-      {row.home !== 'cursor' && agents.length > 0 && <AgentToggles row={row} agents={agents} busy={busy} />}
+      {row.linkable && agents.length > 0 && <AgentToggles row={row} agents={agents} busy={busy} />}
       {row.entry && <button type="button" className="btn btn-ghost btn-s" onClick={() => onEdit(row.entry!)} data-testid={`bm-edit-${row.name}`}>{t('bm.skills.edit')}</button>}
     </footer>
   </article>;
@@ -268,8 +268,8 @@ export function SkillsPage() {
         <Editor draft={draft} places={cat?.places ?? []}
           onChange={text => setDraft(d => (d ? { ...d, text } : d))}
           onPlace={place => setDraft(d => (d ? { ...d, place } : d))}
-          onSaved={(entry, text) => { setDraft(d => (d ? { ...d, entry, saved: text } : d)); void load(); }} // what was typed meanwhile stays
-          onDeleted={() => { setDraft(null); void load(); }} />
+          onSaved={(entry, text) => { setDraft(d => (d ? { ...d, entry, saved: text } : d)); void load(); void refreshBrainModel(); }} // what was typed meanwhile stays
+          onDeleted={() => { setDraft(null); void load(); void refreshBrainModel(); }} />
       </div>}
       <div className="bm-toolbar" data-testid="sk-list">
         <input className="sk-input sk-search" type="search" placeholder={t('bm.skills.search')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('bm.skills.searchLabel')} />
@@ -277,7 +277,7 @@ export function SkillsPage() {
       </div>
       {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
         : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>
-          : <div className="catalog-grid" data-testid="bm-skill-grid">{shown.map((r, i) => <SkillCard key={`${r.home}|${r.file}`} row={r} agents={agents} busy={busy} onEdit={open} index={i} />)}</div>}
+          : <div className="catalog-grid" data-testid="bm-skill-grid">{shown.map((r, i) => <SkillCard key={`${r.home}|${r.file}`} row={r} agents={state?.root ? agents : []} busy={busy} onEdit={open} index={i} />)}</div>}
       {state?.migration && <MigrationReportPanel report={state.migration} agentName={agentName} />}
       <MaintenancePanel kinds={['skill', 'agent']} />
     </div>

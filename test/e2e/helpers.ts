@@ -168,12 +168,23 @@ export async function openAgentOverview(page: Page): Promise<void> {
   await expect(page.getByTestId('agent-overview')).toBeVisible();
 }
 
-/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card;
- *  Generale is in every catalog. */
+/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card: a
+ *  click flips the card (#81), "Apri profilo" on its back opens the page; Generale is in every catalog. */
 export async function openAgents(page: Page, agent = 'Generale'): Promise<void> {
   await openAgentOverview(page);
-  await page.getByTestId('agent-overview').getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
+  const card = page.getByTestId('agent-overview').locator('article.catalog-card').filter({ has: page.getByRole('heading', { name: agent, exact: true }) });
+  await card.getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
+  await expect(card).toHaveAttribute('data-flipped', 'true');
+  await card.getByRole('button', { name: /^(Apri profilo|Open profile)$/ }).click();
   await expect(page.getByTestId('agent-studio')).toBeVisible();
+}
+
+/** Opens the brain's notes map: the Mappa page (G B) and its "Note del brain" view (ADR 0077; it was a Dashboard tab). */
+export async function openNotesMap(page: Page): Promise<void> {
+  await goPage(page, 'collegamenti');
+  await expect(page.getByTestId('bm-map-page')).toBeVisible();
+  await page.getByTestId('bm-map-page').getByRole('button', { name: /^(Note del brain|Brain notes)$/ }).click();
+  await expect(page.getByTestId('dash-map')).toBeVisible();
 }
 
 /** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */

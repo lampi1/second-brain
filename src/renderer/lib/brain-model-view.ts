@@ -13,6 +13,8 @@ export interface SkillRow {
   file: string; rel: string | null; madeBy: BrainSkill['madeBy']; lines: number; changedAt: number | null;
   /** the skill editor's entry for it (skills:read / save / delete), when the editor lists it */
   entry: SkillEntry | null;
+  /** read by the brain model (the brain's or the user's skill folders): agents can declare it */
+  linkable: boolean;
 }
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
@@ -23,11 +25,11 @@ export function skillRows(state: BrainModelState | null, catalog: SkillCatalog |
   const rows: SkillRow[] = (state?.skills ?? []).map(s => {
     const entry = entries.find(e => norm(e.path) === norm(s.file)) ?? entries.find(e => e.harness === 'claude' && e.name === s.name && !used.has(e.id)) ?? null;
     if (entry) used.add(entry.id);
-    return { name: s.name, description: s.description, home: s.home, usedBy: s.usedBy, tools: s.tools, file: s.file, rel: s.rel, madeBy: s.madeBy, lines: s.lines, changedAt: s.changedAt, entry };
+    return { name: s.name, description: s.description, home: s.home, usedBy: s.usedBy, tools: s.tools, file: s.file, rel: s.rel, madeBy: s.madeBy, lines: s.lines, changedAt: s.changedAt, entry, linkable: true };
   });
   for (const e of entries) {
     if (used.has(e.id) || rows.some(r => norm(r.file) === norm(e.path))) continue;
-    rows.push({ name: e.name, description: e.description, home: e.harness === 'cursor' ? 'cursor' : 'user', usedBy: [], tools: [], file: e.path, rel: null, madeBy: null, lines: 0, changedAt: e.mtime ?? null, entry: e });
+    rows.push({ name: e.name, description: e.description, home: e.harness === 'cursor' ? 'cursor' : 'user', usedBy: [], tools: [], file: e.path, rel: null, madeBy: null, lines: 0, changedAt: e.mtime ?? null, entry: e, linkable: false });
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -35,7 +37,7 @@ export function skillRows(state: BrainModelState | null, catalog: SkillCatalog |
 export type SkillFilter = 'all' | 'used' | 'unused';
 export function filterSkills(rows: SkillRow[], query: string, filter: SkillFilter): SkillRow[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return rows.filter(r => (filter === 'all' || (filter === 'used') === r.usedBy.length > 0)
+  return rows.filter(r => (filter === 'all' || (filter === 'used' ? r.usedBy.length > 0 : r.linkable && !r.usedBy.length))
     && words.every(w => `${r.name} ${r.description} ${r.tools.join(' ')}`.toLowerCase().includes(w)));
 }
 

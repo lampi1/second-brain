@@ -51,7 +51,7 @@ export function ClassifiersPage() {
         {r?.error && <p role="alert">{r.error}</p>}
         {r?.routes.length ? <div className="bm-table-wrap"><table className="bm-table">
           <thead><tr><th>{t('bm.cls.col.kind')}</th><th>{t('bm.cls.col.area')}</th><th>{t('bm.cls.col.model')}</th><th>{t('bm.cls.col.effort')}</th><th>{t('bm.cls.col.why')}</th><th>{t('bm.cls.col.runs')}</th><th>{t('bm.cls.col.success')}</th><th>{t('bm.cls.col.cost')}</th></tr></thead>
-          <tbody>{r.routes.map((x, i) => <tr key={i} data-testid="bm-cls-route"><td><code>{x.kind}</code></td><td>{x.area ?? t('bm.cls.anyArea')}</td><td><code>{x.harness} · {x.model}</code></td><td>{x.effort ?? '—'}</td><td className="why">{x.why}</td><Result r={x.result} /></tr>)}</tbody>
+          <tbody>{r.routes.map((x, i) => <tr key={i} data-testid="bm-cls-route"><td className="kind"><code>{x.kind}</code></td><td>{x.area ?? t('bm.cls.anyArea')}</td><td className="model"><code title={x.harness}>{x.model}</code></td><td>{x.effort ?? '—'}</td><td className="why">{x.why}</td><Result r={x.result} /></tr>)}</tbody>
         </table></div> : <p className="bm-empty">{t('bm.cls.noTable')}</p>}
         <details className="bm-history-wrap"><summary className="bm-history-sum">{t('bm.cls.history')} ({state.history.length})</summary>
           {state.history.length ? <ul className="bm-history">{state.history.slice().reverse().map((h, i) => <li key={i}><time>{at(h.at)}</time><div>{t('bm.cls.historyRow', { from: h.from === null ? '—' : String(h.from), to: h.to, by: h.by })}{h.reason && <p>{h.reason}</p>}</div></li>)}</ul> : <p className="bm-empty">{t('bm.cls.historyEmpty')}</p>}
