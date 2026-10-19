@@ -2,7 +2,7 @@
 // the theme applies at once (light and dark screenshots); cross-engine messaging is always available;
 // the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
 // 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
-// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort and "Nuova chat" starts
+// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort, and every chat it opens starts
 // from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
 // (ADR 0046). Screenshots: test-results/shots/settings-*.png.
 import fs from 'node:fs';
@@ -142,7 +142,7 @@ test('spending limits, Windows notifications, the engines the Orchestrator may u
   await app.close();
 });
 
-test('Chat aperte dall’Orchestrator: engine, models (Cursor\'s own list), effort; saved at once, "Nuova chat" starts from them', async () => {
+test('Chat aperte dall’Orchestrator: engine, models (Cursor\'s own list), effort; saved at once', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
@@ -170,19 +170,6 @@ test('Chat aperte dall’Orchestrator: engine, models (Cursor\'s own list), effo
   await expect(g.getByTestId('st-rc-harness-choice-cursor')).toHaveAttribute('aria-checked', 'true');
   await shot(page, 'settings-orchestrator-chats');
 
-  // "Nuova chat" starts from them: Cursor with Grok 4.7; switching to Claude takes Claude's model and effort
-  await page.getByTestId('page-back').click();
-  await page.keyboard.press('Control+N');
-  const d = page.getByTestId('newchat');
-  await d.getByTestId('newchat-engine-options').locator('summary').click();
-  await expect(d.getByTestId('newchat-harness-cursor')).toHaveAttribute('aria-checked', 'true');
-  await d.getByTestId('newchat-advanced').locator('summary').click();
-  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'grok-4.7');
-  await shot(page, 'settings-orchestrator-chats-newchat');
-  await d.getByTestId('newchat-harness-claude').click();
-  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'claude-opus-5-5');
-  // the effort stays "automatico" (the table's, ADR 0051) until the user picks one
-  await expect(d.getByTestId('newchat-effort-default')).toHaveAttribute('aria-checked', 'true');
   await app.close();
 });
 

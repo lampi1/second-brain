@@ -91,12 +91,23 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
   return true;
 }
 
+/** Ctrl+N and the palette's "Nuova richiesta" (the owner, 2026-10-19: the Orchestrator's column is the only way to start
+ *  work, ADR 0083): its input takes the keyboard for a new request; it plans and delegates. Without an Orchestrator yet, its
+ *  column opens on "Crea l'Orchestrator". */
+export function newRequest(): void {
+  setOrchestratorOpen(true);
+  const id = orchestratorId();
+  if (!id) { toast('Crea l’Orchestrator: è da lì che parte ogni lavoro.', 'info'); return; }
+  requestFocus(id);
+  flashTile('orchestrator');
+}
+
 /** Ctrl+Shift+R, the palette and the Orchestrator's menu: the confirm dialog for a new Orchestrator (`to` preselected; default the
  *  current engine = "Ricomincia da capo"). */
 export function askRenewOrchestrator(to?: Harness): void {
   const id = orchestratorId();
   const c = id ? app.get().chats[id] : null;
-  if (!id || !c) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
+  if (!id || !c) { toast('Non c’è ancora un Orchestrator: crealo nella sua colonna.', 'info'); return; }
   openOrchestratorRenew({ chatId: id, to: to ?? c.harness });
 }
 
@@ -104,7 +115,7 @@ export function askRenewOrchestrator(to?: Harness): void {
  *  old conversation stays as a closed chat to read (ADR 0021; the user, 2026-10-12: "che sia disponibile il clear"). */
 export function askClearOrchestrator(chatId: string | null = orchestratorId()): void {
   const c = chatId ? app.get().chats[chatId] : null;
-  if (!chatId || !c?.isOrchestrator) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
+  if (!chatId || !c?.isOrchestrator) { toast('Non c’è ancora un Orchestrator: crealo nella sua colonna.', 'info'); return; }
   askConfirm({
     title: `Pulire l’Orchestrator «${c.title}»?`,
     body: 'Riparte vuoto sullo stesso motore e rilegge da sola la memoria (now.md). La conversazione di adesso resta tra le chat chiuse, da consultare.',

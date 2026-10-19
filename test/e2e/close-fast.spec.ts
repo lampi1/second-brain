@@ -74,10 +74,10 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Orchestrator, neve
 
   // under a dialog: nothing closes, the window stays. A real key event (sendInputEvent), not page.keyboard: only a real
   // one reaches Electron's default menu, whose Ctrl+W ("Close") would close the window and quit the app
-  await page.keyboard.press('Control+N');
-  await expect(page.getByTestId('newchat-cancel')).toBeVisible();
+  await page.keyboard.press('Control+/');
+  await expect(page.getByTestId('shortcuts')).toBeVisible();
   expect(await ctrlWHandled(app, 'window')).toBe(0);
-  await expect(page.getByTestId('newchat-cancel')).toBeVisible();
+  await expect(page.getByTestId('shortcuts')).toBeVisible();
   await expect(page.getByTestId('tile-chat-fix')).toBeAttached();
   await page.keyboard.press('Escape');
 

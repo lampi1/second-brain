@@ -53,9 +53,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/roles.ts ROLE_IDS, ROLE_DEFAULTS
       b('I ruoli sono sempre gli stessi: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nessuno se ne crea uno nuovo: un saper fare che manca diventa una skill.',
         'The roles are always the same: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nobody creates a new one: missing know-how becomes a skill.'),
-      // src/renderer/components/AgentStartDialog.tsx (createChat with roleId and skills); src/main/agents/catalog.ts resolve()
-      b('Tu avvii un ruolo da «Avvia un ruolo» (Ctrl+N): scegli il ruolo e le skill che l’app ti suggerisce; la chat nasce con motore, modello del suo livello e istruzioni del ruolo.',
-        'You start a role from "Start a role" (Ctrl+N): pick the role and the skills the app suggests; the chat is born with the role’s engine, its tier’s model and the role’s instructions.'),
+      // src/renderer/actions.ts newRequest (Ctrl+N); src/main/agents/catalog.ts resolve()
+      b('Il lavoro parte solo dall’Orchestrator: Ctrl+N porta il cursore nella sua colonna («Cosa vuoi fare?»), lui sceglie il ruolo e le skill; la chat nasce con motore, modello del suo livello e istruzioni del ruolo.',
+        'Work starts only from the Orchestrator: Ctrl+N puts the cursor in its column ("What do you want to do?"), it picks the role and the skills; the chat is born with the role’s engine, its tier’s model and the role’s instructions.'),
       // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog, skills_suggest
       b('L’Orchestrator legge i ruoli con agent_catalog, sceglie le skill con skills_suggest e apre il lavoro con app_create_chat indicando roleId: motore, modello e sforzo li decide il ruolo, nient’altro li scavalca.',
         'The Orchestrator reads the roles with agent_catalog, picks skills with skills_suggest and opens the work with app_create_chat naming a roleId: the role decides engine, model and effort, nothing overrides them.'),
@@ -92,7 +92,45 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Router smista solo i lotti che gli dai tu: l’app non gli manda da sola il lavoro in arrivo.',
         'Router triages only the batches you give it: the app does not send it incoming work by itself.'),
     ],
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/actions.ts', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts'],
+  },
+  {
+    id: 'delegation',
+    title: b('Le deleghe tra ruoli', 'Delegation between roles'),
+    summary: b('Un ruolo affida una parte del suo compito a un altro ruolo: il figlio è una chat visibile sotto di lui, con un contratto, e torna con un risultato.',
+      'A role hands part of its task to another role: the child is a visible chat under it, with a contract, and comes back with one result.'),
+    points: [
+      // src/main/agents/delegation.ts agent_delegate; src/shared/delegation.ts delegationPrompt
+      b('agent_delegate avvia da 1 a 10 chat figlie insieme, ognuna con un contratto che basta a sé: obiettivo, risultato atteso, criteri di fatto, contesto. Il figlio non legge mai la conversazione del genitore.',
+        'agent_delegate starts 1 to 10 child chats at once, each with a self-contained contract: goal, expected output, done-when criteria, context. The child never reads the parent’s conversation.'),
+      // src/main/agents/delegation.ts allowsClass, within; src/main/agents/role-gate.ts aboveParent
+      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella; una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat.',
+        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder; a request beyond the parent’s permissions is refused and says so in the chat.'),
+      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
+      b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
+        'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
+      // src/main/agents/delegation.ts agent_ask_parent, agent_answer_child; src/renderer/lib/child-requests.ts requestHost
+      b('Un dubbio del figlio va prima al genitore (agent_ask_parent); a te arriva solo ciò che serve a una persona (un permesso, un’azione irreversibile o esterna, una scelta che cambia l’obiettivo), una volta sola, nella chat che stai guardando.',
+        'A child’s doubt goes to its parent first (agent_ask_parent); only what needs a person reaches you (a permission, an irreversible or external action, a choice that changes the goal), once, in the chat you are looking at.'),
+      // src/renderer/components/DelegationCard.tsx; src/renderer/lib/run-steps.ts
+      b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la mette a fuoco.',
+        'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" puts it in focus.'),
+      // src/main/chats/manager.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
+      b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
+        'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
+      // src/main/chats/manager.ts reportDelegation; src/shared/delegation.ts resultMessage
+      b('Il figlio chiude con agent_report: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato.',
+        'The child closes with agent_report: the result reaches the parent as a message; the Orchestrator sees only the state.'),
+    ],
+    analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e i dubbi passano prima da lui.',
+      'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and questions go through him first.'),
+    diagram: { kind: 'flow', steps: [b('Genitore', 'Parent'), b('agent_delegate', 'agent_delegate'), b('Figli visibili', 'Visible children'), b('agent_report', 'agent_report'), b('Genitore', 'Parent')] },
+    tech: [
+      // src/shared/delegation.ts
+      tech(DATA, 'ChatSummary.parentId e delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.', 'ChatSummary.parentId and delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.'),
+      tech(WHERE, 'Strumenti MCP della chat: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approvati).', 'Chat MCP tools: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approved).'),
+    ],
+    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts'],
   },
   {
     id: 'agents',
@@ -394,9 +432,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Dove l’app smista qualcosa da sola senza spendere token: le skill adatte a un compito, il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',
       'Where the app sorts something by itself without spending tokens: the skills that fit a task, the kind of work, the Orchestrator’s mail, sensitive commands.'),
     points: [
-      // src/main/skills/suggest.ts; src/main/agents/discovery.ts skills_suggest; src/renderer/components/AgentStartDialog.tsx
-      b('Skill per un compito (skills_suggest): la richiesta è confrontata con nome e descrizione di ogni skill del brain, per parole (BM25) e, quando il modello locale è pronto, per significato; le migliori sono preselezionate in «Avvia un ruolo» e l’Orchestrator le passa al ruolo. È un consiglio: un ruolo usa solo le skill che il suo avvio gli dà.',
-        'Skills for a task (skills_suggest): the request is compared with each brain skill’s name and description, by words (BM25) and, when the local model is ready, by meaning; the best are preselected in "Start a role" and the Orchestrator passes them to the role. It is advice: a role uses only the skills its launch gives it.'),
+      // src/main/skills/suggest.ts; src/main/agents/discovery.ts skills_suggest
+      b('Skill per un compito (skills_suggest): la richiesta è confrontata con nome e descrizione di ogni skill del brain, per parole (BM25) e, quando il modello locale è pronto, per significato; l’Orchestrator, o il ruolo che delega, passa le migliori al ruolo. È un consiglio: un ruolo usa solo le skill che il suo avvio gli dà.',
+        'Skills for a task (skills_suggest): the request is compared with each brain skill’s name and description, by words (BM25) and, when the local model is ready, by meaning; the Orchestrator, or the role that delegates, passes the best ones to the role. It is advice: a role uses only the skills its launch gives it.'),
       // src/shared/work-concepts.ts CONCEPTS
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
@@ -424,8 +462,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'flow', steps: [b('Richiesta', 'Request'), b('Parole e lessico', 'Words and lexicon'), b('Skill suggerite', 'Suggested skills'), b('Avvio del ruolo', 'Role launch')] },
     tech: [
       // src/shared/skill-suggest.ts
-      tech(DATA, 'SkillSuggestions { candidates: { name, score 0–100, why }[] (al massimo 5, la migliore prima), mode: hybrid | words }; «Avvia un ruolo» preseleziona da 60 in su.',
-        'SkillSuggestions { candidates: { name, score 0–100, why }[] (at most 5, best first), mode: hybrid | words }; "Start a role" preselects from 60 up.'),
+      tech(DATA, 'SkillSuggestions { candidates: { name, score 0–100, why }[] (al massimo 5, la migliore prima), mode: hybrid | words }; chi delega passa quelle da 60 in su.',
+        'SkillSuggestions { candidates: { name, score 0–100, why }[] (at most 5, best first), mode: hybrid | words }; whoever delegates passes those from 60 up.'),
       // src/shared/contract.ts TaskKind
       tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.',
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
@@ -538,8 +576,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
         'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
       // src/renderer/components/CloudStrips.tsx, src/main/cloud/service.ts (ADR 0080)
-      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Si avviano da «Nuovo agente» → Dove: Cloud, solo su repository GitHub con il branch già pushato.',
-        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. Start one from "New agent" → Where: Cloud, only on GitHub repositories with the branch already pushed.'),
+      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Li avvia l’Orchestrator quando glielo chiedi (app_create_chat con where «cloud»), solo su repository GitHub con il branch già pushato.',
+        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. The Orchestrator starts one when you ask it (app_create_chat with where "cloud"), only on GitHub repositories with the branch already pushed.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),

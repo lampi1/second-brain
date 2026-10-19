@@ -8,7 +8,7 @@ export const componentsEn: typeof componentsIt = {
   "cmp.palette.status": "Status: where things stand",
   "cmp.palette.statusSub": "chats, waiting questions, branches and your PRs, no tokens",
   "cmp.palette.next": "Next thing waiting for you",
-  "cmp.palette.newChat": "New chat",
+  "cmp.palette.newChat": "New request to the Orchestrator",
   "cmp.palette.stopAll": "Stop everything",
   "cmp.palette.stop": "Stop the selected chat",
   "cmp.palette.focusExit": "Leave focus mode",

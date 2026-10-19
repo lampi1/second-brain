@@ -5,7 +5,7 @@ export const chatIt = {
   'chat.input.slashHelp': '↑↓ scegli · Tab completa · Esc chiudi',
   'chat.input.placeholderEnter': 'Invio di nuovo: manda subito l’ultimo in coda',
   'chat.input.placeholderNewChat': 'Cosa deve fare la nuova chat…',
-  'chat.input.placeholderOrchestrator': 'Scrivi all’Orchestrator…',
+  'chat.input.placeholderOrchestrator': 'Cosa vuoi fare?',
   'chat.input.placeholderPending': 'Rispondi sopra o scrivi…',
   'chat.input.placeholderBusy': 'Scrivi: va in coda…',
   'chat.input.placeholderClosed': 'Scrivi per riprendere la chat…',

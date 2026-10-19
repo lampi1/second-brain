@@ -22,9 +22,8 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
       await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     }
     await expect(page.getByRole('button', { name: it ? 'Nuovo agente' : 'New agent', exact: true })).toHaveCount(0);
-    await page.keyboard.press('Control+N'); // a new agent starts from Ctrl+N, the palette or the Orchestrator
-    await expect(page.getByTestId('newchat')).toBeVisible();
-    await page.keyboard.press('Escape');
+    // work starts only from the Orchestrator's column (ADR 0083): Ctrl+N gives its input the keyboard, no dialog
+    await page.keyboard.press('Control+N');
     await expect(page.getByTestId('newchat')).toHaveCount(0);
     await openAgents(page);
   } finally { await app.close(); }

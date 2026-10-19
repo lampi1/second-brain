@@ -100,9 +100,10 @@ when they cannot); long chats handed off before the context fills; code blocks r
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
 pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a Task page (pull requests, work items, QA
 status, alerts); quality metrics; full-text search; the Brain section (Agenti, Skill, Regole, Memoria, Classificatori, Mappa) with
-self-maintaining skills and agents and a change log with undo; agents exported with their skills; agent-first delegation (the Orchestrator or the local classifier picks a catalog
-agent, whose profile sets engine, model, effort and maximum context; workers start catalog sub-agents; the routing
-table only fills a model a profile leaves open, ADR 0078); Fatto, the log of what was done; and one-click updates
+self-maintaining skills and agents and a change log with undo; agents exported with their skills; nine fixed roles with direct parent-to-child delegation in visible chats (permissions only go
+down, questions go to the parent first, the user's words in any chat reach the Orchestrator and the parent, each
+request shown once; the delegation tree as thread cards in the Grindhouse and the sidebar; work starts only from the
+Orchestrator, ADR 0083); Fatto, the log of what was done; and one-click updates
 from Settings → Aggiornamenti, where the user moves the app to main's tip.
 
 ## Horizon (designed for, not built yet)

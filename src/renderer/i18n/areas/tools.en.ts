@@ -145,7 +145,7 @@ export const toolsEn: typeof toolsIt = {
   'tools.keys.map3dKey': 'Ctrl Shift M',
   'tools.keys.map3dWhat': '3D map',
   'tools.keys.newChatKey': 'Ctrl N',
-  'tools.keys.newChatWhat': 'New chat',
+  'tools.keys.newChatWhat': 'New request to the Orchestrator',
   'tools.keys.settingsKey': 'Ctrl ,',
   'tools.keys.settingsWhat': 'Settings',
   'tools.keys.stopChatKey': 'Ctrl .',

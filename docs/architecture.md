@@ -49,7 +49,14 @@
   quiet ones ride along. `chats/held-news.ts` reads both queues (no delivery, no turn) and sends the list as
   `orchestrator:heldChanged` (`orchestrator:held` at start); the Orchestrator's tile shows "N novità in attesa" above its input
   (`HeldNews.tsx`), a click lists chat, kind, since when and why.
-- **A cloud agent** (ADR 0080): "Nuovo agente → Dove: Cloud" or `app_create_chat where:'cloud'` → `cloud:start` →
+- **Delegation** (ADR 0083): a role chat calls `agent_delegate` on its own endpoint (`/mcp/chat/:chatId/:token`,
+  `agents/delegation.ts`) → limits and permissions checked, slots reserved → `ChatManager.create(..., 'agent')` with
+  `parentId` and the contract → the child's requests pass `agents/role-gate.ts` (skills, sub-agents, above-parent
+  refused) → `agent_ask_parent` / `agent_answer_child` for questions → `agent_report` → `reportDelegation` sends the
+  result to the parent. The renderer builds the tree from `parentId` (`lib/chat-tree.ts`), the steps from the
+  transcript (`lib/run-steps.ts`) and picks the one view that shows a request (`lib/child-requests.ts`). The user's
+  message in a work chat (`chat:send` → `userWrote`) is quiet news for the Orchestrator and a note for the parent.
+- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
   (`CloudStrips.tsx`). The vendors' lists are polled only while the window is visible (30 s while running, back-off to

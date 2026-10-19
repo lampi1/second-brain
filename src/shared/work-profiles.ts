@@ -1,7 +1,7 @@
 // The user's work profile (Impostazioni → Il mio spazio): which Brain pages the sidebar shows and which one is the
 // reference page, for a developer, a tester, a product owner or a CTO. Navigation only: it never picks a role, an
 // engine or a permission. Read tolerantly: an unknown saved id means "no profile" (every page shown). Used by
-// renderer/components/WorkProfilePreferences.tsx and Sidebar.tsx; unit tests: test/unit/role-consumers.test.ts.
+// renderer/components/WorkProfilePreferences.tsx and Sidebar.tsx; unit tests: test/unit/work-profiles.test.ts.
 export interface WorkProfile { id: string; title: string; pageIds: readonly string[]; homePageId: string }
 
 export const WORK_PROFILES: readonly WorkProfile[] = [

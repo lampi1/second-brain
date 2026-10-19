@@ -7,7 +7,7 @@ export const chatEn: typeof chatIt = {
   'chat.input.slashHelp': '↑↓ choose · Tab complete · Esc close',
   'chat.input.placeholderEnter': 'Press again: send the last queued message',
   'chat.input.placeholderNewChat': 'What should the new chat do…',
-  'chat.input.placeholderOrchestrator': 'Write to the Orchestrator…',
+  'chat.input.placeholderOrchestrator': 'What do you want to do?',
   'chat.input.placeholderPending': 'Reply above or write…',
   'chat.input.placeholderBusy': 'Write: it will queue…',
   'chat.input.placeholderClosed': 'Write to resume this chat…',

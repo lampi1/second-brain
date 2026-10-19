@@ -5,12 +5,15 @@ Grindhouse, coordinated by the Orchestrator), answers their questions and permis
 (a brain folder chosen at setup) update live. Vision: `docs/VISION.md`. Architecture: `docs/architecture.md`. Decisions:
 `docs/adr/`. Human contributors: `CONTRIBUTING.md`. UI language Italian; code, comments, commits and docs English.
 
-Words used everywhere: **Orchestrator** = the coordinating chat (it plans, starts agents from the catalog, answers
-their mail; one or more, in a full-height column on the right; called "Orchestrator" before ADR 0068, a name still found in
-code identifiers such as `orchestrator`, `OrchestratorTile`, `orchestrator-wake.ts`); **Grindhouse** = the home page, the one place for the
+Words used everywhere: **Orchestrator** = the coordinating chat and the one place where work starts (it plans, opens
+role chats, answers their mail; a full-height column on the right; it sees the work chats' state and the user's own
+messages to them, never their content, ADR 0083); **role** = one of nine fixed roles (Orchestrator, Strategist,
+Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe) a chat runs; **delegation** = a role chat starting visible
+child chats with `agent_delegate` (permissions only go down, questions go to the parent first, one `agent_report`
+back, ADR 0083); **Grindhouse** = the home page, the one place for the
 agents (a strip each, the browsers they drive under them; the old Mosaico / Corsie views are retired, ADR 0068);
-**agent** = who works: a catalog profile with engine, model, effort, permissions and the skills it uses (the profile
-decides a chat's engine, model and effort, not a per-chat choice or a routing row, ADR 0078); **skill** = how a job is
+**agent** = who works: a chat running a role, whose tools, ceiling, tier and skills decide its engine, model and
+permissions (not a per-chat choice or a routing row, ADR 0078, 0083); **skill** = how a job is
 done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077); **Brain** section = Agenti, Skill,
 Regole, Memoria, Classificatori, Mappa; **brain** = the user's folder of notes, rules and tools the agents read and
 write (a template ships in the product; a fresh install starts empty); **Task** = the page of the user's work items and

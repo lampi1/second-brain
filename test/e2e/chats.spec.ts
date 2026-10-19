@@ -12,18 +12,6 @@ declare global { interface Window { __ev: { ch: string; p: unknown }[] } }
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
-test('the Nuova chat dialog shows the status of each CLI, never "controllo…" forever (no check at start under tests)', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
-  const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
-  expect(await page.evaluate(() => window.sb.invoke('app:info', undefined).then(i => i.cli))).toBeNull();
-  await page.keyboard.press('Control+N');
-  await page.getByTestId('newchat-engine-options').locator('summary').click();
-  await expect(page.getByTestId('newchat-harness-claude')).toContainText('0.0.0-fake', { timeout: 30_000 }); // two CLI runs, slow under load
-  await expect(page.getByTestId('newchat-harness-cursor')).not.toContainText('controllo…', { timeout: 30_000 });
-  await shot(page, 'newchat-cli-status');
-  await app.close();
-});
-
 test('a Claude chat runs a turn, asks a question, takes the answer and streams events to the page', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));

@@ -55,13 +55,11 @@ test('Rispondo a una domanda dalla sua tessera senza aprire la chat', async () =
 test('Avvio una chat', async () => {
   const { app, page } = await launchDemo();
   const s = new Scenario('Avvio una chat', page);
-  await s.press('Control+N', 'Ctrl+N: nuova chat');
+  await s.press('Control+N', 'Ctrl+N: nuova richiesta all\'Orchestrator');
   await s.type('Controlla i log di oggi');
-  await s.press('Control+Enter', 'Ctrl+Invio: crea');
-  await s.check('la tessera nuova c\'è con il messaggio e ha il cursore', async () => {
-    const tile = page.locator('[data-testid^="tile-chat-"]', { hasText: 'Controlla i log di oggi' });
-    await expect(tile).toBeVisible();
-    await expect(tile.locator('textarea')).toBeFocused();
+  await s.press('Enter', 'Invio: la manda');
+  await s.check('la richiesta è nella colonna dell\'Orchestrator, che la smista', async () => {
+    await expect(page.getByTestId('tile-orchestrator')).toContainText('Controlla i log di oggi');
   });
   await s.done(3);
   await app.close();

@@ -22,7 +22,7 @@ import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
-  toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, toggleQuestionsModal, newBrowser,
+  toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, toggleQuestionsModal, newBrowser, newRequest,
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
@@ -86,7 +86,7 @@ function buildCommands(): Cmd[] {
   const actions: Omit<Cmd, 'group'>[] = [
     { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
-    { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => openModal('newChat') },
+    { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => newRequest() },
     { id: 'new-browser', title: t('ui.newBrowser'), sub: t('ui.browserMine'), icon: <IconGlobe />, run: () => { void newBrowser(); }, text: 'browser tab scheda web' },
     { id: 'stopall', title: auditText('cmp.palette.stopAll'), shortcut: 'Ctrl+Shift+.', icon: <IconStop />, run: stopAllAsk },
     { id: 'stop', title: auditText('cmp.palette.stop'), shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },

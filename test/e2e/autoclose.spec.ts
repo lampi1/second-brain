@@ -17,10 +17,10 @@ test('a real backend deadline is visible with an accessible keep-open action, an
     await expect(warning.getByRole('button', { name: 'Resta aperto', exact: true })).toBeVisible();
     await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
     await shot(page, 'autoclose-real-deadline');
-    await page.keyboard.press('Control+N');
-    await expect(page.getByTestId('newchat')).toBeVisible();
+    await page.keyboard.press('Control+/');
+    await expect(page.getByTestId('shortcuts')).toBeVisible();
     await expect(warning).not.toBeVisible();
-    await page.getByTestId('newchat-cancel').click();
+    await page.keyboard.press('Escape');
     await expect(warning).toBeVisible();
   } finally { await app.close(); }
 });

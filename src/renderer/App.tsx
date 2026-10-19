@@ -16,7 +16,7 @@ import { sameList } from './store/state';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator,
+  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -30,7 +30,6 @@ import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
-import { AgentStartDialog as NewChatDialog } from './components/AgentStartDialog';
 import { AgentPackHost } from './components/AgentPackHost';
 import { AgentCatalogPage } from './components/AgentCatalogPage';
 import { FirstInterviewGate } from './components/FirstInterview';
@@ -85,7 +84,7 @@ function onKey(e: KeyboardEvent): void {
   switch (cmd.type) {
     case 'palette': openModal('palette'); break;
     case 'next': nextThing(); break;
-    case 'newChat': openModal('newChat'); break;
+    case 'newChat': newRequest(); break;
     case 'stopFocused': stopFocused(); break;
     case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
@@ -261,7 +260,6 @@ export function App() {
       <FirstInterviewGate />
       <UpdateCheckpointStatus />
       {modal === 'palette' && <CommandPalette />}
-      {modal === 'newChat' && <NewChatDialog />}
       {modal === 'shortcuts' && <ShortcutsDialog />}
       {modal === 'confirm' && <ConfirmDialog />}
       {modal === 'orchestratorRenew' && <OrchestratorRenewDialog />}

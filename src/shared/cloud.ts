@@ -1,6 +1,6 @@
 // Cloud agents (ADR 0080, issue #79): agents that run in a vendor's cloud (Cursor Cloud Agents, Codex cloud tasks,
 // Claude Code cloud sessions) instead of on this PC. The shapes main (src/main/cloud/) and the renderer (the Grindhouse's
-// cloud strips, the "Dove: Locale / Cloud" choice of "Nuovo agente") share; contract.ts re-exports them and adds the
+// cloud strips, the Orchestrator's app_create_chat with where "cloud") share; contract.ts re-exports them and adds the
 // cloud:* channels. Pure data, no imports: used by contract.ts, src/main/cloud/*, the renderer's store/cloud.ts.
 
 /** The engines that offer cloud agents (their ids in the engine registry). */

@@ -6,7 +6,7 @@ export const componentsIt = {
   "cmp.palette.status": "Stato: a che punto siamo",
   "cmp.palette.statusSub": "chat, domande in attesa, rami e le tue PR, senza token",
   "cmp.palette.next": "Prossima cosa che ti aspetta",
-  "cmp.palette.newChat": "Nuova chat",
+  "cmp.palette.newChat": "Nuova richiesta all’Orchestrator",
   "cmp.palette.stopAll": "Ferma tutto",
   "cmp.palette.stop": "Ferma la chat selezionata",
   "cmp.palette.focusExit": "Esci dalla modalità focus",

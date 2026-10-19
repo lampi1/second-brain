@@ -18,7 +18,7 @@ import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { answerLater } from '../lib/later';
 import { pairHover, usePair } from '../lib/pairs';
-import { awaitingCard, openLink, reqKey } from '../actions';
+import { awaitingCard, go, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
@@ -56,7 +56,7 @@ function OrchestratorSetup() {
       <option value="">{t('home.chooseEngine')}</option>{engines.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
     </Select>
     <button type="button" className="btn btn-primary btn-m" disabled={!engine || busy || !info?.brainRoot} onClick={() => void create()} data-testid="orchestrator-create">{t('dialogs.orchestrator.createButton')}</button>
-    {!info?.brainRoot && <button type="button" className="btn btn-ghost btn-m" onClick={() => openModal('newChat')}>{t('home.manageAgents')}</button>}
+    {!info?.brainRoot && <button type="button" className="btn btn-ghost btn-m" onClick={() => go({ page: 'agenti' })}>{t('home.manageAgents')}</button>}
   </div>;
 }
 

@@ -136,8 +136,11 @@ cost and context size. When an agent asks a question or a permission, it shows u
 a floating layer, wherever you are in the app): answer with one key, with the context the agent had when it asked.
 Strips are grouped by area and ordered by the Orchestrator; a click anywhere on one expands it inline, and it
 maximizes or opens in focus mode. The globe on a strip shows the browser its agent drives beside it (expanding the
-strip if needed). The sub-agents at work hang under their strip, each with the app agent it runs as, and a parent
-waiting on them reads "in attesa", not "finito". Model and effort come from the agent's profile. A worker that sent
+strip if needed). Work starts only from the Orchestrator's column (Ctrl+N: "Cosa vuoi fare?"); the chats a role
+delegates hang under it as thread cards on a curved line (task, character, skills, model, live steps from the
+engine's own plan and its tool calls, state, what it needs), expand in place into the whole chat, and fold per parent
+(kept across restarts), the same tree as in the sidebar. A child's question goes to its parent first; what needs you
+shows once, in the chat you look at. Model and effort come from the agent's profile. A worker that sent
 its final report to the Orchestrator and went idle closes by itself after a short delay (Settings → Archivia lavori
 conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
 work stays open with an "In attesa di…" label.
@@ -145,7 +148,7 @@ work stays open with an "In attesa di…" label.
 ### Cloud agents next to the local ones
 
 Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going
-with the PC asleep and cost no local CPU. Start one from **Nuovo agente → Dove: Cloud** (or let the Orchestrator do it)
+with the PC asleep and cost no local CPU. Ask the Orchestrator for one (it starts it with `app_create_chat`, where "cloud")
 on a GitHub repository whose branch is already pushed: it gets its own strip in the Grindhouse, grouped by repository,
 with a "cloud" badge. Cursor streams its messages, takes follow-ups and stops from the app (its cloud runs at API
 prices, counted in the Cursor spending limit; the key goes in Settings → Motori → Cursor); Codex and Claude open their
@@ -228,10 +231,13 @@ Costs, budgets and estimates per agent and per day sit next to them.
 
 - **Esegui**: shell blocks in a chat run with one click, and the output goes back to the chat.
 - **Long chats** are handed off before the context fills: a note, then "Riprendi" in a fresh chat.
-- **Agent first**: each work chat runs as a catalog agent, picked by the Orchestrator or by the local classifier;
-  the agent's profile sets engine, model, effort and maximum context ("Contesto massimo"), and a worker can start
-  catalog agents as its own sub-agents. A versioned table only fills the model of a profile that names none, and
-  learns from the agents' verdicts (ADR 0078).
+- **Nine fixed roles** (ADR 0083): Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe,
+  each with its tools, permission ceiling, model tier and skills, editable in Brain → Agenti. A role delegates parts of
+  its task to the roles it may launch (`agent_delegate`) as visible child chats with a self-contained contract; a
+  child never gets more permissions than its parent, works in its folder, and reports once (`agent_report`). The
+  depth and the children at once are your limits (Impostazioni → Ruoli e deleghe). The Orchestrator sees only their
+  state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day on
+  another model.
 - **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
 - **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
 - **Screenshots everywhere**: an agent writes the path of a PNG, JPG or WebP (under the brain, the repo, a worktree or

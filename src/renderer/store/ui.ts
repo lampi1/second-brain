@@ -16,7 +16,7 @@ import{t,type TextKey}from'../i18n';
 
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
-export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
+export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
 export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);

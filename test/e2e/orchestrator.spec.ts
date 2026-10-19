@@ -106,12 +106,19 @@ test('the Orchestrator menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore
   await app.close();
 });
 
-test('new agent dialog: with the Orchestrator there it never offers a second one', async () => {
+test('Ctrl+N and the palette give the Orchestrator\'s input the keyboard for a new request; no start dialog (ADR 0083)', async () => {
   const { app, page } = await launchDemo({ orchestrator: true });
+  await page.locator('body').click({ position: { x: 5, y: 300 } });
   await page.keyboard.press('Control+N');
-  await expect(page.getByTestId('newchat')).toBeVisible();
-  await expect(page.getByTestId('newchat-orchestrator')).toHaveCount(0);
-  await page.keyboard.press('Escape');
+  const input = page.getByTestId('orchestrator-input');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAttribute('placeholder', 'Cosa vuoi fare?');
+  await expect(page.getByTestId('newchat')).toHaveCount(0);
+  await page.locator('body').click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press('Control+K');
+  await page.keyboard.type('Nuova richiesta');
+  await page.keyboard.press('Enter');
+  await expect(input).toBeFocused();
   await expect(page.locator('[data-testid="tile-orchestrator"]')).toHaveCount(1);
   await app.close();
 });

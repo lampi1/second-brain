@@ -9,7 +9,7 @@
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type ToolClass } from '@shared/agents';
-import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, ORCHESTRATOR_ROLE_ID, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast } from '../store/ui';
@@ -19,13 +19,11 @@ import { EFFORTS, effortLabel } from '../lib/format';
 import { characterTone } from '../lib/character-art';
 import { forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { holdUpdate } from '../lib/update-barrier';
-import { profileCanStart } from '../lib/role-consumers';
 import { go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentPackDetails } from './AgentPackDetails';
-import { CatalogRun } from './CatalogRun';
 import { ProgressPanel } from './ProgressPanel';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
@@ -226,7 +224,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const { state: brain } = useBrainModel();
   const memory = brain?.memory.find(m => m.kind === 'agent' && m.agentId === profile.id) ?? null;
   const background = profile.scope === 'background';
-  const startable = !background && profile.id !== ORCHESTRATOR_ROLE_ID;
   const config: [string, string][] = [
     [t('catalog.engine'), engine],
     [t('studio.model'), profile.model ?? `${t('studio.tierModel')} · ${tierLabel(profile.tier)}`],
@@ -257,7 +254,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
           </div>
         </div>
         <div className="ad-actions">
-          {startable && <CatalogRun profile={profile} available={!catalog?.problem && profileCanStart(profile, model)} />}
           <button type="button" className="btn btn-ghost" disabled={busy} aria-expanded={editorOpen} onClick={onEdit} data-testid="agent-edit">{t('studio.edit')}</button>
           <button type="button" className="btn btn-ghost" disabled={busy || !profile.userLocked || !!profile.trial} aria-expanded={resetting} onClick={onReset} data-testid="agent-reset">{t('studio.reset')}</button>
         </div>

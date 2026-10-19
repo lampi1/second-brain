@@ -157,22 +157,15 @@ test('ui:command from main steers the UI (maximize, restore, page, palette)', as
   await app.close();
 });
 
-test('Ctrl+N creates a chat: its tile appears with the first message and gets the focus', async () => {
-  const { page, app } = await launchDemo();
+test('Ctrl+N is a new request to the Orchestrator: its input takes the keyboard, the request goes to it', async () => {
+  const { page, app } = await launchDemo({ orchestrator: true });
   await page.keyboard.press('Control+N');
-  await expect(page.getByTestId('newchat')).toBeVisible();
-  // the folder is not asked: it defaults to the brain folder, the rest lives under Avanzate
-  await expect(page.getByTestId('newchat-cwd')).toBeHidden();
-  await page.getByTestId('newchat-advanced').locator('summary').click();
-  await page.getByTestId('newchat-title').fill('Prova nuova chat');
-  await page.getByTestId('newchat-prompt').fill('Controlla i log di oggi');
-  await shot(page, 'new-chat');
-  await page.keyboard.press('Control+Enter');
-  await expect(page.getByTestId('newchat')).toHaveCount(0);
-  const tile = page.locator('[data-testid^="tile-chat-"]', { hasText: 'Prova nuova chat' });
-  await expect(tile).toBeVisible();
-  await expect(tile).toContainText('Controlla i log di oggi');
-  await expect(tile.locator('textarea')).toBeFocused();
+  const input = page.getByTestId('orchestrator-input');
+  await expect(input).toBeFocused();
+  await page.keyboard.type('Controlla i log di oggi');
+  await shot(page, 'new-request');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tile-orchestrator')).toContainText('Controlla i log di oggi');
   await app.close();
 });
 

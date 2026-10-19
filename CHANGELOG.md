@@ -6,6 +6,30 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
+  Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
+  tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its
+  launch gave it. A role delegates to the roles it may launch with `agent_delegate`: visible child chats with a
+  self-contained contract, never more permissions than the parent, inside its folder, within your limits (Impostazioni
+  → Ruoli e deleghe: depth, children at once); each reports once with `agent_report`. No hidden sub-agents: an
+  engine's own sub-agent only for a quick read-only search. A child's permission above its parent's is refused and said
+  in its chat. Old catalogs are not carried over: export custom agents as packs from the previous stable first.
+- **Work starts only from the Orchestrator**: "Nuovo agente" and the role page's launch are gone; Ctrl+N and the
+  palette put the cursor in the Orchestrator's input ("Cosa vuoi fare?"), which plans and delegates (cloud agents too).
+- **The delegation tree** (the owner's design): in the Grindhouse each delegated chat is a thread card under its parent
+  on a curved line tinted by its state (task, character, role, skills, model, time, its steps, a state pill, what it
+  needs: a permission to answer, an error, a limit, a nudge); a click expands it in place into the whole chat, "Vai alla
+  chat" opens focus mode; the parent's bar counts its children and folds them. The sidebar shows the same tree in two
+  lines per chat under the Orchestrator; a click brings the card on screen, expanded. The fold is kept across
+  restarts. The steps cost no token: the engine's own plan (Claude TodoWrite, Codex plan, Cursor plan and todos), else
+  the contract's criteria, plus the recent tool calls in readable lines ("Letti 42 file in src/payments/").
+- **Questions go to the parent first** (`agent_ask_parent` / `agent_answer_child`); only a permission, an irreversible
+  or external action, a choice that changes the goal, or what the parent cannot answer reaches you, once: in the chat
+  you look at (the child's pause panel in its parent's chat, tagged with who asks) or in the questions window, never a
+  second panel in the Orchestrator.
+- **The Orchestrator sees state only**, plus your own words: what you write in any work chat reaches it as quiet news
+  (no extra turn) and the chat's parent as a note, so nothing conflicts; a child that followed you to a new goal says
+  so in its report and its card shows the new goal.
 - One "Discuti" button (EN "Discuss") replaces every "Apri chat" / "Apri una chat" entry point: Task records (work
   items, pull requests, test plans and test cases), Idee, Qualità, Costi, Confronto, the charts, Script, Changelog and
   the Dashboard. It puts a ready draft (title, source, link, numbers, folder hint) in the Orchestrator's input, never
@@ -26,6 +50,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Local stores retry the rename on a transient Windows lock (EPERM/EACCES/EBUSY) and log a warning instead of an
   error when a retry worked (#71).
 ### Added
+- The Judge reviews a few finished role runs a day on another model (Impostazioni → Ruoli e deleghe, only in the stable
+  app); its verdict is the run's reviewed evidence for the improvement loop.
 - "N novità in attesa" on the Orchestrator (#88): the news and mail the delivery rule holds back for it (a worker that
   finished while it waits for your answer, a quiet question/permission/command, mail grouped or held) are counted above
   its input; a click lists chat, kind, since when and why it waits; it clears on delivery. No rule changed, no extra

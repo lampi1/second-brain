@@ -143,7 +143,7 @@ export const toolsIt = {
   'tools.keys.map3dKey': 'Ctrl Shift M',
   'tools.keys.map3dWhat': 'Mappa 3D',
   'tools.keys.newChatKey': 'Ctrl N',
-  'tools.keys.newChatWhat': 'Nuova chat',
+  'tools.keys.newChatWhat': 'Nuova richiesta all’Orchestrator',
   'tools.keys.settingsKey': 'Ctrl ,',
   'tools.keys.settingsWhat': 'Impostazioni',
   'tools.keys.stopChatKey': 'Ctrl .',
