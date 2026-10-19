@@ -157,7 +157,9 @@ only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pus
 ![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/regia.webp)
 
 The Orchestrator is the chat you talk to first. It knows every agent, starts new ones from your agent catalog, routes
-mail between them and tells you what needs you.
+mail between them and tells you what needs you. News it has not received yet (a chat that finished while it waits for
+your answer, a quiet permission request, mail held for later) shows above its input as **"N novità in attesa"**; a
+click lists each one with its chat, kind, since when and why it waits, at no token cost.
 
 ### Agents that improve, under your approval
 

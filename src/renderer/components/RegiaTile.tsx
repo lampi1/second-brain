@@ -5,22 +5,18 @@
 // on a "Poi:" line (the widget is a popup and at most one request popup is on screen; none while the questions window
 // or the layer's card is the one); Esc or "Rispondi dopo" turns "Rispondi dopo" on (lib/later.ts): the card goes
 // unanswered, a "Da rispondere" line stays; its own messages' shell blocks have
-// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Regia); below, a digest of the live brain feed ("Novità",
-// with "mentre eri via" first; collapsible, remembered). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
+// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Regia); above its input, "N novità in attesa"
+// (HeldNews.tsx, #88: what the app holds back for it; it replaced the "Novità" feed, which stays in the bell). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuova Regia confirm) and "Pulisci". With no Regia yet it offers to create
 // one. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by RegiaOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
-import type { FeedEvent } from '@shared/contract';
-import { AgentFeedAction } from './AgentFeedAction';
-import { ago, chatCost, prettyModel } from '../lib/format';
-import { useNow } from '../lib/clock';
+import { chatCost, prettyModel } from '../lib/format';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
-import { openModal, setFocused, setPrefs, ui } from '../store/ui';
+import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { answerLater } from '../lib/later';
-import { linkOfEvent } from '../lib/notify';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
@@ -33,7 +29,8 @@ import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { HarnessMark, IconChevronDown, IconList, IconMore, IconStop } from './Icons';
+import { HarnessMark, IconList, IconMore, IconStop } from './Icons';
+import { HeldNews } from './HeldNews';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus, setRegiaTab } from '../store/ui';
@@ -63,26 +60,6 @@ function RegiaSetup() {
   </div>;
 }
 
-const TONE: Record<string, string> = {
-  idea: 'blue', error: 'red', win: 'green', 'chat-done': 'green', 'chat-waiting': 'amber', reflection: 'violet', journal: 'dim',
-};
-
-function FeedRow({ e, now }: { e: FeedEvent; now: number }) {
-  const open = () => { openLink(linkOfEvent(e)); };
-  return (
-    <li>
-      <button type="button" className={`feed-row tone-${TONE[e.kind] ?? 'dim'} ${e.priority}`} onClick={open} data-testid={`feed-${e.id}`} data-sb-id={`feed-${e.id}`} title={e.detail}>
-        <span className="feed-k">{e.label}</span>
-        <span className="feed-t">{e.title}</span>
-        <span className="feed-age">{ago(e.at, now)}</span>
-      </button>
-      <AgentFeedAction action={e.action} />
-    </li>
-  );
-}
-
-const EMPTY: readonly FeedEvent[] = [];
-
 /** chatId = the Regia shown (the overlay's tab); null = none yet */
 export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: string | null }) {
   const chat = useApp(s => (id ? s.chats[id] : undefined));
@@ -100,8 +77,6 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
   if (w > 0) open.unshift(...open.splice(w, 1));
   const first = held ? undefined : open[0];
   const ready = useApp(s => s.ready);
-  const feed = useApp(s => s.feed.slice(0, 12), sameList) ?? EMPTY;
-  const feedOpen = ui.use(s => s.prefs.feedOpen);
   const isFocused = ui.use(s => s.focused === 'regia');
   const focusReq = ui.use(s => (id && s.focusReq?.chatId === id ? s.focusReq.n : 0));
   const flash = useFlash('regia');
@@ -110,7 +85,6 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const now = useNow(15_000);
   // the Regia's input has the default focus (once the chat exists)
   const focusedOnce = useRef(false);
   useEffect(() => {
@@ -127,8 +101,6 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
     answerLater();
     if (had) requestAnimationFrame(() => input.current?.focus());
   };
-  const away = feed.filter(e => e.away);
-  const fresh = feed.filter(e => !e.away).slice(0, 8);
 
   if (!chat) {
     return (
@@ -184,21 +156,8 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
           )}
         </div>
       )}
-      <div className={`feed ${feedOpen ? 'open' : ''}`} data-testid="regia-feed">
-        <button type="button" className="feed-head" onClick={() => setPrefs({ feedOpen: !feedOpen })} aria-expanded={feedOpen} data-testid="regia-feed-toggle">
-          <span>{t('dialogs.regia.feedTitle')}</span><span className="count">{feed.length}</span><span className="sp" /><IconChevronDown size={13} className="feed-chev" />
-        </button>
-        {feedOpen && (
-          feed.length === 0 ? <p className="feed-empty">{t('dialogs.regia.feedEmpty')}</p> : (
-            <div className="feed-body">
-              {away.length > 0 && <div className="feed-group">{t('dialogs.regia.feedAway')}</div>}
-              {away.length > 0 && <ul className="feed-list">{away.slice(0, 4).map(e => <FeedRow key={e.id} e={e} now={now} />)}</ul>}
-              {away.length > 0 && fresh.length > 0 && <div className="feed-group">{t('dialogs.regia.feedNow')}</div>}
-              <ul className="feed-list">{fresh.map(e => <FeedRow key={e.id} e={e} now={now} />)}</ul>
-            </div>
-          )
-        )}
-      </div>
+      {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
+      <HeldNews regiaId={chat.id} onOpenChat={c => openLink(`sb://home/chat-${c}`)} />
       <ChatInput ref={input} chat={chat} regia testid="regia-input" />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} regia />
     </section>
