@@ -7,7 +7,8 @@
 // commands, a command that does not only read goes beyond it too). Everything else passes to the user
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
 // brain (brain-write without edit, e.g. the Scribe) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
-// edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link).
+// edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link,
+// a normalized path short enough that trimInput never cut it).
 // Refusals are visible in the chat. No state; reads the file system only to resolve links. Used by chats/manager.ts;
 // pinned by test/unit/agents/role-gate.test.ts.
 import fs from 'node:fs';
@@ -65,11 +66,19 @@ function realOf(p: string): string | null {
     at = up;
   }
 }
-/** True when `target` is a file inside the brain folder: absolute, no ".." segment, its real path (links resolved)
+/** The longest file path a brain-only edit may name. The gate sees the request's input after trimInput (chats/session.ts)
+ *  cut each string to 4000 characters, so a longer path could hide its escaping tail (`./` x 2000 + `../x`). */
+export const BRAIN_PATH_MAX = 1024;
+/** True when `target` is a file inside the brain folder: absolute, already normalized (no "." or ".." segment, no
+ *  doubled separator), at most BRAIN_PATH_MAX characters and never cut by trimInput, its real path (links resolved)
  *  inside the brain's real path, and not a hard link to a file elsewhere. */
 export function insideBrain(brainRoot: string | null | undefined, target: string): boolean {
   if (!brainRoot || !target || !path.isAbsolute(brainRoot) || !path.isAbsolute(target) || target.includes('\0')) return false;
+  if (target.length > BRAIN_PATH_MAX || /… \(\+\d+\)$/.test(target)) return false;
   if (target.split(/[\\/]+/).includes('..')) return false;
+  // the path as written must be the path it resolves to (Windows: either separator)
+  const written = process.platform === 'win32' ? target.replace(/\//g, '\\') : target;
+  if (path.resolve(target) !== written) return false;
   const root = realOf(path.resolve(brainRoot)), real = realOf(path.resolve(target));
   if (!root || !real) return false;
   const rel = path.relative(norm(root), norm(real));

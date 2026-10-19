@@ -214,6 +214,9 @@ describe('read-only commands (shell-read)', () => {
     'find . "-delete"', "find . -de'let'e", 'find . -de\\lete', 'find . -fprint x', 'find . -execdir rm', 'find . -okdir rm', 'find *', 'git diff *', 'rg x *',
     'rg --pre=./run.sh x', 'rg --hostname-bin=./x y', 'tree -o out', 'tree -ao out', 'tree -R -H .', 'file -C -m magic', 'file --compile x',
     'cat "\\"" | rm -rf x "\\""', "cat \\' | rm x", 'cat "a', 'FOO=1 ls', 'git -C .. log', '| ls', 'ls |',
+    // a bare `$`: word splitting ($IFS), variables (bash, PowerShell $env:), $'…' quoting
+    'find .$IFS-delete', 'rg x .$IFS--pre=sh', 'git log -1$IFS--output=../OUT', 'tree .$IFS-R', 'ls $HOME', 'cat "$HOME/a"', "find . $'-delete'",
+    'Get-Content $env:USERPROFILE/a', 'gci $x', "rg 'foo$' src", 'git show HEAD@{1}$IFS--output=x',
   ])('closes: %s', c => {
     expect(readOnlyCommand(c)).toBe(false);
   });

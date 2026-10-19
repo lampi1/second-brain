@@ -235,9 +235,11 @@ function stdinOnly(rule: StdinRule, args: string[]): boolean {
 export function readOnlyCommand(raw: unknown): boolean {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return false;
   // chaining, redirection, substitution (bash $( ${ backtick <( >(, PowerShell $( @( ( { and its ` escape), quoted or
-  // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it
+  // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it. Any other `$` is
+  // refused too: an unquoted $IFS splits `find .$IFS-delete` into a writing option after this check, and a variable
+  // ($HOME, PowerShell's $env:x) or bash's $'…' quoting would make the words differ from what is checked here
   const plain = raw.replace(/@\{[A-Za-z0-9_.:/-]*\}/g, '');
-  if (/[;&<>`(){}\r\n]|\$\(|\$\{/.test(plain)) return false;
+  if (/[;&<>`(){}$\r\n]/.test(plain)) return false;
   // an escaped quote: bash keeps \" inside a double-quoted word, PowerShell ends it there; the two would split the line
   // differently, so neither reading is trusted
   if (/\\["']/.test(raw)) return false;

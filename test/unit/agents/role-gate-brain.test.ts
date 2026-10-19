@@ -2,12 +2,14 @@
 // Edit/Write only a file whose real path is inside the brain folder; "..", a relative path, a link out of the brain
 // (file or folder), a hard link, another edit tool, no brain set, and a sibling folder sharing the brain's prefix are
 // refused visibly; a role with edit is not limited; a parent without edit still lets a brain edit through when it
-// allows brain-write. Pins agents/role-gate.ts insideBrain and the brain part of gateRequest.
+// allows brain-write. A path cut by trimInput (the gate's input), longer than BRAIN_PATH_MAX or not normalized ("."
+// segments, doubled separators) is refused too. Pins agents/role-gate.ts insideBrain and the brain part of gateRequest.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { gateRequest, insideBrain, type GateChat } from '../../../src/main/agents/role-gate';
+import { BRAIN_PATH_MAX, gateRequest, insideBrain, type GateChat } from '../../../src/main/agents/role-gate';
+import { trimInput } from '../../../src/main/chats/session';
 import type { ToolClass } from '../../../src/shared/agents';
 
 const dirs: string[] = [];
@@ -89,5 +91,23 @@ describe('brain-only edits (brain-write without edit)', () => {
     expect(gateRequest(edit('Edit', file), scribe(brain, { parent: { policy: policy(['read', 'brain-write']), title: 'P' } })).kind).toBe('pass');
     expect(gateRequest(edit('Edit', file), scribe(brain, { parent: { policy: policy(['read', 'edit']), title: 'P' } })).kind).toBe('pass');
     expect(gateRequest(edit('Edit', file), scribe(brain, { parent: { policy: policy(['read', 'web']), title: 'P' } }))).toMatchObject({ kind: 'deny', code: 'aboveParent' });
+  });
+  it('refuses a path trimInput cut, an overlong one, and one that is not normalized', () => {
+    const { brain } = setup();
+    // the escaping tail lies beyond the 4000 characters the gate sees
+    const long = `${brain}/${'./'.repeat(2000)}../outside.txt`;
+    const trimmed = (trimInput({ file_path: long }) as { file_path: string }).file_path;
+    expect(trimmed.split(/[\\/]+/)).not.toContain('..');
+    expect(insideBrain(brain, trimmed)).toBe(false);
+    expect(gateRequest({ type: 'permission', tool: 'Write', input: trimInput({ file_path: long, content: 'x' }) }, scribe(brain))).toMatchObject({ kind: 'deny', code: 'brainOnly' });
+    // too long, though inside and normalized
+    const deep = path.join(brain, 'a'.repeat(BRAIN_PATH_MAX));
+    expect(insideBrain(brain, deep)).toBe(false);
+    // "." segments and doubled separators
+    for (const p of [`${brain}${path.sep}.${path.sep}notes${path.sep}a.md`, `${brain}${path.sep}notes${path.sep}${path.sep}a.md`, `${brain}${path.sep}notes${path.sep}a.md${path.sep}`, `${brain}${path.sep}notes${path.sep}.`]) {
+      expect(insideBrain(brain, p), p).toBe(false);
+    }
+    // a plain path stays fine
+    expect(insideBrain(brain, path.join(brain, 'notes', 'a.md'))).toBe(true);
   });
 });
