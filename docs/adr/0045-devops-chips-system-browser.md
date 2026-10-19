@@ -1,6 +1,6 @@
 # ADR 0045 · A chat's DevOps link chips open in the system browser
 
-Date: 2026-10-14 · Status: accepted
+Date: 2026-10-14 · Status: accepted · amended by ADR 0079 (the DevOps page is now "Task": page id task, settings tasks.*, IPC tasks:*)
 
 ## Context
 A chat tile's header shows the DevOps objects the chat talked about as chips (`renderer/lib/devlinks.ts`,

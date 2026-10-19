@@ -327,6 +327,12 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 /* long lines wrap (indentation kept): nothing is cut off on the right, the text stays selectable */
 .bx-md pre { background: var(--bx-surface-2); border: 1px solid var(--bx-border); border-radius: var(--bx-r-s); padding: 10px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .bx-md pre code { background: none; border: 0; padding: 0; }
+/* report images (ReportImages.tsx): shown at most as wide as the text, a click opens them large */
+.bx-md img { max-width: 100%; height: auto; border-radius: var(--bx-r-s); }
+.bx-md img.sb-img { cursor: zoom-in; border: 1px solid var(--bx-border); }
+.bx-md img.sb-img:hover { border-color: var(--bx-blue); }
+.bx-md img.sb-img-wait { min-width: 120px; min-height: 80px; background: var(--bx-surface-2); }
+.bx-md .sb-img-note { display: inline-block; margin: 4px 0; padding: 4px 8px; border: 1px dashed var(--bx-border); border-radius: var(--bx-r-s); font-size: 12px; color: var(--bx-text-3); }
 .bx-md blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--bx-border-2); color: var(--bx-text-3); }
 .bx-md hr { border: 0; border-top: 1px solid var(--bx-border); margin: 14px 0; }
 .bx-md .bx-mdtable { overflow: auto; border: 1px solid var(--bx-border); border-radius: var(--bx-r-s); margin: 8px 0 4px; }
@@ -543,7 +549,16 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 @keyframes bx-discuss-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .bx-discuss-box { animation: none; } }
 
-/* ── DevOps (pages/Devops.tsx): a Dashboard-style head, one quiet settings bar, four tiles, one tab per section ── */
+/* code copy in the Markdown viewer (Markdown.tsx `copy` / `copyBlocks`: the file viewer), and a pressed chip */
+.bx-chip[aria-pressed="true"] { background: var(--bx-blue-bg); border-color: var(--bx-blue-line); color: var(--bx-text); }
+.bx-pre { position: relative; }
+.bx-pre > pre { padding-top: 34px; }
+.bx-pre-copy { position: absolute; top: 6px; right: 6px; }
+.bx-md code.bx-copy { cursor: copy; }
+.bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
+.bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
+
+/* ── Task (pages/Task.tsx): a Dashboard-style head, one quiet settings bar, four tiles, one tab per section ── */
 .dv-page { display: grid; gap: 18px; align-content: start; min-width: 0; }
 .dv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-top: 8px; }
 .dv-head-main { display: grid; gap: 6px; min-width: 0; flex: 1; }
@@ -701,7 +716,7 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .dv-tests li { display: flex; gap: 8px; align-items: baseline; font-size: var(--bx-fs-s); color: var(--bx-text-2); }
 .dv-standup { display: grid; gap: 8px; justify-items: start; }
 .dv-standup > section { width: 100%; }
-/* "Test e QA" (pages/DevopsQa.tsx) */
+/* "Test e QA" (pages/TaskQa.tsx) */
 .qa-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bx-surface-2); }
 .qa-seg { min-width: 6px; }
 .qa-seg.good { background: var(--bx-green); }

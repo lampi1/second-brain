@@ -55,46 +55,94 @@ export function observedErrors(chats: ChatSummary[], items: Readonly<Record<stri
 }
 
 export interface Point { x: number; y: number }
-/** Stable, bounded force layout for a selected neighbourhood; never changes just because telemetry ticks. */
+/** Stable force layout (Fruchterman-Reingold with cooling) in unit-free space, centred on 0,0: the ideal distance
+ *  between two nodes is 1 whatever the node count, so the map spreads with its size instead of clumping in a fixed
+ *  800x520 box; a gentle gravity keeps disconnected notes near the rest. Deterministic (golden-angle start, no
+ *  randomness) and keyed only on the topology, so live telemetry never moves a node. fitLayout maps it onto the panel. */
 export function layout(nodes: Pick<MapNode, 'id'>[], edges: Pick<MapEdge, 'from' | 'to'>[], center?: string): Map<string, Point> {
+  const n = nodes.length;
+  const index = new Map(nodes.map((node, i) => [node.id, i]));
+  const xs = new Float64Array(n), ys = new Float64Array(n), fx = new Float64Array(n), fy = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const angle = i * 2.399963, r = Math.sqrt(i + .5) * .9; xs[i] = Math.cos(angle) * r; ys[i] = Math.sin(angle) * r; }
+  const pinned = center === undefined ? undefined : index.get(center);
+  if (pinned !== undefined) { xs[pinned] = 0; ys[pinned] = 0; }
+  const links: [number, number][] = [];
+  for (const e of edges) { const a = index.get(e.from), b = index.get(e.to); if (a !== undefined && b !== undefined && a !== b) links.push([a, b]); }
+  const steps = n > 160 ? 140 : 300, gravity = 1;
+  let heat = Math.max(1, Math.sqrt(n) * .3);
+  for (let step = 0; step < steps; step++) {
+    fx.fill(0); fy.fill(0);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const dx = xs[i]! - xs[j]!, dy = ys[i]! - ys[j]!, d2 = Math.max(.0025, dx * dx + dy * dy), f = 1 / d2;
+      fx[i]! += dx * f; fy[i]! += dy * f; fx[j]! -= dx * f; fy[j]! -= dy * f;
+    }
+    for (const [a, b] of links) {
+      const dx = xs[b]! - xs[a]!, dy = ys[b]! - ys[a]!, d = Math.hypot(dx, dy);
+      fx[a]! += dx * d; fy[a]! += dy * d; fx[b]! -= dx * d; fy[b]! -= dy * d;
+    }
+    for (let i = 0; i < n; i++) {
+      fx[i]! -= xs[i]! * gravity * Math.hypot(xs[i]!, ys[i]!); fy[i]! -= ys[i]! * gravity * Math.hypot(xs[i]!, ys[i]!);
+      if (i === pinned) continue;
+      const f = Math.hypot(fx[i]!, fy[i]!) || 1, move = Math.min(f, heat);
+      xs[i]! += fx[i]! / f * move; ys[i]! += fy[i]! / f * move;
+    }
+    heat = Math.max(.02, heat * .985);
+  }
   const points = new Map<string, Point>();
-  nodes.forEach((node, i) => {
-    const angle = i * 2.399963;
-    const radius = 70 + 155 * Math.sqrt(i / Math.max(1, nodes.length));
-    points.set(node.id, { x: 400 + Math.cos(angle) * radius, y: 260 + Math.sin(angle) * radius });
-  });
-  for (let step = 0; step < 90; step++) {
-    for (let i = 0; i < nodes.length; i++) {
-      const a = points.get(nodes[i]!.id)!;
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = points.get(nodes[j]!.id)!;
-        const dx = a.x - b.x, dy = a.y - b.y, distance = Math.max(30, Math.hypot(dx, dy));
-        const force = Math.min(8, 2200 / (distance * distance));
-        a.x += dx / distance * force; a.y += dy / distance * force;
-        b.x -= dx / distance * force; b.y -= dy / distance * force;
+  nodes.forEach((node, i) => points.set(node.id, { x: xs[i]!, y: ys[i]! }));
+  return points;
+}
+
+/** Maps a layout onto a width x height panel (SVG units = CSS pixels): the nodes' bounding box fills the panel inside
+ *  `pad`, centred, each axis scaled on its own (the panel's aspect wins over the layout's, up to 3.5x of stretch, so a
+ *  wide panel is filled without turning a ring into a line). Then pushes apart dots closer than `gap`, so no two
+ *  halos overlap however crowded a hub is. */
+export function fitLayout(points: Map<string, Point>, width: number, height: number, pad: { x: number; y: number }, gap = 0): Map<string, Point> {
+  const all = [...points.values()];
+  const out = new Map<string, Point>();
+  if (!all.length) return out;
+  const x0 = Math.min(...all.map(p => p.x)), x1 = Math.max(...all.map(p => p.x)), y0 = Math.min(...all.map(p => p.y)), y1 = Math.max(...all.map(p => p.y));
+  const w = Math.max(1, width - 2 * pad.x), h = Math.max(1, height - 2 * pad.y);
+  const spanX = x1 - x0, spanY = y1 - y0;
+  let sx = spanX > 1e-6 ? w / spanX : Infinity, sy = spanY > 1e-6 ? h / spanY : Infinity;
+  if (!Number.isFinite(sx) && !Number.isFinite(sy)) sx = sy = 0;
+  else if (!Number.isFinite(sx)) sx = 0; else if (!Number.isFinite(sy)) sy = 0;
+  else { const MAX = 3.5; if (sx > sy * MAX) sx = sy * MAX; if (sy > sx * MAX) sy = sx * MAX; }
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  for (const [id, p] of points) out.set(id, { x: width / 2 + (p.x - mx) * sx, y: height / 2 + (p.y - my) * sy });
+  if (gap > 0) {
+    const list = [...out.values()];
+    for (let pass = 0; pass < 24; pass++) {
+      let moved = false;
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+        const a = list[i]!, b = list[j]!;
+        let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= gap) continue;
+        if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
+        const push = (gap - d) / 2 + .01;
+        a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push;
+        moved = true;
       }
-    }
-    for (const edge of edges) {
-      const a = points.get(edge.from), b = points.get(edge.to);
-      if (!a || !b) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      a.x += dx * .006; a.y += dy * .006; b.x -= dx * .006; b.y -= dy * .006;
-    }
-    for (const [id, p] of points) {
-      p.x = Math.max(65, Math.min(735, p.x)); p.y = Math.max(55, Math.min(465, p.y));
-      if (id === center) { p.x = 400; p.y = 260; }
+      for (const p of list) { p.x = Math.max(pad.x / 2, Math.min(width - pad.x / 2, p.x)); p.y = Math.max(pad.y / 2, Math.min(height - pad.y / 2, p.y)); }
+      if (!moved) break;
     }
   }
-  return points;
+  return out;
 }
 
 export interface LabelSpot { x: number; y: number; w: number; h: number; anchor: 'start' | 'middle' | 'end' }
 /** Places each label on the free side of its node (below, above, right, left; outward from the focus first), so no
  *  label covers another label or a node dot. Greedy in input order: pass the most important labels first. Crowded
- *  labels search farther out before falling back to least overlap. Sizes are estimates in SVG units (.58em/char). */
-export function placeLabels(items: { id: string; x: number; y: number; r: number; text: string }[], obstacles: { x: number; y: number; r: number }[], size: number, focus?: Point): Map<string, LabelSpot> {
+ *  labels search farther out before falling back to least overlap. Sizes are estimates in SVG units (.58em/char).
+ *  With `bounds`, a label must also stay inside that box; with `required`, a label that finds no free spot is dropped
+ *  unless its id is required (the selected node's name is always shown; a minor one is hidden, never overlapped). */
+export function placeLabels(items: { id: string; x: number; y: number; r: number; text: string }[], obstacles: { x: number; y: number; r: number }[], size: number, focus?: Point,
+  opts: { bounds?: { x0: number; y0: number; x1: number; y1: number }; required?: ReadonlySet<string> } = {}): Map<string, LabelSpot> {
   const taken: { x0: number; y0: number; x1: number; y1: number }[] = obstacles.map(o => ({ x0: o.x - o.r, y0: o.y - o.r, x1: o.x + o.r, y1: o.y + o.r }));
-  const overlap = (a: typeof taken[number]) => taken.reduce((sum, b) => sum + Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)), 0);
+  const area = (a: typeof taken[number], b: typeof taken[number]) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+  const { bounds, required } = opts;
+  const outside = (a: typeof taken[number]) => bounds ? (a.x1 - a.x0) * (a.y1 - a.y0) - area(a, bounds) : 0;
+  const overlap = (a: typeof taken[number]) => taken.reduce((sum, b) => sum + area(a, b), 0) + outside(a) * 4;
   const spots = new Map<string, LabelSpot>();
   for (const item of items) {
     const w = item.text.length * size * .58 + 12, h = size + 8, gap = item.r + 4;
@@ -109,6 +157,8 @@ export function placeLabels(items: { id: string; x: number; y: number; r: number
       x: side.x + (side.anchor === 'start' ? offset : side.anchor === 'end' ? -offset : 0),
       y: side.y + (side.anchor === 'middle' ? (side.y < item.y ? -offset : offset) : 0),
     });
+    // then diagonals (a pill slid half its width to either side), for labels hemmed in on all four sides
+    for (const side of sides) if (side.anchor === 'middle') for (const dx of [w / 2 + gap, -w / 2 - gap]) candidates.push({ ...side, x: side.x + dx });
     for (const side of candidates) {
       const x0 = side.anchor === 'start' ? side.x : side.anchor === 'end' ? side.x - w : side.x - w / 2;
       const box = { x0, y0: side.y - h / 2, x1: x0 + w, y1: side.y + h / 2 };
@@ -116,7 +166,7 @@ export function placeLabels(items: { id: string; x: number; y: number; r: number
       if (!best || cost < best.cost) best = { spot: { ...side, w, h }, box, cost };
       if (cost === 0) break;
     }
-    if (best) { spots.set(item.id, best.spot); taken.push(best.box); }
+    if (best && (best.cost === 0 || !required || required.has(item.id))) { spots.set(item.id, best.spot); taken.push(best.box); }
   }
   return spots;
 }

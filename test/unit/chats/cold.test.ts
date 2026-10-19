@@ -27,7 +27,7 @@ describe('cold rules', () => {
     expect(coldAsk(base, at(50), 50 * MIN)).toBe(true);
     expect(coldAsk(base, at(56), 50 * MIN)).toBe(false); // the cache is gone: a note would cost a full re-read
     for (const v of [
-      { harness: 'cursor' }, { isRegia: true }, { appRegia: true }, { continuedBy: { id: 'x' } }, { state: 'running' },
+      { harness: 'cursor' }, { isRegia: true }, { continuedBy: { id: 'x' } }, { state: 'running' },
       { pending: 1 }, { background: 1 }, { busy: true }, { alive: false }, { handoffTurn: true }, { contextTokens: COLD_MIN_TOKENS - 1 },
       { noteAt: 2_000 }, { askedFor: 1_000 }, { lastTurnAt: 0 },
     ] satisfies Partial<ColdView>[]) expect(coldAsk({ ...base, ...v }, at(50), 50 * MIN), JSON.stringify(v)).toBe(false);

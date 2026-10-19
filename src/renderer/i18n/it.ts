@@ -1,3 +1,4 @@
+import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { costsIt } from './areas/costs.it';
@@ -43,6 +44,7 @@ export const it = {
   ...reviewedContextIt,
   ...setupIt,
   ...homeIt,
+  ...cloudIt,
   ...guideIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',

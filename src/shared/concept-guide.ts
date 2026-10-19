@@ -140,6 +140,47 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/shared/agents.ts', 'src/shared/agent-manifest.ts', 'src/main/agents/catalog.ts', 'src/shared/role-presets.ts', 'src/shared/role-preset-catalog.ts', 'src/renderer/lib/role-consumers.ts', 'src/renderer/components/AgentStudio.tsx'],
   },
   {
+    id: 'skills',
+    title: b('Agenti e skill: la sezione Brain', 'Agents and skills: the Brain section'),
+    summary: b('Due concetti soli: l’agente è chi lavora, la skill è come si fa un lavoro. Si mantengono da soli, e ogni modifica si annulla con un clic.',
+      'Two concepts only: the agent is who works, the skill is how a job is done. They keep themselves up to date, and every change is undone with one click.'),
+    points: [
+      // src/main/brainmodel/model.ts readSkills; src/main/agents/pack/flows.ts runtime
+      b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle; l’agente che la dichiara la trova caricata quando parte.',
+        'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders; the agent that declares it finds it loaded when it starts.'),
+      // src/renderer/components/SkillsPage.tsx; src/main/brainmodel/service.ts link
+      b('La pagina Skill mostra chi usa ogni skill e quali strumenti chiama; «Agenti» su una scheda la collega o la toglie subito, senza approvazione.',
+        'The Skill page shows who uses each skill and which tools it calls; "Agents" on a card links or drops it at once, with no approval.'),
+      // src/main/brainmodel/jobs.ts
+      b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola.',
+        'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule.'),
+      // src/main/brainmodel/changes.ts
+      b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’approvazione resta solo per produzione, permessi e impostazioni, e testi per altri.',
+        'Every change is logged with what, why and the evidence, and "Undo" puts it back. Approval stays only for production, permissions and settings, and texts for others.'),
+      // src/main/brainmodel/legacy-sources.ts
+      b('Una volta sola, i runbook e le routine di prima diventano skill collegate agli agenti giusti, senza perdere testo: il resoconto è sulla pagina Skill.',
+        'Once, the former runbooks and routines become skills linked to the right agents, losing no text: the report is on the Skill page.'),
+      // src/renderer/components/brain-model/
+      b('Regole valgono per tutti gli agenti; Memoria tiene conoscenza, quello che è successo e una memoria per agente; Mappa mostra agente → skill → regole → memoria.',
+        'Rules apply to every agent; Memory holds knowledge, what happened and one memory per agent; Map shows agent → skills → rules → memory.'),
+      // src/main/agents/pack/emit.ts, rules.ts
+      b('Esportare un agente porta profilo, skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importarlo rimette tutto, senza toccare le tue skill.',
+        'Exporting an agent carries the profile, skills, the tools list (TOOLS.md) and the rules; never memory. Importing restores it all, without touching your skills.'),
+      // src/main/brainmodel/classifiers.ts
+      b('Classificatori, in sola lettura: la tabella che sceglie il modello con i risultati di ogni riga, l’agente suggerito contro quello usato, la qualità per settimana.',
+        'Classifiers, read only: the table that picks the model with each row’s results, the suggested agent versus the one used, quality by week.'),
+    ],
+    analogy: b('Come una squadra con un manuale condiviso: le persone sono gli agenti, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
+      'Like a team with a shared manual: the people are the agents, the manual’s pages are the skills, and someone keeps it tidy every night.'),
+    tech: [
+      tech(DATA, 'Registro delle modifiche e resoconto della migrazione nella cartella dati dell’app; memoria di un agente in agents/<id>/memory.md, quella comune in memory/shared.md.',
+        'Change log and migration report in the app’s data folder; an agent’s memory in agents/<id>/memory.md, the shared one in memory/shared.md.'),
+      tech(WHERE, 'IPC brainmodel:state, :maintain, :rollback, :link e classifiers:state; pagine in src/renderer/components/brain-model/ (ADR 0077).',
+        'IPC brainmodel:state, :maintain, :rollback, :link and classifiers:state; pages in src/renderer/components/brain-model/ (ADR 0077).'),
+    ],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/legacy-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'docs/adr/0077-agents-and-skills-only.md'],
+  },
+  {
     id: 'orchestrator',
     title: b('L’Orchestrator e lo smistamento', 'The Orchestrator and routing work'),
     summary: b('La chat di coordinamento nella colonna a destra: pianifica, apre le chat di lavoro e legge la loro posta.',
@@ -440,6 +481,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/later.ts, src/main/later.ts
       b('«Rispondi dopo» tiene tutto in «Da rispondere» senza popup; Ctrl+J apre la prossima cosa che ti aspetta.',
         '"Answer later" keeps everything in "To answer" with no popups; Ctrl+J opens the next thing waiting for you.'),
+      // src/renderer/components/AskImages.tsx, src/main/ask-image.ts SCREENSHOT_HINT
+      b('Gli screenshot che l’agente cita (un percorso PNG/JPG/WebP nella domanda o in un’opzione) compaiono come miniature, prima e dopo affiancati; un clic li apre grandi. Lo stesso vale per i messaggi in chat.',
+        'Screenshots the agent names (a PNG/JPG/WebP path in the question or an option) show as thumbnails, before and after side by side; a click opens them large. Chat messages work the same way.'),
       // src/main/chats/regia-wake.ts QUIET; no timeout
       b('Non c’è scadenza: la richiesta sparisce solo se rispondi, se la CLI la ritira o se chiudi la chat.',
         'There is no timeout: the request goes away only if you answer, the CLI withdraws it, or you close the chat.'),
@@ -452,7 +496,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'Impostazione questionsModal (default false); stato «Rispondi dopo» in userData/answer-later.json.', 'Setting questionsModal (default false); "Answer later" state in userData/answer-later.json.'),
       tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (regia-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (regia-wake.ts); the order is arrival order.'),
     ],
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/regia-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/regia-wake.ts', 'src/shared/contract.ts'],
   },
   {
     id: 'grindhouse',
@@ -467,19 +511,23 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
       // src/renderer/lib/grid.ts workspaceTiles
-      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: allora stanno accanto alla chat aperta, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati.',
-        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: then they sit beside the expanded chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show.'),
+      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: il globo apre anche la striscia, se è chiusa, e i browser stanno accanto alla chat, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati. Un browser chiuso con il globo continua a lavorare fuori schermo.',
+        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: the globe also expands a collapsed strip, and the browsers sit beside the chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show. A browser folded with the globe keeps working off screen.'),
       // src/renderer/components/ChildStrips.tsx
-      b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro; quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»).',
-        'Under each strip appear the subagents and commands still at work; finished ones leave at once (the full list stays in "Details and collaborators").'),
+      b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro, ciascuno con il nome dell’agente dell’app con cui gira (o «nessun agente»); quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»). Finché un sottoagente lavora, la striscia madre dice «in attesa», non «finito».',
+        'Under each strip appear the subagents and commands still at work, each with the name of the app agent it runs as (or "no agent"); finished ones leave at once (the full list stays in "Details and collaborators"). While a subagent works, the parent strip says "waiting", not "finished".'),
       // src/renderer/lib/agent-estimates.ts
       b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
         'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
+      // src/main/chats/manager.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0076)
+      b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
+        'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, sforzo e l’ultima risposta; aperta mostra la conversazione e l’input.',
-        'A collapsed strip shows agent, state, effort and the last answer; expanded it shows the conversation and the input.'),
-      // src/renderer/components/BrowserTile.tsx
-      b('I browser nascosti (Ctrl+Shift+B) continuano a lavorare fuori schermo.', 'Hidden browsers (Ctrl+Shift+B) keep working off screen.'),
+      b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
+        'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
+      // src/renderer/components/CloudStrips.tsx, src/main/cloud/service.ts (ADR 0080)
+      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Si avviano da «Nuovo agente» → Dove: Cloud, solo su repository GitHub con il branch già pushato.',
+        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. Start one from "New agent" → Where: Cloud, only on GitHub repositories with the branch already pushed.'),
     ],
     analogy: b('Come il banco di regia di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
@@ -488,22 +536,24 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
     ],
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/BrowserTile.tsx'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
   },
   {
     id: 'dashboard',
     title: b('La Dashboard', 'The Dashboard'),
-    summary: b('Sei viste dal vivo su agenti, brain, costi, contesto, errori e spunti, tutte da dati reali.',
-      'Six live views on agents, brain, costs, context, errors and tips, all from real data.'),
+    summary: b('Solo statistiche, dal vivo: agenti, costi, contesto, errori, temi e spunti, tutte da dati reali. La mappa del brain è nella pagina Mappa.',
+      'Statistics only, live: agents, costs, context, errors, themes and tips, all from real data. The brain map is on the Map page.'),
     points: [
       // src/renderer/dashboard/Dashboard.tsx, src/renderer/dashboard/data.ts
       b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
         '"Agents map": open chats and who talks to whom (Orchestrator ownership, messages between chats).'),
-      b('«Mappa brain»: le note del brain e i loro collegamenti, letti ogni 30 secondi.', '"Brain map": the brain’s notes and their links, read every 30 seconds.'),
+      // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
+      b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
+        'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
       b('«Costi» per giorno, modello, motore e agente; «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
         '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
-      b('«Errori» da ai-errors.md e dagli eventi; «Spunti» deriva segnali come contesti lunghi e costi alti.',
-        '"Errors" from ai-errors.md and events; "Tips" derives signals such as long contexts and high costs.'),
+      b('«Errori» conta ai-errors.md e gli eventi (la lezione di ogni errore è in Memoria); «Spunti» deriva segnali come contesti lunghi e costi alti.',
+        '"Errors" counts ai-errors.md and events (each error’s lesson is in Memory); "Tips" derives signals such as long contexts and high costs.'),
       b('Ogni pannello ha «Discutine»: mette una bozza all’Orchestrator, non la invia mai da solo.',
         'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
     ],
@@ -513,11 +563,42 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
       tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+  },
+  {
+    id: 'task-fatto',
+    title: b('Task e Fatto', 'Tasks and Done'),
+    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto è il registro di quello che è stato fatto, dal più recente.',
+      'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
+    points: [
+      // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
+      b('«Task» legge con lo script del cervello devops-me.mjs le tue PR, le review, i work item e le menzioni: sola lettura, zero token.',
+        '"Tasks" reads your PRs, reviews, work items and mentions with the brain’s script devops-me.mjs: read-only, zero tokens.'),
+      b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
+        'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
+      b('Ogni record ha «Apri chat»: una chat di lavoro su quel ticket o quella PR in un clic.',
+        'Every record has "Open chat": a work chat on that ticket or PR in one click.'),
+      // src/renderer/brain/pages/Fatto.tsx, src/renderer/brain/lib/done-log.ts
+      b('«Fatto» elenca per giorno, dal più recente, PR, work item, righe «fatto» e «decisione» del diario e chat concluse.',
+        '"Done" lists by day, newest first, PRs, work items, "fatto" and "decisione" diary lines and finished chats.'),
+      b('Ogni voce dice cosa, chi (tu, o l’agente o il motore della chat), quando e ha il suo link: Azure DevOps fuori dall’app, la chat dentro.',
+        'Each entry says what, who (you, or the chat’s agent or engine), when, and has its link: Azure DevOps outside the app, the chat inside it.'),
+      b('«Mostra altri giorni» aggiunge tre giorni; lo stand-up di oggi resta in cima, da copiare.',
+        '"Show more days" adds three days; today’s stand-up stays on top, ready to copy.'),
+    ],
+    analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
+      'Tasks is the work’s inbox; Done is the logbook.'),
+    tech: [
+      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: /api/day?kind=report del cervello più l’elenco delle chat dell’app.',
+        'Tasks: the tasks.json cache in the app’s data folder; Done: the brain’s /api/day?kind=report plus the app’s chat list.'),
+      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
+        'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
+    ],
+    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/renderer/brain/lib/done-log.ts', 'brain-template/ops/tools/day.mjs'],
   },
   {
     id: 'brain',
-    title: b('Il brain: memoria e procedure', 'The brain: memory and procedures'),
+    title: b('Il brain: le note e la memoria', 'The brain: notes and memory'),
     summary: b('Una cartella di note scelta all’installazione: parte vuota, gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
       'A folder of notes chosen at setup: it starts empty, agents read and write it, the app shows it live.'),
     points: [
@@ -525,17 +606,17 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Si riconosce da brain.json (un brain nuovo) oppure da AGENTS.md più ops/tools/brain-site.mjs (un brain di prima); il percorso è salvato in config.json (brainRoot).',
         'It is recognised by brain.json (a new brain) or by AGENTS.md plus ops/tools/brain-site.mjs (an older brain); the path is saved in config.json (brainRoot).'),
       // src/main/rules/new-brain.ts writeFreshBrain, src/main/rules/tools.ts (ADR 0072)
-      b('Un brain nuovo contiene solo me.md (il tuo profilo) e brain.json: regole, procedure, skill, agenti e strumenti dell’app restano nell’app e arrivano a ogni chat. now.md, ideas.md, ai-errors.md e journal/ nascono al primo uso.',
-        'A new brain holds only me.md (your profile) and brain.json: the app’s rules, procedures, skills, agents and tools stay in the app and reach every chat. now.md, ideas.md, ai-errors.md and journal/ appear on first use.'),
+      b('Un brain nuovo contiene solo me.md (il tuo profilo) e brain.json: regole, skill, agenti e strumenti dell’app restano nell’app e arrivano a ogni chat. now.md, ideas.md, ai-errors.md e journal/ nascono al primo uso.',
+        'A new brain holds only me.md (your profile) and brain.json: the app’s rules, skills, agents and tools stay in the app and reach every chat. now.md, ideas.md, ai-errors.md and journal/ appear on first use.'),
       // brain-template/ops/tools/mem.mjs; src/main/brain/profile.ts; src/main/chats/mail.ts; src/main/skills/service.ts
       b('Gli strumenti del brain aggiornano le note con mem.mjs; l’app scrive anche il profilo me.md, la posta in ops/state/inbox/, brain-settings.json e file di skill/agenti, oltre allo stato in ops/state/improve/.',
         'Brain tools update notes through mem.mjs; the app also writes the me.md profile, mail under ops/state/inbox/, brain-settings.json and skill/agent files, as well as state in ops/state/improve/.'),
       // src/main/brain/live.ts
       b('Il feed dal vivo osserva la cartella e mostra le novità (idee, errori, decisioni…); «mentre eri via» segna quelle arrivate a app chiusa.',
         'The live feed watches the folder and shows what changed (ideas, errors, decisions…); "while you were away" marks those that came while the app was closed.'),
-      // src/main/brain/procedures.ts
-      b('«Procedure» trova da sola runbook e passi numerati; nasconde le righe che sembrano credenziali e non esegue mai nulla.',
-        '"Procedures" finds runbooks and numbered steps by itself; hides lines that look like credentials and never runs anything.'),
+      // src/main/brainmodel/legacy-sources.ts (ADR 0077)
+      b('Runbook e routine di un brain di prima diventano skill una volta sola; i file originali restano dove sono, le righe che sembrano credenziali non passano mai.',
+        'Runbooks and routines of an older brain become skills once; the original files stay where they are, lines that look like credentials never pass.'),
       // src/main/brain/domains.ts, src/main/brain/sync.ts
       b('Più domini e sincronizzazione tra PC sono opzionali (domain.json); prima di ogni push passa il controllo di pubblicazione.',
         'Several domains and sync between PCs are optional (domain.json); every push goes through the publish guard first.'),
@@ -545,14 +626,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'cycle', steps: [b('Agente legge', 'Agent reads'), b('Lavora', 'Works'), b('mem.mjs scrive', 'mem.mjs writes'), b('Feed dal vivo', 'Live feed')] },
     tech: [
       // src/main/brain/live.ts debounce; src/main/brain/index.ts FEED_MAX
-      tech(LIMITS, 'Feed: osservazione con attesa di 400 ms, 500 eventi tenuti; procedure: profondità 4, 400 file, 512 KB per file.',
-        'Feed: watching with a 400 ms debounce, 500 events kept; procedures: depth 4, 400 files, 512 KB per file.'),
+      tech(LIMITS, 'Feed: osservazione con attesa di 400 ms, 500 eventi tenuti.',
+        'Feed: watching with a 400 ms debounce, 500 events kept.'),
       tech(DATA, "domain.json { name, scope: 'everywhere' | 'this-pc', remote?, denyList? }; senza file = un dominio «solo questo PC».",
         "domain.json { name, scope: 'everywhere' | 'this-pc', remote?, denyList? }; no file = one \"this PC only\" domain."),
       tech(WHERE, 'Il server dati del brain (brain-site.mjs) gira su una porta 127.0.0.1; il main inoltra solo GET su percorsi ammessi.',
         'The brain’s data server (brain-site.mjs) runs on a 127.0.0.1 port; main forwards only GETs on allowed paths.'),
     ],
-    sources: ['src/main/rules/new-brain.ts', 'src/main/rules/tools.ts', 'src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brain/procedures.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
+    sources: ['src/main/rules/new-brain.ts', 'src/main/rules/tools.ts', 'src/main/brain/detect.ts', 'src/main/brain/live.ts', 'src/main/brain/index.ts', 'src/main/brainmodel/legacy-sources.ts', 'src/main/brain/domains.ts', 'src/main/brain/sync.ts', 'src/main/brain/profile.ts', 'src/main/chats/mail.ts', 'src/main/brain/brain-settings.ts', 'src/main/skills/service.ts', 'brain-template/ops/tools/mem.mjs', 'brain-template/map.md'],
   },
   {
     id: 'search',
@@ -599,7 +680,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'It refuses files outside these folders (checked before and after resolving the real path), drive roots and network shares.'),
       b('Non mostra file «privati»: cartelle che iniziano con un punto (tranne .github e .githooks) o nomi come secret, token, password.',
         'It does not show "private" files: folders starting with a dot (except .github and .githooks) or names like secret, token, password.'),
-      b('Testo fino a 1 MB; Markdown senza immagini; .jsonl come tabella; il resto come codice numerato.', 'Text up to 1 MB; Markdown without images; .jsonl as a table; the rest as numbered code.'),
+      b('Testo fino a 1 MB; .jsonl come tabella; il resto come codice numerato.', 'Text up to 1 MB; .jsonl as a table; the rest as numbered code.'),
+      // src/renderer/brain/components/ReportHtml.tsx, ReportImages.tsx
+      b('Report Markdown e HTML con le loro immagini (incorporate in base64 o file accanto al report), mai da internet; un clic su un’immagine la apre grande. L’HTML è ripulito: niente script, moduli o caricamenti esterni.',
+        'Markdown and HTML reports with their images (embedded as base64 or files beside the report), never from the internet; a click on an image opens it large. The HTML is cleaned: no scripts, forms or external loads.'),
       // src/main/peek-file.ts
       b('Cliccare un percorso in chat apre prima un’anteprima piccola (14 righe), senza scrivere né eseguire nulla.',
         'Clicking a path in a chat first opens a small preview (14 lines), writing and running nothing.'),
@@ -612,7 +696,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'FILE_VIEW_BYTES = 1,000,000; png/jpg/webp images ≤ 4 MB and 4096 px a side; beyond 4000 lines a window around the cited line.'),
       tech(WHERE, 'Canale app:readFile → readFileView nel main; pagina «file» (brain/pages/FileViewer.tsx).', 'Channel app:readFile → readFileView in main; page "file" (brain/pages/FileViewer.tsx).'),
     ],
-    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/index.ts', 'src/renderer/brain/pages/FileViewer.tsx'],
+    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/index.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
   },
   {
     id: 'routing',
@@ -695,8 +779,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'updates',
     title: b('Aggiornamenti', 'Updates'),
-    summary: b('Tu usi una copia stabile e congelata. Oggi l’app scarica e prepara la versione nuova, ma non la installa da sola.',
-      'You use a frozen stable copy. Today the app downloads and prepares the new version, but does not install it by itself.'),
+    summary: b('Tu usi una copia stabile e congelata. «Aggiorna» in Impostazioni → Aggiornamenti la porta all’ultima versione con un clic.',
+      'You use a frozen stable copy. "Aggiorna" in Settings → Updates brings it to the latest version with one click.'),
     points: [
       // ADR 0007; scripts/release.mjs
       b('Stabile = una release congelata in %LOCALAPPDATA%/second-brain/releases; dev = tutto ciò che parte dal repo, con dati separati.',
@@ -711,9 +795,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/update/wiring.ts RESTART_LIFECYCLE_VERIFIED = false: the ready package says it cannot be applied yet
       b('Quando il pacchetto è pronto lo vedi in «Aggiornamenti»: scaricato e preparato, ma non installato (l’applicazione automatica è spenta).',
         'When the package is ready you see it in "Updates": downloaded and prepared, but not installed (automatic apply is switched off).'),
-      // src/main/wiring.ts allowLegacyPromotion: false
-      b('Il vecchio «Aggiorna» in «Migliora l’app» è disattivato e rimanda al pacchetto preparato.',
-        'The old "Aggiorna" button in "Improve the app" is disabled and points to the prepared package.'),
+      // ADR 0075; src/main/update/source.ts, src/renderer/components/AppUpdateSettings.tsx
+      b('«Aggiorna» in Impostazioni → Aggiornamenti conta cosa c’è di nuovo su GitHub, poi scarica (solo avanzamento rapido), ricostruisce e riavvia sull’ultima versione, senza la suite di test.',
+        '"Aggiorna" in Settings → Updates counts what is new on GitHub, then downloads it (fast-forward only), rebuilds and restarts on the latest version, without the test suite.'),
+      // ADR 0074; src/main/appctl/tools.ts app_update_code
+      b('Puoi anche chiedere all’Orchestrator «aggiornati»: porta la cartella del codice all’ultima versione, ma passarci resta il tuo clic su «Aggiorna».',
+        'You can also ask the Orchestrator to "update": it brings the code folder to the latest version, but switching to it stays your click on "Aggiorna".'),
     ],
     analogy: b('Come il cambio di una gomma con la ruota di scorta pronta: se la nuova non tiene, rimetti quella di prima.',
       'Like changing a tyre with the spare ready: if the new one does not hold, you put the old one back.'),
@@ -728,7 +815,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Installare il pacchetto preparato e riavviare (checkpoint di bozze e preferenze, poi ripristino automatico se fallisce): il codice c’è ma è spento finché il riavvio non è verificato.',
         'Installing the prepared package and restarting (checkpoint of drafts and preferences, then automatic rollback on failure): the code is there but switched off until the restart is verified.'),
     ],
-    sources: ['scripts/release.mjs', 'src/main/update/download.ts', 'src/main/update/wiring.ts', 'src/main/update/checkpoint.ts', 'src/main/wiring.ts', 'docs/adr/0007-self-hosting.md'],
+    sources: ['scripts/release.mjs', 'scripts/pull.mjs', 'src/main/update/source.ts', 'src/renderer/components/AppUpdateSettings.tsx', 'src/main/update/download.ts', 'src/main/update/wiring.ts', 'src/main/update/checkpoint.ts', 'docs/adr/0007-self-hosting.md', 'docs/adr/0075-update-button-without-tests.md'],
   },
 ];
 

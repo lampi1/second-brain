@@ -42,35 +42,51 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Oggi and Adesso are gone: their old links open DevOps', async () => {
+test('Oggi, Adesso and DevOps are gone: their old links open Task', async () => {
+  await open('devops');
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   await open('oggi');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   await open('adesso');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   // "home" is no longer an alias of Oggi: since 73a4e37 it is the Home page itself (index.tsx BRAIN_PAGES)
   await open('home');
   await expect(page.getByTestId('brain-page-home')).toBeVisible();
 });
 
-test('Fatto e standup: done by topic with DevOps links, diary table, another day', async () => {
+test('Fatto: a log newest first, grouped by day, each entry with what, who, when and its link; more days on demand', async () => {
   await open('fatto');
   const p = page.getByTestId('brain-page-fatto');
   await settled();
-  await expect(p.getByRole('heading', { name: 'Fatto oggi' })).toBeVisible();
-  await expect(p.getByRole('link', { name: 'apply the discount once' })).toHaveAttribute('href', /pullrequest\/51001$/);
-  await expect(p.getByTestId('bx-standup')).toBeVisible();
-  // only the work Regia's work: the app's own chats, diary lines, threads and commits are left out (lib/appwork.ts)
+  await expect(p.getByRole('heading', { level: 2, name: 'Fatto' })).toBeVisible();
+  await expect(p.locator('.catalog-head')).toBeVisible(); // the head of Agenti and Guida (ADR 0079)
   await expect(p.getByTestId('bx-standup')).toContainText('Export fatture');
-  await expect(p).not.toContainText('Pagina Procedure');
-  await expect(p).not.toContainText("Regia dell'app");
-  await p.locator('summary', { hasText: 'Dettaglio tecnico' }).click();
-  await expect(p).toContainText('2 commit');
-  await expect(p).toContainText('QA ordini');
+  const days = p.getByTestId('fatto-log').locator('section.wl-day');
+  await expect(days).toHaveCount(3);
+  const today = days.first();
+  await expect(today.getByRole('heading', { level: 3 })).toHaveText('Oggi');
+  await expect(today.getByTestId('fatto-day-count')).toHaveText('13 esiti');
+  // newest first (the 3D map chat ended 15:20, the Procedure chat 14:10, its diary line 13:05), the untimed Cursor chat last
+  const rows = today.getByTestId('fatto-entry');
+  const times = await rows.locator('.wl-time').allInnerTexts();
+  expect(times.slice(0, 3)).toEqual(['15:20', '14:10', '13:05']);
+  expect(times.at(-1)).toBe('senza ora');
+  const pr = rows.filter({ hasText: 'apply the discount once' });
+  await expect(pr.getByRole('link')).toHaveAttribute('href', /pullrequest\/51001$/);
+  await expect(pr).toContainText('PR unita');
+  await expect(pr.locator('.wl-who')).toHaveText('Tu');
+  await expect(rows.filter({ hasText: 'QA ordini' }).locator('.wl-who')).toHaveText('Claude');
+  await expect(rows.filter({ hasText: 'Ricerca librerie grafici' }).locator('.wl-who')).toHaveText('Cursor');
+  // the app's own work is listed like any other since "Migliora l'app" is gone (ADR 0079); lessons stay in the diary
+  await expect(today).toContainText('Pagina Procedure');
+  await expect(today).not.toContainText('La stima dei costi va sempre mostrata');
   await shot(page, 'brain-fatto');
-  await p.getByRole('button', { name: 'Giorno prima' }).click();
-  await expect(p.getByRole('heading', { name: 'Fatto ieri' })).toBeVisible();
+  await today.locator('summary', { hasText: 'Dettaglio tecnico' }).click();
+  await expect(today).toContainText('3 commit');
+  await p.getByTestId('fatto-more').click();
+  await expect(days).toHaveCount(6);
   await settled();
-  await expect(p.getByTestId('bx-diary')).toContainText('Login scaduto sul nodo di test');
+  await p.getByTestId('fatto-log').evaluate(el => el.scrollIntoView());
 });
 
 test('Idee: table with filters (state, area, who), side peek by keyboard, Esc closes it', async () => {

@@ -22,7 +22,7 @@ const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Answer, ChatCommand, ChatItem, ChatSpace, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
@@ -46,8 +46,8 @@ import { AgentMayNotWake } from '../engines/policy';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
-import { cleanRegiaName, regieOf } from '../../shared/regia';
-import { waitsForWork } from '../../shared/waiting';
+import { cleanRegiaName, regieOf, regiaOfChat } from '../../shared/regia';
+import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
 import { compatibleOwner, orchestratorOwner } from '../agents/catalog';
@@ -61,6 +61,7 @@ import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
+import type { AutoCloseWaiting } from '../../shared/auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
@@ -88,9 +89,8 @@ export interface ChatManagerOptions {
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
-  /** the app-control MCP for the Regie only: each work Regia its own /mcp/app/r/<id>/<token> (ADR 0021), the app's
-   *  legacy app Regia /mcp/improve; its source-folder gate remains, while every worker shares the Grindhouse */
-  appMcpUrl?: ((regiaId: string, space?: ChatSpace) => string | null) | null;
+  /** the app-control MCP for the Regie only: each work Regia its own /mcp/app/r/<id>/<token> (ADR 0021) */
+  appMcpUrl?: ((regiaId: string) => string | null) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
   maxItems?: number;
@@ -199,6 +199,13 @@ export function turnReply(items: readonly ChatItem[]): string {
  *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
 export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';
 
+/** The scheduler's reason for each waiting kind (Italian, as its other reasons; the tile shows its own label). */
+export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
+  answer: 'In attesa di una tua risposta', permission: 'In attesa di un tuo permesso', command: 'In attesa di un tuo comando',
+  user: 'In attesa dell’utente', colleagues: 'In attesa dei colleghi', work: 'In attesa del lavoro in corso',
+  report: 'In attesa del report finale', mail: 'In attesa di posta', browser: 'In attesa di te nel browser',
+};
+
 /** The final answer of the turn that just ended ('' when it wrote none). */
 export function lastAnswer(items: readonly ChatItem[]): string {
   for (let i = items.length - 1; i >= 0; i--) {
@@ -212,6 +219,11 @@ export function lastAnswer(items: readonly ChatItem[]): string {
 interface Rec {
   s: ChatSummary;
   createdAt: number;
+  /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
+   *  assignment (#86, ADR 0076); never persisted */
+  report?: { text: string; at: number; blocked?: boolean };
+  /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
+  autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
@@ -405,11 +417,8 @@ export class ChatManager implements ChatService {
     // Regie saved before regiaSince keep their list order (ADR 0021)
     let seat = 0;
     for (const r of this.chats.values()) if (r.s.isRegia && r.s.regiaSince === undefined) r.s.regiaSince = seat++;
-    // one app Regia ("Migliora l'app"): the newest keeps the role
-    const appRegie = [...this.chats.values()].filter(r => r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt);
-    for (const r of appRegie.slice(1)) delete r.s.appRegia;
     const backfilled = this.backfillRuns();
-    if (backfilled || appRegie.length > 1 || stored.some(c => !c.agent) || JSON.stringify(stored) !== JSON.stringify(loaded)) this.persist();
+    if (backfilled || stored.some(c => !c.agent) || JSON.stringify(stored) !== JSON.stringify(loaded)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
@@ -421,7 +430,7 @@ export class ChatManager implements ChatService {
       for (const t of this.probationTimers) t.unref?.();
     }
     if (opts.prewarm) {
-      const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isRegia && !r.s.appRegia).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isRegia).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
     }
     const claude = resolveClaude(opts.enginePaths?.claude ?? null);
@@ -457,12 +466,12 @@ export class ChatManager implements ChatService {
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
-    if (this.opts.unifiedOrchestrator && (req.regia || req.appRegia)) {
+    if (this.opts.unifiedOrchestrator && req.regia) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = this.list().find(c => c.orchestrator && c.isRegia);
       // one Orchestrator: only a replacement of the current one (Cambia motore, Ricomincia) creates another
       if (current && req.replaces !== current.id) return current;
-      req = { ...req, regia: true, appRegia: false, space: undefined, title: 'Orchestrator', regiaName: 'Orchestrator' };
+      req = { ...req, regia: true, title: 'Orchestrator', regiaName: 'Orchestrator' };
     }
     const agent = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req } : this.opts.resolveAgent?.(req) ?? { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
@@ -489,7 +498,7 @@ export class ChatManager implements ChatService {
     }
 
     // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
-    const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !req.appRegia && req.permissionMode !== 'bypassPermissions'
+    const warm = caps.warm && !forkOf && !req.worktree && !req.regia && req.permissionMode !== 'bypassPermissions'
       // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
       && !policy
       // nor one with its own "Contesto massimo": the window is fixed when the engine starts (#80)
@@ -504,9 +513,6 @@ export class ChatManager implements ChatService {
     const regiaName = req.regia ? cleanRegiaName(req.regiaName) ?? old?.s.regiaName ?? null : null;
     if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');
     const regiaOf = !req.regia && req.regiaOf && this.chats.get(req.regiaOf)?.s.isRegia ? req.regiaOf : null;
-    // the app's Regia ("Migliora l'app", ADR 0020) is one and never a work Regia: a new one takes the role
-    const appRegia = req.appRegia === true && !req.regia;
-    const oldApp = appRegia ? [...this.chats.values()].filter(x => x.s.appRegia) : [];
     const title = req.title?.trim() || (req.regia && regiaName && !old ? `Orchestrator · ${regiaName}` : '') || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
@@ -526,7 +532,6 @@ export class ChatManager implements ChatService {
         ...(req.regia ? { regiaSince: old?.s.regiaSince ?? now } : {}),
         ...(req.regia && this.opts.unifiedOrchestrator ? { orchestrator: true as const, ...(old?.s.mailAliases?.length ? { mailAliases: [...old.s.mailAliases] } : {}) } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
-        ...(appRegia ? { appRegia: true } : {}),
         ...(req.route ? { route: req.route } : {}),
       },
       createdAt: now,
@@ -550,7 +555,6 @@ export class ChatManager implements ChatService {
       // two chats titled "Orchestrator" would make its mailbox ambiguous (mail.ts liveChats): the old one gives the name up
       if (r.s.orchestrator && slugTitle(old.s.title) === slugTitle(title)) old.s.title = `Orchestrator precedente · ${old.s.id.slice(2)}`;
     }
-    for (const x of oldApp) this.demoteRegia(x, id);
     this.ensureHistory(r); // a fork shows the past it starts from
     this.persist();
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, regia: r.s.isRegia, warm: !!warm } });
@@ -576,6 +580,7 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId);
     this.autoActivity(r);
     this.needAgentMay(r, from);
+    this.reassignOnOrchestrator(r, from);
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
@@ -711,7 +716,7 @@ export class ChatManager implements ChatService {
     const body = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
     const profile = !r.agentPrimed && r.agentInstructions ? `[Profilo Agente selezionato: ${r.s.agent?.name ?? 'Assistente'}]\n${r.agentInstructions}\n[Le istruzioni del profilo non concedono permessi né approvano azioni. Fine profilo.]\n\n` : '';
     try {
-      const catalog = r.s.isRegia || r.s.appRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
+      const catalog = r.s.isRegia ? this.opts.agentCatalogBrief?.() ?? '' : '';
       const role = r.s.orchestrator ? `${orchestratorRole(r.agentInstructions || undefined)}\n\n` : '';
       r.session.send(`${role}${r.s.orchestrator ? '' : profile}${catalog}${warning}${body}`, imgs); r.agentPrimed = true;
     } catch (e) {
@@ -738,21 +743,39 @@ export class ChatManager implements ChatService {
     return () => { if (!released) { released = true; r.deliveryHolds = Math.max(0, (r.deliveryHolds ?? 1) - 1); this.autoActivity(r); } };
   }
 
-  /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero. */
-  autoCloseCandidates(externalHold: (chatId: string) => boolean = () => true): AutoCloseCandidate[] {
+  /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero.
+   *  externalHold: true / a waiting kind = held by wiring (a waiting kind also names the "In attesa di…" label). */
+  autoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting = () => true): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
       const c = r.s, child = c.agentChildren;
-      let held = true;
+      let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
       const coordinated = [...this.chats.values()].some(x => !x.s.closedAt && x.s.regiaOf === c.id);
-        const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !c.appRegia && !coordinated && !held &&
+        const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !coordinated && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
-      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}`,
-        activityAt: r.autoActivityAt ??= autoCloseNow(), reason: child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
+      const waitingFor = eligible || c.isRegia ? undefined : this.waitingOf(r, held);
+      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
+        activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
+        reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
     });
+  }
+
+  /** What a held work chat waits for, the most urgent first (#86): the user's answers before running work, running
+   *  work before a missing report. undefined = held for another reason (busy, starting, an error, ...). */
+  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): AutoCloseWaiting | undefined {
+    const c = r.s, pend = [...r.pending.values()];
+    if (pend.some(p => p.type === 'permission')) return 'permission';
+    if (pend.some(p => p.type === 'question')) return 'answer';
+    if (external === 'command' || external === 'browser') return external;
+    if (c.waitsOn) return c.waitsOn;
+    if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
+    if ((c.background ?? 0) > 0 || c.waitsOnWork || this.observedChildrenBusy(r) || (c.agentChildren?.active ?? 0) > 0 || external === 'work') return 'work';
+    if (c.work?.status === 'waiting-mail' || external === 'mail') return 'mail';
+    if (c.work?.status === 'assigned' && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return 'report';
+    return undefined;
   }
 
   /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */
@@ -844,7 +867,6 @@ export class ChatManager implements ChatService {
    *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. */
   async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.appRegia) throw new Error('L’Orchestrator non si chiude.');
     if (r.s.isRegia) {
       // a Regia closes only by the user's hand, never the first one (its title "Regia" is the mail address the brain's
       // rules and its chats write to; /mcp/app acts as it): its work chats go to the first Regia
@@ -885,7 +907,7 @@ export class ChatManager implements ChatService {
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';
-    delete r.s.background; delete r.s.waitsOnWork;
+    delete r.s.background; delete r.s.waitsOnWork; delete r.s.waitsOn;
     this.pruneArchived();
     this.persist();
     log.info('chats', 'chat archived', { chat: chatId, data: { auto: !!opts.auto, ...(keep ? { engineKeptForColdNote: true } : {}) } });
@@ -1106,7 +1128,6 @@ export class ChatManager implements ChatService {
 
   private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.appRegia) throw new Error("L’Orchestrator non si riprende così: chiudilo e creane uno nuovo dalla sezione «Migliora l'app».");
     if (r.s.isRegia) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
     if (next) return { ...next.s };
@@ -1159,7 +1180,7 @@ export class ChatManager implements ChatService {
 
   private coldView(r: Rec): ColdView {
     return {
-      harness: r.s.harness, isRegia: r.s.isRegia, ...(r.s.appRegia ? { appRegia: true } : {}), continuedBy: r.s.continuedBy,
+      harness: r.s.harness, isRegia: r.s.isRegia, continuedBy: r.s.continuedBy,
       // an archived chat kept alive for its note counts as idle (archive: closeAfterCold)
       state: r.closeAfterCold && r.s.closedAt && r.s.state === 'closed' ? 'idle' : r.s.state,
       // a final answer that waits for its work counts as one more background task: no note, no fresh session
@@ -1356,7 +1377,7 @@ export class ChatManager implements ChatService {
     let n = 0;
     for (const r of this.chats.values()) {
       const sess = r.session;
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isRegia || r.s.appRegia) continue;
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isRegia) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
@@ -1508,6 +1529,48 @@ export class ChatManager implements ChatService {
     return answer;
   }
 
+  /** A chat sent mail (send_to_chat): to its own Orchestrator it is its report (#86, ADR 0076), read at its turn's end. */
+  noteMail(chatId: string, toChatId: string | null, text: string): void {
+    const r = this.chats.get(chatId), to = toChatId ? this.chats.get(toChatId) : undefined;
+    if (!r || !to || r.s.isRegia || !(to.s.isRegia || to.s.orchestrator)) return;
+    const all = [...this.chats.values()].map(x => x.s);
+    if (regiaOfChat(r.s, all) !== to.s.id && !to.s.orchestrator) return;
+    r.report = { text, at: Date.now() };
+    // mailed while idle (a tool call never runs outside a turn, but a late hook might): settle it now
+    if (r.s.state === 'idle' && !r.session?.busy && r.s.lastResult) { this.settleReport(r); this.updated(r); }
+  }
+
+  /** At a clean turn end: who its last answer and report say it waits for (waitsOn) and, for an assigned worker that
+   *  reported and waits for nobody, its assignment completed and its agent run ended "completed" (#86, ADR 0076). The
+   *  auto-close then closes it after the delay (closedBy "auto"); a question, permission or background task holds it. */
+  private settleReport(r: Rec, item?: Extract<ChatItem, { kind: 'result' }>): void {
+    const answer = lastAnswer(r.items), report = r.report;
+    const fresh = report && (report.at >= (r.s.work?.updatedAt ?? 0));
+    const who = waitsForPeople(answer) ?? (fresh ? waitsForPeople(report.text) : null);
+    if (who) r.s.waitsOn = who; else delete r.s.waitsOn;
+    if (fresh && !r.s.waitsOnWork && waitsForWork(report.text)) r.s.waitsOnWork = true;
+    const clean = item ? !item.isError && !item.interrupted : !!r.s.lastResult && !r.s.lastResult.isError && !r.s.lastResult.interrupted;
+    if (!fresh || !clean || report.blocked || who || r.s.waitsOnWork || r.s.work?.status !== 'assigned' || r.pending.size > 0 || (r.s.background ?? 0) > 0) return;
+    r.s.work = { status: 'completed', updatedAt: Date.now() };
+    r.autoCompleted = true;
+    this.autoActivity(r);
+    this.endRunOf(r, 'completed');
+    try { this.persist(true); } catch (e) { log.warn('chats', 'completed assignment not saved', { chat: r.s.id, cause: errText(e), hint: 'it is saved with the next change' }); }
+    log.info('chats', 'assignment completed by its final report', { chat: r.s.id });
+  }
+
+  /** A new message from its Orchestrator to a worker the app completed: it is a new assignment (#86). */
+  private reassignOnOrchestrator(r: Rec, from?: string): void {
+    if (!r.autoCompleted || !from || r.s.work?.status !== 'completed') return;
+    const all = [...this.chats.values()].map(x => x.s);
+    const regia = all.find(x => x.id === regiaOfChat(r.s, all));
+    const names = regia ? [regia.title, ...(regia.mailAliases ?? [])] : [];
+    if (from !== 'Orchestrator' && !names.some(n => n && from.includes(n))) return;
+    r.autoCompleted = false; delete r.report;
+    r.s.work = { status: 'assigned', updatedAt: Date.now() };
+    try { this.persist(true); } catch { /* saved with the next change */ }
+  }
+
   /** A result arrived: the job ledger gets the turn; the plan windows are refreshed now and then. */
   private turnEnded(r: Rec, item: Extract<ChatItem, { kind: 'result' }>): void {
     const handoffTurn = r.handoffTurn;
@@ -1529,10 +1592,13 @@ export class ChatManager implements ChatService {
     const run = r.s.run, turnAt = r.turnAt;
     // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
     if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
+    const reply = turnReply(r.items), runReport = reportOf(reply, item.at);
     if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
-      const report = reportOf(turnReply(r.items), item.at);
-      if (report) { run.report = report; this.runSave(); }
+      if (runReport) { run.report = runReport; this.runSave(); }
     }
+    // a run-report block is a final report too (the Orchestrator reads it with the turn's end): "blocked" waits on it
+    if (runReport?.ok) r.report = { text: runReport.summary, at: item.at, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
+    this.settleReport(r, item);
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;
@@ -1571,7 +1637,6 @@ export class ChatManager implements ChatService {
     r.s.isRegia = false;
     delete r.s.regiaName;
     delete r.s.regiaSince;
-    delete r.s.appRegia;
     delete r.s.orchestrator;
     delete r.s.mailAliases;
     // its work chats answer to the Regia that takes over
@@ -1744,7 +1809,6 @@ export class ChatManager implements ChatService {
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
         ...(c.closedAt ? { closedAt: c.closedAt, closedBy: c.closedBy ?? 'auto' } : {}),
-        ...(c.appRegia ? { appRegia: true } : {}),
         ...(c.route ? { route: c.route } : {}),
       },
       createdAt: c.createdAt,
@@ -1794,7 +1858,6 @@ export class ChatManager implements ChatService {
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
-      ...(r.s.appRegia ? { appRegia: true as const } : {}),
       ...(r.s.route ? { route: r.s.route } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);
@@ -1942,11 +2005,10 @@ export class ChatManager implements ChatService {
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
   }
 
-  /** the app-control endpoint of a Regia (work or app), null for any other chat */
+  /** the app-control endpoint of a Regia, null for any other chat */
   private appMcpFor(r: Rec | undefined): string | null {
     if (!r) return null;
     if (r.s.isRegia) return this.opts.appMcpUrl?.(r.s.id) ?? null;
-    if (r.s.appRegia) return this.opts.appMcpUrl?.(r.s.id, 'app') ?? null;
     return null;
   }
 
@@ -1987,7 +2049,7 @@ export class ChatManager implements ChatService {
     sess.start();
   }
 
-  /** pre-allowed on Claude: the Regias' app-control tools (/mcp/app or /mcp/improve), and every chat's mail to other
+  /** pre-allowed on Claude: the Regias' app-control tools (/mcp/app), and every chat's mail to other
    *  chats (text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never a Regia. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {

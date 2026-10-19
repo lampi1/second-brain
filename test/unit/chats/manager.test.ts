@@ -558,29 +558,6 @@ describe('ChatManager', () => {
     expect(regieOf(restarted.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
   });
 
-  // "Migliora l'app": its chats keep their space and its Regia (one, never the work Regia) gets the /mcp/improve tools
-  it('the app space: saved across restarts, one app Regia, its own app-control server', async () => {
-    const e = env();
-    const urls: (string | undefined)[] = [];
-    const opts = { appMcpUrl: (_id: string, space?: string) => { urls.push(space); return `http://127.0.0.1:4329/mcp/${space === 'app' ? 'improve' : 'app'}`; }, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog } };
-    const { m } = manager(e, opts);
-    const r1 = await m.create({ harness: 'claude', cwd: e.cwd, title: "Regia dell'app", space: 'app', appRegia: true });
-    const r2 = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hi', title: "Regia dell'app", space: 'app', appRegia: true });
-    const a = await m.create({ harness: 'claude', cwd: e.cwd, title: 'App · tema', space: 'app' });
-    expect(m.list().filter(c => c.appRegia).map(c => c.id)).toEqual([r2.id]);
-    expect(m.list().some(c => c.isRegia)).toBe(false);
-    await waitFor(() => results(m, r2.id).length === 1, 'app regia turn');
-    expect(urls).toContain('app');
-    // only the app Regia's process gets the app tools (processes start in any order: find each by its name)
-    const lines = argvs(e).map(x => x.join(' '));
-    expect(lines.find(l => l.includes('--allowedTools mcp__second-brain-app'))).toContain("--name Regia dell'app");
-    expect(lines.filter(l => l.includes('App · tema')).every(l => !l.includes('--allowedTools mcp__second-brain-app'))).toBe(true);
-    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; space?: string; appRegia?: boolean }[] };
-    expect(stored.chats.map(c => [c.id, c.space ?? null, c.appRegia ?? false])).toEqual([[r1.id, null, false], [r2.id, null, true], [a.id, null, false]]);
-    const again = manager(e, opts).m;
-    expect(again.list().map(c => [c.id, c.space ?? null, !!c.appRegia])).toEqual([[r1.id, null, false], [r2.id, null, true], [a.id, null, false]]);
-  });
-
   // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Regia takes the role, name and work chats; the
   // old one stays as a normal chat and its process (started with the app-control tools) is closed, so its next
   // message resumes it without them. Each Regia gets its own app-control endpoint; the Cursor Regia gets it too.

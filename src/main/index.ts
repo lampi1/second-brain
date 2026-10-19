@@ -49,7 +49,10 @@ import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { classifierRequest, classifyByWords } from './agents/classifier';
 import { ClassifierTuning } from './agents/classifier-calibration';
+import type { CloudService } from './cloud/service';
 
+/** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
+const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
 // userData (ADR 0007): a stable release (started by the launcher, SB_RELEASE set) uses %APPDATA%/second-brain; a build run
@@ -144,7 +147,7 @@ app.whenReady().then(async () => {
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
-    const connectors = createAppConnectors(app.getPath('userData'), () => s.devops.refreshFresh());
+    const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh());
     await connectors.ready;
     const handlers: Handlers = {
       'connectors:list': () => connectors.service.list(),
@@ -161,12 +164,6 @@ app.whenReady().then(async () => {
     'app:brainCreation': () => brainCreation.capability(),
     'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
     'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
-    'improve:proposals': () => s.proposals.list(),
-    'improve:proposalAvailability': () => s.proposals.availability(),
-    'improve:proposalCreate': () => s.proposals.create(),
-    'improve:proposalRefresh': a => s.proposals.refresh(a?.id),
-    'improve:proposalResume': a => s.proposals.resume(a?.id),
-    'improve:proposalPublish': a => s.proposals.publish(a),
     'progress:get': () => s.progress.get(),
     'progress:setHidden': a => s.progress.setHidden(a?.hidden),
     'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),
@@ -302,6 +299,15 @@ app.whenReady().then(async () => {
     'secrets:delete': a => s.engines.deleteSecret(a.engine),
     'engines:trust': a => s.engines.trust(a.engine),
     'engines:spend': () => s.engines.apiSpend(),
+    // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
+    'cloud:list': a => cloudOf(s).list(a?.refresh === true),
+    'cloud:start': a => cloudOf(s).start(a, 'user'),
+    'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
+    'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
+    'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),
+    'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
+    'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
+    'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
     'settings:set': a => s.brain.setSettings(a),
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
@@ -322,15 +328,15 @@ app.whenReady().then(async () => {
       { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
         ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
     'routing:restore': a => s.brain.restoreRouting(Number(a?.version)),
-    'devops:get': () => s.devops.get(),
-    'devops:refresh': () => s.devops.refresh(),
+    'tasks:get': () => s.tasks.get(),
+    'tasks:refresh': () => s.tasks.refresh(),
     // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
     'chat:branches': a => {
       const known = new Set(s.chats.list().map(c => c.cwd));
       const cwds = Array.isArray(a?.cwds) ? a.cwds.filter(c => typeof c === 'string' && known.has(c) && !/^[\\/]{2}/.test(c)) : [];
       return (s.branches ?? gitBranches)(cwds);
     },
-    'devops:markRead': a => s.devops.markRead(Array.isArray(a?.keys) ? a.keys.filter((k): k is string => typeof k === 'string').slice(0, 2000) : undefined),
+    'tasks:markRead': a => s.tasks.markRead(Array.isArray(a?.keys) ? a.keys.filter((k): k is string => typeof k === 'string').slice(0, 2000) : undefined),
     'overlay:model': a => overlay.setModel(a),
     'overlay:size': a => overlay.setSize(a.width, a.height),
     'app:inputLag': a => logInputLag(a),
@@ -350,15 +356,13 @@ app.whenReady().then(async () => {
       const c = s.chats.list().find(x => x.id === a?.chatId);
       return c ? s.chats.commands(c.id) ?? s.skills.commandsFor(c.harness, c.cwd) : [];
     },
-    // "Migliora l'app" (ADR 0020): promote and restart only on the user's click, never from an agent's tool
-    'improve:get': a => (a?.refresh || !s.improve.state().at ? s.improve.refresh() : s.improve.state()),
-    'improve:promote': () => s.improve.promote(),
-    'improve:regia': a => orchestrator.ensure(a),
+    // "Aggiorna" (Settings → Aggiornamenti, ADR 0075): update and restart only on the user's click, never from an agent's tool
+    'source:get': a => (a?.refresh || !s.source.state().at ? s.source.refresh() : s.source.state()),
     'orchestrator:get': () => orchestrator.get(),
     'orchestrator:ensure': a => orchestrator.ensure(a),
-    'improve:dismissLaunch': () => s.improve.dismissLaunch(),
-    'improve:sourceCheck': () => s.improve.sourceCheck(),
-    'improve:updateNow': () => s.improve.updateNow(),
+    'source:dismissLaunch': () => s.source.dismissLaunch(),
+    'source:check': () => s.source.sourceCheck(),
+    'source:updateNow': () => s.source.updateNow(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },

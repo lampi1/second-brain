@@ -1,7 +1,7 @@
 // Open hand-offs (an agent waits for the user in one of its tabs: login, MFA, CAPTCHA), kept live from main's
 // 'browser:handoff' events after one initial 'browser:handoffs' load, and the user's answers (Fatto / Non riesco /
-// Copia). Starts itself on first use, so it needs no wiring in store.ts. Used by HandoffBanner.tsx and by the views
-// that hide browsers (AgentStrips, FocusView: a tab waiting for the user stays visible).
+// Copia). Starts itself on first use, so it needs no wiring in store.ts. Used by HandoffBanner.tsx and by the agents'
+// strips (AgentStrips: a tab waiting for the user stays visible under a collapsed strip).
 import type { BrowserHandoff } from '@shared/contract';
 import { sb } from '../sb';
 import { createStore } from './createStore';
@@ -33,7 +33,7 @@ export function useHandoff(tabId: string): BrowserHandoff | undefined {
   return store.use(s => s[tabId]);
 }
 
-/** Tabs with an open hand-off (sorted): they stay on screen even with "Nascondi browser", the user must act there. */
+/** Tabs with an open hand-off (sorted): they stay on screen even when their strip's browsers are folded, the user must act there. */
 export function useHandoffTabs(): string[] {
   start();
   return store.use(s => Object.keys(s).sort(), (a, b) => a.length === b.length && a.every((x, i) => x === b[i]));

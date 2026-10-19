@@ -2,14 +2,16 @@
 // JSON, Host must be localhost), serving the synthetic brain of ./brain-ui-data.mjs. The slow sources of the real server
 // (now, cost, day, map) come wrapped as { value, at, refreshing, error } like its stale-while-revalidate cache.
 // SB_FIXTURE_DELAY_MS slows every answer (to see loading states); a file named FAIL_<endpoint> in the brain root makes
-// that endpoint answer 500 (to see error states). Copied into temporary brains by test/e2e/brain-ui.spec.ts.
+// that endpoint answer 500 (to see error states); a file MAP_EXTRA holding a number adds that many synthetic notes to
+// the map (a large brain). Copied into temporary brains by test/e2e/brain-ui.spec.ts.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { build } from './brain-ui-data.mjs';
 
 export function makeServer(root) {
-  const D = build();
+  const extra = path.join(root, 'MAP_EXTRA');
+  const D = build(Date.now(), { mapExtra: fs.existsSync(extra) ? Number(fs.readFileSync(extra, 'utf8')) || 0 : 0 });
   const at = Date.now() - 2 * 60e3;
   const wrap = value => ({ value, at, refreshing: false, error: null });
   return http.createServer((req, res) => {

@@ -17,7 +17,7 @@ export function regiaOfChat(chat: Chat | undefined, chats: readonly Chat[]): str
 }
 
 /** A Regia's tab label: its name, "Lavoro" for the Regia from before names existed. */
-export const regiaLabel = (c: Pick<ChatSummary, 'regiaName' | 'appRegia'>): string => (c.appRegia ? 'App' : c.regiaName?.trim() || 'Lavoro');
+export const regiaLabel = (c: Pick<ChatSummary, 'regiaName'>): string => c.regiaName?.trim() || 'Lavoro';
 
 /** How a chat is named in lists and cards: a Regia is "Regia", or "Regia · <name>" when it has a tab name; any
  *  other chat its title. */

@@ -18,7 +18,7 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
     await shot(page, `home-${lang}`);
     await expect(page.getByTestId('nav-home')).toHaveAttribute('aria-label', 'Grindhouse');
     await expect(page.getByTestId('nav-workspace')).toHaveCount(0);
-    for (const id of ['costi', 'qualita', 'confronto', 'idee', 'migliora', 'agenti']) {
+    for (const id of ['costi', 'qualita', 'confronto', 'idee', 'agenti']) {
       await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     }
     await expect(page.getByRole('button', { name: it ? 'Nuovo agente' : 'New agent', exact: true })).toHaveCount(0);

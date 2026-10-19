@@ -268,16 +268,6 @@ test('settings search finds labels, descriptions and sections, preserves drafts 
     await search.fill('solo 127.0.0.1');
     await expect(s.getByTestId('st-group-app')).toBeVisible();
     await expect(s.getByTestId('st-group-look')).toBeHidden();
-    await search.fill('Cartella del codice');
-    const improve = s.getByTestId('st-group-improve');
-    await expect(improve).toBeVisible();
-    const repo = improve.getByTestId('st-app-repo-input');
-    await repo.fill('Bozza non salvata');
-    await search.fill('densita');
-    await expect(improve).toBeHidden();
-    await search.fill('Cartella del codice');
-    await expect(repo).toHaveValue('Bozza non salvata');
-    expect(await page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).appRepo)).not.toBe('Bozza non salvata');
     await search.press('Escape');
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();

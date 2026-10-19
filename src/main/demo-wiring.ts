@@ -1,5 +1,5 @@
 // Builds the demo services (SB_DEMO=1; SB_DEMO_FREEZE=1 = deterministic) from demo.ts (chats, brain) and
-// demo-browser.ts (tabs as real WebContentsViews), DevOps from devops/demo.ts (fixture JSON through the real service), with the real settings store and a real local MCP server where the
+// demo-browser.ts (tabs as real WebContentsViews), DevOps from tasks/demo.ts (fixture JSON through the real service), with the real settings store and a real local MCP server where the
 // app-control tools are mounted (/mcp/app), so agents can drive the demo like the app. Why: one entry point for
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
@@ -13,19 +13,19 @@ import { DemoBrowser } from './demo-browser';
 import { writeDemoBrain } from './brainmodel/demo';
 import { BrainModelService } from './brainmodel/service';
 import { classifyByWords } from './agents/classifier';
-import { demoDevopsRun } from './devops/demo';
-import { DevopsService } from './devops/service';
+import { demoDevopsRun } from './tasks/demo';
+import { TaskService } from './tasks/service';
 import { gitBranches } from './chats/branch';
 import path from 'node:path';
 import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createImprove, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
+import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
 import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
-import { agentsMayOpen, engineOn } from './engines/policy';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
+import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
 import { SetupService } from './agents/setup';
@@ -37,7 +37,6 @@ import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { ProgressService } from './agents/progress';
 import { AgentLifecycle } from './agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
-import { ProposalBridge } from './improve/proposal-bridge';
 
 const demoCli = (version: string, account: string): CliStatus => ({ found: true, path: '(demo)', version, loggedIn: true, account });
 
@@ -59,16 +58,18 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => null, settings: brain });
   const agents = createAgentCatalog(ctx, brain, engines, () => null);
+  // fake cloud agents in the demo's areas (ADR 0080): no CLI, no network
+  const cloud = demoCloud({ emit: st => ctx.emitter.emit('cloud:changed', st), now });
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: new AgentRunStore(ctx.userData), items: id => chats.items(id), publish: events => brain.publish(events), suggestionSpend: () => 0, send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`) });
   const agentPacks = createAgentPacks(ctx.userData, brain, agents, true);
-  const devopsRun = demoDevopsRun(now);
-  const devops = new DevopsService({
-    file: path.join(ctx.userData, 'devops-demo.json'), brainRoot: () => 'demo', locate: () => 'devops-me.mjs (demo)', locateQa: () => 'qa-status.mjs (demo)',
-    settings: () => brain.settings().devops, run: (script, args) => devopsRun(script, args),
-    emit: st => ctx.emitter.emit('devops:state', st), feed: ev => brain.publish(ev), now,
+  const azureRun = demoDevopsRun(now);
+  const tasks = new TaskService({
+    file: path.join(ctx.userData, 'task-demo.json'), brainRoot: () => 'demo', locate: () => 'devops-me.mjs (demo)', locateQa: () => 'qa-status.mjs (demo)',
+    settings: () => brain.settings().tasks, run: (script, args) => azureRun(script, args),
+    emit: st => ctx.emitter.emit('tasks:state', st), feed: ev => brain.publish(ev), now,
   });
-  brain.onSettingChange(c => { if (c.key.startsWith('devops.')) devops.schedule(); });
-  devops.schedule();
+  brain.onSettingChange(c => { if (c.key.startsWith('tasks.')) tasks.schedule(); });
+  tasks.schedule();
   brain.serveApi('/api/quality', () => demoQuality());
   // the agents' lifecycle queue: no daily pass, no wake, no feedback writer (e2e agent-lifecycle.spec.ts); it reads the demo
   // authoring store's feedback, the same single store as in the real app. The user's decisions work on the demo catalog;
@@ -101,12 +102,12 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
+  const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   // show_ui's visuals (ADR 0033): the demo has no chat endpoints, __sbDemo.show calls the same store
   const artifacts = attachArtifacts(ctx, chats, now);
   // The demo has no native collector observations. Empty evidence is explicit, never inferred from scripted chat text.
   brain.serveApi('/api/agents/analytics', () => aggregateAgentUsage([]));
-  attachAppTools(mcp, { agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(aggregateAgentUsage([]), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, improve, true);
+  attachAppTools(mcp, { agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -165,16 +166,15 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, engines, later: createLater(ctx),
+    cloud, chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, engines, later: createLater(ctx),
     agents, agentAuthoring, agentLifecycle, agentPacks, brainModel,
-    proposals: new ProposalBridge({ userData: ctx.userData, repo: () => null, brain, chats, emit: () => {}, focus: () => {}, disabled: true }),
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(devops.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

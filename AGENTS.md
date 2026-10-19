@@ -30,13 +30,13 @@ the user's frozen release vs. anything run from this repo; **Aggiorna** (the but
 | Logs | `npm run logs -- --level warn --since 1h [--scope chats] [--chat <id>] [--grep x] [--json]`; files in `%APPDATA%/second-brain-dev/logs/` (dev, `--dev`) or `%APPDATA%/second-brain/logs/` (stable) |
 | Demo data (no CLIs, no tokens) | `npm run demo` (build + fake chats, tabs and a synthetic brain; `-- --frozen` fixed clock, `-- --hidden` for agents); bare: `SB_DEMO=1 npm start` (brain pages empty), deterministic: `SB_DEMO_FREEZE=1` |
 | README screenshots | `npm run shots` (frozen demo → `docs/screenshots/*.webp`, < 300 KB each); look at them before committing |
-| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each work Regia calls its own `/mcp/app/r/<regiaId>/<token>` (ADR 0021); the app's own Regia ("Migliora l'app") gets `/mcp/improve`: same tools on its own chats + `app_improve_state` (ADR 0020) |
+| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each work Regia calls its own `/mcp/app/r/<regiaId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
 
 **Stable vs dev (ADR 0007).** The user's cockpit is a frozen release in `%LOCALAPPDATA%/second-brain/releases/`
 started by `%LOCALAPPDATA%/second-brain/launch.cmd` (userData `second-brain`, MCP 4319). Anything run from this repo
 is the dev instance (userData `second-brain-dev`, MCP 4329; `npm run doctor -- --dev`, `npm run logs -- --dev`).
 Chats may start, test and kill the dev instance; never the stable one. Promotion (`npm run promote`: needs a clean
-tree and a green `npm run check`) is triggered by the user from the app ("Aggiorna" in "Migliora l'app", ADR 0020);
+tree and a green `npm run check`) is triggered by the user from the app ("Aggiorna" in Settings → Aggiornamenti, ADR 0075, 0079);
 `npm run rollback` by the user from a terminal; neither by agents.
 
 How an agent verifies a change by itself: on its branch `npm run check:branch` (no e2e there; the e2e runs only in the
@@ -65,12 +65,13 @@ first runs on main: say so in the hand-off, so the Regia knows which branch to l
    files or logs, credentials never handled by the app (each CLI logs in itself) with two exceptions: a login
    hand-off's password, read from the user's brain file only when they click Copia, never stored or logged (ADR 0012);
    the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
-   their own engine's process env or HTTP header (ADR 0046).
+   their own engine's process env or HTTP header (ADR 0046; the Cursor Cloud Agents key only to api.cursor.com, ADR 0080).
 3. **Dependencies:** only well-known packages, exact versions, published ≥ 14 days before install (`npm install
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.
 4. **Each harness spends only its own tokens.** The app starts `claude` only for Claude chats and `agent` only for
-   Cursor chats and for the token-free login check (`agent status`), with the user's own login. An agent working on this repo inside Claude Code never runs the Cursor CLI.
+   Cursor chats and for the token-free login check (`agent status`), with the user's own login; a cloud agent
+   (`claude --cloud`, `codex cloud`, Cursor's API with its own key) spends only its own vendor's plan or key (ADR 0080). An agent working on this repo inside Claude Code never runs the Cursor CLI.
 5. **No production from the app**: no prod DB, no ops scripts, no write `az` commands are ever wired in.
 6. **Coexistence**: the app never changes Claude desktop / Cursor config, hooks or settings files; it reads their
    transcripts and state read-only; an external session is resumed only as a fork (never two writers).

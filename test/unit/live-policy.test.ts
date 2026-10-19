@@ -17,7 +17,6 @@ describe('live feed policy', () => {
     const c = { id: 'a', title: 'Fix', isRegia: false };
     expect(doneEvent(undefined)).toBeNull();
     expect(doneEvent({ ...c, isRegia: true })).toBeNull();
-    expect(doneEvent({ ...c, appRegia: true })).toBeNull();
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: false } })).toMatchObject({ kind: 'chat-done', chatId: 'a', title: 'Fix' });
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: false, interrupted: true } })?.kind).toBe('chat-done');
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: true } })).toMatchObject({ kind: 'chat-failed', chatId: 'a' });

@@ -316,7 +316,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
   const open = useMemo(() => thinkingBeforeAsk(items, asking), [items, asking]);
   // a Regia's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
-  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia || c?.appRegia ? titlesKey(s.chats) : ''; });
+  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia ? titlesKey(s.chats) : ''; });
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];

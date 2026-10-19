@@ -16,10 +16,11 @@ import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentO
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
-import type { AppProposal, ProposalAvailability, ProposalPublication } from './improve-proposals';
 import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
+import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
@@ -52,6 +53,8 @@ export interface EngineCaps {
   preAllow: boolean;
   /** the engine works with tools (files, shell, MCP: the browser, the app's tools); false = text only (api) */
   tools: boolean;
+  /** the engine's cloud agents (ADR 0080; shared/cloud.ts CLOUD_CAPS): absent = none */
+  cloud?: CloudCaps;
 }
 /** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
 export interface EngineInfo {
@@ -134,7 +137,7 @@ export interface ChatSummary {
   workSince?: number;
   pending: number;            // open questions/permissions
   isRegia: boolean;
-  /** The single coordinator of work and app improvements. Set only by main. */
+  /** The single coordinator of all work, the app's code included. Set only by main. */
   orchestrator?: true;
   /** The Orchestrator's former titles (migrated Regie): their mailboxes still reach it. Set only by main. */
   mailAliases?: string[];
@@ -161,6 +164,9 @@ export interface ChatSummary {
   /** its last turn's final answer says it waits for work still running (an agent, a QA run, a build: shared/waiting.ts):
    *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
   waitsOnWork?: boolean;
+  /** its last report or final answer says it waits for the user (or a decision from above) or for a colleague (another
+   *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0076) */
+  waitsOn?: 'user' | 'colleagues';
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
@@ -173,15 +179,9 @@ export interface ChatSummary {
   /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
-  /** @deprecated Legacy input only. Ignored for visibility and dropped on restore/creation. */
-  space?: ChatSpace;
-  /** the section's own Regia ("Regia dell'app"): it coordinates the 'app' chats; one at a time, never closed */
-  appRegia?: boolean;
   /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
   route?: RouteDecision;
 }
-
-export type ChatSpace = 'app';
 
 export interface ChatLink { id: string; title: string }
 /** chat = written by the chat itself on request · auto = built by the app without tokens (no decisions inside) */
@@ -359,8 +359,6 @@ export interface NewChat {
   /** a work chat: the Regia it answers to */
   regiaOf?: string;
   worktree?: boolean;         // claude --worktree
-  space?: ChatSpace;          // deprecated input: never persisted or used for visibility
-  appRegia?: boolean;         // with space 'app': the section's Regia (main moves the role from the old one)
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
@@ -499,7 +497,7 @@ export interface FeedEvent {
 }
 export type FeedAction = { kind: 'agent-restore'; agentId: string } | { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
 
-// ---- DevOps (src/main/devops): the user's Azure DevOps, read by the brain's read-only scripts, never written
+// ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
 export interface DevopsItem {
   id: number; type: string; title: string; state: string; project: string; priority: number | null;
@@ -534,10 +532,10 @@ export interface DevopsNews {
   body?: string;
   item?: DevopsItem; pr?: DevopsPrRef; unread: boolean;
 }
-export interface DevopsState {
+export interface TasksState {
   enabled: boolean;
   everyMin: number;
-  /** the alerts' chime (setting devops.sound) */
+  /** the alerts' chime (setting tasks.sound) */
   sound: boolean;
   running: boolean;
   /** last successful read (ms) and the next automatic one (null when off) */
@@ -576,33 +574,20 @@ export interface QaTotals {
 export interface QaPlan { id: number; name: string; url: string; points: QaPoint[]; totals: QaTotals }
 export interface QaReport { pr: DevopsPrRef | null; plans: QaPlan[]; bugs: QaBug[]; totals: QaTotals & { bugs: number; openBugs: number } }
 
-// ---- "Migliora l'app" (src/main/improve): the user improves and customizes their own app from a section of it, with its
-// own Regia; changes go branch → green check → main → "Aggiorna" (scripts/release.mjs promote) → restart (ADR 0020)
+// ---- "Aggiorna" from GitHub (src/main/update/source.ts, ADR 0075): the code folder against GitHub's main, the
+// one-click update in progress and how the last start went (moved from the retired "Migliora l'app", ADR 0079)
 
-/** work = a branch with commits not in main and no green check on its tip · tested = its tip passed `npm run check:branch`
- *  or `npm run check` (ADR 0027) ·
- *  approved = merged into main, not yet in the version in use · promoted = inside the version in use */
-export type ImproveStage = 'work' | 'tested' | 'approved' | 'promoted';
-export interface ImproveBranch {
-  name: string;
-  sha: string;                // short
-  subject: string;            // last commit's subject
-  at: number;                 // last commit (ms)
-  stage: ImproveStage;
-  checkAt: number | null;     // green check on the tip (ms)
-  chatId?: string;            // the app chat working in its worktree
-  chatTitle?: string;
-}
-/** How the last start went, shown once after a restart until dismissed. new = the promoted version started ·
+/** How the last start went, shown once after a restart until dismissed. new = the new version started ·
  *  fallback = it did not start and the launcher went back to the previous one (reason: why, from the launcher) */
-export interface ImproveLaunch { outcome: 'new' | 'fallback'; running: string; wanted: string; reason: string; at: number }
-export interface ImprovePromote {
+export interface LaunchNotice { outcome: 'new' | 'fallback'; running: string; wanted: string; reason: string; at: number }
+/** A stable copy's switch to the new version (scripts/release.mjs promote-now), then the restart through the launcher */
+export interface PromoteRun {
   state: 'running' | 'ok' | 'error' | 'restarting';
   startedAt: number;
   endedAt?: number;
-  step: string;               // Italian, the step in progress ("Test in corso", "Copia della versione")
+  step: string;               // Italian, the step in progress ("Copia della versione")
   log: string;                // the output's tail
-  version?: string;           // the new release id once promoted
+  version?: string;           // the new release id once switched
 }
 /** "Aggiorna" from GitHub (ADR 0075): the code folder against GitHub's main, and the one-click update in progress */
 export interface SourceUpdate {
@@ -615,23 +600,17 @@ export interface SourceUpdate {
   canUpdate: boolean;
   at: number;
 }
-export interface ImproveState {
+export interface AppSourceState {
   repo: string | null;
   repoProblem: string | null; // Italian: why the code folder is missing or unusable
   running: string;            // the release id in use, 'dev' for a build run from the repo
   /** when the version in use was made (its commit, ms): shown instead of the release id; absent = dev or unknown */
   runningAt?: number | null;
   stable: boolean;
-  current: string | null;     // current.json
-  previous: string | null;
-  bad: string[];
-  /** main's tip when it is not the version in use: what "Aggiorna" would promote */
-  candidate: { sha: string; subject: string; at: number; checkAt: number | null } | null;
-  canPromote: boolean;
-  promoteWhy: string;         // Italian: why "Aggiorna" is off (empty when on)
-  promote: ImprovePromote | null;
-  launch: ImproveLaunch | null;
-  branches: ImproveBranch[];  // the last 14 days, newest first, at most 20
+  /** main's tip when it is not the version in use: what "Aggiorna" switches a stable copy to */
+  candidate: { sha: string; subject: string; at: number } | null;
+  promote: PromoteRun | null;
+  launch: LaunchNotice | null;
   source: SourceUpdate;
   at: number;
 }
@@ -757,8 +736,8 @@ export interface Settings {
   /** minutes an idle chat keeps its engine process (with its MCP servers and shells); then the process ends and the
    *  chat stays on the grid, resumed by itself on the next message (ADR 0026); 0 = never. Regie are never released. */
   engineIdleMin?: number;
-  /** DevOps page: read by the brain's devops-me.mjs (no AI, no tokens), on a timer only when the user turns it on */
-  devops: { enabled: boolean; everyMin: number; /** a short sound with a DevOps alert (a mention, a change on my items) */ sound: boolean };
+  /** Task page: read by the brain's devops-me.mjs (no AI, no tokens), on a timer only when the user turns it on */
+  tasks: { enabled: boolean; everyMin: number; /** a short sound with a DevOps alert (a mention, a change on my items) */ sound: boolean };
   /** the Regia overlay's opacity in %, 40-100 (fully opaque while hovered or focused; ADR 0021) */
   regiaOpacity: number;
   /** "Eventi alla Regia": a work chat that finishes, fails, waits for the user or leaves a command wakes the Regia with a
@@ -770,7 +749,7 @@ export interface Settings {
   /** "Domande in finestra": every open question and permission shows in one modal window in front, one at a time in
    *  a queue (instead of the chats' tiles and the Regia); it never takes the keyboard while the user types */
   questionsModal: boolean;
-  /** "Migliora l'app": the folder of the app's own code (a git repo); null = the one the running release was built from */
+  /** the folder of the app's own code (a git repo) that "Aggiorna" updates; null = the one the running release was built from */
   appRepo: string | null;
   /** "Coda per carico" (ADR 0036): an agent's new chat or turn waits while CPU is over loadQueueCpu % or free RAM under
    *  loadQueueRam %; the user's own messages never wait */
@@ -793,10 +772,10 @@ export interface RegiaChatDefaults {
   cursorFast: boolean;
 }
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'regiaChats' | 'devops' | 'pulse'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'regiaChats' | 'tasks' | 'pulse'>> & {
   pulse?: Partial<Omit<PulseSettings, 'headline' | 'types' | 'places'>> & { headline?: { on?: boolean }; types?: Partial<PulseSettings['types']>; places?: Partial<PulseSettings['places']> };
   engines?: Partial<Settings['engines']>;
-  devops?: Partial<Settings['devops']>;
+  tasks?: Partial<Settings['tasks']>;
   engineOn?: Partial<Settings['engineOn']>;
   messaging?: Partial<Settings['messaging']>;
   regiaChats?: Partial<RegiaChatDefaults>;
@@ -807,7 +786,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
   | 'pulse.on' | 'pulse.dailyUsd' | 'pulse.slots' | 'pulse.headline.on' | `pulse.types.${PulseType}` | `pulse.places.${'board' | 'agent' | 'search' | 'file'}` | 'jobs.fallback'
-  | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'devops.enabled' | 'devops.everyMin' | 'devops.sound' | 'budget.enabled'
+  | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'regiaDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `regiaChats.${keyof RegiaChatDefaults}` | 'regiaOpacity' | 'regiaEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
   | 'headlineOn' | 'headlineModel' | 'headlineEffort';
@@ -1148,12 +1127,6 @@ export interface InvokeMap {
   'update:checkpointAnswer': [UpdateCheckpointAnswer, void];
   'update:recovery': [void, UpdateRecovery | null];
   'update:recoveryAck': [{ id: string }, void];
-  'improve:proposals': [void, AppProposal[]];
-  'improve:proposalAvailability': [void, ProposalAvailability];
-  'improve:proposalCreate': [void, AppProposal];
-  'improve:proposalRefresh': [{ id: string }, AppProposal];
-  'improve:proposalResume': [{ id: string }, AppProposal];
-  'improve:proposalPublish': [ProposalPublication, AppProposal];
   'progress:get': [void, ProgressState];
   'progress:setHidden': [{ hidden: boolean }, ProgressState];
   'progress:confirmResult': [{ chatId: string; resultAt: number }, ProgressState];
@@ -1312,11 +1285,11 @@ export interface InvokeMap {
   'routing:restore': [{ version: number }, RoutingInfo];
   /** "Nuova chat": what chat:createRouted would start for this request now, without starting it (no exploration) */
   'routing:preview': [RoutedNewChat, RoutePreview];
-  'devops:get': [void, DevopsState];
+  'tasks:get': [void, TasksState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
-  'devops:refresh': [void, DevopsState];
+  'tasks:refresh': [void, TasksState];
   /** marks news read: the given keys, or all of them */
-  'devops:markRead': [{ keys?: string[] }, DevopsState];
+  'tasks:markRead': [{ keys?: string[] }, TasksState];
   /** the "Stato" view: the git branch checked out in each chat folder, read from disk (null = not a git folder) */
   'chat:branches': [{ cwds: string[] }, Record<string, string | null>];
   /** the app page → main: what the global request layer shows now (main attaches/detaches it and forwards the model) */
@@ -1344,21 +1317,17 @@ export interface InvokeMap {
   'skills:delete': [{ id: string }, { ok: boolean; error?: string }];
   /** what "/" offers in a chat's input: the commands its engine reported, or its engine's skills on disk */
   'chat:commands': [{ chatId: string }, ChatCommand[]];
-  /** "Migliora l'app": the state (refresh = read git now) */
-  'improve:get': [{ refresh?: boolean }, ImproveState];
-  /** the user's click on "Aggiorna" (never an agent): test, copy, switch, then restart the app on the new version */
-  'improve:promote': [void, ImproveState];
-  /** the section's Regia: created in the code folder with its role prompt (harness/model: the user's choice) */
-  'improve:regia': [{ harness: Harness; model?: string }, ChatSummary];
+  /** Settings → Aggiornamenti: the version in use, the code folder, the restart notice (refresh = read git now) */
+  'source:get': [{ refresh?: boolean }, AppSourceState];
   /** Read without starting an engine; ensure creates only when no coordinator exists. */
   'orchestrator:get': [void, ChatSummary | null];
   'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** the restart notice was read */
-  'improve:dismissLaunch': [void, ImproveState];
+  'source:dismissLaunch': [void, AppSourceState];
   /** reads GitHub's main against the code folder (git fetch, nothing changes) */
-  'improve:sourceCheck': [void, ImproveState];
+  'source:check': [void, AppSourceState];
   /** the user's click on "Aggiorna" (never an agent): pull, build, switch to the new version and restart, no tests */
-  'improve:updateNow': [void, ImproveState];
+  'source:updateNow': [void, AppSourceState];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
@@ -1384,6 +1353,20 @@ export interface InvokeMap {
   'pulse:runNow': [void, PulseResult];
   'approvals:list': [{ agentId?: string }, ApprovalItem[]];
   'approvals:decide': [ApprovalDecision, PulseResult];
+  /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
+  'cloud:list': [{ refresh?: boolean } | void, CloudState];
+  /** the user's click (or app_create_chat where:'cloud'): fails closed with the reason (not signed in, no GitHub remote…) */
+  'cloud:start': [CloudStartRequest, CloudAgent];
+  'cloud:followUp': [{ id: string; text: string }, CloudAgent];
+  'cloud:stop': [{ id: string }, CloudAgent];
+  /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
+  'cloud:apply': [{ id: string }, CloudApplyResult];
+  /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
+  'cloud:watch': [{ id: string | null }, void];
+  /** whether each engine can start a cloud agent from this folder now (key, sign-in, GitHub remote, pushed branch) */
+  'cloud:readiness': [{ cwd: string }, Record<string, { ok: boolean; why?: string }>];
+  /** forget a finished agent (the vendor keeps it) */
+  'cloud:dismiss': [{ id: string }, CloudState];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
@@ -1409,7 +1392,6 @@ export interface EventMap {
   'update:state': AppUpdateState;
   'update:checkpointRequest': UpdateCheckpointRequest;
   'update:checkpointRelease': { requestId: string };
-  'improve:proposals': AppProposal[];
   'progress:changed': ProgressState;
   'chat:autoCloseStatus': AutoCloseStatus[];
   'agents:changed': AgentCatalog;
@@ -1438,14 +1420,14 @@ export interface EventMap {
   /** a protected change waits for the user (status pending), or was answered (accepted / rejected) */
   'settings:proposed': SettingProposal;
   'budget:alert': BudgetAlert;
-  'devops:state': DevopsState;
+  'tasks:state': TasksState;
   /** main → the layer page: the cards to show */
   'overlay:model': OverlayModel;
   /** main → the app page: what the user did in the layer */
   'overlay:action': OverlayAction;
   /** a run started, printed more output, or ended */
   'run:updated': RunInfo;
-  'improve:state': ImproveState;
+  'source:state': AppSourceState;
   'later:changed': AnswerLater;
   'search:status': SearchIndexStatus;
   /** a skill, rule, memory file or agent link changed (a maintenance job, a rollback, the brain on disk) */
@@ -1456,6 +1438,7 @@ export interface EventMap {
   'headline:changed': HeadlineState;
   'pulse:changed': void;
   'approvals:changed': void;
+  'cloud:changed': CloudState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1469,7 +1452,6 @@ export const INVOKE_CHANNELS = [
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
-  'improve:proposals', 'improve:proposalAvailability', 'improve:proposalCreate', 'improve:proposalRefresh', 'improve:proposalResume', 'improve:proposalPublish',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:classify', 'agents:classifierCalibration', 'agents:classifierDecide', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
@@ -1478,24 +1460,25 @@ export const INVOKE_CHANNELS = [
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
-  'devops:get', 'devops:refresh', 'devops:markRead', 'chat:branches',
+  'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
   'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
-  'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch', 'improve:sourceCheck', 'improve:updateNow',
+  'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
+  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'pulse:changed', 'approvals:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
-  'improve:proposals',
   'progress:changed',
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
+  'cloud:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

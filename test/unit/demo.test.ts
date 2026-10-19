@@ -30,7 +30,7 @@ describe('demo seed', () => {
   it('is a rich, deterministic state', () => {
     const a = seed(FROZEN_EPOCH);
     expect(seed(FROZEN_EPOCH)).toEqual(a);
-    expect(a.chats.filter(c => c.isRegia).map(c => c.regiaName ?? 'Lavoro')).toEqual(['Lavoro']); // the work Regia; the app's one is made in "Migliora l'app" (ADR 0020)
+    expect(a.chats.filter(c => c.isRegia).map(c => c.regiaName ?? 'Lavoro')).toEqual(['Lavoro']); // the one Orchestrator (ADR 0079: no app Regia)
     expect(new Set(a.chats.map(c => c.state))).toEqual(new Set(['waiting', 'running', 'idle', 'closed'])); // closed: the old finished ones (auto-close)
     expect(a.pending.map(p => p.type).sort()).toEqual(['permission', 'question', 'question']);
     expect(a.tabs.every(t => t.ownerChatId && a.chats.some(c => c.id === t.ownerChatId))).toBe(true);

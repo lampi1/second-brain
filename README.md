@@ -100,8 +100,8 @@ Where things are:
 | `test/unit`, `test/e2e` | Vitest for every module, Playwright driving the real app for every visible feature. |
 | `docs/adr/` | Every decision, numbered, with its reason. |
 
-Or let the app change itself: open **Migliora l'app** and describe what you want; its Orchestrator prepares the change
-on a branch, runs the checks and shows you the result before anything is merged.
+Or let the app change itself: ask the Orchestrator for the change and give it the app's code folder; it opens a chat
+there that works on a branch and runs the checks before anything is merged.
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, ADRs, a map of the modules). AI agents working on the
 repo read [AGENTS.md](AGENTS.md).
@@ -134,8 +134,23 @@ first, `npm run rollback` goes back by hand.
 Every Claude Code, Codex or Cursor agent is a strip in the **Grindhouse** with its streaming text, tool calls, diffs,
 cost and context size. When an agent asks a question or a permission, it shows up as a panel right in its strip (or in
 a floating layer, wherever you are in the app): answer with one key, with the context the agent had when it asked.
-Strips are grouped by area and ordered by the Orchestrator; each expands inline, maximizes or opens in focus mode,
-and the browser an agent drives sits right under it.
+Strips are grouped by area and ordered by the Orchestrator; a click anywhere on one expands it inline, and it
+maximizes or opens in focus mode. The globe on a strip shows the browser its agent drives beside it (expanding the
+strip if needed). The sub-agents at work hang under their strip, each with the app agent it runs as, and a parent
+waiting on them reads "in attesa", not "finito". Model and effort come from the agent's profile. A worker that sent
+its final report to the Orchestrator and went idle closes by itself after a short delay (Settings → Archivia lavori
+conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
+work stays open with an "In attesa di…" label.
+
+### Cloud agents next to the local ones
+
+Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going
+with the PC asleep and cost no local CPU. Start one from **Nuovo agente → Dove: Cloud** (or let the Orchestrator do it)
+on a GitHub repository whose branch is already pushed: it gets its own strip in the Grindhouse, grouped by repository,
+with a "cloud" badge. Cursor streams its messages, takes follow-ups and stops from the app (its cloud runs at API
+prices, counted in the Cursor spending limit; the key goes in Settings → Motori → Cursor); Codex and Claude open their
+own page for what their CLIs do not offer. "Porta in locale" brings the result into a new worktree. The agent pushes
+only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pushes (ADR 0080).
 
 ### The Orchestrator: one chat that coordinates the others
 
@@ -167,14 +182,17 @@ passwords.
 
 Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
-(ADR 0072). The dashboard shows it as pages and as a 3D map that lights up the files, tools and agents at work.
+(ADR 0072). The dashboard shows it as pages, as a 2D map of its connections that fills the panel at any size, and as a 3D map
+that lights up the files, tools and agents at work.
 
-### DevOps in one page
+### Task in one page
 
-![The DevOps page: mentions, pull requests, reviews and work items](docs/screenshots/devops.webp)
+![The Task page: mentions, pull requests, reviews and work items](docs/screenshots/task.webp)
 
 Mentions, comments and votes on your pull requests, reviews waiting for you, stuck work items, failed builds and the QA
-status of each pull request, read on demand (zero tokens, read only). Every item opens its agent in one click.
+status of each pull request, imported from Azure DevOps on demand or automatically (zero tokens, read only). Every item
+opens its agent in one click. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
+what, who (you, or the agent or engine of a chat), when and its link.
 
 ### Quality you can measure
 
@@ -194,6 +212,10 @@ Costs, budgets and estimates per agent and per day sit next to them.
   learns from the agents' verdicts (ADR 0078).
 - **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
 - **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
+- **Screenshots everywhere**: an agent writes the path of a PNG, JPG or WebP (under the brain, the repo, a worktree or
+  its evidence folder) and the app shows it as a thumbnail in the chat and in the question; Markdown and HTML reports
+  open in the file viewer with their images (files beside the report or base64), never loaded from the internet. A
+  click opens any of them large.
 
 ## Architecture
 

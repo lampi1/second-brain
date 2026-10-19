@@ -27,7 +27,7 @@ function deps() {
 describe('app control tools', () => {
   it('sets only a validated next-turn effort within the caller space and preserves the current report', async () => {
     const current = { supported: true, requested: 'xhigh', submitted: 'xhigh', effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: 'high' };
-    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', space: 'app' }, { id: 'cursor', harness: 'cursor' }];
+    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }];
     const set = vi.fn(async (id: string, patch: object) => ({ ...rows.find(c => c.id === id), id, effortStatus: { ...current, requested: 'medium', pending: true }, ...patch }));
     const chats = { list: () => rows, set } as unknown as ChatService;
     const tool = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(t => t.name === 'app_set_chat_effort')!;
@@ -99,27 +99,6 @@ describe('app control tools', () => {
       await expect(Promise.resolve().then(() => tool().run({ chatId: 'w', requestId: 'q1', answers: both }))).rejects.toThrow(/dell’Orchestrator «Orchestrator · Supporto»/);
       expect(answered).toEqual([]);
       await tool('r2').run({ chatId: 'w', requestId: 'q1', answers: both });
-      expect(answered).toHaveLength(1);
-    });
-
-    it('the legacy /mcp/improve Regia closes questions only of app-code work, never of another Orchestrator\'s chat', async () => {
-      const answered: unknown[] = [];
-      const pend = [q, { ...q, id: 'q2', chatId: 'app' }, { ...q, id: 'q3', chatId: 'owned' }];
-      const chats = {
-        list: () => [{ id: 'regia', isRegia: true, harness: 'claude' }, { id: 'ar', isRegia: false, appRegia: true, harness: 'claude', cwd: 'C:/code/app' },
-          { id: 'w', isRegia: false, harness: 'claude', cwd: 'C:/brain' }, { id: 'app', isRegia: false, harness: 'claude', cwd: 'C:/code/app-wt/x' },
-          { id: 'owned', isRegia: false, harness: 'claude', cwd: 'C:/code/app', regiaOf: 'regia' }],
-        pending: () => pend,
-        items: () => [{ kind: 'user', id: 'u', at: 150, text: 'sì' }],
-        answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
-      } as unknown as ChatService;
-      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0', sourceOnly: true,
-        improve: { repo: () => 'C:/code/app', state: async () => ({}) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } }).find(x => x.name === 'app_resolve_question')!;
-      const run = (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a));
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/codice dell’app/);
-      await expect(run({ chatId: 'owned', requestId: 'q3', answers: both })).rejects.toThrow(/codice dell’app/);
-      expect(answered).toEqual([]);
-      await run({ chatId: 'app', requestId: 'q2', answers: both });
       expect(answered).toHaveLength(1);
     });
 
@@ -339,8 +318,8 @@ describe('app control tools', () => {
     const out = await tool('app_logs').run({ level: 'warn', grep: 'slow' }) as { msg: string }[];
     expect(out.map(e => e.msg)).toContain('session slow');
     expect(out.every(e => e.msg !== 'tab opened')).toBe(true);
-    await tool('app_ui').run({ action: 'page', value: 'devops' });
-    expect(ui).toEqual([{ action: 'page', value: 'devops' }]);
+    await tool('app_ui').run({ action: 'page', value: 'task' });
+    expect(ui).toEqual([{ action: 'page', value: 'task' }]);
     expect(() => tool('app_ui').run({ action: 'view', value: 'corsie' })).toThrow(/not allowed/);
   });
 
@@ -364,79 +343,13 @@ describe('app control tools', () => {
     await expect(Promise.resolve(tools.find(t => t.name === 'app_reopen_chat')!.run({ chatId: 'nope' }))).rejects.toThrow(/non trovata/);
   });
 
-  it('legacy mounts share chats; the improve mount retains source-folder gates and read-only branch tools', async () => {
-    const made: Record<string, unknown>[] = [];
-    const sent: string[] = [];
-    const list = [
-      { id: 'r', harness: 'claude', state: 'idle', isRegia: true, title: 'Regia', lastText: '' },
-      { id: 'w', harness: 'claude', state: 'idle', title: 'Ordini · Fix', lastText: '' },
-      { id: 'ar', harness: 'claude', state: 'idle', space: 'app', appRegia: true, title: "Regia dell'app", lastText: '' },
-      { id: 'a', harness: 'claude', state: 'idle', space: 'app', title: 'App · tema', lastText: '' },
-    ];
-    const chats = {
-      list: () => list, items: () => [], pending: () => [{ id: 'p1', chatId: 'w' }, { id: 'p2', chatId: 'a' }],
-      send: async (id: string) => { sent.push(id); },
-      create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n', title: req.title }; },
-      queueState: () => ({ enabled: true, cpu: 90, freeRam: 40, waiting: [{ chatId: 'w', kind: 'turn', position: 1, since: 0 }, { chatId: 'a', kind: 'start', position: 2, since: 0 }] }),
-    } as unknown as ChatService;
-    const brain = {
-      ...ROUTED,
-      settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' }, contextWarnTokens: 200_000 }),
-      info: () => ({ brainRoot: 'C:/brain' }), usage: () => ({}),
-      feed: () => [{ id: 'f1', chatId: 'w' }, { id: 'f2', chatId: 'a' }, { id: 'f3' }],
-    } as unknown as BrainService;
-    log.info('test', 'space-probe', { chat: 'w' });
-    log.info('test', 'space-probe', { chat: 'a' });
-    const run = (chatId: string) => ({ id: chatId, chatId, state: 'done', exitCode: 0, code: 'x', cwd: 'c', output: '', startedAt: 0, endedAt: 1 });
-    const runs = (chatId?: string) => [run('w'), run('a')].filter(r => !chatId || r.chatId === chatId);
-    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', runs: runs as never };
-    const work = appControlTools(base);
-    const app = appControlTools({ ...base, sourceOnly: true, improve: { repo: () => 'C:/code/app', state: async () => ({ repo: 'C:/code/app' }) as never, inRepo: async (dir: string) => dir.startsWith('C:/code/app') } });
-    const t = (tools: typeof work, n: string) => tools.find(x => x.name === n)!;
-
-    const ids = async (tools: typeof work) => ((await t(tools, 'app_chats').run({})) as { app: { id: string }[] }).app.map(c => c.id);
-    expect(await ids(work)).toEqual(['r', 'w', 'ar', 'a']);
-    expect(await ids(app)).toEqual(['r', 'w', 'ar', 'a']);
-
-    await t(work, 'app_send_to_chat').run({ chatId: 'a', text: 'x' });
-    await t(app, 'app_send_to_chat').run({ chatId: 'w', text: 'x' });
-    await t(app, 'app_send_to_chat').run({ chatId: 'a', text: 'x' });
-    expect(sent).toEqual(['a', 'w', 'a']);
-
-    await t(app, 'app_create_chat').run({ title: 'App · tema', prompt: 'tema scuro' });
-    expect(made[0]).toMatchObject({ cwd: 'C:/code/app', regia: false });
-    await t(work, 'app_create_chat').run({ title: 'Ordini', prompt: 'x' });
-    expect(made[1]).toMatchObject({ cwd: 'C:/brain' });
-    expect(made[0]).not.toHaveProperty('space');
-    expect(made[1]).not.toHaveProperty('space');
-    // the app's chats start only in the code folder or one of its worktrees
-    await expect(Promise.resolve().then(() => t(app, 'app_create_chat').run({ title: 'App · x', prompt: 'x', cwd: 'C:/brain' }))).rejects.toThrow(/non ammessa/);
-    expect(made).toHaveLength(2);
-
-    // items, runs and requests of the other space read as unknown
-    expect(await t(app, 'app_chat_items').run({ chatId: 'w' })).toEqual([]);
-    expect(await t(work, 'app_chat_items').run({ chatId: 'a' })).toEqual([]);
-    expect(((await t(app, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
-    expect(((await t(work, 'app_pending').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
-    expect(((await t(app, 'app_command_runs').run({})) as { chatId: string }[]).map(r => r.chatId)).toEqual(['w', 'a']);
-    expect(await t(app, 'app_command_runs').run({ chatId: 'w' })).toHaveLength(1);
-    expect(((await t(app, 'app_state').run({})) as { pending: number }).pending).toBe(2);
-    // the CPU queue (ADR 0036): each space sees only its own waiting chats
-    expect(((await t(app, 'app_state').run({})) as { queue: { waiting: { chatId: string }[] } }).queue.waiting.map(w => w.chatId)).toEqual(['w', 'a']);
-    expect(((await t(work, 'app_state').run({})) as { queue: { cpu: number; waiting: { chatId: string }[] } }).queue).toMatchObject({ cpu: 90, waiting: [{ chatId: 'w', position: 1 }, { chatId: 'a', position: 2 }] });
-    // feed, logs and maximize stay in the caller's space too
-    expect(await t(app, 'app_feed').run({})).toEqual([{ id: 'f1', chatId: 'w' }, { id: 'f2', chatId: 'a' }, { id: 'f3' }]);
-    expect(((await t(app, 'app_logs').run({ grep: 'space-probe' })) as { chat: string }[]).map(e => e.chat)).toEqual(['w', 'a']);
-    expect(() => t(app, 'app_ui').run({ action: 'maximize', value: 'a' })).not.toThrow();
-    expect(() => t(work, 'app_ui').run({ action: 'maximize', value: 'a' })).not.toThrow();
-    // closing too: never a chat of the other space, never the app's Regia
-    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'missing' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve().then(() => t(work, 'app_close_chat').run({ chatId: 'missing' }))).rejects.toThrow(/non trovata/);
-    await expect(Promise.resolve().then(() => t(app, 'app_close_chat').run({ chatId: 'ar' }))).rejects.toThrow(/Orchestrator/);
-    expect(work.some(x => x.name === 'app_improve_state')).toBe(false);
-    expect(await t(app, 'app_improve_state').run({})).toMatchObject({ repo: 'C:/code/app' });
-    // no tool promotes, restarts or merges: the user presses Aggiorna
-    expect(app.map(x => x.name).some(n => /promot|restart|merge|release/i.test(n))).toBe(false);
+  it('no tool promotes, restarts, merges or reads the removed "Migliora l\'app" state: the user presses Aggiorna (ADR 0079)', () => {
+    const chats = { list: () => [], items: () => [], pending: () => [] } as unknown as ChatService;
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
+    const code = { repo: () => 'C:/code/app', inRepo: async () => true, pull: async () => ({ ok: true, message: '' }) };
+    for (const tools of [appControlTools(base), appControlTools({ ...base, code }), appControlTools({ ...base, unified: true, code }, 'or')]) {
+      expect(tools.map(x => x.name).some(n => /promot|restart|merge|release|improve|proposal/i.test(n))).toBe(false);
+    }
   });
 
   it('app_update_code (ADR 0074): only the authenticated Orchestrator, only right after the user wrote to it', async () => {
@@ -445,13 +358,12 @@ describe('app control tools', () => {
     const list = [{ id: 'or', harness: 'claude', state: 'idle', isRegia: true, orchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'idle', title: 'Lavoro', lastText: '' }];
     const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
     let pulls = 0;
-    const improve = { repo: () => 'C:/code/app', state: async () => ({}) as never, pull: async () => { pulls++; return { ok: true, message: 'Aggiornata' }; } };
+    const code = { repo: () => 'C:/code/app', pull: async () => { pulls++; return { ok: true, message: 'Aggiornata' }; } };
     const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
     // never on the plain mounts, never for a work chat on the token mount
-    expect(appControlTools({ ...base, improve }).some(x => x.name === 'app_update_code')).toBe(false);
-    expect(appControlTools({ ...base, sourceOnly: true, improve }).some(x => x.name === 'app_update_code')).toBe(false);
-    expect(appControlTools({ ...base, unified: true, improve }, 'w').some(x => x.name === 'app_update_code')).toBe(false);
-    const tool = appControlTools({ ...base, unified: true, improve }, 'or').find(x => x.name === 'app_update_code')!;
+    expect(appControlTools({ ...base, code }).some(x => x.name === 'app_update_code')).toBe(false);
+    expect(appControlTools({ ...base, unified: true, code }, 'w').some(x => x.name === 'app_update_code')).toBe(false);
+    const tool = appControlTools({ ...base, unified: true, code }, 'or').find(x => x.name === 'app_update_code')!;
     // nothing from the user, an agent-labelled message, or an old one: refused
     await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/non ha chiesto/);
     items = [{ kind: 'user', id: 'u', at: now - (PULL_ASK_MIN + 1) * 60_000, text: 'aggiornati' }, { kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} aggiornati` }];

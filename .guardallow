@@ -26,6 +26,7 @@ test/unit/runner.test.ts internal-host sha256:9b7a97db1e8bc04e3910dfd3363f2cca94
 # file blocks again.
 test/unit/devlinks.test.ts internal-host sha256:128d7a93c6830392ddd97e4783cfcee729b526874b72955e64bbb53f0cad6470
 test/unit/devlinks.test.ts internal-host sha256:a054b1641bd592db1e477cdf1eea0ff18e377c9e13d33b286e4e4fa57cf9fee9
+test/unit/devlinks.test.ts internal-host sha256:974ab533bae25ea7152e28b9ec64355944f72f462b6e1a5cc1a281507f406497
 # Images the product needs, each looked at by a human (2026-10-13): the app icon PNG (build/icon.svg rendered by
 # scripts/make-icon.cjs, chunks IHDR/IDAT/IEND only), the e2e visual baselines and the README screenshots (frozen demo,
 # fictional data). `npm run shots` prints the lines for new screenshots; never remove an old line (history scan).
@@ -52,3 +53,6 @@ docs/screenshots/browser.webp binary-media sha256:4bfacd4cbed7b501f48647d62cda84
 docs/screenshots/brain-map.webp binary-media sha256:ed11d3435617898e34fb957685ee8b791e3ed4b38311cf37c8bb9ca5b4b19a1c
 docs/screenshots/devops.webp binary-media sha256:4d1542b862694104f8ab72df150849a88900206e450fc13589355c3f88dbeee8
 docs/screenshots/quality.webp binary-media sha256:b2825f78505187746926e722bc0e6ce72ed1951581f2485440467ee65393d29e
+docs/screenshots/task.webp binary-media sha256:856458e036b9e613d52738bca0fd66532377e544c0d2657fc409f9a7271a7c61
+test/fixtures/cloud/remotes.txt email sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
+test/fixtures/cloud/remotes.txt internal-host sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721

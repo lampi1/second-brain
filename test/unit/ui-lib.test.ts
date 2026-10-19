@@ -133,8 +133,8 @@ describe('prefs', () => {
     expect(p.density).toBe('compact');
     expect(p.theme).toBe('system');
     for (const key of ['view', 'cols', 'rows', 'browserZone', 'navCollapsed', 'regiaPlacement', 'regiaTopHeight']) expect(p).not.toHaveProperty(key);
-    expect(p.browsersHidden).toBe(false);
-    expect(loadPrefs(JSON.stringify({ browsersHidden: true })).browsersHidden).toBe(true);
-    expect(loadPrefs(JSON.stringify({ browsersHidden: 'yes' })).browsersHidden).toBe(false);
+    // the retired hide-browsers switch (#82): a saved "on" is dropped, an opened browser always shows
+    expect(loadPrefs(JSON.stringify({ browsersHidden: true, density: 'compact' }))).not.toHaveProperty('browsersHidden');
+    expect(loadPrefs(JSON.stringify({ browsersHidden: true, density: 'compact' })).density).toBe('compact');
   });
 });

@@ -4,7 +4,7 @@
 // result also gives the title. Why: the user asks "dammi il link alla PR / al bug" many times a day, and each ask makes
 // the model re-read the whole chat; the chips in the tile's header answer at once. Pure: used by
 // components/ChatLinkChips.tsx (with the cached DevOps data for titles) and test/unit/devlinks.test.ts.
-import type { ChatItem, DevopsState } from '@shared/contract';
+import type { ChatItem, TasksState } from '@shared/contract';
 
 export type DevLinkKind = 'pr' | 'workitem' | 'testplan' | 'build' | 'release';
 export interface DevLink {
@@ -162,8 +162,8 @@ function refUrl(r: ToolRef, org: string | null): string | null {
   }
 }
 
-/** Titles and types from the DevOps page's cached data, by "kind:id". */
-export function cachedTitles(d: DevopsState | null | undefined): Map<string, { title: string; type?: string; url: string }> {
+/** Titles and types from the Task page's cached data, by "kind:id". */
+export function cachedTitles(d: TasksState | null | undefined): Map<string, { title: string; type?: string; url: string }> {
   const map = new Map<string, { title: string; type?: string; url: string }>();
   if (!d) return map;
   const wi = (w: { id: number; title: string; type?: string; url: string } | undefined) => { if (w?.title) map.set(`workitem:${w.id}`, { title: w.title, type: w.type, url: w.url }); };
@@ -177,7 +177,7 @@ export function cachedTitles(d: DevopsState | null | undefined): Map<string, { t
 }
 
 /** The organization URL of the cached DevOps data (the first item's link), for tool ids with no URL in the chat. */
-function cachedOrg(d: DevopsState | null | undefined): string | null {
+function cachedOrg(d: TasksState | null | undefined): string | null {
   const u = d?.prs?.[0]?.url ?? d?.assigned?.[0]?.url ?? d?.news?.[0]?.url ?? d?.reviews?.[0]?.url;
   return u ? parseDevopsUrl(u)?.org ?? null : null;
 }
@@ -210,7 +210,7 @@ function scan(it: ChatItem): Scan {
 }
 
 /** Every DevOps link of a chat, one per object, newest mention first; titles from tool results, else the cache. */
-export function extractDevLinks(items: readonly ChatItem[], devops?: DevopsState | null): DevLink[] {
+export function extractDevLinks(items: readonly ChatItem[], devops?: TasksState | null): DevLink[] {
   const found = new Map<string, DevLink>();
   let org: string | null = null;
   const pending: { ref: ToolRef; at: number }[] = [];

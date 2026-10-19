@@ -1,4 +1,4 @@
-// The Regia helpers (src/renderer/lib/regia-route.ts): which chat is the Regia, the chats of "Migliora l'app", and the
+// The Regia helpers (src/renderer/lib/regia-route.ts): which chat is the Regia, one Grindhouse for every chat, and the
 // commands of the turn that ends with a question (shown with "Esegui" on its popup). "Domande alla Regia" is gone
 // (the user, 2026-10-13): no routing left to test.
 import { describe, expect, it } from 'vitest';
@@ -16,8 +16,8 @@ describe('the Regia from the app state', () => {
 });
 
 describe('one Grindhouse for every worker', () => {
-  it('lists legacy app chats alongside normal chats, in grid order', () => {
-    const s = { order: ['a', 'app1', 'b', 'app2'], chats: { a: {}, app1: { space: 'app' }, b: {}, app2: { space: 'app', appRegia: true } } } as unknown as Pick<AppState, 'order' | 'chats'>;
+  it('lists every chat, the app code included, in grid order', () => {
+    const s = { order: ['a', 'app1', 'b', 'app2'], chats: { a: {}, app1: { cwd: 'C:/repo' }, b: {}, app2: { cwd: 'C:/repo-wt/x' } } } as unknown as Pick<AppState, 'order' | 'chats'>;
     expect(workspaceTiles(s.order, s.chats, []).map(t => t.id)).toEqual(['a', 'app1', 'b', 'app2']);
   });
 });

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
 import { useApp } from '../store/store';
-import { useDevops } from '../store/devops';
+import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
@@ -20,12 +20,12 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   dashboard: <IconChart />, guida: <IconQuestion />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
-/** The pages of the two lower groups, in order (Lavoro is built by hand: DevOps can hide; the Dashboard shows under any role). */
+/** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide; the Dashboard shows under any role). */
 const BRAIN_GROUP: BrainPageId[] = ['miglioramento'];
 /** The Brain section: always shown, whatever the role (ADR 0077). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'skill', 'regole', 'memoria', 'classificatori', 'collegamenti'];
@@ -39,15 +39,15 @@ export function Sidebar() {
   const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
   const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','devops','fatto','impostazioni','migliora',...BRAIN_CORE].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','task','fatto','impostazioni',...BRAIN_CORE].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
   const waiting = useApp(s => s.pending.length);
-  const devopsUnread = useDevops(s => s?.unread ?? 0);
-  // DevOps only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
-  const devopsOn = useDevops(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
+  const tasksUnread = useTasks(s => s?.unread ?? 0);
+  // Task only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
+  const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
   const b = badges(feed, read);
   // pending agent changes (Da approvare, components/AgentApprovals.tsx) outrank the Agenti page's feed count
   const approvals = useApprovalCount();
@@ -64,7 +64,7 @@ export function Sidebar() {
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
     return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
-      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'agenti' && approvals ? <span className="nav-badge amber" data-testid="nav-badge-approvals" aria-label={t('approvals.countLabel', { n: approvals })}>{approvals > 99 ? '99+' : approvals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'devops' ? devopsUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
+      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'agenti' && approvals ? <span className="nav-badge amber" data-testid="nav-badge-approvals" aria-label={t('approvals.countLabel', { n: approvals })}>{approvals > 99 ? '99+' : approvals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
   const title = (txt: string, id: string) => <div className="nav-title" data-testid={`nav-group-${id}`}>{txt}</div>;
@@ -73,7 +73,7 @@ export function Sidebar() {
       <div className="nav-group nav-scroll">
         {page1('home')}
         {title(t('dialogs.sidebar.work'), 'work')}
-        {devopsOn && show('devops') && page1('devops')}
+        {tasksOn && show('task') && page1('task')}
         {show('fatto')&&page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_CORE.map(page1)}

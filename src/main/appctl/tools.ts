@@ -13,11 +13,11 @@
 // - Long chats: it can ask a chat's hand-off and "Riprendi" it in a new chat (app_handoff_chat, app_continue_chat),
 //   under the same rule for chats across engines as messages (engines/policy.ts; an agent never starts a stopped
 //   chat on another engine).
-// - Both mounts see the shared Grindhouse; legacy /mcp/improve creation still requires the source repository.
-//   The app's Regia also reads the branches (app_improve_state)
-//   but can never promote nor restart (only the user's click on "Aggiorna", ADR 0007/0020).
+// - Both mounts see the shared Grindhouse. Only an Orchestrator's own mount brings the app's code folder up to date
+//   when the user asks (app_update_code, ADR 0074); no tool promotes or restarts the app (only the user's click on
+//   "Aggiorna" in Settings, ADR 0075).
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RouteAgent, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, Harness, PendingRequest, RouteAgent, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { EFFORTS, isFable, modelRow } from '../brain/routing';
 import { engineLabel, engineOf, engines } from '../engines/registry';
@@ -33,18 +33,20 @@ import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
 import { claimsAlias } from '../chats/mail';
-import { parseImproveSelection } from './improve-evidence';
-import type { ImproveService, PullResult } from '../improve/service';
-import type { ImproveEvidenceSelection } from '../improve/evidence';
+import type { PullResult } from '../update/source';
 import { GENERAL_AGENT_ID, ORCHESTRATOR_AGENT_ID, type AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
+import type { CloudService } from '../cloud/service';
+import { isCloudEngine } from '../../shared/cloud';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
+  /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
+  cloud?: CloudService;
   agentAuthoring?: AgentAuthoring;
   agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
@@ -57,15 +59,12 @@ export interface AppCtlDeps {
   runs?: (chatId?: string) => RunInfo[];
   /** the "Comando da eseguire" requests (shell blocks left for the user), listed with the other open requests */
   commandAsks?: () => PendingRequest[];
-  /** Legacy /mcp/improve mount: creation requires a verified app source folder. */
-  sourceOnly?: boolean;
   /** Only the authenticated per-chat mount may enable the canonical coordinator's union scope. */
   unified?: boolean;
-  /** "Migliora l'app": the code folder and the branches' state (read-only) */
-  improve?: { repo: () => string | null; state: () => Promise<ImproveState>; inRepo?: (dir: string) => Promise<boolean>; pull?: () => Promise<PullResult> };
-  improveEvidence?: (selection: ImproveEvidenceSelection) => ReturnType<ImproveService['evidence']>;
-  /** the DevOps page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
-  devops?: () => DevopsState | null;
+  /** the app's code folder (update/source.ts): a chat there works on the app (routing area App); pull = app_update_code */
+  code?: { repo: () => string | null; inRepo?: (dir: string) => Promise<boolean>; pull?: () => Promise<PullResult> };
+  /** the Task page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
+  tasks?: () => TasksState | null;
   /** an agent version's results line for its route's reason ("12 run, 9 con esito, 78% riuscite"); absent = none */
   agentStats?: (agentId: string, version: number) => string | null;
 }
@@ -119,17 +118,14 @@ export function regiaEndpointAuth(tokens: { check(key: string, token: string): b
 }
 
 /** callerId = the work Regia that calls (its own endpoint /mcp/app/r/<id>/<token>, ADR 0021); none or stale = the first
- *  Regia (/mcp/app: test agents). The chats it creates answer to it; its messages are signed with its title.
- *  /mcp/improve retains its source-folder creation restriction, not a separate chat partition. */
+ *  Regia (/mcp/app: test agents). The chats it creates answer to it; its messages are signed with its title. */
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const unified = () => d.unified === true && !!callerId && d.chats.list().some(c => c.id === callerId && c.isRegia && c.orchestrator && !c.closedAt);
   const mine = (_c: ChatSummary) => true;
-  /** the caller: the app's Regia on /mcp/improve, else the work Regia of this endpoint */
+  /** the caller: the work Regia of this endpoint */
   const caller = (): ChatSummary | undefined => {
     const all = d.chats.list();
     if (unified()) return all.find(c => c.id === callerId);
-    const legacy = d.sourceOnly ? all.find(c => c.appRegia && !c.closedAt) : undefined;
-    if (legacy) return legacy;
     const id = regiaOfChat(all.find(c => c.id === callerId), all);
     return all.find(c => c.id === id);
   };
@@ -187,15 +183,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
           closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
+          // agents in the vendors' clouds (ADR 0080): status and page only; follow them on their vendor's page
+          ...(d.cloud ? { cloud: d.cloud.state().agents.slice(0, 30).map(a => ({ id: a.id, engine: a.engine, title: a.title, status: a.status, repo: a.repo, ...(a.branch ? { branch: a.branch } : {}), url: a.url, ...(a.summary ? { summary: a.summary.slice(0, 200) } : {}), ...(a.costUsd !== undefined ? { costUsd: a.costUsd } : {}), updatedAt: new Date(a.updatedAt).toISOString() })) } : {}),
         };
       },
     },
     {
       name: 'app_digest',
-      description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread DevOps news from the app's last DevOps read. Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always listed.`,
+      description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread Task news from the app's last Task read (Azure DevOps). Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always listed.`,
       inputSchema: obj({ since: str('"last", an ISO time, or omit') }),
       run: a => {
-        const key = `${d.sourceOnly ? 'improve' : 'app'}:${callerId ?? ''}`;
+        const key = `app:${callerId ?? ''}`;
         const now = Date.now();
         const raw = typeof a.since === 'string' ? a.since.trim() : '';
         const since = raw === 'last' ? lastDigest.get(key) ?? null : raw ? Date.parse(raw) : null;
@@ -203,7 +201,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         lastDigest.set(key, now);
         return digest({
           chats: d.chats.list().filter(mine), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)),
-          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), devops: d.sourceOnly ? null : d.devops?.() ?? null,
+          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
       },
@@ -226,7 +224,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const id = String(a.chatId ?? '');
         const c = d.chats.list().find(x => x.id === id);
         if (!c || !mine(c)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
-        if (c.isRegia || c.appRegia) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
+        if (c.isRegia) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
         if (c.pending > 0) throw new Error(`«${c.title}» aspetta una risposta dell’utente: chiudila solo lui`);
         await d.chats.close(id);
         log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
@@ -262,22 +260,16 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         const target = need(chatId);
-        if (target.isRegia || target.appRegia) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
+        if (target.isRegia) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
         const regia = caller();
         // several Regie (ADR 0021): only the Regia the chat answers to, where its question shows, closes it
-        if (regia && !d.sourceOnly) {
+        if (regia) {
           const all = d.chats.list();
           const owner = regiaOfChat(target, all);
           if (owner !== regia.id) throw new Error(`bloccato: questa domanda è dell’Orchestrator «${chatName(all.find(c => c.id === owner) ?? regia)}»: la risponde l'utente lì`);
-        }
-        // the legacy /mcp/improve Regia now sees every chat, but closes questions only of app-code work: a chat in the
-        // source repo or one of its worktrees that no other Orchestrator coordinates (its authority stays as before)
-        if (regia && d.sourceOnly) {
-          const others = target.regiaOf && target.regiaOf !== regia.id && d.chats.list().some(c => c.id === target.regiaOf && c.isRegia && !c.closedAt);
-          if (others || !(await d.improve?.inRepo?.(target.cwd))) throw new Error('bloccato: questa domanda non è di una chat sul codice dell’app: la risponde l’utente nella sua chat');
         }
         if (!regia || !decidedSince(regia.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
         const given = a.answers && typeof a.answers === 'object' && !Array.isArray(a.answers) ? a.answers as Record<string, unknown> : {};
@@ -333,7 +325,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: workspace|devops|fatto|idee|costi|qualita|confronto|agenti|skill|regole|memoria|classificatori|collegamenti|esplora|mappa), "palette".',
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: workspace|task|fatto|idee|costi|qualita|confronto|agenti|skill|regole|memoria|classificatori|collegamenti|esplora|mappa), "palette".',
       inputSchema: obj({ action: str('maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
       // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
       // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)
@@ -360,6 +352,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); with agentId only the agent\'s own'),
         reason: str('without agentId: why, when harness/model/effort differ from what the table says (required then)'),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
+        where: str('optional: "local" (default) or "cloud" = an agent in the vendor\'s cloud (harness cursor | codex | claude, default cursor; cwd must be a GitHub checkout on a branch already pushed; it pushes only its own cursor/… codex/… claude/… branch; Cursor bills at API prices and is blocked over the Cursor daily budget). Only when the user asked for a cloud agent.'),
+        env: str('optional, where "cloud" + harness codex: the Codex cloud environment id (remembered per repo)'),
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Regia (one at a time: a new one would take the role from the agent's own chat)
@@ -372,19 +366,27 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           if (!unified() || !Number.isSafeInteger(a.agentVersion) || Number(a.agentVersion) < 1 || typeof a.agentId !== 'string') throw new Error('Invalid agent version.');
           links.agentVersion = Number(a.agentVersion);
         }
-        if (a.space !== undefined && a.space !== 'work' && a.space !== 'app') throw new Error('Invalid chat space.');
-        // Legacy app requests keep their source default and fail-closed folder check, never a UI partition.
-        const sourceRequired = a.space === 'app' || d.sourceOnly;
-        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : sourceRequired ? d.improve?.repo() ?? null : d.brain.info().brainRoot;
-        if (!cwd) throw new Error(sourceRequired ? "nessuna cartella: imposta la cartella del codice dell'app nelle impostazioni" : 'nessuna cartella: il cervello non è collegato');
-        const app = await d.improve?.inRepo?.(cwd) ?? false;
-        if (sourceRequired && !app) throw new Error(`cartella non ammessa: scegli la cartella del codice dell'app o un suo worktree (${d.improve?.repo() ?? '-'})`);
+        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
+        if (!cwd) throw new Error('nessuna cartella: il cervello non è collegato');
+        // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
+        const app = await d.code?.inRepo?.(cwd) ?? false;
         if (a.regia !== undefined && a.regia !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
         const title = String(a.title ?? '').trim().slice(0, 80), prompt = String(a.prompt ?? '').trim();
         if (!title || !prompt || prompt.length > 8000) throw new Error('title and prompt are required (prompt ≤ 8000 chars)');
         // a former Regia's title is the Orchestrator's mail box: a new chat may not take its mail
         if (claimsAlias(title, d.chats.list())) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
+        if (a.where !== undefined && a.where !== 'local' && a.where !== 'cloud') throw new Error('where: local | cloud');
+        if (a.where === 'cloud') {
+          if (!d.cloud) throw new Error('agenti cloud non disponibili');
+          const engine = a.harness === undefined || a.harness === null || a.harness === '' ? 'cursor' : a.harness;
+          if (!isCloudEngine(engine)) throw new Error('where "cloud": harness cursor | codex | claude');
+          const refused = openRefusal(s, caller()?.harness ?? 'claude', engine);
+          if (refused) throw new Error(`bloccato: ${refused}`);
+          const agent = await d.cloud.start({ engine, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...(typeof a.model === 'string' && a.model ? { model: a.model } : {}), ...(typeof a.env === 'string' ? { env: a.env } : {}) }, 'agent');
+          log.info('appctl', 'agent started a cloud agent', { data: { engine, title, id: agent.id, repo: agent.repo } });
+          return { cloudAgentId: agent.id, engine, title: agent.title, status: agent.status, repo: agent.repo, ...(agent.branch ? { branch: agent.branch } : {}), url: agent.url };
+        }
         const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
         const kind = text(a.kind);
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
@@ -552,43 +554,21 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
   ];
-  if ((d.sourceOnly || unified()) && d.improve) {
-    if (d.improveEvidence) {
-      const evidence = d.improveEvidence;
-      tools.push({
-        name: 'app_improve_evidence',
-        description: 'Read selected observed agent evidence for an explicit improvement discussion. Supply exact references; empty lists select nothing. Does not send prompts, change settings, publish, grant permissions or call a model. Missing observations remain unavailable.',
-        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-        inputSchema: { ...obj({ agentIds: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 20 }, insightRefs: { type: 'array', items: { type: 'string', maxLength: 160 }, maxItems: 50 }, budgetBytes: { type: 'integer', minimum: 256, maximum: 32768 } }, ['agentIds', 'budgetBytes']), additionalProperties: false },
-        run: args => {
-          // Missing selected references fail explicitly in the service; omission is not a fabricated zero.
-          return { ...evidence(parseImproveSelection(args)), metadataScope: 'selected-evidence-only' };
-        },
-      });
-    }
-    const improve = d.improve;
+  // only the authenticated Orchestrator mount (/mcp/app/r/<id>/<token>): the plain mount is open to local processes
+  if (d.code?.pull && unified()) {
+    const pull = d.code.pull;
     tools.push({
-      name: 'app_improve_state',
-      description: `"Migliora l'app": the app's code folder, the version in use, and every recent branch with its stage (work = commits not in main and no green check on the tip; tested = its tip passed "npm run check"; approved = merged into main, not yet in use; promoted = in the version in use), plus main's tip that "Aggiorna" would take. Read-only: only the user promotes, with the button.`,
+      name: 'app_update_code',
+      description: `Only when the user asked in their own words to update the app ("aggiornati", "aggiorna l'app"): brings the app's code folder up to date with GitHub (scripts/pull.mjs: fetch main, fast-forward only, never merges or drops local work, never pushes), reinstalls the pinned dependencies if the lockfile changed and builds. It never promotes or restarts. Refused unless the user wrote to the Orchestrator in the last ${PULL_ASK_MIN} minutes. Then tell the user the result: a dev app run from the checkout picks it up when restarted; to switch at once, the user presses «Aggiorna» in Impostazioni → Aggiornamenti.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       inputSchema: obj(),
-      run: async () => improve.state(),
+      run: async () => {
+        const regia = caller();
+        if (!unified() || !regia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
+        if (!decidedSince(regia.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
+        return pull();
+      },
     });
-    // only the authenticated Orchestrator mount (/mcp/app/r/<id>/<token>): the plain mounts are open to local processes
-    if (improve.pull && unified()) {
-      const pull = improve.pull;
-      tools.push({
-        name: 'app_update_code',
-        description: `Only when the user asked in their own words to update the app ("aggiornati", "aggiorna l'app"): brings the app's code folder up to date with GitHub (scripts/pull.mjs: fetch main, fast-forward only, never merges or drops local work, never pushes), reinstalls the pinned dependencies if the lockfile changed and builds. It never promotes or restarts. Refused unless the user wrote to the Orchestrator in the last ${PULL_ASK_MIN} minutes. Then tell the user the result: a dev app run from the checkout picks it up when restarted; a stable copy changes only when the user promotes it.`,
-        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-        inputSchema: obj(),
-        run: async () => {
-          const regia = caller();
-          if (!unified() || !regia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
-          if (!decidedSince(regia.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
-          return pull();
-        },
-      });
-    }
   }
   return tools;
 

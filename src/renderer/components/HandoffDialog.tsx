@@ -34,7 +34,7 @@ export function HandoffDialog() {
   const past = !!session;
   const busy = !past && !!chat.handoffBusy;
   const working = chat.state === 'running' || chat.state === 'starting' || chat.pending > 0;
-  const canResume = !chat.isRegia && !chat.appRegia && (!!next || (!busy && !working));
+  const canResume = !chat.isRegia && (!!next || (!busy && !working));
   const copyPath = () => { if (h) void navigator.clipboard.writeText(h.path).then(() => toast(t('dialogs.linkPeek.copyPathSuccess'), 'ok')).catch(() => {}); };
   return (
     <Modal onClose={closeModal} label={`${t('dialogs.handoffDialog.title')} · ${chat.title}`} testid="handoff" className="modal-handoff">
@@ -80,7 +80,7 @@ export function HandoffDialog() {
         )}
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} autoFocus={past || !canResume} data-testid="handoff-close">{t('dialogs.handoffDialog.closeButton')}</button>
-        {!past && !chat.isRegia && !chat.appRegia && (
+        {!past && !chat.isRegia && (
           <button type="button" className="btn btn-primary btn-m" autoFocus={canResume} disabled={!canResume} onClick={() => { closeModal(); void resumeChat(chatId); }} data-testid="handoff-resume">
             {next ? openNextLabel() : resumeLabel()}
           </button>

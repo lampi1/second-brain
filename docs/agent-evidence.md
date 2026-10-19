@@ -44,15 +44,6 @@ Passing the previous policy restores that order; source events, global rules and
 No sample-based productivity scores or token-volume awards exist. Source imports and policy persistence
 remain in existing app services; this pure selector creates no extra archive.
 
-## Improve evidence
-
-`main/improve/evidence.ts` exports `buildImproveEvidence` for the EXISTING Improve coordinator. Caller
-passes the read model and explicit selected agent IDs/insight refs with a byte budget. It returns only
-evidence-derived observations, comparable cohort data and the selected insights;
-unknown selections fail, whole objects that do not fit are reported omitted. No full transcript is read.
-Invoke on an explicit preview/suggestion request; this function sends nothing and runs no model per refresh.
-Use the existing proposal, review ledger, preview and human publication flow. No new wizard/branch/autopush.
-
 ## Runtime routing metadata
 
 The EXISTING AgentDraft/Profile schema now includes optional routing metadata:

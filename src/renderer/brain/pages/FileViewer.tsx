@@ -1,5 +1,7 @@
 // The one read-only viewer for every file link (SPEC 22): markdown rendered, code and config highlighted (highlight.js,
-// one lazy chunk per language), CSV/TSV and JSONL as tables, JSON pretty-printed, images, PDFs (pdf.js, canvas only);
+// one lazy chunk per language), CSV/TSV and JSONL as tables, JSON pretty-printed, images, PDFs (pdf.js, canvas only),
+// HTML reports as a sanitized page (ReportHtml.tsx) and Markdown with its images (embedded or local files read by main,
+// never remote; ReportImages.tsx), each image opening large on a click (issue #83);
 // a big text file comes one page at a time (main cuts it at line ends; a cited line opens its own page); "Compare" shows
 // its diff against git HEAD, a commit/branch or another file (FileDiff.tsx). Main reads any
 // local file, bounded (never a network share); nothing here edits, runs or hands the file to another app: "Show in
@@ -8,6 +10,7 @@ import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState} from 'react
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
+import {ReportHtml} from '../components/ReportHtml';
 import {Empty} from '../components/States';
 import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
 import {baseName} from '../lib/text';
@@ -149,24 +152,24 @@ function Pager({result,go}:{result:TextResult;go:(page:Request)=>void}){
 
 type Mode='formatted'|'source';
 /** The views a kind offers besides its source (markdown rendered, a table, pretty JSON); `code` has only the source. */
-const formattedLabel=(view:FileView)=>view==='csv'||view==='jsonl'?t('viewer.table'):t('viewer.formatted');
+const formattedLabel=(view:FileView)=>view==='csv'||view==='jsonl'?t('viewer.table'):view==='html'?t('viewer.report'):t('viewer.formatted');
 
 /** `line` = the cited line, only while the page is the one opened around it. */
 function TextBody({result,line,go}:{result:TextResult;line?:number;go:(page:Request)=>void}){
   const view=viewOf(result.path),name=baseName(result.path),base=result.firstLine??null;
   const pretty=useMemo(()=>view==='json'&&!result.more&&result.offset===0?prettyJson(result.text):null,[view,result.text,result.more,result.offset]);
   // a page further into the file is shown as its source: a table or a document cut from the middle would mislead
-  const formattable=result.offset===0&&view!=='code'&&!(view==='json'&&!pretty);
+  const formattable=result.offset===0&&view!=='code'&&!(view==='json'&&!pretty)&&!(view==='html'&&result.more);
   const [mode,setMode]=useState<Mode>(line?'source':'formatted');
   const shown=formattable?mode:'source';
   const missing=!!line&&(!base||line<base||line>=base+lineCount(result.text));
   return <>
     {formattable&&<div className="bx-row"><Seg label={t('viewer.mode')} value={mode} onChange={setMode} items={[{id:'formatted',label:formattedLabel(view)},{id:'source',label:t('viewer.source')}]}/></div>}
     {(result.more||result.offset>0)&&<Pager result={result} go={go}/>}
-    {shown==='formatted'&&view==='markdown'&&/!\[|<img\b/i.test(result.text)&&<p className="small muted">{t('viewer.documentImages')}</p>}
     {missing&&<p role="status">{t('viewer.lineUnavailable')}</p>}
     {shown==='source'?<Code text={result.text} path={result.path} line={line} base={base}/>
-      :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" images={false} name={name} copyBlocks testId="viewer-markdown"/>
+      :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" imageBase={result.path} name={name} copyBlocks testId="viewer-markdown"/>
+      :view==='html'?<ReportHtml text={result.text} path={result.path}/>
       :view==='jsonl'?<Jsonl text={result.text} name={name}/>
       :view==='csv'?<Csv text={result.text} path={result.path} name={name}/>
       :<Code text={pretty??result.text} path={result.path}/>}

@@ -1,13 +1,13 @@
 // A short, soft two-note chime made with Web Audio (no sound file, nothing to load, no CSP media source), and the pure
-// rule of when to play it: once per devops-alert event as it arrives from main (feed:events, never throttled like the
-// toasts' repaint of a minimized window), not when the kind is muted, in do-not-disturb or with devops.sound off. Why: the user, 2026-10-13, "voglio una notifica in app
+// rule of when to play it: once per task-alert event as it arrives from main (feed:events, never throttled like the
+// toasts' repaint of a minimized window), not when the kind is muted, in do-not-disturb or with tasks.sound off. Why: the user, 2026-10-13, "voglio una notifica in app
 // anche con il suono" for DevOps mentions and changes on his things (ADR 0029). Used by lib/layer.ts; the rule is
-// pinned by test/unit/devops-alerts.test.ts. A new question, permission or command rings too (requestChimes; the user,
+// pinned by test/unit/task-alerts.test.ts. A new question, permission or command rings too (requestChimes; the user,
 // 2026-10-13: "una notifica anche sonora", "Suono sempre"), with the same switch, the mute of kind "question" and dnd. A hidden run (tests, agents) mutes the window (main/window.ts): the chime plays
 // silently; each one is counted on <html data-chimes> for the e2e test.
 
 /** Kinds whose toast plays the chime. */
-export const CHIME_KINDS = new Set(['devops-alert']);
+export const CHIME_KINDS = new Set(['task-alert']);
 
 /** Event ids that should chime now: arriving events of a chiming kind, not from while the app was closed, not chimed
  *  before, unless the sound is off, the kind muted or do-not-disturb on. */
@@ -17,7 +17,7 @@ export function toChime(events: readonly { id: string; kind: string; away?: bool
   return events.filter(e => CHIME_KINDS.has(e.kind) && !e.away && !opts.muted[e.kind] && !chimed.has(e.id)).map(e => e.id);
 }
 
-/** Does a new request ring? The alerts' switch (devops.sound), unless requests (feed kind "question") are muted or dnd. */
+/** Does a new request ring? The alerts' switch (tasks.sound), unless requests (feed kind "question") are muted or dnd. */
 export const requestChimes = (opts: { soundOn: boolean; muted: Readonly<Record<string, boolean>>; dnd: boolean }): boolean =>
   opts.soundOn && !opts.dnd && !opts.muted.question;
 

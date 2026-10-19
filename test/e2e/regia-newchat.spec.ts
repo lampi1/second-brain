@@ -1,13 +1,13 @@
 // "Nuova chat" from the Regia and "Apri" from anywhere (ADR 0034), on the demo: the toggle in the Regia's input sends
 // the message with the line that asks her for a new chat (hidden, shown as a "Nuova chat" badge) and resets; the demo
-// Regia opens the chat (an app_create_chat row) and the row's "Apri" brings that chat on screen from the DevOps page;
+// Regia opens the chat (an app_create_chat row) and the row's "Apri" brings that chat on screen from the Task page;
 // Ctrl+Shift+Invio sends as a new chat at once. Screenshots in test-results/shots/regia-newchat-*.png.
 import { expect, test } from '@playwright/test';
 import type { ChatItem } from '../../src/shared/contract';
 import { NEW_CHAT_TAG } from '../../src/shared/newchat';
 import { launchDemo, openRegia, shot } from './helpers';
 
-test('Nuova chat: the toggle marks the message, the Regia opens the chat, Apri focuses it from the DevOps page', async () => {
+test('Nuova chat: the toggle marks the message, the Regia opens the chat, Apri focuses it from the Task page', async () => {
   const { app, page } = await launchDemo();
   try {
     await openRegia(page);
@@ -52,12 +52,12 @@ test('Nuova chat: the toggle marks the message, the Regia opens the chat, Apri f
     await page.mouse.move(2, 2);
     await shot(page, 'regia-newchat-created');
 
-    // from the DevOps page: Apri switches back to the chats and focuses that chat
-    await page.getByTestId('nav-devops').click();
-    await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+    // from the Task page: Apri switches back to the chats and focuses that chat
+    await page.getByTestId('nav-task').click();
+    await expect(page.getByTestId('brain-page-task')).toBeVisible();
     await openRegia(page);
     await page.getByTestId('tile-regia').getByTestId('chatref-open').last().click();
-    await expect(page.getByTestId('brain-page-devops')).toHaveCount(0);
+    await expect(page.getByTestId('brain-page-task')).toHaveCount(0);
     await expect(page.getByTestId(`tile-chat-${newId}`)).toBeVisible();
     await expect(page.getByLabel('Messaggio a Demo · Controlla i log ordini')).toBeFocused();
     await page.mouse.move(2, 2);

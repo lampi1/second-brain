@@ -1,19 +1,19 @@
 // One chat as a tile: header (harness mark, title, state pill, ■ stop, ⋯ menu with model / effort / permissions /
-// rename / focus / hand-off / "Riprendi" / close, ⤢ maximize, ✕ close: Ctrl+W too, with the usual undo), sub-line (model · effort · cost · folder · context
+// rename / focus / hand-off / "Riprendi" / close, ⤢ maximize, ✕ close: Ctrl+W too, with the usual undo), sub-line (model · cost · folder · context
 // size), the DevOps link chips (ChatLinkChips.tsx), the "Riprendi" links and the long-chat notice (ContextBar.tsx), the transcript, the inline
 // question/permission/command panel (with "Domande in finestra" on, one line: the questions window shows it; while
 // "Rispondi dopo" is on, one "Da rispondere" line: the chat waits, lib/later.ts), an error bar with one action, and the always-visible input (the menu is ChatMenu). Small tiles render compact
 // (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
 // A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by the agents' strips in the
 // Grindhouse (AgentStrips.tsx) and the focus view. A strip (Brother, 18/10): a click anywhere on it expands it, a click on
-// the head of an expanded one collapses it; the key facts (model, effort, cost, work time, context) stay on screen
+// the head of an expanded one collapses it; the key facts (model, cost, work time, context; the effort is the agent profile's, #75) stay on screen
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
 // off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
-// browsers stay folded until it is pressed, then sit beside the expanded chat (AgentStrips.tsx).
+// browsers stay folded until it is pressed, then sit beside the chat (on a collapsed strip it expands it too; AgentStrips.tsx).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
-import { chatCost, effortLabel, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
+import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
@@ -24,9 +24,9 @@ import {schedule,suspendViews}from'../lib/viewports';
 import { answerLater, openQueue } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
+import { selectedHere } from '../lib/strip-click';
 import { estimateOf, useAgentMetricsAll } from '../lib/agent-estimates';
 import { ChatLinkChips } from './ChatLinkChips';
-import { EffortControl } from './EffortControl';
 import { AgentIdentity } from './AgentIdentity';
 import { AgentAvatar } from './AgentAvatar';
 import { RunChips, RunOutcomeControl } from './RunSurface';
@@ -87,6 +87,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const expandedChoice=ui.use(s=>s.prefs.chatExpanded[chatId]===true);
   const expanded=!!maximized||!!focus||expandedChoice;
   const expansionButton=useRef<HTMLButtonElement>(null);
+  const downSelection=useRef('');
   const reveal=(compose=false)=>{setChatExpanded(chatId,true);if(compose)requestAnimationFrame(()=>input.current?.focus());};
   useEffect(()=>{const release=suspendViews();schedule();const timer=setTimeout(()=>{release();schedule();},window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:220);return()=>{clearTimeout(timer);release();};},[expanded]);
   // the long-chat notice, hidden by the user until the context grows by another quarter of the threshold
@@ -110,8 +111,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const busy = isBusy(chat);
   const st = stateInfo(chat);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
-  // the effort shown is the one chosen (EffortControl tells what the provider reports, when it does)
-  const sub = [prettyModel(chat.model, chat.harness), chat.effort ? t('product.effortChosen', { effort: effortLabel(chat.effort) ?? chat.effort }) : null, chatCost(chat)].filter(Boolean).join(' · ');
+  // no per-chat effort here (#75): the agent's profile decides it and shows it, read only
+  const sub = [prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ');
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);
@@ -120,7 +121,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
     if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic')) return;
-    if (window.getSelection()?.toString()) return; // selecting text is not a click
+    if (selectedHere(window.getSelection(), e.currentTarget, downSelection.current)) return; // selecting text is not a click
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
@@ -128,7 +129,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
-      onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => setFocused(key)} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
+      onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => { downSelection.current = window.getSelection()?.toString() ?? ''; setFocused(key); }} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
@@ -138,7 +139,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           {first && <button type="button" className="strip-wait" onClick={() => (queued ? openQueue(first) : callQuestions(first))} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
             <span className="strip-wait-dot" aria-hidden="true" />{t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
           </button>}
-          <EffortControl chat={chat} />
           {chat.resumedAt && (
             <span className="th-resumed" data-tip={auditText('audit.ChatTile.itsTurnWasInterruptedByThe')}
               data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
@@ -153,7 +153,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <IconButton label={t(maximized ? 'chat.tile.restore' : 'chat.tile.maximize')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
           </IconButton>
-          {!chat.isRegia && !chat.appRegia && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          {!chat.isRegia && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
           </div>
         </div>
         {expanded && <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>}

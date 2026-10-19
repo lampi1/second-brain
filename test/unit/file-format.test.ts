@@ -3,7 +3,7 @@
 import{expect,it}from'vitest';
 import{extOf,fmtBytes,highlightLines,languageOf,parseCsv,prettyJson,splitHighlighted,textLines,viewOf}from'../../src/renderer/brain/lib/file-format';
 it('picks a view and a language from the path, dotfiles and Dockerfile included',()=>{
- expect(viewOf('C:/a/README.md')).toBe('markdown');expect(viewOf('/x/data.TSV')).toBe('csv');expect(viewOf('log.jsonl')).toBe('jsonl');expect(viewOf('a.json')).toBe('json');expect(viewOf('a.ts')).toBe('code');
+ expect(viewOf('C:/a/README.md')).toBe('markdown');expect(viewOf('/x/data.TSV')).toBe('csv');expect(viewOf('log.jsonl')).toBe('jsonl');expect(viewOf('a.json')).toBe('json');expect(viewOf('a.ts')).toBe('code');expect(viewOf('C:/ev/fix-1/report.HTML')).toBe('html');expect(viewOf('a.htm')).toBe('html');
  expect(extOf('C:\\repo\\.env')).toBe('env');expect(languageOf('C:\\repo\\.env')).toBe('ini');expect(languageOf('/r/Dockerfile')).toBe('dockerfile');
  expect(languageOf('x.yaml')).toBe('yaml');expect(languageOf('x.ps1')).toBe('powershell');expect(languageOf('notes.txt')).toBeNull();
 });

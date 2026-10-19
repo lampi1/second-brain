@@ -45,7 +45,7 @@ export type TitleIndex = ReadonlyMap<string, string>;
 
 /** A stable key of the work chats' titles (the store changes often; the index is rebuilt only when this does). */
 export const titlesKey = (chats: Record<string, ChatSummary>): string =>
-  Object.values(chats).filter(c => !c.isRegia && !c.appRegia && c.title.trim()).map(c => `${c.id}\t${c.title.trim()}`).sort().join('\n');
+  Object.values(chats).filter(c => !c.isRegia && c.title.trim()).map(c => `${c.id}\t${c.title.trim()}`).sort().join('\n');
 
 export function titleIndex(key: string): TitleIndex {
   const m = new Map<string, string>();

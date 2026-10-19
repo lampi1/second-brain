@@ -6,7 +6,7 @@
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
 // leave after 8 s. No waiting strip: what waits is counted by the top bar's "Da rispondere" (the user, 2026-10-14:
 // "c'è già in alto il «da rispondere» che va benissimo quello"). All stay off the Regia widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
-// lib/chime.ts, setting devops.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
+// lib/chime.ts, setting tasks.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
 // as overlay:action and goes through the same actions as everywhere else. Started by main.tsx; Ctrl+J uses focusLayer().
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
 import { chatName } from '@shared/regia';
@@ -30,7 +30,7 @@ let atStart: Set<string> | null = null;
 let groups: ToastGroup[] = [];
 /** event ids that already chimed (an event sent twice chimes once) */
 const chimed = new Set<string>();
-const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind === 'chat-failed' || kind.endsWith('-error') || kind.endsWith('-blocked') ? 'err' : kind === 'budget' || kind === 'login' || kind === 'chat-waiting' || kind === 'devops-alert' ? 'warn' : kind === 'chat-done' ? 'ok' : 'info');
+const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind === 'chat-failed' || kind.endsWith('-error') || kind.endsWith('-blocked') ? 'err' : kind === 'budget' || kind === 'login' || kind === 'chat-waiting' || kind === 'task-alert' ? 'warn' : kind === 'chat-done' ? 'ok' : 'info');
 
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
 let last = '';
@@ -177,14 +177,14 @@ export function startLayer(open: (chatId: string) => void, next: (from?: string)
   // the chime on arrival: a minimized window repaints the toasts late (throttled timers), the IPC event is not
   sb.on('feed:events', evs => {
     const s = app.get();
-    const ring = toChime(evs, chimed, { soundOn: s.settings?.devops?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) });
+    const ring = toChime(evs, chimed, { soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) });
     if (ring.length) { for (const id of ring) chimed.add(id); playChime(); }
   });
   // every new request rings once (several arriving together ring once), also while "Rispondi dopo" keeps them quiet
   let ringing: ReturnType<typeof setTimeout> | null = null;
   sb.on('pending:added', () => {
     const s = app.get();
-    if (ringing || !requestChimes({ soundOn: s.settings?.devops?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) })) return;
+    if (ringing || !requestChimes({ soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) })) return;
     ringing = setTimeout(() => { ringing = null; playChime(); }, REQUEST_RING_MS);
   });
   window.addEventListener('resize', scheduleLayer);

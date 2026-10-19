@@ -1,8 +1,8 @@
 // Unit tests of main/appctl/digest.ts and the tool app_digest (appctl/tools.ts): the Regia's whole status in one call,
 // zero tokens. Waiting and failed chats always listed with what they ask; `since` keeps only what changed; closed chats,
-// the user's command runs, PRs with QA failures first and unread DevOps news; the caller and the other space left out.
+// the user's command runs, PRs with QA failures first and unread Task news; the caller left out.
 import { describe, expect, it } from 'vitest';
-import type { ChatSummary, DevopsState, PendingRequest, RunInfo } from '../../src/shared/contract';
+import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../src/shared/contract';
 import { ago, askLine, digest, prLines } from '../../src/main/appctl/digest';
 import { appControlTools } from '../../src/main/appctl/tools';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -15,11 +15,11 @@ const chat = (id: string, o: Partial<ChatSummary> = {}): ChatSummary => ({
 });
 const q = (chatId: string, text: string, at = NOW - 12 * MIN): PendingRequest =>
   ({ id: `q-${chatId}`, chatId, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at, questions: [{ question: text, options: [], multiSelect: false }] }) as PendingRequest;
-const devops = (o: Partial<DevopsState> = {}): DevopsState => ({
+const devops = (o: Partial<TasksState> = {}): TasksState => ({
   enabled: true, everyMin: 15, sound: false, running: false, at: NOW - 10 * MIN, nextAt: null, error: null, news: [], assigned: [], urgent: [],
   oldReviews: [], reviews: [], prs: [], details: {}, unread: 0, qa: [], qaError: null, repoDirs: {}, ...o,
-}) as DevopsState;
-const base = { pending: [] as PendingRequest[], runs: [] as RunInfo[], devops: null, now: NOW, since: null, warnTokens: 200_000 };
+}) as TasksState;
+const base = { pending: [] as PendingRequest[], runs: [] as RunInfo[], tasks: null, now: NOW, since: null, warnTokens: 200_000 };
 
 describe('app_digest', () => {
   it('one line per chat: waiting with the question, failed with its error, working, finished with its last line', () => {
@@ -39,7 +39,7 @@ describe('app_digest', () => {
     expect(t).toContain('- «Web · map» (Claude, map): al lavoro (aggiornata 5 min fa) · ramo feat/map · contesto lungo 420k · 2 attività in background');
     expect(t).toContain('- «Web · qa» (Claude, qa): turno finito 30 min fa · ultima riga «Report pronto: 8 test su 9.»');
     expect(t).not.toContain('Regia'); // the caller is left out
-    expect(t).toContain('DevOps: non letto dall\'app');
+    expect(t).toContain('Task (Azure DevOps): non letti dall\'app');
   });
 
   it('a chat waiting in the CPU queue is queued, never "turno finito" (no turn ran yet)', () => {
@@ -81,15 +81,15 @@ describe('app_digest', () => {
     const d = devops({
       prs: [pr(1, wi(10, 'Totale ordini sbagliato'), { build: { result: 'succeeded', status: 'completed', number: '1', url: '', at: null }, reviewers: [{ name: 'Paolo Rossi', vote: 10, label: '', required: true }, { name: 'Sara Bianchi', vote: 0, label: '', required: true }] }),
         pr(2, wi(20, 'Rimborso con sconto'))],
-      details: { 20: { tests: [{ id: 1, title: 't', outcome: 'Failed', url: '' }, { id: 2, title: 't2', outcome: 'Blocked', url: '' }] } } as unknown as DevopsState['details'],
+      details: { 20: { tests: [{ id: 1, title: 't', outcome: 'Failed', url: '' }, { id: 2, title: 't2', outcome: 'Blocked', url: '' }] } } as unknown as TasksState['details'],
       news: [{ key: 'n', at: new Date(NOW - MIN).toISOString(), kind: 'comment', who: 'Anna Verdi', title: 'Rimborso con sconto', detail: 'non va', url: 'https://dev/n', unread: true }],
       reviews: [{ id: 3, title: 'x', repo: 'r', project: 'p', author: null, createdAt: '', url: '' }],
     });
     const lines = prLines(d);
     expect(lines[0]).toBe('- Rimborso con sconto (Shop.Web → main): QA: 1 test falliti, 1 bloccati https://dev/pr/2');
     expect(lines[1]).toBe('- Totale ordini sbagliato (Shop.Web → main): build succeeded · Paolo approvata · aspetta Sara https://dev/pr/1');
-    const t = digest({ ...base, chats: [], devops: d });
-    expect(t).toContain('Novità DevOps non lette (1):');
+    const t = digest({ ...base, chats: [], tasks: d });
+    expect(t).toContain('Novità Task non lette (1):');
     expect(t).toContain('- comment · Anna: Rimborso con sconto — non va https://dev/n');
     expect(t).toContain('Review che aspettano il suo voto: 1.');
   });
@@ -100,11 +100,11 @@ describe('app_digest', () => {
     expect(askLine({ id: 'c', chatId: 'c', type: 'command', tool: 'Esegui', title: 'Comando', detail: '', input: {}, at: 0, command: { itemId: 'i', code: 'npm run promote\nx', lang: 'powershell' } })).toBe('comando da eseguire `npm run promote`');
   });
 
-  it('the tool: since "last" remembers the previous call per caller; legacy app chats are shown too', async () => {
-    let list: ChatSummary[] = [chat('w', { updatedAt: NOW - 60 * MIN }), chat('fix', { space: 'app', lastText: 'segreto' })];
+  it('the tool: since "last" remembers the previous call per caller; every chat is shown', async () => {
+    let list: ChatSummary[] = [chat('w', { updatedAt: NOW - 60 * MIN }), chat('fix', { lastText: 'segreto' })];
     const chats = { list: () => list, pending: () => [], items: () => [] } as unknown as ChatService;
     const brain = { settings: () => ({ contextWarnTokens: 200_000 }) } as unknown as BrainService;
-    const tool = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', devops: () => null }).find(t => t.name === 'app_digest')!;
+    const tool = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', tasks: () => null }).find(t => t.name === 'app_digest')!;
     const first = String(await tool.run({}));
     expect(first).toContain('«Web · w»');
     expect(first).toContain('fix');

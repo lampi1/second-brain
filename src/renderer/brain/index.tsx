@@ -17,7 +17,7 @@ import { Qualita } from './pages/Qualita';
 import { Confronto } from './pages/Confronto';
 import { FileViewer } from './pages/FileViewer';
 import {normalizeFileArg} from '@shared/file-view';
-import { Devops } from './pages/Devops';
+import { TaskPage } from './pages/Task';
 import { Miglioramento } from './pages/Miglioramento';
 import { BrainMapView } from './map/BrainMap';
 import type { LiveSource } from './lib/live';
@@ -30,14 +30,14 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
 export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
   page('home', 'G H'),
   page('agenti', 'G A'),
-  page('devops', 'G O'),
+  page('task', 'G O'),
   page('dashboard', 'G D'),
   page('fatto', 'G F'),
   page('idee', 'G I'),
@@ -49,8 +49,6 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('skill', 'G S'),
   // not a brain page: the app's Settings (components/SettingsPage.tsx, rendered by App.tsx); listed here for places, links and G P
   page('impostazioni', 'G P'),
-  // not a brain page either: "Migliora l'app" (components/ImprovePage.tsx, ADR 0020), the app improving itself
-  page('migliora', 'G U'),
   // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, classifiers, the map of their links), rendered
   // by App.tsx PageFrame (components/brain-model/)
   page('regole', 'G L'),
@@ -63,9 +61,10 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
 const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
 /** Old page ids still found in links (feed, notes, the Regia's habits) → today's. Oggi (home) and Adesso became DevOps
- *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"). */
-export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'devops', adesso: 'devops', dafare: 'devops',esplora:'file' };
-/** Their old go-to keys still work (G H, G A → DevOps). */
+ *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"), DevOps became Task
+ *  (ADR 0079). */
+export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill' };
+/** Their old go-to keys still work (G O → Task). */
 export const GO_ALIASES: { id: BrainPageId; key: string }[] = [];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
@@ -106,7 +105,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'miglioramento': page = <Miglioramento nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
     case 'impostazioni': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': page = null; break; // rendered by the app (App.tsx PageFrame)
-    case 'devops': page = <Devops nav={nav} />; break;
+    case 'task': page = <TaskPage nav={nav} />; break;
   }
   return (
     <div ref={scroller} className="bx bx-page bx-scroll" data-testid={`brain-page-${cur.id}`} role="region" aria-label={label}>

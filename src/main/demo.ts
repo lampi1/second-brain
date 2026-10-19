@@ -41,7 +41,7 @@ export interface DemoBrowserHooks { act(tabId: string, action: DemoAction): void
 export interface DemoOptions { freeze: boolean; now?: () => number; seed?: number }
 
 const MIN = 60_000;
-// Demo DevOps links: the same made-up org as the demo DevOps data (devops/demo.ts), so the tile's link chips resolve
+// Demo DevOps links: the same made-up org as the demo DevOps data (tasks/demo.ts), so the tile's link chips resolve
 const prUrl = (id: number) => `https://dev.azure.com/o/Shop/_git/shop-web/pullrequest/${id}`;
 const appPr = (id: number) => `https://dev.example.com/proj/_git/app/pullrequest/${id}`;
 /** The fictional brain folder of the demo (shown in the UI, never read). */
@@ -100,7 +100,8 @@ export function seed(E: number): Seed {
     harness: 'claude', origin: 'app', cwd: 'C:\\progetti\\brain', sessionId: `demo-${c.id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default',
     state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
-  // the sub-agents the engines report (ChildStrips.tsx shows them under their chat): what each does, its state, its start
+  // the sub-agents the engines report (ChildStrips.tsx shows them under their chat): what each does, the app agent it
+  // runs as (agentType: a catalog id, or an engine type the app does not know → "nessun agente"), its state, its start
   const child = (c: Partial<ChildObservation> & Pick<ChildObservation, 'key' | 'task' | 'state' | 'startedAt'>): ChildObservation =>
     ({ nativeId: c.key, toolCallId: null, parentNativeId: null, kind: 'agent', observedAt: c.startedAt ?? E, source: 'live', ...c });
   const children = (...list: ChildObservation[]): AgentChildren => {
@@ -110,7 +111,7 @@ export function seed(E: number): Seed {
   const chats: ChatSummary[] = [
     chat({ id: 'regia', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaSince: 1, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
-        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', state: 'running', startedAt: E - 6 * MIN }),
+        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
         child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', state: 'running', startedAt: E - 3 * MIN }),
         child({ key: 'claude:task:a0', task: 'Riassumi lo stato delle chat aperte', state: 'completed', startedAt: E - 12 * MIN, observedAt: E - 9 * MIN })) }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
@@ -118,7 +119,7 @@ export function seed(E: number): Seed {
     chat({ id: 'fix', title: 'Fix totale ordine', state: 'running', effort: 'medium', costUsd: 0.92, contextTokens: 46_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-shop', updatedAt: E - 40_000,
       lastText: 'Lancio i test del modulo ordini.',
       agentChildren: children(
-        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', state: 'running', startedAt: E - 90_000 }),
+        child({ key: 'claude:task:f1', task: 'Trova gli usi di Recalculate nel modulo ordini', agentType: 'default-general', state: 'running', startedAt: E - 90_000 }),
         child({ key: 'claude:task:f2', task: 'dotnet test test/Shop.Tests', kind: 'shell', state: 'running', startedAt: E - 35_000 }),
         child({ key: 'claude:task:f0', task: 'Leggi le regole di sconto', state: 'completed', startedAt: E - 4 * MIN, observedAt: E - 3 * MIN })) }),
     chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', contextTokens: 31_000, contextEstimated: true, cwd: 'C:\\progetti\\alfa-e2e',
@@ -441,12 +442,12 @@ export class DemoChats implements ChatService {
 
   async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
     // one Orchestrator, like the real manager (unifiedOrchestrator): a coordinator request returns the current one
-    // unless it replaces it; the app's Regia is folded into it
-    if (req.regia || req.appRegia) {
+    // unless it replaces it
+    if (req.regia) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = [...this.chats.values()].find(c => c.orchestrator && c.isRegia);
       if (current && req.replaces !== current.id) return current;
-      req = { ...req, regia: true, appRegia: false, space: undefined };
+      req = { ...req, regia: true };
     }
     const id = `c${++this.counter}`;
     // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
@@ -459,16 +460,12 @@ export class DemoChats implements ChatService {
       this.patch(old.id, { isRegia: false, orchestrator: undefined, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === old.id) this.patch(x.id, { regiaOf: id });
     }
-    // one app Regia ("Migliora l'app"), never a work Regia: the new one takes the role
-    const appRegia = req.appRegia === true && !req.regia;
-    if (appRegia) for (const c of [...this.chats.values()]) if (c.appRegia) this.patch(c.id, { appRegia: undefined });
     const c: ChatSummary = {
       id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Orchestrator · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
       ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(appRegia ? { appRegia: true } : {}),
       ...(req.route ? { route: req.route } : {}),
     };
     this.chats.set(id, c);

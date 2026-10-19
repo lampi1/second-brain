@@ -107,7 +107,6 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar-end { flex: none; display: flex; align-items: center; gap: 10px; }
 .topbar-more { position: relative; display: inline-flex; }
 .topbar-more .icon-btn.on { color: var(--blue); }
-.topbar-more .more-badge { position: absolute; top: -2px; right: -4px; pointer-events: none; background: var(--blue); color: #fff; }
 .topbar[data-fit~="1"] .segmented button span, .topbar[data-fit~="1"] .btn-danger > span:not(.count-badge) { display: none; }
 .topbar[data-fit~="2"] .ub-reset, .topbar[data-fit~="2"] .ub-today .ub-k, .topbar[data-fit~="2"] .ub-win-week .ub-meter { display: none; }
 .topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,
@@ -509,9 +508,9 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .ask-chip.soft { font-weight: 500; color: var(--text-3); background: transparent; }
 .ask .step { margin-left: 0; }
 .ask-age { font-size: 11px; color: var(--text-3); flex: none; }
-.ask-q { font: 600 14px/1.45 var(--font-display); color: var(--text); letter-spacing: -0.003em; }
+.ask-q { font: 600 var(--fs-l)/1.45 var(--font-display); color: var(--text); letter-spacing: -0.003em; }
 /* the agent's context sentence in front of its question (lib/askSplit.ts): muted, the question stays the eye's first stop */
-.ask-lead { margin-bottom: -6px; font-size: 12.5px; line-height: 1.45; color: var(--text-3); overflow-wrap: anywhere; }
+.ask-lead { margin-bottom: -6px; font-size: var(--fs-m); line-height: 1.45; color: var(--text-3); overflow-wrap: anywhere; }
 .ask-opts { display: flex; flex-direction: column; gap: 6px; }
 .ask-opt {
   position: relative; display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; text-align: left; border-radius: var(--r-s);
@@ -528,7 +527,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .ask-opt-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ask-opt-label { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; line-height: 1.35; }
 .rec-tag { font-size: 10.5px; font-weight: 600; color: var(--blue); background: var(--blue-bg); border: 1px solid var(--blue-line); padding: 0 7px; border-radius: 99px; line-height: 16px; }
-.ask-opt-desc { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+.ask-opt-desc { font-size: var(--fs-s); color: var(--text-3); line-height: 1.4; }
 .ask-opt-num { flex: none; opacity: 0.75; }
 .ask-check {
   flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px; border: 1.5px solid var(--border-3); background: var(--surface);
@@ -652,7 +651,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 }
 .decision:focus-visible, .decision:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet) 80%, transparent); }
 .decision-k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet); display: flex; align-items: center; }
-.decision-q { font-size: 13px; font-weight: 500; }
+.decision-q { font-size: var(--fs-m); font-weight: 500; }
 .cmd-lead { margin: 2px 0 6px; font-size: 13px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } /* the chat's explanation before the block, in sight */
 .cmd-lead.small { font-size: 12px; -webkit-line-clamp: 2; }
 .decision-cmds { display: flex; flex-direction: column; gap: 6px; min-width: 0; } /* the commands of a question's turn (the questions window), each with Esegui */
@@ -1033,7 +1032,7 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; h
 .layer-who span { font-size: 11.5px; color: var(--text-3); }
 .layer-badge { flex: none; display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 99px; background: var(--amber); color: #1b1304; font-size: 11.5px; font-weight: 700; }
 .layer-card .ask { animation: none; }
-.layer-card .ask-q { font-size: 13px; }
+.layer-card .ask-q { font-size: var(--fs-m); }
 .layer-foot { display: flex; align-items: center; gap: 8px; padding: 0 2px; font-size: 11.5px; color: var(--text-3); min-width: 0; }
 .layer-queue { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .layer-keys { flex: none; display: inline-flex; gap: 5px; align-items: center; }
@@ -1075,14 +1074,14 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .slash-foot { padding: 4px 8px 2px; color: var(--text-4); font-size: var(--fs-xs); }
 /* the context of a question (AskContext.tsx): links always in sight, the turn's prose under a toggle */
 .ask-ctx { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ctx-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 5px 8px; color: var(--text-2); font-size: 12px; cursor: pointer; text-align: left; }
+.ctx-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 5px 8px; color: var(--text-2); font-size: var(--fs-s); cursor: pointer; text-align: left; }
 .ctx-toggle:hover { color: var(--text); border-color: var(--border-2); }
 .ctx-toggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .ctx-toggle b { flex: none; font-weight: 600; color: var(--text); }
 .ctx-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
 .ctx-toggle .tool-chev { flex: none; margin-left: auto; }
 .ask-ctx.open .ctx-toggle .tool-chev { transform: rotate(90deg); }
-.ctx-body { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-size: 13px; user-select: text; scrollbar-width: thin; }
+.ctx-body { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-size: var(--fs-m); user-select: text; scrollbar-width: thin; }
 .ctx-piece.thinking { border-left: 2px solid var(--amber-line); padding-left: 8px; }
 .ctx-piece.preview { border-left: 2px solid var(--blue-line); padding-left: 8px; }
 .ctx-from { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 2px; }

@@ -197,8 +197,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.map': '3D Map',
   'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
-  'dialogs.sidebar.improve': 'Improve app',
-  'dialogs.sidebar.improveShortcut': 'G U',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} waiting for you`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} new`,
 
@@ -213,7 +211,7 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.launch.failedPrefix': 'The new version didn\'t start.',
   'dialogs.launch.failedReason': (p: { reason: string }) => `${p.reason}: the app went back to`,
   'dialogs.launch.startedPrefix': 'New version started',
-  'dialogs.launch.improveButton': 'Improve app',
+  'dialogs.launch.updatesButton': 'Updates',
   'dialogs.launch.dismissLabel': 'Close notification',
   'dialogs.launch.dismissTip': 'Close',
 

@@ -1,0 +1,5 @@
+{"tasks":[
+{"id":"task_e_0001","url":"https://chatgpt.com/codex/tasks/task_e_0001","title":"Add payment tests","status":"ready","updated_at":"2026-10-19T07:30:00Z","environment":{"id":"env_shop","repo":"acme/shop"},"summary":"12 tests added"},
+{"id":"task_e_0002","url":"https://chatgpt.com/codex/tasks/task_e_0002","title":"Refactor","status":"running","updated_at":"2026-10-19T08:30:00Z","environment":{"id":"env_shop","repo":"acme/shop"}},
+{"id":"task_e_0003","title":"Strange","status":"brand_new_state","updated_at":1760860800}
+],"cursor":null}

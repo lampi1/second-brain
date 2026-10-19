@@ -22,9 +22,9 @@ describe('settings schema and validate()', () => {
     const prot = schema().filter(d => d.protected).map(d => d.key);
     for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
-    expect(defOf('devops.enabled')!.protected).toBe(true);
-    expect(validate('devops.everyMin', 2).ok).toBe(false);
-    expect(validate('devops.everyMin', 60).ok).toBe(true);
+    expect(defOf('tasks.enabled')!.protected).toBe(true);
+    expect(validate('tasks.everyMin', 2).ok).toBe(false);
+    expect(validate('tasks.everyMin', 60).ok).toBe(true);
     expect(defOf('theme')!.protected).toBe(false);
     expect(defOf('mute.chat-done')!.key).toBe('mute.*');
   });
@@ -139,7 +139,7 @@ describe('settings store', () => {
     expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, osToasts: 'urgent', theme: 'dark', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
     expect(s.budget).toEqual({ enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } });
     expect(s.locked).toBeUndefined();
-    expect(s.devops).toEqual({ enabled: false, everyMin: 30, sound: true }); // DevOps reads only when the user turns it on; its alerts chime
+    expect(s.tasks).toEqual({ enabled: false, everyMin: 30, sound: true }); // Task reads only when the user turns it on; its alerts chime
   });
 
   it('saves a patch, reloads it, merges budget and mutes key by key; all-or-none on a bad key', () => {
@@ -301,6 +301,24 @@ describe('retired view setting', () => {
     expect(restarted.history()).toEqual([oldChange]);
     expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
     expect(restarted.request('view' as never, 'corsie', { by: 'agent' })).toHaveProperty('error');
+  });
+
+  it('DevOps became Task (ADR 0079): devops.* and the old mute keys load as tasks.* and task, written once with the new names', () => {
+    const dir = tmpDir();
+    const file = path.join(dir, 'config.json');
+    fs.writeFileSync(file, JSON.stringify({ theme: 'light', devops: { enabled: true, everyMin: 60, sound: false }, mute: { devops: true, 'devops-alert': true, idea: true } }));
+    const store = new ConfigStore(dir, {});
+    expect(store.get().tasks).toEqual({ enabled: true, everyMin: 60, sound: false });
+    expect(store.get().mute).toMatchObject({ task: true, 'task-alert': true, idea: true });
+    const migrated = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown> & { mute: Record<string, unknown> };
+    expect('devops' in migrated).toBe(false);
+    expect(migrated.tasks).toEqual({ enabled: true, everyMin: 60, sound: false });
+    expect(Object.keys(migrated.mute).sort()).toEqual(['idea', 'task', 'task-alert']);
+    expect(migrated.theme).toBe('light');
+    // a file that already has tasks keeps them: an old devops block next to it never wins
+    fs.writeFileSync(file, JSON.stringify({ tasks: { enabled: false, everyMin: 15, sound: true }, devops: { enabled: true, everyMin: 60, sound: false } }));
+    expect(new ConfigStore(dir, {}).get().tasks).toEqual({ enabled: false, everyMin: 15, sound: true });
+    expect(store.request('devops.enabled' as never, true, { by: 'agent' })).toHaveProperty('error');
   });
 });
 

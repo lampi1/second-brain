@@ -151,7 +151,7 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
 }
 
 /** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
-const GO_KEY = { home: 'h', agenti: 'a', devops: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', migliora: 'u' } as const;
+const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', guida: 'e' } as const;
 export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
@@ -187,8 +187,8 @@ export async function openNotesMap(page: Page): Promise<void> {
   await expect(page.getByTestId('dash-map')).toBeVisible();
 }
 
-/** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
-export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
+/** Runs an action of the top bar's "…" menu (Credenziali: TopBar.tsx MoreButton). */
+export async function moreAction(page: Page, item: 'more-credentials'): Promise<void> {
   await page.getByTestId('topbar-more').click();
   await page.getByTestId(item).click();
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);

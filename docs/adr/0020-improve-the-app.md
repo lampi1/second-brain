@@ -1,6 +1,6 @@
 # ADR 0020 · "Migliora l'app": a section and a Regia to change the app, one "Promuovi" button, a clear start notice
 
-Date: 2026-10-12 · Status: accepted
+Date: 2026-10-12 · Status: superseded by ADR 0079 (2026-10-19: the section, its Regia and /mcp/improve are removed; the start notice and «Aggiorna» moved to Settings → Aggiornamenti, src/main/update/)
 
 ## Context
 The user: "Le modifiche che voglio fare all'app voglio farle da una sezione apposita con una regia apposita, in realtà

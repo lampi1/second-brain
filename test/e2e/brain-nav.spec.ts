@@ -37,7 +37,7 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await page.keyboard.press('Alt+ArrowLeft');await expect(viewer).toContainText('Produzione');
   await page.keyboard.press('Alt+ArrowRight');await expect(viewer).toContainText('Mappa della memoria');
   await expect(page.getByTestId('nav-esplora')).toHaveCount(0);
-  // from Qualità, a link to another page goes through the history (DevOps's link to Fatto shows only once DevOps is read)
+  // from Qualità, a link to another page goes through the history (Task's link to Fatto shows only once Task is read)
   await page.keyboard.press('Control+K');await page.getByTestId('palette-input').fill('sb://qualita');await page.keyboard.press('Enter');
   await settled(page);
   await page.getByTestId('brain-page-qualita').getByRole('button', { name: 'Apri proposals.md' }).click();
