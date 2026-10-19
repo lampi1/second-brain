@@ -42,7 +42,7 @@ test('a card opens a panel with points, analogy, technical details and sources; 
   await expect(body).toContainText('In pratica è come');
   await expect(body).toContainText('Dettagli tecnici');
   await expect(body).toContainText('src/main/agents/runs.ts');
-  await expect(body.getByTestId('guide-target')).toBeVisible();
+  await expect(body.getByTestId('guide-target')).toHaveCount(0); // the runs card has no open target (the costs card has one)
   await expect(page.getByTestId('guide-panel')).toContainText('Le run dei ruoli');
   await shot(page, 'concept-guide-expanded');
 
