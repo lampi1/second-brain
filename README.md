@@ -167,7 +167,8 @@ passwords.
 
 Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
-(ADR 0072). The dashboard shows it as pages and as a 3D map that lights up the files, tools and agents at work.
+(ADR 0072). The dashboard shows it as pages, as a 2D map of its connections that fills the panel at any size, and as a 3D map
+that lights up the files, tools and agents at work.
 
 ### DevOps in one page
 

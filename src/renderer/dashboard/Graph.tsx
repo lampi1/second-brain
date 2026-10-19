@@ -2,9 +2,13 @@
 // Data coordinates are stable between live updates; the CSS pulse represents observed recent messages only.
 // The map's own commands live inside its frame (owner, 18/10: «i comandi devono stare dentro la mappa»): an optional
 // floating toolbar on top (search, overview, 3D: supplied by Dashboard) and a footer with the legend and the zoom group.
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+// The drawing is measured (ResizeObserver) and drawn 1 SVG unit = 1 CSS pixel: the layout is fitted to the panel's own
+// size and aspect (fitLayout), so the map fills the panel centred at any width, and labels are placed at their real size
+// inside it (minor ones that find no free spot are hidden, never overlapped). "Adatta" drops zoom and selection and
+// re-measures, so the whole map is fitted again (issue #77).
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { lang } from '../i18n';
-import { layout, placeLabels } from './data';
+import { fitLayout, layout, placeLabels } from './data';
 import { labelCandidates, nodeStyle } from './graph-style';
 
 export interface GraphNode { id: string; label: string; detail: string; kind?: string; layer?: string; active?: boolean; central?: boolean }
@@ -18,38 +22,55 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
   const en = lang() === 'en';
   const [zoom, setZoom] = useState(1);
   const select = (id: string) => { setZoom(1); onSelect(id); };
+  // the drawing area's size in CSS pixels; 800x520 until the first measure (and in a non-DOM render)
+  const canvas = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ w: 800, h: 520 });
+  const measure = useCallback(() => {
+    const el = canvas.current;
+    if (!el) return;
+    const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+    if (w > 0 && h > 0) setSize(old => old.w === w && old.h === h ? old : { w, h });
+  }, []);
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure, nodes.length > 0]);
   const identity = nodes.map(n => n.id).join('|');
   const topology = edges.map(e => `${e.from}|${e.to}`).join(';');
-  const points = useMemo(() => layout(nodes, edges, nodes.find(n => n.central)?.id), [identity, topology]);
+  const raw = useMemo(() => layout(nodes, edges, nodes.find(n => n.central)?.id), [identity, topology]);
+  const dense = nodes.length > 14;
+  // a crowded small panel draws smaller halos and allows closer dots (spacing = the panel's area per node)
+  const spacing = Math.sqrt(size.w * size.h / Math.max(1, nodes.length));
+  const halo = dense ? Math.min(11, Math.max(6, spacing * .22)) : 20;
+  const radius = (n: GraphNode) => n.central ? 38 : halo;
+  // room around the nodes for halos and the labels of the outermost ones (labels move inward when they would not fit)
+  const pad = dense ? { x: 44, y: 34 } : { x: 90, y: 56 };
+  const points = useMemo(() => fitLayout(raw, size.w, size.h, pad, dense ? Math.min(26, spacing * .55) : 48), [raw, size.w, size.h, dense, spacing]);
   const focus = selected ? points.get(selected) : undefined;
   const near = useMemo(() => new Set(selected ? edges.flatMap(e => e.from === selected ? [e.to] : e.to === selected ? [e.from] : []) : []), [selected, topology]);
-  const dense = nodes.length > 14;
-  const radius = (n: GraphNode) => n.central ? 38 : dense ? 11 : 20;
   // Visible labels sit on a top layer with a backdrop, each on a free side of its node: selected first, then neighbours.
   const spots = useMemo(() => {
     const shown = labelCandidates(nodes, edges, selected);
     const order = [...shown].sort((a, b) => Number(b.id === selected) - Number(a.id === selected) || Number(!!b.central) - Number(!!a.central));
     const at = (n: GraphNode) => ({ ...points.get(n.id)!, r: radius(n) });
-    return placeLabels(order.map(n => ({ id: n.id, ...at(n), text: n.label })), nodes.map(n => ({ ...points.get(n.id)!, r: n.central ? 23 : n.kind ? nodeStyle(n.kind, n.layer).radius + 2 : dense ? 6 : radius(n) * .6 })), 14, focus ?? points.get(nodes.find(n => n.central)?.id ?? ''));
-  }, [points, selected, near, dense, nodes]);
-  // Fit the drawn nodes (plus room for labels), keeping the panel's 800:520 aspect; zoom narrows inside that box.
-  const box = useMemo(() => {
-    // Sparse maps always show every label, so their pills count too (a long name on the edge must not be clipped).
-    const extents = [...points.values()].map(p => ({ x0: p.x, x1: p.x, y0: p.y, y1: p.y }));
-    if (!extents.length) return { x: 0, y: 0, w: 800, h: 520 };
-    for (const s of spots.values()) { const left = s.anchor === 'start' ? s.x : s.anchor === 'end' ? s.x - s.w : s.x - s.w / 2; extents.push({ x0: left, x1: left + s.w, y0: s.y - s.h / 2, y1: s.y + s.h / 2 }); }
-    const x0 = Math.min(...extents.map(e => e.x0)) - 70, x1 = Math.max(...extents.map(e => e.x1)) + 70, y0 = Math.min(...extents.map(e => e.y0)) - 55, y1 = Math.max(...extents.map(e => e.y1)) + 65;
-    const w = Math.max(360, x1 - x0, (y1 - y0) * 800 / 520), h = w * 520 / 800;
-    return { x: (x0 + x1 - w) / 2, y: (y0 + y1 - h) / 2, w, h };
-  }, [points, spots, dense]);
+    return placeLabels(order.map(n => ({ id: n.id, ...at(n), text: n.label })), nodes.map(n => ({ ...points.get(n.id)!, r: n.central ? 23 : n.kind ? nodeStyle(n.kind, n.layer).radius + 2 : dense ? 6 : radius(n) * .6 })), 14,
+      focus ?? points.get(nodes.find(n => n.central)?.id ?? '') ?? { x: size.w / 2, y: size.h / 2 },
+      { bounds: { x0: 10, y0: 8, x1: size.w - 10, y1: size.h - 8 }, required: new Set(selected ? [selected] : []) });
+  }, [points, selected, near, dense, nodes, size.w, size.h]);
+  // Zoom narrows the panel-sized view around the selected node (or the centre), never past the map's edges.
+  const box = { x: 0, y: 0, w: size.w, h: size.h };
   const width = box.w / zoom, height = box.h / zoom;
   const x = Math.max(box.x, Math.min(box.x + box.w - width, (focus?.x ?? box.x + box.w / 2) - width / 2));
   const y = Math.max(box.y, Math.min(box.y + box.h - height, (focus?.y ?? box.y + box.h / 2) - height / 2));
   return <div className={`dash-graph ${dense ? 'dense' : ''} ${selected ? 'focused' : ''}`} data-testid={testId}>
     {toolbar && <div className="dash-map-toolbar" data-testid="dash-map-toolbar" role="toolbar" aria-label={en ? 'Map commands' : 'Comandi della mappa'}>{toolbar}</div>}
-    {nodes.length ? <svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label}>
+    {nodes.length ? <div className="dash-graph-canvas" ref={canvas}><svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label} data-size={`${size.w}x${size.h}`}>
       <defs><radialGradient id="dash-aura"><stop stopColor="var(--blue)" stopOpacity=".13" /><stop offset="1" stopColor="var(--blue)" stopOpacity="0" /></radialGradient></defs>
-      <circle cx="400" cy="260" r="250" fill="url(#dash-aura)" />
+      <circle cx={size.w / 2} cy={size.h / 2} r={Math.min(size.w, size.h) * .48} fill="url(#dash-aura)" />
       <g aria-hidden="true">{edges.map((edge, i) => {
         const a = points.get(edge.from), b = points.get(edge.to);
         return a && b ? <path key={`${edge.from}-${edge.to}-${i}`} d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2 + 18} ${(a.y + b.y) / 2 - 18} ${b.x} ${b.y}`} className={`dash-edge ${edge.active ? 'flow' : ''} ${selected && (edge.from === selected || edge.to === selected) ? 'lit' : ''}`} /> : null;
@@ -61,7 +82,7 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
           onClick={() => select(node.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(node.id); } }}>
           <g className="dash-node-in" style={{ animationDelay: `${Math.min(i, 40) * 18}ms` }}>
           <title>{node.label}: {node.detail}</title>
-          <circle className="dash-node-halo" r={node.central ? 38 : dense ? 11 : 20} />
+          <circle className="dash-node-halo" r={radius(node)} />
           <circle className="dash-node-dot" r={node.central ? 23 : node.kind ? nodeStyle(node.kind, node.layer).radius : dense ? 4.5 : 8} />
           {node.central && <text className="dash-node-mark" y="5">O</text>}
           </g>
@@ -77,11 +98,11 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
           <text x={spot.anchor === 'start' ? spot.x + 6 : spot.anchor === 'end' ? spot.x - 6 : spot.x} y={spot.y} textAnchor={spot.anchor} dominantBaseline="central">{node.label}</text>
         </g>;
       })}</g>
-    </svg> : <div className="dash-graph-empty">{empty}</div>}
+    </svg></div> : <div className="dash-graph-empty">{empty}</div>}
     <div className="dash-graph-foot">
       {legend ?? <span />}
       <div className="dash-zoom" role="group" aria-label="Zoom">
-        <button type="button" className="dash-zoom-fit" title={en ? 'Show the whole map' : 'Mostra tutta la mappa'} onClick={() => { setZoom(1); onSelect(''); }}><span aria-hidden="true">⤢</span>{en ? 'Fit' : 'Adatta'}</button>
+        <button type="button" className="dash-zoom-fit" title={en ? 'Show the whole map' : 'Mostra tutta la mappa'} onClick={() => { setZoom(1); onSelect(''); measure(); }}><span aria-hidden="true">⤢</span>{en ? 'Fit' : 'Adatta'}</button>
         <button type="button" aria-label={en ? 'Zoom out' : 'Riduci'} title={en ? 'Zoom out' : 'Riduci'} onClick={() => setZoom(z => Math.max(1, z - .5))} disabled={zoom === 1}>−</button>
         <output aria-live="polite">{Math.round(zoom * 100)}%</output>
         <button type="button" aria-label={en ? 'Zoom in' : 'Ingrandisci'} title={en ? 'Zoom in' : 'Ingrandisci'} onClick={() => setZoom(z => Math.min(3, z + .5))} disabled={zoom === 3}>+</button>
