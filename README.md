@@ -188,7 +188,10 @@ Costs, budgets and estimates per agent and per day sit next to them.
 
 - **Esegui**: shell blocks in a chat run with one click, and the output goes back to the chat.
 - **Long chats** are handed off before the context fills: a note, then "Riprendi" in a fresh chat.
-- **Model routing**: a versioned table picks engine, model and effort per kind of task.
+- **Agent first**: each work chat runs as a catalog agent, picked by the Orchestrator or by the local classifier;
+  the agent's profile sets engine, model, effort and maximum context ("Contesto massimo"), and a worker can start
+  catalog agents as its own sub-agents. A versioned table only fills the model of a profile that names none, and
+  learns from the agents' verdicts (ADR 0078).
 - **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
 - **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
 

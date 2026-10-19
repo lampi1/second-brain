@@ -54,11 +54,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Tu (o l’Orchestrator) avvii un agente del catalogo: la chat nasce con il suo motore, modello e istruzioni.',
         'You (or the Orchestrator) start a catalog agent: the chat is born with its engine, model and instructions.'),
       // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog
-      b('L’Orchestrator legge il catalogo con agent_catalog e apre il lavoro con app_create_chat, passando l’agentId scelto.',
-        'The Orchestrator reads the catalog with agent_catalog and opens the work with app_create_chat, passing the chosen agentId.'),
-      // src/main/agents/catalog.ts resolve(): Generale preserves the caller's engine/model/effort
-      b('Senza un agente indicato, le chat di lavoro vanno a Generale: mantengono motore, modello e sforzo scelti da te o dall’instradamento.',
-        'Without a named agent, work chats go to Generale: they keep the engine, model and effort chosen by you or routing.'),
+      b('L’Orchestrator legge il catalogo con agent_catalog (con la richiesta: i punteggi del classificatore) e apre il lavoro con app_create_chat, passando l’agentId scelto: motore, modello, sforzo e contesto massimo sono quelli del profilo, nient’altro li scavalca.',
+        'The Orchestrator reads the catalog with agent_catalog (with the request: the classifier’s scores) and opens the work with app_create_chat, passing the chosen agentId: engine, model, effort and maximum context are the profile’s, nothing overrides them.'),
+      // src/main/appctl/tools.ts app_create_chat (classifyAgents); src/main/agents/catalog.ts resolve(): Generale
+      b('Senza un agente indicato, l’app chiede al classificatore locale: sopra la soglia la chat va a quell’agente, altrimenti a Generale, con motore e modello dalla tabella di instradamento o dai tuoi predefiniti.',
+        'Without a named agent, the app asks the local classifier: above its threshold the chat goes to that agent, otherwise to Generale, with engine and model from the routing table or your defaults.'),
+      // src/main/agents/subagent-tool.ts agent_start_subagent
+      b('Un agente al lavoro può avviare un altro agente del catalogo come suo sotto-agente: è collegato alla sua run, risponde allo stesso Orchestrator e gli manda il risultato.',
+        'A working agent can start another catalog agent as its own sub-agent: it is linked to its run, answers to the same Orchestrator and sends it the result.'),
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
       b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. La Regia e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
         'Catalog chats, including Generale, have a "run" with counters and cost. Regia and the compatible fallback when Generale is missing have no catalog run.'),
@@ -66,8 +69,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente nuovo nasce da «Crea agente» in Agenti: un breve questionario diventa un tuo messaggio all’Orchestrator, che lo crea con agent_create.',
         'A new agent starts from "Create agent" in Agents: a short questionnaire becomes your message to the Orchestrator, which creates it with agent_create.'),
       // src/main/agents/authoring.ts agent_suggest; rememberHumanMessage (only the UI's chat:create/chat:send)
-      b('L’Orchestrator crea un agente solo da un messaggio scritto da te nell’app negli ultimi 30 minuti; altrimenti può solo proporlo, e decidi tu in Agenti.',
-        'The Orchestrator creates an agent only from a message you wrote in the app in the last 30 minutes; otherwise it can only suggest one, and you decide in Agents.'),
+      b('L’Orchestrator crea un agente solo con il tuo ok: un messaggio scritto da te nell’app negli ultimi 30 minuti, o la tua risposta in un pannello che glielo propone. Una chiamata rifiutata (un valore sbagliato) non consuma il tuo ok. Altrimenti può solo proporlo, e decidi tu in Agenti.',
+        'The Orchestrator creates an agent only with your ok: a message you wrote in the app in the last 30 minutes, or your answer in a panel proposing it. A refused call (a wrong value) does not use up your ok. Otherwise it can only suggest one, and you decide in Agents.'),
       // src/main/agents/probation.ts; src/main/chats/manager.ts evaluateProbation
       b('Per i profili già in prova, il servizio valuta risultati confermati, correzioni, rifacimenti e inattività per tenerli o ritirarli.',
         'For profiles already on probation, the service evaluates confirmed results, corrections, rework and inactivity to keep or retire them.'),
@@ -94,7 +97,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Detecting the "gap" (no fitting agent) automatically: today only the Orchestrator judges it by reading the catalog.'),
       b('«Salva come agente» da una chat ad hoc riuscita: non esiste ancora.', '"Save as agent" from a successful ad-hoc chat: does not exist yet.'),
     ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/probation.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/probation.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/components/AgentStartDialog.tsx', 'src/main/agents/subagent-tool.ts'],
   },
   {
     id: 'agents',
@@ -106,8 +109,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('L’app parte con sei agenti di base: Generale, Ricerca, Scrittura e documenti, Analisi, Pianificazione, Sviluppo.',
         'The app starts with six base agents: Generale, Research, Writing and documents, Analysis, Planning, Development.'),
       // src/shared/agents.ts BEHAVIOUR_FIELDS
-      b('Cambiare istruzioni, manifesto, motore, modello, sforzo, strumenti o tetto dei permessi crea una nuova versione.',
-        'Changing instructions, manifest, engine, model, effort, tools or permission ceiling creates a new version.'),
+      b('Cambiare istruzioni, manifesto, motore, modello, sforzo, contesto massimo, strumenti o tetto dei permessi crea una nuova versione.',
+        'Changing instructions, manifest, engine, model, effort, maximum context, tools or permission ceiling creates a new version.'),
+      // src/main/chats/manager.ts startSession compactWindowTokens; src/renderer/components/AgentStudio.tsx
+      b('«Contesto massimo»: oltre quella soglia la chat dell’agente si compatta da sola. Lo applicano i motori Claude, gli altri lo ignorano (l’editor lo dice); vuoto = l’impostazione dell’app.',
+        '"Maximum context": past it the agent’s chat compacts itself. Claude engines apply it, the others ignore it (the editor says so); empty = the app setting.'),
       // src/shared/agents.ts AgentManifest; src/shared/agent-manifest.ts
       b('Il manifesto dice quando usarlo e quando no, input, output e criteri di successo: sono dichiarazioni, non concedono permessi.',
         'The manifest says when to use it and when not, input, output and success criteria: declarations only, they grant no permissions.'),
@@ -118,8 +124,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('I «ruoli» (dev, qa, po, cto) sono un’altra cosa: scelgono quali agenti consigliarti e quali pagine mostrarti.',
         '"Roles" (dev, qa, po, cto) are a different thing: they choose which agents to suggest and which pages to show you.'),
       // src/main/agents/catalog.ts resolve()
-      b('All’avvio l’app controlla che motore, modello e sforzo della chat siano quelli dell’agente; se no rifiuta.',
-        'At start the app checks the chat’s engine, model and effort match the agent’s; otherwise it refuses.'),
+      b('All’avvio l’app controlla che motore, modello e sforzo della chat siano quelli dell’agente; se no rifiuta. Se il profilo non indica un modello, la chat prende quello della tabella di instradamento.',
+        'At start the app checks the chat’s engine, model and effort match the agent’s; otherwise it refuses. If the profile names no model, the chat takes the routing table’s.'),
     ],
     analogy: b('Come la scheda di un collaboratore: cosa sa fare, con quali attrezzi, fin dove può spingersi senza chiedere.',
       'Like a colleague’s profile card: what they do, with which tools, how far they may go without asking.'),
@@ -149,8 +155,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Per scegliere chi fa il lavoro legge agent_catalog (4 profili per pagina, mai le istruzioni).',
         'To choose who does the work it reads agent_catalog (4 profiles per page, never the instructions).'),
       // src/main/appctl/tools.ts app_create_chat
-      b('Apre il lavoro con app_create_chat: con un agentId valgono motore e modello dell’agente; senza, decide la tabella di instradamento.',
-        'It opens the work with app_create_chat: with an agentId the agent’s engine and model apply; without, the routing table decides.'),
+      b('Apre il lavoro con app_create_chat: con un agentId valgono motore, modello e sforzo dell’agente; senza, sceglie il classificatore (sopra soglia) o Generale con la tabella di instradamento.',
+        'It opens the work with app_create_chat: with an agentId the agent’s engine, model and effort apply; without, the classifier picks (above its threshold) or Generale with the routing table.'),
       // src/shared/newchat.ts
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
@@ -162,12 +168,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like an editor-in-chief: does not write every piece, picks who writes it and keeps the threads together.'),
     diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('agent_catalog', 'agent_catalog'), b('app_create_chat', 'app_create_chat'), b('Chat di lavoro', 'Work chat')] },
     tech: [
-      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source, kind, area, tableVersion, reason } }.',
-        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source, kind, area, tableVersion, reason } }.'),
+      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source (agent | table | default | override | explore), kind, area, tableVersion, reason, agent? { id, version, chosenBy, score?, threshold?, modelFrom } } }.',
+        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source (agent | table | default | override | explore), kind, area, tableVersion, reason, agent? { id, version, chosenBy, score?, threshold?, modelFrom } } }.'),
       // src/main/agents/discovery.ts
       tech(LIMITS, 'Elenco del catalogo nel prompt ≤ 8000 caratteri; «quando usarlo» tagliato a 240.', 'Catalog list in the prompt ≤ 8000 chars; "when to use" cut at 240.'),
-      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_* e agent_catalog); la scelta dell’agente la fa il modello dell’Orchestrator, non un algoritmo dell’app.',
-        'The app’s MCP on 127.0.0.1 (app_* and agent_catalog tools); the agent is chosen by the Orchestrator’s model, not by an app algorithm.'),
+      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_* e agent_catalog); l’agente lo sceglie l’Orchestrator con agentId, oppure, se non lo indica, il classificatore locale dell’app (ADR 0078).',
+        'The app’s MCP on 127.0.0.1 (app_* and agent_catalog tools); the agent is chosen by the Orchestrator with agentId or, when it names none, by the app’s local classifier (ADR 0078).'),
     ],
     sources: ['src/main/chats/orchestrator.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/regia-route.ts'],
   },
@@ -611,8 +617,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'routing',
     title: b('Instradamento modelli', 'Model routing'),
-    summary: b('Una tabella decide motore, modello e sforzo di ogni chat in base al tipo di lavoro e all’area.',
-      'A table decides each chat’s engine, model and effort based on the kind of work and the area.'),
+    summary: b('Una tabella dà motore, modello e sforzo alle chat senza un agente specifico (Generale) e il modello agli agenti che non ne indicano uno.',
+      'A table gives engine, model and effort to chats without a specific agent (Generale), and the model to agents that name none.'),
     points: [
       // src/main/brain/routing.ts taskOf, areaOf
       b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App forzata nello spazio dell’app.',
@@ -623,8 +629,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/routing.ts resolve
       b('Se la riga indica un motore che non si può avviare, valgono i tuoi predefiniti «Chat aperte dall’Orchestrator».',
         'If the row names an engine that cannot start, your "Chats opened by the Orchestrator" defaults apply.'),
-      b('Un agente che vuole un modello diverso dalla tabella deve dare un motivo; lo sforzo max mai dalla tabella.',
-        'An agent wanting a model other than the table’s must give a reason; max effort never from the table.'),
+      // src/main/brain/routing.ts routeAgent (ADR 0078)
+      b('Un agente scelto non viene mai scavalcato: la tabella riempie solo il modello che il suo profilo non indica. Senza agente, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
+        'A chosen agent is never overridden: the table only fills the model its profile leaves open. Without an agent, a model other than the table’s needs a reason; max effort never from the table.'),
+      // src/main/brain/routing.ts knownOutcome, kindStats, freshReason; src/main/wiring.ts routingVerdict
+      b('Il tuo esito su una run di un agente (o quello della revisione o dell’Orchestrator) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
+        'Your verdict on an agent run (or the review’s or the Orchestrator’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
       // src/main/brain/routing.ts explore
       b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
         '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),
@@ -645,7 +655,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
     ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
+    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md', 'docs/adr/0078-agent-first-routing.md'],
   },
   {
     id: 'costs',

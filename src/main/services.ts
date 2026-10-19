@@ -6,7 +6,7 @@ import type {
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import type { Emitter } from './ipc';
-import type { RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
+import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
 export interface ChatService {
   list(): ChatSummary[];
@@ -124,6 +124,8 @@ export interface BrainService {
   observeRouting(rec: RoutingPrediction | RoutingActual): void;
   /** The last actuals written for a ledger id: totals carry over an app restart or a hand-off. */
   lastRoutingActual(id: string): RoutingActual['actual'] | null;
+  /** An agent run's verdict as the known outcome of its chat's ledger line (issue #72, ADR 0078). */
+  observeRoutingOutcome(id: string, outcome: KnownOutcome): void;
   /** GET-only proxy to the brain's own data server (ops/tools/brain-site.mjs makeServer), run as an Electron-node child. */
   api(path: string): Promise<BrainApiResult>;
   /** Answers one of the allowed /api/ paths from main itself (e.g. /api/quality: brain/quality.ts), not the brain's server. */

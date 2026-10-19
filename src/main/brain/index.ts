@@ -273,10 +273,13 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       log.info('brain', 'routing table restored', { data: { from: version, version: info.table?.version ?? null, by } });
       return info;
     },
-    route: req => routeChat({ counts: k => routing.armCounts(k), api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
+    route: req => routeChat({ counts: k => routing.armCounts(k), stats: k => routing.kindStats(k), api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
+    },
+    observeRoutingOutcome: (id, outcome) => {
+      try { routing.observeOutcome(id, outcome); } catch (e) { log.warn('brain', 'routing verdict not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
     },
     api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun cervello configurato' }),
     serveApi: (p, fn) => { localApi.set(p, fn); },

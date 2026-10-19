@@ -216,6 +216,8 @@ interface Rec {
   agentAssets?: { pluginDir: string; skillRoot: string };
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
+  /** the agent's "Contesto massimo" (tokens): the compaction window of its engine instead of the user's setting (#80) */
+  maxContext?: number;
   agentPrimed?: boolean;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
@@ -449,7 +451,7 @@ export class ChatManager implements ChatService {
   }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
-  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string } }, links: RunLinks = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; maxContext?: number }, links: RunLinks = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
@@ -490,6 +492,8 @@ export class ChatManager implements ChatService {
     const warm = caps.warm && !forkOf && !req.worktree && !req.regia && !req.appRegia && req.permissionMode !== 'bypassPermissions'
       // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
       && !policy
+      // nor one with its own "Contesto massimo": the window is fixed when the engine starts (#80)
+      && !agent.maxContext
       ? this.warm.take(cwd) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
@@ -529,6 +533,7 @@ export class ChatManager implements ChatService {
       agentInstructions: agent.instructions,
       ...('assets' in agent && agent.assets ? { agentAssets: agent.assets } : {}),
       ...(policy ? { policy } : {}),
+      ...(agent.maxContext ? { maxContext: agent.maxContext } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
       worktree: !!req.worktree && caps.worktree,
@@ -1119,7 +1124,7 @@ export class ChatManager implements ChatService {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets });
+    }, 'user', { owner: r.s.agent ?? compatibleOwner(r.s.harness, r.choice.model, true), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.maxContext ? { maxContext: r.maxContext } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -1746,6 +1751,7 @@ export class ChatManager implements ChatService {
       agentInstructions: c.agentInstructions ?? '',
       ...(c.agentAssets ? { agentAssets: c.agentAssets } : {}),
       ...(c.agentPolicy ? { policy: c.agentPolicy } : {}),
+      ...(c.agentMaxContext ? { maxContext: c.agentMaxContext } : {}),
       children,
       choice: { model: c.model, effort: c.effort, permissionMode: c.permissionMode },
       ...(c.forkFrom ? { forkFrom: c.forkFrom } : {}),
@@ -1770,6 +1776,7 @@ export class ChatManager implements ChatService {
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       ...(r.policy ? { agentPolicy: r.policy } : {}),
+      ...(r.maxContext ? { agentMaxContext: r.maxContext } : {}),
       ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : r.runPruned ? { runPruned: r.runPruned } : {}),
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
@@ -1964,7 +1971,7 @@ export class ChatManager implements ChatService {
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
-      compactWindowTokens: this.compactWindow(),
+      compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };

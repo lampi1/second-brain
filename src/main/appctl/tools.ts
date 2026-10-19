@@ -17,13 +17,13 @@
 //   The app's Regia also reads the branches (app_improve_state)
 //   but can never promote nor restart (only the user's click on "Aggiorna", ADR 0007/0020).
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSummary, DevopsState, Effort, EventMap, Harness, ImproveState, PendingRequest, RouteAgent, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { EFFORTS, isFable, modelRow } from '../brain/routing';
 import { engineLabel, engineOf, engines } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
-import { log, redact } from '../log';
+import { errText, log, redact } from '../log';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { timerSnapshot } from '../timers';
@@ -36,7 +36,7 @@ import { claimsAlias } from '../chats/mail';
 import { parseImproveSelection } from './improve-evidence';
 import type { ImproveService, PullResult } from '../improve/service';
 import type { ImproveEvidenceSelection } from '../improve/evidence';
-import type { AgentCatalog } from '../../shared/agents';
+import { GENERAL_AGENT_ID, ORCHESTRATOR_AGENT_ID, type AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
@@ -66,6 +66,16 @@ export interface AppCtlDeps {
   improveEvidence?: (selection: ImproveEvidenceSelection) => ReturnType<ImproveService['evidence']>;
   /** the DevOps page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
   devops?: () => DevopsState | null;
+  /** an agent version's results line for its route's reason ("12 run, 9 con esito, 78% riuscite"); absent = none */
+  agentStats?: (agentId: string, version: number) => string | null;
+}
+
+/** agent_learn_propose on the app endpoints: a learned rule, or (with the authoring service) an agent's "Contesto
+ *  massimo" as an agent_update proposal for the user (issue #80). */
+function learnTool(d: AppCtlDeps, callerId: string | undefined): ToolDef {
+  const authoring = d.agentAuthoring;
+  const tool = agentLearnTool(d.agentLearning!, authoring ? (agentId, patch, evidence) => authoring.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, callerId ?? 'orchestrator') : undefined);
+  return { name: tool.name, description: tool.description, inputSchema: tool.inputSchema, run: async a => JSON.parse(String(await tool.run(a, { params: {} } as unknown as Parameters<typeof tool.run>[1]))) as object };
 }
 
 /** app_digest since "last": when each caller (Regia endpoint) last asked, for this app run */
@@ -127,12 +137,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
-    ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified) : []),
-    ...(d.agentLearning ? [{ name: 'agent_learn_propose', description: agentLearnTool(d.agentLearning).description, inputSchema: agentLearnTool(d.agentLearning).inputSchema,
-      run: (a: Record<string, unknown>) => {
-        if (Object.keys(a).some(k => !['agentId', 'rule', 'evidence'].includes(k)) || typeof a.agentId !== 'string' || typeof a.rule !== 'string' || typeof a.evidence !== 'string') throw new Error('Invalid learned-rule proposal');
-        return d.agentLearning!.propose(a.agentId, a.rule, a.evidence);
-      } }] : []),
+    ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified, () => d.agents?.().profiles.filter(p => p.origin.kind === 'preset' && p.status === 'active' && p.routable !== false && p.id !== ORCHESTRATOR_AGENT_ID).map(p => p.id) ?? []) : []),
+    ...(d.agentLearning ? [learnTool(d, callerId)] : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',
@@ -342,17 +348,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Create a work chat in the app and start it with a prompt (the Orchestrator does this instead of the user). Never an Orchestrator: only the user picks it. Title "Area · cosa". Engine, model and effort: omit harness/model/effort and the routing table decides by kind of task and area (the user edits it in Impostazioni → «Instradamento modelli»; no row = the user’s "Chat aperte dall’Orchestrator"); naming something else is an override and needs a reason (logged and measured). The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Create a work chat in the app and start it with a prompt (the Orchestrator does this instead of the user). Never an Orchestrator: only the user picks it. Title "Area · cosa". Agent first (ADR 0078): pass agentId (from agent_catalog with request) and the agent\'s profile decides engine, model and effort; nothing overrides it (a profile with no model gets the routing table\'s model for this kind of work as a default). Without agentId the app asks the local classifier on title and prompt: a match above its threshold runs as that agent, otherwise Generale, routed by the table (Impostazioni → «Instradamento modelli»; no row = the user’s "Chat aperte dall’Orchestrator"). Naming harness/model/effort without agentId skips the classifier; differing from the table row is an override and needs a reason. parentRunId = the run this chat is a sub-agent of (it reports to that chat). The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent. When no agent fits, propose a new one to the user in a panel first (agent_create with the panel answer), then start it here with its agentId.',
       inputSchema: obj({
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do'),
-        agentId: str('optional profile id from agent_catalog; uses its engine/model/effort and instructions under existing launch policy. Manifest never grants access.'),
+        agentId: str('optional profile id from agent_catalog: its engine, model and effort decide (agent first); omitted = the classifier picks one above its threshold, else Generale. Manifest never grants access.'),
         agentVersion: { type: 'integer', description: 'Expected active definition version; refuse if it changed.' },
         parentRunId: str('Parent run ID'), reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
-        harness: str(`optional engine id: ${engines().map(e => e.id).join(' | ')}; omit it to let the routing table decide`),
-        model: str('optional model id; omit it to let the routing table decide'),
-        effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); omit it to let the routing table decide'),
-        reason: str('why, when harness/model/effort differ from what the table says (required then)'),
+        harness: str(`optional engine id: ${engines().map(e => e.id).join(' | ')}; with agentId only the agent's own; omit it to let the agent or the routing table decide`),
+        model: str('optional model id; with agentId only the agent\'s own; omit it to let the agent or the routing table decide'),
+        effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); with agentId only the agent\'s own'),
+        reason: str('without agentId: why, when harness/model/effort differ from what the table says (required then)'),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
       }, ['title', 'prompt']),
       run: async a => {
@@ -382,12 +388,20 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
         const kind = text(a.kind);
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
-        let askedEffort: string | null | undefined = text(a.effort);
+        const askedEffort: string | null | undefined = text(a.effort);
         if (askedEffort && !(EFFORTS as readonly string[]).includes(askedEffort)) throw new Error(`effort: ${EFFORTS.join(' | ')}`);
         let said: Harness | undefined = typeof a.harness === 'string' && engineOf(a.harness) ? a.harness : undefined;
         if (a.harness !== undefined && a.harness !== null && a.harness !== '' && !said) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`);
-        let askedModel: string | null | undefined = text(a.model);
+        const askedModel: string | null | undefined = text(a.model);
         let selected: AgentCatalog['profiles'][number] | undefined;
+        // the caller is the Regia (the only chat given these tools), on any engine: a chat on another engine spends that
+        // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
+        const regia = caller();
+        const from = regia?.harness ?? 'claude';
+        // agent first (ADR 0078): who chose the agent, and the classifier's view when it chose (or found none)
+        let chosenBy: RouteAgent['chosenBy'] = links.parentRunId ? 'parent' : 'orchestrator';
+        let scored: { score: number; threshold: number; mode: RouteAgent['mode'] } | undefined;
+        let fallback: RouteAgent | undefined;
         if (a.agentId !== undefined) {
           if (typeof a.agentId !== 'string') throw Error('agentId non valido.');
           const catalog = d.agents?.();
@@ -395,37 +409,59 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           selected = catalog.profiles.find(p => p.id === a.agentId);
           if (!selected) throw Error('Agente non trovato.');
           if (said && said !== selected.engine || askedModel !== undefined && askedModel !== selected.model || askedEffort !== undefined && askedEffort !== selected.effort) throw Error('La configurazione non corrisponde all’Agente scelto.');
-          said = selected.engine; askedModel = selected.model; askedEffort = selected.effort ?? null;
+        } else if (!said && askedModel === undefined && askedEffort === undefined && d.agents && d.classifyAgents) {
+          // no agent named: the local classifier ($0, no model call) on the chat's title and prompt; the first match above
+          // its threshold that may start now runs the chat, else Generale (the table routes it)
+          const catalog = d.agents();
+          if (!catalog.problem) {
+            try {
+              const c = await d.classifyAgents(`${title}\n\n${prompt}`.slice(0, 2000), catalog);
+              for (const cand of c.candidates) {
+                if (cand.score < c.threshold) break;
+                const p = catalog.profiles.find(x => x.id === cand.id && x.status === 'active' && x.routable !== false && x.id !== GENERAL_AGENT_ID && x.id !== ORCHESTRATOR_AGENT_ID);
+                const e = p && catalog.models.find(m => m.engine === p.engine);
+                if (!p || !e?.enabled || !e.trusted || openRefusal(s, from, p.engine)) continue;
+                selected = p; chosenBy = 'classifier'; scored = { score: cand.score, threshold: c.threshold, mode: c.mode };
+                break;
+              }
+              if (!selected) {
+                const g = catalog.profiles.find(x => x.id === GENERAL_AGENT_ID);
+                fallback = { id: GENERAL_AGENT_ID, version: g?.activeVersion ?? 0, chosenBy: 'fallback', threshold: c.threshold, mode: c.mode, ...(c.candidates[0] ? { score: c.candidates[0].score } : {}) };
+              }
+            } catch (e) { log.warn('appctl', 'agent classifier failed: the chat starts as Generale', { cause: errText(e), hint: 'check the local classifier (Agenti → Classificatori); the routing table decides meanwhile' }); }
+          }
         }
         // a model id belongs to one engine: without harness, the registry says which; an unknown one needs harness
-        if (askedModel && !said) {
+        if (askedModel && !said && !selected) {
           const row = modelRow(askedModel, d.brain.routingInfo().registry);
           if (!row || !engineOf(row.harness)) throw new Error('model without harness: say harness too, or omit both to let the routing table decide');
           said = row.harness;
         }
-        // the caller is the Regia (the only chat given these tools), on any engine: a chat on another engine spends that
-        // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
-        const regia = caller();
-        const from = regia?.harness ?? 'claude';
-        // what nobody names comes from the routing table, else from the user's "Chat aperte dalla Regia" (read now); a
-        // row on an engine this Regia may not start now leaves the choice to the defaults
+        // an agent's profile decides (ADR 0078); what nobody names comes from the routing table, else from the user's
+        // "Chat aperte dalla Regia" (read now); a row on an engine this Regia may not start now leaves it to the defaults
+        const agent = selected ? { id: selected.id, name: selected.name, version: selected.activeVersion, harness: selected.engine, model: selected.model, effort: selected.effort ?? null,
+          chosenBy, ...(scored ?? {}), stats: d.agentStats?.(selected.id, selected.activeVersion) ?? null } : undefined;
         const routed = d.brain.route({
-          ...(selected ? { api: null } : {}),
+          ...(selected ? { api: null, agent } : {}),
           canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app,
-          ask: { ...(said ? { harness: said } : {}), ...(askedModel !== undefined ? { model: askedModel } : {}), ...(askedEffort !== undefined ? { effort: askedEffort as Effort | null } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
+          ask: selected ? {} : { ...(said ? { harness: said } : {}), ...(askedModel !== undefined ? { model: askedModel } : {}), ...(askedEffort !== undefined ? { effort: askedEffort as Effort | null } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
           defaults: { harness: s.regiaChats.harness, models: { claude: s.regiaChats.claudeModel || null, cursor: s.regiaChats.cursorModel || null }, effort: s.regiaChats.claudeEffort || null },
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
-        const { harness, model, effort, route } = routed;
+        const { harness, model, effort } = routed;
+        const route = fallback ? { ...routed.route, agent: fallback } : routed.route;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         // a work chat answers to the Regia that opens it: its questions go to her tab, and it knows whom to write to
-        const yours = regia ? `\n\nIl tuo Orchestrator è «${regia.title}»: scrivigli con send_to_chat.` : '';
+        const parentChat = links.parentRunId ? d.chats.list().find(c => c.run?.runId === links.parentRunId) : undefined;
+        const yours = (regia ? `\n\nIl tuo Orchestrator è «${regia.title}»: scrivigli con send_to_chat.` : '')
+          + (parentChat ? `\nSei un sotto-agente di «${parentChat.title}»: quando hai finito mandagli il risultato con send_to_chat.` : '')
+          + '\nPer un sotto-compito puoi avviare un agente del catalogo come tuo sotto-agente: agent_catalog (con request) e poi agent_start_subagent.';
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, ...links, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
-        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason } });
+        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
-        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason } };
+        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
       },
     },
     {

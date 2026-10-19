@@ -19,7 +19,7 @@ export function renameWithRetry(tmp: string, file: string, waits: readonly numbe
     catch (e) {
       const code = (e as NodeJS.ErrnoException).code ?? '';
       if (!RETRY_CODES.has(code) || attempt >= waits.length) throw e;
-      waitSync(waits[attempt]);
+      waitSync(waits[attempt]!);
     }
   }
 }
