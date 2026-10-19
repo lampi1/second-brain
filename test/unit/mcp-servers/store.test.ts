@@ -61,6 +61,22 @@ describe('McpServerStore', () => {
     expect(s.secret('azure-devops', { where: 'env', name: 'AZURE_DEVOPS_PAT' })).toBeNull();
   });
 
+  it('drops a stdio token when its command, arguments or plain env change', () => {
+    const s = new McpServerStore(tmp('mcp-store'), cipher);
+    const slot = { where: 'env' as const, name: 'AZURE_DEVOPS_PAT' };
+    s.upsert(stdio);
+    s.setSecret('azure-devops', 'env:AZURE_DEVOPS_PAT', 'pat-123456789012345');
+    s.upsert({ ...stdio, label: 'ADO' }, 'azure-devops');
+    expect(s.secret('azure-devops', slot)).toBe('pat-123456789012345');
+    for (const change of [{ args: ['-y', '@evil/other-package'] }, { env: { NODE_OPTIONS: '--require /tmp/x.js' } }, { command: 'node' }]) {
+      s.upsert(stdio, 'azure-devops');
+      s.setSecret('azure-devops', 'env:AZURE_DEVOPS_PAT', 'pat-123456789012345');
+      s.upsert({ ...stdio, ...change }, 'azure-devops');
+      expect(s.secret('azure-devops', slot)).toBeNull();
+    }
+    expect(fingerprint(stdio as never, slot)).not.toBe(fingerprint({ ...stdio, args: [] } as never, slot));
+  });
+
   it('drops a token when its server now points to another host, keeps it for a path change', () => {
     const s = new McpServerStore(tmp('mcp-store'), cipher);
     s.upsert(http);

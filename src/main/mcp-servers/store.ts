@@ -97,7 +97,9 @@ function checkSlots(v: unknown, transport: 'stdio' | 'http'): McpSecretSlot[] {
 
 /** Where a server's token may go: a different command, URL origin or slot is a different place. */
 export function fingerprint(def: McpServerDef, slot: McpSecretSlot): string {
-  const where = def.transport === 'stdio' ? `stdio|${def.command ?? ''}` : `http|${def.url ? new URL(def.url).origin : ''}`;
+  // a stdio token is bound to the whole launch (command, arguments, plain env): `npx other-package` or a NODE_OPTIONS
+  // never inherits it; an http one to the URL's origin (a path change keeps it)
+  const where = def.transport === 'stdio' ? `stdio|${JSON.stringify([def.command ?? '', def.args ?? [], def.env ?? {}])}` : `http|${def.url ? new URL(def.url).origin : ''}`;
   return crypto.createHash('sha256').update(`${where}|${slotKey(slot)}`).digest('hex').slice(0, 32);
 }
 
