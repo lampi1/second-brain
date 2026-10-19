@@ -659,30 +659,36 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .decision .chip-opt { background: color-mix(in srgb, var(--violet) 6%, var(--surface-2)); }
 .decision .chip-opt.rec { border-color: color-mix(in srgb, var(--violet) 55%, transparent); }
 .decision .chip-opt.rec .kbd { color: var(--on-accent); background: var(--violet); border-color: var(--violet); }
-.feed { flex: none; display: flex; flex-direction: column; min-height: 0; max-height: 40%; border-top: 1px solid var(--regia-line); margin-top: auto; }
-.feed + .composer { margin-top: 0; }
-.feed-head {
-  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 var(--pad); background: none; border: 0; color: var(--text-3);
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; cursor: pointer;
+/* "N novità in attesa" (HeldNews.tsx, #88): what the app holds back for the Orchestrator, above its input */
+.held { flex: none; display: flex; flex-direction: column; min-height: 0; max-height: 40%; border-top: 1px solid var(--regia-line); margin-top: auto; }
+.held + .composer { margin-top: 0; }
+.held-head {
+  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 var(--pad); background: none; border: 0;
+  color: var(--amber); font-size: 12px; font-weight: 600; cursor: pointer; text-align: left;
 }
-.feed-head:hover { color: var(--text-2); }
-.feed-chev { transition: transform var(--dur) var(--ease); }
-.feed:not(.open) .feed-chev { transform: rotate(-90deg); }
-.feed-body { overflow-y: auto; padding: 0 6px 6px; min-height: 0; }
-.feed-group { font-size: 10px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.09em; padding: 6px 6px 2px; font-weight: 600; }
-.feed-list { list-style: none; margin: 0; padding: 0; }
-.feed-row { width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border: 0; background: none; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; color: var(--text-2); }
-.feed-row:hover { background: color-mix(in srgb, var(--violet) 7%, transparent); }
-.feed-k { flex: none; font-weight: 500; }
-.feed-t { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.feed-age { flex: none; color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums; }
-.feed-empty { margin: 0; padding: 0 var(--pad) 10px; color: var(--text-3); font-size: 12px; }
-.tone-blue .feed-k { color: var(--blue); }
-.tone-red .feed-k { color: var(--red); }
-.tone-green .feed-k { color: var(--green); }
-.tone-amber .feed-k { color: var(--amber); }
-.tone-violet .feed-k { color: var(--violet); }
-.tone-dim .feed-k { color: var(--text-3); }
+.held-head:hover { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.held-head:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.held-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: heldPulse 2.4s var(--ease) infinite; }
+@keyframes heldPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .held-dot { animation: none; } }
+.held-count { font-variant-numeric: tabular-nums; }
+.held-chev { color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.held:not(.open) .held-chev { transform: rotate(-90deg); }
+.held-list { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; min-height: 0; }
+.held-row {
+  width: 100%; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; align-items: baseline;
+  padding: 5px 6px; border: 0; background: none; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; color: var(--text-2);
+}
+.held-row:hover:not(:disabled) { background: color-mix(in srgb, var(--violet) 7%, transparent); }
+.held-row:disabled { cursor: default; }
+.held-k { font-weight: 600; font-size: 11px; }
+.held-t { min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.held-age { color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums; }
+.held-why { grid-column: 2 / -1; color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tone-green .held-k { color: var(--green); }
+.tone-red .held-k { color: var(--red); }
+.tone-amber .held-k { color: var(--amber); }
+.tone-violet .held-k { color: var(--violet); }
 .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 20px 16px; }
 .empty-title { margin: 0; font: 600 15px var(--font-display); color: var(--text); }
 .empty-text { margin: 0 0 6px; color: var(--text-3); line-height: 1.5; max-width: 440px; }

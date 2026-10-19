@@ -48,7 +48,6 @@ export interface Prefs {
   regiaSeenAt: number;
   /** chat | browser split of the focus mode */
   pairSplit: number;
-  feedOpen: boolean;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
   lastFocus: string | null;
 }
@@ -102,7 +101,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
   appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},
-  density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42, feedOpen: false,
+  density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
 };
 const READ_KEY = 'sb.read.v1';
@@ -124,9 +123,10 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
   try {
     // Retired and dropped: regiaRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
     // Corsie views); navCollapsed (the icon-only sidebar); regiaPlacement, regiaTopHeight (the Orchestrator at the top);
-    // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows).
-    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, browsersHidden: _i, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight' | 'browsersHidden', unknown>;
+    // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows); feedOpen (the Orchestrator's
+    // "Novità" feed, replaced by "N novità in attesa", #88).
+    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, browsersHidden: _i, feedOpen: _j, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight' | 'browsersHidden' | 'feedOpen', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),

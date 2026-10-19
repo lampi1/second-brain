@@ -44,6 +44,11 @@
   (`waitsOn`, `shared/waiting.ts`), a question/permission is open or background work runs. The main AutoCloseService
   archives it after the `autoCloseMin` delay and its warning (`closedBy: 'auto'`); a held chat carries `waitingFor`
   in `chat:autoCloseStatus` and its strip shows "In attesa di…".
+- **News held for the Orchestrator** (#88): the delivery rule (`chats/regia-delivery.ts`) holds a work chat's news
+  (`regia-wake.ts`) and mail to the Orchestrator (`mail.ts`) while it waits for the user, groups them for 30 s, or lets
+  quiet ones ride along. `chats/held-news.ts` reads both queues (no delivery, no turn) and sends the list as
+  `regia:heldChanged` (`regia:held` at start); the Orchestrator's tile shows "N novità in attesa" above its input
+  (`HeldNews.tsx`), a click lists chat, kind, since when and why.
 - **A cloud agent** (ADR 0080): "Nuovo agente → Dove: Cloud" or `app_create_chat where:'cloud'` → `cloud:start` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip

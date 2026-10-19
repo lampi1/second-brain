@@ -21,6 +21,7 @@ import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { recordMcpPort } from './health';
 import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
+import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
 import { createEngines } from './engines/service';
@@ -102,6 +103,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
+  // "N novità in attesa" (#88): the demo has no mail, only the news
+  const heldNews = attachHeldNews(ctx.emitter, wake);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   // show_ui's visuals (ADR 0033): the demo has no chat endpoints, __sbDemo.show calls the same store
   const artifacts = attachArtifacts(ctx, chats, now);
@@ -166,7 +169,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    cloud, chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, agentAuthoring, agentLifecycle, agentPacks, brainModel,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
