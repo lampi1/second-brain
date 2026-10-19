@@ -80,6 +80,18 @@ describe('BrainScripts', () => {
     expect(fs.existsSync(path.join(root, 'scripts'))).toBe(false);
   });
 
+  it('accepts a secret read at run time, keeps CRLF and the BOM', () => {
+    const s = new BrainScripts(() => root);
+    const pw = `${'pass'}${'word'}`;
+    for (const code of [`${pw} = os.environ["DB_X"]`, 'const token = process.env.GITHUB_TOKEN;', 'api_key = os.getenv("API_KEY")', `const ${pw} = await readCreds();`, `$${pw} = $env:DB_X`])
+      expect(() => s.save({ name: 'ok.py', code, meta, by: 'O' }), code).not.toThrow();
+    s.save({ name: 'w.ps1', code: '\uFEFFWrite-Output "città"\r\nexit 0\r\n', meta, by: 'O' });
+    const text = fs.readFileSync(path.join(root, 'scripts', 'w.ps1'), 'utf8');
+    expect(text.startsWith('\uFEFF# @title')).toBe(true);
+    expect(text.split('\r\n').length).toBeGreaterThan(5);
+    expect(text.replace(/\r\n/g, '')).not.toContain('\n');
+  });
+
   it('masks a credential in a hand-written script it reads', () => {
     fs.mkdirSync(path.join(root, 'scripts'));
     fs.writeFileSync(path.join(root, 'scripts', 'old.py'), `# vecchio\n${'pass'}${'word'} = "${'demo-non-reale-42'}"\n`);
@@ -117,6 +129,9 @@ describe('changelog', () => {
     expect(e[0]!.summary).toBe('priorità settimana');
     expect(e[1]!.summary).toBe('mai push - su main');
     expect(parseChangelog(formatEntry(e[1]!))).toEqual([e[1]]);
+    expect(() => log.add({ kind: 'note', action: 'edited', target: 'x', by: 'O', summary: `ruotata ${'pass'}${'word'}=${'demo-non-reale-42'}` })).toThrow(/credential/);
+    fs.appendFileSync(path.join(root, 'changelog.md'), `- 2026-10-19 09:00 · note · edited · x · O · ${'pass'}${'word'}=${'demo-non-reale-42'}\n`);
+    expect(log.list().entries.at(-1)!.summary).not.toContain('demo-non-reale');
     expect(() => log.add({ kind: 'x' as never, action: 'added', target: 't', by: 'b', summary: 's' })).toThrow(/kind/);
   });
 

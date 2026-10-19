@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChangelogAction, ChangelogEntry, ChangelogKind } from '../../shared/contract';
+import { maskSecrets } from './procedures';
 
 export const CHANGELOG_FILE = 'changelog.md';
 export const CHANGELOG_KINDS: readonly ChangelogKind[] = ['script', 'rule', 'procedure', 'note', 'agent', 'skill', 'other'];
@@ -39,7 +40,9 @@ export function parseChangelog(text: string): ChangelogEntry[] {
     if (!m) continue;
     const kind = (CHANGELOG_KINDS as readonly string[]).includes(m[2]!) ? m[2] as ChangelogKind : 'other';
     const action = (CHANGELOG_ACTIONS as readonly string[]).includes(m[3]!) ? m[3] as ChangelogAction : 'edited';
-    out.push({ at: m[1]!, kind, action, target: m[4]!, by: m[5]!, summary: m[6]! });
+    // a hand-written line may hold a credential: masked before it leaves main (AGENTS.md rule 2)
+    const mask = (v: string) => maskSecrets(v).text;
+    out.push({ at: m[1]!, kind, action, target: mask(m[4]!), by: mask(m[5]!), summary: mask(m[6]!) });
     if (out.length >= MAX_READ) break;
   }
   return out;
@@ -65,6 +68,7 @@ export class BrainChangelog {
     if (!(CHANGELOG_KINDS as readonly string[]).includes(e.kind)) throw new Error(`kind: one of ${CHANGELOG_KINDS.join(', ')}`);
     if (!(CHANGELOG_ACTIONS as readonly string[]).includes(e.action)) throw new Error(`action: one of ${CHANGELOG_ACTIONS.join(', ')}`);
     const entry: ChangelogEntry = { ...e, at: e.at ?? stampOf(this.now()) };
+    if (maskSecrets(formatEntry(entry)).masked) throw new Error('refused: the entry looks like it holds a credential; describe the change without the secret');
     let text = '';
     try { text = fs.readFileSync(f, 'utf8'); } catch { /* first entry */ }
     const line = formatEntry(entry);

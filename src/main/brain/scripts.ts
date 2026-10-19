@@ -81,16 +81,25 @@ export function withHeader(file: string, body: string, meta: ScriptMeta): string
     ...(meta.tags?.length ? [`${c} @tags ${meta.tags.map(one).filter(Boolean).join(', ')}`] : []),
     `${c} @tested ${meta.tested.at ?? new Date().toISOString().slice(0, 10)} ${meta.tested.ok ? 'ok' : 'failed'}${meta.tested.note ? `: ${one(meta.tested.note)}` : ''}`,
   ];
-  const rest = stripHeader(body);
-  const lines = rest.split('\n');
+  // the body's own line ends and byte-order mark stay (Windows PowerShell 5.1 and .cmd labels depend on them)
+  const eol = body.includes('\r\n') ? '\r\n' : '\n', bom = body.startsWith('\uFEFF') ? '\uFEFF' : '';
+  const lines = stripHeader(body).split('\n');
   const shebang = lines[0] && /^\s*#!/.test(lines[0]) ? [lines.shift()!] : [];
-  return [...shebang, ...head, '', ...lines].join('\n').replace(/\n*$/, '\n');
+  return bom + [...shebang, ...head, '', ...lines].join(eol).replace(/(?:\r?\n)*$/, eol);
 }
+
+/** A value read at run time is not a secret: an environment variable, a credentials-file read or any call. Replaced by a
+ *  placeholder before the check, so a key assigned from an environment variable or a helper call can be saved. */
+const RUNTIME_READ = [
+  /\bos\.environ(?:\.get\([^)]*\)|\[[^\]]*\])/g, /\bprocess\.env(?:\.\w+|\[[^\]]*\])/g, /\$env:\w+/gi, /\$ENV\{[^}]*\}/g,
+  /\bENV\[[^\]]*\]/g, /\b(?:await\s+)?[A-Za-z_][\w.]*\([^()]*\)/g,
+];
+const runtimeFree = (line: string): string => RUNTIME_READ.reduce((l, re) => l.replace(re, '<runtime>'), line);
 
 /** The first line that may hold a credential (1-based), or 0. */
 export function secretLine(text: string): number {
   const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) if (maskSecrets(lines[i]!).masked) return i + 1;
+  for (let i = 0; i < lines.length; i++) if (maskSecrets(runtimeFree(lines[i]!)).masked) return i + 1;
   return 0;
 }
 
