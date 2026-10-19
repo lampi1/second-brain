@@ -15,10 +15,10 @@ export const CHARACTER_LOOKS: Record<CharacterId, string> = {
   artisan: 'maker in a bandana and apron with a wrench',
   sentinel: 'guard in a visored helmet with a shield',
   herald: 'town crier in a feathered tricorn with a horn',
-  router: 'switchboard operator with a headset and a signpost arrow',
+  router: 'switchboard operator with an afro puff and a headset, holding a signpost',
   judge: 'judge in a white curled wig with a gavel',
   scribe: 'writer with a hair bun and round glasses, holding a quill',
-  pulse: 'lighthouse keeper with a knit cap and a lantern',
+  pulse: 'bearded lighthouse keeper in a knit cap and a raincoat, holding a lantern',
 };
 /** The character of a catalog entry: its own id when it has one, else the Scout's (never empty). */
 export const characterOf = (id: string): CharacterId => (isCharacterId(id) ? id : 'scout');
