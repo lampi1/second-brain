@@ -1,6 +1,7 @@
 import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
+import { memoryIt } from './areas/memory.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -64,6 +65,7 @@ export const it = {
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
   ...brainModelIt,
+  ...memoryIt,
   ...productIt,
   ...agentsGridIt,
   ...explainIt,

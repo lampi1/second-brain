@@ -107,13 +107,16 @@ const KNOWLEDGE: [RegExp, string][] = [
   [/^(persone|people|contacts?|contatti|team|colleghi)$/i, 'Persone'],
   [/^(knowledge|conoscenza|kb|wiki|references?|riferimenti)$/i, 'Riferimenti'],
 ];
-const entriesOf = (text: string): string[] => text.split(/\r?\n/).filter(l => /^\s*(?:[-*]\s+\S|\|\s*\d{4}-\d{2}-\d{2})/.test(l)).map(l => plain(l.replace(/^\s*[-*]\s+/, '').replace(/\|/g, ' ')));
+const ENTRY = /^\s*(?:[-*]\s+\S|\|\s*\d{4}-\d{2}-\d{2})/;
+/** The entry lines as written (list marker dropped, table pipes kept as separators), oldest first. */
+export const rawEntries = (text: string): string[] => text.split(/\r?\n/).filter(l => ENTRY.test(l)).map(l => l.replace(/^\s*[-*]\s+/, '').trim());
+const entriesOf = (text: string): string[] => rawEntries(text).map(l => plain(l.replace(/\|/g, ' ')));
 function memoryFile(root: string, rel: string, kind: MemoryFile['kind'], group: string, agentId?: string): MemoryFile | null {
   const text = readSmall(path.join(root, rel));
   if (text === null) return null;
-  const entries = entriesOf(text);
+  const entries = entriesOf(text), raw = rawEntries(text);
   const title = /^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? path.posix.basename(rel, '.md');
-  return { kind, group, title: plain(title), file: rel, ...(agentId ? { agentId } : {}), entries: entries.length || (text.trim() ? 1 : 0), preview: (entries.length ? entries.slice(-3) : [firstProse(text)]).filter(Boolean).reverse(), changedAt: mtime(path.join(root, rel)) };
+  return { kind, group, title: plain(title), file: rel, ...(agentId ? { agentId } : {}), entries: entries.length || (text.trim() ? 1 : 0), preview: (entries.length ? entries.slice(-3) : [firstProse(text)]).filter(Boolean).reverse(), previewMd: (raw.length ? raw.slice(-3) : [firstProse(text)]).filter(Boolean).reverse(), changedAt: mtime(path.join(root, rel)) };
 }
 function walkMd(root: string, dir: string, depth: number, out: string[]): void {
   let ents: fs.Dirent[] = [];
@@ -146,7 +149,7 @@ export function readMemory(root: string | null, profiles: readonly AgentProfile[
   try { for (const f of fs.readdirSync(path.join(root, 'journal')).sort().reverse()) if (/\.md$/i.test(f)) journal.push(`journal/${f}`); } catch { /* none yet */ }
   if (journal.length) {
     const latest = memoryFile(root, journal[0]!, 'journal', 'Diario');
-    if (latest) out.push({ ...latest, title: 'Diario', entries: journal.length, preview: journal.slice(0, 3).map(f => path.posix.basename(f, '.md')) });
+    if (latest) out.push({ ...latest, title: 'Diario', entries: journal.length, preview: journal.slice(0, 3).map(f => path.posix.basename(f, '.md')), previewMd: latest.previewMd });
   }
   const errors = memoryFile(root, 'ai-errors.md', 'errors', 'Errori'); if (errors) out.push(errors);
   const shared = memoryFile(root, 'memory/shared.md', 'shared', 'Condivisa'); if (shared) out.push(shared);

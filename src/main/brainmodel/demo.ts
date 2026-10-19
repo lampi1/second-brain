@@ -3,9 +3,12 @@
 // routines sections into skills (ADR 0077) run for real without the user's brain. Generic content only (no real
 // customers, hosts or products). One line holds a fake connection string with a password, to show (and test) that it is
 // masked in the skill made from it; one file named like credentials, to show it is never read. File dates are relative
-// to `now` (frozen demo: the same dates every run). Used by demo-wiring.ts.
+// to `now` (frozen demo: the same dates every run); a `{d:N}` in a path or a text is the date N days before `now`. The
+// role memories, logged errors, a stale note, two older skills and made-up role runs (demoBrainRuns) feed the Memoria
+// statistics. Used by demo-wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
+import type { AgentRun, AgentRunOutcome } from '../../shared/agents';
 
 const DAY = 24 * 3600e3;
 // built in pieces: a fake value, never a real one, and no secret pattern in this source file
@@ -144,36 +147,95 @@ Questo file non viene mai letto dalla migrazione.
 
 - Giulia (QA): vuole i passi esatti per riprodurre
 - Marco (sviluppo): preferisce una PR piccola per volta
-`, 10],
+`, 40],
   'now.md': [`# Fili aperti
 
 - **Rimborsi parziali** · test e2e in corso, manca il caso di rimborso doppio
 - **Totale ordine** · fix pronto, aspetta la revisione
 `, 0],
-  'journal/2026-10-08.md': [`# 2026-10-08
+  'journal/{d:15}.md': [`# Diario
+
+- Prenotato l'ambiente di test per la settimana
+- Rilascio 1.4.0 in test
+`, 15],
+  'journal/{d:8}.md': [`# Diario
+
+- Rimborsi parziali: scritto il primo test e2e
+`, 8],
+  'journal/{d:3}.md': [`# Diario
 
 - Rilascio 1.4.1 in test, verificato il carrello
-`, 1],
-  'journal/2026-10-09.md': [`# 2026-10-09
+- Trovato il bug del totale con lo sconto
+`, 3],
+  'journal/{d:1}.md': [`# Diario
 
 - Corretto il totale dell'ordine con lo sconto
-`, 0],
-  'ai-errors.md': [`# AI errors
+`, 1],
+  'ai-errors.md': [`# Errori dell'IA: il registro
 
-Date | agent | correction and prevention
+Ogni errore di un agente o di una chat, una riga.
 
-- 2026-10-07 | Correzione bug | Ha letto l'avviso generico invece del log del nodo: leggere sempre il log del cliente
+- {d:68} | Scout | Ha letto l'avviso generico invece del log del nodo del cliente: leggere sempre il log del nodo
+- {d:61} 09:40 · Artisan · rilasci · verifica mancata · detto: fatto · vero: nessuno screenshot della pagina cambiata · visto da: tu, a mano · regola: niente «fatto» senza screenshot
+- {d:54} | Sentinel | Test dato per passato senza eseguirlo: la suite non era partita
+- {d:47} | Scout | Di nuovo l'avviso generico al posto del log del nodo del cliente Alfa Shop
+- {d:40} 15:05 · Artisan · rilasci · verifica mancata · detto: pronto per il test · vero: la build della pull request era rossa · visto da: revisione
+- {d:33} | Scribe | Nota di rilascio in inglese tecnico: il cliente la vuole in italiano semplice
+- {d:26} | Sentinel | Test dato per passato senza eseguirlo: mancava l'ambiente di test libero
+- {d:19} | Scout | Log del nodo letto in ora locale: il nodo scrive in UTC, l'orario era sbagliato di due ore
+- {d:12} 11:20 · Artisan · rilasci · verifica mancata · detto: fatto · vero: la pagina dava errore 500 · visto da: tu, dallo screenshot · regola: niente «fatto» senza screenshot
+- {d:9} | Judge | Giudizio dato senza leggere i criteri del contratto
+- {d:5} | Sentinel | Test dato per passato senza eseguirlo: suite filtrata su un solo file
+- {d:2} | Scout | Ha letto l'avviso generico invece del log del nodo: il problema era nel nodo 3
 `, 2],
-  'agents/default-bug-investigator/memory.md': [`# Memoria: Indagine
+  'agents/scout/memory.md': [`# Memoria: Scout
 
-- Il nodo del cliente Alfa Shop scrive i log in UTC
-- L'ambiente di test si azzera ogni notte alle 2
-`, 3],
-  'agents/default-reviewer/memory.md': [`# Memoria: Revisione
+- {d:70} · Il nodo del cliente Alfa Shop scrive i log in **UTC**
+- {d:52} · I log dei nodi stanno in \`logs/nodo-<n>/\`, uno per giorno
+- {d:31} · L'ambiente di test si azzera ogni notte alle 2
+- {d:18} · Prima di cercare nel codice, chiedi il numero di build: cambia tutto
+- {d:4} · L'avviso generico non dice mai il nodo: apri sempre il log del nodo
+`, 4],
+  'agents/artisan/memory.md': [`# Memoria: Artisan
 
-- Marco preferisce una PR piccola per volta
-- L'ambiente di test si azzera ogni notte alle 2
-`, 3],
+- {d:64} · Marco preferisce una PR piccola per volta
+- {d:44} · Il carrello ha due calcoli del totale: \`cart.ts\` e \`checkout.ts\`, vanno cambiati insieme
+- {d:23} · Screenshot della pagina cambiata **prima** di dire fatto
+- {d:11} · Le pull request verso \`release/*\` vogliono il numero del work item nel titolo
+`, 11],
+  'agents/sentinel/memory.md': [`# Memoria: Sentinel
+
+- {d:57} · L'ambiente di test si azzera ogni notte alle 2
+- {d:27} · Un solo ambiente libero alla volta: prenotalo nel canale QA
+- {d:6} · Controlla che la suite sia partita davvero: guarda il numero di test eseguiti
+`, 6],
+  'agents/scribe/memory.md': [`# Memoria: Scribe
+
+- {d:35} · Le note di rilascio per Alfa Shop vanno in *italiano semplice*
+`, 35],
+  'ambienti/vecchio-server.md': [`# Vecchio server di prova
+
+- Spento a fine estate: i dati sono nell'ambiente di test
+- Accesso solo dalla rete dell'ufficio
+`, 75],
+  '.claude/skills/note-di-rilascio/SKILL.md': [`---
+name: note-di-rilascio
+description: Scrive le note di rilascio per i clienti, in italiano semplice, partendo dalle pull request della versione.
+---
+# Note di rilascio
+
+1. Elenca le pull request della versione.
+2. Per ognuna una riga: cosa cambia per il cliente, senza gergo.
+`, 50],
+  '.claude/skills/pulizia-ambiente/SKILL.md': [`---
+name: pulizia-ambiente
+description: Riporta l'ambiente di test allo stato iniziale dopo una prova lunga.
+---
+# Pulizia dell'ambiente
+
+1. Ferma i servizi di prova.
+2. Ripristina i dati della notte.
+`, 45],
   'rules/stile.md': [`---
 when: {"prompt":["scrivi","bozza","mail"],"tools":[],"paths":[]}
 ---
@@ -187,12 +249,55 @@ Frasi brevi, italiano semplice, niente gergo.
 export function writeDemoBrain(dir: string, now: number): string {
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(path.join(dir, 'brain.json'))) fs.writeFileSync(path.join(dir, 'brain.json'), `${JSON.stringify({ machinery: 'product-v1', template: {}, rules: { topicFiles: ['rules/stile.md'], appRules: true } }, null, 2)}\n`);
+  const dated = (t: string) => t.replace(/\{d:(\d+)\}/g, (_m, n: string) => new Date(now - Number(n) * DAY).toISOString().slice(0, 10));
   for (const [rel, [text, days]] of Object.entries(FILES)) {
-    const f = path.join(dir, rel);
+    const f = path.join(dir, dated(rel));
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, text);
+    fs.writeFileSync(f, dated(text));
     const t = new Date(now - days * DAY);
     fs.utimesSync(f, t, t);
   }
   return dir;
+}
+
+/** The demo runs' requests: all different, but the Scout's "log del nodo" searches repeat (the maintenance's repeated-task
+ *  job turns them into a skill on the Manutenzione button). */
+const GOALS = [
+  'Cerca nel log del nodo l’errore del carrello', 'Correggi il totale dell’ordine con lo sconto', 'Esegui la suite dei rimborsi parziali',
+  'Cerca nel log del nodo perché il rimborso fallisce', 'Aggiungi il test del rimborso doppio', 'Scrivi le note di rilascio della versione 1.4.1',
+  'Giudica la pull request del totale ordine', 'Trova chi usa ancora la vecchia API dei pagamenti', 'Sistema il calcolo IVA per i clienti esteri',
+  'Verifica il rilascio in test sul carrello', 'Cerca nel log del nodo l’errore delle notifiche SMS', 'Prepara la pull request del fix notifiche',
+  'Aggiorna la pagina cliente Alfa Shop', 'Valuta il piano per i rimborsi parziali', 'Leggi la documentazione del corriere spedizioni',
+  'Rinomina i campi del modulo indirizzo', 'Controlla le schermate dopo il rilascio', 'Cerca nel log del nodo il timeout del checkout',
+  'Togli il codice morto del vecchio carrello', 'Riassumi le decisioni della riunione QA', 'Confronta due versioni della ricevuta PDF',
+  'Elenca le dipendenze scadute del progetto', 'Migliora i messaggi di errore del pagamento', 'Riprova la suite notturna fallita',
+  'Cerca nel log del nodo l’eccezione della fattura', 'Scrivi il test per lo sconto a soglia', 'Correggi il fuso orario nei report',
+  'Rileggi il glossario per i nuovi colleghi', 'Esamina la copertura dei test del checkout', 'Trova i ticket duplicati del mese',
+  'Semplifica la funzione di arrotondamento prezzi', 'Lancia i controlli di accessibilità del sito', 'Spiega il flusso degli ordini annullati',
+  'Decidi se la correzione del magazzino è completa',
+];
+
+/** Made-up role runs for the demo's Memoria statistics (skills used, how they went, memories recalled): deterministic,
+ *  spread over the last ten weeks. `skills` = the demo brain's skill names now (the migrated ones are named at start);
+ *  the first three migrated ones get runs, «pulizia-ambiente» none (a skill never used). */
+export function demoBrainRuns(now: number, skills: string[]): AgentRun[] {
+  const migrated = skills.filter(s => s !== 'note-di-rilascio' && s !== 'pulizia-ambiente');
+  // [role, days ago, skill (index in migrated, or a name), verdict]
+  const plan: [string, number, number | string, AgentRunOutcome['verdict'] | null][] = [];
+  const verdicts: AgentRunOutcome['verdict'][] = ['success', 'success', 'partial', 'success', 'fail', 'success', 'success', 'unknown'];
+  for (let i = 0; i < 34; i++) {
+    const role = ['scout', 'artisan', 'sentinel', 'scout', 'artisan', 'scribe', 'judge'][i % 7]!;
+    const skill: number | string = role === 'scribe' ? 'note-di-rilascio' : role === 'sentinel' ? 2 : role === 'artisan' ? (i % 3 === 0 ? 1 : 0) : i % 5 === 0 ? 1 : 0;
+    plan.push([role, 2 + Math.floor((i * 67) / 34), skill, role === 'sentinel' ? (i % 2 ? 'fail' : 'partial') : verdicts[i % verdicts.length]!]);
+  }
+  return plan.map(([role, days, skill, verdict], i): AgentRun => {
+    const name = typeof skill === 'number' ? migrated[skill] : skill;
+    const startedAt = now - days * DAY - (i % 5) * 3600e3;
+    return {
+      source: 'chat', runId: `r_demo_${i}`, chatId: `demo-run-${i}`, agentId: role, version: 1, goal: GOALS[i % GOALS.length]!, startedBy: 'orchestrator', startedAt,
+      endedAt: startedAt + 40 * 60e3, endReason: 'completed', counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null,
+      ...(verdict ? { outcome: { verdict, basis: 'human', at: startedAt + 41 * 60e3, by: 'demo' } } : {}),
+      tags: { skills: name ? [name] : [], app: null, repo: null },
+    };
+  });
 }

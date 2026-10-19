@@ -21,6 +21,7 @@ import { t } from '../i18n';
 import { useBrainModel, linkSkill, refreshBrainModel } from '../store/brain-model';
 import { filterSkills, skillRows, type SkillFilter, type SkillRow } from '../lib/brain-model-view';
 import { MaintenancePanel, MigrationReportPanel, when } from './brain-model/MaintenancePanel';
+import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import '../styles/skills.css';
 import '../styles/agent-catalog.css';
 import '../styles/brain-model.css';
@@ -260,7 +261,7 @@ export function SkillsPage() {
     <div className="sk-page bm-page agent-overview" data-testid="skills-page">
       <PageHead title={t('bm.skills.title')} onRefresh={() => void load()}
         lead={cat || state ? t('bm.skills.lead', { n: rows.length, used }) : t('tools.skillsPage.loadingFolders')}
-        actions={<button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button>} />
+        actions={<><MaintenanceButton /><button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button></>} />
       {err && <p className="sk-refused" role="alert">{t('tools.skillsPage.loadError')} {err}</p>}
       {draft && <div className="bm-editor" ref={editor}>
         <div className="bm-editor-bar"><button type="button" className="btn btn-ghost btn-s" onClick={close} data-testid="sk-close">{t('bm.skills.close')}</button></div>

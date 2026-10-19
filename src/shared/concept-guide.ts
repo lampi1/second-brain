@@ -185,8 +185,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('La pagina Skill mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
         'The Skill page shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
-      b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
-        'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
+      b('La manutenzione gira da sola ogni 6 ore, o subito con il pulsante «Manutenzione» in cima a Skill, Regole e Memoria, che dice cosa ha fatto ogni lavoro: una skill nuova da un lavoro ripetuto, skill doppie unite, ricordi doppi nella memoria condivisa, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
+        'Maintenance runs by itself every 6 hours, or at once with the "Manutenzione" button atop Skill, Regole and Memoria, which says what each job did: a new skill from a repeated task, duplicate skills merged, duplicate memories moved to the shared one, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
       // src/main/brainmodel/changes.ts; src/main/agents/catalog.ts maintain (ADR 0083)
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
@@ -194,8 +194,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è sulla pagina Skill.',
         'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is on the Skill page.'),
       // src/renderer/components/brain-model/
-      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo; Mappa mostra ruolo → skill → regole → memoria.',
-        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role; Map shows role → skills → rules → memory.'),
+      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
+        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/agents/pack/emit.ts, rules.ts
       b('Esportare un ruolo porta il suo testo, le skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importare un pacchetto aggiunge skill e regole al ruolo che scegli, come versione in prova: il ruolo tiene i suoi permessi.',
         'Exporting a role carries its text, skills, the tools list (TOOLS.md) and the rules; never memory. Importing a pack adds skills and rules to the role you pick, as a trial version: the role keeps its permissions.'),

@@ -12,6 +12,7 @@ import { t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { PageHead } from '../../brain/components/States';
 import { MaintenancePanel, when } from './MaintenancePanel';
+import { MaintenanceButton } from './MaintenanceButton';
 import { LearnedRules } from '../../brain/pages/LearnedRules';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
@@ -41,7 +42,7 @@ export function RulesPage() {
   const order = { always: 0, topic: 1, none: 2 };
   const rules = [...(state?.rules ?? [])].sort((a, b) => order[a.loaded] - order[b.loaded] || a.file.localeCompare(b.file));
   return <div className="bm-page agent-overview" data-testid="bm-rules-page">
-    <PageHead title={t('bm.rules.title')} lead={state ? t('bm.rules.lead', { n: rules.length }) : t('bm.loading')} />
+    <PageHead title={t('bm.rules.title')} lead={state ? t('bm.rules.lead', { n: rules.length }) : t('bm.loading')} actions={<MaintenanceButton />} />
     {error && <p role="alert">{error}</p>}
     {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p>
       : state && !rules.length ? <p className="bm-empty" data-testid="bm-rules-empty">{t('bm.rules.empty')}</p>

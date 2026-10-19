@@ -13,7 +13,7 @@ import { changesOf } from '../../lib/brain-model-view';
 export const when = (ms: number | null | undefined): string => (ms ? new Date(ms).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const jobName = (job: BrainChange['job']) => t(`bm.job.${job}`);
 
-function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
+export function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
   const undo = async () => { const err = await rollbackChange(c.id); toast(err ?? t('bm.maint.undoneToast'), err ? 'err' : 'ok'); };
   return <li className="bm-change" data-undone={!!c.rolledBackAt} data-testid="bm-change">
     <div className="bm-change-main">
