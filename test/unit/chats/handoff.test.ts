@@ -167,10 +167,10 @@ describe('ChatManager long chats', () => {
     expect(summary(m, c.id)?.state).toBe('idle');
   }, 20000);
 
-  it('refuses the Regia and a busy chat', async () => {
+  it('refuses the Orchestrator and a busy chat', async () => {
     const { make, cwd } = setup();
     const m = make();
-    const r = await m.create({ harness: 'claude', cwd, regia: true });
+    const r = await m.create({ harness: 'claude', cwd, orchestrator: true });
     await expect(m.continueChat(r.id)).rejects.toThrow(/Orchestrator/);
     const c = await m.create({ harness: 'claude', cwd, prompt: 'slow' });
     await waitFor(() => summary(m, c.id)?.state === 'running', 'running');

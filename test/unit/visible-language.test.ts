@@ -21,7 +21,7 @@ it('keeps Italian and English keys in parity, in the whole dictionary and in eve
  }
 });
 it('renders the reported legacy control labels in English',()=>{
- setLang('en');expect(stateInfo({state:'waiting',pending:1,isRegia:true}).label).toBe('waiting for you');
+ setLang('en');expect(stateInfo({state:'waiting',pending:1,isOrchestrator:true}).label).toBe('waiting for you');
  expect(t('chat.input.newChatButton')).toBe('New chat');expect(t('chat.menu.copyLink')).toBe('Copy link');expect(t('ui.other')).toBe('Other…');expect(t('essential.saved')).toBe('Saved');
 });
 it('renders the converted component labels and messages in English',()=>{

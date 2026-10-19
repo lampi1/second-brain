@@ -217,7 +217,7 @@ describe('AcpSession as Cursor', () => {
     expect(answerOf(logFile)).toEqual({ outcome: 'skipped', reason: 'L’utente ha risposto con parole sue invece di scegliere solo le opzioni: «Che colore?» → verde acqua; «Quali file?» → a.ts' });
   });
 
-  it('a message streamed right before a question is finished when the question opens (its commands show on the Regia card)', async () => {
+  it('a message streamed right before a question is finished when the question opens (its commands show on the Orchestrator card)', async () => {
     const { s, sink } = start();
     s.send('ask cmd');
     await waitFor(() => sink.pendings[0], 'question');

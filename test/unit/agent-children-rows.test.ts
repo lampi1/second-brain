@@ -51,7 +51,7 @@ describe('child strip selection', () => {
       states.forEach((s, i) => r.observe({ ...row(`c${i}`, s, 10), kind }));
       return r.snapshot();
     };
-    const idle = { state: 'idle' as const, pending: 0, isRegia: false };
+    const idle = { state: 'idle' as const, pending: 0, isOrchestrator: false };
     expect(waitsOnChildren(children(['running', 'completed']))).toBe(true);
     expect(stateInfo({ ...idle, agentChildren: children(['running']) })).toEqual({ label: 'in attesa', tone: 'run' });
     expect(stateInfo({ ...idle, agentChildren: children(['waiting']) }).label).toBe('in attesa');

@@ -27,7 +27,7 @@ export type ChatRoute = Pick<RoutedNewChat, 'kind' | 'area' | 'routeText'>;
 export interface DiscussBridge {
   /** Open the Orchestrator next to the page with `text` as a draft in its input, not sent. `onSent` runs when the user sends
    *  it. False when no Orchestrator is open. */
-  draftToRegia(text: string, onSent: (chat: { id: string; title: string }) => void): boolean;
+  draftToOrchestrator(text: string, onSent: (chat: { id: string; title: string }) => void): boolean;
   /** Create a work chat that starts with `prompt` (in `opts.cwd`, else the brain folder) and say so with a toast; null
    *  when it was not created. The routing table picks its engine, model and effort (ADR 0032), with what `opts.route` says. */
   newChat(title: string, prompt: string, opts?: { cwd?: string; route?: ChatRoute }): Promise<{ id: string; title: string } | null>;
@@ -75,19 +75,19 @@ const IconCheck = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5" /></svg>
 );
 
-type Box = null | { kind: 'regia' | 'chat'; text: string };
+type Box = null | { kind: 'orchestrator' | 'chat'; text: string };
 
 /** "Discutine" + "Apri una chat" + the "Discussa" mark, for one idea, reflection, error pattern or number. */
-export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
+export function DiscussBar({ topic, testId = 'bx-discuss', onOrchestrator }: {
   topic: Topic;
   testId?: string;
   /** after the draft went to the Orchestrator (the Idee peek steps aside so the docked Orchestrator shows) */
-  onRegia?: () => void;
+  onOrchestrator?: () => void;
 }) {
   const bridge = useContext(DiscussContext);
   const chats = useAppChats();
   // the Orchestrator even when closed: after a restart every chat is 'closed' until its first message, and it resumes on send
-  const regia = chats?.find(c => c.isRegia) ?? null;
+  const orchestrator = chats?.find(c => c.isOrchestrator) ?? null;
   const done = useDiscussed()[topicKey(topic)] ?? [];
   const [box, setBox] = useState<Box>(null);
   const [busy, setBusy] = useState(false);
@@ -105,12 +105,12 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
     if (bridge) setBox(null); // the keyboard goes to the Orchestrator: no hidden box left to catch Esc
     const text = discussText(topic, await topicLine(topic));
     if (bridge) {
-      const ok = bridge.draftToRegia(text, chat => markDiscussed(key, { via: 'regia', chatId: chat.id, chatTitle: chat.title, at: Date.now() }));
-      if (!ok) toast(t('brainPages.discuss.errorRegiaNotOpen'));
-      else onRegia?.();
+      const ok = bridge.draftToOrchestrator(text, chat => markDiscussed(key, { via: 'orchestrator', chatId: chat.id, chatTitle: chat.title, at: Date.now() }));
+      if (!ok) toast(t('brainPages.discuss.errorOrchestratorNotOpen'));
+      else onOrchestrator?.();
       return;
     }
-    setBox({ kind: 'regia', text });
+    setBox({ kind: 'orchestrator', text });
   };
   const openChat = async () => {
     setErr(null);
@@ -129,10 +129,10 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
         markDiscussed(key, { via: 'chat', chatId: c.id, chatTitle: c.title, at: Date.now() });
         if (!bridge) toast(t('brainPages.discuss.successChatCreated', { title: c.title }));
       } else {
-        if (!regia) throw new Error(t('brainPages.discuss.errorNoRegia'));
-        await window.sb.invoke('chat:send', { chatId: regia.id, text: box.text.trim() });
-        markDiscussed(key, { via: 'regia', chatId: regia.id, chatTitle: 'Orchestrator', at: Date.now() });
-        toast(t('brainPages.discuss.successRegiaSent'));
+        if (!orchestrator) throw new Error(t('brainPages.discuss.errorNoOrchestrator'));
+        await window.sb.invoke('chat:send', { chatId: orchestrator.id, text: box.text.trim() });
+        markDiscussed(key, { via: 'orchestrator', chatId: orchestrator.id, chatTitle: 'Orchestrator', at: Date.now() });
+        toast(t('brainPages.discuss.successOrchestratorSent'));
       }
       closeBox();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
@@ -140,13 +140,13 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   };
 
   const last = done[0];
-  const lastChat = last ? chats?.find(c => c.id === last.chatId) ?? (last.via === 'regia' ? regia : null) : null;
+  const lastChat = last ? chats?.find(c => c.id === last.chatId) ?? (last.via === 'orchestrator' ? orchestrator : null) : null;
   const show = (id: string) => { if (bridge) bridge.showChat(id); };
   return (
     <div className="bx-discuss" data-testid={testId}>
       <div className="bx-discuss-row">
-        <button type="button" className="bx-btn primary" onClick={() => void discuss()} data-testid={`${testId}-regia`} aria-label={t('brainPages.discuss.discussButtonLabel', { topic: titleOf(topic) })}
-          title={regia ? t('brainPages.discuss.discussButtonTitle') : t('brainPages.discuss.discussButtonTitleDisabled')} disabled={!!chats && !regia && !!bridge}>
+        <button type="button" className="bx-btn primary" onClick={() => void discuss()} data-testid={`${testId}-orchestrator`} aria-label={t('brainPages.discuss.discussButtonLabel', { topic: titleOf(topic) })}
+          title={orchestrator ? t('brainPages.discuss.discussButtonTitle') : t('brainPages.discuss.discussButtonTitleDisabled')} disabled={!!chats && !orchestrator && !!bridge}>
           <IconChat /> {t('brainPages.discuss.discussBtn')}
         </button>
         <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
@@ -160,15 +160,15 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
             <IconCheck />
             <span>{topic.kind === 'quote' ? t('brainPages.discuss.discussedNeutral') : t('brainPages.discuss.discussed')}{done.length > 1 ? t('brainPages.discuss.discussedTimes', { n: done.length }) : ''}</span>
             {lastChat && bridge
-              ? <button type="button" className="bx-go" onClick={() => show(lastChat.id)} data-testid={`${testId}-open`}>{last.via === 'regia' ? t('brainPages.discuss.withRegia') : t('brainPages.discuss.inChat', { title: lastChat.title })} →</button>
-              : <span className="muted">{last.via === 'regia' ? t('brainPages.discuss.withRegia') : <>{t('brainPages.discuss.inChat', { title: last.chatTitle })}{chats && !lastChat ? ' ' + t('brainPages.discuss.chatClosed') : ''}</>}</span>}
+              ? <button type="button" className="bx-go" onClick={() => show(lastChat.id)} data-testid={`${testId}-open`}>{last.via === 'orchestrator' ? t('brainPages.discuss.withOrchestrator') : t('brainPages.discuss.inChat', { title: lastChat.title })} →</button>
+              : <span className="muted">{last.via === 'orchestrator' ? t('brainPages.discuss.withOrchestrator') : <>{t('brainPages.discuss.inChat', { title: last.chatTitle })}{chats && !lastChat ? ' ' + t('brainPages.discuss.chatClosed') : ''}</>}</span>}
             <span className="muted">· {fmt.day(localDay(last.at))}</span>
           </span>
         )}
       </div>
       {box && (
-        <div className="bx-confirm bx-discuss-box" role="group" aria-label={box.kind === 'chat' ? t('brainPages.discuss.boxAriaLabelChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxAriaLabelRegia')} data-testid={`${testId}-box`}>
-          <p className="small"><b>{box.kind === 'chat' ? t('brainPages.discuss.boxTitleChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxTitleRegia')}</b> <span className="muted">· {box.kind === 'chat' ? t('brainPages.discuss.boxDescChat') : t('brainPages.discuss.boxDescRegia')}</span></p>
+        <div className="bx-confirm bx-discuss-box" role="group" aria-label={box.kind === 'chat' ? t('brainPages.discuss.boxAriaLabelChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxAriaLabelOrchestrator')} data-testid={`${testId}-box`}>
+          <p className="small"><b>{box.kind === 'chat' ? t('brainPages.discuss.boxTitleChat', { title: chatTitle(topic) }) : t('brainPages.discuss.boxTitleOrchestrator')}</b> <span className="muted">· {box.kind === 'chat' ? t('brainPages.discuss.boxDescChat') : t('brainPages.discuss.boxDescOrchestrator')}</span></p>
           <textarea ref={ta} className="bx-textarea" rows={box.kind === 'chat' ? 4 : 7} value={box.text} maxLength={4000} aria-label={t('brainPages.discuss.boxLabel')}
             onChange={e => setBox({ ...box, text: e.target.value })}
             onKeyDown={e => {
@@ -177,7 +177,7 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
           {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
           <div className="bx-row">
             <button type="button" className="bx-btn primary" disabled={busy || !box.text.trim()} onClick={() => void confirm()} data-testid={`${testId}-confirm`}>
-              {box.kind === 'chat' ? t('brainPages.discuss.boxConfirmChat') : t('brainPages.discuss.boxConfirmRegia')}
+              {box.kind === 'chat' ? t('brainPages.discuss.boxConfirmChat') : t('brainPages.discuss.boxConfirmOrchestrator')}
             </button>
             <button type="button" className="bx-btn ghost" onClick={() => closeBox()}>{t('brainPages.discuss.boxCancelBtn')}</button>
             <span className="sp" />
@@ -198,8 +198,8 @@ async function createDirect(title: string, prompt: string): Promise<{ id: string
   const cwd = info?.brainRoot;
   if (!cwd) return null;
   const settings = await window.sb.invoke('settings:get', undefined);
-  const h = settings.regiaChats.harness;
-  const model = h === 'claude' ? settings.regiaChats.claudeModel : h === 'cursor' ? settings.regiaChats.cursorModel : '';
+  const h = settings.orchestratorChats.harness;
+  const model = h === 'claude' ? settings.orchestratorChats.claudeModel : h === 'cursor' ? settings.orchestratorChats.cursorModel : '';
   const c = await window.sb.invoke('chat:createRouted', { title, prompt, cwd, defaults: { harness: h, model } });
   return { id: c.id, title: c.title };
 }

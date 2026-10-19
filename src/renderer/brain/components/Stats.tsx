@@ -8,7 +8,7 @@
 import { useContext, type ReactNode } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import{ModelOrigin}from'../../components/ModelOrigin';
-import { chatName } from '@shared/regia';
+import { chatName } from '@shared/orchestrator';
 import { fmt } from '../lib/format';
 import { short } from '../lib/text';
 import { trend, typeLabel, type ErrorGroup, type ErrorPatterns as Patterns, type Trend } from '../lib/stats';
@@ -40,7 +40,7 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 export function chatFor(name: string, chats: ChatSummary[] | null): ChatSummary | null {
   const n = norm(name);
   if (!n || !chats) return null;
-  return chats.find(c => norm(c.title) === n || norm(chatName(c)) === n) ?? (n === 'regia' ? chats.find(c => c.isRegia) ?? null : null);
+  return chats.find(c => norm(c.title) === n || norm(chatName(c)) === n) ?? (n === 'orchestrator' ? chats.find(c => c.isOrchestrator) ?? null : null);
 }
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {

@@ -9,7 +9,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { launchDemo, shot } from './helpers';
 
 let app: ElectronApplication, page: Page;
-test.beforeAll(async () => { ({ app, page } = await launchDemo({ regia: true })); });
+test.beforeAll(async () => { ({ app, page } = await launchDemo({ orchestrator: true })); });
 test.afterAll(async () => { await app?.close(); });
 
 test('Guida opens from the left rail and from Ctrl+K, with the prominent card first', async () => {
@@ -60,7 +60,7 @@ test('a card opens a panel with points, analogy, technical details and sources; 
 
 test('«Discutine» docks the Orchestrator with the card as an unsent draft and the Explainer instruction', async () => {
   await page.getByTestId('guide-discuss-runs').click();
-  const input = page.getByTestId('regia-input');
+  const input = page.getByTestId('orchestrator-input');
   await expect(input).toBeFocused();
   await expect(input).toHaveValue(/agent_catalog/);
   await expect(input).toHaveValue(/"Explainer"/);

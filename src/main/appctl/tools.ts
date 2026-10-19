@@ -27,12 +27,11 @@ import { errText, log, redact } from '../log';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { timerSnapshot } from '../timers';
-import { chatName, regiaOfChat } from '../../shared/regia';
+import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { isLongChat } from '../../shared/context';
 import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
-import { claimsAlias } from '../chats/mail';
 import type { PullResult } from '../update/source';
 import { GENERAL_AGENT_ID, ORCHESTRATOR_AGENT_ID, type AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
@@ -62,8 +61,6 @@ export interface AppCtlDeps {
   runs?: (chatId?: string) => RunInfo[];
   /** the "Comando da eseguire" requests (shell blocks left for the user), listed with the other open requests */
   commandAsks?: () => PendingRequest[];
-  /** Only the authenticated per-chat mount may enable the canonical coordinator's union scope. */
-  unified?: boolean;
   /** the app's code folder (update/source.ts): a chat there works on the app (routing area App); pull = app_update_code */
   code?: { repo: () => string | null; inRepo?: (dir: string) => Promise<boolean>; pull?: () => Promise<PullResult> };
   /** the Task page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
@@ -98,7 +95,7 @@ const labelled = (text: string) => (text.split('\n', 1)[0] ?? '').includes('non 
 
 const brief = (c: ChatSummary, warn: number) => ({
   effort: c.effortStatus ?? { supported: !!engineOf(c.harness)?.caps.effort, requested: c.effort, submitted: null, effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: null },
-  id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isRegia: c.isRegia,
+  id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isOrchestrator: c.isOrchestrator,
   ...(c.background ? { background: c.background } : {}),
   ...(c.work ? {work:c.work} : {}), last: c.lastText.slice(0, 200),
   ...(c.contextTokens ? { contextTokens: c.contextTokens, ...(c.contextEstimated ? { contextEstimated: true } : {}), long: isLongChat(c, warn) } : {}),
@@ -116,31 +113,29 @@ export function recentClosed(list: ChatSummary[], now = Date.now()): ChatSummary
   return list.filter(c => c.closedAt && now - c.closedAt <= RECENT_CLOSED_MS).sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)).slice(0, 20);
 }
 
-/** The per-Orchestrator endpoint /mcp/app/r/:chatId/:token answers only an open work Orchestrator presenting its own token (ADR
- *  0021): the id names the caller, whose engine decides the rule for chats across engines, so it may not be picked by anyone else. */
-export function regiaEndpointAuth(tokens: { check(key: string, token: string): boolean }, list: () => Pick<ChatSummary, 'id' | 'isRegia'>[]) {
-  return (p: Record<string, string>): boolean => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token) && list().some(c => c.id === p.chatId && c.isRegia);
+/** The Orchestrator's endpoint /mcp/app/o/:chatId/:token answers only the open Orchestrator presenting its own token: the id
+ *  names the caller, whose engine decides the rule for chats across engines, so it may not be picked by anyone else. */
+export function orchestratorEndpointAuth(tokens: { check(key: string, token: string): boolean }, list: () => Pick<ChatSummary, 'id' | 'isOrchestrator'>[]) {
+  return (p: Record<string, string>): boolean => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token) && list().some(c => c.id === p.chatId && c.isOrchestrator);
 }
 
-/** callerId = the work Orchestrator that calls (its own endpoint /mcp/app/r/<id>/<token>, ADR 0021); none or stale = the first
- *  Orchestrator (/mcp/app: test agents). The chats it creates answer to it; its messages are signed with its title. */
+/** callerId = the Orchestrator calling on its own endpoint (/mcp/app/o/<id>/<token>); none = /mcp/app (test agents), which acts
+ *  for the Orchestrator without its write tools. Its messages are signed with its title. */
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
-  const unified = () => d.unified === true && !!callerId && d.chats.list().some(c => c.id === callerId && c.isRegia && c.orchestrator && !c.closedAt);
+  /** true when this endpoint is the Orchestrator's own (/mcp/app/o/<id>/<token>, checked by orchestratorEndpointAuth) */
+  const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
   const mine = (_c: ChatSummary) => true;
-  /** the caller: the work Orchestrator of this endpoint */
+  /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => {
-    const all = d.chats.list();
-    if (unified()) return all.find(c => c.id === callerId);
-    const id = regiaOfChat(all.find(c => c.id === callerId), all);
-    return all.find(c => c.id === id);
+    return d.chats.list().find(c => c.isOrchestrator && !c.closedAt);
   };
   /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
-    ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified, () => d.agents?.().profiles.filter(p => p.origin.kind === 'preset' && p.status === 'active' && p.routable !== false && p.id !== ORCHESTRATOR_AGENT_ID).map(p => p.id) ?? []) : []),
+    ...(d.agentAuthoring && authed() && callerId ? authoringTools(d.agentAuthoring, callerId, authed, () => d.agents?.().profiles.filter(p => p.origin.kind === 'preset' && p.status === 'active' && p.routable !== false && p.id !== ORCHESTRATOR_AGENT_ID).map(p => p.id) ?? []) : []),
     ...(d.agentLearning ? [learnTool(d, callerId)] : []),
-    ...(d.brainScripts && unified() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
+    ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',
@@ -162,7 +157,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run:async a=>{
         const id=guard(String(a.chatId??'')),target=d.chats.list().find(c=>c.id===id&&mine(c));
         const owner=caller();
-        if(!target||!owner||(target.id!==owner.id&&target.regiaOf!==owner.id))throw new Error('Agente fuori dal tuo gruppo.');
+        if(!target||!owner)throw new Error('Agente fuori dal tuo gruppo.');
         if(!['assigned','waiting-mail','completed'].includes(String(a.status)))throw new Error('Stato incarico non valido.');
         const result=await d.chats.set(id,{workStatus:a.status as 'assigned'|'waiting-mail'|'completed'});
         return {chatId:id,work:result.work};
@@ -230,7 +225,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const id = String(a.chatId ?? '');
         const c = d.chats.list().find(x => x.id === id);
         if (!c || !mine(c)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
-        if (c.isRegia) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
+        if (c.isOrchestrator) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
         if (c.pending > 0) throw new Error(`«${c.title}» aspetta una risposta dell’utente: chiudila solo lui`);
         await d.chats.close(id);
         log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
@@ -266,18 +261,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         const target = need(chatId);
-        if (target.isRegia) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
+        if (target.isOrchestrator) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
-        const regia = caller();
-        // several Orchestrators (ADR 0021): only the Orchestrator the chat answers to, where its question shows, closes it
-        if (regia) {
-          const all = d.chats.list();
-          const owner = regiaOfChat(target, all);
-          if (owner !== regia.id) throw new Error(`bloccato: questa domanda è dell’Orchestrator «${chatName(all.find(c => c.id === owner) ?? regia)}»: la risponde l'utente lì`);
-        }
-        if (!regia || !decidedSince(regia.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
+        const orchestrator = caller();
+        if (!orchestrator || !decidedSince(orchestrator.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
         const given = a.answers && typeof a.answers === 'object' && !Array.isArray(a.answers) ? a.answers as Record<string, unknown> : {};
         const asked = req.questions.map(q => q.question);
         const text = (v: unknown) => (Array.isArray(v) ? v.map(String).join(', ') : String(v ?? '')).trim();
@@ -365,22 +354,22 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
         const links: { parentRunId?: string; reviewOf?: string; reworkOf?: string; goal?: string; agentVersion?: number } = {};
         for (const key of ['parentRunId', 'reviewOf', 'reworkOf', 'goal'] as const) if (a[key] !== undefined) {
-          if (!unified() || typeof a[key] !== 'string' || !a[key].trim() || a[key].length > (key === 'goal' ? 2000 : 80)) throw new Error('Invalid or unauthorized run link/goal.');
+          if (!authed() || typeof a[key] !== 'string' || !a[key].trim() || a[key].length > (key === 'goal' ? 2000 : 80)) throw new Error('Invalid or unauthorized run link/goal.');
           links[key] = a[key];
         }
         if (a.agentVersion !== undefined) {
-          if (!unified() || !Number.isSafeInteger(a.agentVersion) || Number(a.agentVersion) < 1 || typeof a.agentId !== 'string') throw new Error('Invalid agent version.');
+          if (!authed() || !Number.isSafeInteger(a.agentVersion) || Number(a.agentVersion) < 1 || typeof a.agentId !== 'string') throw new Error('Invalid agent version.');
           links.agentVersion = Number(a.agentVersion);
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
         if (!cwd) throw new Error('nessuna cartella: il cervello non è collegato');
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
-        if (a.regia !== undefined && a.regia !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
+        if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
         const title = String(a.title ?? '').trim().slice(0, 80), prompt = String(a.prompt ?? '').trim();
         if (!title || !prompt || prompt.length > 8000) throw new Error('title and prompt are required (prompt ≤ 8000 chars)');
         // a former Orchestrator's title is the Orchestrator's mail box: a new chat may not take its mail
-        if (claimsAlias(title, d.chats.list())) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
+        if (title.trim().toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
         if (a.where !== undefined && a.where !== 'local' && a.where !== 'cloud') throw new Error('where: local | cloud');
         if (a.where === 'cloud') {
@@ -404,8 +393,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         let selected: AgentCatalog['profiles'][number] | undefined;
         // the caller is the Orchestrator (the only chat given these tools), on any engine: a chat on another engine spends that
         // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
-        const regia = caller();
-        const from = regia?.harness ?? 'claude';
+        const orchestrator = caller();
+        const from = orchestrator?.harness ?? 'claude';
         // agent first (ADR 0078): who chose the agent, and the classifier's view when it chose (or found none)
         let chosenBy: RouteAgent['chosenBy'] = links.parentRunId ? 'parent' : 'orchestrator';
         let scored: { score: number; threshold: number; mode: RouteAgent['mode'] } | undefined;
@@ -455,7 +444,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app,
           ask: selected ? {} : { ...(said ? { harness: said } : {}), ...(askedModel !== undefined ? { model: askedModel } : {}), ...(askedEffort !== undefined ? { effort: askedEffort as Effort | null } : {}), ...(text(a.reason) ? { reason: text(a.reason)!.slice(0, 300) } : {}) },
-          defaults: { harness: s.regiaChats.harness, models: { claude: s.regiaChats.claudeModel || null, cursor: s.regiaChats.cursorModel || null }, effort: s.regiaChats.claudeEffort || null },
+          defaults: { harness: s.orchestratorChats.harness, models: { claude: s.orchestratorChats.claudeModel || null, cursor: s.orchestratorChats.cursorModel || null }, effort: s.orchestratorChats.claudeEffort || null },
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
         const { harness, model, effort } = routed;
@@ -464,10 +453,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (refused) throw new Error(`bloccato: ${refused}`);
         // a work chat answers to the Orchestrator that opens it: its questions go to her tab, and it knows whom to write to
         const parentChat = links.parentRunId ? d.chats.list().find(c => c.run?.runId === links.parentRunId) : undefined;
-        const yours = (regia ? `\n\nIl tuo Orchestrator è «${regia.title}»: scrivigli con send_to_chat.` : '')
+        const yours = (orchestrator ? `\n\nIl tuo Orchestrator è «${orchestrator.title}»: scrivigli con send_to_chat.` : '')
           + (parentChat ? `\nSei un sotto-agente di «${parentChat.title}»: quando hai finito mandagli il risultato con send_to_chat.` : '')
           + '\nPer un sotto-compito puoi avviare un agente del catalogo come tuo sotto-agente: agent_catalog (con request) e poi agent_start_subagent.';
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, ...links, regia: false, ...(selected ? { agentId: selected.id } : {}), ...(regia ? { regiaOf: regia.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}${yours}\n\n${prompt}`, ...links, orchestrator: false, ...(selected ? { agentId: selected.id } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent');
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
@@ -484,15 +473,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // it is already running — an agent never starts a stopped engine of another kind (review 2026-10-11).
         const target = d.chats.list().find(c => c.id === String(a.chatId));
         if (target && !mine(target)) throw new Error(`chat non trovata: ${target.id} (vedi app_chats)`);
-        const regia = caller();
-        const from = regia?.harness ?? 'claude';
+        const orchestrator = caller();
+        const from = orchestrator?.harness ?? 'claude';
         if (target && target.harness !== from) {
           const name = engineLabel(target.harness);
           const refused = crossRefusal(d.brain.settings(), from, target.harness);
           if (refused) throw new Error(`messaggio bloccato: ${refused}`);
           if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
         }
-        await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, regia?.title ?? 'Orchestrator');
+        await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator');
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
         return q ? queuedLine(q) : 'sent';
@@ -560,8 +549,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
   ];
-  // only the authenticated Orchestrator mount (/mcp/app/r/<id>/<token>): the plain mount is open to local processes
-  if (d.code?.pull && unified()) {
+  // only the authenticated Orchestrator mount (/mcp/app/o/<id>/<token>): the plain mount is open to local processes
+  if (d.code?.pull && authed()) {
     const pull = d.code.pull;
     tools.push({
       name: 'app_update_code',
@@ -569,9 +558,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       inputSchema: obj(),
       run: async () => {
-        const regia = caller();
-        if (!unified() || !regia) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
-        if (!decidedSince(regia.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
+        const orchestrator = caller();
+        if (!authed() || !orchestrator) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
+        if (!decidedSince(orchestrator.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
         return pull();
       },
     });
@@ -579,8 +568,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   return tools;
 
   /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's) */
-  function decidedSince(regiaId: string, at: number): boolean {
-    return d.chats.items(regiaId).some(i => i.at >= at && (
+  function decidedSince(orchestratorId: string, at: number): boolean {
+    return d.chats.items(orchestratorId).some(i => i.at >= at && (
       i.kind === 'user' ? !labelled(i.text) : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok'));
   }
 

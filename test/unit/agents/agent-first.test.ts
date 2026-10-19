@@ -31,11 +31,11 @@ function appTools(catalog: AgentCatalogService, classify: (req: string) => Agent
   const create = vi.fn(async (req: NewChat) => ({ id: `c${create.mock.calls.length}`, title: req.title, ...catalog.resolve(req).request }));
   const brain = {
     info: () => ({ brainRoot: tmp() }), routingInfo: () => ({ registry: null }),
-    settings: () => ({ engineOn: { claude: true }, engines: { claude: true }, messaging: {}, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
+    settings: () => ({ engineOn: { claude: true }, engines: { claude: true }, messaging: {}, orchestratorChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
     route: (req: RouteRequest) => routeChat(req, null, null, null),
   } as unknown as BrainService;
-  const chats = { list: () => [{ id: 'orch', title: 'Orchestrator', harness: 'claude', isRegia: true, orchestrator: true }], create } as unknown as ChatService;
-  const tools = appControlTools({ chats, browser: {} as BrowserService, brain, unified: true, agents: () => catalog.list(), classifyAgents: async r => classify(r),
+  const chats = { list: () => [{ id: 'orch', title: 'Orchestrator', harness: 'claude', isOrchestrator: true }], create } as unknown as ChatService;
+  const tools = appControlTools({ chats, browser: {} as BrowserService, brain, agents: () => catalog.list(), classifyAgents: async r => classify(r),
     agentStats: () => '4 run, 2 con esito, 100% riuscite', window: () => null, emitUi: () => {}, version: '0' }, 'orch');
   return { create, tool: tools.find(t => t.name === 'app_create_chat')! };
 }
@@ -83,12 +83,12 @@ describe('app_create_chat without agentId (#70)', () => {
 describe('agent_start_subagent (#70)', () => {
   const run = (over: Partial<AgentRun>): AgentRun => ({ runId: 'run-w', chatId: 'w', agentId: 'agent-x', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: 1,
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0, tokens: null, ...over });
-  const chat = (over: Partial<ChatSummary>) => ({ id: 'w', title: 'Bug · Worker', cwd: '/repo', harness: 'claude', isRegia: false, regiaOf: 'orch', ...over }) as ChatSummary;
+  const chat = (over: Partial<ChatSummary>) => ({ id: 'w', title: 'Bug · Worker', cwd: '/repo', harness: 'claude', isOrchestrator: false, ...over }) as ChatSummary;
 
   it('starts a catalog agent through the worker\'s Orchestrator, linked to the worker\'s open run', async () => {
     const create = vi.fn(async () => ({ chatId: 'child' }));
     let runs: AgentRun[] = [run({})];
-    const [tool] = subagentTools({ chats: () => [chat({}), chat({ id: 'orch', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaOf: undefined })], runs: () => runs, create });
+    const [tool] = subagentTools({ chats: () => [chat({}), chat({ id: 'orch', title: 'Orchestrator', isOrchestrator: true })], runs: () => runs, create });
     await expect(Promise.resolve(tool!.run({ agentId: 'agent-review', title: 'Bug · Review', prompt: 'Review the fix' }, ctx('w')))).resolves.toContain('child');
     expect(create).toHaveBeenCalledWith('orch', { agentId: 'agent-review', title: 'Bug · Review', prompt: 'Review the fix', parentRunId: 'run-w', goal: 'Review the fix', cwd: '/repo' });
     // bounds: three open children, two levels deep, an open run, a work chat
@@ -106,10 +106,10 @@ describe('agent_start_subagent (#70)', () => {
     const reviewer = catalog.save(draft({ name: 'Reviewer' }));
     const create = vi.fn(async (req: NewChat) => ({ id: 'child', title: req.title, ...catalog.resolve(req).request }));
     const brain = { info: () => ({ brainRoot: tmp() }), routingInfo: () => ({ registry: null }),
-      settings: () => ({ engineOn: { claude: true }, engines: { claude: true }, messaging: {}, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
+      settings: () => ({ engineOn: { claude: true }, engines: { claude: true }, messaging: {}, orchestratorChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
       route: (req: RouteRequest) => routeChat(req, null, null, null) } as unknown as BrainService;
-    const chats = { list: () => [{ id: 'orch', title: 'Orchestrator', harness: 'claude', isRegia: true, orchestrator: true }, { id: 'w', title: 'Bug · Worker', harness: 'claude', run: { runId: 'run-w' } }], create } as unknown as ChatService;
-    const tool = appControlTools({ chats, browser: {} as BrowserService, brain, unified: true, agents: () => catalog.list(), window: () => null, emitUi: () => {}, version: '0' }, 'orch').find(t => t.name === 'app_create_chat')!;
+    const chats = { list: () => [{ id: 'orch', title: 'Orchestrator', harness: 'claude', isOrchestrator: true }, { id: 'w', title: 'Bug · Worker', harness: 'claude', run: { runId: 'run-w' } }], create } as unknown as ChatService;
+    const tool = appControlTools({ chats, browser: {} as BrowserService, brain, agents: () => catalog.list(), window: () => null, emitUi: () => {}, version: '0' }, 'orch').find(t => t.name === 'app_create_chat')!;
     await tool.run({ agentId: reviewer.id, title: 'Bug · Review', prompt: 'Review', parentRunId: 'run-w', cwd: tmp() });
     expect(create.mock.calls[0]?.[0]).toMatchObject({ agentId: reviewer.id, parentRunId: 'run-w', route: { source: 'agent', agent: { chosenBy: 'parent' } } });
     expect(create.mock.calls[0]?.[0].prompt).toContain('Sei un sotto-agente di «Bug · Worker»');

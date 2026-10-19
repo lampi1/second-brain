@@ -49,7 +49,7 @@ test('cloud agents: strips with badge and engine, expand + follow-up, Locale / C
     await expect(page.getByTestId('newchat')).toBeVisible();
     await page.getByTestId('newchat-prompt').fill('Rendi più veloce la ricerca prodotti');
     // a work agent, not an Orchestrator: only then is "Dove" offered
-    if (await page.getByTestId('newchat-regia').isChecked()) await page.getByTestId('newchat-regia').uncheck();
+    if (await page.getByTestId('newchat-orchestrator').isChecked()) await page.getByTestId('newchat-orchestrator').uncheck();
     await page.getByTestId('newchat-where-pick').getByRole('radio', { name: 'Cloud' }).click();
     await expect(page.getByTestId('newchat-cloud-cursor')).toContainText('pronto');
     await expect(page.getByTestId('newchat-cloud-cursor')).toHaveAttribute('aria-checked', 'true');

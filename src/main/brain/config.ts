@@ -64,8 +64,8 @@ export function fromSaved(raw: unknown): Settings {
     }
   }
   // the Orchestrator's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
-  const regiaEngine = (raw as { regiaChats?: { harness?: unknown } }).regiaChats?.harness;
-  if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine) && !REMOVED_ENGINES.has(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
+  const orchestratorEngine = (raw as { orchestratorChats?: { harness?: unknown } }).orchestratorChats?.harness;
+  if (typeof orchestratorEngine === 'string' && ENGINE_ID.test(orchestratorEngine) && !REMOVED_ENGINES.has(orchestratorEngine)) s = { ...s, orchestratorChats: { ...s.orchestratorChats, harness: orchestratorEngine } };
   return s;
 }
 

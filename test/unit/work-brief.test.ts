@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { WORK_PATHS, workBrief } from '../../src/shared/work-brief';
 
 describe('everyday work brief', () => {
-  it('preserves context/outcome for a Regia with an optional first message', () => {
+  it('preserves context/outcome for a Orchestrator with an optional first message', () => {
     const brief = workBrief({ path: 'client', request: ' ', context: 'A customer', outcome: 'Follow-up' });
     expect(brief).toContain('A customer'); expect(brief).toContain('Follow-up');
     expect(workBrief({ path: 'general', request: '', context: '', outcome: '' })).toBe('');

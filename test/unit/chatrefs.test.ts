@@ -9,7 +9,7 @@ type Tool = Extract<ChatItem, { kind: 'tool' }>;
 const tool = (id: string, name: string, input: unknown, output?: string, status: Tool['status'] = 'ok', summary = ''): Tool => ({ kind: 'tool', id, at: 1, name, summary, input, status, output });
 const asst = (id: string, text: string, streaming?: boolean): ChatItem => ({ kind: 'assistant', id, at: 1, text, ...(streaming ? { streaming } : {}) });
 const user = (id: string, text: string): ChatItem => ({ kind: 'user', id, at: 1, text });
-const chat = (id: string, title: string, more: Partial<ChatSummary> = {}): ChatSummary => ({ id, title, isRegia: false, ...more } as ChatSummary);
+const chat = (id: string, title: string, more: Partial<ChatSummary> = {}): ChatSummary => ({ id, title, isOrchestrator: false, ...more } as ChatSummary);
 
 describe('newchat line', () => {
   it('goes first, says its meaning, and comes off again', () => {
@@ -46,10 +46,10 @@ describe('toolChatRef', () => {
 });
 
 describe('textChatRefs', () => {
-  const chats = { r: chat('r', 'Regia', { isRegia: true }), a: chat('a', 'Ordini · Fix totale'), b: chat('b', 'Note'), c: chat('c', 'QA · Report') };
+  const chats = { r: chat('r', 'Orchestrator', { isOrchestrator: true }), a: chat('a', 'Ordini · Fix totale'), b: chat('b', 'Note'), c: chat('c', 'QA · Report') };
   const index = titleIndex(titlesKey(chats));
-  it('finds «titles» and bare "Area · cosa" titles, in order of appearance, never the Regia', () => {
-    expect(textChatRefs('Ho scritto a QA · Report e a «Note»; poi **Ordini · Fix totale**. La Regia resta.', index)).toEqual(['c', 'b', 'a']);
+  it('finds «titles» and bare "Area · cosa" titles, in order of appearance, never the Orchestrator', () => {
+    expect(textChatRefs('Ho scritto a QA · Report e a «Note»; poi **Ordini · Fix totale**. L’Orchestrator resta.', index)).toEqual(['c', 'b', 'a']);
   });
   it('does not take a short bare word, a longer title or an excluded chat', () => {
     expect(textChatRefs('Note sparse. Ordini · Fix totale2 no.', index)).toEqual([]);
@@ -78,7 +78,7 @@ describe('chatRefsOf', () => {
     expect(refs.has('a3')).toBe(false);
     expect(chatRefsOf(items, key).get('a2')).toBe(refs.get('a2')); // same array: the row does not re-render
   });
-  it('is empty outside a Regia (no key)', () => {
+  it('is empty outside a Orchestrator (no key)', () => {
     expect(chatRefsOf([asst('a1', '«QA · Report»')], '').size).toBe(0);
   });
 });

@@ -11,7 +11,7 @@ const idea = (o: Partial<Idea> = {}): Idea => ({
   data: '2026-10-05', area: 'personale', titolo: 'Diario vocale', stato: 'aperta', idea: 'Dettare tre righe a fine giornata.', come: '', perche: 'scrivere stanca',
   riprendere: '', fonte: '', per: '', notato: '', penso: '', sicurezza: '', nonso: '', testo: '', chi: 'Tu', scaduta: '', ...o,
 });
-const refl: Reflection = { data: '2026-10-09', chat: 'Regia', titolo: 'Troppo centralino', notato: 'giro troppi messaggi', penso: 'meglio delegare', sicurezza: 'media', nonso: '' };
+const refl: Reflection = { data: '2026-10-09', chat: 'Orchestrator', titolo: 'Troppo centralino', notato: 'giro troppi messaggi', penso: 'meglio delegare', sicurezza: 'media', nonso: '' };
 const I = (o?: Partial<Idea>): Topic => ({ kind: 'idea', idea: idea(o) });
 const R: Topic = { kind: 'reflection', reflection: refl };
 
@@ -47,14 +47,14 @@ describe('discussText', () => {
   });
   it('without a line names only the file', () => expect(discussText(I(), null)).toContain('(ideas.md, from 05/10'));
   it("an AI idea is called a suggestion, with its reasoning and source", () => {
-    const t = discussText(I({ chi: 'IA', notato: 'tre chat', penso: 'chiudere', fonte: 'IA · Regia · revisione' }), 3);
+    const t = discussText(I({ chi: 'IA', notato: 'tre chat', penso: 'chiudere', fonte: 'IA · Orchestrator · revisione' }), 3);
     expect(t).toContain("the AI's suggestion «Diario vocale»");
     expect(t).toContain('- Noticed: tre chat');
-    expect(t).toContain('- Born in: Regia · revisione');
+    expect(t).toContain('- Born in: Orchestrator · revisione');
   });
   it('a reflection quotes ai-reflections.md and its chat', () => {
     const t = discussText(R, 4);
-    expect(t).toContain('«Troppo centralino» (ai-reflections.md, line 4, from 09/10, chat Regia)');
+    expect(t).toContain('«Troppo centralino» (ai-reflections.md, line 4, from 09/10, chat Orchestrator)');
     expect(t).toContain('- You noticed: giro troppi messaggi');
   });
   it('long fields are shortened', () => expect(discussText(I({ idea: 'x'.repeat(1000) }), 1).length).toBeLessThan(800));
@@ -96,9 +96,9 @@ describe('discussed records', () => {
   });
   it('round-trips, newest first, one entry per chat', () => {
     const kv = mem();
-    let m = addDiscussed({}, 'k', { via: 'regia', chatId: 'r', chatTitle: 'Regia', at: 1 });
+    let m = addDiscussed({}, 'k', { via: 'orchestrator', chatId: 'r', chatTitle: 'Orchestrator', at: 1 });
     m = addDiscussed(m, 'k', { via: 'chat', chatId: 'c1', chatTitle: 'Idea · X', at: 2 });
-    m = addDiscussed(m, 'k', { via: 'regia', chatId: 'r', chatTitle: 'Regia', at: 3 });
+    m = addDiscussed(m, 'k', { via: 'orchestrator', chatId: 'r', chatTitle: 'Orchestrator', at: 3 });
     writeDiscussed(kv, m);
     const back = readDiscussed(kv);
     expect(back.k!.map(d => d.at)).toEqual([3, 2]);

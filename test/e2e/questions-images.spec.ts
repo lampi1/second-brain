@@ -39,7 +39,7 @@ for (const scheme of ['dark', 'light'] as const) {
     fs.writeFileSync(outside, png(40, 40, [200, 200, 0]));
 
     const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
-    for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+    for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
     const q = `Approvi il nuovo disegno? ![Prima (oggi)](${path.join(ev, '0-prima.png')}) ![Dopo](${path.join(ev, '1-proposta.png')})`;
     await demo(app, (d, id, req) => d.ask(id, req), 'qa', {
       type: 'question', tool: 'AskUserQuestion', title: q, detail: q, input: {},

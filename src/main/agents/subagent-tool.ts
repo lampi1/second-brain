@@ -17,8 +17,8 @@ export const MAX_DEPTH = 2;
 export interface SubagentDeps {
   chats: () => ChatSummary[];
   runs: () => readonly AgentRun[];
-  /** app_create_chat as the Orchestrator `regiaId` (its unified endpoint), with these arguments */
-  create: (regiaId: string, args: Record<string, unknown>) => Promise<unknown>;
+  /** app_create_chat as the Orchestrator `orchestratorId` (its unified endpoint), with these arguments */
+  create: (orchestratorId: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
 const text = (v: unknown, max: number, label: string): string => {
@@ -42,7 +42,7 @@ export function subagentTools(d: SubagentDeps): McpTool[] {
       if (Object.keys(a).some(k => !['agentId', 'title', 'prompt', 'goal', 'cwd'].includes(k))) throw new Error('agent_start_subagent: unknown argument.');
       const all = d.chats(), me = all.find(c => c.id === ctx.params.chatId);
       if (!me) throw new Error('This tool works only on a chat\'s own endpoint.');
-      if (me.isRegia) throw new Error('The Orchestrator starts agents with app_create_chat.');
+      if (me.isOrchestrator) throw new Error('The Orchestrator starts agents with app_create_chat.');
       const runs = d.runs();
       const own = runs.filter(r => r.chatId === me.id && r.endedAt === undefined).sort((x, y) => y.startedAt - x.startedAt)[0];
       if (!own) throw new Error('Your chat has no open agent run: ask your Orchestrator with send_to_chat instead.');
@@ -50,11 +50,11 @@ export function subagentTools(d: SubagentDeps): McpTool[] {
       for (let cur: AgentRun | undefined = own; cur?.parentRunId && depth <= MAX_DEPTH; depth++) cur = runs.find(r => r.runId === cur!.parentRunId);
       if (depth >= MAX_DEPTH) throw new Error(`Sub-agents go at most ${MAX_DEPTH} levels deep: do this part yourself or ask your Orchestrator.`);
       if (runs.filter(r => r.parentRunId === own.runId && r.endedAt === undefined).length >= MAX_OPEN_CHILDREN) throw new Error(`Already ${MAX_OPEN_CHILDREN} open sub-agents: wait for one to finish (agent_children).`);
-      const live = all.filter(c => c.isRegia && !c.closedAt);
-      const regia = live.find(c => c.id === me.regiaOf) ?? live.find(c => c.orchestrator);
-      if (!regia) throw new Error('No Orchestrator is open: the user must open it before sub-agents can start.');
+      const live = all.filter(c => c.isOrchestrator && !c.closedAt);
+      const orchestrator = live[0];
+      if (!orchestrator) throw new Error('No Orchestrator is open: the user must open it before sub-agents can start.');
       const prompt = text(a.prompt, 8000, 'prompt');
-      return JSON.stringify(await d.create(regia.id, {
+      return JSON.stringify(await d.create(orchestrator.id, {
         agentId: text(a.agentId, 80, 'agentId'), title: text(a.title, 80, 'title'), prompt,
         parentRunId: own.runId, goal: a.goal === undefined ? prompt.slice(0, 2000) : text(a.goal, 2000, 'goal'),
         cwd: a.cwd === undefined ? me.cwd : text(a.cwd, 1000, 'cwd'),

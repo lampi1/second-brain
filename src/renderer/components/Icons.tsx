@@ -76,11 +76,11 @@ export const IconSpinner = ({ size = 16, ...rest }: P) => (
   </svg>
 );
 
-/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Orchestrator (violet four-point star, the ✦ of its column; once a Regia "R"). */
-export function HarnessMark({ harness, regia, size = 20 }: { harness: Harness; regia?: boolean; size?: number }) {
-  if (regia) {
+/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Orchestrator (violet four-point star, the ✦ of its column; once a Orchestrator "R"). */
+export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Harness; orchestrator?: boolean; size?: number }) {
+  if (orchestrator) {
     return (
-      <span className="mark mark-regia" style={{ width: size, height: size }} aria-hidden="true">
+      <span className="mark mark-orchestrator" style={{ width: size, height: size }} aria-hidden="true">
         <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 14.4 9.6 21.5 12l-7.1 2.4L12 21.5l-2.4-7.1L2.5 12l7.1-2.4z" /></svg>
       </span>
     );

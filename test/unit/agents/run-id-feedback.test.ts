@@ -21,12 +21,12 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 
 const run = (over: Partial<AgentRun> = {}): AgentRun => ({ runId: 'r_0123456789ab', chatId: 'c_work000001', agentId: 'reviewer', version: 2, goal: 'g', startedBy: 'orchestrator', startedAt: 1,
   counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null, ...over });
-const chatRow = (id: string, extra: Record<string, unknown> = {}) => ({ id, harness: 'claude', state: 'idle', title: id, pending: 0, model: null, costUsd: 0, isRegia: false, lastText: '', ...extra });
+const chatRow = (id: string, extra: Record<string, unknown> = {}) => ({ id, harness: 'claude', state: 'idle', title: id, pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '', ...extra });
 const feedbackArgs = (runId: string) => ({ runId, verdict: 'partial', notes: 'Missed the tests', evidence: [] });
 
 describe('app_chats exposes the agent run of each agent chat', () => {
   it('lists runId, agentId, version and running/ended state; a plain chat has no run', async () => {
-    const list = [chatRow('c_work000001', { run: run() }), chatRow('c_done000001', { run: run({ runId: 'r_ba9876543210', chatId: 'c_done000001', endedAt: 5, endReason: 'completed' }) }), chatRow('c_cb79813eb5', { isRegia: true })];
+    const list = [chatRow('c_work000001', { run: run() }), chatRow('c_done000001', { run: run({ runId: 'r_ba9876543210', chatId: 'c_done000001', endedAt: 5, endReason: 'completed' }) }), chatRow('c_cb79813eb5', { isOrchestrator: true })];
     const chats = { list: () => list } as unknown as ChatService;
     const brain = { settings: () => ({}) } as unknown as BrainService;
     const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });

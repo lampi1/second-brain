@@ -11,7 +11,7 @@ const NOW = Date.parse('2026-10-13T18:00:00Z');
 const MIN = 60_000;
 const chat = (id: string, o: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: `Web · ${id}`, cwd: `C:\\repo\\${id}`, sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: NOW - 5 * MIN, browserTabIds: [], ...o,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: NOW - 5 * MIN, browserTabIds: [], ...o,
 });
 const q = (chatId: string, text: string, at = NOW - 12 * MIN): PendingRequest =>
   ({ id: `q-${chatId}`, chatId, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at, questions: [{ question: text, options: [], multiSelect: false }] }) as PendingRequest;
@@ -29,16 +29,16 @@ describe('app_digest', () => {
         chat('ord', { state: 'error', lastError: 'ECONNRESET' }),
         chat('map', { state: 'running', background: 2, contextTokens: 420_000 }),
         chat('qa', { lastText: 'Report pronto: 8 test su 9.', lastResult: { at: NOW - 30 * MIN, isError: false } }),
-        chat('regia', { isRegia: true, title: 'Regia' }),
+        chat('orchestrator', { isOrchestrator: true, title: 'Orchestrator' }),
       ],
-      pending: [q('sms', 'Apro il bug?')], selfId: 'regia', branch: cwd => (cwd.endsWith('map') ? 'feat/map' : null),
+      pending: [q('sms', 'Apro il bug?')], selfId: 'orchestrator', branch: cwd => (cwd.endsWith('map') ? 'feat/map' : null),
     });
     expect(t).toMatch(/^Stato alle \d\d:\d\d: 4 chat aperte, 1 richieste per l'utente, 1 in errore, 1 al lavoro\./);
     expect(t).toContain("- «Web · sms» (Claude, sms): aspetta l'utente da 12 min: domanda «Apro il bug?»");
     expect(t).toContain('- «Web · ord» (Claude, ord): ferma su un errore: ECONNRESET');
     expect(t).toContain('- «Web · map» (Claude, map): al lavoro (aggiornata 5 min fa) · ramo feat/map · contesto lungo 420k · 2 attività in background');
     expect(t).toContain('- «Web · qa» (Claude, qa): turno finito 30 min fa · ultima riga «Report pronto: 8 test su 9.»');
-    expect(t).not.toContain('Regia'); // the caller is left out
+    expect(t).not.toContain('Orchestrator'); // the caller is left out
     expect(t).toContain('Task (Azure DevOps): non letti dall\'app');
   });
 

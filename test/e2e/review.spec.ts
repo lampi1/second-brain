@@ -50,9 +50,9 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
 test('S2/S3/C8: Enter on "Apri" never answers; a toast action and the last answer give the keyboard back to the app', async () => {
   const { app, page } = await launchDemo();
   await goPage(page, 'costi');
-  await page.keyboard.press('Control+R'); // the Regia overlay: its card is the one popup, the layer waits
+  await page.keyboard.press('Control+R'); // the Orchestrator overlay: its card is the one popup, the layer waits
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  await demo(app, d => d.stop('regia'), null); // her request leaves ("Rispondi dopo" would quiet them all): QA and Feedback float
+  await demo(app, d => d.stop('orchestrator'), null); // her request leaves ("Rispondi dopo" would quiet them all): QA and Feedback float
   await expect.poll(async () => (await layerState(app)).cards).toBe(2);
   const layer = await layerPage(app);
   await layer.getByTestId('layer-open').focus();
@@ -83,17 +83,17 @@ test('C1: Ctrl+J from inside the layer to an app card brings the keyboard back t
   const { app, page } = await launchDemo();
   await goPage(page, 'costi');
   await page.keyboard.press('Control+R');
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0); // the Regia's card is the one popup
-  await page.keyboard.press('Control+J'); // Regia (dock, app)
-  await page.keyboard.press('Control+J'); // QA (layer): the popup moves there, the Regia's card steps aside
+  await expect.poll(async () => (await layerState(app)).cards).toBe(0); // the Orchestrator's card is the one popup
+  await page.keyboard.press('Control+J'); // Orchestrator (dock, app)
+  await page.keyboard.press('Control+J'); // QA (layer): the popup moves there, the Orchestrator's card steps aside
   await expect.poll(async () => (await focusOf(app)).layer).toBe(true);
   const layer = await layerPage(app);
   await layer.keyboard.press('Control+J'); // Feedback (layer)
   await expect(layer.locator('[data-request-key="feedback/feedback-p1"]')).toBeFocused();
-  await layer.keyboard.press('Control+J'); // back to the Regia: an app card
+  await layer.keyboard.press('Control+J'); // back to the Orchestrator: an app card
   await expect.poll(async () => (await focusOf(app)).app).toBe(true);
-  await expect(page.locator('[data-request-key="regia/regia-q1"]')).toBeFocused();
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0); // back in the Regia: the layer empties again
+  await expect(page.locator('[data-request-key="orchestrator/orchestrator-q1"]')).toBeFocused();
+  await expect.poll(async () => (await layerState(app)).cards).toBe(0); // back in the Orchestrator: the layer empties again
   await app.close();
 });
 
@@ -144,9 +144,9 @@ test('C3/C4/C7: free text for Cursor questions too, with a note; long details ke
   const long = Array.from({ length: 200 }, (_, i) => `echo riga ${i}`).join('\n');
   await demo(app, (d, c) => d.ask('mappa', { type: 'permission', tool: 'Bash', title: 'Bash · script lungo', detail: c, input: {} }), long);
   const layer = await layerPage(app);
-  await page.keyboard.press('Control+R'); // the Regia overlay: its card is the one popup
+  await page.keyboard.press('Control+R'); // the Orchestrator overlay: its card is the one popup
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  await demo(app, d => d.stop('regia'), null); // her request leaves: the others float, the long one queued
+  await demo(app, d => d.stop('orchestrator'), null); // her request leaves: the others float, the long one queued
   await expect.poll(async () => (await layerState(app)).cards).toBe(3);
   for (const key of ['qa/qa-q1', 'feedback/feedback-p1']) {
     await layer.locator(`[data-request-key="${key}"]`).focus();

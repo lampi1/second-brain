@@ -1,5 +1,5 @@
 // chat-prompt: the prompt of a new work chat, the same in Claude (chip spawn_task) and Cursor (link --open), so the
-// Orchestrator writes only the job (hub.md "New chats"; {{OWNER}} 2026-10-09, "la regia che mi apre altre chat con il prompt già
+// Orchestrator writes only the job (hub.md "New chats"; {{OWNER}} 2026-10-09, "l’Orchestrator che mi apre altre chat con il prompt già
 // ben scritto"). Fixed parts: role and title, what to read for the kind of work, where questions go, the now.md line
 // via mem.mjs, the wait-devops / env-lease line. Checks the title (`<Area> · <cosa>`). Also `show`: the full first
 // prompt of an old chat (Claude or Cursor), e.g. to reuse or review it. READ-ONLY.
@@ -70,8 +70,8 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   L.push(`- ${KIND_RULES[kind]}`);
   const me = slug(title);
   const INBOX = 'node "{{BRAIN}}/ops/tools/inbox.mjs"';
-  // 2026-10-13 "la regia mi serve principalmente per lo stato": each chat asks {{OWNER}} itself, the app pops it up or queues it
-  L.push(`- Domande e comandi per {{OWNER}} li fai tu, qui: domande con i pannelli (${harness === 'cursor' ? 'AskQuestion' : 'AskUserQuestion'}; 2-3 opzioni, la consigliata prima), comandi come un solo blocco \`powershell\` (l'app lo mostra con Esegui); prima, in 1-3 righe, il contesto e il perché (cosa vedrà, cosa cambia). L'app li mostra in popup o in coda: mai mandarli all’Orchestrator. All’Orchestrator solo risultati e stato con \`${INBOX} send --to "regia" --from "${me}" --file <testo scritto con Write>\`; query su DB di produzione: all’Orchestrator (DB, perché, percorso del .sql).`);
+  // 2026-10-13 "l’Orchestrator mi serve principalmente per lo stato": each chat asks {{OWNER}} itself, the app pops it up or queues it
+  L.push(`- Domande e comandi per {{OWNER}} li fai tu, qui: domande con i pannelli (${harness === 'cursor' ? 'AskQuestion' : 'AskUserQuestion'}; 2-3 opzioni, la consigliata prima), comandi come un solo blocco \`powershell\` (l'app lo mostra con Esegui); prima, in 1-3 righe, il contesto e il perché (cosa vedrà, cosa cambia). L'app li mostra in popup o in coda: mai mandarli all’Orchestrator. All’Orchestrator solo risultati e stato con \`${INBOX} send --to "orchestrator" --from "${me}" --file <testo scritto con Write>\`; query su DB di produzione: all’Orchestrator (DB, perché, percorso del .sql).`);
   // --app: the second-brain app delivers mail to its chats itself, mid-turn too: a `wait` would only wake the chat for
   // nothing every 2 h (2026-10-13 zero-token audit: 115 waits a week)
   if (app) L.push(`- Posta tra chat: te la consegna l'app second-brain da sé, anche a metà turno (niente \`wait\`); per scrivere usa send_to_chat. I passaggi operativi (build pronta, stack libero, fix pronto per la QA) li mandi tu direttamente alla chat interessata; domande e comandi per {{OWNER}} li fai tu qui (sopra).`);

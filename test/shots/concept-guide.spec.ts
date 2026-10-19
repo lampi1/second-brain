@@ -12,7 +12,7 @@ const OUT = path.resolve(import.meta.dirname, '..', '..', 'docs', 'screenshots',
 let app: ElectronApplication, page: Page;
 test.beforeAll(async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  ({ app, page } = await launchDemo({ regia: true }));
+  ({ app, page } = await launchDemo({ orchestrator: true }));
 });
 test.afterAll(async () => { await app?.close(); });
 

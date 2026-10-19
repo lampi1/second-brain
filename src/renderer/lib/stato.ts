@@ -6,7 +6,7 @@
 // siamo" ~8 times a day, ~80 s and millions of cache-read tokens each. Used by components/StatoDialog.tsx; unit-tested
 // in test/unit/stato.test.ts.
 import type { ChatSummary, DevopsPr, TasksState, Harness, PendingRequest } from '@shared/contract';
-import { chatName } from '@shared/regia';
+import { chatName } from '@shared/orchestrator';
 import { BUILD_WORDS, firstName, prWait, type Wait } from '../brain/lib/tasks';
 import { bugName, clean } from '../brain/lib/text';
 import type { Tone } from '../brain/components/ui';
@@ -14,7 +14,7 @@ import { stateInfo } from './format';
 
 export interface StatoAsk { key: string; kind: PendingRequest['type']; text: string; req: PendingRequest }
 export interface StatoChat {
-  id: string; name: string; harness: Harness; regia: boolean; app: boolean;
+  id: string; name: string; harness: Harness; orchestrator: boolean; app: boolean;
   state: { label: string; tone: string };
   lastLine: string; asks: StatoAsk[]; folder: string; branch: string | null; updatedAt: number;
 }
@@ -53,7 +53,7 @@ export function askText(r: PendingRequest): string {
 }
 
 // waiting first (the user unblocks them), then failed, working, starting, finished; the Orchestrators last among equals
-const RANK: Record<string, number> = { wait: 0, err: 1, run: 2, off: 3, done: 4, regia: 5 };
+const RANK: Record<string, number> = { wait: 0, err: 1, run: 2, off: 3, done: 4, orchestrator: 5 };
 
 /** The open chats (not closed, not being closed), the ones that wait for the user first, then newest. */
 export function statoChats(inp: StatoInput): StatoChat[] {
@@ -66,12 +66,12 @@ export function statoChats(inp: StatoInput): StatoChat[] {
     // a command left to run does not block the chat (ChatSummary.pending skips it) but still waits for the user
     const st = stateInfo({ ...c, pending: c.pending + asks.length });
     rows.push({
-      id, name: chatName(c), harness: c.harness, regia: c.isRegia === true, app: c.route?.area === 'App',
+      id, name: chatName(c), harness: c.harness, orchestrator: c.isOrchestrator === true, app: c.route?.area === 'App',
       state: st, lastLine: oneLine(c.lastError && c.state === 'error' ? c.lastError : c.lastText ?? ''), asks,
       folder: folderOf(c.cwd), branch: inp.branches[c.cwd] ?? null, updatedAt: c.updatedAt,
     });
   }
-  return rows.sort((a, b) => (RANK[a.state.tone] ?? 9) - (RANK[b.state.tone] ?? 9) || Number(a.regia) - Number(b.regia) || b.updatedAt - a.updatedAt);
+  return rows.sort((a, b) => (RANK[a.state.tone] ?? 9) - (RANK[b.state.tone] ?? 9) || Number(a.orchestrator) - Number(b.orchestrator) || b.updatedAt - a.updatedAt);
 }
 
 /** A PR is named after the bug (or work item) it fixes, what QA and colleagues know; else its own cleaned title. */

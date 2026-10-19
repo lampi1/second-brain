@@ -12,7 +12,7 @@ const EFFORTS: readonly unknown[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const LABELS: Record<RoutingRow['kind'], string> = {
   '*': 'Assistente', 'qa-run': 'Verifica', review: 'Revisione', 'bug-fix': 'Correzione bug',
   'ops-read': 'Lettura operativa', writing: 'Scrittura', triage: 'Triage', 'research-web': 'Ricerca web',
-  investigation: 'Indagine', 'app-feature': 'Sviluppo', regia: 'Orchestrator', altro: 'Altre attività',
+  investigation: 'Indagine', 'app-feature': 'Sviluppo', orchestrator: 'Orchestrator', altro: 'Altre attività',
 };
 
 /** What each legacy row's kind of work is for (whenToUse) and how to do it (instructions), in the user's language. */
@@ -27,7 +27,7 @@ const GUIDANCE: Record<RoutingRow['kind'], [string, string]> = {
   'research-web': ['Cercare informazioni sul web e riassumerle con le fonti.', 'Cerca in più fonti affidabili, confrontale, riassumi con i link. Distingui fatti verificati e opinioni.'],
   investigation: ['Indagare un problema o una domanda tecnica: leggere codice, log e dati e spiegare cosa succede.', 'Raccogli prove (codice, log, dati), formula ipotesi e verificale. Riporta la causa più probabile e cosa resta incerto. Non modificare senza che ti venga chiesto.'],
   'app-feature': ['Implementare una funzione nuova o una modifica del codice (feature, refactor, pull request).', 'Leggi le regole del repository, implementa con test, verifica con i controlli del progetto. Riporta cosa hai cambiato, dove e come l’hai verificato.'],
-  regia: ['Coordinare altri agenti su un lavoro diviso in parti.', 'Dividi il lavoro, assegna ogni parte e verifica i risultati prima di riportarli.'],
+  orchestrator: ['Coordinare altri agenti su un lavoro diviso in parti.', 'Dividi il lavoro, assegna ogni parte e verifica i risultati prima di riportarli.'],
   altro: ['Attività varie che non rientrano negli altri tipi di lavoro.', 'Chiarisci il risultato atteso, lavora per passi verificabili e riporta cosa hai fatto, con le prove.'],
 };
 /** The whenToUse and instructions of a legacy row's kind and areas (empty area list = any area). */

@@ -1,6 +1,6 @@
 // The Orchestrator widget's geometry and counts (ADR 0028): docked bottom-right, collapsed to a bar or expanded to a panel the
 // user resizes from its top-left corner. Pure, so unit tests check it without React; used by
-// components/RegiaOverlay.tsx (place, size, unread), App.tsx (the room the workspace leaves it) and lib/layer.ts (the
+// components/OrchestratorOverlay.tsx (place, size, unread), App.tsx (the room the workspace leaves it) and lib/layer.ts (the
 // global layer's cards and toasts sit beside it, never on it).
 import type { ChatItem } from '@shared/contract';
 
@@ -18,7 +18,7 @@ export function columnSize(saved: DockSize | null, v: { W: number; H: number; to
 export const BAR_H = 34, EDGE = 8, MIN_W = 340, MIN_H = 260, MIN_WORK = 420;
 
 /** The expanded panel's first size in a W×H window under a `top` px top bar: wide and low (the user, 2026-10-13: "la
- *  finestra della regia la voglio più larga e meno alta"): 42% of the width (480-820 px), 42% of the height under the
+ *  finestra dell’Orchestrator la voglio più larga e meno alta"): 42% of the width (480-820 px), 42% of the height under the
  *  top bar (300-560 px). DEFAULT_V: bumped when the default changes, so a size saved before is dropped once. */
 export const DEFAULT_V = 2;
 export function defaultSize(W: number, H: number, top: number): DockSize {

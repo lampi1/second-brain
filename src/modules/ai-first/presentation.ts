@@ -14,6 +14,6 @@ export function visibleGuideItems(items: readonly ChatItem[], chatId: string | n
   if (item?.kind !== 'user' || item.from || item.images || item.thumbs?.length || (item.text !== guidePrompt('it') && item.text !== guidePrompt('en'))) return items;
   return items.filter((_, i) => i !== index);
 }
-export function guideHasCenter(setup: SetupState | null, hasRegia: boolean): boolean {
-  return !hasRegia && setup?.status === 'draft' && !!guideChatId(setup);
+export function guideHasCenter(setup: SetupState | null, hasOrchestrator: boolean): boolean {
+  return !hasOrchestrator && setup?.status === 'draft' && !!guideChatId(setup);
 }

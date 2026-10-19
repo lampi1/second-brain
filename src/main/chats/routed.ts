@@ -32,17 +32,17 @@ const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' &&
  *  engines they may start now. `preview` = no exploration and no checks on the texts (the dialog asks while typing). */
 type Decided = { error: string } | { routed: Exclude<RouteResult, { error: string }>; title: string; prompt: string; cwd: string; harness: Harness };
 function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace, preview: boolean): Decided {
-  const regia = req?.regia === true;
+  const orchestrator = req?.orchestrator === true;
   // an Orchestrator's title is its mail address and a rename has no limit: kept whole, a work chat's capped
-  const title = text(req?.title, regia ? 1000 : 80), prompt = typeof req?.prompt === 'string' ? req.prompt.trim() : '', cwd = text(req?.cwd, 1000);
+  const title = text(req?.title, orchestrator ? 1000 : 80), prompt = typeof req?.prompt === 'string' ? req.prompt.trim() : '', cwd = text(req?.cwd, 1000);
   if (!preview) {
-    // an empty title is made from the prompt (or "Orchestrator · <name>") by the chat manager, as for chat:create
-    if (!prompt && !regia) throw new Error('il primo messaggio serve');
-    if (!own.byUser && prompt.length > (regia ? 40_000 : 8000)) throw new Error(`primo messaggio troppo lungo (≤ ${regia ? 40_000 : 8000} caratteri)`);
+    // an empty title is made from the prompt (or "Orchestrator") by the chat manager, as for chat:create
+    if (!prompt && !orchestrator) throw new Error('il primo messaggio serve');
+    if (!own.byUser && prompt.length > (orchestrator ? 40_000 : 8000)) throw new Error(`primo messaggio troppo lungo (≤ ${orchestrator ? 40_000 : 8000} caratteri)`);
     if (!cwd) throw new Error('nessuna cartella per la chat');
   }
-  // an Orchestrator's work is always 'regia', whatever its title or handoff says
-  const kind: TaskKind | undefined = regia ? 'regia' : req.kind && (TASK_KINDS as readonly string[]).includes(req.kind) ? req.kind as TaskKind : undefined;
+  // an Orchestrator's work is always 'orchestrator', whatever its title or handoff says
+  const kind: TaskKind | undefined = orchestrator ? 'orchestrator' : req.kind && (TASK_KINDS as readonly string[]).includes(req.kind) ? req.kind as TaskKind : undefined;
   const def = req.defaults ?? { harness: 'claude' };
   const harness: Harness = engineOf(def.harness) ? def.harness : 'claude';
   const effort = def.effort && (EFFORTS as readonly string[]).includes(def.effort) ? def.effort : null;
@@ -51,7 +51,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   const named = !!(said.harness || said.model || said.effort);
   // the engine the user names for a work chat needs only to be on; a row of the table (the AI writes it), the defaults
   // and an Orchestrator (an agent itself) need «Gli Orchestrator possono usare X» too
-  const userPick = (h: Harness) => !regia && h === said.harness;
+  const userPick = (h: Harness) => !orchestrator && h === said.harness;
   const refusal = (h: Harness): string | null => !d.engineOn(h) ? `${engineLabel(h)} è spento nelle impostazioni`
     : !userPick(h) && !d.agentsMayOpen(h) ? `gli Orchestrator non possono usare ${engineLabel(h)} (impostazione «Gli Orchestrator possono usare ${engineLabel(h)}»)` : null;
   const routed = d.route({
@@ -88,8 +88,8 @@ export async function createRoutedChat(d: RoutedChatDeps, req: RoutedNewChat, ow
   const wt = req.worktree === true && engineOf(routed.harness)?.caps.worktree ? { worktree: true } : {};
   const chat = await d.create({
     harness: routed.harness, cwd, ...(title ? { title } : {}), ...(prompt ? { prompt } : {}), ...(routed.model ? { model: routed.model } : {}), ...(routed.effort ? { effort: routed.effort } : {}),
-    ...pm, ...wt, ...(typeof req.regiaOf === 'string' && req.regiaOf ? { regiaOf: req.regiaOf } : {}),
-    ...(req.regia === true ? { regia: true, ...(text(req.replaces, 100) ? { replaces: text(req.replaces, 100) } : {}), ...(text(req.regiaName, 40) ? { regiaName: text(req.regiaName, 40) } : {}) } : {}),
+    ...pm, ...wt,
+    ...(req.orchestrator === true ? { orchestrator: true, ...(text(req.replaces, 100) ? { replaces: text(req.replaces, 100) } : {}) } : {}),
     route: routed.route,
   });
   const r = routed.route;

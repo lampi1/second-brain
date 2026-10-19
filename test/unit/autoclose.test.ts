@@ -7,7 +7,7 @@ import { closeAt, closedChats, dueChats, type Hold } from '../../src/renderer/li
 const MIN = 60_000;
 const chat = (p: Partial<ChatSummary> = {}): ChatSummary => ({
   id: 'c1', harness: 'claude', origin: 'app', title: 'Lavoro', cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], lastResult: { at: 1000, isError: false }, ...p,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], lastResult: { at: 1000, isError: false }, ...p,
 });
 const free: Hold = { queued: 0, draft: false, shown: false, browser: false, touchedAt: 0, asks: 0, running: false };
 
@@ -28,9 +28,9 @@ describe('auto-close rule', () => {
     expect(closeAt(chat(), { ...free, touchedAt: 9000 }, MIN)).toBe(9000 + MIN);
   });
 
-  it('never: the Regia, delay 0, already closed, not idle, a request open, background tasks, a last answer that waits for its work, an error, no result yet, a turn the user interrupted', () => {
+  it('never: the Orchestrator, delay 0, already closed, not idle, a request open, background tasks, a last answer that waits for its work, an error, no result yet, a turn the user interrupted', () => {
     const no: Partial<ChatSummary>[] = [
-      { isRegia: true }, { closedAt: 5 }, { state: 'running' }, { state: 'waiting' }, { state: 'error' }, { pending: 1 },
+      { isOrchestrator: true }, { closedAt: 5 }, { state: 'running' }, { state: 'waiting' }, { state: 'error' }, { pending: 1 },
       { background: 2 }, { lastError: 'x' }, { lastResult: { at: 1, isError: true } }, { lastResult: undefined },
       { lastResult: { at: 1, isError: false, interrupted: true } }, // the user stopped it: he is on it
       { waitsOnWork: true }, // its last answer waits for its agents ("Aspetto la QA…", 2026-10-16)

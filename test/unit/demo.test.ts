@@ -30,7 +30,7 @@ describe('demo seed', () => {
   it('is a rich, deterministic state', () => {
     const a = seed(FROZEN_EPOCH);
     expect(seed(FROZEN_EPOCH)).toEqual(a);
-    expect(a.chats.filter(c => c.isRegia).map(c => c.regiaName ?? 'Lavoro')).toEqual(['Lavoro']); // the one Orchestrator (ADR 0079: no app Regia)
+    expect(a.chats.filter(c => c.isOrchestrator).map(c => c.title)).toEqual(['Orchestrator']); // the one Orchestrator
     expect(new Set(a.chats.map(c => c.state))).toEqual(new Set(['waiting', 'running', 'idle', 'closed'])); // closed: the old finished ones (auto-close)
     expect(a.pending.map(p => p.type).sort()).toEqual(['permission', 'question', 'question']);
     expect(a.tabs.every(t => t.ownerChatId && a.chats.some(c => c.id === t.ownerChatId))).toBe(true);
@@ -81,20 +81,20 @@ describe('demo chats (frozen)', () => {
     expect(chats.items(c.id).some(i => i.kind === 'user')).toBe(true);
   });
 
-  it('the Regia answers with the current picture', async () => {
+  it('the Orchestrator answers with the current picture', async () => {
     const { chats } = make();
-    await chats.send('regia', 'Che si fa adesso?');
+    await chats.send('orchestrator', 'Che si fa adesso?');
     await flush();
-    const last = chats.items('regia').filter(i => i.kind === 'assistant').pop();
+    const last = chats.items('orchestrator').filter(i => i.kind === 'assistant').pop();
     expect(last && 'text' in last ? last.text : '').toMatch(/Ti aspettano \d/);
   });
 
-  it('a Regia in place of one (replaces) takes the role: the old one goes on as a normal chat', async () => {
+  it('a Orchestrator in place of one (replaces) takes the role: the old one goes on as a normal chat', async () => {
     const { chats, events } = make();
-    const c = await chats.create({ harness: 'cursor', cwd: 'C:\lavoro\brain', title: 'Regia', regia: true, replaces: 'regia' });
-    expect(chats.list().filter(x => x.isRegia).map(x => x.id)).toEqual([c.id]);
-    expect(chats.list().find(x => x.id === 'regia')?.isRegia).toBe(false);
-    expect(events.some(e => e.ch === 'chat:updated' && (e.p as { id: string; isRegia: boolean }).id === 'regia' && !(e.p as { isRegia: boolean }).isRegia)).toBe(true);
+    const c = await chats.create({ harness: 'cursor', cwd: 'C:\lavoro\brain', title: 'Orchestrator', orchestrator: true, replaces: 'orchestrator' });
+    expect(chats.list().filter(x => x.isOrchestrator).map(x => x.id)).toEqual([c.id]);
+    expect(chats.list().find(x => x.id === 'orchestrator')?.isOrchestrator).toBe(false);
+    expect(events.some(e => e.ch === 'chat:updated' && (e.p as { id: string; isOrchestrator: boolean }).id === 'orchestrator' && !(e.p as { isOrchestrator: boolean }).isOrchestrator)).toBe(true);
   });
 
   it('set changes model/effort/title and close removes the chat', async () => {
@@ -120,7 +120,7 @@ describe('demo chats (frozen)', () => {
     expect(n).toMatchObject({ title: 'App · Mappa 3D (2)', continuedFrom: { id: 'mappa' } });
     expect(chats.list().find(c => c.id === 'mappa')).toMatchObject({ continuedBy: { id: n.id }, state: 'closed' });
     expect((await chats.continueChat('mappa')).id).toBe(n.id);
-    await expect(chats.continueChat('regia')).rejects.toThrow(/Orchestrator/);
+    await expect(chats.continueChat('orchestrator')).rejects.toThrow(/Orchestrator/);
   });
 
   it('brain: feed, mute and usage that follows the chats\' cost', () => {

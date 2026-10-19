@@ -3,7 +3,7 @@
 // git branch, last line and the requests waiting for the user; the PRs of the last DevOps read named after their bug,
 // QA-blocked first; a chat row brings that chat on screen. Zero tokens: only data the app holds. Screenshot.
 import { expect, test } from '@playwright/test';
-import { launchDemo, openRegia, shot } from './helpers';
+import { launchDemo, openOrchestrator, shot } from './helpers';
 
 test('Stato: chats, waiting requests, branches and PRs in one click; a row opens its chat', async () => {
   const { app, page } = await launchDemo();
@@ -43,8 +43,8 @@ test('Stato: chats, waiting requests, branches and PRs in one click; a row opens
     await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
 
     // from the Orchestrator's head and from the palette
-    await openRegia(page);
-    await page.getByTestId('regia-stato').click();
+    await openOrchestrator(page);
+    await page.getByTestId('orchestrator-stato').click();
     await expect(st).toBeVisible();
     await page.keyboard.press('Escape');
     await page.keyboard.press('Control+KeyK');

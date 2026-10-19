@@ -98,7 +98,7 @@ test('the questions window: waits while the user types, never takes the field, C
   await page.keyboard.press('Control+J'); // the queue: open again, quiet mode over
   await expect(page.getByTestId('qwin-card')).toBeFocused();
   await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // their requests leave
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // their requests leave
   await expect(page.getByTestId('qwin')).toHaveCount(0);
 
   // typing in a chat: a new question waits as a pill, the field keeps the keyboard and the text
@@ -117,7 +117,7 @@ test('the questions window: waits while the user types, never takes the field, C
   await expect(page.locator('.qwin-backdrop')).toHaveCount(1);
   const vp = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   const wb = (await page.getByTestId('qwin').boundingBox())!;
-  expect(Math.abs(wb.x + wb.width / 2 - vp.width / 2)).toBeLessThan(4); // centered, whatever the field and the Regia
+  expect(Math.abs(wb.x + wb.width / 2 - vp.width / 2)).toBeLessThan(4); // centered, whatever the field and the Orchestrator
   // anchored near the top like a command palette (ADR 0049): content that loads late grows downward, nothing jumps
   expect(Math.abs(wb.y - Math.min(88, Math.max(20, vp.height * 0.07)))).toBeLessThan(2);
   await page.keyboard.type('!');
@@ -151,7 +151,7 @@ test('the questions window stays on: a question from the chat the user is in goe
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   const inline = page.locator('.tile-requests [data-request-key]');
   // the user is in the chat: its field has the keyboard
@@ -185,7 +185,7 @@ test('the questions window: the first click on an option answers, even when the 
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await page.getByTestId('chat-input-fix').click();
   await page.keyboard.type('una nota');
@@ -212,7 +212,7 @@ test('the questions window, two questions in a row: the second shows once, with 
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   const q = question('Il pezzo 1 ti è chiaro?', ['Chiaro, vai avanti', 'Rispiegamelo diverso']);
   await demo(app, (d, id, req) => { d.think(id, 'Pezzo 1: la casella di posta passa i messaggi tra le chat.'); d.ask(id, req); }, 'fix', q);
@@ -242,7 +242,7 @@ test('the questions window, two questions in a row: the second shows once, with 
 test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
-  await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Regia's question first, QA and Feedback under it
+  await page.getByTestId('topbar-qwin').click(); // "Domande in finestra": the Orchestrator's question first, QA and Feedback under it
   await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   const picks = page.getByTestId('qwin-pick');
   await expect(picks).toHaveCount(2);
@@ -274,7 +274,7 @@ test('the questions window reads context first: the agent\'s lead muted on top, 
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await demo(app, (d, id, t) => d.say(id, t), 'fix', 'Ho rilanciato il test case 7 su master e sul ramo della PR: fallisce su entrambi.');
   await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Il test case 7 fallisce anche su master: il bug è vecchio. Apro un bug separato?', ['Sì', 'No']));

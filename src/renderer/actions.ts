@@ -14,28 +14,28 @@ import { t } from './i18n';
 import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
 import { freezeClock, now } from './lib/clock';
 import { setReporting } from './lib/viewports';
-import { floatsBehindPopup, focusLayer, inLayer, regiaCardOnScreen, visibleRequestKeys } from './lib/layer';
+import { floatsBehindPopup, focusLayer, inLayer, orchestratorCardOnScreen, visibleRequestKeys } from './lib/layer';
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
 import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
-import { orchestratorIdOf, regiaOfIn, regieIdsOf } from './lib/regia-route';
+import { orchestratorIdOf } from './lib/orchestrator-route';
 import { questionsModalOn } from './lib/questions';
 import { answerLater, openQueue } from './lib/later';
 import { engineCan, engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openRegiaRenew, setRead, setRegiaOpen, setRegiaTab, toast, ui, setRegiaFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setBrowserOpen, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setBrowserOpen, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
-export const regiaId = (): string | null => orchestratorIdOf(app.get());
+export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
 
 const HANDOFF_CHARS = 6000;
 
 /** "Porta un riassunto": what the new Orchestrator starts from. For now the old Orchestrator's last exchanges (text only, newest kept)
  *  plus now.md; the context-handoff work (chat "contesto chat") will produce a real handoff and plug in here. */
-export function regiaHandoff(chatId: string): string {
+export function orchestratorHandoff(chatId: string): string {
   const s = app.get();
   const old = s.chats[chatId];
   const nowMd = s.info?.brainRoot ? `${s.info.brainRoot.replace(/[\\/]+$/, '')}/now.md` : 'now.md del cervello';
@@ -65,17 +65,17 @@ export function regiaHandoff(chatId: string): string {
 /** A new Orchestrator in place of one, same folder and name, on `to` (the same engine = "Ricomincia da capo" or "Pulisci", the
  *  other = "Cambia motore"): main moves that one's role and work chats to it (`replaces`); the old one goes on as a
  *  normal chat with its history (its process closes), renamed "<title> precedente · <engine> · <when>" so the mail
- *  address (the title) stays the new one's. `summary`: the new one starts from the handoff (regiaHandoff), else empty
+ *  address (the title) stays the new one's. `summary`: the new one starts from the handoff (orchestratorHandoff), else empty
  *  (it reads its memory, now.md, by itself). `archive` ("Pulisci"): the old one is closed too, to read among the
  *  Chiuse (its own notice offers Riapri). */
-export async function renewRegia(chatId: string, to: Harness, summary: boolean, archive = false): Promise<boolean> {
+export async function renewOrchestrator(chatId: string, to: Harness, summary: boolean, archive = false): Promise<boolean> {
   const old = app.get().chats[chatId];
-  if (!old?.isRegia) return false;
-  const prompt = summary ? regiaHandoff(chatId) : undefined;
-  // through the routing table (ADR 0032, kind regia): the engine the user picked beats the row; the model and effort
+  if (!old?.isOrchestrator) return false;
+  const prompt = summary ? orchestratorHandoff(chatId) : undefined;
+  // through the routing table (ADR 0032, kind orchestrator): the engine the user picked beats the row; the model and effort
   // come from the row for that engine, else the engine's default as before; main keeps the Orchestrator role on it
   const n = await createRoutedChat({
-    title: old.title, cwd: old.cwd, regia: true, replaces: old.id, ...(old.regiaName ? { regiaName: old.regiaName } : {}), ...(prompt ? { prompt } : {}),
+    title: old.title, cwd: old.cwd, orchestrator: true, replaces: old.id, ...(prompt ? { prompt } : {}),
     defaults: { harness: to }, ask: { harness: to, reason: to === old.harness ? 'Orchestrator nuovo sullo stesso motore (scelta dell’utente)' : 'motore scelto dall’utente (Cambia motore)' },
   });
   if (!n) return false;
@@ -85,7 +85,6 @@ export async function renewRegia(chatId: string, to: Harness, summary: boolean, 
   let oldTitle = base;
   for (let i = 2; taken.has(oldTitle); i++) oldTitle = `${base} (${i})`;
   await setChat(old.id, { title: oldTitle });
-  setRegiaTab(n.id);
   if (archive) await archiveChat(old.id, false);
   else toast(to === old.harness ? `Orchestrator nuovo su ${engineLabel(to)}. Il precedente resta tra le chat come «${oldTitle}».` : `L’Orchestrator ora usa ${engineLabel(to)}. Il precedente resta tra le chat come «${oldTitle}».`, 'info');
   requestFocus(n.id);
@@ -94,22 +93,22 @@ export async function renewRegia(chatId: string, to: Harness, summary: boolean, 
 
 /** Ctrl+Shift+R, the palette and the Orchestrator's menu: the confirm dialog for a new Orchestrator (`to` preselected; default the
  *  current engine = "Ricomincia da capo"). */
-export function askRenewRegia(to?: Harness): void {
-  const id = regiaId();
+export function askRenewOrchestrator(to?: Harness): void {
+  const id = orchestratorId();
   const c = id ? app.get().chats[id] : null;
   if (!id || !c) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
-  openRegiaRenew({ chatId: id, to: to ?? c.harness });
+  openOrchestratorRenew({ chatId: id, to: to ?? c.harness });
 }
 
 /** "Pulisci" (the Orchestrator's ⋯ menu, the palette): after a confirm, a new Orchestrator on the same engine started empty; the
  *  old conversation stays as a closed chat to read (ADR 0021; the user, 2026-10-12: "che sia disponibile il clear"). */
-export function askClearRegia(chatId: string | null = regiaId()): void {
+export function askClearOrchestrator(chatId: string | null = orchestratorId()): void {
   const c = chatId ? app.get().chats[chatId] : null;
-  if (!chatId || !c?.isRegia) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
+  if (!chatId || !c?.isOrchestrator) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
   askConfirm({
     title: `Pulire l’Orchestrator «${c.title}»?`,
     body: 'Riparte vuoto sullo stesso motore e rilegge da sola la memoria (now.md). La conversazione di adesso resta tra le chat chiuse, da consultare.',
-    confirmLabel: 'Pulisci', onConfirm: () => { void renewRegia(chatId, c.harness, false, true); },
+    confirmLabel: 'Pulisci', onConfirm: () => { void renewOrchestrator(chatId, c.harness, false, true); },
   });
 }
 
@@ -197,7 +196,7 @@ export function currentLink(): string {
   if (u.map) return makeLink('mappa', u.mapArg);
   if (u.page !== 'home') return makeLink(u.page, u.pageArg);
   const f = u.focused;
-  const el = !f ? null : f === 'regia' ? 'regia' : f.startsWith('chat:') ? `chat-${f.slice(5)}` : f.startsWith('browser:') ? `tab-${f.slice(8)}` : null;
+  const el = !f ? null : f === 'orchestrator' ? 'orchestrator' : f.startsWith('chat:') ? `chat-${f.slice(5)}` : f.startsWith('browser:') ? `tab-${f.slice(8)}` : null;
   return makeLink('home', el);
 }
 
@@ -214,34 +213,20 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
   toast(`Link copiato: ${link}`, 'ok');
 }
 
-/** "Chiudi questa Orchestrator" (her ⋯ menu, only for an Orchestrator after the first): after a confirm she is archived like a
- *  finished chat; main moves her work chats to the first Orchestrator, whose tab then takes the keyboard. */
-export function askCloseRegia(chatId: string): void {
-  const c = app.get().chats[chatId];
-  const regie = regieIdsOf(app.get());
-  if (!c?.isRegia || regie.length < 2 || regie[0] === chatId) return;
-  askConfirm({
-    title: `Chiudere l’Orchestrator «${c.title}»?`,
-    body: 'La sua tab sparisce e le sue chat di lavoro passano al primo Orchestrator. La conversazione resta tra le chat chiuse.',
-    confirmLabel: 'Chiudi l’Orchestrator', danger: true,
-    onConfirm: () => { void archiveChat(chatId, false).then(ok => { if (ok) { setRegiaTab(regie[0]!); requestFocus(regie[0]!); } }); },
-  });
-}
-
 /** The overlay closes to its pill from inside (Ctrl+R, Esc, "Riduci"): the keyboard follows to the pill, never lost
  *  on the page. */
-export function collapseRegia(): void {
+export function collapseOrchestrator(): void {
   // Legacy callers may release focus, but the coordinator column always stays open.
   (document.activeElement as HTMLElement | null)?.blur();
 }
 
 /** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the Dashboard and the
  *  3D map included): its input takes the keyboard. */
-export function toggleRegia(): void {
-  setRegiaOpen(true);
-  const r = regiaId();
+export function toggleOrchestrator(): void {
+  setOrchestratorOpen(true);
+  const r = orchestratorId();
   if (r) requestFocus(r);
-  else requestAnimationFrame(() => document.getElementById('regia-engine')?.focus());
+  else requestAnimationFrame(() => document.getElementById('orchestrator-engine')?.focus());
 }
 
 export const toggleCenter = () => setCenter(!ui.get().center);
@@ -255,8 +240,8 @@ export function toggleQuestionsModal(): void {
  *  "Apri una chat" / DevOps "Apri chat" (a work chat in the brain folder or the given one, e.g. a PR's repo; the page
  *  stays, a toast leads to the chat; both go through the routing table, ADR 0032). */
 export const brainBridge: DiscussBridge = {
-  draftToRegia(text, onSent) {
-    const r = regiaId();
+  draftToOrchestrator(text, onSent) {
+    const r = orchestratorId();
     if (!r) return false;
     setDraft(r, text, () => onSent({ id: r, title: app.get().chats[r]?.title ?? 'Orchestrator' }));
     focusChat(r);
@@ -270,7 +255,7 @@ export const brainBridge: DiscussBridge = {
     // through the routing table (ADR 0032): a DevOps record says its kind and area, a brain page's chat is read from its
     // title and first message; the last "Nuova chat" choice only without a row
     const c = await createRoutedChat({
-      title, prompt, cwd, ...(opts?.route ?? {}), ...(regiaId() ? { regiaOf: regiaId()! } : {}),
+      title, prompt, cwd, ...(opts?.route ?? {}),
       defaults: { harness: last.harness, ...(last.model ? { model: last.model } : {}), ...(effortOk && last.effort ? { effort: last.effort } : {}) },
       // the permission mode the user saw: only an engine with permission modes carries one (another keeps a stale value)
       ...(permOk && last.permissionMode ? { permissionMode: last.permissionMode } : {}),
@@ -291,14 +276,7 @@ export function focusChat(chatId: string): void {
   if (!c) return;
   const u = ui.get();
   // the Orchestrator: its column is beside every page (the Dashboard and the 3D map too), so the page stays
-  if (chatId === orchestratorIdOf(s)) { setRegiaTab(chatId); requestFocus(chatId); flashTile('regia'); return; }
-  if (c.isRegia) {
-    // Existing work coordinators remain accessible as chats; only the app coordinator owns the column.
-    go({ page: 'home' });
-    setFocusMode(chatId);
-    requestFocus(chatId);
-    return;
-  }
+  if (chatId === orchestratorIdOf(s)) { requestFocus(chatId); flashTile('orchestrator'); return; }
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode && u.focusMode !== chatId) setFocusMode(chatId);
   if (u.maximized && u.maximized !== `chat:${chatId}`) setMaximized(null);
@@ -316,7 +294,7 @@ export function showTab(tabId: string): void {
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode) setFocusMode(null);
   const maximized = ui.get().maximized;
-  if (!maximized || maximized === 'regia') {
+  if (!maximized || maximized === 'orchestrator') {
     // a strip's browser is folded until opened: open it beside its (expanded) strip
     const owner = app.get().tabs.find(tab => tab.id === tabId)?.ownerChatId;
     if (owner) setBrowserOpen(owner, true);
@@ -422,34 +400,34 @@ export function focusRequest(req: PendingRequest): void {
   // "Domande in finestra" or the queue already open: the window shows it first, at once, with the keyboard
   if (questionsModalOn(app.get()) || ui.get().qwin.open) { void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); callQuestions(reqKey(req)); return; }
   // the Orchestrator's own request: always answered in her widget (the layer's card that held the keyboard lets go of it)
-  const regiaOwn = req.chatId === orchestratorIdOf(app.get());
-  if (regiaOwn) setLayerHeld(null);
+  const orchestratorOwn = req.chatId === orchestratorIdOf(app.get());
+  if (orchestratorOwn) setLayerHeld(null);
   // it would float there but the Orchestrator widget shows a card (one popup at a time): the layer's card takes the keyboard
   // and is the popup while it has it (ui layerHeld), the widget's card waits on "Poi:". Not another request of the
   // Orchestrator's own: that one takes the widget's card below
-  const shown = regiaCardOnScreen();
-  if (shown && shown !== reqKey(req) && !regiaOwn && floatsBehindPopup(reqKey(req))) { focusLayer(reqKey(req)); return; }
+  const shown = orchestratorCardOnScreen();
+  if (shown && shown !== reqKey(req) && !orchestratorOwn && floatsBehindPopup(reqKey(req))) { focusLayer(reqKey(req)); return; }
   // already on screen (lane, tile, Orchestrator): just take it, nothing moves. Checked before the layer: the layer's list is
   // recomputed a moment later, so right after the Orchestrator opens it can still hold a card that is now on the page
   const sel = `[data-request-key="${CSS.escape(reqKey(req))}"]`;
   const here = visibleRequestKeys().has(reqKey(req)) ? document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel) : null;
   // floating in the global layer (not visible elsewhere): the keyboard goes there, the page stays where it is
-  if (!here && !regiaOwn && inLayer(reqKey(req))) { focusLayer(reqKey(req)); return; }
+  if (!here && !orchestratorOwn && inLayer(reqKey(req))) { focusLayer(reqKey(req)); return; }
   // the keyboard may be in the global layer (Ctrl+J pressed there): bring it back first, else Enter answers the layer card
   void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {});
   if (here) { here.focus(); here.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
   const c = app.get().chats[req.chatId];
   const u = ui.get();
   // the Orchestrator's own requests: answered in her tile
-  const inRegia = regiaOwn;
+  const inOrchestrator = orchestratorOwn;
   // her tab, over anything, with this request as the card shown (the widget shows one at a time)
-  if (inRegia) { const r = regiaOfIn(app.get(), req.chatId); if (r) setRegiaTab(r); setRegiaFirst(reqKey(req)); setRegiaOpen(true); }
+  if (inOrchestrator) { setOrchestratorFirst(reqKey(req)); setOrchestratorOpen(true); }
   else if (u.page !== 'home' || u.map) go({ page: 'home' });
   // a collapsed Grindhouse strip shows only its pill: it opens, so its panel mounts and takes the keyboard
-  if (!inRegia && c && !c.isRegia) setChatExpanded(req.chatId, true);
-  if (c?.isRegia && !inRegia) setFocusMode(c.id);
-  if (u.focusMode && u.focusMode !== req.chatId && !inRegia) setLanePeek(true);
-  flashTile(inRegia ? 'regia' : `chat:${req.chatId}`);
+  if (!inOrchestrator && c && !c.isOrchestrator) setChatExpanded(req.chatId, true);
+  if (c?.isOrchestrator && !inOrchestrator) setFocusMode(c.id);
+  if (u.focusMode && u.focusMode !== req.chatId && !inOrchestrator) setLanePeek(true);
+  flashTile(inOrchestrator ? 'orchestrator' : `chat:${req.chatId}`);
   let tries = 0;
   const key = reqKey(req);
   awaited = key;
@@ -478,7 +456,7 @@ export function nextThing(from?: string): void {
 const chatOfTile = (key: string | null): string | null => {
   if (!key) return null;
   // the Orchestrator tile shows the overlay's tab: the app's Orchestrator too (Ctrl+. stops the one on screen)
-  if (key === 'regia') return orchestratorIdOf(app.get());
+  if (key === 'orchestrator') return orchestratorIdOf(app.get());
   return key.startsWith('chat:') ? key.slice(5) : null;
 };
 
@@ -504,7 +482,7 @@ export function closeFocused(): void {
   const pageOff = !!c && u.page !== 'home';
   const offScreen = !!c && (!!c.closedAt || pageOff || u.map || (!!u.maximized && u.maximized !== `chat:${c.id}`) || (!!u.focusMode && u.focusMode !== c.id));
   if (!c || offScreen) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
-  if (c.isRegia) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
+  if (c.isOrchestrator) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
   closeChat(c.id);
 }
 
@@ -535,7 +513,7 @@ export function stopAllAsk(): void {
 export function toggleMaximize(key?: string | null): void {
   const k = key ?? ui.get().focused ?? ui.get().prefs.lastFocus;
   if (!k) { toast('Seleziona prima una tessera', 'info'); return; }
-  if (k === 'regia') { toast('L’Orchestrator si allarga trascinando il suo angolo in basso a destra', 'info'); return; }
+  if (k === 'orchestrator') { toast('L’Orchestrator si allarga trascinando il suo angolo in basso a destra', 'info'); return; }
   setMaximized(ui.get().maximized === k ? null : k);
 }
 
@@ -546,8 +524,8 @@ export function toggleFocusMode(): void {
   // Never focus an archived chat.
   const open = (x: string | null | undefined): x is string => !!x && !!s.chats[x] && !s.chats[x]!.closedAt;
   const sel = chatOfTile(u.focused);
-  const id = (open(sel) ? sel : null) ?? s.order.find(x => open(x) && !s.chats[x]!.isRegia && isBusy(s.chats[x]!)) ?? s.order.find(x => open(x) && !s.chats[x]!.isRegia);
-  if (!id || s.chats[id]?.isRegia) { toast('Seleziona una chat per la modalità focus', 'info'); return; }
+  const id = (open(sel) ? sel : null) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator && isBusy(s.chats[x]!)) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator);
+  if (!id || s.chats[id]?.isOrchestrator) { toast('Seleziona una chat per la modalità focus', 'info'); return; }
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   setFocusMode(id);
   requestFocus(id);
@@ -568,7 +546,7 @@ export function escapeOne(): boolean {
 
 /** Ctrl+0 = the Orchestrator, Ctrl+1 = back to the Grindhouse (from anywhere), Ctrl+2-9 = the (n-1)-th chat tile on screen. */
 export function focusTile(index: number): void {
-  if (index === 0) { const r = regiaId(); if (r) focusChat(r); return; }
+  if (index === 0) { const r = orchestratorId(); if (r) focusChat(r); return; }
   if (index === 1) {
     const u = ui.get();
     if (u.center) setCenter(false);
@@ -593,13 +571,10 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'maximize': {
       const s = app.get();
       setFocusMode(null);
-      if (s.chats[v]?.isRegia) {
-        // the Orchestrator is the overlay: it opens (visual only, app_ui never moves the keyboard); her tab only while the
-        // user is not typing in the overlay (a new tab mounts its input, which the focus keeper would refill)
-        const inside = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-regia-overlay]');
-        if (!inside) setRegiaTab(v);
-        setRegiaOpen(true);
-        flashTile('regia');
+      if (s.chats[v]?.isOrchestrator) {
+        // the Orchestrator is the overlay: it opens (visual only, app_ui never moves the keyboard)
+        setOrchestratorOpen(true);
+        flashTile('orchestrator');
       }
       else if (s.chats[v]) setMaximized(`chat:${v}`);
       else if (s.tabs.some(t => t.id === v)) setMaximized(`browser:${v}`);

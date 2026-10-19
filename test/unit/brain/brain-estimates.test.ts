@@ -20,7 +20,7 @@ describe('brain estimates table', () => {
     const k = table([]).kinds;
     expect(areaOf('Alfa · Fix preventivi', k)).toBe('Alfa');
     expect(areaOf('Pers · App: memoria', k)).toBe('Pers · App');
-    expect(areaOf('Regia', k)).toBe('Regia');
+    expect(areaOf('Orchestrator', k)).toBe('Orchestrator');
     expect(areaOf('Brief mattino', k)).toBe('altro');
     expect(areaOf('Fix · Listino', k)).toBe('altro'); // the label names the kind, not an area
   });

@@ -111,7 +111,7 @@ describe('a pruned run is never counted again', () => {
 
   it('chats.json keeps only a well-formed pruned run id', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-review-22-')); roots.push(dir);
-    const chat = { harness: 'claude', cwd: dir, sessionId: null, title: 'x', model: null, effort: null, permissionMode: null, isRegia: false, createdAt: 1 };
+    const chat = { harness: 'claude', cwd: dir, sessionId: null, title: 'x', model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1 };
     fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 2, chats: [
       { ...chat, id: 'a', runPruned: 'r_0123456789ab' }, { ...chat, id: 'b', runPruned: 'not-a-run' }, { ...chat, id: 'c', runPruned: 7 },
     ] }));
@@ -143,11 +143,11 @@ describe('a run report goes to its own turn', () => {
     reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
     s.changed({ state: 'running' }); // a turn starts...
     s.changed({ state: 'error' }); // ...and the CLI dies: no result, r.turnAt stays set
-    await f.m.set(c.id, { workStatus: 'completed' }); // its Regia completes the run while idle
+    await f.m.set(c.id, { workStatus: 'completed' }); // its Orchestrator completes the run while idle
     const ended = f.run(c.id)!.endedAt!;
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(ended + 60_000);
-    s.changed({ state: 'running' }); // the Regia writes to the chat later: a turn after the end (no reopen)
+    s.changed({ state: 'running' }); // the Orchestrator writes to the chat later: a turn after the end (no reopen)
     reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
     expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' }); // an ended run takes nothing
   });
@@ -158,7 +158,7 @@ describe('a run report goes to its own turn', () => {
     const s = f.sink(c.id);
     s.changed({ state: 'running' });
     reply(s, 'primo turno, nessun report', Date.now()); // the CLI had a queued message: the chat stays running
-    await f.m.set(c.id, { workStatus: 'completed' }); // the Regia completes the run during the queued turn
+    await f.m.set(c.id, { workStatus: 'completed' }); // the Orchestrator completes the run during the queued turn
     reply(s, report({ outcome: 'done', verified: 'yes', summary: 'turno in coda' }), Date.now() + 1);
     expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, summary: 'turno in coda' } });
   });
@@ -174,7 +174,7 @@ describe('a run report goes to its own turn', () => {
     const ended = f.run(c.id)!.endedAt!;
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(ended + 60_000);
-    await f.m.send(c.id, 'continua', undefined, false, 'regia'); // a new session (no reopen: not the user)
+    await f.m.send(c.id, 'continua', undefined, false, 'orchestrator'); // a new session (no reopen: not the user)
     const t = f.latest();
     expect(t).not.toBe(s);
     t.changed({ state: 'running' });

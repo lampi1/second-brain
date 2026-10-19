@@ -163,8 +163,8 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
 
 /** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. An Orchestrator's own turns are no event (it reports in its own tile);
  *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
-export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
-  if (!c || c.isRegia) return null;
+export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isOrchestrator' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
+  if (!c || c.isOrchestrator) return null;
   // the CLI died mid-turn (no result): a failure too, with the engine's error as the detail
   if (crash) return { kind: 'chat-failed', title: c.title || 'Chat', detail: cut(`il motore si è chiuso a metà turno: ${crash}`, 200), chatId: c.id };
   return c.lastResult?.isError

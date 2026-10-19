@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AgentProfile } from '@shared/agents';
 import { createChat, useApp } from '../store/store';
 import { toast } from '../store/ui';
-import { focusChat, regiaId } from '../actions';
+import { focusChat } from '../actions';
 import { t } from '../i18n';
 
 export function CatalogRun({ profile, available }: { profile: AgentProfile; available: boolean }) {
@@ -17,8 +17,7 @@ export function CatalogRun({ profile, available }: { profile: AgentProfile; avai
     if (working.current || !available || !goal.trim() || !cwd) return;
     working.current = true; setBusy(true); setError(false);
     try {
-      const owner = regiaId();
-      const chat = await createChat({ agentId: profile.id, harness: profile.engine, cwd, prompt: goal.trim(), ...(owner ? { regiaOf: owner } : {}) });
+      const chat = await createChat({ agentId: profile.id, harness: profile.engine, cwd, prompt: goal.trim() });
       if (!chat) { setError(true); return; }
       setStarted(true); setOpen(false); setGoal('');
       toast(t('runs.started'), 'ok', { label: t('runs.open'), run: () => focusChat(chat.id) });

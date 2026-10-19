@@ -69,13 +69,13 @@ describe('warm Claude engine', () => {
     await waitFor(() => !alive(warmPid), 'the old waiting engine closed');
   });
 
-  it('Regie, worktrees and bypass chats never take it', async () => {
+  it('Orchestrators, worktrees and bypass chats never take it', async () => {
     const e = env();
     const m = manager(e);
     const c1 = await m.create({ harness: 'claude', cwd: e.cwd });
     await waitFor(() => starts(e).length === 2, 'the waiting engine');
     const warmPid = warmStart(e, c1.sessionId).pid;
-    await m.create({ harness: 'claude', cwd: e.cwd, regia: true });
+    await m.create({ harness: 'claude', cwd: e.cwd, orchestrator: true });
     await m.create({ harness: 'claude', cwd: e.cwd, permissionMode: 'bypassPermissions' });
     await waitFor(() => starts(e).length === 4, 'two cold starts');
     expect(alive(warmPid)).toBe(true);

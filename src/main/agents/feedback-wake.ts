@@ -1,14 +1,14 @@
 // The Orchestrator messages of the agents' improvement loop: the batched feedback request on ended runs (an automatic
 // wake, so it costs the user's tokens: gated here and capped in lifecycle.ts) and the drafting request the user starts by
 // approving a queue entry (Agenti → Da approvare). Why a gate: each delivery to an idle Orchestrator is a new turn that
-// re-reads its whole context (regia-delivery.ts, ~0.18 $ measured), so the automatic one goes only to an Orchestrator
+// re-reads its whole context (orchestrator-delivery.ts, ~0.18 $ measured), so the automatic one goes only to an Orchestrator
 // that exists, runs on an engine the user left on, is idle (never closed: it is not resumed for this), has nothing open
 // with the user and has been quiet for FEEDBACK_QUIET_MS, while no request waits for the user anywhere in the app.
 // Pure: wiring.ts sends the text; pinned by test/unit/agents/agent-loop.test.ts.
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { AgentLifecycleProposal } from '../../shared/agent-lifecycle';
 import type { ChatSummary, Harness } from '../../shared/contract';
-import { APP_EVENT_LABEL } from '../chats/regia-wake';
+import { APP_EVENT_LABEL } from '../chats/orchestrator-wake';
 
 export const FEEDBACK_QUIET_MS = 5 * 60_000;
 const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
@@ -16,7 +16,7 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 export type FeedbackGate = { chat: ChatSummary } | { refused: string };
 /** The Orchestrator that may receive the automatic feedback request now, or why not (logged by the caller). */
 export function feedbackGate(chats: readonly ChatSummary[], now: number, engineOn: (h: Harness) => boolean, userWaiting: boolean): FeedbackGate {
-  const o = chats.find(c => c.isRegia && c.orchestrator && !c.closedAt);
+  const o = chats.find(c => c.isOrchestrator && !c.closedAt);
   if (!o) return { refused: 'no Orchestrator' };
   if (!engineOn(o.harness)) return { refused: 'Orchestrator engine switched off' };
   if (o.state !== 'idle') return { refused: `Orchestrator ${o.state}` };

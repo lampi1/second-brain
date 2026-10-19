@@ -178,6 +178,8 @@ async function runTurn(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, permissionMode, cwd: process.cwd(), tools: ['Bash', 'Edit', 'AskUserQuestion'], mcp_servers: [{ name: 'broken', status: 'failed' }], claude_code_version: '0.0.0-fake', effort: opt('--effort') ?? null });
   }
   record({ type: 'user', message: { role: 'user', content: text } });
+  // the role text the app puts before an Orchestrator's first message is not the user's: its words trigger nothing
+  text = text.replace(/\[Orchestrator role supplied by the app\][\s\S]*?\[End Orchestrator role\]\n*/, '');
   // like the real CLI on a claude.ai login: plan windows as utilization 0-1, resets in unix seconds
   out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', utilization: 0.25, resetsAt: Math.floor(Date.now() / 1000) + 3600 }, session_id: sessionId, uuid: crypto.randomUUID() });
   if (/\bbig\b/.test(text)) ctxTokens = 250000;

@@ -21,14 +21,14 @@ Facts that the guide states as they are today, not as the docs describe them:
 catalog has an explainer agent that can start (whole id or name is Explainer / Spiegazioni, case-insensitive), a new chat with that
 agent; otherwise the Orchestrator gets the card plus the instruction to reuse an "Explainer" agent from
 `agent_catalog` or, since it cannot create one, to propose its definition for the user to save. It reuses the
-existing paths (`createChat` + `setDraft`, `brainBridge.draftToRegia`); no new IPC. A synchronous per-card guard prevents
+existing paths (`createChat` + `setDraft`, `brainBridge.draftToOrchestrator`); no new IPC. A synchronous per-card guard prevents
 duplicate creation even before React renders the disabled button, and releases on completion/failure.
 
 ## What changed
 
 - `src/shared/concept-guide.ts`: the typed content (cards, `Bi` texts, diagrams, `target` and `coming` parts,
   source refs, with a comment citing the source file beside each part) and the pure text builders for «Discutine»
-  (`cardText`, `discussText`, `regiaText`, `isExplainer`).
+  (`cardText`, `discussText`, `orchestratorText`, `isExplainer`).
 - `src/renderer/lib/concept-discuss.ts`: `planDiscuss` / `explainerOf` (explainer agent vs Orchestrator).
 - `src/renderer/components/GuidePage.tsx` + `src/renderer/styles/guide.css`: the page (filter, cards, diagrams).
 - Navigation: page id `guida` in `brain/index.tsx`, `Sidebar.tsx` (App group), `CommandPalette.tsx` (icon and

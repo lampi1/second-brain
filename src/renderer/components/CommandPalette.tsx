@@ -11,18 +11,18 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { locale, t, type TextKey } from '../i18n';
-import { chatName } from '@shared/regia';
+import { chatName } from '@shared/orchestrator';
 import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
 import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
-import { BRAIN_PAGES, closeModal, openModal, openNewRegia, pageLabel, placeLabel, setMaximized, setPrefs, setRegiaOpen, ui, type BrainPageId } from '../store/ui';
+import { BRAIN_PAGES, closeModal, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
 import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
-  toggleMaximize, toggleRegia, askRenewRegia, askClearRegia, regiaId, toggleQuestionsModal, newBrowser,
+  toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, toggleQuestionsModal, newBrowser,
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
@@ -62,7 +62,7 @@ function buildCommands(): Cmd[] {
     const st = stateInfo(c);
     out.push({
       id: `chat:${id}`, group: 'Chat', title: chatName(c), sub: `${engineName(c.harness)} · ${st.label} · ${folderName(c.cwd)}${c.lastText ? ` · ${c.lastText}` : ''}`,
-      icon: <HarnessMark harness={c.harness} regia={c.isRegia} size={18} />, run: () => focusChat(id), text: `${c.title} ${engineName(c.harness)} ${c.cwd} ${c.lastText}`,
+      icon: <HarnessMark harness={c.harness} orchestrator={c.isOrchestrator} size={18} />, run: () => focusChat(id), text: `${c.title} ${engineName(c.harness)} ${c.cwd} ${c.lastText}`,
     });
   }
   for (const c of closedChats(s.chats)) {
@@ -80,9 +80,9 @@ function buildCommands(): Cmd[] {
     });
   }
   // the Orchestrator of the tab shown in the overlay (ADR 0021)
-  const rid = regiaId();
-  const regia = rid ? s.chats[rid] : undefined;
-  const to = regia && otherEngine(regia.harness);
+  const rid = orchestratorId();
+  const orchestrator = rid ? s.chats[rid] : undefined;
+  const to = orchestrator && otherEngine(orchestrator.harness);
   const actions: Omit<Cmd, 'group'>[] = [
     { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
@@ -92,12 +92,11 @@ function buildCommands(): Cmd[] {
     { id: 'stop', title: auditText('cmp.palette.stop'), shortcut: 'Ctrl+.', icon: <IconStop />, run: stopFocused },
     { id: 'focus', title: u.focusMode ? auditText('cmp.palette.focusExit') : auditText('cmp.palette.focusEnter'), shortcut: 'Ctrl+Shift+F', icon: <IconFocus />, run: toggleFocusMode },
     { id: 'max', title: auditText('cmp.palette.maximize'), shortcut: 'F11', icon: <IconMaximize />, run: () => toggleMaximize() },
-    { id: 'regia', title: auditText('cmp.palette.goRegia'), sub: regia ? auditText('cmp.palette.onEngine', { engine: engineName(regia.harness) }) : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" regia size={18} />, run: () => focusTile(0) },
-    ...(regia ? [
-      { id: 'regiaclear', title: auditText('cmp.palette.regiaClear', { title: regia.title }), sub: auditText('cmp.palette.regiaClearSub'), icon: <HarnessMark harness={regia.harness} regia size={18} />, run: () => askClearRegia(regia.id), text: 'pulisci clear azzera orchestrator regia' },
-      { id: 'regianew', title: auditText('cmp.palette.newRegia'), sub: auditText('cmp.palette.newRegiaSub'), icon: <IconPlus />, run: openNewRegia },
-      { id: 'regiarenew', title: auditText('cmp.palette.regiaRenew'), sub: auditText('cmp.palette.regiaRenewSub', { engine: engineName(regia.harness) }), shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={regia.harness} size={18} />, run: () => askRenewRegia(regia.harness) },
-      ...(to ? [{ id: 'regiaengine', title: auditText('cmp.palette.regiaEngine', { engine: engineName(to) }), sub: auditText('cmp.palette.regiaEngineSub', { engine: engineName(regia.harness) }), icon: <HarnessMark harness={to} size={18} />, run: () => askRenewRegia(to) }] : []),
+    { id: 'orchestrator', title: auditText('cmp.palette.goOrchestrator'), sub: orchestrator ? auditText('cmp.palette.onEngine', { engine: engineName(orchestrator.harness) }) : undefined, shortcut: 'Ctrl+0', icon: <HarnessMark harness="claude" orchestrator size={18} />, run: () => focusTile(0) },
+    ...(orchestrator ? [
+      { id: 'orchestratorclear', title: auditText('cmp.palette.orchestratorClear', { title: orchestrator.title }), sub: auditText('cmp.palette.orchestratorClearSub'), icon: <HarnessMark harness={orchestrator.harness} orchestrator size={18} />, run: () => askClearOrchestrator(orchestrator.id), text: 'pulisci clear azzera orchestrator orchestrator' },
+      { id: 'orchestratorrenew', title: auditText('cmp.palette.orchestratorRenew'), sub: auditText('cmp.palette.orchestratorRenewSub', { engine: engineName(orchestrator.harness) }), shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={orchestrator.harness} size={18} />, run: () => askRenewOrchestrator(orchestrator.harness) },
+      ...(to ? [{ id: 'orchestratorengine', title: auditText('cmp.palette.orchestratorEngine', { engine: engineName(to) }), sub: auditText('cmp.palette.orchestratorEngineSub', { engine: engineName(orchestrator.harness) }), icon: <HarnessMark harness={to} size={18} />, run: () => askRenewOrchestrator(to) }] : []),
     ] : []),
     { id: 'qwin', title: questionsModalOn(s) ? auditText('cmp.palette.questionsOff') : auditText('cmp.palette.questionsOn'),
       sub: questionsModalOn(s) ? auditText('cmp.palette.questionsOffSub') : auditText('cmp.palette.questionsOnSub'),
@@ -109,8 +108,8 @@ function buildCommands(): Cmd[] {
       text: 'credenziali password utente login account ambienti test url pms' },
     { id: 'keys', title: auditText('cmp.palette.shortcuts'), shortcut: 'Ctrl+/', icon: <IconKeyboard />, run: () => openModal('shortcuts') },
     { id: 'center', title: auditText('cmp.palette.notifications'), shortcut: 'Ctrl+Shift+N', icon: <IconBell />, run: toggleCenter },
-    { id: 'regiadock', title: auditText('cmp.palette.regiaDock'), shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" regia size={18} />, run: toggleRegia },
-    { id: 'regiaplace', title: auditText('cmp.palette.regiaPlace'), sub: auditText('cmp.palette.regiaPlaceSub'), icon: <HarnessMark harness="claude" regia size={18} />, run: () => { setPrefs({ regiaSize: null }); setRegiaOpen(true); }, text: 'misura dimensione reset orchestrator regia' },
+    { id: 'orchestratordock', title: auditText('cmp.palette.orchestratorDock'), shortcut: 'Ctrl+R', icon: <HarnessMark harness="claude" orchestrator size={18} />, run: toggleOrchestrator },
+    { id: 'orchestratorplace', title: auditText('cmp.palette.orchestratorPlace'), sub: auditText('cmp.palette.orchestratorPlaceSub'), icon: <HarnessMark harness="claude" orchestrator size={18} />, run: () => { setPrefs({ orchestratorSize: null }); setOrchestratorOpen(true); }, text: 'misura dimensione reset orchestrator orchestrator' },
     { id: 'back', title: auditText('cmp.palette.back'), shortcut: 'Alt+←', icon: <IconArrowLeft />, run: back },
     { id: 'forward', title: auditText('cmp.palette.forward'), shortcut: 'Alt+→', icon: <IconArrowRight />, run: forward },
     { id: 'copylink', title: auditText('cmp.palette.copyLink'), sub: currentLink(), icon: <IconLink />, run: () => { void copyLink(); } },
@@ -164,7 +163,7 @@ function foundCommands(hits: SearchHit[], shown: Set<string>): Cmd[] {
       const more = h.count && h.count > 1 ? ` · ${auditText('cmp.palette.messages', { n: h.count })}` : '';
       out.push({
         ...base, title, sub: `${closed ? `${auditText('cmp.palette.closedReopen')} · ` : ''}${h.sub ?? ''}${more}`,
-        icon: c ? <HarnessMark harness={c.harness} regia={c.isRegia} size={18} /> : <IconHistory />, run: () => openChat(h.chatId),
+        icon: c ? <HarnessMark harness={c.harness} orchestrator={c.isOrchestrator} size={18} /> : <IconHistory />, run: () => openChat(h.chatId),
       });
     }
   }

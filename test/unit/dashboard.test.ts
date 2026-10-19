@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, ChatItem } from '../../src/shared/contract';
 import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
-import { columnSize } from '../../src/renderer/lib/regia-dock';
+import { columnSize } from '../../src/renderer/lib/orchestrator-dock';
 
 it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
   const viewport = { W, H: 900, top: 52, left: 196 };
@@ -22,15 +22,15 @@ it('groups distinct brain diagnostics without inventing checks for a new brain',
 
 const chat = (id: string, patch: Partial<ChatSummary> = {}): ChatSummary => ({
   id, title: id, harness: 'codex', origin: 'app', cwd: '', sessionId: null, model: null, effort: null,
-  permissionMode: null, state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0,
+  permissionMode: null, state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0,
   browserTabIds: [], ...patch,
 });
 describe('dashboard sources', () => {
   it('ownership alone does not invent message traffic', () => {
-    expect(connections([chat('orchestrator', { isRegia: true }), chat('worker')], {})).toEqual([{ from: 'orchestrator', to: 'worker', at: null }]);
+    expect(connections([chat('orchestrator', { isOrchestrator: true }), chat('worker')], {})).toEqual([{ from: 'orchestrator', to: 'worker', at: null }]);
   });
   it('lights only successful known message destinations and preserves the newest observed event', () => {
-    const chats = [chat('o', { isRegia: true }), chat('a'), chat('b')];
+    const chats = [chat('o', { isOrchestrator: true }), chat('a'), chat('b')];
     const tool = (id: string, status: 'ok' | 'error', to: string, at: number): ChatItem => ({ kind: 'tool', id, name: 'mcp__second_brain__send_to_chat', status, input: { to }, at, summary: '' });
     const result = connections(chats, { a: [tool('1', 'ok', 'b', 123), tool('2', 'error', 'o', 999), tool('3', 'ok', 'unknown', 500)], b: [{ kind: 'user', id: 'u', from: 'a', at: 150, text: 'hello' }] });
     expect(result.find(e => e.from === 'a' && e.to === 'b')?.at).toBe(150);
@@ -59,7 +59,7 @@ describe('dashboard sources', () => {
     expect(cursorCoverage({ downloaded: 'garbage' }, '2026-10-17')).toBeNull();
   });
   it('names the Orchestrator chat Orchestrator, whatever its title', () => {
-    expect(chatName(chat('o', { isRegia: true, title: 'Regia' }))).toBe('Orchestrator');
+    expect(chatName(chat('o', { isOrchestrator: true, title: 'Orchestrator' }))).toBe('Orchestrator');
     expect(chatName(chat('a', { title: 'Worker' }))).toBe('Worker');
   });
   it('labels retained errors without treating a user interruption as failure', () => {

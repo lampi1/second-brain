@@ -10,7 +10,7 @@ import { edgeKey } from '../../../src/renderer/brain/lib/map';
 const ROOT = 'C:/brains/demo';
 const N = (id: string, layer: string, kind: string, label: string, file?: string, extra: Partial<MapNode> = {}): MapNode => ({ id, layer, kind, label, file: file ? `${ROOT}/${file}` : undefined, degree: 1, members: [], ...extra });
 const VIEW: MapNode[] = [
-  N('chat:regia', 'chat', 'regia', 'Regia', 'hub.md'),
+  N('chat:orchestrator', 'chat', 'orchestrator', 'Orchestrator', 'hub.md'),
   N('harness:claude', 'esterni', 'harness', 'Claude', 'AGENTS.md'),
   N('harness:cursor', 'esterni', 'harness', 'Cursor', 'AGENTS.md'),
   N('mem:now', 'memoria', 'file', 'now.md', 'now.md'),
@@ -22,7 +22,7 @@ const VIEW: MapNode[] = [
 ];
 const ALL: MapNode[] = [...VIEW, N('skill:stato', 'agenti', 'skill', '/stato', 'skills/stato.md')];
 const NOW = 1_000_000;
-const chat = (o: Partial<LiveChat> & Pick<LiveChat, 'id'>): LiveChat => ({ title: o.id, harness: 'claude', engine: 'Claude', state: 'running', isRegia: false, cwd: ROOT, ...o });
+const chat = (o: Partial<LiveChat> & Pick<LiveChat, 'id'>): LiveChat => ({ title: o.id, harness: 'claude', engine: 'Claude', state: 'running', isOrchestrator: false, cwd: ROOT, ...o });
 const tool = (o: Partial<LiveTool> & Pick<LiveTool, 'chatId' | 'name'>): LiveTool => ({ id: `${o.chatId}-${o.name}-${Math.random()}`, input: {}, summary: '', startAt: NOW - 1000, endAt: null, ...o });
 const snap = (chats: LiveChat[], tools: LiveTool[] = [], tabs: LiveSnapshot['tabs'] = []): LiveSnapshot => ({ now: NOW, chats, tools, tabs });
 const g = (s: LiveSnapshot) => liveGraph(s, VIEW, ALL, ROOT);
@@ -52,10 +52,10 @@ describe('liveGraph', () => {
     expect(l.chatOf.get('live:chat:fix')).toBe('fix');
     expect(l.working[0]).toMatchObject({ id: 'fix', title: 'Fix totale', running: true });
   });
-  it('the Regia lights the map\'s own Regia; idle chats with nothing recent stay dark', () => {
-    const l = g(snap([chat({ id: 'r', isRegia: true, state: 'waiting' }), chat({ id: 'old', state: 'idle' })]));
-    expect(l.glow.get('chat:regia')).toMatchObject({ level: 1, running: false });
-    expect(l.chatOf.get('chat:regia')).toBe('r');
+  it('the Orchestrator lights the map\'s own Orchestrator; idle chats with nothing recent stay dark', () => {
+    const l = g(snap([chat({ id: 'r', isOrchestrator: true, state: 'waiting' }), chat({ id: 'old', state: 'idle' })]));
+    expect(l.glow.get('chat:orchestrator')).toMatchObject({ level: 1, running: false });
+    expect(l.chatOf.get('chat:orchestrator')).toBe('r');
     expect(l.nodes).toHaveLength(0);
     expect(l.working.map(w => w.id)).toEqual(['r']);
   });
@@ -94,18 +94,18 @@ describe('liveGraph', () => {
     expect(l.glow.get('grp:skill')?.running).toBe(true);
   });
   it('a message to another chat (app_send_to_chat, inbox.mjs) links the two chats', () => {
-    const l = g(snap([chat({ id: 'r', isRegia: true }), chat({ id: 'qa', title: 'QA · Rimborsi', state: 'idle' })], [
+    const l = g(snap([chat({ id: 'r', isOrchestrator: true }), chat({ id: 'qa', title: 'QA · Rimborsi', state: 'idle' })], [
       tool({ chatId: 'r', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'qa', text: 'vai' } }),
     ]));
-    expect(l.links.get(edgeKey('chat:regia', 'live:chat:qa', 'vivo'))?.running).toBe(true);
+    expect(l.links.get(edgeKey('chat:orchestrator', 'live:chat:qa', 'vivo'))?.running).toBe(true);
     expect(l.chatOf.get('live:chat:qa')).toBe('qa');
-    const m = g(snap([chat({ id: 'w', title: 'Lavoro' }), chat({ id: 'r', title: 'Regia', isRegia: true, state: 'idle' })], [
-      tool({ chatId: 'w', name: 'Bash', input: { command: 'node inbox.mjs send --to "Regia" --from "Lavoro" --text "pronto"' }, endAt: NOW - 2000 }),
+    const m = g(snap([chat({ id: 'w', title: 'Lavoro' }), chat({ id: 'r', title: 'Orchestrator', isOrchestrator: true, state: 'idle' })], [
+      tool({ chatId: 'w', name: 'Bash', input: { command: 'node inbox.mjs send --to "Orchestrator" --from "Lavoro" --text "pronto"' }, endAt: NOW - 2000 }),
     ]));
-    expect(m.links.get(edgeKey('live:chat:w', 'chat:regia', 'vivo'))?.running).toBe(false);
+    expect(m.links.get(edgeKey('live:chat:w', 'chat:orchestrator', 'vivo'))?.running).toBe(false);
   });
   it("the app's own tools are no browser; Cursor's Shell counts as a command; the live set comes sorted", () => {
-    const l = g(snap([chat({ id: 'r', isRegia: true }), chat({ id: 'c', harness: 'cursor', engine: 'Cursor' })], [
+    const l = g(snap([chat({ id: 'r', isOrchestrator: true }), chat({ id: 'c', harness: 'cursor', engine: 'Cursor' })], [
       tool({ chatId: 'r', name: 'mcp__second-brain-app__app_state', input: {} }),
       tool({ chatId: 'c', name: 'Shell', input: { command: 'node ops/tools/mem.mjs now me' } }),
       tool({ chatId: 'c', name: 'Write', input: { file_path: `${ROOT}/b.md` }, startAt: NOW - 10 }),

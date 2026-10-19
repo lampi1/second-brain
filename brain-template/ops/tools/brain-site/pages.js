@@ -282,7 +282,7 @@
       node,
       setTargets(boxes) {
         const cur = sel.value;
-        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'regia' ? -1 : b.box === 'regia' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'regia' ? 'Orchestrator' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
+        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'orchestrator' ? -1 : b.box === 'orchestrator' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'orchestrator' ? 'Orchestrator' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
         if (cur) sel.value = cur;
       },
       open(box, name) { sel.value = box; ta.focus(); node.scrollIntoView({ behavior: 'smooth', block: 'center' }); App.toast(`Scrivi a ${name}`); },
@@ -357,7 +357,7 @@
       box.hidden = false;
       box.replaceChildren(el('p.small', el('b', 'Mando all’Orchestrator?'), ` «Discutiamone: ${short(title, 80)}»`),
         el('div.btn-row', el('button.btn.primary', { type: 'button', onclick: async () => {
-          try { await App.post('/api/send', { to: 'regia', text }); App.toast('Mandato all’Orchestrator'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
+          try { await App.post('/api/send', { to: 'orchestrator', text }); App.toast('Mandato all’Orchestrator'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
         } }, 'Sì, manda'), el('button.btn', { type: 'button', onclick: () => { box.hidden = true; } }, 'Annulla')));
     } }, 'Discutiamone');
     return el('div.composer', el('div.btn-row', btn), box);

@@ -9,13 +9,13 @@
 // 'guida' (left rail, Ctrl+K, G E). Hooks in GuidePage and Card stay useId/useMemo/useState: the unit test
 // test/unit/concept-discuss-click.test.ts renders them without a DOM.
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { CONCEPTS, regiaText, textOf, type ConceptCard, type ConceptDiagram, type GuideLang } from '@shared/concept-guide';
+import { CONCEPTS, orchestratorText, textOf, type ConceptCard, type ConceptDiagram, type GuideLang } from '@shared/concept-guide';
 import { lang, t } from '../i18n';
 import { planDiscuss } from '../lib/concept-discuss';
 import { agents, useAgents } from '../store/agents';
 import { app, createChat } from '../store/store';
 import { toast, ui } from '../store/ui';
-import { brainBridge, focusChat, regiaId } from '../actions';
+import { brainBridge, focusChat } from '../actions';
 import { setDraft } from './ChatInput';
 import { IconChevronRight } from './Icons';
 import '../styles/guide.css';
@@ -36,8 +36,7 @@ async function startDiscussion(card: ConceptCard, l: GuideLang): Promise<void> {
   const cwd = app.get().info?.brainRoot || ui.get().prefs.newChat.cwd || null;
   const plan = planDiscuss(card, l, agents.get().catalog, cwd);
   if (plan.via === 'agent') {
-    const r = regiaId();
-    const chat = await createChat({ agentId: plan.agentId, harness: plan.harness, cwd: plan.cwd, title: plan.title, prompt: '', ...(r ? { regiaOf: r } : {}) });
+    const chat = await createChat({ agentId: plan.agentId, harness: plan.harness, cwd: plan.cwd, title: plan.title, prompt: '' });
     if (chat) {
       setDraft(chat.id, plan.draft);
       focusChat(chat.id);
@@ -45,9 +44,9 @@ async function startDiscussion(card: ConceptCard, l: GuideLang): Promise<void> {
       return;
     } // not created (told by createChat): the Orchestrator still can take it
   }
-  const draft = plan.via === 'regia' ? plan.draft : regiaText(card, l);
-  if (brainBridge.draftToRegia(draft, () => {})) toast(t('guide.toRegia'), 'ok');
-  else toast(t('guide.noRegia'), 'warn');
+  const draft = plan.via === 'orchestrator' ? plan.draft : orchestratorText(card, l);
+  if (brainBridge.draftToOrchestrator(draft, () => {})) toast(t('guide.toOrchestrator'), 'ok');
+  else toast(t('guide.noOrchestrator'), 'warn');
 }
 
 /** A small line glyph per concept (24×24, stroke = currentColor): the card's picture, drawn here, no package. */

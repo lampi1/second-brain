@@ -3,7 +3,7 @@
 // to enlarge, ✕ to remove, sent with the message (also when queued) as image blocks; the history shows them. Also the
 // Orchestrator overlay (Ctrl+R) (demo). A fresh Win+Shift+S screenshot the paste event does not carry is read by main (its
 // clipboard here the in-memory one of SB_TEST). The system clipboard is never touched (synthetic paste events only).
-// Screenshots: test-results/shots/paste-images-<engine>-*.png, paste-images-regia.png, paste-images-fresh-screenshot*.png.
+// Screenshots: test-results/shots/paste-images-<engine>-*.png, paste-images-orchestrator.png, paste-images-fresh-screenshot*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -123,7 +123,7 @@ async function pasteFreshScreenshot(app: ElectronApplication, page: Page, testid
   }, testid);
 }
 
-test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main reads it, in a tile and in the Regia', async () => {
+test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main reads it, in a tile and in the Orchestrator', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa'); // the input is on the open strip
   await pasteFreshScreenshot(app, page, 'chat-input-qa', true);
@@ -136,10 +136,10 @@ test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main 
   await expect(page.getByTestId('chat-input-qa-images').locator('.img-thumb')).toHaveCount(1);
   // the Orchestrator overlay uses the same input
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await pasteFreshScreenshot(app, page, 'regia-input', true);
-  await expect(page.getByTestId('regia-input-images-0')).toBeVisible();
-  await shot(page, 'paste-images-fresh-screenshot-regia');
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await pasteFreshScreenshot(app, page, 'orchestrator-input', true);
+  await expect(page.getByTestId('orchestrator-input-images-0')).toBeVisible();
+  await shot(page, 'paste-images-fresh-screenshot-orchestrator');
   await app.close();
 });
 
@@ -163,7 +163,7 @@ test('a screenshot pasted in one chat stays there when focus mode swaps to anoth
   await app.close();
 });
 
-test('the Regia overlay (Ctrl+R) takes pasted screenshots too (here it waits on a decision: queued with its image)', async () => {
+test('the Orchestrator overlay (Ctrl+R) takes pasted screenshots too (here it waits on a decision: queued with its image)', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'qa'); // the input is on the open strip
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
@@ -171,15 +171,15 @@ test('the Regia overlay (Ctrl+R) takes pasted screenshots too (here it waits on 
   await page.keyboard.press('q');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  const input = page.getByTestId('regia-input');
-  await putImages(page, 'regia-input', 1, 'paste', 280);
-  await expect(page.getByTestId('regia-input-images-0')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  const input = page.getByTestId('orchestrator-input');
+  await putImages(page, 'orchestrator-input', 1, 'paste', 280);
+  await expect(page.getByTestId('orchestrator-input-images-0')).toBeVisible();
   await input.fill('guarda questo errore');
-  await shot(page, 'paste-images-regia');
+  await shot(page, 'paste-images-orchestrator');
   await input.press('Enter');
-  await expect(page.getByTestId('regia-input-images')).toHaveCount(0);
-  await expect(page.getByTestId('regia-input-queued-0')).toContainText('guarda questo errore');
-  await expect(page.getByTestId('regia-input-queued-0').locator('.queued-img img')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-input-images')).toHaveCount(0);
+  await expect(page.getByTestId('orchestrator-input-queued-0')).toContainText('guarda questo errore');
+  await expect(page.getByTestId('orchestrator-input-queued-0').locator('.queued-img img')).toBeVisible();
   await app.close();
 });

@@ -24,15 +24,15 @@ test('requests not on screen float above a page, without taking the keyboard', a
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('brain-page-task')).toBeVisible(); // a page (Oggi is now Task)
   // the Orchestrator column stays on the page (ADR 0068): its decision is the one popup on screen
-  await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(1);
+  await expect(page.locator('[data-orchestrator-overlay] [data-request-key]')).toHaveCount(1);
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // never two popups at once (the user, 2026-10-13)
-  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // her request leaves
-  await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(0);
+  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('orchestrator')); // her request leaves
+  await expect(page.locator('[data-orchestrator-overlay] [data-request-key]')).toHaveCount(0);
   await expect.poll(async () => (await layerState(app)).cards).toBe(2); // now the layer shows the others: QA + Feedback
-  await page.getByTestId('regia-input').click();
+  await page.getByTestId('orchestrator-input').click();
   const st = await layerState(app);
   expect(st.attached).toBe(true);
-  const ov = (await page.getByTestId('regia-overlay').boundingBox())!;
+  const ov = (await page.getByTestId('orchestrator-overlay').boundingBox())!;
   expect(st.bounds!.x + st.bounds!.width).toBe(Math.round(ov.x) - 16); // left of the Orchestrator column, never over it
   await expect.poll(async () => { const b = (await layerState(app)).bounds!; return b.y + b.height; }).toBe(1000 - 16);
   const layer = await layerPage(app);
@@ -41,7 +41,7 @@ test('requests not on screen float above a page, without taking the keyboard', a
   await expect(layer.getByTestId('layer-queue')).toContainText('App · Feedback');
   // typing goes on in the app: the layer did not take the keyboard
   await page.keyboard.type('ciao');
-  await expect(page.getByTestId('regia-input')).toHaveValue('ciao');
+  await expect(page.getByTestId('orchestrator-input')).toHaveValue('ciao');
   expect(await focusOf(app)).toEqual({ app: true, layer: false });
   // a new request while typing: it shows up, the keyboard stays where it is
   await app.evaluate(() => (globalThis as unknown as { __sbDemo: { ask(id: string, r: object): void } }).__sbDemo.ask('mappa', {
@@ -49,7 +49,7 @@ test('requests not on screen float above a page, without taking the keyboard', a
   }));
   await expect.poll(async () => (await layerState(app)).cards).toBe(3);
   await page.keyboard.type(' a tutti');
-  await expect(page.getByTestId('regia-input')).toHaveValue('ciao a tutti');
+  await expect(page.getByTestId('orchestrator-input')).toHaveValue('ciao a tutti');
   expect(await focusOf(app)).toEqual({ app: true, layer: false });
   await windowShot(app, 'layer-over-page');
   await app.close();
@@ -64,10 +64,10 @@ test('Ctrl+J moves the keyboard to the layer: 1 answers, Esc is "Rispondi dopo"'
   await page.keyboard.press('Control+R'); // the Orchestrator column here too: its card is the one popup, the layer waits
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
   await page.keyboard.press('Control+J'); // the oldest is the Orchestrator's, on screen in its column: focused there, nothing moves
-  await expect(page.locator('[data-request-key="regia/regia-q1"]')).toBeFocused();
+  await expect(page.locator('[data-request-key="orchestrator/orchestrator-q1"]')).toBeFocused();
   await expect(page.getByTestId('brain-page-costi')).toBeVisible();
-  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // her request leaves: the next one floats
-  await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(0);
+  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('orchestrator')); // her request leaves: the next one floats
+  await expect(page.locator('[data-orchestrator-overlay] [data-request-key]')).toHaveCount(0);
   await expect.poll(async () => (await layerState(app)).cards).toBe(2);
   await page.keyboard.press('Control+J'); // the next one floats in the layer: the keyboard goes there
   await expect.poll(async () => (await focusOf(app)).layer).toBe(true);
@@ -95,7 +95,7 @@ test('the layer stays above browser tiles (focus mode, the chat browser beside i
   await page.getByTestId('chat-input-qa').click();
   await page.keyboard.press('Control+Shift+F');
   await expect(page.getByTestId('focus-view')).toBeVisible();
-  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia')); // the column's card is the one popup: let it go
+  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('orchestrator')); // the column's card is the one popup: let it go
   await expect.poll(async () => (await layerState(app)).cards).toBe(1); // the Feedback's
   await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect?.width ?? 0).toBeGreaterThan(300); // beside the chat, left of the Orchestrator column
   const tab = (await demoLayout(app)).find(l => l.tabId === 'tab-qa')!.rect!;

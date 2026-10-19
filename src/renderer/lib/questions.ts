@@ -1,9 +1,9 @@
 // "Domande in finestra" (settings questionsModal; the user, 2026-10-12: "le domande vorrei un toggle per farle comparire
-// proprio come modale invece che nella regia o nelle chat"): the switch, and the typing guard that keeps the window from
+// proprio come modale invece che nell’Orchestrator o nelle chat"): the switch, and the typing guard that keeps the window from
 // taking the user's text (the user: "la modale non deve rubare il testo che sto scrivendo"). While the user types in a
 // field (a key less than TYPING_IDLE_MS ago, the field still focused) a new request waits as a small pill; once the
 // typing stops it shows, and it takes the keyboard only if no field outside it has it. Used by QuestionsWindow.tsx,
-// ChatTile.tsx, RegiaTile.tsx, lib/layer.ts, actions.ts; started by main.tsx.
+// ChatTile.tsx, OrchestratorTile.tsx, lib/layer.ts, actions.ts; started by main.tsx.
 import type { AppState } from '../store/state';
 
 export const TYPING_IDLE_MS = 2000;

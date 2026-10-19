@@ -165,18 +165,18 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   // People and chats
   add(node('owner', 'persone', 'persona', 'Owner', { what: 'Il proprietario del cervello: lavora con le chat, decide, lancia lui i comandi di produzione.', file: `${root}/me.md`, modified: modified(path.join(root, 'me.md')) }));
   if (fs.existsSync(path.join(root, 'people.md'))) add(node('colleghi', 'persone', 'persona', 'Colleghi e QA', { what: 'Colleghi, soprannomi, ruoli e chi taggare su DevOps (people.md).', file: `${root}/people.md`, modified: modified(path.join(root, 'people.md')) }));
-  add(node('chat:regia-claude', 'chat', 'regia', 'Orchestrator (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libero.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
-  const cursorRegia = path.join(root, '.cursor', 'skills', 'regia', 'SKILL.md');
-  if (fs.existsSync(cursorRegia)) fileNode('chat:regia-cursor', 'chat', 'regia', 'Orchestrator (Cursor)', cursorRegia, { what: 'Lo stesso Orchestrator dentro Cursor, acceso con /regia; legge le chat Cursor con chats.mjs.' });
+  add(node('chat:orchestrator-claude', 'chat', 'orchestrator', 'Orchestrator (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libero.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
+  const cursorOrchestrator = path.join(root, '.cursor', 'skills', 'orchestrator', 'SKILL.md');
+  if (fs.existsSync(cursorOrchestrator)) fileNode('chat:orchestrator-cursor', 'chat', 'orchestrator', 'Orchestrator (Cursor)', cursorOrchestrator, { what: 'Lo stesso Orchestrator dentro Cursor, acceso con /orchestrator; legge le chat Cursor con chats.mjs.' });
   add(node('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', { what: 'Una chat per ogni lavoro (fix, QA, produzione, OS): tiene la sua riga in now.md e parla alle altre con inbox.mjs.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
   for (const b of inbox?.boxes ?? []) {
-    if (/^regia$/.test(b.who)) continue;
+    if (/^orchestrator$/.test(b.who)) continue;
     add(node(`chat:box:${b.who}`, 'chat', 'chat-viva', b.who, { what: `Chat con una casella di posta: ${b.listening ? 'in ascolto' : 'non in ascolto'}${b.unread ? `, ${b.unread} da leggere` : ''}.`, live: b }));
     edges.push({ from: 'chat:lavoro', to: `chat:box:${b.who}`, kind: 'istanza', label: 'una delle chat di lavoro' });
   }
   for (const [pair, s] of Object.entries(inbox?.stats ?? {})) {
     const [a, b] = pair.split(' -> ');
-    const id = w => (/^regia$/.test(w) ? 'chat:regia-claude' : `chat:box:${w}`);
+    const id = w => (/^orchestrator$/.test(w) ? 'chat:orchestrator-claude' : `chat:box:${w}`);
     for (const w of [a, b]) if (!nodes.has(id(w))) add(node(id(w), 'chat', 'chat-viva', w, { what: 'Chat che ha usato la posta tra chat.' }));
     edges.push({ from: id(a), to: id(b), kind: 'posta', label: `${s.sent} messaggi`, weight: s.sent, source: { file: 'ops/state/inbox/inbox.log', text: `${pair}: ${s.sent} inviati, ${s.delivered} consegnati` } });
   }
@@ -360,7 +360,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
 // SHORT: one Italian line per main piece for the label; a piece not here gets the first sentence of its own header.
 export const SHORT = {
   owner: 'decide e lancia lui la produzione', colleghi: 'QA e colleghi, chi taggare',
-  'chat:regia-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:regia-cursor': 'la stessa Orchestrator dentro Cursor',
+  'chat:orchestrator-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:orchestrator-cursor': 'la stessa Orchestrator dentro Cursor',
   'chat:lavoro': 'una chat per ogni lavoro', 'harness:claude': 'le chat Claude e i loro hook', 'harness:cursor': 'le chat Cursor, stesse regole',
   'agent:reviewer': 'controlla un diff prima del merge', 'agent:code-investigator': 'trova la causa di un bug nel codice',
   'agent:prod-log-reader': 'legge log e stato di produzione', 'agent:qa': 'prova i test case del prodotto nel browser',

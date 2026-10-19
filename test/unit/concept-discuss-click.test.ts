@@ -15,7 +15,7 @@ vi.mock('../../src/renderer/styles/guide.css', () => ({}));
 vi.mock('../../src/renderer/i18n', () => ({ lang: () => 'it', t: (k: string) => k }));
 vi.mock('../../src/renderer/components/Icons', () => ({ IconChevronDown: () => null, IconChevronRight: () => null }));
 vi.mock('../../src/renderer/components/ChatInput', () => ({ setDraft }));
-vi.mock('../../src/renderer/actions', () => ({ brainBridge: { draftToRegia: fallback }, focusChat: vi.fn(), regiaId: () => null }));
+vi.mock('../../src/renderer/actions', () => ({ brainBridge: { draftToOrchestrator: fallback }, focusChat: vi.fn(), orchestratorId: () => null }));
 vi.mock('../../src/renderer/store/ui', () => ({ toast: vi.fn(), ui: { get: () => ({ prefs: { newChat: { cwd: null } } }) } }));
 vi.mock('../../src/renderer/store/store', () => ({ app: { get: () => ({ info: { brainRoot: '/brain' } }) }, createChat }));
 vi.mock('../../src/renderer/store/agents', () => ({

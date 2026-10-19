@@ -13,7 +13,7 @@ The candidate has no consumed module registry, so the registration export in
    `apply` accepts only a previously prepared opaque plan id; never accept a
    renderer-supplied file path, contents, URL or plan object at that endpoint.
 3. Mount `<OnboardingScreen port={port} language={language}/>` in FirstInterview
-   and `<RegiaConnectAction port={port} language={language}/>` in RegiaOverlay.
+   and `<OrchestratorConnectAction port={port} language={language}/>` in OrchestratorOverlay.
    Keep `port` stable. Both surfaces share current() and preserve live undo.
 4. Supply a native, no-hydration metadata adapter on Windows/macOS/Linux.
    It must inspect recall/offline/link flags and normalize them to local.ts bits.

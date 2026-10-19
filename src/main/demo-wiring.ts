@@ -23,7 +23,7 @@ import path from 'node:path';
 import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachRegiaWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
+import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
@@ -111,7 +111,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const runner = commandRunner(ctx, chats);
   const asks = attachCommandAsks(ctx, runner, brain, now);
   // the demo's scripted Orchestrator answers every message: only an e2e test that asks for it gets the news
-  const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
+  const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && process.env.SB_ORCHESTRATOR_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
   // "N novità in attesa" (#88): the demo has no mail, only the news
@@ -170,7 +170,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a tool call of a chat, running or finished (e2e: the live brain map); the same id again updates it */
     tool: (chatId: string, t: { id: string; name: string; input: unknown; summary?: string; status?: 'running' | 'ok' | 'error' }) =>
       chats.upsert(chatId, { kind: 'tool', id: t.id, at: now(), name: t.name, summary: t.summary ?? t.name, input: t.input, status: t.status ?? 'running' }),
-    /** "Eventi all'Orchestrator": the chats whose news waits (`chat:kind`), and how much of it a busy Orchestrator holds (e2e: regia-wake) */
+    /** "Eventi all'Orchestrator": the chats whose news waits (`chat:kind`), and how much of it a busy Orchestrator holds (e2e: orchestrator-wake) */
     wake: () => ({ queued: wake.queued().map(e => `${e.chatId}:${e.kind}`), held: wake.held() }),
     asks: () => ({ reads: asks.reads, pending: asks.pending().map(r => r.chatId) }),
   };

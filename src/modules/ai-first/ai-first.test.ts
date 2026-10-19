@@ -25,7 +25,7 @@ describe('AI connection evidence', () => {
       }
     }
   });
-  it('temporarily gives an active guide the empty Regia space and restores normal layout afterwards', () => {
+  it('temporarily gives an active guide the empty Orchestrator space and restores normal layout afterwards', () => {
     const setup: SetupState = { version: 1, status: 'draft', updatedAt: 0, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [], guide: { stage: 'guided', engine: 'claude', chatId: 'guide' } } };
     expect(guideChatId(setup)).toBe('guide');
     expect(guideHasCenter(setup, false)).toBe(true);

@@ -812,12 +812,12 @@ export class AgentCatalogService {
   }
   /** maxContext = the agent's "Contesto massimo" (tokens) for its chat's engine, absent = the user's setting (#80). */
   resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; maxContext?: number } {
-    if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.regia) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
+    if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.orchestrator) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
     if (req.agentId === undefined) {
       const compatible = { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
       // The Orchestrator is no agent's run (no run, no metrics): it keeps the selected harness/model and takes only the
       // preset's instructions and policy.
-      if (req.regia) {
+      if (req.orchestrator) {
         const p = this.profiles.find(x => x.id === ORCHESTRATOR_AGENT_ID && x.status === 'active');
         if (!p) return { ...compatible, owner: orchestratorOwner(compatible.owner), instructions: ORCHESTRATOR_INSTRUCTIONS };
         return { ...compatible, owner: orchestratorOwner(compatible.owner, p), instructions: p.instructions,

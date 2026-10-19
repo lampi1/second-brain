@@ -23,15 +23,15 @@ afterEach(() => { for (const d of tmp.splice(0)) fs.rmSync(d, { recursive: true,
 
 describe('fold and terms', () => {
   it('lowers, drops accents and turns separators into spaces without changing the length', () => {
-    const s = 'Perché feat/Regia-Overlay_v2.md È';
-    expect(fold(s)).toBe('perche feat regia overlay v2 md e');
+    const s = 'Perché feat/Orchestrator-Overlay_v2.md È';
+    expect(fold(s)).toBe('perche feat orchestrator overlay v2 md e');
     expect(fold(s)).toHaveLength(s.length);
     expect(fold('İstanbul')).toHaveLength('İstanbul'.length);
   });
   it('splits the query into distinct words, dropping one-letter words unless alone', () => {
     expect(terms('  Totale  d ordine totale ').words).toEqual(['totale', 'ordine']);
     expect(terms('x').words).toEqual(['x']);
-    expect(terms('feat/regia').phrase).toBe('feat regia');
+    expect(terms('feat/orchestrator').phrase).toBe('feat orchestrator');
   });
 });
 
@@ -74,9 +74,9 @@ describe('searchDocs', () => {
   });
 
   it('finds a branch by its words', () => {
-    const d: Doc = { key: 'branch:x', kind: 'branch', title: 'feat/regia-overlay', titleLow: fold('feat/regia-overlay'), at: NOW, parts: [] };
-    expect(searchDocs([d], 'regia overlay', { now: NOW })).toHaveLength(1);
-    expect(searchDocs([d], 'feat/regia', { now: NOW })).toHaveLength(1);
+    const d: Doc = { key: 'branch:x', kind: 'branch', title: 'feat/orchestrator-overlay', titleLow: fold('feat/orchestrator-overlay'), at: NOW, parts: [] };
+    expect(searchDocs([d], 'orchestrator overlay', { now: NOW })).toHaveLength(1);
+    expect(searchDocs([d], 'feat/orchestrator', { now: NOW })).toHaveLength(1);
   });
 });
 
@@ -158,7 +158,7 @@ describe('sources', () => {
 describe('SearchService', () => {
   const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
     id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x\\alfa', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
-    costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: NOW, browserTabIds: [], ...p,
+    costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: NOW, browserTabIds: [], ...p,
   });
 
   function setup() {

@@ -81,7 +81,7 @@ const FIX = /\b(fix\w*|hotfix|correggi\w*|corregger\w*|sistema (il|la|i|le) (bug
  *  match = 'altro'. */
 export function taskOf(title: string, prompt: string, rules: [string, string, string][] | undefined): TaskKind {
   const t = String(title ?? '').trim();
-  if (/^regia\b/i.test(t)) return 'regia';
+  if (/^orchestrator\b/i.test(t)) return 'orchestrator';
   const word = (s: string): TaskKind | null => {
     for (const [k, src, flags] of rules ?? []) {
       try { if (new RegExp(src, flags).test(plain(s)) && (TASK_KINDS as readonly string[]).includes(k)) return k as TaskKind; } catch { /* a bad rule is skipped */ }
@@ -255,7 +255,7 @@ export const armKey = (a: Arm, reg: ModelRegistry | null): string => `${a.harnes
 export function explore(table: Pick<RoutingTable, 'exploration'> | null, item: { kind: TaskKind; area: string }, base: Arm, reg: ModelRegistry | null,
   canRun: (h: Harness) => boolean, counts: (kind: TaskKind) => Map<string, number>, rnd: () => number = Math.random): (Arm & { samples: number }) | null {
   const rate = Math.min(Math.max(Number(table?.exploration) || 0, 0), 0.5);
-  if (!reg || rate <= 0 || item.kind === 'regia' || rnd() >= rate) return null;
+  if (!reg || rate <= 0 || item.kind === 'orchestrator' || rnd() >= rate) return null;
   const arms: Arm[] = [];
   for (const m of reg.models) {
     const h = m.harness;

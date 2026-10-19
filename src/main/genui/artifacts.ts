@@ -1,7 +1,7 @@
 // Generative UI, the main half (ADR 0033): the show_ui tool on every chat's own MCP endpoint and the store of the
 // visuals it makes ("artifacts", ChatItem kind 'artifact'). A chat passes a catalog component name + props
 // (shared/genui.ts checks them: a wrong call gets a clear error back as the tool result, so the model retries); the
-// visual becomes an item of the calling chat (target chat), of its Orchestrator (target regia: the Orchestrator's panel shows it with
+// visual becomes an item of the calling chat (target chat), of its Orchestrator (target orchestrator: the Orchestrator's panel shows it with
 // the sender's name) or waits for the chat's next AskUserQuestion (target next-ask: attached to it when the question
 // arrives, a plain card after ASK_WAIT_MS). Visuals live in <userData>/artifacts/<chatId>.json (at most
 // ARTIFACT_MAX_PER_CHAT per chat), so they survive a transcript reload and a restart; chat:items merges them in by time.
@@ -11,7 +11,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ArtifactTarget, ChatItem, ChatSummary, EventMap } from '../../shared/contract';
 import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, SUMMARY_MAX, TITLE_MAX, UI_COMPONENTS, checkUi } from '../../shared/genui';
-import { regiaOfChat } from '../../shared/regia';
 import type { McpTool } from '../mcp/server';
 import { log, errText } from '../log';
 import { SCREENSHOT_HINT } from '../ask-image';
@@ -59,10 +58,9 @@ export class Artifacts {
     const key = typeof a.id === 'string' ? a.id : `${this.now().toString(36)}${++this.n}`;
 
     let owner = caller.id, where = 'in questa chat';
-    if (target === 'regia') {
-      const regia = caller.isRegia ? caller.id
-        : regiaOfChat(caller, all.filter(c => !c.closedAt));
-      if (regia) { owner = regia; where = regia === caller.id ? 'nel pannello dell’Orchestrator' : `nell’Orchestrator «${all.find(c => c.id === regia)?.title ?? 'Orchestrator'}»`; }
+    if (target === 'orchestrator') {
+      const orchestrator = caller.isOrchestrator ? caller.id : all.find(c => c.isOrchestrator && !c.closedAt)?.id;
+      if (orchestrator) { owner = orchestrator; where = orchestrator === caller.id ? 'nel pannello dell’Orchestrator' : 'nell’Orchestrator'; }
       else where = 'in questa chat (nessun Orchestrator aperto)';
     }
     // in another chat's list (its Orchestrator) the id carries the sender: two chats with the same key never replace each
@@ -224,7 +222,7 @@ export function showUiTool(store: Artifacts): McpTool {
     name: 'show_ui',
     description: [
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
-      'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · regia (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
+      'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · orchestrator (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
       'props per component:',
       'table {columns: string[], rows: [{cells: string[], status?, link?: {label, href}}]}',
       'cards {options: [{title, summary?, pros?: string[], cons?: string[], effort?, risk?: low|medium|high, recommended?: true on one at most}]} (1-6 options)',

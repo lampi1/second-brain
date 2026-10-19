@@ -9,13 +9,13 @@
 // lib/chime.ts, setting tasks.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
 // as overlay:action and goes through the same actions as everywhere else. Started by main.tsx; Ctrl+J uses focusLayer().
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
-import { chatName } from '@shared/regia';
+import { chatName } from '@shared/orchestrator';
 import { sb } from '../sb';
 import { app, answer, attemptOf, dismissCommand, dndActive, runCommand } from '../store/store';
 import { dismissEventToasts, setLayerHeld, setRead, ui } from '../store/ui';
 import { answerLater } from './later';
 import { now } from './clock';
-import { columnSize, viewport } from './regia-dock';
+import { columnSize, viewport } from './orchestrator-dock';
 import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
@@ -60,15 +60,15 @@ export function visibleRequestKeys(): Set<string> {
 }
 
 /** The key of the request card the Orchestrator widget shows on screen (it floats like the layer), if any. */
-export function regiaCardOnScreen(): string | null {
+export function orchestratorCardOnScreen(): string | null {
   if (ui.get().modal || !app.get().pending.length) return null;
-  const el = [...document.querySelectorAll<HTMLElement>('[data-regia-overlay] [data-request-key]')].find(onScreen);
+  const el = [...document.querySelectorAll<HTMLElement>('[data-orchestrator-overlay] [data-request-key]')].find(onScreen);
   return el?.dataset.requestKey ?? null;
 }
 
 /** A request popup is on screen in the app page: the Orchestrator widget's card or the questions window. Then the layer shows
  *  no card: never two popups at once. */
-export const popupOnScreen = (): boolean => ui.get().qwin.shown || regiaCardOnScreen() !== null;
+export const popupOnScreen = (): boolean => ui.get().qwin.shown || orchestratorCardOnScreen() !== null;
 
 /** Would this request float in the layer, were no other popup on screen? (Ctrl+J to it: the popup moves there.) */
 export const floatsBehindPopup = (key: string): boolean => computeModel(true).cards.some(c => c.key === key);
@@ -80,13 +80,13 @@ export function computeModel(ignorePopup = false): OverlayModel {
   const cards: OverlayCard[] = [];
   // "Domande in finestra": the questions window shows them all (QuestionsWindow.tsx), the layer keeps only the toasts;
   // the same while the Orchestrator widget shows a request card (one popup at a time), unless the user is answering here
-  // (the layer has the keyboard on a card still open: the Orchestrator's card waits instead, RegiaTile.tsx)
+  // (the layer has the keyboard on a card still open: the Orchestrator's card waits instead, OrchestratorTile.tsx)
   const held = !!u.layerHeld && s.pending.some(p => keyOf(p) === u.layerHeld);
   for (const req of u.later || questionsModalOn(s) || (!ignorePopup && !held && popupOnScreen()) ? [] : s.pending) {
     const key = keyOf(req);
     if (u.hidden.includes(req.chatId) || visible.has(key)) continue;
     const c = s.chats[req.chatId];
-    cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', engine: (c && engineOf(c.harness)) ?? null, isRegia: !!c?.isRegia, attempt: attemptOf(key) });
+    cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', engine: (c && engineOf(c.harness)) ?? null, isOrchestrator: !!c?.isOrchestrator, attempt: attemptOf(key) });
   }
   if (focusKey && !cards.some(c => c.key === focusKey)) focusKey = undefined;
   // the card the keyboard is sent to (Ctrl+J) is the one shown in full
@@ -102,7 +102,7 @@ export function computeModel(ignorePopup = false): OverlayModel {
     action: g.kind === 'chat-waiting' ? 'Rispondi' : 'Apri',
   }));
   const v = viewport();
-  const size = columnSize(u.prefs.regiaSize, v, u.page === 'home' && !u.map);
+  const size = columnSize(u.prefs.orchestratorSize, v, u.page === 'home' && !u.map);
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};

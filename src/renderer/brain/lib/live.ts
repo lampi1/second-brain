@@ -10,7 +10,7 @@ import type { MapEdge, MapNode } from '../types';
 import { edgeKey, groupIndex, relFile } from './map';
 
 /** `engine` = the engine's short name ("Claude", "Kimi"), from the app's registry */
-export interface LiveChat { id: string; title: string; harness: string; engine: string; state: string; isRegia: boolean; cwd: string }
+export interface LiveChat { id: string; title: string; harness: string; engine: string; state: string; isOrchestrator: boolean; cwd: string }
 /** A tool call of a chat: running (endAt null) or finished at endAt. */
 export interface LiveTool { chatId: string; id: string; name: string; input: unknown; summary: string; startAt: number; endAt: number | null; error?: boolean }
 export interface LiveTab { chatId: string; env: string | null; title: string; url: string }
@@ -33,7 +33,7 @@ export interface LiveGraph {
   /** node id → the chat a click opens (a live chat, the Orchestrator) */
   chatOf: Map<string, string>;
   /** the chats at work, newest activity first (the legend) */
-  working: { id: string; title: string; harness: string; engine: string; doing: string; level: number; running: boolean; isRegia: boolean }[];
+  working: { id: string; title: string; harness: string; engine: string; doing: string; level: number; running: boolean; isOrchestrator: boolean }[];
   counts: { chats: number; files: number; tools: number };
 }
 
@@ -101,7 +101,7 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
     return null;
   };
   const engineNode = (harness: string) => findBy(n => n.kind === 'harness' && (n.id === `harness:${harness}` || n.label.toLowerCase() === harness.toLowerCase()));
-  const regiaNode = findBy(n => n.kind === 'regia');
+  const orchestratorNode = findBy(n => n.kind === 'orchestrator');
 
   const light = (id: string, kind: LiveKind, level: number, running: boolean, doing: string, chatId: string) => {
     if (level <= 0) return;
@@ -128,7 +128,7 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
 
   // a chat node: the Orchestrator is the map's own Orchestrator; any other chat at work gets its own neuron in the chat layer
   const chatNode = (c: LiveChat): string => {
-    if (c.isRegia && regiaNode) { chatOf.set(regiaNode, c.id); return regiaNode; }
+    if (c.isOrchestrator && orchestratorNode) { chatOf.set(orchestratorNode, c.id); return orchestratorNode; }
     const id = extra({ id: `live:chat:${c.id}`, layer: 'chat', kind: 'chat-viva', label: c.title, short: `chat su ${c.engine}`, degree: 2, members: [] });
     chatOf.set(id, c.id);
     return id;
@@ -144,7 +144,7 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
     const cid = chatNode(c);
     const doing = ts[0] ? ts[0].summary || ts[0].name : c.state === 'waiting' ? 'aspetta te' : 'sta pensando';
     light(cid, 'chat', chatLevel, chatRunning, doing, c.id);
-    working.push({ id: c.id, title: c.title, harness: c.harness, engine: c.engine, doing, level: chatLevel, running: chatRunning, isRegia: c.isRegia });
+    working.push({ id: c.id, title: c.title, harness: c.harness, engine: c.engine, doing, level: chatLevel, running: chatRunning, isOrchestrator: c.isOrchestrator });
     const eng = engineNode(c.harness);
     if (eng && active) { light(eng, 'engine', chatLevel, chatRunning, c.title, c.id); link(eng, cid, `gira su ${c.engine}`, chatLevel, chatRunning); }
 

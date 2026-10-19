@@ -7,7 +7,7 @@ import { errorPatterns, normType, previousSpend, rowType, trend } from '../../..
 import { chatPrompt, chatTitle, discussText, ERROR_QUESTION, topicKey, type Topic } from '../../../src/renderer/brain/lib/discuss';
 import { caughtWeeks, type Caught } from '../../../src/renderer/brain/lib/quality';
 
-const row = (o: Partial<ErrorRow>): ErrorRow => ({ data: '2026-10-13', ora: '10:00', chi: 'Regia', area: 'QA', tipo: 'fatto-non-verificato', detto: 'd', vero: 'v', visto: 'Alex', regola: '', ...o });
+const row = (o: Partial<ErrorRow>): ErrorRow => ({ data: '2026-10-13', ora: '10:00', chi: 'Orchestrator', area: 'QA', tipo: 'fatto-non-verificato', detto: 'd', vero: 'v', visto: 'Alex', regola: '', ...o });
 
 describe('trend', () => {
   it('says down, up and stable in words, with the tone from lowerIsBetter', () => {
@@ -26,8 +26,8 @@ describe('trend', () => {
 describe('errorPatterns', () => {
   const rows = [
     row({ data: '2026-10-13', ora: '18:00', chi: 'QA ordini', area: 'QA', detto: 'passato', vero: 'fallito' }),
-    row({ data: '2026-10-12', chi: 'Regia', area: 'QA', visto: 'agente stesso' }),
-    row({ data: '2026-10-03', chi: 'Regia', area: 'PR', regola: 'rules/qa.md "screenshot"' }),
+    row({ data: '2026-10-12', chi: 'Orchestrator', area: 'QA', visto: 'agente stesso' }),
+    row({ data: '2026-10-03', chi: 'Orchestrator', area: 'PR', regola: 'rules/qa.md "screenshot"' }),
     row({ data: '2026-10-10', tipo: 'Regola ignorata', area: 'memoria' }),
     row({ data: '2026-10-01', tipo: 'regola-ignorata', area: 'memoria' }),
     row({ data: '2026-10-11', tipo: 'non-capito' }),
@@ -43,7 +43,7 @@ describe('errorPatterns', () => {
     const g = p.recurring[0]!;
     expect(g).toMatchObject({ count: 3, week: 2, prevWeek: 1, first: '2026-10-03', last: '2026-10-13', lastTime: '18:00', byOwner: 2, official: true });
     expect(g.areas).toEqual([['QA', 2], ['PR', 1]]);
-    expect(g.chats[0]).toEqual(['Regia', 2]);
+    expect(g.chats[0]).toEqual(['Orchestrator', 2]);
     expect(g.latest.detto).toBe('passato');
   });
   it('joins the rules of recurrence.mjs (with outcome) and of the rows, newest first', () => {
@@ -104,11 +104,11 @@ describe('quote topics', () => {
 describe('rowType on off-format lines', () => {
   const off = (riga: string): ErrorRow => row({ tipo: '', chi: '', area: '', detto: '', riga });
   it('reads the official type from the raw line when it is there', () => {
-    expect(rowType(off('2026-10-07 21:40 · Regia · hub · posto-sbagliato · bozza di un messaggio messa solo nell\'anteprima di un pannello · il proprietario non vede pannelli da dove segue · il proprietario ("che messaggio?")'))).toBe('posto-sbagliato');
-    expect(rowType(off('2026-10-08 17:27 · Regia + chat di rilascio · fatto-non-verificato · detto: \'impostazione rotta\' · vero: confermato · visto da: il proprietario'))).toBe('fatto-non-verificato');
+    expect(rowType(off('2026-10-07 21:40 · Orchestrator · hub · posto-sbagliato · bozza di un messaggio messa solo nell\'anteprima di un pannello · il proprietario non vede pannelli da dove segue · il proprietario ("che messaggio?")'))).toBe('posto-sbagliato');
+    expect(rowType(off('2026-10-08 17:27 · Orchestrator + chat di rilascio · fatto-non-verificato · detto: \'impostazione rotta\' · vero: confermato · visto da: il proprietario'))).toBe('fatto-non-verificato');
   });
   it('has no type when the line has none: the page groups it as "Formato non riconosciuto" with the line', () => {
-    const r = off('2026-10-11 · Regia · app · detto: per la revisione la chat chiede al proprietario di lanciarla · vero: la chat ha i suoi reviewer · visto da: il proprietario');
+    const r = off('2026-10-11 · Orchestrator · app · detto: per la revisione la chat chiede al proprietario di lanciarla · vero: la chat ha i suoi reviewer · visto da: il proprietario');
     expect(rowType(r)).toBe('');
     const p = errorPatterns([r], [], '2026-10-13', 'proprietario');
     expect(p.unknown).toEqual([r]);
@@ -122,9 +122,9 @@ describe('rowType: more real shapes', () => {
   it('takes the field before an English "said:" when chat and area come first', () =>
     expect(rowType(off('2026-10-13 13:10 · App barra-fullscreen · second-brain top bar · regression · said: top bar fit fix done · true: broke after merge'))).toBe('regression'));
   it('reads "<tipo>: detto …" glued in one field', () =>
-    expect(rowType(off('2026-10-13 11:20 · Regia dell\'app · github · fatto-non-verificato: detto che il repo non va su GitHub · vero: va'))).toBe('fatto-non-verificato'));
+    expect(rowType(off('2026-10-13 11:20 · Orchestrator dell\'app · github · fatto-non-verificato: detto che il repo non va su GitHub · vero: va'))).toBe('fatto-non-verificato'));
   it('never takes the area for a type (chat · area · detto)', () =>
-    expect(rowType(off('2026-10-11 · Regia · second-brain app · detto: v1 pronta · vero: no'))).toBe(''));
+    expect(rowType(off('2026-10-11 · Orchestrator · second-brain app · detto: v1 pronta · vero: no'))).toBe(''));
 });
 
 describe('errorPatterns: a rule written on an alias row', () => {

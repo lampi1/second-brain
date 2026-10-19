@@ -24,7 +24,7 @@
   --bx-green-bg: var(--green-bg, rgba(79, 209, 139, 0.11));
   --bx-red: var(--red, #ff6b7a);
   --bx-red-bg: var(--red-bg, rgba(255, 107, 122, 0.11));
-  --bx-violet: var(--violet, var(--regia, #b892ff));
+  --bx-violet: var(--violet, var(--orchestrator, #b892ff));
   --bx-violet-bg: var(--violet-bg, rgba(184, 146, 255, 0.12));
   --bx-focus: var(--focus, #93a8ff);
   --bx-on-accent: var(--on-accent, #0b0d14);

@@ -123,7 +123,7 @@ export const auditIt = {
   "audit.ProgressPanel.anOutcomeToReview": "Un risultato da rivedere",
   "audit.ProgressPanel.openTheOutcome": "Apri il risultato",
   "audit.ProgressPanel.iConfirmIGotAUseful": "Confermo: ho ottenuto un risultato utile",
-  "audit.RegiaOverlay.statusChatsAndPrs": "Stato: chat e PR",
+  "audit.OrchestratorOverlay.statusChatsAndPrs": "Stato: chat e PR",
   "audit.RoutingGroup.modelRouting": "Instradamento modelli",
   "audit.RoutingGroup.aTableOfRules": "Una tabella di regole",
   "audit.RoutingGroup.forEachKindOfWorkOptionally": "Vale per le chat senza un agente scelto (Generale) e dà il modello agli agenti che non ne indicano uno: il profilo dell’agente decide sempre. Per ogni tipo di lavoro, ed eventualmente area, dice con quale modello e quanto sforzo parte la chat. Se più righe valgono, vince la più precisa: tipo e area, poi solo area, poi solo tipo, poi «qualsiasi». Così una riga d'area (per esempio App) vale per tutte le sue chat.",

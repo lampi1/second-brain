@@ -74,7 +74,7 @@ describe('notify', () => {
     // ideas and reflections open Idee filtered by author (the AI's: "Dall'IA"), not the raw file
     expect(linkOfEvent(ev('7', 'idea', 1, { file: 'ideas.md', who: "dell'IA" }))).toBe('sb://idee/ia');
     expect(linkOfEvent(ev('8', 'idea', 1, { file: 'ideas.md', who: 'tua' }))).toBe('sb://idee/mie');
-    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Regia' }))).toBe('sb://idee/ia');
+    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Orchestrator' }))).toBe('sb://idee/ia');
     expect(linkOfEvent(ev('10', 'playbook', 1, { file: 'playbooks/x.md' }))).toBe('sb://esplora/playbooks/x.md');
     expect(parseLink('sb://esplora/ops/runbook/x.md')).toEqual({ page: 'esplora', element: 'ops/runbook/x.md' });
     expect(parseLink('sb://workspace/chat-qa')).toEqual({ page: 'workspace', element: 'chat-qa' });

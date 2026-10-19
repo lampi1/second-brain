@@ -122,12 +122,12 @@ describe('claude plugin', () => {
 describe('codex launch', () => {
   it('approval, sandbox and both MCP servers as -c overrides; the brain\'s instructions and skills', () => {
     const b = brain();
-    const r = codexLaunch({ mcpUrl: 'http://127.0.0.1:4329/mcp/c/abc', appMcpUrl: 'http://127.0.0.1:4329/mcp/app/r/x/t', domains: b.domains, brain: true });
+    const r = codexLaunch({ mcpUrl: 'http://127.0.0.1:4329/mcp/c/abc', appMcpUrl: 'http://127.0.0.1:4329/mcp/app/o/x/t', domains: b.domains, brain: true });
     expect(r.configArgs).toEqual(['-c', 'approval_policy=on-request', '-c', 'sandbox_mode=workspace-write',
       '-c', 'mcp_servers.second-brain.url=http://127.0.0.1:4329/mcp/c/abc',
       '-c', 'mcp_servers.second-brain.default_tools_approval_mode=prompt',
       ...['send_to_chat', 'list_chats'].flatMap(tool => ['-c', `mcp_servers.second-brain.tools.${tool}.approval_mode=approve`]),
-      '-c', 'mcp_servers.second-brain-app.url=http://127.0.0.1:4329/mcp/app/r/x/t',
+      '-c', 'mcp_servers.second-brain-app.url=http://127.0.0.1:4329/mcp/app/o/x/t',
       '-c', 'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(r.developerInstructions).toContain('Regole del lavoro');

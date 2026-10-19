@@ -142,7 +142,7 @@ for (const scheme of ['dark', 'light'] as const) {
     const { userData, ev } = fixture();
     const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
     try {
-      for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+      for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
       const q = `Ho corretto il calcolo del rimborso con lo sconto. Approvi la correzione? ![Prima](${path.join(ev, 'shots', 'before.png')}) ![Dopo](${path.join(ev, 'shots', 'after.png')})`;
       await demo(app, (d, id, req) => d.ask(id, req), 'qa', {
         type: 'question', tool: 'AskUserQuestion', title: q, detail: q, input: {},

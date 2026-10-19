@@ -1,17 +1,17 @@
-// The Orchestrator helpers (src/renderer/lib/regia-route.ts): which chat is the Orchestrator, one Grindhouse for every chat, and the
+// The Orchestrator helpers (src/renderer/lib/orchestrator-route.ts): which chat is the Orchestrator, one Grindhouse for every chat, and the
 // commands of the turn that ends with a question (shown with "Esegui" on its popup). "Domande all'Orchestrator" is gone
 // (the user, 2026-10-13): no routing left to test.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
-import { commandsOfTurn, regiaIdOf } from '../../src/renderer/lib/regia-route';
+import { commandsOfTurn, orchestratorIdOf } from '../../src/renderer/lib/orchestrator-route';
 import { workspaceTiles } from '../../src/renderer/lib/grid';
 import type { AppState } from '../../src/renderer/store/state';
 
-describe('the Regia from the app state', () => {
-  it('finds the Regia among the chats', () => {
-    const s = { order: ['a', 'r'], chats: { a: { isRegia: false }, r: { isRegia: true } } } as unknown as Pick<AppState, 'order' | 'chats'>;
-    expect(regiaIdOf(s)).toBe('r');
-    expect(regiaIdOf({ order: ['a'], chats: { a: {} } } as unknown as Pick<AppState, 'order' | 'chats'>)).toBe(null);
+describe('the Orchestrator from the app state', () => {
+  it('finds the Orchestrator among the chats', () => {
+    const s = { order: ['a', 'r'], chats: { a: { isOrchestrator: false }, r: { isOrchestrator: true } } } as unknown as Pick<AppState, 'order' | 'chats'>;
+    expect(orchestratorIdOf(s)).toBe('r');
+    expect(orchestratorIdOf({ order: ['a'], chats: { a: {} } } as unknown as Pick<AppState, 'order' | 'chats'>)).toBe(null);
   });
 });
 

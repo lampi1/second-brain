@@ -157,7 +157,7 @@ describe('Generale', () => {
     expect(r.instructions).toMatch(/Chiarisci il risultato atteso/);
     // ceiling null = Brother's settings: no policy
     expect(r.policy).toBeNull();
-    expect(c.resolve({ harness: 'claude', cwd: '/unused', regia: true }).owner.source).toBe('routed');
+    expect(c.resolve({ harness: 'claude', cwd: '/unused', orchestrator: true }).owner.source).toBe('routed');
   });
 
   it('restores an archived Generale and recreates a missing one', () => {

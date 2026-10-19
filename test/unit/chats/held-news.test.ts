@@ -1,32 +1,32 @@
-// Unit tests of "N novità in attesa" (#88): RegiaWake.heldNews and ChatMail.heldMail list what the delivery rule holds
-// back for the Orchestrator (chats/regia-delivery.ts heldWhy says why), and HeldNewsHub (chats/held-news.ts) tells the
+// Unit tests of "N novità in attesa" (#88): OrchestratorWake.heldNews and ChatMail.heldMail list what the delivery rule holds
+// back for the Orchestrator (chats/orchestrator-delivery.ts heldWhy says why), and HeldNewsHub (chats/held-news.ts) tells the
 // page only when that list changed. Reading the list never sends anything to the Orchestrator and never changes when
 // the news goes: the cases are the issue's (a question panel open + a worker that finishes = 1, cleared on delivery; a
 // quiet permission request counted too).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import type { ChatSummary, HeldNewsState, PendingRequest } from '../../../src/shared/contract';
-import { RegiaWake } from '../../../src/main/chats/regia-wake';
-import { heldWhy } from '../../../src/main/chats/regia-delivery';
+import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
+import { heldWhy } from '../../../src/main/chats/orchestrator-delivery';
 import { attachHeldNews, HeldNewsHub } from '../../../src/main/chats/held-news';
-import { ChatMail, inboxDir, REGIA_GROUP_MS, sendMail } from '../../../src/main/chats/mail';
+import { ChatMail, inboxDir, ORCHESTRATOR_GROUP_MS, sendMail } from '../../../src/main/chats/mail';
 import { tmp } from './helpers';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 } as ChatSummary);
 
 const perm = (chatId: string, id = 'p1'): PendingRequest => ({ id, chatId, type: 'permission', tool: 'Bash', title: 'Bash · npm test', detail: 'npm test', input: {}, at: 1 });
 
 function make() {
   const sent: { chatId: string; text: string }[] = [];
-  const w = new RegiaWake({ send: async (chatId, text) => { sent.push({ chatId, text }); }, enabled: () => true, groupMs: 1000, perChatMs: 10_000, now: () => Date.now() });
+  const w = new OrchestratorWake({ send: async (chatId, text) => { sent.push({ chatId, text }); }, enabled: () => true, groupMs: 1000, perChatMs: 10_000, now: () => Date.now() });
   const emitted: HeldNewsState[] = [];
-  const hub = attachHeldNews({ emit: (ch, p) => { if (ch === 'regia:heldChanged') emitted.push(p as HeldNewsState); } }, w);
+  const hub = attachHeldNews({ emit: (ch, p) => { if (ch === 'orchestrator:heldChanged') emitted.push(p as HeldNewsState); } }, w);
   const up = (p: Partial<ChatSummary> & { id: string }) => w.observe('chat:updated', chat(p));
   const finish = (id: string, lastText: string) => { up({ id, state: 'running' }); up({ id, state: 'idle', lastText }); };
-  up({ id: 'regia', isRegia: true, title: 'Orchestrator', state: 'idle' });
+  up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle' });
   return { w, sent, hub, emitted, up, finish };
 }
 
@@ -43,21 +43,21 @@ describe('heldWhy', () => {
   });
 });
 
-describe('RegiaWake.heldNews and the hub', () => {
+describe('OrchestratorWake.heldNews and the hub', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
   it('a question panel open on the Orchestrator and a worker that finishes: 1 held, cleared on delivery', async () => {
     const { w, sent, hub, emitted, up, finish } = make();
-    up({ id: 'regia', isRegia: true, title: 'Orchestrator', state: 'waiting', pending: 1 });
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'waiting', pending: 1 });
     finish('App · Mappa', 'Mappa pronta.');
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toEqual([]); // the rule is unchanged: nothing goes while it waits for the user
-    expect(hub.get().items).toEqual([expect.objectContaining({ regiaId: 'regia', chatId: 'App · Mappa', title: 'App · Mappa', kind: 'done', why: 'user' })]);
+    expect(hub.get().items).toEqual([expect.objectContaining({ orchestratorId: 'orchestrator', chatId: 'App · Mappa', title: 'App · Mappa', kind: 'done', why: 'user' })]);
     expect(emitted.at(-1)?.items).toHaveLength(1);
     expect(w.held()).toBe(1);
     // the user answers: the news goes after the group window, and the list empties
-    up({ id: 'regia', isRegia: true, title: 'Orchestrator', state: 'idle', pending: 0 });
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle', pending: 0 });
     expect(hub.get().items[0]?.why).toBe('group');
     await vi.advanceTimersByTimeAsync(1000);
     expect(sent).toHaveLength(1);
@@ -108,10 +108,10 @@ describe('ChatMail.heldMail', () => {
   let mails: ChatMail[] = [];
   afterEach(() => { for (const m of mails) m.stop(); mails = []; });
 
-  function setup(regia: Partial<ChatSummary>) {
+  function setup(orchestrator: Partial<ChatSummary>) {
     const root = tmp('held'); const dir = inboxDir(root);
     fs.mkdirSync(dir, { recursive: true });
-    const list = [chat({ id: 'w', title: 'App · Lavoro' }), chat({ id: 'r', title: 'Orchestrator', isRegia: true, ...regia })];
+    const list = [chat({ id: 'w', title: 'App · Lavoro' }), chat({ id: 'r', title: 'Orchestrator', isOrchestrator: true, ...orchestrator })];
     const sent: string[] = [];
     const mail = new ChatMail({ root: () => root, chats: { list: () => list, send: async id => { sent.push(id); } }, instance: 'second-brain-dev', now: () => clock.t });
     mails.push(mail);
@@ -125,12 +125,12 @@ describe('ChatMail.heldMail', () => {
     mail.onHeldChange(changes);
     post('feat/x pronto da unire: 3c6f315');
     expect(await mail.tick()).toBe(0);
-    expect(mail.heldMail()).toEqual([expect.objectContaining({ regiaId: 'r', chatId: 'w', title: 'App · Lavoro', kind: 'mail', why: 'user', at: clock.t })]);
+    expect(mail.heldMail()).toEqual([expect.objectContaining({ orchestratorId: 'r', chatId: 'w', title: 'App · Lavoro', kind: 'mail', why: 'user', at: clock.t })]);
     expect(changes).toHaveBeenCalledTimes(1);
     await mail.tick();
     expect(changes).toHaveBeenCalledTimes(1); // same list: no second call
     list[1] = { ...list[1]!, state: 'idle', pending: 0 };
-    clock.t += REGIA_GROUP_MS;
+    clock.t += ORCHESTRATOR_GROUP_MS;
     expect(await mail.tick()).toBe(1);
     expect(sent).toEqual(['r']);
     expect(mail.heldMail()).toEqual([]);
@@ -146,7 +146,7 @@ describe('ChatMail.heldMail', () => {
 
   it('the hub merges the news and the mail, oldest first', async () => {
     const { mail, post } = setup({ state: 'waiting', pending: 1 });
-    const w = new RegiaWake({ send: async () => {}, enabled: () => true, list: () => [chat({ id: 'r', title: 'Orchestrator', isRegia: true, state: 'waiting', pending: 1 })] });
+    const w = new OrchestratorWake({ send: async () => {}, enabled: () => true, list: () => [chat({ id: 'r', title: 'Orchestrator', isOrchestrator: true, state: 'waiting', pending: 1 })] });
     const hub = attachHeldNews({ emit: () => {} }, w, mail);
     post('pronto da unire');
     await mail.tick();
@@ -159,8 +159,8 @@ describe('ChatMail.heldMail', () => {
 
 describe('a request of a chat not seen since the start', () => {
   it('is read from the list: the quiet permission is counted (and rides along with the next news)', () => {
-    const list = [chat({ id: 'regia', isRegia: true, state: 'waiting', pending: 1 }), chat({ id: 'fix', title: 'Fix totale ordine', state: 'running' })];
-    const w = new RegiaWake({ send: async () => {}, enabled: () => true, list: () => list });
+    const list = [chat({ id: 'orchestrator', isOrchestrator: true, state: 'waiting', pending: 1 }), chat({ id: 'fix', title: 'Fix totale ordine', state: 'running' })];
+    const w = new OrchestratorWake({ send: async () => {}, enabled: () => true, list: () => list });
     const hub = attachHeldNews({ emit: () => {} }, w);
     w.observe('pending:added', perm('fix'));
     w.stop();

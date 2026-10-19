@@ -84,7 +84,7 @@ export function OnboardingScreen({ port, language = 'it', onClose, visible = tru
     {onClose && <div className="ob-actions"><button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>{t.skip}</button></div>}
   </section>;
 }
-export function RegiaConnectAction(props: ScreenProps) {
+export function OrchestratorConnectAction(props: ScreenProps) {
   const [open, setOpen] = useState(false);
   return <><button className="btn" type="button" aria-expanded={open} onClick={() => setOpen(v => !v)}>{copy[props.language ?? 'it'].title}</button><div hidden={!open}><OnboardingScreen {...props} visible={open} onClose={() => setOpen(false)}/></div></>;
 }

@@ -110,13 +110,13 @@ test('Seguo un browser a schermo intero e torno', async () => {
   await app.close();
 });
 
-test('Torno alla Regia da qualsiasi punto', async () => {
+test('Torno all’Orchestrator da qualsiasi punto', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'fix'); // the input is on the open strip
   await page.getByTestId('chat-input-fix').click();
-  const s = new Scenario('Torno alla Regia', page);
-  await s.press('Control+0', 'Ctrl+0: Regia');
-  await s.check('il cursore è nella Regia', async () => { await expect(page.getByTestId('regia-input')).toBeFocused(); });
+  const s = new Scenario('Torno all’Orchestrator', page);
+  await s.press('Control+0', 'Ctrl+0: Orchestrator');
+  await s.check('il cursore è nell’Orchestrator', async () => { await expect(page.getByTestId('orchestrator-input')).toBeFocused(); });
   await s.done(1);
   await app.close();
 });

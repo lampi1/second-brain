@@ -31,7 +31,7 @@ it('rejects a stale memory selection before creating a token-spending guide chat
 it('starts the actual guide in the chosen engine without widening permission mode', async () => {
   expect(await createAiSetupPort(state, 'it').start('claude', 'authoritative-root')).toBe('fixture-chat');
   expect(mock.create).toHaveBeenCalledWith(expect.objectContaining({ harness: 'claude', cwd: 'authoritative-root', permissionMode: 'default' }));
-  expect(mock.invoke).toHaveBeenCalledWith('settings:set', { regiaChats: { harness: 'claude' } });
+  expect(mock.invoke).toHaveBeenCalledWith('settings:set', { orchestratorChats: { harness: 'claude' } });
 });
 it('checks login and presents the only ready engine first without starting it', async () => {
   mock.invoke.mockImplementation(async (channel, arg) => channel === 'app:info'

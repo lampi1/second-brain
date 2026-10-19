@@ -56,28 +56,28 @@ describe('flattenPatch', () => {
   it('turns the nested UI patch of every group into dot keys (the engines and chats across engines too)', () => {
     expect(flattenPatch({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, language: 'it' }))
       .toEqual([['messaging.crossHarness', false], ['engineOn.cursor', false], ['engines.cursor', false], ['language', 'it']]);
-    expect(flattenPatch({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
-      .toEqual([['regiaChats.harness', 'cursor'], ['regiaChats.cursorModel', 'grok-4.7']]);
+    expect(flattenPatch({ orchestratorChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
+      .toEqual([['orchestratorChats.harness', 'cursor'], ['orchestratorChats.cursorModel', 'grok-4.7']]);
   });
 });
 
-describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
+describe('"Domande all’Orchestrator" removed (the user, 2026-10-13)', () => {
   it('a config from before the engine switches keeps its keys and meaning; every engine starts on', () => {
     // the user's real file: the Orchestrators may not use Cursor, chats across engines on (older releases read the same keys)
     expect(fromSaved({ messaging: { crossHarness: true }, engines: { claude: true, cursor: false } })).toMatchObject({
       engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: false }, messaging: { crossHarness: true } });
   });
 
-  it('an older config with regiaDriven loads without it; the key is no setting any more', () => {
-    expect('regiaDriven' in DEFAULTS).toBe(false);
-    expect(defOf('regiaDriven' as never)).toBeNull();
-    expect('regiaDriven' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
-    expect('view' in fromSaved({ view: 'corsie', regiaDriven: false })).toBe(false);
+  it('an older config with orchestratorDriven loads without it; the key is no setting any more', () => {
+    expect('orchestratorDriven' in DEFAULTS).toBe(false);
+    expect(defOf('orchestratorDriven' as never)).toBeNull();
+    expect('orchestratorDriven' in fromSaved({ view: 'corsie', orchestratorDriven: false })).toBe(false);
+    expect('view' in fromSaved({ view: 'corsie', orchestratorDriven: false })).toBe(false);
   });
 });
 
 describe('engine switches (ADR 0046)', () => {
-  it('an engine switched off closes «Le Regie possono usare» too, by the same hand, events in order; on again leaves it closed', () => {
+  it('an engine switched off closes «Gli Orchestrator possono usare» too, by the same hand, events in order; on again leaves it closed', () => {
     const dir = tmpDir();
     const store = new ConfigStore(dir, {});
     const seen: string[] = [];
@@ -100,36 +100,36 @@ describe('engine switches (ADR 0046)', () => {
     expect(fromSaved({ engineOn: { qwen: true, 'Bad id': true }, engines: { qwen: false } })).toMatchObject({ engineOn: { qwen: true }, engines: { qwen: false } });
     expect(fromSaved({ engineOn: { 'Bad id': true } }).engineOn).not.toHaveProperty('Bad id');
     // the Orchestrator's engine too: Settings and "Nuova chat" do not fall back to Claude on a restart
-    expect(fromSaved({ regiaChats: { harness: 'qwen' } }).regiaChats.harness).toBe('qwen');
-    expect(fromSaved({ regiaChats: { harness: '../x' } }).regiaChats.harness).toBe('claude');
+    expect(fromSaved({ orchestratorChats: { harness: 'qwen' } }).orchestratorChats.harness).toBe('qwen');
+    expect(fromSaved({ orchestratorChats: { harness: '../x' } }).orchestratorChats.harness).toBe('claude');
     // Gemini, removed from the app (ADR 0046): a config saved by an older release loads without it, the Orchestrator back on Claude
-    const old = fromSaved({ engineOn: { gemini: true, kimi: true }, engines: { gemini: true }, regiaChats: { harness: 'gemini' } });
+    const old = fromSaved({ engineOn: { gemini: true, kimi: true }, engines: { gemini: true }, orchestratorChats: { harness: 'gemini' } });
     expect(old.engineOn).not.toHaveProperty('gemini');
     expect(old.engines).not.toHaveProperty('gemini');
     expect(old.engineOn).not.toHaveProperty('kimi');
-    expect(old.regiaChats.harness).toBe('claude');
+    expect(old.orchestratorChats.harness).toBe('claude');
   });
 });
 
-describe('Chat aperte dalla Regia (regiaChats)', () => {
+describe('Chat aperte dall’Orchestrator (orchestratorChats)', () => {
   it('protected keys (engine and model choose whose credits are spent), CLI defaults by default', () => {
-    for (const k of ['regiaChats.harness', 'regiaChats.claudeModel', 'regiaChats.claudeEffort', 'regiaChats.cursorModel']) expect(defOf(k)!.protected, k).toBe(true);
-    expect(DEFAULTS.regiaChats).toEqual({ harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false });
+    for (const k of ['orchestratorChats.harness', 'orchestratorChats.claudeModel', 'orchestratorChats.claudeEffort', 'orchestratorChats.cursorModel']) expect(defOf(k)!.protected, k).toBe(true);
+    expect(DEFAULTS.orchestratorChats).toEqual({ harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false });
   });
   it('model ids as the CLIs take them, trimmed; nothing that could become a CLI flag or a path', () => {
-    expect(validate('regiaChats.cursorModel', ' grok-4.7 ')).toMatchObject({ ok: true, value: 'grok-4.7' });
-    expect(validate('regiaChats.cursorModel', 'gpt-5.6-sol[effort=high]')).toMatchObject({ ok: true });
-    expect(validate('regiaChats.claudeModel', '')).toMatchObject({ ok: true, value: '' });
-    for (const v of ['grok 4.7', 'a;b', '"x"', 'x'.repeat(121), 7, null]) expect(validate('regiaChats.claudeModel', v).ok, String(v)).toBe(false);
-    expect(validate('regiaChats.claudeEffort', 'xhigh')).toMatchObject({ ok: true });
-    expect(validate('regiaChats.claudeEffort', 'huge').ok).toBe(false);
-    expect(validate('regiaChats.harness', 'nope').ok).toBe(false);
+    expect(validate('orchestratorChats.cursorModel', ' grok-4.7 ')).toMatchObject({ ok: true, value: 'grok-4.7' });
+    expect(validate('orchestratorChats.cursorModel', 'gpt-5.6-sol[effort=high]')).toMatchObject({ ok: true });
+    expect(validate('orchestratorChats.claudeModel', '')).toMatchObject({ ok: true, value: '' });
+    for (const v of ['grok 4.7', 'a;b', '"x"', 'x'.repeat(121), 7, null]) expect(validate('orchestratorChats.claudeModel', v).ok, String(v)).toBe(false);
+    expect(validate('orchestratorChats.claudeEffort', 'xhigh')).toMatchObject({ ok: true });
+    expect(validate('orchestratorChats.claudeEffort', 'huge').ok).toBe(false);
+    expect(validate('orchestratorChats.harness', 'nope').ok).toBe(false);
   });
   it('a config saved before this setting gets the defaults; a saved choice survives a restart', () => {
-    expect(fromSaved({ view: 'corsie' }).regiaChats).toEqual(DEFAULTS.regiaChats);
+    expect(fromSaved({ view: 'corsie' }).orchestratorChats).toEqual(DEFAULTS.orchestratorChats);
     const dir = tmpDir();
-    new ConfigStore(dir, {}).set({ regiaChats: { harness: 'cursor', cursorModel: 'grok-4.7', claudeEffort: 'high' } });
-    expect(new ConfigStore(dir, {}).get().regiaChats).toEqual({ harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'medium', cursorFast: false });
+    new ConfigStore(dir, {}).set({ orchestratorChats: { harness: 'cursor', cursorModel: 'grok-4.7', claudeEffort: 'high' } });
+    expect(new ConfigStore(dir, {}).get().orchestratorChats).toEqual({ harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'medium', cursorFast: false });
   });
 });
 
@@ -283,7 +283,7 @@ describe('retired view setting', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
     const domains = [path.join(dir, 'other-domain')];
-    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, regiaChats: { claudeModel: 'claude-opus-5-5' } };
+    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, orchestratorChats: { claudeModel: 'claude-opus-5-5' } };
     const oldChange = { id: 'chg_old_view', at: 1, by: 'user', key: 'view', before: 'mosaico', after: 'corsie' };
     fs.writeFileSync(file, JSON.stringify({ view: 'corsie', ...choices, domains }));
     fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}
@@ -334,6 +334,6 @@ describe('compaction window 300k → 200k (ADR 0051)', () => {
     // once per userData: a choice that has left the change log (it keeps only its last entries) is not undone
     fs.rmSync(path.join(dir, 'changes.jsonl'));
     expect(new ConfigStore(dir, {}).get().compactWindowTokens).toBe(300_000);
-    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, regiaDayCompact: true, launchRulesClaude: false, launchRulesCodex: true });
+    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, orchestratorDayCompact: true, launchRulesClaude: false, launchRulesCodex: true });
   });
 });

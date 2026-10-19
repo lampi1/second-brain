@@ -124,7 +124,7 @@ app.whenReady().then(async () => {
     });
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
-    regiaChats: () => s.brain.settings().regiaChats,
+    orchestratorChats: () => s.brain.settings().orchestratorChats,
   });
   // the Grindhouse's headline (SPEC 18): never a model call in the demo or under test
   const readBrain = (rel: string): string => {
@@ -373,7 +373,7 @@ app.whenReady().then(async () => {
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
-    'regia:held': () => s.heldNews?.get() ?? { items: [] },
+    'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
     }) : pulseStubHandlers())),

@@ -136,7 +136,7 @@
 .st-value.mono { font-family: var(--mono); }
 .st-essential select { max-width: 100%; min-height: 32px; }
 /* a plain .btn inside the page (hosted parts) reads as secondary, never as the browser's grey button */
-.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-regia) {
+.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-orchestrator) {
   background: var(--surface-2); border-color: var(--border-2); color: var(--text); }
 .st-essential .btn:not(.btn-s):not(.btn-m):not(.btn-l) { min-height: 32px; padding: 0 12px; font-size: var(--fs-m); }
 .st-essential .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

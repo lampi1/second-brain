@@ -13,10 +13,10 @@ it('shows only the three supported platforms in setup and account choices', () =
   expect(engineOf('kimi')).toBeNull();
   expect(brainEngine('kimi', { kind: 'acp', label: 'Kimi', command: 'kimi' })).toMatch(/ignorata/);
 });
-it('drops retired switches and falls back from a retired Regia engine', () => {
-  const value = fromSaved({ engineOn: { kimi: true, claude: true }, engines: { kimi: true }, regiaChats: { harness: 'kimi' } });
+it('drops retired switches and falls back from a retired Orchestrator engine', () => {
+  const value = fromSaved({ engineOn: { kimi: true, claude: true }, engines: { kimi: true }, orchestratorChats: { harness: 'kimi' } });
   expect(value.engineOn.kimi).toBeUndefined(); expect(value.engines.kimi).toBeUndefined();
-  expect(value.regiaChats.harness).toBe('claude');
+  expect(value.orchestratorChats.harness).toBe('claude');
 });
 it('preserves preferences but restarts engine choice for a retired guide', () => {
   const value = checkSetup({ step: 2, work: '', goals: 'Keep my goals', tools: '', style: 'balanced', agentIds: [], guide: { stage: 'guided', engine: 'kimi', chatId: 'old-chat' } });

@@ -118,7 +118,7 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     expect(tools.startsWith(fwd(path.join(userData, 'brain-tools')))).toBe(true);
     // the plugin: the product's agents, skills and output styles, the product hooks, the boot rules
     expect(launch.args).toContain('--plugin-dir');
-    for (const f of ['agents/reviewer.md', 'agents/brain-editor.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/regia.md']) {
+    for (const f of ['agents/reviewer.md', 'agents/brain-editor.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
       expect(fs.existsSync(path.join(launch.pluginDir!, f)), f).toBe(true);
     }
     const hooks = fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8');
@@ -134,7 +134,7 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     const hub = fs.readFileSync(path.join(tools, 'hub.md'), 'utf8');
     expect(hub).toContain(`node ${tools}/ops/tools/chat-prompt.mjs`);
     expect(hub).not.toMatch(/\{\{[A-Z_]+\}\}|\{tools\}/);
-    const injected = runHook(root, path.join(base, 'state'), { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'coordina le altre chat come regia' }, { tools });
+    const injected = runHook(root, path.join(base, 'state'), { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'coordina le altre chat come orchestrator' }, { tools });
     expect(injected.context).toContain(`Topic ${tools}/hub.md`);
     // the Codex / Cursor text gets the boot rules and topic text too
     expect(productInstructions(root, true, tools)).toContain('Topic ');

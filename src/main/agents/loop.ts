@@ -28,7 +28,7 @@ export interface AgentLoopDeps {
   engineOn(h: Harness): boolean;
   /** a question, permission or command waits for the user somewhere in the app */
   userWaiting(): boolean;
-  /** the automatic feedback wake may run at all (the setting regiaEvents, off in test suites) */
+  /** the automatic feedback wake may run at all (the setting orchestratorEvents, off in test suites) */
   wakeEnabled(): boolean;
   /** nothing works now: the daily pass may read the evidence */
   idle(): boolean;
@@ -75,7 +75,7 @@ export function createAgentLoop(d: AgentLoopDeps) {
       lifecycle.reconcile(all);
     } catch (e) { log.warn('agents', 'trial evaluation failed', { cause: errText(e), hint: 'check that agent-lifecycle.json in the app data folder is readable and writable; the next run end tries again' }); }
   };
-  const orchestrator = () => d.chats.list().find(c => c.isRegia && c.orchestrator && !c.closedAt);
+  const orchestrator = () => d.chats.list().find(c => c.isOrchestrator && !c.closedAt);
   const api = createLifecycleApi(lifecycle, id => d.runs.get(id), (args, caller) => d.authoring.recordFeedback(args, caller),
     id => unknownRunError(id, d.runs.list(), cid => d.chats.list().find(c => c.id === cid)), {
       agents: everyAgent,

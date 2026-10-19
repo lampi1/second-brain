@@ -132,11 +132,11 @@ describe('routing: resolve', () => {
 });
 
 describe('routing: task kind and routeChat', () => {
-  it('reads the kind from title, then prompt, accents off; a Regia is its own; no rule matches = the built-in work words, else altro', () => {
+  it('reads the kind from title, then prompt, accents off; a Orchestrator is its own; no rule matches = the built-in work words, else altro', () => {
     expect(taskOf('Posta · smista la inbox', '', TASKS)).toBe('triage');
     expect(taskOf('Ordini · totale', 'c’è un bug nel totale', TASKS)).toBe('bug-fix');
     expect(taskOf('Posta · novità', '', TASKS)).toBe('triage');
-    expect(taskOf('Regia · lavoro', 'fix', TASKS)).toBe('regia');
+    expect(taskOf('Orchestrator · lavoro', 'fix', TASKS)).toBe('orchestrator');
     expect(taskOf('Ordini · x', 'y', TASKS)).toBe('altro');
     // a topic-only title loses to a prompt that builds or fixes (the brain's estimates.mjs, same rule)
     const OPS: [string, string, string][] = [['ops-read', String.raw`\b(log|telemetr\w*|app ?insights)\b`, 'i'], ...TASKS];
@@ -209,11 +209,11 @@ describe('routing: exploration', () => {
     expect(explore(T, item, base, auto, () => true, none, yes)).toMatchObject({ harness: 'claude' });
   });
 
-  it('stays off at rate 0, past the dice, for a Regia, for an engine the caller may not start', () => {
+  it('stays off at rate 0, past the dice, for a Orchestrator, for an engine the caller may not start', () => {
     expect(explore({ exploration: 0 }, item, base, REG, () => true, none, yes)).toBeNull();
     expect(explore(T, item, base, REG, () => true, none, () => 0.2)).toBeNull();
     expect(explore({ exploration: 9 }, item, base, REG, () => true, none, () => 0.49)).not.toBeNull();
-    expect(explore(T, { kind: 'regia', area: 'Ordini' }, base, REG, () => true, none, yes)).toBeNull();
+    expect(explore(T, { kind: 'orchestrator', area: 'Ordini' }, base, REG, () => true, none, yes)).toBeNull();
     expect(explore(T, item, base, REG, h => h !== 'claude', none, yes)).toBeNull();
     expect(explore(T, item, base, null, () => true, none, yes)).toBeNull();
   });
@@ -290,12 +290,12 @@ describe('routing: the brain files', () => {
     const root = brain();
     const r = new Routing(() => root);
     r.save(ROUTES, 'utente (Impostazioni)', 'prima', 1);
-    r.save([ROUTES[0]!, ROUTES[1]!], 'agente: Regia dell’app', 'triage su Sonnet', 2, { exploration: 0.2, evidence: '31 chat, −58% di costo' });
+    r.save([ROUTES[0]!, ROUTES[1]!], 'agente: Orchestrator dell’app', 'triage su Sonnet', 2, { exploration: 0.2, evidence: '31 chat, −58% di costo' });
     const info = r.restore(1, 'utente (Impostazioni)', 3);
     expect(info.table).toMatchObject({ version: 3, exploration: 0, routes: ROUTES.map(x => expect.objectContaining({ kind: x.kind, model: x.model })) });
     expect(info.history).toEqual([
       expect.objectContaining({ to: 3, from: 2, by: 'utente (Impostazioni)', reason: 'ripristino della versione 1', exploration: { from: 0.2, to: 0 }, stored: true }),
-      expect.objectContaining({ to: 2, by: 'agente: Regia dell’app', reason: 'triage su Sonnet', evidence: '31 chat, −58% di costo', exploration: { from: 0, to: 0.2 } }),
+      expect.objectContaining({ to: 2, by: 'agente: Orchestrator dell’app', reason: 'triage su Sonnet', evidence: '31 chat, −58% di costo', exploration: { from: 0, to: 0.2 } }),
       expect.objectContaining({ to: 1, from: null, evidence: null }),
     ]);
     expect(() => r.restore(9, 'u')).toThrow(/versione 9 non trovata/);
@@ -311,7 +311,7 @@ describe('routing: the brain files', () => {
     const locked = { ...ROUTES[1]!, locked: true };
     r.save([ROUTES[0]!, locked, ROUTES[2]!], 'utente (Impostazioni)', 'blocco il triage', 1, { costWeight: 7 });
     expect(r.table()).toMatchObject({ version: 1, costWeight: 7, routes: [{ kind: '*' }, { kind: 'triage', locked: true }, expect.not.objectContaining({ locked: true })] });
-    const agent = 'agente: Regia';
+    const agent = 'agente: Orchestrator';
     expect(() => r.save([ROUTES[0]!, { ...locked, model: 'claude-haiku-5-5' }, ROUTES[2]!], agent, 'r', 2)).toThrow(/riga «triage» è bloccata dall’utente: l’AI non la cambia/);
     expect(() => r.save([ROUTES[0]!, ROUTES[2]!], agent, 'r', 2)).toThrow(/l’AI non la toglie/);
     expect(() => r.save([ROUTES[0]!, ROUTES[1]!, ROUTES[2]!], agent, 'r', 2)).toThrow(/non la cambia/); // unlocking is a change

@@ -6,7 +6,7 @@ test('the Grindhouse keeps the coordinator beside expandable agent strips', asyn
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('nav-home').click();
-    const column = page.getByTestId('regia-overlay');
+    const column = page.getByTestId('orchestrator-overlay');
     const initial = await column.boundingBox();
     expect(initial).not.toBeNull();
     await expect(page.getByTestId('page-home').getByTestId('view-agents')).toBeVisible();
@@ -17,7 +17,7 @@ test('the Grindhouse keeps the coordinator beside expandable agent strips', asyn
     await expect(expand).not.toHaveAttribute('aria-expanded', was ?? '');
     await expand.click();
     await expect(expand).toHaveAttribute('aria-expanded', was ?? '');
-    await page.getByTestId('regia-resize').focus();
+    await page.getByTestId('orchestrator-resize').focus();
     await page.keyboard.press('ArrowLeft');
     expect((await column.boundingBox())!.width).toBeGreaterThan(initial!.width);
     await page.keyboard.press('Control+r');

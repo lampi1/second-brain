@@ -32,7 +32,7 @@ function LayerCard({ card, queue, waiting, now }: { card: OverlayCard; queue: Ov
   return (
     <section className="layer-card" data-testid="layer-card" data-request={card.key} aria-label={auditText('auditExpression.OverlayApp.text70', { v0: card.chatTitle })}>
       <header className="layer-head">
-        <HarnessMark harness={card.harness} regia={card.isRegia} size={18} />
+        <HarnessMark harness={card.harness} orchestrator={card.isOrchestrator} size={18} />
         <span className="layer-who"><b>{card.chatTitle}</b><span>{card.req.type === 'command' ? auditText('auditExpression.OverlayApp.text71') : auditText('auditExpression.OverlayApp.text72')} · {ago(card.req.at, now)}</span></span>
         <span className="sp" />
         <span className="layer-badge" data-testid="layer-badge" aria-label={auditText('auditExpression.OverlayApp.text73', { v0: waiting })}>{waiting}</span>

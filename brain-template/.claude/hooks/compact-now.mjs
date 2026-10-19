@@ -30,7 +30,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     const input = JSON.parse(raw.replace(/^\uFEFF/, '').trim() || '{}');
     if (input.source && input.source !== 'compact') return;
     const title = claudeTitle(input.transcript_path);
-    if (!title || /^(regia|orchestrator)\b/i.test(title)) return; // the Orchestrator has no line of its own to refresh
+    if (!title || /^(orchestrator|orchestrator)\b/i.test(title)) return; // the Orchestrator has no line of its own to refresh
     const label = title.replace(/"/g, '');
     const files = briefFiles(input.transcript_path);
     const text = `[compattazione] La conversazione è stata appena compattata. Prima di continuare, se questa chat ha una riga in now.md, ` +

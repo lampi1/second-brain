@@ -44,7 +44,7 @@ const sessions = [], errors = {}, denials = [], msgs = { correction: [], confusi
 const NUDGE = /(vai avanti|continua|sei ferm|è ferm|perch[ée] (sei|è|si è) ferm|riprendi|ci sei\?|a che punto sei|ti sei bloccat|sblocca)/i;
 const PUSHY = /^\s*(push|pusha|ok push|sì push|si push)\b/i;
 const LONG = 1500; // chars of the last assistant text before {{OWNER}} answered
-const FORCED_KINDS = ['ok_fuori_regia', 'correzione', 'non_capito', 'sollecito', 'comando', 'rifiuto_permesso', 'testo_lungo'];
+const FORCED_KINDS = ['ok_fuori_orchestrator', 'correzione', 'non_capito', 'sollecito', 'comando', 'rifiuto_permesso', 'testo_lungo'];
 const forced = {}; // day → { kind: count, human: n, examples: { kind: [..] } }
 const models = {}, modelIds = new Set(); // day → { model: assistant messages } (main sessions)
 const bump = (t, kind, ex) => {
@@ -129,11 +129,11 @@ for (const { p, dir, sub } of files) {
     else if (CONFUSION.test(txt)) msgs.confusion.push(line1);
     else if (CORRECTION.test(txt)) msgs.correction.push(line1);
   }
-  const hub = /regia/i.test(s.title); // the title can appear anywhere in the file: classify after reading it
+  const hub = /orchestrator/i.test(s.title); // the title can appear anywhere in the file: classify after reading it
   for (const m of humanMsgs) {
     const ex = `· ${s.title || dir} · "${short(m.txt).slice(0, 90)}"`;
     (forced[day(m.t)] ??= { human: 0, examples: {} }).human++;
-    if (!hub && (BARE.test(m.txt) || PUSHY.test(m.txt))) bump(m.t, 'ok_fuori_regia', ex);
+    if (!hub && (BARE.test(m.txt) || PUSHY.test(m.txt))) bump(m.t, 'ok_fuori_orchestrator', ex);
     else if (CONFUSION.test(m.txt)) bump(m.t, 'non_capito', ex);
     else if (NUDGE.test(m.txt)) bump(m.t, 'sollecito', ex);
     else if (CORRECTION.test(m.txt)) bump(m.t, 'correzione', ex);

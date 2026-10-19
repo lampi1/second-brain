@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '@shared/contract';
 import { foreignOf } from '../../src/renderer/lib/foreign';
 import { render } from '../../src/main/chats/mail';
-import { wakeMessage } from '../../src/main/chats/regia-wake';
+import { wakeMessage } from '../../src/main/chats/orchestrator-wake';
 import { runResultMessage } from '../../src/main/run/results';
 import { AGENT_LABEL } from '../../src/main/appctl/tools';
 import { RESUME_TEXT } from '../../src/main/chats/manager';
@@ -21,7 +21,7 @@ describe('foreignOf', () => {
   });
 
   it('folds mail from another chat: sender from the structured from, first words of the message', () => {
-    const text = render([{ id: 'm1', from: 'App · QA rimborsi', to: 'Regia', at: '2026-10-13T10:00:00Z', text: 'Test case 7 passato su master.\nDettagli nel report.', hop: 1 } as never], 'abcd');
+    const text = render([{ id: 'm1', from: 'App · QA rimborsi', to: 'Orchestrator', at: '2026-10-13T10:00:00Z', text: 'Test case 7 passato su master.\nDettagli nel report.', hop: 1 } as never], 'abcd');
     const f = foreignOf(user(text, { from: 'App · QA rimborsi' }))!;
     expect(f).toMatchObject({ kind: 'mail', sender: 'App · QA rimborsi', summary: 'Test case 7 passato su master.' });
     expect(f.body).toContain('Dettagli nel report.');
@@ -31,16 +31,16 @@ describe('foreignOf', () => {
   });
 
   it('folds an agent\'s prompt (app_create_chat) and message (app_send_to_chat)', () => {
-    const created = `${AGENT_LABEL}\n\nLa tua Regia è «Regia dell'app»: scrivile con send_to_chat.\n\nYou work in the worktree X.\nMore.`;
+    const created = `${AGENT_LABEL}\n\nLa tuo Orchestrator è «Orchestrator dell'app»: scrivile con send_to_chat.\n\nYou work in the worktree X.\nMore.`;
     expect(foreignOf(user(created))).toMatchObject({ kind: 'agent', sender: 'un agente', summary: 'You work in the worktree X.' });
     const renamed = `${AGENT_LABEL}\n\nIl tuo Orchestrator è «Orchestrator»: scrivigli con send_to_chat.\n\nYou work in the worktree X.`;
     expect(foreignOf(user(renamed))).toMatchObject({ kind: 'agent', summary: 'You work in the worktree X.' });
-    expect(foreignOf(user(`${AGENT_LABEL}\n\nRiprova il test.`, { from: 'Regia' }))).toMatchObject({ kind: 'agent', sender: 'Regia', summary: 'Riprova il test.' });
+    expect(foreignOf(user(`${AGENT_LABEL}\n\nRiprova il test.`, { from: 'Orchestrator' }))).toMatchObject({ kind: 'agent', sender: 'Orchestrator', summary: 'Riprova il test.' });
     // a from with an unknown text is still not the user's
-    expect(foreignOf(user('ciao', { from: 'Regia' }))).toMatchObject({ kind: 'agent', sender: 'Regia', summary: 'ciao' });
+    expect(foreignOf(user('ciao', { from: 'Orchestrator' }))).toMatchObject({ kind: 'agent', sender: 'Orchestrator', summary: 'ciao' });
   });
 
-  it('folds the app\'s news to the Regia with its first news line', () => {
+  it('folds the app\'s news to the Orchestrator with its first news line', () => {
     const text = wakeMessage([{ kind: 'done', chatId: 'c1', title: 'App · Mappa', harness: 'claude', detail: 'v2 in main', at: 0 }]);
     expect(foreignOf(user(text))).toMatchObject({ kind: 'event', sender: 'App', summary: '«App · Mappa» (Claude): ha finito il turno. Ultima riga: «v2 in main»' });
   });

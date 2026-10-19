@@ -14,8 +14,8 @@ const choices = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', 
 const draft = (): AgentDraft => ({ name: 'Ricerca', purpose: 'Controllare fonti', instructions: 'Cita le fonti.', engine: 'claude', model: 'known-model', avatar: { kind: 'symbol', value: 'search' }, effort: 'medium' });
 
 describe('Agent catalog and local setup', () => {
-  it('names a Regia owner after the Orchestrator profile, not "Assistente" (#61)', () => {
-    const r = new AgentCatalogService({ userData: tmp(), models: choices }).resolve({ harness: 'claude', cwd: tmp(), regia: true });
+  it('names a Orchestrator owner after the Orchestrator profile, not "Assistente" (#61)', () => {
+    const r = new AgentCatalogService({ userData: tmp(), models: choices }).resolve({ harness: 'claude', cwd: tmp(), orchestrator: true });
     expect(r.owner).toMatchObject({ name: 'Orchestrator', source: 'routed' });
     expect(r.owner.avatar).toEqual({ kind: 'symbol', value: 'compass' });
   });

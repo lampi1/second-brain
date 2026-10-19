@@ -30,7 +30,7 @@ const draft = (over: Partial<AgentDraft> = {}): AgentDraft => ({ name: 'Reader',
 const DAY = 86_400_000;
 
 /** The Orchestrator chat as the gate reads it. */
-const orchestrator = (over: Partial<ChatSummary> = {}): ChatSummary => ({ id: 'orch', title: 'Orchestrator', harness: 'claude', state: 'idle', pending: 0, isRegia: true, orchestrator: true,
+const orchestrator = (over: Partial<ChatSummary> = {}): ChatSummary => ({ id: 'orch', title: 'Orchestrator', harness: 'claude', state: 'idle', pending: 0, isOrchestrator: true, orchestrator: true,
   updatedAt: 0, createdAt: 0, cwd: '/', model: null, ...over } as unknown as ChatSummary);
 
 function world() {

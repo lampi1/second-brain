@@ -33,46 +33,38 @@
 .bell:hover, .bell.on { background: var(--surface-2); color: var(--text); }
 .bell-n { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 15px; padding: 0 4px; border-radius: 99px; background: var(--blue); color: var(--on-accent); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
 .bell-dnd { position: absolute; bottom: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 2px var(--bg-2); }
-.workspace.no-regia { grid-template-columns: minmax(0, 1fr); }
-/* ------------------------------------------------- the Orchestrator widget, docked bottom-right (RegiaOverlay.tsx, ADR 0028) */
-/* its room (--regia-r expanded, --regia-b collapsed; App.tsx) is left free by the workspace, the map and the questions window */
-.workspace { padding-right: calc(var(--gap) + var(--regia-r, 0px)); padding-bottom: calc(var(--gap) + var(--regia-b, 0px)); }
-.map-layer { padding-right: var(--regia-r, 0px); padding-bottom: var(--regia-b, 0px); }
-.regia-dock { position: fixed; right: 8px; bottom: 8px; z-index: 35; }
-.regia-dock.collapsed { display: flex; justify-content: flex-end; }
-.regia-dock-bar {
+.workspace.no-orchestrator { grid-template-columns: minmax(0, 1fr); }
+/* ------------------------------------------------- the Orchestrator widget, docked bottom-right (OrchestratorOverlay.tsx, ADR 0028) */
+/* its room (--orchestrator-r expanded, --orchestrator-b collapsed; App.tsx) is left free by the workspace, the map and the questions window */
+.workspace { padding-right: calc(var(--gap) + var(--orchestrator-r, 0px)); padding-bottom: calc(var(--gap) + var(--orchestrator-b, 0px)); }
+.map-layer { padding-right: var(--orchestrator-r, 0px); padding-bottom: var(--orchestrator-b, 0px); }
+.orchestrator-dock { position: fixed; right: 8px; bottom: 8px; z-index: 35; }
+.orchestrator-dock.collapsed { display: flex; justify-content: flex-end; }
+.orchestrator-dock-bar {
   display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 9px; border-radius: var(--r-m);
-  border: 1px solid var(--regia-line-2); background: var(--regia-bg); color: var(--violet); font: inherit; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--orchestrator-line-2); background: var(--orchestrator-bg); color: var(--violet); font: inherit; font-size: 13px; font-weight: 600;
   box-shadow: var(--shadow-pop); cursor: pointer; animation: dockIn var(--dur-slow) var(--ease);
 }
-.regia-dock-bar:hover { background: var(--regia-surface); }
-.regia-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
-.regia-dock-bar.waits { border-color: var(--amber-line); }
-.regia-dock-bar > svg:last-child { color: var(--text-3); }
-.regia-unread { height: 18px; padding: 0 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }
-.regia-ov {
+.orchestrator-dock-bar:hover { background: var(--orchestrator-surface); }
+.orchestrator-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.orchestrator-dock-bar.waits { border-color: var(--amber-line); }
+.orchestrator-dock-bar > svg:last-child { color: var(--text-3); }
+.orchestrator-unread { height: 18px; padding: 0 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }
+.orchestrator-ov {
   display: flex; flex-direction: column; min-width: 0; border-radius: var(--r-l);
-  background: var(--regia-bg); border: 1px solid var(--regia-line-2); box-shadow: var(--shadow-pop);
-  opacity: var(--regia-op, 1); transition: opacity var(--dur) var(--ease); animation: dockIn var(--dur-slow) var(--ease);
+  background: var(--orchestrator-bg); border: 1px solid var(--orchestrator-line-2); box-shadow: var(--shadow-pop);
+  opacity: var(--orchestrator-op, 1); transition: opacity var(--dur) var(--ease); animation: dockIn var(--dur-slow) var(--ease);
 }
-.regia-ov:hover, .regia-ov:focus-within, .regia-ov.moving { opacity: 1; }
-.regia-ov.moving { user-select: none; transition: none; }
-.regia-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 6px 0 18px; }
-.regia-grip { min-width: 28px; align-self: stretch; } /* always room to double-click, however many tabs */
-.regia-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.regia-tab {
-  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-bottom: 0;
-  border-radius: var(--r-s) var(--r-s) 0 0; background: none; color: var(--text-3); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;
-}
-.regia-tab:hover { color: var(--text); background: var(--violet-bg); }
-.regia-tab.on { color: var(--violet); font-weight: 600; background: var(--regia-surface); border-color: var(--regia-line); }
-.regia-tab-busy, .regia-pill-busy { width: 7px; height: 7px; border-radius: 50%; background: var(--violet); animation: pulse 1.4s ease-in-out infinite; }
-.regia-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 99px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
-.regia-body { flex: 1; min-height: 0; display: flex; }
-.regia-body > .tile { flex: 1; border-radius: 0 0 var(--r-l) var(--r-l); border-left: 0; border-right: 0; border-bottom: 0; }
-.regia-resize { position: absolute; left: 0; top: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
-  background: linear-gradient(135deg, transparent 21%, var(--regia-line-2) 21%, var(--regia-line-2) 28%, transparent 28%, transparent 38%, var(--regia-line-2) 38%, var(--regia-line-2) 45%, transparent 45%); border-radius: var(--r-l) 0 0 0; }
-@keyframes dockIn { from { opacity: 0; transform: translateY(6px); } to { opacity: var(--regia-op, 1); transform: none; } }
+.orchestrator-ov:hover, .orchestrator-ov:focus-within, .orchestrator-ov.moving { opacity: 1; }
+.orchestrator-ov.moving { user-select: none; transition: none; }
+.orchestrator-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 6px 0 18px; }
+.orchestrator-grip { min-width: 28px; align-self: stretch; } /* always room to double-click */
+.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 99px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
+.orchestrator-body { flex: 1; min-height: 0; display: flex; }
+.orchestrator-body > .tile { flex: 1; border-radius: 0 0 var(--r-l) var(--r-l); border-left: 0; border-right: 0; border-bottom: 0; }
+.orchestrator-resize { position: absolute; left: 0; top: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 21%, var(--orchestrator-line-2) 21%, var(--orchestrator-line-2) 28%, transparent 28%, transparent 38%, var(--orchestrator-line-2) 38%, var(--orchestrator-line-2) 45%, transparent 45%); border-radius: var(--r-l) 0 0 0; }
+@keyframes dockIn { from { opacity: 0; transform: translateY(6px); } to { opacity: var(--orchestrator-op, 1); transform: none; } }
 
 /* ---------------------------------------------------------------- brain pages frame (the pages: src/renderer/brain) */
 .page-frame { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; animation: zoomIn var(--dur-slow) var(--ease); }

@@ -27,7 +27,7 @@ const equalTiles = (a: TileRef[], b: TileRef[]) => sameList(a.map(tileKey), b.ma
 /** The one control above the strips: back from a maximized strip. */
 export function AgentStripsActions() {
   const maximized = ui.use(s => s.maximized);
-  if (!maximized || maximized === 'regia') return null;
+  if (!maximized || maximized === 'orchestrator') return null;
   return <div className="agent-strips-actions"><button type="button" className="btn btn-ghost btn-s" onClick={() => toggleMaximize(maximized)}>{tr('product.restoreLayout')}</button></div>;
 }
 

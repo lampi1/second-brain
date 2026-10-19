@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, openRegia, setSize, waitThumbs, goPage } from '../e2e/helpers';
+import { launch, openOrchestrator, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -20,12 +20,12 @@ test.beforeAll(async () => {
   const brain = (demoBrain as (p: string) => string)('sb-shots-brain-');
   // each chat asks in its own tile (questions as panels), as most users start
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-shots-'));
-  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({ regiaDriven: false }));
+  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({ orchestratorDriven: false }));
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: brain }, userData));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await expect(page.locator('html[data-clock="frozen"]')).toHaveCount(1);
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -81,7 +81,7 @@ test('README screenshots', async () => {
   await expect(page.getByTestId('view-agents')).toBeVisible();
 
   // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
-  await openRegia(page);
+  await openOrchestrator(page);
   await waitThumbs(page);
   await save('orchestrator');
 
@@ -96,7 +96,7 @@ test('README screenshots', async () => {
   // 4. The 3D brain map, lit where the chats are working right now
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
-  await tool('regia', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
+  await tool('orchestrator', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
   await page.getByTestId('nav-dashboard').click();
     await page.getByRole('tab', { name: 'Mappa brain' }).click();
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();

@@ -22,7 +22,7 @@ import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, 
 import { Kbd } from './ui';
 import { t } from '../i18n';
 
-export type CommandVariant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
+export type CommandVariant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
 
 export interface CommandHandlers {
   /** Esegui through someone else (the layer relays to the app page); resolves false when it did not start */
@@ -90,7 +90,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   const more = lines.length > (small ? 1 : 3) || shown.length > 110;
   const age = ago(req.at, now);
   const prodBadge = <span className="cb-prod" data-testid={`${testBase}-prod`} title={t('chat.codeblock.productionWarning', { warning: prod ?? '' })}><IconAlert size={11} /> {t('chat.codeblock.productionBadge')}</span>;
-  const cls = variant === 'regia' ? 'decision cmd-ask' : small ? 'need-card cmd-ask cmd-small' : 'ask cmd-ask';
+  const cls = variant === 'orchestrator' ? 'decision cmd-ask' : small ? 'need-card cmd-ask cmd-small' : 'ask cmd-ask';
 
   if (variant === 'window') {
     return (

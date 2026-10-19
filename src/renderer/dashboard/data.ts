@@ -1,7 +1,6 @@
 // Pure dashboard projections: preserve source coverage and unknowns, derive only observed activity.
 // Used by Dashboard and its unit tests; no bridge calls or invented telemetry.
 import type { ChatItem, ChatSummary, FeedEvent } from '@shared/contract';
-import { regiaOfChat } from '@shared/regia';
 import { isLongChat } from '@shared/context';
 import type { MapEdge, MapNode } from '../brain/types';
 
@@ -21,9 +20,9 @@ export function connections(chats: ChatSummary[], items: Readonly<Record<string,
     const titles = chats.filter(c => c.title === value);
     return titles.length === 1 ? titles[0] : undefined;
   };
+  const owner = chats.find(c => c.isOrchestrator && !c.closedAt)?.id;
   for (const c of chats) {
-    const owner = regiaOfChat(c, chats);
-    if (owner) add(owner, c.id, null);
+    if (owner && c.id !== owner) add(owner, c.id, null);
     for (const item of items[c.id] ?? []) {
       if (item.kind === 'user' && item.from) {
         const sender = resolve(item.from);
@@ -196,7 +195,7 @@ export function cursorCoverage(cursor: { downloaded?: string }, periodEnd: strin
 const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
 
 /** The Orchestrator's visible name, whatever its chat is titled (SPEC point 8). */
-export const chatName = (c: { isRegia?: boolean; title: string }): string => c.isRegia ? 'Orchestrator' : c.title;
+export const chatName = (c: { isOrchestrator?: boolean; title: string }): string => c.isOrchestrator ? 'Orchestrator' : c.title;
 
 export function contextRatio(chat: ChatSummary): number | null {
   return chat.contextTokens !== undefined && chat.contextMaxTokens && chat.contextMaxTokens > 0

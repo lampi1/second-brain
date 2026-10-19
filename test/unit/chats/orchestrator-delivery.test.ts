@@ -1,19 +1,19 @@
-// Unit tests of main/chats/regia-delivery.ts, the one rule for what reaches an Orchestrator and when (news and mail alike):
+// Unit tests of main/chats/orchestrator-delivery.ts, the one rule for what reaches an Orchestrator and when (news and mail alike):
 // the gate from the Orchestrator's state, the classes, the brain's words (escaped literals, whole words or "stem*").
 import { describe, expect, it } from 'vitest';
-import { brainClassifier, DEFAULT_WORDS, mailClassifier, newsClass, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, wordsFrom } from '../../../src/main/chats/regia-delivery';
+import { brainClassifier, DEFAULT_WORDS, mailClassifier, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS, orchestratorGate, waitOf, wordsFrom } from '../../../src/main/chats/orchestrator-delivery';
 
-describe('regia-delivery', () => {
+describe('orchestrator-delivery', () => {
   it('the gate: idle/closed queue, working injects (busy on an engine without mid-turn input), waiting or hand-off hold', () => {
-    expect(regiaGate({ state: 'idle', pending: 0 })).toBe('queue');
-    expect(regiaGate({ state: 'closed', pending: 0 })).toBe('queue');
-    expect(regiaGate({ state: 'running', pending: 0 })).toBe('inject');
-    expect(regiaGate({ state: 'starting', pending: 0 })).toBe('inject');
-    expect(regiaGate({ state: 'running', pending: 0 }, false)).toBe('busy');
-    expect(regiaGate({ state: 'waiting', pending: 0 })).toBe('hold');
-    expect(regiaGate({ state: 'idle', pending: 1 })).toBe('hold');
-    expect(regiaGate({ state: 'idle', pending: 0, handoffBusy: true })).toBe('hold');
-    expect(regiaGate({ state: 'error', pending: 0 })).toBe('hold');
+    expect(orchestratorGate({ state: 'idle', pending: 0 })).toBe('queue');
+    expect(orchestratorGate({ state: 'closed', pending: 0 })).toBe('queue');
+    expect(orchestratorGate({ state: 'running', pending: 0 })).toBe('inject');
+    expect(orchestratorGate({ state: 'starting', pending: 0 })).toBe('inject');
+    expect(orchestratorGate({ state: 'running', pending: 0 }, false)).toBe('busy');
+    expect(orchestratorGate({ state: 'waiting', pending: 0 })).toBe('hold');
+    expect(orchestratorGate({ state: 'idle', pending: 1 })).toBe('hold');
+    expect(orchestratorGate({ state: 'idle', pending: 0, handoffBusy: true })).toBe('hold');
+    expect(orchestratorGate({ state: 'error', pending: 0 })).toBe('hold');
   });
 
   it('what passes each gate, and when a queued class is due', () => {
@@ -23,8 +23,8 @@ describe('regia-delivery', () => {
       expect(passes('busy', c)).toBe(false);
       expect(passes('hold', c)).toBe(c === 'now');
     }
-    expect([waitOf('now'), waitOf('group'), waitOf('quiet')]).toEqual([0, REGIA_GROUP_MS, REGIA_HOLD_MS]);
-    expect(REGIA_GROUP_MS).toBe(30_000); // the owner's choice, 15/10
+    expect([waitOf('now'), waitOf('group'), waitOf('quiet')]).toEqual([0, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS]);
+    expect(ORCHESTRATOR_GROUP_MS).toBe(30_000); // the owner's choice, 15/10
   });
 
   it('news: a failure at once, a turn end grouped, what waits for the user quiet unless it ends the turn', () => {

@@ -6,11 +6,11 @@
 import { expect, test } from '@playwright/test';
 import { ctrlWHandled, launchDemo, shot } from './helpers';
 
-test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the window', async () => {
-  const { app, page } = await launchDemo({ regia: true });
+test('the ✕ and Ctrl+W close a chat with Annulla; never the Orchestrator, never the window', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true });
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
   await expect(page.getByTestId('chat-x-fix')).toBeVisible();
-  await expect(page.getByTestId('tile-regia').locator('[data-testid^="chat-x-"]')).toHaveCount(0);
+  await expect(page.getByTestId('tile-orchestrator').locator('[data-testid^="chat-x-"]')).toHaveCount(0);
   await shot(page, 'close-fast-1-x');
 
   // ✕: gone at once, Annulla brings it back
@@ -67,10 +67,10 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   await expect(page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' })).toHaveCount(0);
 
   // the Orchestrator: Ctrl+W only explains
-  await page.getByTestId('tile-regia').locator('h3').first().click();
+  await page.getByTestId('tile-orchestrator').locator('h3').first().click();
   await page.keyboard.press('Control+W');
   await expect(page.getByTestId('toast').filter({ hasText: 'L’Orchestrator non si chiude con Ctrl+W' })).toBeVisible();
-  await expect(page.getByTestId('tile-regia')).toBeVisible();
+  await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
 
   // under a dialog: nothing closes, the window stays. A real key event (sendInputEvent), not page.keyboard: only a real
   // one reaches Electron's default menu, whose Ctrl+W ("Close") would close the window and quit the app
@@ -84,6 +84,6 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   // the requests layer (its own view over the window) focused: Ctrl+W stays there
   await expect.poll(() => app.evaluate(({ webContents }) => webContents.getAllWebContents().some(w => w.getURL().includes('#overlay')))).toBe(true);
   expect(await ctrlWHandled(app, 'layer')).toBe(0);
-  await expect(page.getByTestId('tile-regia')).toBeVisible();
+  await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
   await app.close();
 });

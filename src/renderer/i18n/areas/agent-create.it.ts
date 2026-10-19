@@ -24,7 +24,7 @@ export const agentCreateIt = {
   'agentCreate.limits': 'Cosa non deve fare (facoltativo)', 'agentCreate.limitsHint': 'Per esempio: non toccare la produzione, non scrivere ai clienti',
   'agentCreate.engine': 'Motore preferito', 'agentCreate.engineAny': 'Lo sceglie l’Orchestrator',
   'agentCreate.preview': 'Il messaggio che invii all’Orchestrator',
-  'agentCreate.regiaEngine': 'L’Orchestrator non è aperto: con quale motore lo avvio?',
+  'agentCreate.orchestratorEngine': 'L’Orchestrator non è aperto: con quale motore lo avvio?',
   'agentCreate.noEngine': 'Nessun motore attivo per l’Orchestrator: accendine uno nelle Impostazioni.',
   'agentCreate.noRoot': 'Scegli la cartella del brain nelle Impostazioni prima di avviare l’Orchestrator.',
   'agentCreate.back': 'Indietro', 'agentCreate.next': 'Avanti', 'agentCreate.cancel': 'Annulla',

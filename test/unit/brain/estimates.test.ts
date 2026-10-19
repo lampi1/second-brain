@@ -23,7 +23,7 @@ describe('classify', () => {
     ['Find out why the build is slow, check the logs', 'research'],
     ['Cosa devo fare oggi?', 'question'],
     ['how do I rebase onto main', 'question'],
-    ['Regia', 'other'],
+    ['Orchestrator', 'other'],
     ['Brief mattino', 'other'],
   ];
   for (const [text, kind] of cases) it(`${kind}: ${text}`, () => expect(classify(text)).toBe(kind));

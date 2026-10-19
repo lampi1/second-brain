@@ -18,7 +18,7 @@
 // from its question by lib/askSplit.ts when certain, else two lines of why), the question large, a text to approve as a
 // document, the options as large cards (the recommended one marked by color, border and a label), the
 // keys in the window's footer.
-// Used by NeedsLane, ChatTile, RegiaTile, OverlayApp, QuestionsWindow.
+// Used by NeedsLane, ChatTile, OrchestratorTile, OverlayApp, QuestionsWindow.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import{t}from'../i18n';
@@ -39,7 +39,7 @@ import { HarnessMark, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
 import { ChoiceCard } from './genui/ChoiceCard';
 
-type Variant = 'lane' | 'tile' | 'regia' | 'compact' | 'window';
+type Variant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
 
 /** The raw command of a permission: its first line, the rest unfolded with a click (never hidden: the user approves it). */
 function RawCommand({ raw, testBase, onToggle }: { raw: string; testBase: string; onToggle: () => void }) {
@@ -80,7 +80,7 @@ type PanelProps = {
 export function RequestPanel(p: PanelProps) {
   if (p.req.type !== 'command') return <AskPanel {...p} />;
   // "Apri chat" where the chat is not already on screen around the card: the lane, the Orchestrator, the layer
-  const open = p.command?.onOpen ?? (p.variant === 'lane' || p.variant === 'regia' ? () => focusChat(p.req.chatId) : undefined);
+  const open = p.command?.onOpen ?? (p.variant === 'lane' || p.variant === 'orchestrator' ? () => focusChat(p.req.chatId) : undefined);
   // the turn's prose one click away, except in the global layer (p.command: its page can not read the chat)
   return <CommandRequest req={p.req} variant={p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;
 }
@@ -129,7 +129,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     if (viaKey && here && here.contains(document.activeElement) && !here.closest('.qwin')) {
       const all = [...document.querySelectorAll<HTMLElement>(variant === 'lane' ? '[data-lane][data-request-key]' : '[data-request-key]')];
       const next = all[all.indexOf(here) + 1] ?? all.find(x => x !== here);
-      requestAnimationFrame(() => { if (next && next.isConnected) next.focus(); else document.querySelector<HTMLElement>('[data-testid="regia-input"]')?.focus(); });
+      requestAnimationFrame(() => { if (next && next.isConnected) next.focus(); else document.querySelector<HTMLElement>('[data-testid="orchestrator-input"]')?.focus(); });
     }
     void answer(req, a).then(ok => { if (ok) onAnswered?.(); else setSent(false); });
   };
@@ -224,7 +224,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       onChoose={() => finish(permissionAnswer(i))} testid={testBase + '-opt-' + (i + 1)} />
   ));
 
-  // ---------- chips (lane, regia, compact)
+  // ---------- chips (lane, orchestrator, compact)
   const chips = () => {
     if (isPerm) {
       return permissionCards();
@@ -320,7 +320,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     );
   }
 
-  if (variant === 'regia') {
+  if (variant === 'orchestrator') {
     return (
       <div {...common} className={`decision ${sent ? 'sent' : ''}`}>
         <div className="decision-k">{t('genui.request.decision')}{q?.header ? ` · ${q.header}` : ''}{stepBadge}</div>

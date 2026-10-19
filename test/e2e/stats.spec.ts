@@ -24,13 +24,13 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
 });
 test.afterAll(async () => { await app?.close(); });
 
 const settled = async () => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 }); await page.waitForTimeout(250); };
 
-test('Qualità: errors grouped by pattern with count, week comparison, chats and rule; Discutine drafts into the Regia', async () => {
+test('Qualità: errors grouped by pattern with count, week comparison, chats and rule; Discutine drafts into the Orchestrator', async () => {
   await goPage(page, 'qualita');
   const p = page.getByTestId('page-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
@@ -38,8 +38,8 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
 
   // every metric with numbers has its reading and its bar
   await expect(p.getByTestId('bx-q-trovati-reading')).toContainText(/(in calo|in aumento|stabile): .* ogni 100 turni negli ultimi 7 giorni contro .* nei 7 prima/);
-  await expect(p.getByTestId('bx-q-trovati-discuss-regia')).toBeVisible();
-  await expect(p.getByTestId('bx-q-tornati-discuss-regia')).toBeVisible();
+  await expect(p.getByTestId('bx-q-trovati-discuss-orchestrator')).toBeVisible();
+  await expect(p.getByTestId('bx-q-tornati-discuss-orchestrator')).toBeVisible();
 
   const sec = p.getByTestId('bx-q-errori');
   await expect(sec.getByTestId('bx-q-errori-reading')).toContainText(/errori registrati negli ultimi 7 giorni/);
@@ -72,9 +72,9 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await mark.click();
   await expect(help).toBeHidden();
 
-  await fnv.getByTestId('bx-q-pattern-discuss-regia').click();
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  const input = page.getByTestId('regia-input');
+  await fnv.getByTestId('bx-q-pattern-discuss-orchestrator').click();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  const input = page.getByTestId('orchestrator-input');
   await expect(input).toBeFocused();
   await expect(input).toHaveValue(/^Let's discuss the recurring error «fatto non verificato» \(source: ai-errors\.md\)\./);
   await expect(input).toHaveValue(/- \d+ volte dal .* al .*; ultimi 7 giorni \d+, i 7 prima \d+/);
@@ -94,9 +94,9 @@ test('Costi: the period against the one before, Discutine on the total and on ev
   await expect(p.getByTestId('bx-cost-kpis')).toBeVisible({ timeout: 30000 });
   await settled();
   await expect(p.getByTestId('bx-cost-reading')).toContainText(/(in calo|in aumento|stabile): .* negli ultimi 7 giorni \(oggi compreso, non finito\) contro .* nei 7 prima/, { timeout: 30000 });
-  await expect(p.getByTestId('bx-cost-discuss-regia')).toBeVisible();
-  for (const c of ['spesa-giorni-7', 'spesa-tipo-7', 'spesa-modello-7', 'spesa-area-7']) await expect(p.getByTestId(`bx-chart-${c}-discuss-regia`)).toBeVisible();
-  await expect(p.getByTestId('bx-advice-discuss-regia')).toBeVisible();
+  await expect(p.getByTestId('bx-cost-discuss-orchestrator')).toBeVisible();
+  for (const c of ['spesa-giorni-7', 'spesa-tipo-7', 'spesa-modello-7', 'spesa-area-7']) await expect(p.getByTestId(`bx-chart-${c}-discuss-orchestrator`)).toBeVisible();
+  await expect(p.getByTestId('bx-advice-discuss-orchestrator')).toBeVisible();
   await shot(page, 'stats-costi');
   await p.getByRole('button', { name: '90 giorni' }).click();
   await expect(p.getByTestId('bx-cost-reading')).toContainText('nessun confronto', { timeout: 30000 });

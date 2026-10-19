@@ -86,7 +86,7 @@ export function scan(root, fromMs, toMs) {
 }
 
 const add = (o, k, usd, calls = 0) => { const r = (o[k] ??= { usd: 0, calls: 0 }); r.usd += usd; r.calls += calls; };
-const area = title => (title.match(/^(A|B|Prod|OS|Pers|Regia)\b/)?.[1]) ?? (title ? 'altro' : 'senza titolo');
+const area = title => (title.match(/^(A|B|Prod|OS|Pers|Orchestrator)\b/)?.[1]) ?? (title ? 'altro' : 'senza titolo');
 
 export function summarize({ msgs, chats }, cursorRows = [], fixedChars = 0) {
   const S = { total: 0, calls: 0, responses: msgs.length, byDay: {}, byModel: {}, byKind: {}, byArea: {}, chats: {}, long: 0, longSave: 0,
@@ -124,9 +124,9 @@ export function advice(S) {
   const chats = Object.values(S.chats);
   const longChats = chats.filter(c => c.longSave > 0).sort((a, b) => b.longSave - a.longSave);
   if (S.longSave > 0) out.push({ usd: S.longSave, text: `Chat lunghe: ${longChats.length} chat oltre ${LONG / 1000}k token di contesto; ripartire (chat nuova o /clear) a ~${TARGET / 1000}k avrebbe risparmiato ~${f$(S.longSave)}. Le più care: ${longChats.slice(0, 3).map(c => `${c.title} ${f$(c.longSave)}`).join(', ')}` });
-  const regia = chats.filter(c => /^(Regia|Orchestrator)/i.test(c.title));
-  const regiaUsd = regia.reduce((n, c) => n + c.usd, 0);
-  if (regiaUsd > 0.15 * S.total) out.push({ usd: regia.reduce((n, c) => n + c.longSave, 0), text: `Orchestrator: ${pct(regiaUsd, S.total)} della spesa (${f$(regiaUsd)}): l’Orchestrator resta "libero" solo se fa poche chiamate e riparte spesso` });
+  const orchestrator = chats.filter(c => /^(Orchestrator|Orchestrator)/i.test(c.title));
+  const orchestratorUsd = orchestrator.reduce((n, c) => n + c.usd, 0);
+  if (orchestratorUsd > 0.15 * S.total) out.push({ usd: orchestrator.reduce((n, c) => n + c.longSave, 0), text: `Orchestrator: ${pct(orchestratorUsd, S.total)} della spesa (${f$(orchestratorUsd)}): l’Orchestrator resta "libero" solo se fa poche chiamate e riparte spesso` });
   const k = S.byKind;
   const mem = k['memoria (now, errori, diario)'];
   if (mem && mem.calls > 50) out.push({ usd: mem.usd / 2, text: `Memoria a mano: ${mem.calls} chiamate, ${f$(mem.usd)}; con un solo comando mem.mjs per riga si dimezzano` });

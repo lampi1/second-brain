@@ -51,10 +51,10 @@ import { subagentTools } from './agents/subagent-tool';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
-import { appControlTools, regiaEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
+import { appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
-import { brainClassifier } from './chats/regia-delivery';
-import { readRegiaMail } from './brain/brain-settings';
+import { brainClassifier } from './chats/orchestrator-delivery';
+import { readOrchestratorMail } from './brain/brain-settings';
 import { EndpointTokens } from './mcp/tokens';
 import { createDemoServices } from './demo-wiring';
 import { forcedSampler, OsLoadSampler } from './chats/admission';
@@ -63,7 +63,7 @@ import fs from 'node:fs';
 import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
-import { RegiaWake } from './chats/regia-wake';
+import { OrchestratorWake } from './chats/orchestrator-wake';
 import { attachHeldNews, type HeldNewsHub } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
@@ -131,8 +131,8 @@ export interface Wired {
   runner: CommandRunner;
   /** shell blocks a chat left for the user, as open requests ("Comando da eseguire", run/asks.ts) */
   asks: CommandAsks;
-  /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/regia-wake.ts) */
-  wake: RegiaWake;
+  /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/orchestrator-wake.ts) */
+  wake: OrchestratorWake;
   /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */
   heldNews?: HeldNewsHub;
   /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
@@ -155,21 +155,21 @@ export function toMcp(out: ToolOut): ToolOutput {
   return JSON.stringify(out, null, 1);
 }
 
-/** The app-control tools on the local MCP server: /mcp/app for test agents (acts as the first Orchestrator) and
- *  /mcp/app/r/<id>/<token> for each Orchestrator (ADR 0021). Only the second gets app_update_code (ADR 0074). */
-export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, regiaTokens?: EndpointTokens): void {
+/** The app-control tools on the local MCP server: /mcp/app for test agents (acts for the Orchestrator) and
+ *  /mcp/app/o/<id>/<token>, the Orchestrator's own. Only the second gets app_update_code (ADR 0074). */
+export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, orchestratorTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Orchestrator's input means (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${NEW_CHAT_RULE}`;
   const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
-  // /mcp/app: test agents (acts as the first Orchestrator); /mcp/app/r/<id>/<token>: each work Orchestrator's own, so the tools know
-  // the caller (ADR 0021). Only an open Orchestrator with its own token answers (the token lives only here and in its config).
+  // /mcp/app: test agents (acts for the Orchestrator); /mcp/app/o/<id>/<token>: the Orchestrator's own, so the tools know
+  // the caller. Only an open Orchestrator with its own token answers (the token lives only here and in its config).
   mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
-  if (regiaTokens) {
-    mcp.mount('/mcp/app/r/:chatId/:token', {
-      name: 'app', instructions, authorize: regiaEndpointAuth(regiaTokens, () => deps.chats.list()), who: p => p.chatId,
-      tools: c => appControlTools({ ...deps, unified: true, code: { ...code, pull: () => source.pull() } }, c.params.chatId).map(as),
+  if (orchestratorTokens) {
+    mcp.mount('/mcp/app/o/:chatId/:token', {
+      name: 'app', instructions, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
+      tools: c => appControlTools({ ...deps, code: { ...code, pull: () => source.pull() } }, c.params.chatId).map(as),
     });
   }
 }
@@ -208,12 +208,12 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
   return asks;
 }
 
-/** "Eventi all'Orchestrator" (chats/regia-wake.ts): it watches the same events (the emitter tapped once more) and writes
- *  to the Orchestrator through the chat service. on = the setting regiaEvents and, in tests, an explicit SB_REGIA_EVENTS=1
- *  (a test's Orchestrator never gets surprise messages); SB_REGIA_EVENTS_MS shortens the grouping window for e2e. */
-export function attachRegiaWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): RegiaWake {
-  const groupMs = Number(process.env.SB_REGIA_EVENTS_MS) || undefined;
-  const wake = new RegiaWake({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
+/** "Eventi all'Orchestrator" (chats/orchestrator-wake.ts): it watches the same events (the emitter tapped once more) and writes
+ *  to the Orchestrator through the chat service. on = the setting orchestratorEvents and, in tests, an explicit SB_ORCHESTRATOR_EVENTS=1
+ *  (a test's Orchestrator never gets surprise messages); SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window for e2e. */
+export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): OrchestratorWake {
+  const groupMs = Number(process.env.SB_ORCHESTRATOR_EVENTS_MS) || undefined;
+  const wake = new OrchestratorWake({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); wake.observe(ch, p); };
   return wake;
@@ -414,9 +414,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // Claude chats through the user's own `claude` CLI (SB_CLAUDE_PATH: a fake CLI for e2e tests); each chat gets its own
   // browser endpoint, so it sees and drives only its tabs.
-  // each Orchestrator's app-control endpoint carries an unguessable token (ADR 0021): the URL names the caller, whose engine
-  // decides the Claude <-> Cursor rule, so a local process may not pick another Orchestrator's identity
-  const regiaTokens = new EndpointTokens();
+  // the Orchestrator's app-control endpoint carries an unguessable token: the URL names the caller, whose engine decides the
+  // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
+  const orchestratorTokens = new EndpointTokens();
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
@@ -425,7 +425,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // queue + trial evaluation, the user's verdict → evaluation, the probation verdict → a proposal for the user
   const loopRef: { current?: { started(run: AgentRun): void; ended(run: AgentRun): void; outcome(run: AgentRun): void; probation(agent: AgentProfile, j: ProbationJudgement): void } } = {};
   const manager = new ChatManager({
-    unifiedOrchestrator: true,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
       const resolved = agents.resolve(req);
@@ -464,11 +463,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 75, ram: st.loadQueueRam ?? 15 }; },
     },
     // the Orchestrator also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
-    appMcpUrl: regiaId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
+    appMcpUrl: orchestratorId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/o/${orchestratorId}/${orchestratorTokens.tokenFor(orchestratorId)}`),
     // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => brain.recordModels(h, list),
-    acpModelConfig: () => { const r = brain.settings().regiaChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
+    acpModelConfig: () => { const r = brain.settings().orchestratorChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
@@ -513,7 +512,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // cold timers for the e2e suite (SB_TEST only)
     compactWindowTokens: () => brain.settings().compactWindowTokens ?? COMPACT_WINDOW,
     coldHandoff: () => brain.settings().contextHandoff,
-    regiaDayCompact: () => brain.settings().regiaDayCompact !== false,
+    orchestratorDayCompact: () => brain.settings().orchestratorDayCompact !== false,
     coldIdleMs: () => coldTest?.[0] ?? (brain.settings().coldHandoffMin ?? 50) * 60_000,
     ...(coldTest ? { cacheTtlMs: coldTest[1], coldEveryMs: coldTest[2] } : {}),
     memTool: () => {
@@ -552,8 +551,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // mail between chats in real time: inbox.mjs mail goes to the app's live chats at once, and every chat gets
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
-  // the words that time the mail to an Orchestrator come from the brain (chats/regia-delivery.ts)
-  const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readRegiaMail(root) : undefined; });
+  // the words that time the mail to an Orchestrator come from the brain (chats/orchestrator-delivery.ts)
+  const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readOrchestratorMail(root) : undefined; });
   const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
@@ -596,7 +595,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
-  const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
+  const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
@@ -625,13 +624,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // The feedback wake: ended runs without the user's verdict wait in agent-lifecycle.json; one batched request goes to the
   // Orchestrator at most 3 times a day, 2 h apart, once 5 runs wait or the oldest waited 3 h (WAKE_POLICY), and only
   // while the gate holds (feedback-wake.ts: an open, idle Orchestrator on an engine the user left on, quiet for 5 min,
-  // nothing waiting for the user; off with the setting regiaEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
+  // nothing waiting for the user; off with the setting orchestratorEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
   const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring,
     classify: (q, profiles, runs) => classifier.classify(q, profiles, runs), chats,
     engineOn: h => engineOn(brain.settings(), h), userWaiting: () => manager.pending().length > 0 || asks.pending().length > 0,
-    wakeEnabled: () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
+    wakeEnabled: () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
     idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null) });
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
@@ -643,11 +642,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // agent first (ADR 0078): an agent's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const appDeps: Parameters<typeof attachAppTools>[1] = { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
-  attachAppTools(mcp, appDeps, source, false, regiaTokens);
+  attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
   // a worker starts a catalog agent as its own sub-agent, through its Orchestrator's app_create_chat (agents/subagent-tool.ts)
   addChatTools(subagentTools({ chats: () => chats.list(), runs: () => manager.runs.list(),
-    create: async (regiaId, args) => {
-      const tool = appControlTools({ ...appDeps, unified: true, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, regiaId).find(t => t.name === 'app_create_chat')!;
+    create: async (orchestratorId, args) => {
+      const tool = appControlTools({ ...appDeps, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, orchestratorId).find(t => t.name === 'app_create_chat')!;
       return tool.run(args);
     } }));
 

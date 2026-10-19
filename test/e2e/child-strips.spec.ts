@@ -16,12 +16,12 @@ test('child activity at work stays visible beneath each parent strip and the Orc
     // the app agent each sub-agent runs as; a command names none
     await expect(work.locator('[data-child-kind="agent"]').getByTestId('child-agent')).toHaveText('Generale');
     await expect(work.locator('[data-child-kind="shell"]').getByTestId('child-agent')).toHaveCount(0);
-    await expect(page.getByTestId('child-strips-regia').locator('[data-child-key="claude:task:a1"]').getByTestId('child-agent')).toHaveText('nessun agente');
+    await expect(page.getByTestId('child-strips-orchestrator').locator('[data-child-key="claude:task:a1"]').getByTestId('child-agent')).toHaveText('nessun agente');
     const parentBox = (await page.getByTestId('tile-chat-fix').boundingBox())!;
     const childBox = (await work.boundingBox())!;
     expect(childBox.x).toBeGreaterThan(parentBox.x);
     expect(childBox.y).toBeGreaterThanOrEqual(parentBox.y + parentBox.height - 1);
-    await expect(page.getByTestId('child-strips-regia').getByTestId('child-strip')).toHaveCount(2);
+    await expect(page.getByTestId('child-strips-orchestrator').getByTestId('child-strip')).toHaveCount(2);
     await expect(page.getByTestId('child-strips-sms')).toContainText('Riproduci il bug');
     await shot(page, 'child-strips-collapsed');
     await page.getByTestId('chat-expand-fix').click();

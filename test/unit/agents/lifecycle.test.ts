@@ -26,7 +26,7 @@ const baseline = () => Array.from({ length: 10 }, (_, i) => run(i));
 const trial = () => Array.from({ length: 5 }, (_, i) => run(i + 20, { version: 2, startedAt: 1100, endedAt: 1200, corrections: { tagged: 1, afterReport: 0 } }));
 /** A stored record as the authoring store writes it (agent/version from the run, basis from main). */
 const fb = (id: number, over: Partial<AgentFeedback> = {}): AgentFeedback => ({ id: `f${id}-${Math.random()}`, at: id, agentId: 'reviewer', runId: run(id).runId, version: 1,
-  outcome: { verdict: 'partial', basis: 'orchestrator-opinion', by: 'regia', at: id, note: 'Missed tests' }, worked: 'Read', failed: 'Missed tests',
+  outcome: { verdict: 'partial', basis: 'orchestrator-opinion', by: 'orchestrator', at: id, note: 'Missed tests' }, worked: 'Read', failed: 'Missed tests',
   gap: 'instructions', gapKey: 'test-contract', evidence: [{ kind: 'run', ref: 'r_000000000001', at: 1 }], ...over });
 const empty = (): SuggestionInput => ({ agents: [], runs: [], work: [], models: [] });
 

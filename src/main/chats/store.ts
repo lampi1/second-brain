@@ -36,7 +36,7 @@ export interface StoredChat {
   agentPolicy?: AgentPolicy;
   /** the agent's "Contesto massimo" (tokens), frozen at start like its policy (#80) */
   agentMaxContext?: number;
-  /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. Additive: chats.json stays version 2 */
+  /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. */
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
   runIdleSince?: number;
@@ -52,14 +52,7 @@ export interface StoredChat {
   effort: Effort | null;
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
-  isRegia: boolean;
-  orchestrator?: true;
-  /** the Orchestrator's former titles (migrated Orchestrators): mail sent to those boxes still reaches it (mail.ts) */
-  mailAliases?: string[];
-  /** an Orchestrator's tab name; a work chat's Orchestrator (ADR 0021) */
-  regiaName?: string;
-  regiaOf?: string;
-  regiaSince?: number;
+  isOrchestrator: boolean;
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
   costTotalUsd?: number;
@@ -74,7 +67,7 @@ export interface StoredChat {
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
   /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
-   *  compaction (continuity.ts regiaDayDue) */
+   *  compaction (continuity.ts orchestratorDayDue) */
   ctxSince?: number;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
   pastSessions?: PastSession[];
@@ -88,10 +81,6 @@ export interface StoredChat {
   closedBy?: 'auto' | 'user';
   /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
   working?: true;
-  /** Legacy markers of the retired "Migliora l'app" (ADR 0079): space is dropped on load; appRegia (that section's
-   *  coordinator) is read once by migrateOrchestrator, which makes it the Orchestrator or a normal chat. */
-  space?: unknown;
-  appRegia?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
   route?: RouteDecision;
 }
@@ -109,11 +98,6 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   // Invalid persisted holds fail closed until an explicit lifecycle update; they never turn into completed work.
   return {status:'assigned',updatedAt:0};
 }
-/** at most 10 former titles, each a usable box name */
-const mailAliases = (v: unknown): { mailAliases?: string[] } => {
-  const list = Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && !!x.trim()).map(x => x.trim().slice(0, 80)))].slice(-10) : [];
-  return list.length ? { mailAliases: list } : {};
-};
 function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route), run = readRun(c.run);
@@ -137,16 +121,13 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
-    // Legacy space is discarded; the coordinator marker survives until role migration.
-    ...(c.appRegia === true ? { appRegia: true as const } : {}),
   };
 }
 
 const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-/** v1 files always wrote 'default' even when the user chose nothing: read as "no choice" (v2 writes only real choices). */
-function valid(x: unknown, version: number): StoredChat | null {
+function valid(x: unknown): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
   if (typeof c.id !== 'string' || !c.id || typeof c.cwd !== 'string' || !ENGINE_ID.test(String(c.harness))) return null;
@@ -158,17 +139,13 @@ function valid(x: unknown, version: number): StoredChat | null {
     title: typeof c.title === 'string' ? c.title : 'Chat',
     model: typeof c.model === 'string' && c.model ? c.model : null,
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
-    permissionMode: MODES.includes(String(c.permissionMode)) && !(version < 2 && c.permissionMode === 'default') ? (c.permissionMode as PermissionMode) : null,
-    isRegia: c.isRegia === true,
-    ...(c.isRegia === true && c.orchestrator === true ? { orchestrator: true as const, ...mailAliases(c.mailAliases) } : {}),
-    ...(c.isRegia === true && typeof c.regiaName === 'string' && c.regiaName ? { regiaName: c.regiaName.slice(0, 30) } : {}),
-    ...(c.isRegia !== true && typeof c.regiaOf === 'string' && c.regiaOf ? { regiaOf: c.regiaOf } : {}),
-    ...(c.isRegia === true && typeof c.regiaSince === 'number' && Number.isFinite(c.regiaSince) ? { regiaSince: c.regiaSince } : {}),
+    permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : null,
+    isOrchestrator: c.isOrchestrator === true,
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
-    // the Orchestrator (and the app's Orchestrator) is never archived, whatever the file says
-    ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isRegia !== true && c.appRegia !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
+    // the Orchestrator is never archived, whatever the file says
+    ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isOrchestrator !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
   };
 }
@@ -181,9 +158,8 @@ export class ChatStore {
     let text: string;
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     try {
-      const data = JSON.parse(text) as { version?: unknown; chats?: unknown };
-      const version = typeof data.version === 'number' ? data.version : 1;
-      return (Array.isArray(data.chats) ? data.chats : []).map(c => valid(c, version)).filter((c): c is StoredChat => !!c);
+      const data = JSON.parse(text) as { chats?: unknown };
+      return (Array.isArray(data.chats) ? data.chats : []).map(valid).filter((c): c is StoredChat => !!c);
     } catch (e) {
       const bad = `${this.file}.bad-${Date.now()}`;
       try { fs.renameSync(this.file, bad); } catch { /* keep it */ }

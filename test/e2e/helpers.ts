@@ -2,7 +2,7 @@
 // too), optionally in the demo (SB_DEMO=1, frozen = SB_DEMO_FREEZE=1) at a fixed window size and color scheme, wait
 // until it is settled (data loaded, clock frozen, browser snapshots in), read what the UI reported to main for the
 // browser views (globalThis.__sbDemo, demo only) and save screenshots in test-results/shots/. A spec may seed the
-// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `regia: true` waits for its chat.
+// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
 import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -69,7 +69,7 @@ export async function setSize(app: ElectronApplication, width: number, height: n
 }
 
 /** The demo, settled: data loaded, (frozen) clock applied, browser snapshots shown. */
-export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; regia?: boolean; env?: Record<string, string> } = {}): Promise<Launched> {
+export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; orchestrator?: boolean; env?: Record<string, string> } = {}): Promise<Launched> {
   const { freeze = true, width = 1600, height = 1000, scheme = 'dark' } = opts;
   const userData = opts.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
   // a fresh profile gets the settings the spec seeds; a reused one keeps its own
@@ -78,17 +78,17 @@ export async function launchDemo(opts: { freeze?: boolean; width?: number; heigh
   const l = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: freeze ? '1' : '0', ...opts.env }, userData);
   await setSize(l.app, width, height);
   await l.page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-  await expect(l.page.locator('[data-regia-overlay]')).toBeVisible(); // the persistent Orchestrator column
-  if (opts.regia) await openRegia(l.page);
+  await expect(l.page.locator('[data-orchestrator-overlay]')).toBeVisible(); // the persistent Orchestrator column
+  if (opts.orchestrator) await openOrchestrator(l.page);
   if (freeze) await expect(l.page.locator('html[data-clock="frozen"]')).toHaveCount(1);
   await l.page.mouse.move(2, 2);
   return l;
 }
 
 /** The Orchestrator column is always open (ADR 0068): waits until it shows its chat. */
-export async function openRegia(page: Page): Promise<void> {
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await expect(page.getByTestId('tile-regia')).toBeVisible();
+export async function openOrchestrator(page: Page): Promise<void> {
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
 }
 
 /** A fresh profile opens the first-run setup by itself (FirstInterview.tsx): closes it, as a user who skips it would. */

@@ -58,7 +58,7 @@ test('notification center: filter by kind, mark all read (remembered after a rel
   await expect(page.locator('[data-testid="nc-list"] [data-unread]')).toHaveCount(0);
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   // mute a kind from its row (settings mute.<kind>): its toasts stop
   await page.keyboard.press('Control+Shift+N');
@@ -164,20 +164,20 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   // the Orchestrator without leaving the page
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await expect(page.getByTestId('regia-input')).toBeFocused();
-  await page.getByTestId('regia-input').fill('che si fa adesso?');
-  await page.getByTestId('regia-input').press('Enter');
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-input')).toBeFocused();
+  await page.getByTestId('orchestrator-input').fill('che si fa adesso?');
+  await page.getByTestId('orchestrator-input').press('Enter');
   // the Orchestrator waits on its decision: the message is queued (sent when it is free), the decision answerable right here
-  await expect(page.getByTestId('regia-input-queued-0')).toContainText('che si fa adesso?');
-  await page.locator('[data-testid="regia-overlay"] [data-request-key="regia/regia-q1"]').focus();
+  await expect(page.getByTestId('orchestrator-input-queued-0')).toContainText('che si fa adesso?');
+  await page.locator('[data-testid="orchestrator-overlay"] [data-request-key="orchestrator/orchestrator-q1"]').focus();
   await page.keyboard.press('1');
-  await expect(page.getByTestId('regia-overlay')).toContainText('Ecco il quadro');
+  await expect(page.getByTestId('orchestrator-overlay')).toContainText('Ecco il quadro');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
-  await shot(page, 'regia-overlay');
+  await shot(page, 'orchestrator-overlay');
   await page.keyboard.press('Control+R');
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await expect(page.getByTestId('regia-input')).toBeFocused();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-input')).toBeFocused();
   // the map: full screen, browser views hidden, Esc closes
   await openNotesMap(page);
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();

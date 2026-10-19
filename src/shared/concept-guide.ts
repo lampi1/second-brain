@@ -4,7 +4,7 @@
 // beside each part cites the file it was read from; a statement about what the app does NOT do yet goes in `target`,
 // never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discutine»:
 // the text that carries a card into a chat (discussText) and the instruction for the Orchestrator when no explainer agent
-// exists (regiaText); lib/concept-discuss.ts decides where it goes.
+// exists (orchestratorText); lib/concept-discuss.ts decides where it goes.
 
 export type GuideLang = 'it' | 'en';
 /** One text in both UI languages (ADR 0057). */
@@ -187,7 +187,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('La chat di coordinamento nella colonna a destra: pianifica, apre le chat di lavoro e legge la loro posta.',
       'The coordinating chat in the right column: it plans, opens work chats and reads their mail.'),
     points: [
-      // src/renderer/lib/regia-route.ts, src/main/chats/orchestrator-service.ts, ADR 0068
+      // src/renderer/lib/orchestrator-route.ts, src/main/chats/orchestrator-service.ts, ADR 0068
       b('Ce n’è uno solo, sempre nella colonna di destra (Ctrl+R). Lo crei tu: un agente non può crearne un altro.',
         'There is only one, always in the right column (Ctrl+R). You create it: an agent cannot create another.'),
       // src/main/chats/orchestrator.ts ORCHESTRATOR_ROLE; src/main/chats/manager.ts agentCatalogBrief
@@ -202,7 +202,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/newchat.ts
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
-      // src/main/chats/regia-delivery.ts
+      // src/main/chats/orchestrator-delivery.ts
       b('La posta delle chat gli arriva smistata: subito, raggruppata (30 s) o silenziosa.',
         'Mail from the chats reaches it sorted: now, grouped (30 s) or quiet.'),
       // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
@@ -220,7 +220,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_* e agent_catalog); l’agente lo sceglie l’Orchestrator con agentId, oppure, se non lo indica, il classificatore locale dell’app (ADR 0078).',
         'The app’s MCP on 127.0.0.1 (app_* and agent_catalog tools); the agent is chosen by the Orchestrator with agentId or, when it names none, by the app’s local classifier (ADR 0078).'),
     ],
-    sources: ['src/main/chats/orchestrator.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/regia-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/regia-route.ts'],
+    sources: ['src/main/agents/orchestrator-preset.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
   },
   {
     id: 'runs',
@@ -416,7 +416,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/estimates.ts classify
       b('Tipo di lavoro nel registro dei costi (correzione, QA, revisione, funzionalità, indagine, domanda, altro): espressioni in italiano e inglese, vince il tipo con più indizi.',
         'Kind of work in the cost ledger (fix, QA, review, feature, research, question, other): Italian and English patterns, the kind with the most clues wins.'),
-      // src/main/chats/regia-delivery.ts mailClassifier
+      // src/main/chats/orchestrator-delivery.ts mailClassifier
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
       // src/shared/runnable.ts prodRisk; src/shared/command-ask.ts; src/shared/waiting.ts; src/main/chats/claude.ts
@@ -441,8 +441,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Parole: Robertson e Zaragoza, «The Probabilistic Relevance Framework: BM25 and Beyond» (2009). Lessico bilingue: Ballesteros e Croft, «Phrasal translation and query expansion techniques for cross-language information retrieval» (SIGIR 1997). Modello: scheda di intfloat/multilingual-e5 su Hugging Face (i punteggi coseno stanno tra 0,7 e 1,0 anche per testi diversi: conta l’ordine, non il valore). Soglia: Angelopoulos e Bates, «A Gentle Introduction to Conformal Prediction» (arXiv 2107.07511, 2021).',
         'Words: Robertson and Zaragoza, "The Probabilistic Relevance Framework: BM25 and Beyond" (2009). Bilingual lexicon: Ballesteros and Croft, "Phrasal translation and query expansion techniques for cross-language information retrieval" (SIGIR 1997). Model: the intfloat/multilingual-e5 model card on Hugging Face (cosine scores sit between 0.7 and 1.0 even for unrelated texts: the order counts, not the value). Threshold: Angelopoulos and Bates, "A Gentle Introduction to Conformal Prediction" (arXiv 2107.07511, 2021).'),
       // src/shared/contract.ts TaskKind
-      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro. Soglie approvate in userData/agent-classifier.json.',
-        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, regia, altro. Approved thresholds in userData/agent-classifier.json.'),
+      tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro. Soglie approvate in userData/agent-classifier.json.',
+        'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro. Approved thresholds in userData/agent-classifier.json.'),
     ],
     target: [
       b('Unire parole e significato con una media pesata tarata su pochi esempi invece di prendere il più alto dei due (Bruch, Gai e Ingber, «An Analysis of Fusion Functions for Hybrid Retrieval», ACM TOIS 2023).',
@@ -452,7 +452,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     sources: ['src/main/agents/classifier.ts', 'src/main/agents/classifier-calibration.ts', 'src/shared/agent-classifier.ts', 'src/shared/work-concepts.ts', 'src/main/agents/routing-snapshot.ts',
       'src/renderer/lib/agent-approvals.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts', 'src/main/run/runner.ts', 'src/shared/command-ask.ts',
-      'src/shared/waiting.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'test/unit/classifiers/evaluation.test.ts'],
+      'src/shared/waiting.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'test/unit/classifiers/evaluation.test.ts'],
   },
   {
     id: 'permissions',
@@ -520,7 +520,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/AskImages.tsx, src/main/ask-image.ts SCREENSHOT_HINT
       b('Gli screenshot che l’agente cita (un percorso PNG/JPG/WebP nella domanda o in un’opzione) compaiono come miniature, prima e dopo affiancati; un clic li apre grandi. Lo stesso vale per i messaggi in chat.',
         'Screenshots the agent names (a PNG/JPG/WebP path in the question or an option) show as thumbnails, before and after side by side; a click opens them large. Chat messages work the same way.'),
-      // src/main/chats/regia-wake.ts QUIET; no timeout
+      // src/main/chats/orchestrator-wake.ts QUIET; no timeout
       b('Non c’è scadenza: la richiesta sparisce solo se rispondi, se la CLI la ritira o se chiudi la chat.',
         'There is no timeout: the request goes away only if you answer, the CLI withdraws it, or you close the chat.'),
     ],
@@ -530,9 +530,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(DATA, "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }.", "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }."),
       tech(FILES, 'Impostazione questionsModal (default false); stato «Rispondi dopo» in userData/answer-later.json.', 'Setting questionsModal (default false); "Answer later" state in userData/answer-later.json.'),
-      tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (regia-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (regia-wake.ts); the order is arrival order.'),
+      tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (orchestrator-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (orchestrator-wake.ts); the order is arrival order.'),
     ],
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/regia-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
   },
   {
     id: 'grindhouse',
@@ -565,7 +565,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Si avviano da «Nuovo agente» → Dove: Cloud, solo su repository GitHub con il branch già pushato.',
         'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. Start one from "New agent" → Where: Cloud, only on GitHub repositories with the branch already pushed.'),
     ],
-    analogy: b('Come il banco di regia di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
+    analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
     tech: [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
@@ -887,7 +887,7 @@ export function discussText(card: ConceptCard, lang: GuideLang): string {
 
 /** What goes to the Orchestrator when no explainer agent exists: reuse one from the catalog, else propose one in a
  *  panel and create it only after the user's yes (agent_create, ADR 0078), and the card as context. */
-export function regiaText(card: ConceptCard, lang: GuideLang): string {
+export function orchestratorText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
     ? `I want to discuss the concept «${card.title.en}» from the app's guide. Look in agent_catalog for an explainer agent ("${EXPLAINER_NAME}"): if there is one, open a chat with it through app_create_chat with its agentId and pass it the context below. If there is none, propose it to me in a panel (name "${EXPLAINER_NAME}", what it does, engine) and create it with agent_create only after my yes; meanwhile explain the concept to me yourself.`
     : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Cerca in agent_catalog un agente che spiega ("${EXPLAINER_NAME}"): se c'è, apri una chat con lui con app_create_chat e il suo agentId e passagli il contesto qui sotto. Se non c'è, proponimelo in un pannello (nome "${EXPLAINER_NAME}", cosa fa, motore) e crealo con agent_create solo dopo il mio sì; intanto spiegami tu il concetto.`;

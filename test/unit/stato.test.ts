@@ -12,7 +12,7 @@ import { gitBranch, gitBranches, headOf } from '../../src/main/chats/branch';
 
 const chat = (id: string, o: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: `Chat ${id}`, cwd: `C:\\repo\\${id}`, sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...o,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...o,
 });
 const req = (chatId: string, id: string, o: Partial<PendingRequest> = {}): PendingRequest =>
   ({ id, chatId, type: 'permission', tool: 'Bash', title: 'Eseguire npm test?', detail: 'npm test', input: {}, at: 1, ...o }) as PendingRequest;
@@ -29,15 +29,15 @@ const devops = (prs: DevopsPr[], details: TasksState['details'] = {}): TasksStat
 });
 
 describe('statoChats', () => {
-  it('keeps only open chats, the waiting ones first, then errors, working, finished; the Regia last among equals', () => {
+  it('keeps only open chats, the waiting ones first, then errors, working, finished; the Orchestrator last among equals', () => {
     const rows = statoChats(input([
       chat('done', { updatedAt: 9 }), chat('run', { state: 'running' }), chat('wait', { state: 'waiting', pending: 1 }),
       chat('err', { state: 'error', lastError: 'crash', lastText: 'old' }), chat('closed', { closedAt: 5 }), chat('gone', { state: 'closed' }),
-      chat('regia', { isRegia: true, regiaName: 'Lavoro', updatedAt: 99 }), chat('hidden'),
+      chat('orchestrator', { isOrchestrator: true, updatedAt: 99 }), chat('hidden'),
     ], { hidden: ['hidden'] }));
-    expect(rows.map(r => r.id)).toEqual(['wait', 'err', 'run', 'done', 'regia']);
+    expect(rows.map(r => r.id)).toEqual(['wait', 'err', 'run', 'done', 'orchestrator']);
     expect(rows.find(r => r.id === 'err')!.lastLine).toBe('crash');
-    expect(rows.find(r => r.id === 'regia')!.name).toBe('Orchestrator · Lavoro');
+    expect(rows.find(r => r.id === 'orchestrator')!.name).toBe('Orchestrator');
   });
   it('lists what waits for the user by text (the question itself) and counts a command to run as waiting', () => {
     const q = req('a', 'q1', { type: 'question', title: 'Domanda', questions: [{ question: 'Quale ramo uso?', options: [], multiSelect: false }] });

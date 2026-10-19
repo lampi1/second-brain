@@ -20,22 +20,22 @@ afterEach(async () => {
 });
 
 async function setup() {
-  const cwd = tmp('regia-codex-cwd'), userData = tmp('regia-codex-data');
+  const cwd = tmp('orchestrator-codex-cwd'), userData = tmp('orchestrator-codex-data');
   const log = path.join(userData, 'codex.jsonl');
   // Synthetic trust in this test process only: no real user's settings or trust file are changed.
   setTrust({ codex: fingerprint(engineOf('codex')!) });
   const manager = new ChatManager({ emitter: recEmitter(), userData, enginePaths: { codex: FAKE }, env: { FAKE_CODEX_LOG: log, FAKE_CODEX_DELAY: '1' } });
-  const server = new McpServer({ name: 'regia-codex-test', version: '0' });
+  const server = new McpServer({ name: 'orchestrator-codex-test', version: '0' });
   live.push({ manager, server });
-  const regia = await manager.create({ harness: 'codex', cwd, title: 'Regia · Test isolato', regia: true });
+  const orchestrator = await manager.create({ harness: 'codex', cwd, title: 'Orchestrator · Test isolato', orchestrator: true });
   let enabled = true;
   const brain = {
     routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null),
     settings: () => ({ messaging: { crossHarness: false }, engineOn: { codex: enabled }, engines: { codex: enabled },
-      regiaChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
+      orchestratorChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
     info: () => ({ brainRoot: cwd }),
   } as unknown as BrainService;
-  const tools = appControlTools({ chats: manager, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }, regia.id);
+  const tools = appControlTools({ chats: manager, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }, orchestrator.id);
   server.mount('/mcp/app', { name: 'app', instructions: 'Isolated app-control test', tools: tools.map((t): McpTool => ({ ...t, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => JSON.stringify(await t.run(a)) })) });
   const port = await server.listen(0);
   const rpc = async (method: string, params: object = {}): Promise<{ result: { content: { text: string }[]; isError?: boolean; tools?: { name: string; inputSchema: { properties: { harness: { description: string } } } }[] } }> => {
@@ -43,12 +43,12 @@ async function setup() {
     expect(response.status).toBe(200);
     return response.json();
   };
-  return { manager, regia, cwd, log, rpc, disable: () => { enabled = false; } };
+  return { manager, orchestrator, cwd, log, rpc, disable: () => { enabled = false; } };
 }
 
 describe('Codex app_create_chat', () => {
   it('advertises Codex and delivers one work chat with the informative title and complete brief', async () => {
-    const { manager, regia, cwd, log, rpc } = await setup();
+    const { manager, orchestrator, cwd, log, rpc } = await setup();
     const listed = await rpc('tools/list');
     expect(listed.result.tools?.find(t => t.name === 'app_create_chat')?.inputSchema.properties.harness.description).toContain('codex');
     const title = 'Alfa · Conferme MCP e consegna brief';
@@ -59,17 +59,17 @@ describe('Codex app_create_chat', () => {
     expect(made).toMatchObject({ title, harness: 'codex', cwd });
     expect(manager.list()).toHaveLength(2);
     const chat = manager.list().find(c => c.id === made.chatId)!;
-    expect(chat).toMatchObject({ title, harness: 'codex', isRegia: false, regiaOf: regia.id });
+    expect(chat).toMatchObject({ title, harness: 'codex', isOrchestrator: false });
     const lines = (): { cwd?: string; msg?: { method?: string; params?: { input?: { type: string; text: string }[] } } }[] => fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
     await waitFor(() => manager.items(made.chatId).some(i => i.kind === 'assistant' && i.text === 'Ciao da Codex'), 'fake work chat completes');
     const turns = lines().filter(l => l.msg?.method === 'turn/start');
     expect(turns).toHaveLength(1);
     const text = turns[0]!.msg!.params!.input!.find(i => i.type === 'text')!.text;
     expect(text.startsWith(AGENT_LABEL)).toBe(true);
-    expect(text).toContain(`Il tuo Orchestrator è «${regia.title}»`);
+    expect(text).toContain(`Il tuo Orchestrator è «${orchestrator.title}»`);
     expect(text.endsWith(prompt)).toBe(true);
     expect(lines().filter(l => l.cwd).every(l => l.cwd === cwd)).toBe(true);
-    expect(manager.list().filter(c => c.isRegia)).toHaveLength(1);
+    expect(manager.list().filter(c => c.isOrchestrator)).toHaveLength(1);
   });
 
   it('keeps an explicit engine refusal visible and does not create a chat', async () => {

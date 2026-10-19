@@ -31,13 +31,13 @@ await T('slug', () => {
 });
 
 await T('send/take', () => {
-  const { msg, listening: on } = send(P, { to: 'Regia', from: 'OS · Tool', text: 'ciao' });
+  const { msg, listening: on } = send(P, { to: 'Orchestrator', from: 'OS · Tool', text: 'ciao' });
   ok(!on, 'nobody listening yet');
-  ok(unread(P, 'regia').length === 1, 'one unread');
-  const got = take(P, 'REGIA', 'test');
+  ok(unread(P, 'orchestrator').length === 1, 'one unread');
+  const got = take(P, 'ORCHESTRATOR', 'test');
   ok(got.length === 1 && got[0].id === msg.id && got[0].text === 'ciao', 'taken');
-  ok(take(P, 'Regia', 'test').length === 0, 'taken only once');
-  ok(fs.existsSync(path.join(P.box('regia'), 'read', `${msg.id}.json`)), 'moved to read/');
+  ok(take(P, 'Orchestrator', 'test').length === 0, 'taken only once');
+  ok(fs.existsSync(path.join(P.box('orchestrator'), 'read', `${msg.id}.json`)), 'moved to read/');
 });
 
 await T('empty and missing args', () => {
@@ -68,12 +68,12 @@ await T('CLI wait wakes on send', async () => {
   ok(await waitFor(() => listening(P, 'os-prova'), { stop: () => exited !== null }), `waiter registered (exit ${exited}): ${out}`);
   const again = run(['wait', '--me', 'os prova', '--poll', '0.2']);
   ok(again.status === 0 && /già in ascolto/.test(again.stdout), `second waiter refused: ${again.stdout}${again.stderr}`);
-  const s = run(['send', '--to', 'OS · Prova', '--from', 'Regia', '--text', 'vai col passo 2']);
+  const s = run(['send', '--to', 'OS · Prova', '--from', 'Orchestrator', '--text', 'vai col passo 2']);
   ok(s.status === 0 && /la chat è in ascolto/.test(s.stdout), `send says listening: ${s.stdout}${s.stderr}`);
   // a deadline for a hang, not a wait; unref: it must not keep the test process alive once the waiter is done
   const code = await Promise.race([done, new Promise(r => setTimeout(r, 60000, 'timeout').unref())]);
   ok(code === 0, `waiter exit ${code}`);
-  ok(/vai col passo 2/.test(out) && /send --to "regia" --from "os-prova" --reply-to/.test(out) && /wait --me "os-prova"/.test(out), `render: ${out}`);
+  ok(/vai col passo 2/.test(out) && /send --to "orchestrator" --from "os-prova" --reply-to/.test(out) && /wait --me "os-prova"/.test(out), `render: ${out}`);
   // the printed commands name this script and the same --root, so a worktree prototype answers into the same boxes
   ok(out.includes(TOOL.replace(/\\/g, '/')) && out.includes(`--root "${tmp}"`), `render paths: ${out}`);
   // and the printed "Rispondi:" command works as is (the live test of 10/10 found it pointing elsewhere)
@@ -81,7 +81,7 @@ await T('CLI wait wakes on send', async () => {
   const rf = path.join(tmp, 'reply.txt'); fs.writeFileSync(rf, 'fatto, passo 2 ok');
   const r = spawnSync(reply.slice('Rispondi: '.length).replace('<testo scritto con Write>', `"${rf}"`), { shell: true, encoding: 'utf8' });
   ok(r.status === 0, `reply command: ${r.stdout}${r.stderr}`);
-  const back = take(P, 'Regia', 'test');
+  const back = take(P, 'Orchestrator', 'test');
   ok(back.length === 1 && back[0].hop === 2 && back[0].text === 'fatto, passo 2 ok', `reply landed: ${JSON.stringify(back)}`);
   ok(!listening(P, 'os-prova'), 'waiter file removed');
 });
@@ -105,8 +105,8 @@ await T('hook claude', () => {
   fs.writeFileSync(tr, [{ type: 'custom-title', customTitle: 'Vecchio' }, { type: 'user', message: { content: 'x' } }, { type: 'custom-title', customTitle: 'A · Fix login' }].map(r => JSON.stringify(r)).join('\n'));
   const none = run(['hook', 'claude'], JSON.stringify({ session_id: 's', transcript_path: tr, hook_event_name: 'Stop' }));
   ok(none.stdout === '', 'no mail, no output');
-  send(P, { to: 'A - Fix login', from: 'Regia', text: '{{OWNER}} dice: ok push' });
-  send(P, { to: 'Altra chat', from: 'Regia', text: 'non per te' });
+  send(P, { to: 'A - Fix login', from: 'Orchestrator', text: '{{OWNER}} dice: ok push' });
+  send(P, { to: 'Altra chat', from: 'Orchestrator', text: 'non per te' });
   const r = run(['hook', 'claude'], JSON.stringify({ session_id: 's', transcript_path: tr, hook_event_name: 'Stop', stop_hook_active: false }));
   const o = JSON.parse(r.stdout || '{}');
   ok(o.decision === 'block' && /ok push/.test(o.reason) && !/non per te/.test(o.reason), `claude hook: ${r.stdout}${r.stderr}`);
@@ -121,9 +121,9 @@ await T('hook cursor', async () => {
   const dbf = path.join(tmp, 'state.vscdb');
   const db = new DatabaseSync(dbf);
   db.exec('CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, value TEXT)');
-  db.prepare('INSERT INTO composerHeaders VALUES (?, ?)').run('c-1', JSON.stringify({ name: 'Regia' }));
+  db.prepare('INSERT INTO composerHeaders VALUES (?, ?)').run('c-1', JSON.stringify({ name: 'Orchestrator' }));
   db.close();
-  send(P, { to: 'Regia', from: 'B · Bug Mario', text: 'domanda per Owner: A o B?' });
+  send(P, { to: 'Orchestrator', from: 'B · Bug Mario', text: 'domanda per Owner: A o B?' });
   const r = spawnSync(process.execPath, [TOOL, 'hook', 'cursor', '--root', tmp], { input: '﻿' + JSON.stringify({ conversation_id: 'c-1', hook_event_name: 'stop', status: 'completed', loop_count: 0 }), encoding: 'utf8', env: { ...process.env, BRAIN_CURSOR_DB: dbf } });
   const o = JSON.parse(r.stdout || '{}');
   ok(/A o B/.test(o.followup_message || ''), `cursor hook: ${r.stdout}${r.stderr}`);
@@ -213,7 +213,7 @@ await T('cross-engine transport ignores retired settings, both directions and CL
 await T('the second-brain app serves a box: send says it delivers at once; a stale heartbeat does not count', () => {
   const beat = path.join(P.dir, '.app-second-brain.json');
   fs.writeFileSync(beat, JSON.stringify({ pid: process.pid, at: new Date().toISOString(), boxes: ['pers-app'] }));
-  const s = run(['send', '--to', 'Pers · App', '--from', 'Regia', '--text', 'subito']);
+  const s = run(['send', '--to', 'Pers · App', '--from', 'Orchestrator', '--text', 'subito']);
   ok(s.status === 0 && /aperta nell’app second-brain/.test(s.stdout), `send says the app delivers: ${s.stdout}${s.stderr}`);
   ok(!appServes(P, 'Altra chat'), 'a box the app does not list');
   // a wait in an app chat ends at once and says not to relaunch it (the app takes the mail before any wait could)
@@ -228,8 +228,8 @@ await T('the second-brain app serves a box: send says it delivers at once; a sta
 
 await T('stats', () => {
   const s = stats(P);
-  ok(s['os-tool -> regia']?.sent === 1 && s['os-tool -> regia']?.delivered === 1, `stats: ${JSON.stringify(s['os-tool -> regia'])}`);
-  ok(s['regia -> os-prova']?.via?.wait === 1, 'via wait counted');
+  ok(s['os-tool -> orchestrator']?.sent === 1 && s['os-tool -> orchestrator']?.delivered === 1, `stats: ${JSON.stringify(s['os-tool -> orchestrator'])}`);
+  ok(s['orchestrator -> os-prova']?.via?.wait === 1, 'via wait counted');
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });

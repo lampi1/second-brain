@@ -3,7 +3,7 @@
 // open PRs from the last DevOps read (who each waits for, build, votes, QA-blocked). A chat row brings that chat on
 // screen, a waiting question opens that card; the button opens the Task page. Only data the app already holds (lib/stato.ts) plus
 // the folders' branches read from disk ('chat:branches'): no model, no new network call. Opened from the Orchestrator's head
-// (RegiaTile.tsx), the command palette and Ctrl+Shift+S. Used by App.tsx (modal 'stato').
+// (OrchestratorTile.tsx), the command palette and Ctrl+Shift+S. Used by App.tsx (modal 'stato').
 import { t as auditText } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../store/store';
@@ -20,14 +20,14 @@ import { HelpTip } from './HelpTip';
 import { Keys, Modal } from './ui';
 import '../styles/stato.css';
 
-const PILL: Record<Tone, string> = { good: 'done', warn: 'wait', bad: 'err', blue: 'run', violet: 'regia', outline: 'off', neutral: 'off', '': 'off' };
+const PILL: Record<Tone, string> = { good: 'done', warn: 'wait', bad: 'err', blue: 'run', violet: 'orchestrator', outline: 'off', neutral: 'off', '': 'off' };
 
 function ChatRow({ c, now }: { c: StatoChat; now: number }) {
   const open = () => { closeModal(); focusChat(c.id); };
   return (
     <li className={`stato-chat tone-${c.state.tone}`} data-testid={`stato-chat-${c.id}`}>
       <button type="button" className="stato-row" onClick={open} title={auditText('audit.StatoDialog.goToChat')}>
-        <HarnessMark harness={c.harness} regia={c.regia} size={18} />
+        <HarnessMark harness={c.harness} orchestrator={c.orchestrator} size={18} />
         <span className="stato-main">
           <span className="stato-line1">
             <span className="stato-name">{c.name}</span>

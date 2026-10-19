@@ -1,4 +1,4 @@
-// An Orchestrator on Cursor really drives the app (the user, 2026-10-11: "regia con cursor che apre chat cursor o claude"):
+// An Orchestrator on Cursor really drives the app (the user, 2026-10-11: "orchestrator con cursor che apre chat cursor o claude"):
 // the real ChatManager, the real MCP server with the app-control tools on /mcp/app, the fake Cursor CLI that calls
 // app_create_chat over HTTP like the real agent does with the server it gets in session/new. No real CLI, no tokens.
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,7 +25,7 @@ async function setup(cross = true) {
     appMcpUrl: () => `http://127.0.0.1:${port}/mcp/app`,
     env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: claudeLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') },
   });
-  const brain = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null), settings: () => ({ messaging: { crossHarness: cross }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }), info: () => ({ brainRoot: cwd }) } as unknown as BrainService;
+  const brain = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null), settings: () => ({ messaging: { crossHarness: cross }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '' } }), info: () => ({ brainRoot: cwd }) } as unknown as BrainService;
   const tools = appControlTools({ chats: m, browser: { list: () => [] } as unknown as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });
   mcp.mount('/mcp/app', { name: 'app', instructions: 'app', tools: tools.map((t): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, run: async a => JSON.stringify(await t.run(a)) })) });
   live.push({ m, mcp });
@@ -34,17 +34,17 @@ async function setup(cross = true) {
 
 const call = (harness: string, title: string) => `mcpcall second-brain-app app_create_chat ${JSON.stringify({ title, prompt: 'ciao', harness })}`;
 
-describe('a Regia on Cursor', () => {
+describe('a Orchestrator on Cursor', () => {
   it('gets the app tools and creates work chats on both engines', async () => {
     const { m, cwd, claudeLog, curLog } = await setup();
-    const regia = await m.create({ harness: 'cursor', cwd, title: 'Regia', regia: true, prompt: [call('claude', 'Prova · Claude'), call('cursor', 'Prova · Cursor')].join('\n') });
-    await waitFor(() => m.list().length === 3 && m.items(regia.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'two chats created by the Regia', 20000);
+    const orchestrator = await m.create({ harness: 'cursor', cwd, title: 'Orchestrator', orchestrator: true, prompt: [call('claude', 'Prova · Claude'), call('cursor', 'Prova · Cursor')].join('\n') });
+    await waitFor(() => m.list().length === 3 && m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'two chats created by the Orchestrator', 20000);
 
-    const made = m.list().filter(c => c.id !== regia.id);
-    expect(made.map(c => [c.title, c.harness, c.isRegia])).toEqual([['Prova · Claude', 'claude', false], ['Prova · Cursor', 'cursor', false]]);
-    expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([regia.id]); // still one Regia
+    const made = m.list().filter(c => c.id !== orchestrator.id);
+    expect(made.map(c => [c.title, c.harness, c.isOrchestrator])).toEqual([['Prova · Claude', 'claude', false], ['Prova · Cursor', 'cursor', false]]);
+    expect(m.list().filter(c => c.isOrchestrator).map(c => c.id)).toEqual([orchestrator.id]); // still one Orchestrator
     // the Orchestrator's two tool calls succeeded (shown in its transcript)
-    expect(m.items(regia.id).filter(i => i.kind === 'tool').map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
+    expect(m.items(orchestrator.id).filter(i => i.kind === 'tool').map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
     // both chats really started, each on its own engine
     await waitFor(() => fakeLog(claudeLog).some(l => l.argv), 'claude chat started');
     await waitFor(() => cursorLog(curLog).filter(l => l.method === 'session/new').length === 2, 'cursor chat started');
@@ -55,10 +55,10 @@ describe('a Regia on Cursor', () => {
 
   it('a legacy false still permits work chats on both enabled engines', async () => {
     const { m, cwd } = await setup(false);
-    const regia = await m.create({ harness: 'cursor', cwd, title: 'Regia', regia: true, prompt: [call('claude', 'No · Claude'), call('cursor', 'Si · Cursor')].join('\n') });
-    await waitFor(() => m.items(regia.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'both calls answered', 20000);
-    expect(m.list().filter(c => c.id !== regia.id).map(c => [c.title, c.harness])).toEqual([['No · Claude', 'claude'], ['Si · Cursor', 'cursor']]);
-    const tools = m.items(regia.id).filter(i => i.kind === 'tool');
+    const orchestrator = await m.create({ harness: 'cursor', cwd, title: 'Orchestrator', orchestrator: true, prompt: [call('claude', 'No · Claude'), call('cursor', 'Si · Cursor')].join('\n') });
+    await waitFor(() => m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'both calls answered', 20000);
+    expect(m.list().filter(c => c.id !== orchestrator.id).map(c => [c.title, c.harness])).toEqual([['No · Claude', 'claude'], ['Si · Cursor', 'cursor']]);
+    const tools = m.items(orchestrator.id).filter(i => i.kind === 'tool');
     expect(tools.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
   }, 40000);
 });

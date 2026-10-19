@@ -48,7 +48,7 @@ Ran (Windows 11, Node, vitest 5):
   - `agent-collector`, `agent-runs`, `chats/agent-runs-manager`, `mem-run`, `run-metrics`, `run-report`;
   - `chats/manager`, `correction`, `contract`;
   - `chats/archive`, `chats/resume`, `chats/handoff`, `chats/cold`;
-  - `chats/orchestrator`, `chats/claude`, `chats/regia-delivery`, `chats/auto-close-manager`.
+  - `chats/orchestrator`, `chats/claude`, `chats/orchestrator-delivery`, `chats/auto-close-manager`.
 
 Not run:
 

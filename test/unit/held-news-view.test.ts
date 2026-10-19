@@ -9,7 +9,7 @@ import { heldSummary, HeldNewsView } from '../../src/renderer/components/HeldNew
 import { loadPrefs } from '../../src/renderer/store/ui';
 
 const NOW = Date.parse('2026-10-19T10:00:00Z');
-const item = (p: Partial<HeldNewsItem>): HeldNewsItem => ({ regiaId: 'regia', chatId: 'mappa', title: 'App · Mappa 3D', kind: 'done', at: NOW, why: 'user', ...p });
+const item = (p: Partial<HeldNewsItem>): HeldNewsItem => ({ orchestratorId: 'orchestrator', chatId: 'mappa', title: 'App · Mappa 3D', kind: 'done', at: NOW, why: 'user', ...p });
 const view = (items: HeldNewsItem[], open: boolean) => renderToStaticMarkup(createElement(HeldNewsView, { items, open, now: NOW, onToggle: vi.fn(), onOpenChat: vi.fn() }));
 
 describe('HeldNewsView', () => {
@@ -22,7 +22,7 @@ describe('HeldNewsView', () => {
     expect(html).toContain('2 novità in attesa');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('data-tip="App · Mappa 3D: Finita · Feedback: Permesso"');
-    expect(html).not.toContain('regia-held-list');
+    expect(html).not.toContain('orchestrator-held-list');
   });
 
   it('open: each held news with its chat, kind, since when and why; mail without a chat cannot be opened', () => {
@@ -31,7 +31,7 @@ describe('HeldNewsView', () => {
     expect(html).toContain('Finita'); expect(html).toContain('App · Mappa 3D'); expect(html).toContain('adesso');
     expect(html).toContain('aspetta la tua risposta all’Orchestrator');
     expect(html).toContain('Messaggio'); expect(html).toContain('da 3 min'); expect(html).toContain('arriva tra pochi secondi, insieme alle altre');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-testid="regia-held-mail"/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-testid="orchestrator-held-mail"/);
   });
 
   it('the tooltip names three and counts the rest', () => {

@@ -34,7 +34,7 @@ test('each browser beside its chat, folded by its globe; a saved hide-browsers c
   await page.waitForTimeout(300); // the prefs are saved 150 ms after a change
   await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}'); localStorage.setItem('sb.prefs.v1', JSON.stringify({ ...p, browsersHidden: true })); });
   await page.reload();
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
   await expect(page.getByTestId('view-agents').getByTestId('tile-browser-tab-sms')).toBeVisible();
   await page.mouse.move(2, 2);
   await shot(page, 'zones-browser-migrated');

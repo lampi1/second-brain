@@ -10,12 +10,12 @@ export const tileKey = (t: TileRef) => `${t.kind}:${t.id}`;
 export function workspaceTiles(order: readonly string[], chats: Readonly<Record<string, ChatSummary>>, tabs: readonly BrowserTab[]): TileRef[] {
   const tiles: TileRef[] = [];
   const placed = new Set<string>();
-  const regiaIds = new Set(order.filter(id => chats[id]?.isRegia));
+  const orchestratorIds = new Set(order.filter(id => chats[id]?.isOrchestrator));
   // the Orchestrator's own tabs come first, so they sit right next to the Orchestrator column
-  for (const t of tabs) if (t.ownerChatId && regiaIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
+  for (const t of tabs) if (t.ownerChatId && orchestratorIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   for (const id of order) {
     const c = chats[id];
-    if (!c || c.isRegia || c.closedAt) continue; // closed chats: the palette (Ctrl+K)
+    if (!c || c.isOrchestrator || c.closedAt) continue; // closed chats: the palette (Ctrl+K)
     tiles.push({ kind: 'chat', id });
     for (const t of tabs) if (t.ownerChatId === id && !placed.has(t.id)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   }

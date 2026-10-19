@@ -4,8 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
-import { ORCHESTRATOR_AGENT_ID as ID, ORCHESTRATOR_INSTRUCTIONS } from '../../src/main/agents/orchestrator-preset';
-import { orchestratorRole } from '../../src/main/chats/orchestrator';
+import { ORCHESTRATOR_AGENT_ID as ID, ORCHESTRATOR_INSTRUCTIONS, orchestratorRole } from '../../src/main/agents/orchestrator-preset';
 import type { AgentModelChoice } from '../../src/shared/agents';
 
 const dirs: string[] = [];
@@ -28,12 +27,12 @@ describe('Orchestrator preset', () => {
     const before = fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8'), again = service(dir);
     expect(again.list().profiles.filter(p => p.id === ID)).toEqual([edited]);
     expect(fs.readFileSync(path.join(dir, 'agents.v2.json'), 'utf8')).toBe(before);
-    expect(again.resolve({ harness: 'codex', cwd: dir, regia: true }).instructions).toBe(edited.instructions);
+    expect(again.resolve({ harness: 'codex', cwd: dir, orchestrator: true }).instructions).toBe(edited.instructions);
     expect(orchestratorRole(edited.instructions)).toContain(edited.instructions);
     expect(orchestratorRole(edited.instructions)).not.toContain(ORCHESTRATOR_INSTRUCTIONS);
   });
   it.each(['claude', 'codex', 'cursor'] as const)('defaults to the preset on %s without replacing engine choices', harness => {
-    const dir = temp(), c = service(dir), req = { harness, cwd: dir, regia: true, model: 'selected', effort: 'medium' as const };
+    const dir = temp(), c = service(dir), req = { harness, cwd: dir, orchestrator: true, model: 'selected', effort: 'medium' as const };
     const result = c.resolve(req);
     expect(result.request).toEqual(req);
     // the Orchestrator is no agent's run: it stays unassigned and only takes the preset's instructions

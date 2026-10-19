@@ -7,7 +7,7 @@ import { RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 });
 const run = (p: Partial<RunInfo> & { id: string }): RunInfo => ({
   chatId: 'c1', itemId: 'a1', code: 'npm run check', cwd: 'C:/repo', state: 'ok', exitCode: 0, output: 'tutto verde\n', startedAt: 1000, endedAt: 13_000, ...p,

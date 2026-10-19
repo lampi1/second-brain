@@ -139,7 +139,7 @@ export function chatPrompt(t: Topic, line: number | null): string {
 
 // ── the "discussa" record ───────────────────────────────────────────────────────────────────────────────────────────
 /** One discussion: with the Orchestrator (the draft was sent) or in a dedicated work chat. */
-export interface Discussed { via: 'regia' | 'chat'; chatId: string; chatTitle: string; at: number }
+export interface Discussed { via: 'orchestrator' | 'chat'; chatId: string; chatTitle: string; at: number }
 export type DiscussedMap = Record<string, Discussed[]>;
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
 
@@ -153,7 +153,7 @@ export function readDiscussed(kv: KV | null): DiscussedMap {
     const out: DiscussedMap = {};
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
       if (!Array.isArray(v)) continue;
-      const list = v.filter((d): d is Discussed => !!d && typeof d === 'object' && (d.via === 'regia' || d.via === 'chat') && typeof d.chatId === 'string' && typeof d.at === 'number')
+      const list = v.filter((d): d is Discussed => !!d && typeof d === 'object' && (d.via === 'orchestrator' || d.via === 'chat') && typeof d.chatId === 'string' && typeof d.at === 'number')
         .map(d => ({ via: d.via, chatId: d.chatId, chatTitle: typeof d.chatTitle === 'string' ? d.chatTitle : '', at: d.at }));
       if (list.length) out[k] = list;
     }

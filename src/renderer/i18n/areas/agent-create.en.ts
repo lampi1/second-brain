@@ -26,7 +26,7 @@ export const agentCreateEn: typeof agentCreateIt = {
   'agentCreate.limits': 'What it must not do (optional)', 'agentCreate.limitsHint': 'For example: never touch production, never write to customers',
   'agentCreate.engine': 'Preferred engine', 'agentCreate.engineAny': 'Let the Orchestrator choose',
   'agentCreate.preview': 'The message you send to the Orchestrator',
-  'agentCreate.regiaEngine': 'The Orchestrator is not open: which engine should start it?',
+  'agentCreate.orchestratorEngine': 'The Orchestrator is not open: which engine should start it?',
   'agentCreate.noEngine': 'No engine is on for the Orchestrator: turn one on in Settings.',
   'agentCreate.noRoot': 'Choose the brain folder in Settings before starting the Orchestrator.',
   'agentCreate.back': 'Back', 'agentCreate.next': 'Next', 'agentCreate.cancel': 'Cancel',

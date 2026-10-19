@@ -196,7 +196,7 @@ T('chat-prompt', () => {
   const job = 'Fai la review della PR.';
   const c = buildPrompt({ title: 'A · Review login', kind: 'code', repo: 'my-app', job, words: 'fai la review', date: '2026-10-10' });
   ok(c.includes('Sei la chat di lavoro "A · Review login"') && c.includes('Repo di lavoro: {{REPOS_JS}}\\my-app.') && c.includes('code.md'), 'chat-prompt: claude head');
-  ok(c.includes('inbox.mjs" send --to "regia" --from "a-review-login"') && c.includes('(AskUserQuestion;') && c.includes('blocco `powershell`') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Regia, wait-devops, env-lease, now.md)');
+  ok(c.includes('inbox.mjs" send --to "orchestrator" --from "a-review-login"') && c.includes('(AskUserQuestion;') && c.includes('blocco `powershell`') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Orchestrator, wait-devops, env-lease, now.md)');
   ok(c.includes('Suite di test pesanti') && c.includes('`sb-tests`') && c.includes('`release` sempre'), 'chat-prompt: heavy-suite turn line missing (code.md "Heavy test suites")');
   ok(c.includes('Parole di {{OWNER}} (2026-10-10): "fai la review"') && c.includes(job), 'chat-prompt: words and job');
   const k = buildPrompt({ title: 'B · QA', kind: 'qa', harness: 'cursor', repo: 'my-app', job });
@@ -285,16 +285,16 @@ T('wt-land', () => {
 
 T('recurrence', () => {
   const rows = parseErrors([
-    '- 2026-10-01 10:00 · Regia · prod DB · azione-pericolosa · detto: query in più · vero: no · visto da: {{OWNER}} · regola: me.md ok',
+    '- 2026-10-01 10:00 · Orchestrator · prod DB · azione-pericolosa · detto: query in più · vero: no · visto da: {{OWNER}} · regola: me.md ok',
     '- 2026-10-02 --:-- · OS · Tool · ops/tools · regola-ignorata · detto: heredoc · vero: regola 5 · visto da: io',
     '- 2026-10-03 11:00 · chat X · prod, DB clienti · azione pericolosa · detto: altra query · vero: no · visto da: {{OWNER}}',
-    '- 2026-10-04 11:00 · chat Y · App QA · fatto-non-verificato · detto alla Regia: tutto ok · vero: no · visto da: QA',
+    '- 2026-10-04 11:00 · chat Y · App QA · fatto-non-verificato · detto all’Orchestrator: tutto ok · vero: no · visto da: QA',
     '- 2026-10-05 11:00 · chat Z · stile · tipo-inventato · detto: x · vero: y · visto da: {{OWNER}}',
     '- not a line',
   ].join('\n'));
   ok(rows.length === 5, `recurrence parse: ${rows.length}`);
   ok(rows[1].who === 'OS · Tool' && rows[1].area === 'ops/tools' && rows[1].type === 'regola-ignorata', `recurrence chat with dot: ${JSON.stringify(rows[1])}`);
-  ok(rows[3].type === 'fatto-non-verificato', `recurrence "detto alla Regia:": ${rows[3].type}`);
+  ok(rows[3].type === 'fatto-non-verificato', `recurrence "detto all’Orchestrator:": ${rows[3].type}`);
   const res = recurrence(rows);
   ok(res.rules.length === 1 && res.rules[0].again === 1, `recurrence came back once (same type, area shares "prod"): ${JSON.stringify(res.rules)}`);
   ok(res.outside.length === 1 && res.outside[0].type === 'tipo-inventato', 'recurrence outside list');
@@ -318,8 +318,8 @@ T('compact-now hook', () => {
   ].map(r => JSON.stringify(r)).join('\n'));
   const b = JSON.parse(h({ source: 'compact', transcript_path: tr }) || '{}').hookSpecificOutput?.additionalContext || '';
   ok(b.includes('C:\\Users\\d\\{{BRAIN_NAME}}\\tmp\\prompt-x.md, C:/r/code.md)') && !/not-this|later|README/.test(b), `compact-now: brief files (no URLs): ${b}`);
-  fs.writeFileSync(tr, JSON.stringify({ type: 'custom-title', customTitle: 'Regia' }));
-  ok(h({ source: 'compact', transcript_path: tr }) === '', 'compact-now: silent for the Regia');
+  fs.writeFileSync(tr, JSON.stringify({ type: 'custom-title', customTitle: 'Orchestrator' }));
+  ok(h({ source: 'compact', transcript_path: tr }) === '', 'compact-now: silent for the Orchestrator');
   ok(spawnSync(process.execPath, [hook], { input: 'garbage', encoding: 'utf8' }).status === 0, 'compact-now: never fails');
 });
 

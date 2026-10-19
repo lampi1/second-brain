@@ -39,7 +39,7 @@ describe('evaluateBudget', () => {
   });
 
   it('per-chat limits name the chat; plan windows alert at 80 % and 100 % without a $ limit', () => {
-    const chats = [{ id: 's1', title: 'Fix login', usd: 17 }, { id: 's2', title: 'Regia', usd: 3 }];
+    const chats = [{ id: 's1', title: 'Fix login', usd: 17 }, { id: 's2', title: 'Orchestrator', usd: 3 }];
     const c = evaluateBudget(B({ claude: { perChatUsd: 20 } }), S({ chats }));
     expect(c).toHaveLength(1);
     expect(c[0]).toMatchObject({ scope: 'chat', chatId: 's1', chatTitle: 'Fix login', threshold: 80 });

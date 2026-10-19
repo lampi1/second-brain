@@ -73,6 +73,6 @@ test('keyboard focus opens the explanation, Esc closes it and stays on the page;
   await page.mouse.move(5, 5);
   await expect(mark).not.toHaveAttribute('data-hover'); // the leave was handled: a pinned bubble schedules no close
   await expect(bubble).toBeVisible();
-  await page.getByTestId('st-regia-opacity').locator('.st-title').click(); // a row above: the bubble opens below the mark
+  await page.getByTestId('st-orchestrator-opacity').locator('.st-title').click(); // a row above: the bubble opens below the mark
   await expect(bubble).toBeHidden();
 });

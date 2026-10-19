@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentCatalog, AgentModelChoice, AgentProfile } from '@shared/agents';
-import { CONCEPTS, cardText, discussText, isExplainer, regiaText, type Bi } from '@shared/concept-guide';
+import { CONCEPTS, cardText, discussText, isExplainer, orchestratorText, type Bi } from '@shared/concept-guide';
 import { explainerOf, planDiscuss } from '../../src/renderer/lib/concept-discuss';
 
 const root = path.resolve(import.meta.dirname, '../..');
@@ -114,8 +114,8 @@ describe('«Discutine» plan', () => {
 
   it('goes to the Orchestrator with the Explainer instruction when no explainer exists', () => {
     const plan = planDiscuss(card, 'en', catalog([profile('default-general', 'Assistente')]), '/brain');
-    expect(plan.via).toBe('regia');
-    expect(plan.draft).toBe(regiaText(card, 'en'));
+    expect(plan.via).toBe('orchestrator');
+    expect(plan.draft).toBe(orchestratorText(card, 'en'));
     expect(plan.draft).toContain('agent_catalog');
     expect(plan.draft).toContain('"Explainer"');
     expect(plan.draft).toContain(card.points[0]!.en);
@@ -124,8 +124,8 @@ describe('«Discutine» plan', () => {
   it('skips an explainer whose engine cannot start, and goes to the Orchestrator without a folder', () => {
     const off = catalog([profile('a1', 'Explainer')], [choice({ enabled: false })]);
     expect(explainerOf(off)).toBeNull();
-    expect(planDiscuss(card, 'it', off, '/brain').via).toBe('regia');
-    expect(planDiscuss(card, 'it', catalog([profile('a1', 'Explainer')]), null).via).toBe('regia');
-    expect(planDiscuss(card, 'it', null, '/brain').via).toBe('regia');
+    expect(planDiscuss(card, 'it', off, '/brain').via).toBe('orchestrator');
+    expect(planDiscuss(card, 'it', catalog([profile('a1', 'Explainer')]), null).via).toBe('orchestrator');
+    expect(planDiscuss(card, 'it', null, '/brain').via).toBe('orchestrator');
   });
 });

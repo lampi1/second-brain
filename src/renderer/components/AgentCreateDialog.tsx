@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { focusChat } from '../actions';
 import { t } from '../i18n';
 import { AGENT_AUTONOMY, AGENT_KINDS, AGENT_NEEDS, CREATE_LIMITS, CREATE_STEPS, agentRequestMessage, canSend, emptyAnswers, type AgentCreateAnswers } from '../lib/agent-create';
-import { orchestratorIdOf } from '../lib/regia-route';
+import { orchestratorIdOf } from '../lib/orchestrator-route';
 import { useAgents } from '../store/agents';
 import { app, ensureOrchestrator, send, useApp } from '../store/store';
 import { toast } from '../store/ui';
@@ -17,19 +17,19 @@ import '../styles/agent-create.css';
 export function AgentCreateDialog({ onClose }: { onClose: () => void }) {
   const { catalog } = useAgents();
   const info = useApp(s => s.info), settings = useApp(s => s.settings);
-  const regia = useApp(s => orchestratorIdOf(s));
+  const orchestrator = useApp(s => orchestratorIdOf(s));
   const [answers, setAnswers] = useState<AgentCreateAnswers>(emptyAnswers);
   const [step, setStep] = useState(0), [touched, setTouched] = useState(false);
-  const [regiaEngine, setRegiaEngine] = useState('');
+  const [orchestratorEngine, setOrchestratorEngine] = useState('');
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState(false);
   const working = useRef(false);
   const change = (patch: Partial<AgentCreateAnswers>) => { setAnswers(a => ({ ...a, ...patch })); setProblem(false); };
-  // the engines an Orchestrator may start on: the same list as the Orchestrator column's own setup (RegiaTile)
-  const regiaEngines = (info?.engines ?? []).filter(e => e.trusted && settings?.engineOn[e.id] === true && settings.engines[e.id] !== false);
-  const regiaPick = regiaEngines.find(e => e.id === regiaEngine) ?? regiaEngines[0];
+  // the engines an Orchestrator may start on: the same list as the Orchestrator column's own setup (OrchestratorTile)
+  const orchestratorEngines = (info?.engines ?? []).filter(e => e.trusted && settings?.engineOn[e.id] === true && settings.engines[e.id] !== false);
+  const orchestratorPick = orchestratorEngines.find(e => e.id === orchestratorEngine) ?? orchestratorEngines[0];
   const agentEngines = catalog?.models.filter(m => m.enabled && m.trusted) ?? [];
   const goalMissing = !canSend(answers);
-  const blocked = goalMissing || !regia && (!info?.brainRoot || !regiaPick);
+  const blocked = goalMissing || !orchestrator && (!info?.brainRoot || !orchestratorPick);
   const last = step === CREATE_STEPS.length - 1;
   const next = () => { if (step === 0 && goalMissing) { setTouched(true); return; } setStep(s => Math.min(s + 1, CREATE_STEPS.length - 1)); };
   const submit = async () => {
@@ -38,8 +38,8 @@ export function AgentCreateDialog({ onClose }: { onClose: () => void }) {
     if (blocked) return;
     working.current = true; setBusy(true); setProblem(false);
     try {
-      let target = regia;
-      if (!target) { const chat = await ensureOrchestrator(regiaPick!.id); target = chat?.id ?? null; }
+      let target = orchestrator;
+      if (!target) { const chat = await ensureOrchestrator(orchestratorPick!.id); target = chat?.id ?? null; }
       // a store send = what Enter in the Orchestrator's input does ('chat:send'): the message is the user's own
       const result = target && app.get().chats[target] ? send(target, agentRequestMessage(answers)) : 'empty';
       if (result === 'empty' || !target) { setProblem(true); return; }
@@ -83,10 +83,10 @@ export function AgentCreateDialog({ onClose }: { onClose: () => void }) {
         </>}
         {last && <>
           <section className="agent-create-preview" aria-label={t('agentCreate.preview')}><h3>{t('agentCreate.preview')}</h3><pre data-testid="agent-create-preview">{agentRequestMessage(answers)}</pre></section>
-          {!regia && info?.brainRoot && regiaEngines.length > 0 && <label className="field"><span>{t('agentCreate.regiaEngine')}</span><Select value={regiaPick?.id ?? ''} disabled={busy} onChange={e => setRegiaEngine(e.target.value)} data-testid="agent-create-regia-engine">
-            {regiaEngines.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Select></label>}
+          {!orchestrator && info?.brainRoot && orchestratorEngines.length > 0 && <label className="field"><span>{t('agentCreate.orchestratorEngine')}</span><Select value={orchestratorPick?.id ?? ''} disabled={busy} onChange={e => setOrchestratorEngine(e.target.value)} data-testid="agent-create-orchestrator-engine">
+            {orchestratorEngines.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Select></label>}
         </>}
-        {!regia && (!info?.brainRoot ? <p role="status" className="agent-create-note">{t('agentCreate.noRoot')}</p> : !regiaEngines.length && <p role="status" className="agent-create-note">{t('agentCreate.noEngine')}</p>)}
+        {!orchestrator && (!info?.brainRoot ? <p role="status" className="agent-create-note">{t('agentCreate.noRoot')}</p> : !orchestratorEngines.length && <p role="status" className="agent-create-note">{t('agentCreate.noEngine')}</p>)}
         {problem && <p role="alert" className="field-error">{t('agentCreate.error')}</p>}
       </div>
       <div className="modal-foot">

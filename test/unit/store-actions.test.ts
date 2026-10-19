@@ -13,7 +13,7 @@ const { app, answer, attemptOf, cliCheck, cliFetch, dispatch, send, sendQueuedNo
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
 });
 const req: PendingRequest = { id: 'r1', chatId: 'a', type: 'permission', tool: 'Bash', title: 't', detail: 'd', input: {}, at: 1 };
 const flush = () => new Promise(r => setTimeout(r, 0));

@@ -6,7 +6,7 @@
 // the Orchestrator, its open overlay included (the user, 2026-10-13); "Non serve" on the tile card takes it away. On a page (Task) it
 // floats in the request layer. A production block asks a second click on the card too. When the run ends the chat gets
 // its result by itself (run/results.ts). Screenshots: test-results/shots/command-ask-lane.png (the tile card),
-// command-ask-not-regia.png, command-ask-layer.png, command-run-result.png.
+// command-ask-not-orchestrator.png, command-ask-layer.png, command-run-result.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { expandChats, launchDemo, layerPage, layerState, shot, windowShot } from './helpers';
 
@@ -30,7 +30,7 @@ test('a command left by a chat waits in its tile and runs from there; an example
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip (ADR 0019)
   // the open requests: the demo's three (Orchestrator, QA, Feedback); the Orchestrator column (ADR 0068) shows its own, the
   // strips the other two in their tiles
-  await expect(page.getByTestId('tile-regia').locator('[data-request-key]')).toHaveCount(1);
+  await expect(page.getByTestId('tile-orchestrator').locator('[data-request-key]')).toHaveCount(1);
   const asks = page.getByTestId('view-agents').locator('[data-request-key]');
   await expect(asks).toHaveCount(2);
 
@@ -88,20 +88,20 @@ test('a command left by a chat waits in its tile and runs from there; an example
   await app.close();
 });
 
-test('a work chat\'s command never shows in the Regia: it is a card in its own tile; "Non serve" takes it away', async () => {
-  const { app, page } = await launchDemo({ regia: true });
+test('a work chat\'s command never shows in the Orchestrator: it is a card in its own tile; "Non serve" takes it away', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true });
   await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
-  const regia = page.getByTestId('tile-regia');
+  const orchestrator = page.getByTestId('tile-orchestrator');
   await turn(app, 'mappa', ASK);
   const card = page.getByTestId('tile-chat-mappa').locator('[data-kind="command"]');
   await expect(card).toHaveCount(1);
   // the chat's explanation right before the block, in sight without a click (2026-10-13)
   await expect(card.locator('.cmd-lead')).toHaveText('Fatto: il fix è in main. Ora lancia il controllo:');
   await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
-  await expect(regia.locator('[data-request-key^="mappa/"]')).toHaveCount(0); // the open Regia never hosts it
+  await expect(orchestrator.locator('[data-request-key^="mappa/"]')).toHaveCount(0); // the open Orchestrator never hosts it
   await expect(page.locator('[data-kind="command"]')).toHaveCount(1);
   await page.mouse.move(2, 2);
-  await shot(page, 'command-ask-not-regia');
+  await shot(page, 'command-ask-not-orchestrator');
   // the open requests main serves (the app's chat:pending, the Orchestrator's app_pending) list it too
   const pending = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
   expect(pending.filter(p => p.type === 'command')).toMatchObject([{ chatId: 'mappa', tool: 'Esegui', detail: "Write-Output 'comando ok'" }]);

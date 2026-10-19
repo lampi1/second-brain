@@ -31,7 +31,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
   const d = r.data;
   if (!d) return <div className="bs-detail-body"><p className="bs-muted">{r.error ? `${copy('Non riesco a leggere lo script', 'Cannot read the script')}: ${r.error}` : copy('Carico…', 'Loading…')}</p></div>;
   const discuss = () => {
-    const ok = brainBridge.draftToRegia(`${copy('Script del brain', 'Brain script')}: ${d.title} (${d.file})\n${d.description}\n${copy('Ultimo test', 'Last test')}: ${d.tested.state}${d.tested.at ? ` ${d.tested.at}` : ''} ${d.tested.note}\n\n${copy('Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?', 'Let us review it: is it still right? Should it be fixed, extended or deleted?')}`, () => {});
+    const ok = brainBridge.draftToOrchestrator(`${copy('Script del brain', 'Brain script')}: ${d.title} (${d.file})\n${d.description}\n${copy('Ultimo test', 'Last test')}: ${d.tested.state}${d.tested.at ? ` ${d.tested.at}` : ''} ${d.tested.note}\n\n${copy('Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?', 'Let us review it: is it still right? Should it be fixed, extended or deleted?')}`, () => {});
     if (!ok) toast(copy('Apri un Orchestrator per discuterne.', 'Open an Orchestrator to discuss it.'));
   };
   return (

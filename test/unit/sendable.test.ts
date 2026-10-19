@@ -48,7 +48,7 @@ describe('sendable', () => {
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
 });
 const sent = () => invoke.mock.calls.filter(c => c[0] === 'chat:send').map(c => (c[1] as { text: string }).text);
 const MAIL = 'Ciao Marco,\nti mando il report di oggi.\nStudio Demo';

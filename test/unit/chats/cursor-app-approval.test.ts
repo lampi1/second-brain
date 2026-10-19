@@ -8,7 +8,7 @@ import { cursorAppPermissions } from '../../../src/main/chats/app-tool-approval'
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
-const urls = ['http://127.0.0.1:4329/mcp/chat/c/token', 'http://127.0.0.1:4329/mcp/app/r/r/token'] as const;
+const urls = ['http://127.0.0.1:4329/mcp/chat/c/token', 'http://127.0.0.1:4329/mcp/app/o/r/token'] as const;
 it('adds only mail/list and app-control permissions in the app-owned snapshot', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-approval-')); dirs.push(root);
   const from = path.join(root, 'user'), to = path.join(root, 'app'); fs.mkdirSync(from);

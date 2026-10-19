@@ -19,7 +19,7 @@ export interface Foreign { kind: ForeignKind; sender: string; summary: string; b
 type UserItem = Extract<ChatItem, { kind: 'user' }>;
 
 // the label lines main writes as the first line (chats/mail.ts render, appctl/tools.ts AGENT_LABEL,
-// chats/regia-wake.ts APP_EVENT_LABEL, run/results.ts RUN_RESULT_LABEL, chats/manager.ts RESUME_TEXT)
+// chats/orchestrator-wake.ts APP_EVENT_LABEL, run/results.ts RUN_RESULT_LABEL, chats/manager.ts RESUME_TEXT)
 const MAIL = /^\[Messaggio dalla chat "(.*?)" tramite second-brain[^\n]*\]/;
 const AGENT = /^\[Messaggio di un agente tramite second-brain[^\n]*\]/;
 const EVENT = /^\[evento app[^\n]*\]/;
@@ -45,7 +45,7 @@ export function foreignOf(item: UserItem): Foreign | null {
     return { kind: 'mail', sender: item.from ?? m[1] ?? t('tools.foreign.otherChat'), summary: oneLine(words[0] ?? ''), body };
   }
   if (AGENT.test(text)) {
-    const body = after(text, AGENT).replace(/^(?:La tua Regia|Il tuo Orchestrator) è «[^»]*»[^\n]*\n*/, '').trim();
+    const body = after(text, AGENT).replace(/^(?:La tuo Orchestrator|Il tuo Orchestrator) è «[^»]*»[^\n]*\n*/, '').trim();
     return { kind: 'agent', sender: item.from ?? t('tools.foreign.anAgent'), summary: oneLine(firstLine(body)), body };
   }
   if (EVENT.test(text)) {

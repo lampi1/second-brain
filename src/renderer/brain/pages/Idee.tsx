@@ -100,7 +100,7 @@ export function Idee({ arg, nav }: { arg?: string; nav: Navigate }) {
                     {r.chi === 'IA'
                       ? <>{r.idea && <p>{r.idea}</p>}<Reasoning x={{ ...r, sicurezza: bareSure(r.sicurezza) }} />{r.fonte && <p className="small muted">{tr('brainPages.idee.bornIn', { source: r.fonte.replace(/^IA\s*·\s*/, '') })}</p>}</>
                       : r.testo ? <Markdown text={r.testo} name={`idea-${r.data}`} /> : <p>{r.idea}</p>}
-                    <DiscussBar key={topicKey({ kind: 'idea', idea: r })} topic={{ kind: 'idea', idea: r }} onRegia={close} />
+                    <DiscussBar key={topicKey({ kind: 'idea', idea: r })} topic={{ kind: 'idea', idea: r }} onOrchestrator={close} />
                   </>
                 )} />
             ) : filter === 'ia'

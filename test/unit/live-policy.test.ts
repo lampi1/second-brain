@@ -13,16 +13,16 @@ describe('live feed policy', () => {
     for (const k of ['chat-done', 'now', 'done', 'decision', 'proposal', 'mail', 'sync-ok', 'playbook']) expect(KINDS[k]?.priority).toBe('quiet');
   });
 
-  it('a turn end: nothing for a Regia, chat-failed on an error, chat-done otherwise', () => {
-    const c = { id: 'a', title: 'Fix', isRegia: false };
+  it('a turn end: nothing for a Orchestrator, chat-failed on an error, chat-done otherwise', () => {
+    const c = { id: 'a', title: 'Fix', isOrchestrator: false };
     expect(doneEvent(undefined)).toBeNull();
-    expect(doneEvent({ ...c, isRegia: true })).toBeNull();
+    expect(doneEvent({ ...c, isOrchestrator: true })).toBeNull();
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: false } })).toMatchObject({ kind: 'chat-done', chatId: 'a', title: 'Fix' });
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: false, interrupted: true } })?.kind).toBe('chat-done');
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: true } })).toMatchObject({ kind: 'chat-failed', chatId: 'a' });
     // the CLI died mid-turn: chat-failed with its error, even after a good last turn; never for an Orchestrator
     expect(doneEvent({ ...c, lastResult: { at: 1, isError: false } }, 'fatal: boom')).toMatchObject({ kind: 'chat-failed', chatId: 'a', detail: expect.stringContaining('fatal: boom') });
-    expect(doneEvent({ ...c, isRegia: true }, 'fatal: boom')).toBeNull();
+    expect(doneEvent({ ...c, isOrchestrator: true }, 'fatal: boom')).toBeNull();
   });
 
   it('playbooks: an event only when the content hash changes', () => {

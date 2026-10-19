@@ -42,7 +42,7 @@ test('expanded run records all three human verdicts and handles failure without 
       await tile.getByTestId(`run-outcome-${verdict}`).click();
       await expect(tile.getByTestId(`run-outcome-${verdict}`)).toHaveAttribute('aria-pressed', 'true');
     }
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'run-outcome-human');
   } finally { await app.close(); }
 });
@@ -82,7 +82,7 @@ test('Run on the agent page confirms only a successful launch, respects reduced 
     await expect(card.getByRole('alert')).toContainText('Avvio non riuscito');
     await card.locator('button[type=submit]').click();
     await expect(page.getByText('Avviata, la trovi nella Home', { exact: true })).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'catalog-run-confirmation');
     await page.getByRole('button', { name: 'Apri', exact: true }).click();
     await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
@@ -100,11 +100,11 @@ test('Battito appears only in matching agent/search/file contexts and dismissal 
     }, info.brainRoot);
     await visit(page, 'sb://agenti/default-general');
     await expect(page.locator('[data-place="agent:default-general"]')).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'agent-context-pulse');
     await visit(page, 'sb://esplora/AGENTS.md');
     await expect(page.locator('[data-place="file:AGENTS.md"]')).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'file-context-pulse');
     await page.keyboard.press('Control+K');
     await page.getByTestId('palette-input').fill('zzzznoresultszzzz');

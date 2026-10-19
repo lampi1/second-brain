@@ -100,8 +100,8 @@ function Editor({ draft, places, onChange, onSaved, onDeleted, onPlace }: {
         </div>
         <span className="sp" />
         {draft.entry && draft.entry.kind === 'skill' && !dirty && (
-          <button type="button" className="bx-btn s" data-testid="sk-try" title={t('tools.skillsPage.tryInRegiaTip')}
-            onClick={() => { if (!brainBridge.draftToRegia(`/${draft.entry!.name} `, () => {})) toast(t('tools.skillsPage.noRegiaOpen'), 'warn'); }}>{t('tools.skillsPage.tryInRegia')}</button>
+          <button type="button" className="bx-btn s" data-testid="sk-try" title={t('tools.skillsPage.tryInOrchestratorTip')}
+            onClick={() => { if (!brainBridge.draftToOrchestrator(`/${draft.entry!.name} `, () => {})) toast(t('tools.skillsPage.noOrchestratorOpen'), 'warn'); }}>{t('tools.skillsPage.tryInOrchestrator')}</button>
         )}
         {draft.entry && !ro && <button type="button" className="bx-btn s danger" onClick={del} data-testid="sk-delete">{t('tools.skillsPage.deleteButton')}</button>}
         {dirty && draft.entry && <button type="button" className="bx-btn s" onClick={() => onChange(draft.saved)} data-testid="sk-revert">{t('tools.skillsPage.revertButton')}</button>}

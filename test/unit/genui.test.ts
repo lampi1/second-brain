@@ -66,7 +66,7 @@ describe('textOfUi: a visual as text for Copia', () => {
   });
   it('a diffList lists its paths as code, a chart its values with the unit, cards the recommended one', () => {
     expect(textOfUi(spec('diffList', { groups: [{ area: 'Calcolo', files: [{ path: 'src/a.ts', added: 2, removed: 1, why: 'fix' }] }] }))).toBe('**Calcolo**\n- `src/a.ts` +2 −1: fix');
-    expect(textOfUi(spec('barChart', { unit: '$', bars: [{ label: 'Regia', value: 4.12 }] }))).toBe('- Regia: 4.12 $');
+    expect(textOfUi(spec('barChart', { unit: '$', bars: [{ label: 'Orchestrator', value: 4.12 }] }))).toBe('- Orchestrator: 4.12 $');
     expect(textOfUi(spec('cards', { options: [{ title: 'A', recommended: true, pros: ['piccolo'], risk: 'low' }] }))).toBe('- **A** (consigliata)\n  - + piccolo\n  - rischio basso');
   });
 });
@@ -91,7 +91,7 @@ describe('splitUiFences: sb-ui fences in a question preview', () => {
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: `Chat ${id}`, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'running', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  state: 'running', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 });
 
 function setup(chats: ChatSummary[], dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-genui-'))) {
@@ -114,7 +114,7 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'w.json'), 'utf8'))).toHaveLength(1);
     expect(() => store.show('w', args({ summary: '' }))).toThrow('summary: required');
     expect(() => store.show('w', args({ props: { columns: [] } }))).toThrow(/table props.columns: needs at least 1 item\. Fix the props/);
-    expect(() => store.show('w', args({ target: 'popup' }))).toThrow('target: expected one of chat, regia, next-ask');
+    expect(() => store.show('w', args({ target: 'popup' }))).toThrow('target: expected one of chat, orchestrator, next-ask');
     expect(() => store.show('w', args({ id: 'a b' }))).toThrow('id: 1-40');
     expect(() => store.show('gone', args())).toThrow('no longer in the app');
   });
@@ -131,30 +131,22 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(ids[0]).toBe('n3');
   });
 
-  it('target regia: shown in the Regia the chat answers to, with the sender; a chat with no Regia goes to the first', () => {
-    const all = [chat('r1', { isRegia: true, regiaSince: 1, title: 'Regia' }), chat('r2', { isRegia: true, regiaSince: 2, title: 'Regia · B' }), chat('w', { regiaOf: 'r2', title: 'QA · Rimborsi' }),
-      chat('aw')];
+  it('target orchestrator: shown in the Orchestrator, with the sender', () => {
+    const all = [chat('r1', { isOrchestrator: true, title: 'Orchestrator' }), chat('w', { title: 'QA · Rimborsi' }), chat('aw', { cwd: 'C:/repo' })];
     const { store, sent } = setup(all);
-    expect(store.show('w', args({ target: 'regia' }))).toContain('nell’Orchestrator «Regia · B»');
-    expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
-    store.show('aw', args({ target: 'regia' }));
+    expect(store.show('w', args({ target: 'orchestrator' }))).toContain('nell’Orchestrator');
+    expect(sent.at(-1)).toMatchObject({ chatId: 'r1', item: { from: 'QA · Rimborsi', target: 'orchestrator' } });
+    store.show('aw', args({ target: 'orchestrator' }));
     expect(sent.at(-1)?.chatId).toBe('r1');
-    // two chats of the same Orchestrator with the same id never replace each other; the sender's folder goes along
-    const w2 = chat('w2', { regiaOf: 'r2', cwd: 'C:\\repo2' });
+    // two chats with the same id never replace each other in the Orchestrator; the sender's folder goes along
+    const w2 = chat('w2', { cwd: 'C:\\repo2' });
     all.push(w2);
-    store.show('w', args({ id: 'status', target: 'regia' }));
-    store.show('w2', args({ id: 'status', target: 'regia' }));
-    expect(store.items('r2').filter(a => a.key === 'status').map(a => [a.id, a.cwd])).toEqual([['art-w-status', 'C:\\x'], ['art-w2-status', 'C:\\repo2']]);
-    store.show('r1', args({ target: 'regia' }));
+    store.show('w', args({ id: 'status', target: 'orchestrator' }));
+    store.show('w2', args({ id: 'status', target: 'orchestrator' }));
+    expect(store.items('r1').filter(a => a.key === 'status').map(a => [a.id, a.cwd])).toEqual([['art-w-status', 'C:\\x'], ['art-w2-status', 'C:\\repo2']]);
+    store.show('r1', args({ target: 'orchestrator' }));
     expect(sent.at(-1)).toMatchObject({ chatId: 'r1' });
     expect((sent.at(-1)?.item as Artifact).from).toBeUndefined();
-  });
-
-  it('target regia from an app-code chat (unified Orchestrator): the Regia it answers to', () => {
-    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { cwd: 'C:/repo', regiaOf: 'o' })];
-    const { store, sent } = setup(all);
-    expect(store.show('aw', args({ target: 'regia' }))).toContain('nell’Orchestrator «Orchestrator»');
-    expect(sent.at(-1)?.chatId).toBe('o');
   });
 
   it('target next-ask: waits, then attaches to the chat\'s next question; with none in 60 s it becomes a card', () => {

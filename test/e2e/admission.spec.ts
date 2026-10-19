@@ -22,7 +22,7 @@ test('a resume after a restart waits while the machine is busy; "Avvia ora" star
   // a chat whose turn was running when the app stopped: the next start resumes it by itself
   fs.writeFileSync(path.join(userData, 'chats.json'), JSON.stringify({ version: 2, chats: [{
     id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title: 'Lavoro interrotto', model: null, effort: null, permissionMode: null,
-    isRegia: false, createdAt: Date.now() - 60_000, working: true,
+    isOrchestrator: false, createdAt: Date.now() - 60_000, working: true,
   }] }));
   const { app, page } = await launch({
     SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_LOAD_FORCE: '95,40',
@@ -61,7 +61,7 @@ test("a work chat's resume waits ahead of a chat on the app queued before it", a
   const cwd = tmp('sb-e2e-cwd-');
   const cut = (id: string, title: string) => ({
     id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title, model: null, effort: null, permissionMode: null,
-    isRegia: false, createdAt: Date.now() - 60_000, working: true,
+    isOrchestrator: false, createdAt: Date.now() - 60_000, working: true,
   });
   // the app's chat comes first in the file, so its resume asks the queue first
   fs.writeFileSync(path.join(userData, 'chats.json'), JSON.stringify({ version: 2, chats: [cut('c_appchat01', 'App · coda'), cut('c_workchat1', 'Shop · sprint')] }));

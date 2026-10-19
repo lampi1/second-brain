@@ -4,7 +4,7 @@
 // with the app agent it runs as (the catalog profile its engine agent type names, else "nessun agente"; owner, #69),
 // what it does, its state and when it started. A child at work always shows; an ended one leaves at once
 // (lib/agent-children.ts), so the strips stay short. Mounted under each strip of the
-// Grindhouse (AgentStrips.tsx) and under the Orchestrator's head (RegiaTile.tsx). The "Dettagli" popover
+// Grindhouse (AgentStrips.tsx) and under the Orchestrator's head (OrchestratorTile.tsx). The "Dettagli" popover
 // (AgentIdentity.tsx) keeps the full census with the parent links.
 import type { AgentProfile } from '@shared/agents';
 import { childAgent, childRows, childTone } from '../lib/agent-children';

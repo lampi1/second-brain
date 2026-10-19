@@ -11,7 +11,7 @@
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
 // list opens. An Orchestrator's input also has "Nuova chat" (ADR 0034): on, the message goes with the line that asks her to
 // open a new work chat for it (shared/newchat.ts); Ctrl+Shift+Invio sends that way at once; it resets after a send.
-// Used by ChatTile and RegiaTile (also the Orchestrator docked with Ctrl+R).
+// Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { splitNewChat, withNewChat } from '@shared/newchat';
@@ -97,17 +97,17 @@ export const hasDraft = (chatId: string): boolean =>
   !!drafts.get(chatId)?.trim() || !!draftImages.get(chatId)?.length || (readingN.get(chatId) ?? 0) > 0;
 
 export interface ChatInputHandle { focus(): void }
-type Props = { chat: ChatSummary; regia?: boolean; testid: string };
+type Props = { chat: ChatSummary; orchestrator?: boolean; testid: string };
 
 // keyed by chat: a view that swaps the chat in place (focus mode) gets a fresh input, never the other chat's draft
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(props, handle) {
   return <ChatInputFor key={props.chat.id} {...props} ref={handle} />;
 });
 
-const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ chat, regia, testid }, handle) {
+const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ chat, orchestrator, testid }, handle) {
   const [text, setText] = useState(() => drafts.get(chat.id) ?? '');
   const context = reviewedContextDraft(text), visibleText = context?.message ?? text;
-  const [asNew, setAsNewState] = useState(() => !!regia && newChatOn.has(chat.id));
+  const [asNew, setAsNewState] = useState(() => !!orchestrator && newChatOn.has(chat.id));
   const setAsNew = (on: boolean) => { if (on) newChatOn.add(chat.id); else newChatOn.delete(chat.id); setAsNewState(on); };
   const [, rerender] = useState(0);
   useEffect(() => {
@@ -174,15 +174,15 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   };
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = enterNow ? t('chat.input.placeholderEnter') : regia && asNew ? t('chat.input.placeholderNewChat') : regia ? t('chat.input.placeholderRegia') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  const placeholder = enterNow ? t('chat.input.placeholderEnter') : orchestrator && asNew ? t('chat.input.placeholderNewChat') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (newChat = asNew) => {
     if(updateIsFrozen())return;
     if (reading) return; // a screenshot is still being read: it goes with this message, so wait for it
     if (newChat && !text.trim()) { toast(t('chat.input.emptyNewChat'), 'info'); return; } // a new chat needs a request in words
-    const r = send(chat.id, newChat && regia ? withNewChat(text) : text, images);
+    const r = send(chat.id, newChat && orchestrator ? withNewChat(text) : text, images);
     if (r === 'empty') return;
-    if (regia) setAsNew(false);
+    if (orchestrator) setAsNew(false);
     setText('');
     drafts.delete(chat.id);
     const hook = onSentHooks.get(chat.id);
@@ -247,7 +247,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     return true;
   };
   return (
-    <div className={`composer ${regia ? 'composer-regia' : ''}`}>
+    <div className={`composer ${orchestrator ? 'composer-orchestrator' : ''}`}>
       {queued.length > 0 && (
         <div className="queued" aria-label={t('chat.input.queuedLabel')}>
           {queued.map((q, i) => {
@@ -282,7 +282,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         <div className="composer-row">
           {slashOpen && <SlashMenu items={matches} sel={Math.min(sel, matches.length - 1)} onPick={pick} testid={testid} />}
           <textarea
-            ref={ta} rows={1} value={visibleText} placeholder={placeholder} aria-label={regia ? t('chat.input.messageToRegia') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
+            ref={ta} rows={1} value={visibleText} placeholder={placeholder} aria-label={orchestrator ? t('chat.input.messageToOrchestrator') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
             aria-expanded={slashOpen} aria-controls={slashOpen ? `${testid}-slash-list` : undefined} aria-autocomplete="list"
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
             onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); }}
@@ -298,11 +298,11 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
                 const byName = cur.name !== query && cur.name.toLowerCase().includes((query ?? '').toLowerCase());
                 if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && (byName || (chose && cur.name !== query)))) { e.preventDefault(); pick(cur); return; }
               }
-              if (regia && e.key === 'Enter' && e.shiftKey && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) { e.preventDefault(); submit(true); return; }
+              if (orchestrator && e.key === 'Enter' && e.shiftKey && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) { e.preventDefault(); submit(true); return; }
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!emptyEnter()) submit(); }
             }}
           />
-          {regia && (
+          {orchestrator && (
             <button type="button" className={`newchat-toggle ${asNew ? 'on' : ''}`} aria-pressed={asNew} onClick={() => { setAsNew(!asNew); ta.current?.focus(); }}
               data-tip={asNew ? t('chat.input.newChatTip') : t('chat.input.newChatTipOn')}
               data-testid={`${testid}-newchat`}><IconPlus size={12} /><span>{t('chat.input.newChatButton')}</span></button>
@@ -310,7 +310,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={asNew ? (busy ? t('chat.input.sendAsNew') : t('chat.input.sendAsNewDirect')) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={asNew ? (busy ? t('chat.input.sendAsNewOnBusy') : t('chat.input.sendAsNewDirectOnBusy')) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : (
-            <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !regia ? t('chat.input.queuedInQueue') : ''} <Kbd>{auditText('audit.ChatInput.enter')}</Kbd></span>
+            <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !orchestrator ? t('chat.input.queuedInQueue') : ''} <Kbd>{auditText('audit.ChatInput.enter')}</Kbd></span>
           )}
         </div>
       </div>

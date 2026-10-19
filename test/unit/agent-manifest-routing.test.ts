@@ -28,15 +28,15 @@ it('selects the profile without interpreting declared access as permission and r
   const create = vi.fn(async (req: NewChat) => ({ id: 'new', title: req.title, ...service.resolve(req).request }));
   const brain = {
     info: () => ({ brainRoot: '/synthetic' }), routingInfo: () => ({ registry: null }),
-    settings: () => ({ engineOn: { codex: allowed, [ANTHROPIC_API]: true }, engines: { codex: allowed, [ANTHROPIC_API]: true }, messaging: {}, regiaChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
+    settings: () => ({ engineOn: { codex: allowed, [ANTHROPIC_API]: true }, engines: { codex: allowed, [ANTHROPIC_API]: true }, messaging: {}, orchestratorChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
     route: (req: RouteRequest) => routeChat({ api: ANTHROPIC_API, ...req }, table, null, null),
   } as unknown as BrainService;
-  const chats = { list: () => [{ id: 'regia', harness: 'codex', isRegia: true }], create } as unknown as ChatService;
-  const tools = appControlTools({ chats, browser: {} as BrowserService, brain, agents: () => service.list(), window: () => null, emitUi: () => {}, version: '0' }, 'regia');
+  const chats = { list: () => [{ id: 'orchestrator', harness: 'codex', isOrchestrator: true }], create } as unknown as ChatService;
+  const tools = appControlTools({ chats, browser: {} as BrowserService, brain, agents: () => service.list(), window: () => null, emitUi: () => {}, version: '0' }, 'orchestrator');
   const tool = tools.find(t => t.name === 'app_create_chat')!;
   const args = { title: 'Research', prompt: 'Find sources', agentId: profile.id };
   await tool.run(args);
-  expect(create.mock.calls[0]?.[0]).toMatchObject({ agentId: profile.id, harness: 'codex', regiaOf: 'regia' });
+  expect(create.mock.calls[0]?.[0]).toMatchObject({ agentId: profile.id, harness: 'codex' });
   expect(create.mock.calls[0]?.[0]).not.toHaveProperty('permissionMode');
   expect(create.mock.calls[0]?.[0]).not.toHaveProperty('manifest');
   await expect(tool.run({ ...args, harness: 'claude' })).rejects.toThrow(/non corrisponde/);
@@ -63,7 +63,7 @@ it('selects the profile without interpreting declared access as permission and r
   await expect(Promise.resolve(tools.find(t => t.name === 'agent_catalog')!.run({ id: profile.id }))).resolves.toMatchObject({ permissionsGranted: false });
 });
 
-it('refreshes compact declarations for Regia turns and keeps them out of work-chat turns', async () => {
+it('refreshes compact declarations for Orchestrator turns and keeps them out of work-chat turns', async () => {
   const sent: { id: string; text: string }[] = [];
   let brief = 'DECLARATIONS VERSION ONE\n';
   const manager = new ChatManager({ userData: tmp(), emitter: { emit: () => {} }, agentCatalogBrief: () => brief,
@@ -73,12 +73,13 @@ it('refreshes compact declarations for Regia turns and keeps them out of work-ch
     }),
   });
   managers.push(manager);
-  const cwd = tmp(), regia = await manager.create({ harness: 'codex', cwd, regia: true }), work = await manager.create({ harness: 'codex', cwd });
-  await manager.send(regia.id, 'Choose a delegate');
+  const cwd = tmp(), orchestrator = await manager.create({ harness: 'codex', cwd, orchestrator: true }), work = await manager.create({ harness: 'codex', cwd });
+  await manager.send(orchestrator.id, 'Choose a delegate');
   brief = 'DECLARATIONS VERSION TWO\n';
-  await manager.send(regia.id, 'Choose again');
+  await manager.send(orchestrator.id, 'Choose again');
   await manager.send(work.id, 'Work');
-  expect(sent.map(row => row.text)).toEqual(['DECLARATIONS VERSION ONE\nChoose a delegate', 'DECLARATIONS VERSION TWO\nChoose again', 'Work']);
+  // the role text comes first on the Orchestrator's first turn of a session
+  expect(sent.map(row => row.text.replace(/^\[Orchestrator role supplied by the app\][\s\S]*?\[End Orchestrator role\]\n\n/, ''))).toEqual(['DECLARATIONS VERSION ONE\nChoose a delegate', 'DECLARATIONS VERSION TWO\nChoose again', 'Work']);
   const service = new AgentCatalogService({ userData: tmp(), models });
   for (let i = 0; i < 40; i++) service.save({ ...service.list().profiles[0]!, name: 'x'.repeat(80), manifest: { whenToUse: 'u'.repeat(1200) } });
   const context = agentCatalogBrief(() => service.list());

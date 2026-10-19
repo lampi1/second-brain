@@ -78,9 +78,9 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
   // Cursor imports Claude hooks with a different input: skip it, or every Cursor chat in {{BRAIN_NAME}} looks like the Orchestrator ({{OWNER}}, 2026-10-09).
   if ('cursor_version' in input || 'conversation_id' in input) return;
   const event = input.hook_event_name;
-  // The Orchestrator by title ("Orchestrator", or the older "Regia"; a chat's cwd changes when it cd's elsewhere); without a
-  // title, by the main checkout cwd. Its focus key stays 'Regia' (focus.json of existing brains).
-  const isRegia = input.session_title ? /^(regia|orchestrator)$/i.test(input.session_title.trim()) : path.resolve(input.cwd || '').toLowerCase() === MAIN;
+  // The Orchestrator by title ("Orchestrator", or the older "Orchestrator"; a chat's cwd changes when it cd's elsewhere); without a
+  // title, by the main checkout cwd. Its focus key stays 'Orchestrator' (focus.json of existing brains).
+  const isOrchestrator = input.session_title ? /^(orchestrator|orchestrator)$/i.test(input.session_title.trim()) : path.resolve(input.cwd || '').toLowerCase() === MAIN;
   const fromOwner = p => p && !p.trimStart().startsWith('<') &&
     !/<agent-message|<task-notification|<cross-session-message|Another Claude session sent a message/.test(p);
   // What started this turn (read again at Stop): owner | peer (another chat) | notifica (own background work).
@@ -88,7 +88,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
   const origins = readJson(ORIGINS, {});
 
   if (event === 'UserPromptSubmit') {
-    if (!isRegia && input.session_id) {
+    if (!isOrchestrator && input.session_id) {
       origins[input.session_id] = {
         origin: fromOwner(input.prompt) ? 'owner'
           : /<cross-session-message|Another Claude session sent a message/.test(input.prompt ?? '') ? 'peer' : 'notifica',
@@ -99,18 +99,18 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     }
     if (!fromOwner(input.prompt)) {
       // A worker message reaches the Orchestrator while {{OWNER}} works in another chat: queue, don't interrupt.
-      const focus = isRegia ? readJson(FOCUS, null) : null;
-      if (!isRegia) { // a worker woken by the hub, a peer or a notification: it is working
+      const focus = isOrchestrator ? readJson(FOCUS, null) : null;
+      if (!isOrchestrator) { // a worker woken by the hub, a peer or a notification: it is working
         append({ kind: 'state', state: 'in-lavorazione', chat: titleOf(input.transcript_path, input.cwd, input.session_title), cwd: input.cwd });
         return;
       }
-      if (focus && focus.chat !== 'Regia') {
+      if (focus && focus.chat !== 'Orchestrator') {
         // Only the fact: what to do in focus is written once in me.md ("Focus").
         say(`Focus: {{OWNER}} is in "${focus.chat}" since ${hhmm(focus.since)}.`);
       }
       return;
     }
-    if (!isRegia) {
+    if (!isOrchestrator) {
       const chat = titleOf(input.transcript_path, input.cwd, input.session_title);
       append({ kind: 'owner', state: 'in-lavorazione', chat, cwd: input.cwd, text: oneLine(input.prompt, 300) });
       fs.writeFileSync(FOCUS, JSON.stringify({ chat, cwd: input.cwd, since: new Date().toISOString() }));
@@ -118,7 +118,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     }
     const focus = readJson(FOCUS, null);
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(FOCUS, JSON.stringify({ chat: 'Regia', since: new Date().toISOString() }));
+    fs.writeFileSync(FOCUS, JSON.stringify({ chat: 'Orchestrator', since: new Date().toISOString() }));
     const lines = fs.existsSync(FEED) ? fs.readFileSync(FEED, 'utf8').split('\n').filter(Boolean) : [];
     const from = readJson(CURSOR, { line: 0 }).line;
     fs.writeFileSync(CURSOR, JSON.stringify({ line: lines.length }));
@@ -127,7 +127,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     const talk = fresh.filter(e => e.kind !== 'state');
     let text = talk.map(e => `${hhmm(e.ts)} ${e.kind === 'owner' ? `{{OWNER}} → ${e.chat}` : `${e.chat} → {{OWNER}}${e.tag ? ` (${e.tag})` : ''}`}: ${e.text}`).join('\n');
     if (text.length > MAX_INJECT) text = `(…${talk.length} righe, le più vecchie tagliate)\n${text.slice(-MAX_INJECT)}`;
-    const back = focus && focus.chat !== 'Regia' ? `{{OWNER}} is back from focus on "${focus.chat}" (since ${hhmm(focus.since)}). ` : '';
+    const back = focus && focus.chat !== 'Orchestrator' ? `{{OWNER}} is back from focus on "${focus.chat}" (since ${hhmm(focus.since)}). ` : '';
     // Latest state per chat (by cwd = its worktree, the same cwd list_sessions shows) → sidebar groups.
     const latest = new Map();
     for (const e of fresh) if (e.state) latest.set(e.chat, e);
@@ -140,11 +140,11 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
     return say(`${back}Since your last turn, in the other chats (chat-feed, automatic):\n${text || '(solo cambi di stato)'}${sidebar}`);
   }
 
-  if (event === 'Notification' && !isRegia && input.notification_type === 'permission_prompt') {
+  if (event === 'Notification' && !isOrchestrator && input.notification_type === 'permission_prompt') {
     append({ kind: 'chat', state: 'aspetta-te', chat: titleOf(input.transcript_path, input.cwd, input.session_title), cwd: input.cwd, tag: 'permesso', text: oneLine(input.message, 200) });
   }
 
-  if (event === 'Stop' && !isRegia && !input.stop_hook_active) {
+  if (event === 'Stop' && !isOrchestrator && !input.stop_hook_active) {
     const msg = lastAssistant(input);
     if (!msg.trim()) return;
     const tag = /```powershell/i.test(msg) ? 'comando' : (/\?\s*$/.test(msg.trim()) ? 'domanda' : '');

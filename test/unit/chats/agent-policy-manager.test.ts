@@ -86,17 +86,17 @@ describe('agent policy on chats', () => {
 
   it('a renewed Orchestrator and the chats an agent opens never run wider than their origin', async () => {
     const f = fixture();
-    const regia = await f.m.create({ harness: 'claude', cwd: f.dir, regia: true }, 'user', agent(reviewer));
-    const renewed = await f.m.create({ harness: 'claude', cwd: f.dir, regia: true, replaces: regia.id });
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user', agent(reviewer));
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, replaces: orchestrator.id });
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
-    const work = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'modifica X', regiaOf: renewed.id, permissionMode: 'acceptEdits' }, 'agent');
+    const work = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'modifica X', permissionMode: 'acceptEdits' }, 'agent');
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default', permissionMode: 'default' });
     expect(f.m.browserAllowed(work.id)).toBe(false);
     // an agent chosen for the work is narrowed by its opener too
-    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y', regiaOf: renewed.id }, 'agent', agent({ tools: { allow: ['read', 'edit', 'browser'] }, ceiling: 'acceptEdits' }));
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'agent', agent({ tools: { allow: ['read', 'edit', 'browser'] }, ceiling: 'acceptEdits' }));
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
     // a chat Brother opens himself is his own
-    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'z', regiaOf: renewed.id });
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'z' });
     expect(f.starts.at(-1)?.toolPolicy).toBeUndefined();
   });
 

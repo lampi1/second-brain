@@ -146,7 +146,7 @@ describe('agent runs on chats', () => {
     const c = await f.create();
     await f.m.set(c.id, { workStatus: 'completed' });
     f.m.markRun(c.id, 'success');
-    await f.m.send(c.id, 'continua', undefined, false, 'regia');
+    await f.m.send(c.id, 'continua', undefined, false, 'orchestrator');
     await f.m.send(c.id, 'notizia dell’app');
     expect(f.run(c.id)).toMatchObject({ endReason: 'completed', counters: { reopened: 0 } });
     f.m.resumedByUser(c.id);
@@ -255,7 +255,7 @@ describe('agent run evidence (A6)', () => {
     expect(f.run(c.id)?.report).toEqual({ ok: false, at: 30 });
   });
 
-  it('a run ended during the turn (its Regia marked it completed) still takes that turn’s report', async () => {
+  it('a run ended during the turn (its Orchestrator marked it completed) still takes that turn’s report', async () => {
     const f = fixture();
     const c = await f.create();
     f.sink(c.id).changed({ state: 'running' });

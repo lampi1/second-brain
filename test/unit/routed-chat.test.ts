@@ -10,19 +10,19 @@ import type { ChatSummary, NewChat, RoutedNewChat, RoutingTable } from '../../sr
 const table: RoutingTable = { version: 11, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
   { kind: 'bug-fix', harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'bug: Opus', since: '2026-10-14', evidence: 'n=2' },
   { kind: 'qa-run', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', why: 'QA: Sonnet', since: '2026-10-14', evidence: 'n=1' },
-  { kind: 'regia', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Regia: Sonnet', since: '2026-10-14', evidence: 'prova' },
+  { kind: 'orchestrator', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Orchestrator: Sonnet', since: '2026-10-14', evidence: 'prova' },
   { kind: 'review', area: 'Acme.Web', harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', why: 'review di quel repo', since: '2026-10-14', evidence: 'prova' },
 ] };
 const rules = { tasks: [['qa-run', String.raw`\b(test ?case|qa)\b`, 'i'], ['bug-fix', String.raw`\b(fix|bug)\b`, 'i']] as [string, string, string][] };
 
-function deps(engines = { claude: true, cursor: true }, regie = { claude: true, cursor: true }) {
+function deps(engines = { claude: true, cursor: true }, orchestrators = { claude: true, cursor: true }) {
   const made: NewChat[] = [];
   return {
     made,
     d: {
       route: (req: RouteRequest) => routeChat(req, table, DEMO_REGISTRY, rules, 7),
       engineOn: (h: string) => engines[h as keyof typeof engines] !== false,
-      agentsMayOpen: (h: string) => engines[h as keyof typeof engines] !== false && regie[h as keyof typeof regie] !== false,
+      agentsMayOpen: (h: string) => engines[h as keyof typeof engines] !== false && orchestrators[h as keyof typeof orchestrators] !== false,
       create: async (req: NewChat) => { made.push(req); return { id: `c${made.length}`, title: req.title } as ChatSummary; },
     },
   };
@@ -33,8 +33,8 @@ const base = (o: Partial<RoutedNewChat> = {}): RoutedNewChat => ({ title: 'Shop 
 describe('createRoutedChat', () => {
   it('a bug: the bug-fix row, with its route on the chat', async () => {
     const { d, made } = deps();
-    await createRoutedChat(d, base({ kind: 'bug-fix', area: 'Shop', routeText: 'Bug Rimborso sbagliato', permissionMode: 'acceptEdits', regiaOf: 'r1', defaults: { harness: 'claude' } }));
-    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', cwd: 'C:/brain', regiaOf: 'r1', permissionMode: 'acceptEdits',
+    await createRoutedChat(d, base({ kind: 'bug-fix', area: 'Shop', routeText: 'Bug Rimborso sbagliato', permissionMode: 'acceptEdits', defaults: { harness: 'claude' } }));
+    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', cwd: 'C:/brain', permissionMode: 'acceptEdits',
       route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'Shop', version: 11, at: 7 } });
     expect(made[0]!.prompt).toBe(base().prompt);
   });
@@ -77,7 +77,7 @@ describe('createRoutedChat', () => {
     expect(off.made).toHaveLength(1);
   });
 
-  it('«Le Regie possono usare Cursor» off: a table row or a default on Cursor is not used, the user’s own pick is; a Regia never moves there', async () => {
+  it('«Gli Orchestrator possono usare Cursor» off: a table row or a default on Cursor is not used, the user’s own pick is; a Orchestrator never moves there', async () => {
     const cursorRow: RoutingTable = { ...table, routes: [{ kind: 'bug-fix', harness: 'cursor', model: 'composer-2.5', effort: null, why: 'bug: Cursor', since: '2026-10-14', evidence: 'n=1' }] };
     const { d, made } = deps({ claude: true, cursor: true }, { claude: true, cursor: false });
     d.route = (req: RouteRequest) => routeChat(req, cursorRow, DEMO_REGISTRY, rules, 7);
@@ -87,23 +87,23 @@ describe('createRoutedChat', () => {
     expect(made[0]).toMatchObject({ harness: 'claude', route: { source: 'default' } });
     await createRoutedChat(d, base({ kind: 'bug-fix', defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'scelta mia' } }));
     expect(made[1]).toMatchObject({ harness: 'cursor' }); // the user named it: the row that agrees is used
-    await expect(createRoutedChat(d, { title: 'Regia · lavoro', cwd: 'C:/brain', regia: true, defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'Cambia motore' } }))
+    await expect(createRoutedChat(d, { title: 'Orchestrator · lavoro', cwd: 'C:/brain', orchestrator: true, defaults: { harness: 'claude' }, ask: { harness: 'cursor', reason: 'Cambia motore' } }))
       .rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     expect(made).toHaveLength(2);
   });
 
-  it('a Regia: kind regia whatever its text, no first message needed, its role passed on; the engine the user picked beats the row', async () => {
+  it('a Orchestrator: kind orchestrator whatever its text, no first message needed, its role passed on; the engine the user picked beats the row', async () => {
     const { d, made } = deps();
-    await createRoutedChat(d, { title: 'Regia · lavoro', cwd: 'C:/brain', regia: true, replaces: 'old1', regiaName: 'lavoro', defaults: { harness: 'claude' }, ask: { harness: 'claude', reason: 'Ricomincia' } });
-    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', regia: true, replaces: 'old1', regiaName: 'lavoro', route: { kind: 'regia', source: 'table' } });
+    await createRoutedChat(d, { title: 'Orchestrator · lavoro', cwd: 'C:/brain', orchestrator: true, replaces: 'old1', defaults: { harness: 'claude' }, ask: { harness: 'claude', reason: 'Ricomincia' } });
+    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', orchestrator: true, replaces: 'old1', route: { kind: 'orchestrator', source: 'table' } });
     expect(made[0]).not.toHaveProperty('prompt');
     // Cambia motore to Cursor: an override with its reason, the engine's default model, no effort
-    await createRoutedChat(d, { title: 'Regia · lavoro', cwd: 'C:/brain', regia: true, prompt: 'fix del bug: handoff', defaults: { harness: 'cursor' }, ask: { harness: 'cursor', reason: 'Cambia motore' } });
-    expect(made[1]).toMatchObject({ harness: 'cursor', regia: true, route: { kind: 'regia', source: 'override', reason: 'Cambia motore' } });
+    await createRoutedChat(d, { title: 'Orchestrator · lavoro', cwd: 'C:/brain', orchestrator: true, prompt: 'fix del bug: handoff', defaults: { harness: 'cursor' }, ask: { harness: 'cursor', reason: 'Cambia motore' } });
+    expect(made[1]).toMatchObject({ harness: 'cursor', orchestrator: true, route: { kind: 'orchestrator', source: 'override', reason: 'Cambia motore' } });
     expect(made[1]).not.toHaveProperty('effort');
     // a long title (renamed by the user) is the Orchestrator's address: kept whole
-    const long = `Regia · ${'x'.repeat(120)}`;
-    await createRoutedChat(d, { title: long, cwd: 'C:/brain', regia: true, defaults: { harness: 'claude' } });
+    const long = `Orchestrator · ${'x'.repeat(120)}`;
+    await createRoutedChat(d, { title: long, cwd: 'C:/brain', orchestrator: true, defaults: { harness: 'claude' } });
     expect(made[2]!.title).toBe(long);
     // a work chat still needs its first message
     await expect(createRoutedChat(d, { title: 'Shop · x', cwd: 'C:/brain', defaults: { harness: 'claude' } })).rejects.toThrow(/primo messaggio/);

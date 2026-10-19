@@ -124,7 +124,7 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.ProgressPanel.anOutcomeToReview": "An outcome to review",
   "audit.ProgressPanel.openTheOutcome": "Open the outcome",
   "audit.ProgressPanel.iConfirmIGotAUseful": "I confirm: I got a useful outcome",
-  "audit.RegiaOverlay.statusChatsAndPrs": "Status: chats and PRs",
+  "audit.OrchestratorOverlay.statusChatsAndPrs": "Status: chats and PRs",
   "audit.RoutingGroup.modelRouting": "Model routing",
   "audit.RoutingGroup.aTableOfRules": "A table of rules",
   "audit.RoutingGroup.forEachKindOfWorkOptionally": "Applies to chats without a chosen agent (Generale) and gives the model to agents whose profile names none: an agent's profile always decides. For each kind of work, optionally by area, this sets the model and effort a chat starts with. If several rows match, the most specific wins: kind and area, area only, kind only, then “any”. An area row (for example App) applies to all its chats.",

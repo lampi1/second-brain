@@ -40,7 +40,7 @@ export function waitsForWork(text: string | null | undefined): boolean {
 // a worker that just delivered its report closes by itself. Same sentence/clause reading as waitsForWork.
 const AWAIT = /(?:^|[^\p{L}])(?:aspetto|attendo|sto aspettando|stiamo aspettando|resto in attesa|rimango in attesa|in attesa d[ie'’]\w*|waiting (?:for|on)|awaiting|i'?ll wait for|wait(?:ing)? until|blocked on|bloccat[oa] (?:su|in attesa d\w*))(?![\p{L}])/iu;
 const NOT_WAITING = /(?:^|[^\p{L}])(?:non (?:aspetto|attendo|resto in attesa)|niente da aspettare|nulla da aspettare|nessuna attesa|nothing to wait|not waiting|no longer waiting)(?![\p{L}])/iu;
-const COLLEAGUE = /«|"|“|(?:^|[^\p{L}])(?:collega|colleghi|altra chat|altre chat|other chats?|teammates?|colleagues?|orchestrator|regia|worker|chat\s+\S+)(?![\p{L}])/iu;
+const COLLEAGUE = /«|"|“|(?:^|[^\p{L}])(?:collega|colleghi|altra chat|altre chat|other chats?|teammates?|colleagues?|orchestrator|orchestrator|worker|chat\s+\S+)(?![\p{L}])/iu;
 const PERSON = /(?:^|[^\p{L}])(?:utente|user|owner|proprietario|tu|tuo|tua|tuoi|tue|te|your|you)(?![\p{L}])/iu;
 const DECISION = /(?:^|[^\p{L}])(?:ok|okay|conferma|confirmation|approvazione|approval|via libera|go-ahead|istruzioni|instructions|decisione|decision|risposta|reply|answer|feedback|indicazioni)(?![\p{L}])/iu;
 // asks the reader to decide before it goes on: "Procedo?", "Vuoi che proceda?", "Shall I go ahead?", "Mi serve il tuo ok"

@@ -74,8 +74,8 @@ test('a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the
   const userCursor = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cursor-user-')); // never the real ~/.cursor
   const { app, page, userData } = await launch({ SB_CURSOR_PATH: FAKE_CURSOR, FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: userCursor });
   await page.evaluate(() => { window.__ev = []; for (const ch of ['pending:added', 'pending:resolved', 'chat:item'] as const) window.sb.on(ch, p => { window.__ev.push({ ch, p }); }); });
-  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Regia Cursor', regia: true }), cwd);
-  expect(chat).toMatchObject({ harness: 'cursor', isRegia: true, costKnown: false });
+  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Orchestrator Cursor', orchestrator: true }), cwd);
+  expect(chat).toMatchObject({ harness: 'cursor', isOrchestrator: true, costKnown: false });
   await expect.poll(() => page.evaluate(() => window.__ev.filter(e => e.ch === 'pending:added').length)).toBe(1);
   const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
   expect(pending[0]).toMatchObject({ chatId: chat.id, type: 'permission', tool: 'Shell', noAlways: true });
