@@ -92,7 +92,8 @@ Open ideas (not decided):
 ## Built today
 
 Chats as tiles with streaming, tools and diffs; questions and permissions as panels with their context; one or more
-Regie; mail between chats; long chats handed off before the context fills; code blocks run with one click and their
+Regie; mail between chats; finished workers that close by themselves once they reported (and say what they wait for
+when they cannot); long chats handed off before the context fills; code blocks run with one click and their
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
 pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a DevOps page (pull requests, work items, QA
 status, alerts); quality metrics; full-text search; per-task model routing; and "Migliora l'app", where the app's own

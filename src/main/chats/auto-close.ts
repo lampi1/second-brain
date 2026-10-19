@@ -1,6 +1,6 @@
 // Main-owned automatic archive scheduler. Requires fresh presence, current backend guards, and 120 seconds of
 // acknowledged warning; no renderer fade or stale deadline can authorize closure. Clock/IO are injected for tests.
-import type { AutoClosePresence, AutoCloseStatus } from '../../shared/auto-close';
+import type { AutoClosePresence, AutoCloseStatus, AutoCloseWaiting } from '../../shared/auto-close';
 
 export const AUTO_CLOSE_WARNING_MS = 120_000;
 export const PRESENCE_LEASE_MS = 15_000;
@@ -15,6 +15,8 @@ export interface AutoCloseCandidate {
   /** False for Regia/app/coordinating agents, active delivery/mail/tools/children/pending/errors or uncertain telemetry. */
   eligible: boolean;
   reason?: string;
+  /** what a held chat waits for (ADR 0076): shown as "In attesa di…" on its tile */
+  waitingFor?: AutoCloseWaiting;
 }
 export interface AutoCloseReservation { generation: number; deadline: number; stamp: string }
 export interface AutoCloseDeps {
@@ -107,7 +109,11 @@ export class AutoCloseService {
       let e = this.entries.get(c.id);
       if (!e) { e = { status: { chatId: c.id, deadline: null, warningStartedAt: null, generation: this.nextGeneration++, keptOpen: this.kept.has(c.id), reason: null, clockAt: now }, fingerprint: null }; this.entries.set(c.id, e); }
       const held = this.hold(c, now);
-      if (held) { this.cancel(e, held); continue; }
+      if (held) {
+        this.cancel(e, held);
+        if (!c.eligible && c.waitingFor && !this.kept.has(c.id)) e.status.waitingFor = c.waitingFor; else delete e.status.waitingFor;
+        continue;
+      }
       const p = this.presence.get(c.id)!;
       const fingerprint = JSON.stringify([c.stamp, c.activityAt, p.touchedAt, this.d.delayMs()]);
       if (fingerprint !== e.fingerprint) {

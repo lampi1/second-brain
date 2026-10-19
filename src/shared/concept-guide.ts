@@ -469,6 +469,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/agent-estimates.ts
       b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
         'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
+      // src/main/chats/manager.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0076)
+      b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
+        'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, sforzo e l’ultima risposta; aperta mostra la conversazione e l’input.',
         'A collapsed strip shows agent, state, effort and the last answer; expanded it shows the conversation and the input.'),

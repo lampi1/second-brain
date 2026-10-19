@@ -36,6 +36,12 @@
 - **A question or permission**: CLI `control_request can_use_tool` → `PendingRequest` (`pending:added`) → shown in
   the tile and in the needs-you lane → the user clicks → `chat:answer` → `control_response`. This click is the user's own
   answer: the app is the harness (unlike mail between chats, which never counts as their ok).
+- **A finished worker closes by itself** (ADR 0076): its `send_to_chat` to its Orchestrator (or a `run-report` block)
+  is its final report; at the next clean idle turn end ChatManager completes its assignment (`work: completed`) and
+  ends its agent run `completed`, unless the report or the last answer waits for the user or colleagues
+  (`waitsOn`, `shared/waiting.ts`), a question/permission is open or background work runs. The main AutoCloseService
+  archives it after the `autoCloseMin` delay and its warning (`closedBy: 'auto'`); a held chat carries `waitingFor`
+  in `chat:autoCloseStatus` and its strip shows "In attesa di…".
 - **Stop**: `chat:stop` → control `interrupt` (Claude) / `session/cancel` (Cursor); `chat:stopAll` = every running
   chat.
 - **A browser action by an agent**: CLI calls the MCP tool on its own endpoint → BrowserService acts on that chat's

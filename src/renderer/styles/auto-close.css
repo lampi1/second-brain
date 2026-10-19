@@ -2,3 +2,8 @@
 .autoclose-warnings { position:fixed; left:16px; bottom:16px; z-index:30; max-width:min(440px,70vw); max-height:180px; overflow:auto; display:grid; gap:8px; padding:10px 12px; border:1px solid var(--line,#9996); border-radius:10px; background:var(--surface,#252735); color:var(--text,#eee); box-shadow:0 3px 12px #0003; font-size:12px; }
 .agent-autoclose { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--muted,#aab); }
 .autoclose-warnings[hidden] { display:none; }
+/* What a held work chat waits for (#86): a quiet pill under the tile header, amber when it waits for the user. */
+.agent-waiting { display:inline-flex; align-self:flex-start; gap:6px; align-items:center; margin:2px 10px 4px; padding:2px 9px 2px 8px; border-radius:20px; border:1px solid var(--blue-line,var(--border-2)); background:var(--blue-bg,transparent); color:var(--text-2); font-size:var(--fs-xs,11px); font-weight:550; white-space:nowrap; }
+.agent-waiting-dot { width:6px; height:6px; border-radius:50%; background:var(--blue); flex:none; }
+.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) { border-color:var(--amber-line,var(--border-2)); background:var(--amber-bg,transparent); }
+.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) .agent-waiting-dot { background:var(--amber); }
