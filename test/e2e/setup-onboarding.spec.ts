@@ -5,7 +5,7 @@
 // GitHub "Connesso come …" after the probe, Jira "Non connesso" with the reason and what to do, Azure waiting for its
 // window; (3) the folders step: no options to choose, a new memory by default, the projects folder found by itself
 // in the fixture home, changed with the (stubbed) native picker, asked when nothing is found, and on confirm saved in
-// projectsRoot with the new memory's REPOS pointing there. CLI status, sign-ins, probes and the folder dialog are
+// projectsRoot with the new memory's REPOS pointing there; Settings → Il mio spazio shows it, re-detects and changes it. CLI status, sign-ins, probes and the folder dialog are
 // replaced in main: no CLI runs, no network, no tokens. Screenshots: test-results/shots/setup-onboarding-*.png (dark
 // and light).
 import fs from 'node:fs';
@@ -155,11 +155,24 @@ test('setup: fields take typing, connectors end in a real check, folders without
     const brain = JSON.parse(fs.readFileSync(path.join(info.brainRoot!, 'brain.json'), 'utf8')) as { template: { REPOS: string } };
     expect(brain.template.REPOS).toBe(picked.split(path.sep).join('/'));
 
+    // Settings → Il mio spazio shows the same folder: Rileva di nuovo finds the other one, «Usa questa» saves it
+    await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
+    const row = page.getByTestId('st-projects');
+    await row.scrollIntoViewIfNeeded();
+    await expect(page.getByTestId('st-projects-value')).toHaveText(picked);
+    await expect(page.getByTestId('st-help-projects')).toBeVisible();
+    await page.getByTestId('st-projects-detect').click();
+    await expect(page.getByTestId('st-projects-found')).toContainText(found);
+    await shot(page, 'setup-onboarding-8-settings-projects');
+    await light(page, true); await shot(page, 'setup-onboarding-8-settings-projects-light'); await light(page, false);
+    await page.getByTestId('st-projects-found').getByRole('button', { name: 'Usa questa', exact: true }).click();
+    await expect(page.getByTestId('st-projects-value')).toHaveText(found);
+    expect((await page.evaluate(() => window.sb.invoke('settings:get', undefined))).projectsRoot).toBe(found);
+
     // nothing found and nothing saved: the step asks for the folder
     await page.evaluate(() => window.sb.invoke('settings:set', { projectsRoot: null }));
     for (const repo of ['shop', 'api']) fs.rmSync(path.join(found, repo, '.git'), { recursive: true });
-    await page.getByTestId('settings').click();
-    await page.getByTestId('settings-all').click();
     await page.getByRole('button', { name: 'Configura il mio lavoro', exact: true }).click();
     await expect(title).toHaveText('La tua memoria e i tuoi progetti');
     await expect(setup.getByTestId('setup-memory-card')).toHaveAttribute('data-state', 'connected');

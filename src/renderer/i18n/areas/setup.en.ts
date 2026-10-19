@@ -113,4 +113,10 @@ export const setupEn = {
   'setup.done.memoryNew': 'New, created on confirmation',
   'setup.done.edit': 'Edit',
   'setup.done.editAria': (p: { step: string }) => `Edit: ${p.step}`,
+  'setup.settings.projects': 'Projects folder',
+  'setup.settings.projectsHelp': 'Where you keep your repositories: agents start from here. The app looks for it by itself using only folder names and the presence of .git, without opening files: first the folders Claude Code and Cursor already worked in (worth three times a usual place), then source/repos, Projects, dev, code, git and the like. The folder with the most repositories wins.',
+  'setup.settings.found': (p: { path: string; n: number }) => `Found: ${p.path} (${p.n === 1 ? 'one git repository' : `${p.n} git repositories`}).`,
+  'setup.settings.use': 'Use this one',
+  'setup.settings.none': 'No folder found by itself: choose one with “Change…”.',
+  'setup.settings.noneOther': 'No other folder found: the current one stays.',
 };

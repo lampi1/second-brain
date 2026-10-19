@@ -89,7 +89,7 @@ it as a draft and it reopens on the same step, also from Settings → "Configura
    or a brain you already have ("Use an existing brain…", the system folder picker). Below it, your **projects
    folder**: the app finds it by itself from the repositories Claude Code and Cursor already worked in and the usual
    places (`source/repos`, `Projects`, `dev`, …), reading only folder names and `.git`; it asks you only when it finds
-   none. It is saved in the setting `projectsRoot`, and a new memory points its repositories there.
+   none. It is saved in the setting `projectsRoot` (Settings → Il mio spazio → Cartella dei progetti: change it or detect it again), and a new memory points its repositories there.
 2. **Your AI**: "Collega" opens the CLI's official sign-in in its own window; the card checks again by itself every
    few seconds (no tokens) until it says "Collegata" with the account and the time of the check.
 3. **Tools** (GitHub, Azure DevOps, Jira Cloud): every sign-in ends in a real read-only check. The row says

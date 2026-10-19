@@ -113,4 +113,10 @@ export const setupIt = {
   'setup.done.memoryNew': 'Nuova, creata alla conferma',
   'setup.done.edit': 'Modifica',
   'setup.done.editAria': (p: { step: string }) => `Modifica: ${p.step}`,
+  'setup.settings.projects': 'Cartella dei progetti',
+  'setup.settings.projectsHelp': 'Dove tieni i tuoi repository: gli agenti partono da qui. L’app la cerca da sola guardando solo i nomi delle cartelle e la presenza di .git, senza aprire file: prima le cartelle in cui Claude Code e Cursor hanno già lavorato (vale tre volte un posto abituale), poi source/repos, Projects, dev, code, git e simili. Vince la cartella con più repository.',
+  'setup.settings.found': (p: { path: string; n: number }) => `Trovata: ${p.path} (${p.n === 1 ? 'un repository git' : `${p.n} repository git`}).`,
+  'setup.settings.use': 'Usa questa',
+  'setup.settings.none': 'Nessuna cartella trovata da sola: scegline una con «Cambia…».',
+  'setup.settings.noneOther': 'Nessun’altra cartella trovata: resta quella attuale.',
 };

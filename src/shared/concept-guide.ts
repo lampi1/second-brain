@@ -656,7 +656,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Cartelle: nessuna scelta tra opzioni. La memoria è nuova e vuota (creata alla conferma nella cartella dati dell’app) oppure un brain che hai già, indicato con «Usa un brain esistente…».',
         'Folders: no options to pick. The memory is a new, empty one (created on confirmation in the app’s data folder) or a brain you already have, pointed to with "Use an existing brain…".'),
       // src/main/brain/projects-folder.ts
-      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova.',
+      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova; la cambi o la rilevi di nuovo in Impostazioni → Il mio spazio.',
         'The app looks for the projects folder by itself: the repositories Claude Code and Cursor already worked in and the usual places (source/repos, Projects, dev…). It asks only when it finds none.'),
       // src/renderer/components/SetupEngines.tsx; src/renderer/lib/setup-wizard.ts
       b('La tua IA: «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi, finché la scheda dice «Collegata» con l’account e l’ora della verifica.',
@@ -680,7 +680,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(LIMITS, 'Ricerca dei progetti: solo nomi di cartelle e presenza di .git, al massimo 300 cartelle note alle CLI; nessun file aperto. Ricontrollo degli accessi: ogni 4 secondi per 3 minuti.',
         'Projects search: folder names and .git presence only, at most 300 folders known to the CLIs; no file opened. Sign-in re-checks: every 4 seconds for 3 minutes.'),
     ],
-    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
+    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
   },
   {
     id: 'brain',
