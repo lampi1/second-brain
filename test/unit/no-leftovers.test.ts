@@ -22,12 +22,19 @@ function files(rel: string): string[] {
     return e.isFile() && TEXT.test(e.name) ? [r] : [];
   });
 }
+/** The one read of the old key, so the user's Orchestrator in a chats.json of a release before ADR 0083 is not lost
+ *  (the owner's rule: one tolerant reader line, no other compatibility), and the test that pins it. */
+const KEPT_READS: readonly { file: string; line: string }[] = [
+  { file: 'src/main/chats/store.ts', line: "const orchestrator = c.isOrchestrator === true || (c.isRegia === true && c.orchestrator === true);" },
+  { file: 'test/unit/chats/store.test.ts', line: "const old = { id: 'o1', harness: 'claude', cwd: '/w', title: 'Orchestrator', isRegia: true, orchestrator: true, closedAt: 5 };" },
+  { file: 'test/unit/chats/store.test.ts', line: "const plain = { id: 'r2', harness: 'claude', cwd: '/w', title: 'Ordini', isRegia: true };" },
+];
 function hits(list: readonly string[], re: RegExp, onLine?: (line: string) => boolean): string[] {
   const out: string[] = [];
   for (const f of list) {
     if (f === SELF) continue;
     const lines = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n');
-    lines.forEach((l, i) => { if (re.test(l) && (!onLine || onLine(l))) out.push(`${f}:${i + 1}: ${l.trim().slice(0, 120)}`); });
+    lines.forEach((l, i) => { if (re.test(l) && (!onLine || onLine(l)) && !KEPT_READS.some(k => k.file === f && k.line === l.trim())) out.push(`${f}:${i + 1}: ${l.trim().slice(0, 120)}`); });
   }
   return out;
 }

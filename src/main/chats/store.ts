@@ -140,6 +140,9 @@ function valid(x: unknown): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
   if (typeof c.id !== 'string' || !c.id || typeof c.cwd !== 'string' || !ENGINE_ID.test(String(c.harness))) return null;
+  // a file written by a release before ADR 0083 marks the user's Orchestrator with the old coordinator key plus
+  // `orchestrator: true`: it stays the Orchestrator (the one tolerant read; the other old coordinators are plain chats)
+  const orchestrator = c.isOrchestrator === true || (c.isRegia === true && c.orchestrator === true);
   return {
     id: c.id, harness: c.harness as Harness, cwd: c.cwd,
     // only UUIDs ever reach --resume / --session-id: anything else in the file is dropped
@@ -149,12 +152,12 @@ function valid(x: unknown): StoredChat | null {
     model: typeof c.model === 'string' && c.model ? c.model : null,
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
     permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : null,
-    isOrchestrator: c.isOrchestrator === true,
+    isOrchestrator: orchestrator,
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
     // the Orchestrator is never archived, whatever the file says
-    ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isOrchestrator !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
+    ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && !orchestrator ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
   };
 }
