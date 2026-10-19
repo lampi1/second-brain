@@ -1,0 +1,166 @@
+/* The Brain section (ADR 0077): the Skill, Regole and Memoria pages in the Agenti page's look (agent-catalog.css:
+   page header, a grid of gradient cards with a tone hairline), the maintenance panel with its change log, the
+   migration report, the Classificatori tables and the Mappa inspector in the Dashboard's language (dashboard.css),
+   and the agent card's 3D flip (#81) with a plain fade under reduced motion. Theme tokens only (tokens.css): dark and
+   light follow the app; one column on narrow windows. */
+
+/* ── cards of the Brain pages (skills, rules, memory) ── */
+.bm-page .catalog-card{gap:10px}
+.bm-page .catalog-card[data-kind=skill]{--tone:var(--pair-0)}
+.bm-page .catalog-card[data-kind=rule]{--tone:var(--pair-1)}
+.bm-page .catalog-card[data-kind=memory]{--tone:var(--blue)}
+.bm-page .catalog-card[data-kind=agent]{--tone:var(--violet)}
+.bm-page .catalog-card[data-unused=true]{--tone:var(--text-4)}
+.bm-card-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.bm-card-head>div{flex:1;min-width:0}
+.bm-card-head h3{margin:0;font-size:var(--fs-l);font-weight:600;letter-spacing:-.2px;line-height:1.35;overflow-wrap:anywhere}
+.bm-card-head h3 code{font-family:var(--mono);font-size:13px}
+.bm-card-sub{margin:3px 0 0;font-size:var(--fs-xs);color:var(--text-3);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bm-page .bm-desc{margin:0;font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.bm-badges{display:flex;gap:6px;flex-wrap:wrap;flex:none}
+.bm-badge{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:550;color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:2px 8px;white-space:nowrap}
+.bm-badge[data-tone=amber]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.bm-badge[data-tone=green]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
+.bm-badge[data-tone=blue]{color:var(--blue);border-color:var(--blue-line);background:var(--blue-bg)}
+.bm-badge[data-tone=violet]{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 40%,transparent);background:var(--violet-bg)}
+.bm-badge[data-tone=muted]{color:var(--text-3)}
+.bm-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0;font-size:var(--fs-s)}
+.bm-row>dt,.bm-label{flex:none;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.bm-chips{display:flex;gap:5px;flex-wrap:wrap;min-width:0;margin:0;padding:0;list-style:none}
+.bm-chip{max-width:100%;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-3);border-radius:var(--r-xs);padding:2px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bm-chip[data-kind=tool]{font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:transparent}
+button.bm-chip{cursor:pointer;font:inherit;font-size:var(--fs-xs)}button.bm-chip:hover{border-color:var(--border-3);color:var(--text)}
+.bm-card-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-3)}
+.bm-card-foot .sp{flex:1}
+.bm-card-foot .btn{position:relative;z-index:1}
+.bm-preview{margin:0;padding:8px 10px;list-style:none;display:grid;gap:4px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 45%,transparent);font-size:var(--fs-s);color:var(--text-2)}
+.bm-preview li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* toolbar (search + filter) and sections */
+.bm-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-l);background:var(--surface)}
+.bm-toolbar input[type=search]{flex:1;min-width:200px;max-width:420px}
+.bm-section{margin:28px 0 0}
+.bm-section>header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.bm-section>header h3{margin:0;font-size:var(--fs-xl);font-weight:600;letter-spacing:-.3px}
+.bm-section>header p{margin:2px 0 0;color:var(--text-3);font-size:var(--fs-s)}
+.bm-empty{margin:0;padding:22px 18px;border:1px dashed var(--border-2);border-radius:var(--r-l);color:var(--text-3);font-size:var(--fs-m);line-height:1.6;text-align:center}
+
+/* agent toggles of a skill */
+.bm-toggles{position:relative;z-index:1}
+.bm-toggles>summary{list-style:none;cursor:pointer}.bm-toggles>summary::-webkit-details-marker{display:none}
+.bm-toggles fieldset{position:absolute;z-index:30;right:0;bottom:calc(100% + 6px);min-width:240px;max-height:300px;overflow:auto;margin:0;padding:10px 12px;display:grid;gap:6px;border:1px solid var(--border-3);border-radius:var(--r-m);background:var(--surface-2);box-shadow:var(--shadow-pop)}
+.bm-toggles legend{float:left;width:100%;margin:0 0 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.bm-toggles label{display:flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--text);cursor:pointer}
+
+/* ── panels: maintenance, migration report ── */
+.bm-panel{margin:22px 0 0;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%);padding:16px 18px}
+.bm-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.bm-panel-head>div:first-child{flex:1;min-width:240px}
+.bm-panel h3{margin:0 0 4px;font-size:var(--fs-l);font-weight:600;letter-spacing:-.2px}
+.bm-panel-head p,.bm-migration summary p{margin:0;color:var(--text-3);font-size:var(--fs-s);line-height:1.6;max-width:90ch}
+.bm-panel-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bm-last{color:var(--text-3);font-size:var(--fs-xs)}
+.bm-note{margin:10px 0 0;font-size:var(--fs-xs);color:var(--text-3);line-height:1.6}
+.bm-panel .bm-empty{margin-top:12px;padding:14px}
+.bm-changes{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:0;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
+.bm-change{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--bg) 35%,transparent)}
+.bm-change:first-child{border-top:0}
+.bm-change[data-undone=true]{opacity:.62}
+.bm-change-main{flex:1;min-width:0;display:grid;gap:3px}
+.bm-change-meta{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--text-3)}
+.bm-change-what{margin:0;font-size:var(--fs-s);color:var(--text);overflow-wrap:anywhere}
+.bm-change-why{margin:0;font-size:var(--fs-xs);color:var(--text-3);line-height:1.55}
+.bm-evidence summary{cursor:pointer;font-size:var(--fs-xs);color:var(--text-3)}
+.bm-evidence ul{margin:4px 0 0;padding-left:16px;font-size:var(--fs-xs)}
+.bm-evidence code{font-size:10.5px;overflow-wrap:anywhere}
+.bm-undone,.bm-locked{flex:none;font-size:var(--fs-xs);color:var(--text-3);max-width:180px;text-align:right}
+.bm-tag{display:inline-block;font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:4px;border:1px solid var(--border-2);color:var(--text-2);background:var(--surface-3)}
+.bm-tag[data-kind=skill]{color:var(--pair-0)}.bm-tag[data-kind=agent]{color:var(--violet)}.bm-tag[data-kind=rule]{color:var(--pair-1)}.bm-tag[data-kind=memory]{color:var(--blue)}
+.bm-tag[data-status=moved]{color:var(--green)}.bm-tag[data-status=skipped]{color:var(--amber)}
+.bm-more{margin-top:8px}
+.bm-migration>summary{cursor:pointer;list-style:none}.bm-migration>summary::-webkit-details-marker{display:none}
+.bm-migration>summary h3::after{content:" ▾";color:var(--text-4);font-weight:400}
+.bm-migration:not([open])>summary h3::after{content:" ▸"}
+.bm-mig-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+.bm-mig-list li{display:grid;grid-template-columns:minmax(0,1.2fr) auto minmax(0,1fr) auto;align-items:center;gap:6px 12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-s);background:var(--surface)}
+.bm-mig-list small{display:block;font-size:10.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bm-mig-from,.bm-mig-to{min-width:0;font-size:var(--fs-s);overflow:hidden;text-overflow:ellipsis}
+.bm-mig-to code{font-size:12px;color:var(--pair-0)}
+.bm-mig-arrow{color:var(--text-4)}
+.bm-mig-note{grid-column:1/-1}
+@container catalog (max-width:640px){.bm-mig-list li{grid-template-columns:minmax(0,1fr) auto}.bm-mig-arrow{display:none}}
+
+/* the skill editor opened from a card */
+.bm-editor{margin:0 0 18px;border:1px solid var(--border-2);border-radius:var(--r-l);background:var(--surface);overflow:hidden}
+.bm-editor>.bm-editor-bar{display:flex;justify-content:flex-end;padding:6px 8px 0}
+.bm-editor .sk-editor{border:0;min-height:460px}
+
+/* ── Classificatori ── */
+.bm-table-wrap{overflow:auto}
+.bm-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.bm-table th{position:sticky;top:0;text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:650;color:var(--text-3);padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface);white-space:nowrap}
+.bm-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text)}
+.bm-table tr:last-child td{border-bottom:0}
+.bm-table td.num{text-align:right;white-space:nowrap}
+.bm-table td.why{color:var(--text-3);min-width:220px;max-width:420px}
+.bm-table td.goal{max-width:380px;overflow-wrap:anywhere;color:var(--text-2)}
+.bm-table code{font-size:11.5px}
+.bm-nodata{color:var(--text-4);font-style:italic;white-space:nowrap}
+.bm-week{display:grid;gap:1px;justify-items:end}
+.bm-week small{color:var(--text-3);font-size:10.5px}
+.bm-history{list-style:none;margin:0;padding:6px 20px 14px;display:grid;gap:0}
+.bm-history li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:4px 14px;padding:9px 0;border-top:1px solid var(--border);font-size:12.5px}
+.bm-history li:first-child{border-top:0}
+.bm-history time{color:var(--text-3);font-variant-numeric:tabular-nums}
+.bm-history p{margin:2px 0 0;color:var(--text-3)}
+.bm-match{font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.bm-match[data-match=same]{color:var(--green);background:var(--green-bg)}
+.bm-match[data-match=differ]{color:var(--amber);background:var(--amber-bg)}
+.bm-match[data-match=none]{color:var(--text-3);background:var(--surface-3)}
+.bm-cls-sources{display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px 0}
+
+/* ── Mappa: a view switch above the graph ── */
+.bm-dash .dash-header{height:auto;min-height:110px}
+.bm-dash .dash-panel+.dash-panel{margin-top:18px}
+.bm-dash .bm-empty{margin:16px 20px 20px}
+.bm-map-views{margin:0 0 16px}
+
+/* ── agent card flip (#81): the back holds the details and the skills; a click or Enter/Space turns it ── */
+.catalog-card.bm-flip{padding:0;background:none;border:0;perspective:1400px;transition:none}
+.catalog-card.bm-flip::before{display:none}
+.catalog-card.bm-flip:hover,.catalog-card.bm-flip:focus-within{transform:none;box-shadow:none}
+.bm-flip-inner{display:grid;transform-style:preserve-3d;transition:transform 560ms cubic-bezier(.2,.75,.25,1)}
+.bm-flip[data-flipped=true] .bm-flip-inner{transform:rotateY(180deg)}
+.bm-face{grid-area:1/1;position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);backface-visibility:hidden;-webkit-backface-visibility:hidden;transition:border-color var(--dur-slow),box-shadow var(--dur-slow)}
+.bm-face::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
+.bm-face:hover,.bm-face:focus-within{border-color:var(--border-3);box-shadow:0 16px 36px -22px var(--tone)}
+.bm-face-back{transform:rotateY(180deg);gap:12px;background:linear-gradient(200deg,var(--surface-2),var(--surface) 70%)}
+.bm-face .catalog-card-head h3 button::after{content:"";position:absolute;inset:0;border-radius:var(--r-l)}
+.bm-face:has(h3 button:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.bm-face .btn,.bm-face a,.bm-face pre,.bm-face .bm-chip{position:relative;z-index:1}
+.bm-back-head{display:flex;align-items:center;gap:10px;min-width:0}
+.bm-back-head h3{flex:1;min-width:0;margin:0;font-size:var(--fs-l);font-weight:600}
+.bm-back-head h3 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.bm-back-head h3 button::after{content:"";position:absolute;inset:0;border-radius:var(--r-l)}
+.bm-back-head .catalog-avatar{width:34px;height:34px;border-radius:10px}
+.bm-face-back .catalog-prompt pre{max-height:120px}
+.bm-face-back dl{display:grid;gap:6px;margin:0;padding-top:10px;border-top:1px solid var(--border)}
+.bm-face-back dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:var(--fs-s)}
+.bm-face-back dt{color:var(--text-3)}.bm-face-back dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.bm-face-back dd small{display:block;color:var(--text-3);font-size:var(--fs-xs)}
+.bm-back-skills h4{margin:0 0 6px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.bm-back-skills p{margin:0;font-size:var(--fs-s);color:var(--text-3)}
+.bm-back-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}
+.bm-flip-hint{font-size:var(--fs-xs);color:var(--text-4)}
+.bm-face[inert]{pointer-events:none}
+@media(prefers-reduced-motion:reduce){
+  .bm-flip-inner,.bm-flip[data-flipped=true] .bm-flip-inner{transform:none;transition:none}
+  .bm-face{backface-visibility:visible;-webkit-backface-visibility:visible;transition:opacity 180ms linear}
+  .bm-face-back{transform:none;opacity:0;visibility:hidden}
+  .bm-flip[data-flipped=true] .bm-face-front{opacity:0;visibility:hidden}
+  .bm-flip[data-flipped=true] .bm-face-back{opacity:1;visibility:visible}
+}
+
+/* the agent page's "Skill e memoria" card */
+.bm-studio-skills{display:grid;gap:10px}
+.bm-studio-skills p{margin:0;font-size:var(--fs-s);color:var(--text-3);line-height:1.55}

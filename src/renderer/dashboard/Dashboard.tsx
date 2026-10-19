@@ -1,5 +1,6 @@
-// Live Dashboard: seven views of existing app/brain sources, each with a source-preserving Orchestrator draft.
-// Mounted by App's PageFrame. No telemetry is fabricated and Discuss never sends a message automatically.
+// Live Dashboard: statistics only (ADR 0077), six views of existing app/brain sources, each with a source-preserving
+// Orchestrator draft. The brain's notes map moved to the Brain section's Mappa (BrainNotesMap.tsx) and the logged
+// errors' lessons ("Cosa abbiamo imparato") to its Memoria page. Mounted by App's PageFrame. No telemetry is fabricated and Discuss never sends a message automatically.
 // The header and the tab bar keep the same place on every tab, the map's included (owner, 18/10: no jump when switching);
 // buttons follow one hierarchy: primary = the one next step, ghost = secondary, quiet = repeated per-row actions.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -7,12 +8,11 @@ import { isLongChat } from '@shared/context';
 import { useApp } from '../store/store';
 import { brainBridge, goTarget } from '../actions';
 import { useBrain, type Loaded } from '../brain/api';
-import { normCost, normMap, normTables } from '../brain/types';
+import { normCost, normTables } from '../brain/types';
 import { costRows, liveTotal } from '../lib/live-costs';
 import { lang, locale } from '../i18n';
-import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, neighbourhood, observedErrors } from './data';
+import { chatName, connections, contextLevel, contextRatio, cursorCoverage, observedErrors } from './data';
 import { Graph } from './Graph';
-import { nodeStyle } from './graph-style';
 import { ThemesTab } from './Themes';
 import { HeadlineLine, useHeadline } from '../brain/pages/HomeHeadline';
 import './dashboard.css';
@@ -20,25 +20,25 @@ import './dashboard.css';
 const copy = (it: string, en: string) => lang() === 'en' ? en : it;
 const number = (value: number) => new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(value);
 const money = (value: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
-const tabs = ['agents', 'brain', 'costs', 'context', 'errors', 'themes', 'tips'] as const;
+const tabs = ['agents', 'costs', 'context', 'errors', 'themes', 'tips'] as const;
 type Tab = typeof tabs[number];
-const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), brain: copy('Mappa brain', 'Brain map'), costs: copy('Costi', 'Costs'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), themes: copy('Temi', 'Themes'), tips: copy('Spunti', 'Tips') })[tab];
-const marks: Record<Tab, string> = { agents: '◎', brain: '⌘', costs: '↗', context: '◫', errors: '△', themes: '❖', tips: '✦' };
+const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), costs: copy('Costi', 'Costs'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), themes: copy('Temi', 'Themes'), tips: copy('Spunti', 'Tips') })[tab];
+const marks: Record<Tab, string> = { agents: '◎', costs: '↗', context: '◫', errors: '△', themes: '❖', tips: '✦' };
 
 type Weight = 'primary' | 'ghost' | 'quiet';
 const weightClass: Record<Weight, string> = { primary: 'btn-primary', ghost: 'btn-ghost', quiet: 'btn-subtle' };
-function Discuss({ title, facts, source, weight = 'quiet' }: { title: string; facts: string; source: string; weight?: Weight }) {
+export function Discuss({ title, facts, source, weight = 'quiet' }: { title: string; facts: string; source: string; weight?: Weight }) {
   const [missing, setMissing] = useState(false);
   return <><button type="button" className={`btn ${weightClass[weight]} btn-s dash-discuss dash-discuss-${weight}`} aria-label={`${copy('Discutine', 'Discuss')}: ${title}`} onClick={() => {
     setMissing(!brainBridge.draftToRegia(`${title}\n${copy('Fonte', 'Source')}: ${source}\n${facts}\n\n${copy('Analizziamo questi dati e il prossimo passo?', 'Can we analyse these data and the next step?')}`, () => {}));
   }}><span aria-hidden="true">↗</span> {copy('Discutine', 'Discuss')}</button>{missing && <span role="status" className="dash-note">{copy('Apri un Orchestrator per discutere questi dati.', 'Open an Orchestrator to discuss these data.')}</span>}</>;
 }
 
-function Panel({ title, note, children, facts, source = 'Dashboard' }: { title: string; note?: string; children: ReactNode; facts?: string; source?: string }) {
+export function Panel({ title, note, children, facts, source = 'Dashboard' }: { title: string; note?: string; children: ReactNode; facts?: string; source?: string }) {
   return <section className="dash-panel"><header><div><h3>{title}</h3>{note && <p>{note}</p>}</div>{facts !== undefined && <Discuss title={title} facts={facts} source={source} weight="ghost" />}</header>{children}</section>;
 }
-function Empty({ children }: { children: ReactNode }) { return <div className="dash-empty">{children}</div>; }
-function Source({ data, name }: { data: Loaded<unknown>; name?: string }) {
+export function Empty({ children }: { children: ReactNode }) { return <div className="dash-empty">{children}</div>; }
+export function Source({ data, name }: { data: Loaded<unknown>; name?: string }) {
   return <div className="dash-source" role="status">{name && `${name} · `}{data.error ? `${copy('Dati non aggiornati', 'Data unavailable or stale')}: ${data.error}` : data.loading || data.refreshing ? copy('Aggiornamento…', 'Refreshing…') : data.at ? `${copy('Aggiornato', 'Updated')} ${new Date(data.at).toLocaleTimeString(locale())}` : copy('In attesa dei dati', 'Waiting for data')}
     <button type="button" className="btn btn-subtle btn-s dash-refresh" onClick={() => data.reload(true)} disabled={data.loading || data.refreshing}><span aria-hidden="true">↻</span>{copy('Aggiorna', 'Refresh')}</button></div>;
 }
@@ -88,24 +88,17 @@ export function Dashboard() {
   const chats = useMemo(() => Object.values(chatsById), [chatsById]);
   const [tick, setTick] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => { if (!document.hidden) setTick(Date.now()); }, 1500); return () => clearInterval(timer); }, []);
-  const map = useBrain(tab === 'brain' ? '/api/map' : null, normMap, { pollMs: 30_000 });
   const costs = useBrain(tab === 'costs' || tab === 'tips' ? '/api/cost?days=7' : null, normCost, { pollMs: 30_000 });
   const tables = useBrain(tab === 'errors' || tab === 'tips' ? '/api/tables' : null, normTables, { pollMs: 30_000 });
-  const [query, setQuery] = useState(''), [selected, setSelected] = useState<string | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
-  const [errorQuery, setErrorQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
   const live = chats.filter(c => !c.closedAt && c.state !== 'closed');
   const links = useMemo(() => connections(chats, items), [chats, items]);
   const rows = useMemo(() => costRows(usage, chats), [usage, chats]);
   const total = liveTotal(usage, chats);
   const errors = useMemo(() => observedErrors(chats, items, feed, copy('Turno terminato con un errore', 'Turn ended with an error')), [chats, items, feed]);
   const long = live.filter(c => isLongChat(c, warn));
-  const switchTab = (value: Tab) => { setTab(value); setSelected(null); setQuery(''); setFocus(null); };
+  const switchTab = (value: Tab) => { setTab(value); setSelected(null); };
   const activeChat = chats.find(c => c.id === selected);
-  const brainNodes = useMemo(() => neighbourhood(map.data?.nodes ?? [], map.data?.edges ?? [], query, focus), [map.data, query, focus]);
-  const brainNode = map.data?.nodes.find(n => n.id === selected);
-  const checks = brainChecks(map.data);
-  const errorRows = (tables.data?.errors ?? []).filter(e => `${e.tipo} ${e.area} ${e.chi} ${e.vero}`.toLowerCase().includes(errorQuery.toLowerCase()));
   const groups = new Map<string, BarRow>();
   for (const row of rows) {
     const g = groups.get(row.harness) ?? { label: row.harness, value: 0 };
@@ -116,7 +109,7 @@ export function Dashboard() {
   const errorDays = new Map<string, number>();
   for (const error of tables.data?.errors ?? []) if (error.data) errorDays.set(error.data, (errorDays.get(error.data) ?? 0) + 1);
 
-  return <div className={`dashboard${tab === 'brain' ? ' dashboard-map' : ''}`} data-testid="dashboard">
+  return <div className="dashboard" data-testid="dashboard">
     <header className="dash-header"><div><span className="dash-eyebrow">{copy('IL TUO SISTEMA, IN DIRETTA', 'YOUR SYSTEM, LIVE')}</span><h1>Dashboard<span className="dash-live-dot" /></h1><HeadlineLine state={headline} /><p>{copy('Ogni connessione racconta il lavoro. Ogni dato apre una conversazione.', 'Every connection tells a story. Every signal starts a conversation.')}</p></div><span className="dash-live-label">{copy('Dati reali · aggiornamento live', 'Real data · live updates')}</span></header>
     <div className="dash-tabs" role="tablist" aria-label="Dashboard" ref={tabBar}><i className="dash-ink" aria-hidden="true" style={{ transform: `translateX(${ink.x}px)`, width: ink.w }} />{tabs.map((id, i) => <button key={id} type="button" role="tab" id={`dash-tab-${id}`} aria-controls={`dash-panel-${id}`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} onClick={() => switchTab(id)} onKeyDown={event => {
       const next = event.key === 'ArrowRight' ? (i + 1) % tabs.length : event.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
@@ -130,21 +123,6 @@ export function Dashboard() {
             <aside className="dash-inspector">{activeChat ? <><span className="dash-eyebrow">{activeChat.isRegia ? 'ORCHESTRATOR' : activeChat.harness}</span><h2>{chatName(activeChat)}</h2><p>{activeChat.model ?? copy('Modello non riportato', 'Model not reported')}</p><span className={`dash-status ${activeChat.state}`}>{activeChat.state}</span><p>{activeChat.lastText || copy('Nessun messaggio recente.', 'No recent message.')}</p><div className="dash-actions"><Discuss title={chatName(activeChat)} facts={`${activeChat.harness}; ${activeChat.model}; ${activeChat.state}\n${activeChat.lastText}`} source={`chat:${activeChat.id}`} weight="primary" /></div></> : <><span className="dash-orbit-icon">◎</span><h2>{copy('Segui il flusso', 'Follow the flow')}</h2><p>{copy('Scegli un agente per vedere modello, stato e ultima attività.', 'Choose an agent to inspect its model, state and latest activity.')}</p></>}</aside></div> : <Empty>{copy('La rete apparirà quando aprirai le prime chat.', 'The network will appear when you open your first chats.')}</Empty>}
         </Panel>
       </>}
-      {tab === 'brain' && <><Source data={map} /><Panel title={copy('Le connessioni del tuo brain', 'Your brain connections')} note={copy('Note, aree, agenti e strumenti del brain. Clicca un nodo per vedere i suoi collegamenti.', 'Notes, areas, agents and tools in your brain. Click a node to see its connections.')} facts={`${map.data?.nodes.length ?? 'unknown'} nodes; ${map.data?.edges.length ?? 'unknown'} links`} source="/api/map">
-        <div className="dash-network">
-          <Graph testId="dash-map" label={tabName('brain')} nodes={brainNodes.map(n => ({ id: n.id, label: n.label, detail: n.what || n.kind, kind: n.kind, layer: n.layer }))} edges={map.data?.edges ?? []} selected={selected} onSelect={id => { setSelected(id || null); setFocus(id || null); setQuery(''); }}
-            toolbar={<>
-              <label className="dash-search"><span aria-hidden="true">⌕</span><input aria-label={copy('Cerca note', 'Search notes')} placeholder={copy('Cerca una nota, un file, un concetto…', 'Find a note, a file, a concept…')} value={query} onChange={e => { setQuery(e.target.value); setFocus(null); }} /></label>
-              <span className="dash-map-count" title={copy('Nodi visibili / totali', 'Visible / total nodes')}>{brainNodes.length} / {map.data?.nodes.length ?? '—'} {copy('nodi', 'nodes')}</span>
-              <button className="btn btn-subtle btn-s" type="button" disabled={!query && !focus && !selected} onClick={() => { setFocus(null); setSelected(null); setQuery(''); }}><span aria-hidden="true">◌</span>{copy('Vista completa', 'Overview')}</button>
-              <button type="button" className="btn btn-ghost btn-s dash-3d" onClick={() => goTarget('mappa')}><span aria-hidden="true">◈</span>{copy('Esplora in 3D', 'Explore in 3D')}</button>
-            </>}
-            empty={<Empty>{map.loading ? copy('Caricamento della mappa…', 'Loading map…') : copy('Nessuna nota trovata. Verifica il brain o cambia ricerca.', 'No notes found. Check your brain or change the search.')}</Empty>}
-            legend={<div className="dash-legend" aria-label={copy('Legenda', 'Legend')}>{['area', 'agent', 'skill', 'rule', 'note'].map(kind => { const style = nodeStyle(kind); return <span key={kind}><i style={{ background: style.color }} />{style.label}</span>; })}</div>} />
-          <aside className="dash-inspector">{brainNode ? <><span className="dash-eyebrow">{brainNode.kind}</span><h2>{brainNode.label}</h2><p>{brainNode.what}</p><code>{brainNode.file || brainNode.id}</code><div className="dash-actions"><Discuss title={brainNode.label} facts={`${brainNode.what ?? ''}\n${brainNode.file ?? brainNode.id}`} source="/api/map" weight="primary" /><button className="btn btn-ghost btn-s" type="button" onClick={() => { setFocus(brainNode.id); setQuery(''); }}><span aria-hidden="true">⌖</span>{copy('Esplora i collegamenti', 'Explore connections')}</button>{brainNode.file && <button className="btn btn-ghost btn-s" type="button" onClick={() => goTarget(`file/${brainNode.file}`)}><span aria-hidden="true">↗</span>{copy('Apri nota', 'Open note')}</button>}</div></> : <><span className="dash-orbit-icon">⌘</span><h2>{copy('Scegli un nodo', 'Choose a node')}</h2><p>{copy('Seleziona una nota per esplorarne i collegamenti o discuterne.', 'Select a note to explore its connections or discuss it.')}</p></>}</aside>
-        </div>
-        {checks.length > 0 && <section className="dash-note dash-checks" data-testid="brain-checks"><h3>{copy(`${checks.length} controlli del cervello da guardare`, `${checks.length} brain checks to review`)}</h3><p>{copy('Alcuni collegamenti o regole della memoria richiedono una verifica. Puoi continuare a lavorare.', 'Some memory links or rules need a review. You can keep working.')}</p><details><summary>{copy('Apri dettagli', 'Open details')}</summary><ul>{checks.map(check => <li key={check}>{check}</li>)}</ul></details></section>}
-      </Panel></>}
       {tab === 'costs' && <>
         <Source data={costs} /><div className="dash-stats"><Stat label={copy('Oggi · Claude + Cursor', 'Today · Claude + Cursor')} value={total ? `${total.estimated ? '≈ ' : ''}${money(total.usd)}` : '—'} note={total?.partial ? copy('Parziale: Cursor non disponibile', 'Partial: Cursor unavailable') : copy('Stima equivalente API, non fattura', 'API-equivalent estimate, not a bill')} /><Stat label={copy('Ultimi 7 giorni · Claude', 'Last 7 days · Claude')} value={costs.data ? money(costs.data.total) : '—'} n={costs.data?.total} format={money} note={costs.data ? `${costs.data.from} → ${costs.data.to}` : copy('In attesa della fonte', 'Waiting for source')} /><Stat label={copy('Cursor · ultimi 7 giorni', 'Cursor · last 7 days')} value={cursor?.downloaded ? money(cursor.total) : '—'} note={cursor?.downloaded ? `Export ${when(cursor.downloaded)} · ${copy('ultima riga', 'last row')} ${when(cursor.lastRow)}${cover === false ? ` · ${copy('parziale: l’export finisce prima del periodo', 'partial: the export ends before the period')}` : cover === null ? ` · ${copy('copertura sconosciuta', 'coverage unknown')}` : ''}` : copy('Export Cursor non disponibile', 'Cursor export unavailable')} /></div>
         <div className="dash-columns"><Bars title={copy('Per giorno · Claude, 7 giorni', 'By day · Claude, 7 days')} source="/api/cost?days=7 · USD" rows={Object.entries(costs.data?.byDay ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([label, v]) => ({ label, value: v.usd }))} /><Bars title={copy('Per modello · Claude, 7 giorni', 'By model · Claude, 7 days')} source="/api/cost?days=7 · USD" rows={Object.entries(costs.data?.byModel ?? {}).map(([label, v]) => ({ label, value: v.usd }))} /></div>
@@ -166,10 +144,9 @@ export function Dashboard() {
       </>}
       {tab === 'errors' && <>
         <Source data={tables} /><div className="dash-stats"><Stat label={copy('Errori AI registrati', 'Logged AI errors')} value={tables.data ? number(tables.data.errors.length) : '—'} n={tables.data?.errors.length} format={number} note="ai-errors.md" /><Stat label={copy('Eventi di errore osservati', 'Observed error events')} value={number(errors.length)} n={errors.length} format={number} note={copy('Feed e messaggi conservati; non incidenti unici', 'Retained feed and messages; not unique incidents')} /></div>
+        <p className="dash-note">{copy('Gli errori registrati, con la regola nata da ciascuno, sono nella pagina Memoria.', 'The logged errors, each with the rule it produced, are on the Memory page.')} <button type="button" className="link-btn" onClick={() => goTarget('memoria')}>{copy('Apri Memoria', 'Open Memory')}</button></p>
         <Bars title={copy('Errori AI per giorno', 'AI errors by day')} source="ai-errors.md · parsed dated rows" rows={[...errorDays].sort(([a], [b]) => a.localeCompare(b)).slice(-14).map(([label, value]) => ({ label, value }))} format={number} />
-        <Panel title={copy('Cosa abbiamo imparato', 'What we learned')} note="ai-errors.md"><div className="dash-toolbar"><input value={errorQuery} onChange={e => setErrorQuery(e.target.value)} aria-label={copy('Filtra errori', 'Filter errors')} placeholder={copy('Filtra per agente, area o errore…', 'Filter by agent, area or error…')} /></div>
-          {errorRows.length ? errorRows.slice().reverse().map((e, i) => <article className="dash-error" key={`${e.data}-${e.ora}-${i}`}><div><span className="dash-tag">{e.tipo || e.area || 'AI'}</span><small>{e.data} {e.ora} · {e.chi}</small></div><h4>{e.vero || e.detto}</h4>{e.regola && <p>{e.regola}</p>}<Discuss title={`${e.area}: ${e.tipo}`} facts={`${e.data} ${e.ora} · ${e.chi}\n${e.detto}\n${e.vero}\n${e.regola}`} source="ai-errors.md" /></article>) : <Empty>{tables.data ? copy('Nessun errore corrisponde alla ricerca.', 'No errors match the search.') : copy('Il registro non è ancora disponibile.', 'The error log is not yet available.')}</Empty>}
-        </Panel><Panel title={copy('Errori recenti dell’app e degli strumenti', 'Recent app and tool errors')} note={copy('Eventi conservati nel feed e nelle chat; non è lo storico completo dei log.', 'Retained feed and chat events; this is not the complete application log.')}>
+        <Panel title={copy('Errori recenti dell’app e degli strumenti', 'Recent app and tool errors')} note={copy('Eventi conservati nel feed e nelle chat; non è lo storico completo dei log.', 'Retained feed and chat events; this is not the complete application log.')}>
           {errors.length ? errors.map(e => <article className="dash-error" key={e.id}><small>{e.source} · {new Date(e.at).toLocaleString(locale())}</small><h4>{e.title}</h4><p>{e.detail}</p><Discuss title={e.title} facts={e.detail} source={`${e.source} · ${new Date(e.at).toISOString()}`} /></article>) : <Empty>{copy('Nessun evento di errore nei dati conservati.', 'No error events in retained data.')}</Empty>}
         </Panel>
       </>}

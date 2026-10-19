@@ -1,4 +1,5 @@
-// Overview regression coverage: deterministic filters, truthful metric samples and safe bilingual cards.
+// Overview regression coverage: deterministic filters, truthful metric samples, safe bilingual cards and the flip card
+// (#81): no Avvia / Dettagli, the back holds the details and the declared skills, the hidden face is inert.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it } from 'vitest';
@@ -46,8 +47,28 @@ it('renders verified successes and cost sample coverage without using self-repor
   const p = { ...profile('Reviewer', 'Review'), probation: { since: 1, requestItemId: 'request' } };
   const html = renderToStaticMarkup(createElement(AgentCatalogCard, { profile: p, metrics, loaded: true, engine: 'Claude', lastStart: 1, onOpen: () => {} }));
   expect(html).toContain('100%');
-  // the card's details panel states each sample size once (the metric tiles repeat it in their tooltips)
-  expect(html.slice(html.indexOf('catalog-details')).match(/1 of 2 runs/g)).toHaveLength(2);
+  // the card's back states each sample size once (the metric tiles repeat it in their tooltips)
+  expect(html.slice(html.indexOf('bm-face-back')).match(/1 of 2 runs/g)).toHaveLength(2);
   expect(html).toContain('On probation');
   expect(html).toContain('0.25');
+});
+it('flips instead of Avvia and Dettagli: the back holds the skills and memory, hidden and inert until turned', () => {
+  for (const language of ['it', 'en'] as const) {
+    setLang(language);
+    const html = renderToStaticMarkup(createElement(AgentCatalogCard, { profile: profile('Reviewer', 'Review'), engine: 'Claude', lastStart: null, onOpen: () => {}, loaded: true,
+      skills: ['code-review', 'release-notes'], memory: { kind: 'agent', group: 'Reviewer', title: 'Memoria', file: 'agents/reviewer/memory.md', agentId: 'Reviewer', entries: 3, preview: [], changedAt: null } }));
+    expect(html).not.toMatch(/catalog-run|Avvia|>Start</);
+    expect(html).not.toContain(language === 'it' ? 'Dettagli' : 'Details');
+    expect(html).toContain('data-flipped="false"');
+    const back = html.slice(html.indexOf('bm-face-back'));
+    expect(back).toContain('code-review');
+    expect(back).toContain('release-notes');
+    expect(back).toContain(language === 'it' ? '3 voci' : '3 entries');
+    // the back starts hidden from keyboard and screen readers; the front is live
+    expect(html).toMatch(/class="bm-face bm-face-back"[^>]*inert=""[^>]*aria-hidden="true"/);
+    expect(html).not.toMatch(/class="bm-face bm-face-front"[^>]*inert/);
+    expect(html).toContain(language === 'it' ? 'Gira la scheda di Reviewer' : 'Flip Reviewer');
+  }
+  const none = renderToStaticMarkup(createElement(AgentCatalogCard, { profile: profile('Solo', 'Review'), engine: 'Claude', lastStart: null, onOpen: () => {}, loaded: true }));
+  expect(none).toContain('No declared skills');
 });

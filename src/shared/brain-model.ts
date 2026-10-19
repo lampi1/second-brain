@@ -125,6 +125,10 @@ export interface ClassifiersState {
   routing: { version: number | null; appliedAt: string | null; by: string | null; routes: ClassifierRoute[]; error: string | null };
   history: { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null }[];
   choices: ClassifierChoice[];
+  /** per kind of work: the app's chats in the ledger, how many have a known outcome and how many succeeded */
+  kinds: { kind: string; chats: number; known: number; ok: number }[];
+  /** how the model of the app's chats was chosen: by the table, by the agent's profile, by default or override */
+  sources: { source: string; chats: number }[];
   /** success and cost per route and per classifier channel, by week; a row without runs has no data yet */
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
 }

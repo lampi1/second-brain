@@ -47,6 +47,10 @@ import { QuestionsWindow } from './components/QuestionsWindow';
 import { ImprovePage } from './components/ImprovePage';
 import { LaunchBanner } from './components/LaunchBanner';
 import { Dashboard } from './dashboard/Dashboard';
+import { RulesPage } from './components/brain-model/RulesPage';
+import { MemoryPage } from './components/brain-model/MemoryPage';
+import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
+import { MapPage } from './components/brain-model/MapPage';
 import { GuidePage } from './components/GuidePage';
 
 const editable = (t: EventTarget | null) => {
@@ -169,7 +173,10 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>
-            : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
+            : id === 'regole' || id === 'memoria'
+              ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner">{id === 'regole' ? <RulesPage /> : <MemoryPage />}</div></div>
+              : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
+              : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
       </div>
     </div>
   );

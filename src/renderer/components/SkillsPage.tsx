@@ -1,24 +1,29 @@
-// "Skill e agenti" (G S, ADR 0018): every skill and agent of Claude Code and Cursor, user level and project level, in
-// one list (search, filters by kind and engine, grouped by where they live), and an editor on the right: a form (name,
-// description, instructions; tools and model for an agent) and the whole markdown with its frontmatter, the two always
-// showing the same text, checked live (shared/skillmd.ts). Save goes through main, which checks again and runs the
-// user's PreToolUse hooks for Write: a refusal is shown with the hook's own message. "Elimina" moves the file to the
-// Recycle Bin after a confirmation; "Prova nella Regia" writes "/<name> " in the Regia's input. Why: the user, 12/10,
-// "deve anche essere facile dall'app creare e modificare skill una sezione apposta, anche per gli agenti". Rendered by
-// App.tsx PageFrame for the 'skill' place (.bx classes of the brain pages, styles/skills.css).
+// "Skill" (G S, ADR 0018, ADR 0077): the Brain section's skills page. Two concepts only (owner, 2026-10-19): agents and
+// skills, so this page lists skills alone (the brain's shared ones, the user's own, Cursor's) as cards in the Agenti
+// page's look: what each does, the tools it calls, which agents use it ("Usata da", or "Non usata"), who made it (the
+// migration, a maintenance job, the user). "Agenti" on a card links or unlinks the skill to an agent at once, no
+// approval, logged and undoable. "Modifica" and "Nuova skill" open the editor: a form (name, description, instructions)
+// and the whole markdown with its frontmatter, the two always showing the same text, checked live (shared/skillmd.ts).
+// Save goes through main, which checks again and runs the user's PreToolUse hooks for Write: a refusal is shown with
+// the hook's own message. "Elimina" moves the file to the Recycle Bin after a confirmation; "Prova nella Regia" writes
+// "/<name> " in the Regia's input. Below: the one-time migration's report (runbooks and routines turned into skills)
+// and the maintenance panel. Rendered by App.tsx PageFrame for the 'skill' place (styles/skills.css, brain-model.css).
 import { Select } from './Select';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Harness, MdIssue, SkillCatalog, SkillEntry, SkillKind, SkillPlace } from '@shared/contract';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import type { MdIssue, SkillCatalog, SkillEntry, SkillPlace } from '@shared/contract';
 import { checkMd, DESC_MAX, field, newMd, parseMd, setBody, setFields, template } from '@shared/skillmd';
 import { PageHead } from '../brain/components/States';
-import { Pill, Seg } from '../brain/components/ui';
+import { Seg } from '../brain/components/ui';
 import { brainBridge } from '../actions';
-import { askConfirm, toast } from '../store/ui';
+import { askConfirm, toast, ui } from '../store/ui';
 import { t } from '../i18n';
+import { useBrainModel, linkSkill } from '../store/brain-model';
+import { filterSkills, skillRows, type SkillFilter, type SkillRow } from '../lib/brain-model-view';
+import { MaintenancePanel, MigrationReportPanel, when } from './brain-model/MaintenancePanel';
 import '../styles/skills.css';
+import '../styles/agent-catalog.css';
+import '../styles/brain-model.css';
 
-const ENGINE: Record<Harness, string> = { claude: 'Claude', cursor: 'Cursor' };
-const getKind = (): Record<SkillKind, string> => ({ skill: t('tools.skillsPage.kindSkillLabel'), agent: t('tools.skillsPage.kindAgentLabel') });
 const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const placeKey = (p: Pick<SkillPlace, 'kind' | 'harness' | 'scope' | 'root'>) => `${p.kind}|${p.harness}|${p.scope}|${p.root ?? ''}`;
 const MODELS = ['inherit', 'sonnet', 'opus', 'haiku', 'fable'];
@@ -163,20 +168,65 @@ function Editor({ draft, places, onChange, onSaved, onDeleted, onPlace }: {
   );
 }
 
+const norm = (p: string | null | undefined) => (p ?? '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+const HOME_TONE = { brain: 'green', user: 'blue', cursor: 'violet' } as const;
+
+/** "Agenti" on a card: one checkbox per active agent; a change links or unlinks at once (logged, undoable). */
+function AgentToggles({ row, agents, busy }: { row: SkillRow; agents: { id: string; name: string }[]; busy: boolean }) {
+  const toggle = async (agent: { id: string; name: string }, on: boolean) => {
+    const err = await linkSkill(row.name, agent.id, on);
+    toast(err ?? t(on ? 'bm.skills.linked' : 'bm.skills.unlinked', { skill: row.name, agent: agent.name }), err ? 'err' : 'ok');
+  };
+  return <details className="bm-toggles" data-testid={`bm-toggles-${row.name}`}>
+    <summary className="btn btn-ghost btn-s">{t('bm.skills.agents')}</summary>
+    <fieldset disabled={busy}>
+      <legend>{t('bm.skills.agentsLabel', { name: row.name })}</legend>
+      {agents.map(a => <label key={a.id}><input type="checkbox" checked={row.usedBy.includes(a.id)} onChange={e => void toggle(a, e.target.checked)} data-testid={`bm-link-${row.name}-${a.id}`} />{a.name}</label>)}
+    </fieldset>
+  </details>;
+}
+
+function SkillCard({ row, agents, busy, onEdit, index }: { row: SkillRow; agents: { id: string; name: string }[]; busy: boolean; onEdit: (e: SkillEntry) => void; index: number }) {
+  const names = row.usedBy.map(id => agents.find(a => a.id === id)?.name ?? id);
+  const unused = row.home !== 'cursor' && !row.usedBy.length;
+  return <article className="catalog-card" data-kind="skill" data-unused={unused} data-testid={`bm-skill-${row.name}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
+    <header className="bm-card-head">
+      <div><h3><code>/{row.name}</code></h3><p className="bm-card-sub" title={row.file}>{row.rel ?? row.file}</p></div>
+      <span className="bm-badges">
+        <span className="bm-badge" data-tone={HOME_TONE[row.home]}>{t(`bm.skills.home.${row.home}`)}</span>
+        {unused && <span className="bm-badge" data-tone="amber" data-testid="bm-unused">{t('bm.skills.unused')}</span>}
+      </span>
+    </header>
+    <p className="bm-desc">{row.description || <i>{t('tools.skillsPage.noDescription')}</i>}</p>
+    {row.home === 'cursor' ? <p className="bm-note">{t('bm.skills.cursorOnly')}</p> : <dl className="bm-row"><dt>{t('bm.skills.usedBy')}</dt><dd className="bm-chips">{names.length ? names.map(n => <span key={n} className="bm-chip">{n}</span>) : <span className="bm-card-sub">—</span>}</dd></dl>}
+    {row.tools.length > 0 && <dl className="bm-row"><dt>{t('bm.skills.tools')}</dt><dd className="bm-chips">{row.tools.slice(0, 8).map(x => <span key={x} className="bm-chip" data-kind="tool">{x}</span>)}{row.tools.length > 8 && <span className="bm-chip" data-kind="tool">+{row.tools.length - 8}</span>}</dd></dl>}
+    <footer className="bm-card-foot">
+      <span>{row.madeBy ? t('bm.madeBy', { job: t(`bm.job.${row.madeBy}`) }) : row.changedAt ? t('bm.changed', { at: when(row.changedAt) }) : ''}</span>
+      <span className="sp" />
+      {row.home !== 'cursor' && agents.length > 0 && <AgentToggles row={row} agents={agents} busy={busy} />}
+      {row.entry && <button type="button" className="btn btn-ghost btn-s" onClick={() => onEdit(row.entry!)} data-testid={`bm-edit-${row.name}`}>{t('bm.skills.edit')}</button>}
+    </footer>
+  </article>;
+}
+
 export function SkillsPage() {
+  const arg = ui.use(s => s.pageArg);
+  const { state, busy } = useBrainModel();
   const [cat, setCat] = useState<SkillCatalog | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [q, setQ] = useState('');
-  const [kind, setKind] = useState<'all' | SkillKind>('all');
-  const [eng, setEng] = useState<'all' | Harness>('all');
+  const [q, setQ] = useState(() => arg ?? '');
+  const [filter, setFilter] = useState<SkillFilter>('all');
   const [draft, setDraft] = useState<Draft | null>(() => kept);
   useEffect(() => { kept = draft; }, [draft]);
-  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (arg) setQ(arg); }, [arg]);
+  const editor = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try { setCat(await window.sb.invoke('skills:list', undefined)); setErr(null); } catch (e) { setErr(errText(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // a skill saved, linked or merged elsewhere: the editor's list follows the brain model
+  useEffect(() => { if (state) void load(); }, [state?.skills.length, load]);
 
   const dirty = !!draft && draft.text !== draft.saved;
   /** leaving unsaved changes asks first */
@@ -184,90 +234,52 @@ export function SkillsPage() {
     if (!dirty) { go(); return; }
     askConfirm({ title: t('tools.skillsPage.unsavedTitle'), body: t('tools.skillsPage.unsavedBody'), confirmLabel: t('tools.skillsPage.leaveChanges'), danger: true, onConfirm: go });
   };
+  const reveal = () => requestAnimationFrame(() => editor.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   const open = (e: SkillEntry) => guard(() => {
     void window.sb.invoke('skills:read', { id: e.id }).then(d => {
       const place = cat?.places.find(p => placeKey(p) === placeKey(d.entry)) ?? { kind: d.entry.kind, harness: d.entry.harness, scope: d.entry.scope, root: d.entry.root, dir: '', label: '' };
-      setDraft({ entry: d.entry, place, saved: d.text, text: d.text });
+      setDraft({ entry: d.entry, place, saved: d.text, text: d.text }); reveal();
     }, err2 => toast(`${t('tools.skillsPage.notRead')} ${errText(err2)}`, 'err'));
   });
-  const create = (k: SkillKind) => guard(() => {
-    const place = cat?.places.find(p => p.kind === k && p.harness === (eng === 'cursor' ? 'cursor' : 'claude') && p.scope === 'user');
+  /** a new skill goes to the brain's shared skills (the brain as a Claude project) when the brain is a known project */
+  const create = () => guard(() => {
+    const skills = cat?.places.filter(p => p.kind === 'skill' && p.harness === 'claude') ?? [];
+    const place = skills.find(p => p.scope === 'project' && state?.root && norm(p.root) === norm(state.root)) ?? skills.find(p => p.scope === 'user');
     if (!place) return;
-    const t = template(k);
-    const text = newMd(k, t);
-    setDraft({ entry: null, place, saved: text, text });
+    const text = newMd('skill', template('skill'));
+    setDraft({ entry: null, place, saved: text, text }); reveal();
   });
+  const close = () => guard(() => setDraft(null));
 
-  const entries = useMemo(() => {
-    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return (cat?.entries ?? []).filter(e => (kind === 'all' || e.kind === kind) && (eng === 'all' || e.harness === eng)
-      && words.every(w => `${e.name} ${e.description}`.toLowerCase().includes(w)));
-  }, [cat, q, kind, eng]);
-  const groups = useMemo(() => {
-    const m = new Map<string, { label: string; items: SkillEntry[] }>();
-    for (const e of entries) {
-      const pl = cat?.places.find(p => placeKey(p) === placeKey(e));
-      const label = pl?.label ?? `${ENGINE[e.harness]}`;
-      const g = m.get(label) ?? { label, items: [] };
-      g.items.push(e);
-      m.set(label, g);
-    }
-    return [...m.values()];
-  }, [entries, cat]);
-  const nSkill = cat?.entries.filter(e => e.kind === 'skill').length ?? 0;
-  const nAgent = cat?.entries.filter(e => e.kind === 'agent').length ?? 0;
+  const rows = useMemo(() => skillRows(state, cat), [state, cat]);
+  const shown = useMemo(() => filterSkills(rows, q, filter), [rows, q, filter]);
+  const agents = state?.agents ?? [];
+  const agentName = (id: string) => agents.find(a => a.id === id)?.name ?? id;
+  const used = rows.filter(r => r.usedBy.length).length;
 
   return (
-    <div className="sk-page" data-testid="skills-page">
-      <PageHead title={t('tools.skillsPage.pageTitle')} onRefresh={() => void load()}
-        lead={cat ? <>{t('tools.skillsPage.lead', { nSkill, nAgent })}<b>{t('tools.skillsPage.slashName')}</b>.</> : t('tools.skillsPage.loadingFolders')}
-        actions={<>
-          <button type="button" className="bx-btn s primary" onClick={() => create('skill')} data-testid="sk-new-skill">{t('tools.skillsPage.newSkillButton')}</button>
-          <button type="button" className="bx-btn s" onClick={() => create('agent')} data-testid="sk-new-agent">{t('tools.skillsPage.newAgentButton')}</button>
-        </>} />
+    <div className="sk-page bm-page agent-overview" data-testid="skills-page">
+      <PageHead title={t('bm.skills.title')} onRefresh={() => void load()}
+        lead={cat || state ? t('bm.skills.lead', { n: rows.length, used }) : t('tools.skillsPage.loadingFolders')}
+        actions={<button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button>} />
       {err && <p className="sk-refused" role="alert">{t('tools.skillsPage.loadError')} {err}</p>}
-      <div className="sk-cols">
-        <section className="sk-list" aria-label={t('tools.skillsPage.listAria')} data-testid="sk-list">
-          <input ref={search} className="sk-input sk-search" type="search" placeholder={t('tools.skillsPage.searchPlaceholder')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('tools.skillsPage.searchLabel')} />
-          <div className="sk-filters">
-            <Seg items={[{ id: 'all', label: t('tools.skillsPage.kindAll') }, { id: 'skill', label: t('tools.skillsPage.kindSkill') }, { id: 'agent', label: t('tools.skillsPage.kindAgent') }]} value={kind} onChange={setKind} label={t('tools.skillsPage.kindFilterLabel')} />
-            <Seg items={[{ id: 'all', label: t('tools.skillsPage.engineAll') }, { id: 'claude', label: t('tools.skillsPage.engineClaude') }, { id: 'cursor', label: t('tools.skillsPage.engineCursor') }]} value={eng} onChange={setEng} label={t('tools.skillsPage.engineFilterLabel')} />
-          </div>
-          {cat && !entries.length && <p className="small muted" data-testid="sk-empty">{q ? t('tools.skillsPage.emptySearch') : t('tools.skillsPage.emptyNoItems')}</p>}
-          {groups.map(g => (
-            <div key={g.label} className="sk-group">
-              <h3>{g.label}</h3>
-              <ul>
-                {g.items.map(e => (
-                  <li key={e.id}>
-                    <button type="button" className={`sk-item ${draft?.entry?.id === e.id ? 'on' : ''}`} onClick={() => open(e)} data-testid={`sk-item-${e.harness}-${e.kind}-${e.name}`} aria-current={draft?.entry?.id === e.id || undefined}>
-                      <span className="sk-item-head">
-                        <span className="mono sk-item-name">{e.kind === 'skill' ? '/' : ''}{e.name}</span>
-                        <Pill tone={e.kind === 'agent' ? 'violet' : 'blue'}>{getKind()[e.kind]}</Pill>
-                        {e.readOnly && <Pill tone="outline" title={e.readOnly}>{t('tools.skillsPage.readOnlyPill')}</Pill>}
-                        {e.errors > 0 && <Pill tone="bad">{t('tools.skillsPage.errorCount', { n: e.errors })}</Pill>}
-                      </span>
-                      <span className="sk-item-desc">{e.description || <i>{t('tools.skillsPage.noDescription')}</i>}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-        {draft ? (
-          <Editor draft={draft} places={cat?.places ?? []}
-            onChange={text => setDraft(d => (d ? { ...d, text } : d))}
-            onPlace={place => setDraft(d => (d ? { ...d, place } : d))}
-            onSaved={(entry, text) => { setDraft(d => (d ? { ...d, entry, saved: text } : d)); void load(); }} // what was typed meanwhile stays
-            onDeleted={() => { setDraft(null); void load(); }} />
-        ) : (
-          <section className="sk-editor sk-empty" data-testid="sk-editor-empty">
-            <h2>{t('tools.skillsPage.emptyEditorTitle')}</h2>
-            <p>{t('tools.skillsPage.emptyEditorBody1')}<b>{t('tools.skillsPage.newSkill')}</b>{t('tools.skillsPage.or')}<b>{t('tools.skillsPage.newAgent')}</b>{t('tools.skillsPage.emptyEditorBody2')}</p>
-          </section>
-        )}
+      {draft && <div className="bm-editor" ref={editor}>
+        <div className="bm-editor-bar"><button type="button" className="btn btn-ghost btn-s" onClick={close} data-testid="sk-close">{t('bm.skills.close')}</button></div>
+        <Editor draft={draft} places={cat?.places ?? []}
+          onChange={text => setDraft(d => (d ? { ...d, text } : d))}
+          onPlace={place => setDraft(d => (d ? { ...d, place } : d))}
+          onSaved={(entry, text) => { setDraft(d => (d ? { ...d, entry, saved: text } : d)); void load(); }} // what was typed meanwhile stays
+          onDeleted={() => { setDraft(null); void load(); }} />
+      </div>}
+      <div className="bm-toolbar" data-testid="sk-list">
+        <input className="sk-input sk-search" type="search" placeholder={t('bm.skills.search')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('bm.skills.searchLabel')} />
+        <Seg items={[{ id: 'all', label: t('bm.skills.filter.all') }, { id: 'used', label: t('bm.skills.filter.used') }, { id: 'unused', label: t('bm.skills.filter.unused') }]} value={filter} onChange={setFilter} label={t('bm.skills.filterLabel')} />
       </div>
+      {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
+        : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>
+          : <div className="catalog-grid" data-testid="bm-skill-grid">{shown.map((r, i) => <SkillCard key={`${r.home}|${r.file}`} row={r} agents={agents} busy={busy} onEdit={open} index={i} />)}</div>}
+      {state?.migration && <MigrationReportPanel report={state.migration} agentName={agentName} />}
+      <MaintenancePanel kinds={['skill', 'agent']} />
     </div>
   );
 }

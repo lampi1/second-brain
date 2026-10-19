@@ -15,7 +15,6 @@ export const agentPackEn: typeof agentPackIt = {
   'pack.apply': 'Import on probation', 'pack.collision': 'Import choice', 'pack.update': 'Update with a trial version',
   'pack.copy': 'Import a copy', 'pack.rename': 'Import with an available name', 'pack.present': 'Package already present',
   'pack.error': 'The operation failed. Review the details and retry.', 'pack.saved': 'Package exported', 'pack.imported': 'Imported on probation',
-  'pack.learned': 'Learned rules', 'pack.pending': 'Pending approval', 'pack.none': 'No proposals awaiting approval.',
   'pack.approve': 'Approve', 'pack.edit': 'Edit', 'pack.discard': 'Discard', 'pack.applyEdit': 'Approve edit',
   'pack.preset': 'Preset', 'pack.mine': 'Mine · from preset',
   'pack.trial': 'Trial version', 'pack.rollback': 'Go back to the previous version', 'pack.retireReason': 'Retired by Brother from the card',

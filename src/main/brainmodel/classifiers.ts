@@ -3,7 +3,8 @@
 // chats it routed (runs, verified success rate, average cost per chat) from the improvement loop's ledger
 // (<brain>/ops/state/improve/outcomes.jsonl, predictions joined with their actuals and the verdicts of the agent runs of
 // the same chats). Agent choice: for recent runs, the agent the words classifier ranks first for the goal now, and the
-// one actually used with its score at start (AgentRun.routing). Quality over time: success and cost per route and per
+// one actually used with its score at start (AgentRun.routing). Per kind of work: the known outcomes (routing:get's
+// kindStats); per source: how many chats the table, the agent's profile (ADR 0078) or a default chose the model of. Quality over time: success and cost per route and per
 // classifier channel, by week; a row without runs says so (null values), never zero. Nothing here writes: changes go
 // through the routing save and the maintenance jobs, logged with their rollback. Used by brainmodel/service.ts;
 // unit tests: test/unit/brainmodel/classifiers.test.ts.
@@ -94,5 +95,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
     routing: { version: table?.version ?? null, appliedAt: table?.appliedAt ?? null, by: table?.by ?? null, routes: rows, error: i.routing.error },
     history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),
     choices, quality,
+    kinds: Object.entries(i.routing.kindStats ?? {}).flatMap(([kind, v]) => (v ? [{ kind, chats: v.chats, known: v.known, ok: v.ok }] : [])).sort((a, b) => b.chats - a.chats || a.kind.localeCompare(b.kind)),
+    sources: [...predictions.reduce((m, p) => m.set(p.source, (m.get(p.source) ?? 0) + 1), new Map<string, number>())].map(([source, chats]) => ({ source, chats })).sort((a, b) => b.chats - a.chats),
   };
 }

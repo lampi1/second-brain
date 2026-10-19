@@ -104,8 +104,16 @@ export const brainModelIt = {
   'bm.cls.mode.words': 'parole', 'bm.cls.mode.hybrid': 'ibrido',
   'bm.cls.agentWords': 'Scelta agente · parole', 'bm.cls.agentHybrid': 'Scelta agente · ibrido',
   'bm.cls.score': (p: N) => `punteggio ${p.n}`,
+  'bm.cls.eyebrow': 'COME SCEGLIE L’APP', 'bm.cls.refresh': 'Aggiorna',
+  'bm.cls.kinds': 'Esiti per tipo di lavoro',
+  'bm.cls.kindsLead': 'Le chat dell’app per tipo di lavoro, quante hanno un esito noto e quante sono riuscite.',
+  'bm.cls.col.chats': 'Chat', 'bm.cls.col.known': 'Esito noto', 'bm.cls.col.ok': 'Riuscite',
+  'bm.cls.kindsEmpty': 'Nessuna chat registrata ancora.',
+  'bm.cls.sources': 'Chi ha scelto il modello',
+  'bm.cls.source.table': 'tabella', 'bm.cls.source.agent': 'profilo dell’agente', 'bm.cls.source.default': 'predefinito', 'bm.cls.source.override': 'scelta tua', 'bm.cls.source.explore': 'esplorazione',
 
   // Mappa page
+  'bm.map.eyebrow': 'IL TUO BRAIN, COLLEGATO', 'bm.map.legendLabel': 'Legenda',
   'bm.map.title': 'Mappa',
   'bm.map.lead': 'Chi usa cosa: ogni agente con le sue skill, le regole che riceve e la sua memoria.',
   'bm.map.viewLabel': 'Vista', 'bm.map.view.links': 'Agenti e skill', 'bm.map.view.notes': 'Note del brain',

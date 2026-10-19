@@ -14,7 +14,6 @@ export const agentPackIt = {
   'pack.apply': 'Importa in prova', 'pack.collision': 'Come importare', 'pack.update': 'Aggiorna con una versione in prova',
   'pack.copy': 'Importa come copia', 'pack.rename': 'Importa con un nome disponibile', 'pack.present': 'Pacchetto già presente',
   'pack.error': 'Operazione non riuscita. Controlla i dettagli e riprova.', 'pack.saved': 'Pacchetto esportato', 'pack.imported': 'Importato in prova',
-  'pack.learned': 'Regole imparate', 'pack.pending': 'Da approvare', 'pack.none': 'Nessuna proposta da approvare.',
   'pack.approve': 'Approva', 'pack.edit': 'Modifica', 'pack.discard': 'Scarta', 'pack.applyEdit': 'Approva modifica',
   'pack.preset': 'Preset', 'pack.mine': 'Mio · da preset',
   'pack.trial': 'Versione in prova', 'pack.rollback': 'Torna alla versione precedente', 'pack.retireReason': 'Ritirato da Brother dalla scheda',
