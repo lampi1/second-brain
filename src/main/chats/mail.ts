@@ -24,27 +24,26 @@ import type { ChatSummary, Harness, HeldNewsItem, HeldNewsWhy } from '../../shar
 import { log, errText } from '../log';
 import { updateActivity } from '../update/activity';
 import { AgentMayNotWake } from '../engines/policy';
-import { regiaOfChat } from '../../shared/regia';
 import { engineOf } from '../engines/registry';
-import { heldWhy, mailClassifier, MAIL_KINDS, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, type MailClassifier, type MailKind } from './regia-delivery';
+import { heldWhy, mailClassifier, MAIL_KINDS, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS, orchestratorGate, waitOf, type MailClassifier, type MailKind } from './orchestrator-delivery';
 
 export const MAX_HOPS = 6; // as inbox.mjs: a thread of replies longer than this is refused (no endless ping-pong)
 export const MAX_SENDS_PER_MINUTE = 6; // send_to_chat of one chat: a message that says "forward me to everyone" stops here
 export const CHAIN_MS = 15 * 60_000; // a send this soon after receiving mail continues that thread, reply_to or not
 const LIVE = new Set(['running', 'waiting', 'idle']);
 
-// Mail to an Orchestrator follows the one rule of regia-delivery.ts (shared with the app's news, regia-wake.ts): each delivery
+// Mail to an Orchestrator follows the one rule of orchestrator-delivery.ts (shared with the app's news, orchestrator-wake.ts): each delivery
 // to an idle Orchestrator is a new turn re-reading its whole context, so it waits for its class (urgent at once, a request
 // within the group window together with the other news, pure progress with the Orchestrator's next turn, at the latest after
-// REGIA_HOLD_MS); an Orchestrator that works gets it at once, in its running turn; one that waits for the user or is in a
+// ORCHESTRATOR_HOLD_MS); an Orchestrator that works gets it at once, in its running turn; one that waits for the user or is in a
 // hand-off only urgent mail. Nothing is dropped: held mail stays unread in its box, delivered in full with the first
 // message that goes. What an Orchestrator's box holds is listed for the user (heldMail(), held-news.ts: "N novità in attesa" on
 // its tile, #88); listing it delivers nothing and changes no rule.
-export { REGIA_GROUP_MS, REGIA_HOLD_MS } from './regia-delivery';
-const isRegiaChat = (c: ChatSummary): boolean => c.isRegia;
+export { ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS } from './orchestrator-delivery';
+const isOrchestratorChat = (c: ChatSummary): boolean => c.isOrchestrator;
 
 /** sig = the app's signature (sendMail): only then the sender is the chat it says */
-/** kind = what the sender says it is (send_to_chat): it times the mail to an idle Orchestrator (regia-delivery.ts) */
+/** kind = what the sender says it is (send_to_chat): it times the mail to an idle Orchestrator (orchestrator-delivery.ts) */
 export interface MailMsg { id: string; thread: string; hop: number; replyTo: string | null; from: string; to: string; at: string; text: string; kind?: MailKind; sig?: string }
 
 const defaultClass = mailClassifier();
@@ -66,14 +65,6 @@ export const senderOf = (m: MailMsg): string => {
 /** The box name of a chat title, as inbox.mjs: case, accents and punctuation ignored. */
 export const slug = (s: unknown): string => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-/** The boxes of the Orchestrators the Orchestrator replaced (orchestrator.ts migration). */
-const aliasBoxes = (c: Pick<ChatSummary, 'mailAliases'>): string[] => (c.mailAliases ?? []).map(slug).filter(Boolean);
-/** True when this title would take over one of the Orchestrator's alias boxes (a new chat may not claim them). */
-export const claimsAlias = (title: string, chats: readonly ChatSummary[]): boolean => {
-  const b = slug(title);
-  return !!b && chats.some(c => c.orchestrator && !c.closedAt && aliasBoxes(c).includes(b));
-};
 
 export const inboxDir =(root: string): string => path.join(root, 'ops', 'state', 'inbox');
 const readJson = (f: string): Record<string, unknown> | null => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>; } catch { return null; } };
@@ -201,10 +192,10 @@ export interface ChatMailDeps {
   /** the instance's name (userData folder): stable and dev keep separate heartbeats */
   instance: string;
   everyMs?: number;
-  /** mail to an idle Orchestrator (regia-delivery.ts): defaults REGIA_GROUP_MS, REGIA_HOLD_MS */
-  regiaGroupMs?: number;
-  regiaHoldMs?: number;
-  /** the class of a mail without a sender's kind: the brain's words (brain-settings.json regiaMail), else the defaults */
+  /** mail to an idle Orchestrator (orchestrator-delivery.ts): defaults ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS */
+  orchestratorGroupMs?: number;
+  orchestratorHoldMs?: number;
+  /** the class of a mail without a sender's kind: the brain's words (brain-settings.json orchestratorMail), else the defaults */
   classify?: () => MailClassifier;
   now?: () => number;
 }
@@ -219,7 +210,7 @@ export class ChatMail {
   private warned = new Set<string>();
   /** box -> the thread and hop of the last mail delivered to it, and when (chainOf) */
   private received = new Map<string, { thread: string; hop: number; at: number }>();
-  /** message id -> when this process first saw it unread in an idle Orchestrator's box (regiaHolds) */
+  /** message id -> when this process first saw it unread in an idle Orchestrator's box (orchestratorHolds) */
   private seen = new Map<string, number>();
   /** chat id -> the last check that saw it working (a Cursor Orchestrator gets no mail mid-turn: its turn is "the next one") */
   private busyAt = new Map<string, number>();
@@ -229,7 +220,7 @@ export class ChatMail {
   private heldListener: (() => void) | null = null;
   constructor(private readonly d: ChatMailDeps) {}
 
-  /** The mail the Orchestrators's boxes hold back now (the rule of regia-delivery.ts), one row per message, for the user's eyes
+  /** The mail the Orchestrator's box holds back now (the rule of orchestrator-delivery.ts), one row per message, for the user's eyes
    *  (the Orchestrator's tile, #88): sender, when it was sent, why it waits. Reading it delivers nothing. */
   heldMail(): HeldNewsItem[] { return this.held; }
   /** held-news.ts listens: called when heldMail() changed */
@@ -238,7 +229,7 @@ export class ChatMail {
   /** why an Orchestrator's held mail waits (heldMail); an Orchestrator on an engine that takes no mail mid-turn is busy */
   private mailWhy(chat: ChatSummary, msgs: MailMsg[], midTurnBlocked: boolean): HeldNewsWhy {
     if (midTurnBlocked) return 'busy';
-    const gate = regiaGate(chat, engineOf(chat.harness)?.kind !== 'acp');
+    const gate = orchestratorGate(chat, engineOf(chat.harness)?.kind !== 'acp');
     const words = this.d.classify?.() ?? defaultClass;
     const classes = msgs.map(m => words(m.text, verified(m) ? m.kind : undefined));
     const cls = classes.includes('now') ? 'now' : classes.includes('group') ? 'group' : 'quiet';
@@ -257,17 +248,17 @@ export class ChatMail {
     return msgs.map(m => {
       const from = all.find(c => !c.closedAt && slug(c.title) === slug(m.from));
       const at = Date.parse(m.at);
-      return { regiaId: chat.id, chatId: from?.id ?? null, title: senderOf(m), kind: 'mail' as const, at: Number.isFinite(at) ? at : (this.seen.get(m.id) ?? Date.now()), why };
+      return { orchestratorId: chat.id, chatId: from?.id ?? null, title: senderOf(m), kind: 'mail' as const, at: Number.isFinite(at) ? at : (this.seen.get(m.id) ?? Date.now()), why };
     });
   }
 
-  /** True while an Orchestrator's mail may still wait (regia-delivery.ts): it works → never; it waits for the user or is in a
+  /** True while an Orchestrator's mail may still wait (orchestrator-delivery.ts): it works → never; it waits for the user or is in a
    *  hand-off → unless one is urgent; idle → until the first message is due, which takes the whole box with it. The clock
    *  starts at the send (or first sight, for a time in the future or unreadable). Mail the Orchestrator could not take during
    *  a turn it worked after the send (Cursor) goes as soon as that turn ends. */
-  private regiaHolds(chat: ChatSummary, msgs: MailMsg[], now: number): boolean {
-    if (!isRegiaChat(chat)) return false;
-    const gate = regiaGate(chat, engineOf(chat.harness)?.kind !== 'acp');
+  private orchestratorHolds(chat: ChatSummary, msgs: MailMsg[], now: number): boolean {
+    if (!isOrchestratorChat(chat)) return false;
+    const gate = orchestratorGate(chat, engineOf(chat.harness)?.kind !== 'acp');
     if (gate === 'inject') return false;
     if (gate === 'busy') return true;
     const words = this.d.classify?.() ?? defaultClass;
@@ -275,14 +266,14 @@ export class ChatMail {
     const cls = (m: MailMsg) => words(m.text, verified(m) ? m.kind : undefined);
     if (gate === 'hold') return !msgs.some(m => passes(gate, cls(m)));
     // ids another reader took (the hook, a `wait`) never come back: forgotten once past any wait
-    for (const [id, t] of this.seen) if (now - t > 2 * (this.d.regiaHoldMs ?? REGIA_HOLD_MS)) this.seen.delete(id);
+    for (const [id, t] of this.seen) if (now - t > 2 * (this.d.orchestratorHoldMs ?? ORCHESTRATOR_HOLD_MS)) this.seen.delete(id);
     const worked = this.busyAt.get(chat.id) ?? -Infinity;
     let due = Infinity;
     for (const m of msgs) {
       let t0 = this.seen.get(m.id);
       if (t0 === undefined) { const at = Date.parse(m.at); t0 = Number.isFinite(at) ? Math.min(at, now) : now; this.seen.set(m.id, t0); }
       if (worked >= t0) return false;
-      due = Math.min(due, t0 + waitOf(cls(m), this.d.regiaGroupMs, this.d.regiaHoldMs));
+      due = Math.min(due, t0 + waitOf(cls(m), this.d.orchestratorGroupMs, this.d.orchestratorHoldMs));
     }
     return now < due;
   }
@@ -321,10 +312,6 @@ export class ChatMail {
       if (c) out.set(b, c);
       else if (!this.warned.has(b)) { this.warned.add(b); log.warn('mail', 'two live chats share a title: their mail waits', { data: { box: b }, hint: 'rename one of the two chats' }); }
     }
-    // the Orchestrator also serves the boxes of the Orchestrators it replaced, unless an open chat (any state: send_to_chat
-    // resolves the same way) still holds that title
-    const held = new Set(this.d.chats.list().filter(c => !c.closedAt).map(c => slug(c.title)));
-    for (const c of by.values()) if (c?.orchestrator) for (const b of aliasBoxes(c)) if (!held.has(b)) out.set(b, c);
     return out;
   }
 
@@ -335,12 +322,8 @@ export class ChatMail {
     if (!root || !chat) return false;
     const box = slug(chat.title);
     if (!box) return true;
-    const live = chat.orchestrator ? this.liveChats() : null;
-    const boxes = [box, ...(chat.orchestrator ? aliasBoxes(chat).filter(b => live?.get(b)?.id === chat.id) : [])];
-    return boxes.some(b => {
-      try { return fs.readdirSync(path.join(inboxDir(root), b)).some(name => name.endsWith('.json') && !name.startsWith('.')); }
-      catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
-    });
+    try { return fs.readdirSync(path.join(inboxDir(root), box)).some(name => name.endsWith('.json') && !name.startsWith('.')); }
+    catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
   }
 
   async tick(): Promise<number> {
@@ -360,7 +343,7 @@ export class ChatMail {
       this.beat(dir, [...live.keys()]);
       const now = this.d.now?.() ?? Date.now();
       // "worked": a turn it could have taken mail in (a hold for the user is no such turn: its mail keeps its class)
-      for (const c of live.values()) { const g = regiaGate(c); if (g === 'inject' || g === 'busy') this.busyAt.set(c.id, now); }
+      for (const c of live.values()) { const g = orchestratorGate(c); if (g === 'inject' || g === 'busy') this.busyAt.set(c.id, now); }
       for (const [box, chat] of live) {
         if (this.stopped) break;
         noteHarness(dir, box, chat.harness);
@@ -368,12 +351,12 @@ export class ChatMail {
         // mail only between turns (Claude's CLI keeps it in its own input)
         // Only Claude's stream input durably accepts mid-turn mail. Other adapters have volatile input queues.
         if (engineOf(chat.harness)?.kind !== 'claude' && chat.state !== 'idle') {
-          if (isRegiaChat(chat)) { const msgs = unread(dir, box).map(u => u.msg); if (msgs.length) heldRows.push(...this.heldRows(chat, msgs, this.mailWhy(chat, msgs, true), all)); }
+          if (isOrchestratorChat(chat)) { const msgs = unread(dir, box).map(u => u.msg); if (msgs.length) heldRows.push(...this.heldRows(chat, msgs, this.mailWhy(chat, msgs, true), all)); }
           continue;
         }
         const waiting = unread(dir, box);
         if (!waiting.length) continue;
-        if (this.regiaHolds(chat, waiting.map(u => u.msg), now)) {
+        if (this.orchestratorHolds(chat, waiting.map(u => u.msg), now)) {
           const msgs = waiting.map(u => u.msg);
           heldRows.push(...this.heldRows(chat, msgs, this.mailWhy(chat, msgs, false), all));
           continue;
@@ -462,11 +445,12 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         const to = String(a.to ?? '').trim();
         const dir = inboxDir(root);
         const all = d.chats().filter(c => !c.closedAt);
-        const target = all.find(c => c.id === to) ?? all.find(c => slug(c.title) === slug(to))
-          ?? all.find(c => c.orchestrator && aliasBoxes(c).includes(slug(to)));
+        const target = all.find(c => c.id === to) ?? all.find(c => slug(c.title) === slug(to));
         const box = target ? slug(target.title) : slug(to);
         if (!box) throw new MailError('to mancante: il titolo della chat (list_chats)');
         if (box === slug(from.title)) throw new MailError('è la tua stessa chat');
+        // a delegated chat reports to the chat that delegated it (agent_report), never to the Orchestrator (ADR 0083)
+        if (from.parentId && target?.isOrchestrator) throw new MailError('sei una chat delegata: riporta al tuo genitore con agent_report, non all’Orchestrator');
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
         const kind = MAIL_KINDS.find(k => k === a.kind);
@@ -477,15 +461,15 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         try { d.sent?.(from.id, target?.id ?? null, text); } catch (e) { log.warn('mail', 'report bookkeeping failed', { chat: from.id, cause: errText(e), hint: 'the mail went; the chat stays open until its Orchestrator completes it' }); }
         d.deliver();
         const live = target && LIVE.has(target.state);
-        const gate = target && live && isRegiaChat(target) ? regiaGate(target, engineOf(target.harness)?.kind !== 'acp') : 'inject';
+        const gate = target && live && isOrchestratorChat(target) ? orchestratorGate(target, engineOf(target.harness)?.kind !== 'acp') : 'inject';
         const cls = (d.classify?.() ?? defaultClass)(text, kind);
         const asleep = target && live && target.state === 'idle' && d.agentsMayOpen?.(target.harness) === false;
         const when = !live ? 'la chat non è attiva nell’app: lo riceve a fine del suo prossimo turno o con il suo wait'
           : asleep ? `se la chat è ferma lo riceve solo quando l’utente la riprende (gli Orchestrator non possono usare ${engineOf(target.harness)?.label ?? target.harness})`
           : gate === 'busy' ? 'l’Orchestrator sta lavorando su un motore che non riceve messaggi a metà turno: lo riceve appena finisce il turno'
           : gate === 'hold' && cls !== 'now' ? 'l’Orchestrator aspetta l’utente: lo riceve appena è libero (solo un messaggio urgente passa subito)'
-          : gate === 'queue' && cls === 'quiet' ? `l’Orchestrator è fermo e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(REGIA_HOLD_MS / 60_000)} minuti`
-            : gate === 'queue' && cls === 'group' ? `l’Orchestrator è fermo: l’app glielo consegna entro ${Math.round(REGIA_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
+          : gate === 'queue' && cls === 'quiet' ? `l’Orchestrator è fermo e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(ORCHESTRATOR_HOLD_MS / 60_000)} minuti`
+            : gate === 'queue' && cls === 'group' ? `l’Orchestrator è fermo: l’app glielo consegna entro ${Math.round(ORCHESTRATOR_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
         return `inviato a "${msg.to}" (id ${msg.id}${msg.hop > 1 ? `, risposta ${msg.hop}/${MAX_HOPS}` : ''}): ${when}`;
       },
     },
@@ -496,14 +480,11 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
       run: (_a, ctx) => {
         const self = me(ctx);
         const app = d.chats().filter(c => !c.closedAt && c.id !== self.id);
-        // several Orchestrators (ADR 0021): each work chat says which one it answers to
-        const all = d.chats();
-        const regiaTitle = (c: ChatSummary) => all.find(x => x.id === regiaOfChat(c, all))?.title;
-        const lines = app.map(c => `- "${c.title}" · ${c.harness} · ${c.state}${c.isRegia ? ' · Orchestrator' : regiaTitle(c) ? ` · risponde a "${regiaTitle(c)}"` : ''}`);
+        const lines = app.map(c => `- "${c.title}" · ${c.harness} · ${c.state}${c.isOrchestrator ? ' · Orchestrator' : ''}`);
         const root = d.root();
         let other: string[] = [];
         if (root) {
-          const inApp = new Set([...app, self].flatMap(c => [slug(c.title), ...(c.orchestrator ? aliasBoxes(c) : [])]));
+          const inApp = new Set([...app, self].map(c => slug(c.title)));
           try { other = fs.readdirSync(inboxDir(root), { withFileTypes: true }).filter(e => e.isDirectory() && !inApp.has(e.name)).map(e => `- "${e.name}"`); } catch { /* no inbox yet */ }
         }
         return [`Nell'app:`, ...(lines.length ? lines : ['(nessun’altra)']), '', 'Fuori dall\'app (casella della posta):', ...(other.length ? other : ['(nessuna)'])].join('\n');

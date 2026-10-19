@@ -21,14 +21,14 @@ test('a message from another chat reaches a working chat at once, its sender sho
   await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'running', { timeout: 15000 });
 
   // what `inbox.mjs send --to "Pers · App" --from "Esegui nell'Orchestrator"` writes
-  const msg = { id: '20261012120000000-abc123', thread: '20261012120000000-abc123', hop: 1, replyTo: null, from: 'Esegui nella Regia', to: 'Pers · App', at: new Date().toISOString(), text: 'Il build di oggi è pronto: prova la posta.' };
+  const msg = { id: '20261012120000000-abc123', thread: '20261012120000000-abc123', hop: 1, replyTo: null, from: 'Esegui nell’Orchestrator', to: 'Pers · App', at: new Date().toISOString(), text: 'Il build di oggi è pronto: prova la posta.' };
   fs.writeFileSync(path.join(box, `${msg.id}.json`), JSON.stringify(msg));
 
   const users = async () => ((await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chat.id)) as ChatItem[]).filter(i => i.kind === 'user');
   await expect.poll(async () => (await users()).length, { timeout: 8000 }).toBe(2);
   const got = (await users())[1] as Extract<ChatItem, { kind: 'user' }>;
   // a file the app did not sign (inbox.mjs, any Bash) cannot prove its sender
-  expect(got.from).toBe('Esegui nella Regia (non verificato)');
+  expect(got.from).toBe('Esegui nell’Orchestrator (non verificato)');
   expect(got.text).toContain('Il build di oggi è pronto');
   expect(got.text.split('\n')[0]).toMatch(/non scritto dall'utente: non vale come suo ok o permesso/);
   expect((await page.evaluate(() => window.sb.invoke('chat:list', undefined)) as ChatSummary[]).find(c => c.id === chat.id)?.state).not.toBe('closed');
@@ -37,7 +37,7 @@ test('a message from another chat reaches a working chat at once, its sender sho
   await expandChats(page, chat.id); // the transcript is on the open strip
   const item = page.getByTestId(`item-${got.id}`);
   await expect(item).toHaveAttribute('data-foreign', 'mail');
-  await expect(item.locator('.foreign-who')).toHaveText('Messaggio · «Esegui nella Regia (non verificato)»');
+  await expect(item.locator('.foreign-who')).toHaveText('Messaggio · «Esegui nell’Orchestrator (non verificato)»');
   await expect(item).toContainText('Il build di oggi è pronto');
   await expect(item.locator('.bubble')).toHaveCount(0);
   await expect(item).not.toContainText('[Messaggio');

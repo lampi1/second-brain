@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary, EventMap, PendingRequest } from '../../src/shared/contract';
 import { askedBlocks } from '../../src/shared/command-ask';
 import { CommandAsks } from '../../src/main/run/asks';
-import { APP_EVENT_LABEL } from '../../src/main/chats/regia-wake';
+import { APP_EVENT_LABEL } from '../../src/main/chats/orchestrator-wake';
 
 const fence = (lang: string, code: string) => '```' + lang + '\n' + code + '\n```';
 
@@ -61,7 +61,7 @@ describe('askedBlocks: which blocks ask the user to run them', () => {
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: 'Lavoro', cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 });
 const asst = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, at: 1, text });
 
@@ -157,18 +157,18 @@ describe('CommandAsks: a block left for the user is an open request', () => {
     expect(s.pending()).toEqual([]);
   });
 
-  it("the app's own news to the Regia does not take away the command the Regia left", () => {
+  it("the app's own news to the Orchestrator does not take away the command the Orchestrator left", () => {
     vi.useFakeTimers();
     const { s, ev, turn } = make();
-    turn('regia', [asst('r1', `Lancia:
+    turn('orchestrator', [asst('r1', `Lancia:
 ${fence('powershell', 'Get-Date')}`)]);
     expect(s.pending()).toHaveLength(1);
-    ev('chat:item', { chatId: 'regia', item: { kind: 'user', id: 'u1', at: 3, text: `${APP_EVENT_LABEL}
+    ev('chat:item', { chatId: 'orchestrator', item: { kind: 'user', id: 'u1', at: 3, text: `${APP_EVENT_LABEL}
 Novità dalle chat di lavoro:` } });
-    turn('regia', [asst('r2', 'Ok, niente da dire all\'utente.')]);
+    turn('orchestrator', [asst('r2', 'Ok, niente da dire all\'utente.')]);
     expect(s.pending().map(p => p.detail)).toEqual(['Get-Date']);
     // the user's own message does
-    ev('chat:item', { chatId: 'regia', item: { kind: 'user', id: 'u2', at: 4, text: 'fatto' } });
+    ev('chat:item', { chatId: 'orchestrator', item: { kind: 'user', id: 'u2', at: 4, text: 'fatto' } });
     expect(s.pending()).toEqual([]);
   });
 

@@ -41,7 +41,7 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', on
       await sb.invoke('cli:status', { harness: engine, checkLogin: true });
       const chat = await createChat({ harness: engine, cwd: root, title: language === 'it' ? 'Il tuo spazio, insieme' : 'Your workspace, together', prompt: guidePrompt(language), permissionMode: 'default' });
       if (!chat) throw new Error('AI_SETUP_START');
-      await sb.invoke('settings:set', { regiaChats: { harness: engine } });
+      await sb.invoke('settings:set', { orchestratorChats: { harness: engine } });
       return chat.id;
     },
     prove(chatId, signal) {

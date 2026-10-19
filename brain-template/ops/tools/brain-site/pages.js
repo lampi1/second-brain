@@ -282,7 +282,7 @@
       node,
       setTargets(boxes) {
         const cur = sel.value;
-        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'regia' ? -1 : b.box === 'regia' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'regia' ? 'Orchestrator' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
+        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'orchestrator' ? -1 : b.box === 'orchestrator' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'orchestrator' ? 'Orchestrator' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
         if (cur) sel.value = cur;
       },
       open(box, name) { sel.value = box; ta.focus(); node.scrollIntoView({ behavior: 'smooth', block: 'center' }); App.toast(`Scrivi a ${name}`); },
@@ -357,7 +357,7 @@
       box.hidden = false;
       box.replaceChildren(el('p.small', el('b', 'Mando all’Orchestrator?'), ` «Discutiamone: ${short(title, 80)}»`),
         el('div.btn-row', el('button.btn.primary', { type: 'button', onclick: async () => {
-          try { await App.post('/api/send', { to: 'regia', text }); App.toast('Mandato all’Orchestrator'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
+          try { await App.post('/api/send', { to: 'orchestrator', text }); App.toast('Mandato all’Orchestrator'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
         } }, 'Sì, manda'), el('button.btn', { type: 'button', onclick: () => { box.hidden = true; } }, 'Annulla')));
     } }, 'Discutiamone');
     return el('div.composer', el('div.btn-row', btn), box);
@@ -426,14 +426,14 @@
   // ---------- Qualità ----------
   page('qualita', 'Qualità', async (main, arg) => {
     const t = await tablesP();
-    const sub = ['errori', 'regole', 'lodi', 'taccuini', 'proposte', 'misure', 'bug'].includes(arg) ? arg : 'errori';
+    const sub = ['errori', 'regole', 'lodi', 'proposte', 'misure', 'bug'].includes(arg) ? arg : 'errori';
     const week = t.errors.filter(r => daysAgo(r.data) < 7).length;
     const rules = t.recurrence?.rules ?? [];
     const back = rules.filter(r => r.again > 0);
     const body = el('div.section');
     put(main, 
       head('Qualità', `<b>${t.errors.length} errori</b> dell'IA registrati (${week} negli ultimi 7 giorni), <b>${t.wins.length} lodi</b>; <b>${rules.length - back.length} regole su ${rules.length}</b> hanno fermato il loro errore.`),
-      tabs([['errori', `Errori (${t.errors.length})`], ['regole', 'Regole servite?'], ['lodi', `Lodi (${t.wins.length})`], ['taccuini', 'Taccuini'], ['proposte', `Proposte (${t.proposals.length})`], ['misure', 'Misure'], ['bug', `Bug (${t.bugs.length})`]], id => { location.hash = `qualita/${id}`; }, sub),
+      tabs([['errori', `Errori (${t.errors.length})`], ['regole', 'Regole servite?'], ['lodi', `Lodi (${t.wins.length})`], ['proposte', `Proposte (${t.proposals.length})`], ['misure', 'Misure'], ['bug', `Bug (${t.bugs.length})`]], id => { location.hash = `qualita/${id}`; }, sub),
       body);
     if (sub === 'errori') {
       const types = countBy(t.errors, 'tipo').slice(0, 14);
@@ -464,14 +464,6 @@
         cols: [
           { key: 'data', label: 'Data', nowrap: true }, { key: 'ora', label: 'Ora' }, { key: 'chat', label: 'Chat' }, { key: 'esito', label: 'Esito', help: 'pieno = lode senza riserve; parziale = "perfetto, però…"', render: r => pill(r.esito, r.esito === 'pieno' ? 'good' : '') },
           { key: 'parole', label: 'Le tue parole', clip: true }, { key: 'consegnato', label: 'Cosa era stato consegnato', clip: true }], empty: 'Ancora nessuna lode registrata.' }));
-    } else if (sub === 'taccuini') {
-      const pb = t.playbooks ?? [];
-      const totalPts = sum(pb.map(p => p.punti)), proposed = sum(pb.map(p => p.proposti.length));
-      body.append(table({ name: 'taccuini', rows: pb.map(p => ({ agente: p.agent, punti: p.punti, proposti: p.proposti.length, caratteri: p.size, da_rivedere: p.review.join(', ') })), search: false,
-        explain: { find: `<b>${totalPts} punti</b> imparati in tutto, <b>${proposed} in attesa</b> del tuo sì.`, next: proposed ? 'l’Orchestrator ti porta i punti proposti: un sì e lo specialista li usa' : '', says: 'il taccuino di ogni specialista: cosa ha imparato dai suoi errori e dalle tue lodi.', why: 'ogni punto rende lo specialista più bravo senza appesantire le altre chat.' },
-        cols: [
-          { key: 'agente', label: 'Specialista', render: r => fileLink(`playbooks/${r.agente}.md`, r.agente) }, { key: 'punti', label: 'Punti', type: 'num', help: 'Punti approvati da te, che lo specialista legge all\'avvio' }, { key: 'proposti', label: 'In attesa', type: 'num', help: 'Punti proposti dalle chat, non ancora approvati' },
-          { key: 'caratteri', label: 'Caratteri (max 2500)', type: 'num', help: 'Il taccuino ha un tetto: quando è pieno si accorpa' }, { key: 'da_rivedere', label: 'Da rivedere', help: 'Punti con più voti "dannoso" che "utile"' }] }));
     } else if (sub === 'proposte') {
       const st = countBy(t.proposals, 'stato'), tp = countBy(t.proposals, 'tipo').slice(0, 10);
       const applied = t.proposals.filter(p => p.stato === 'applicata').length, measured = t.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length;
@@ -497,7 +489,7 @@
     } else if (sub === 'bug') {
       const areas = countBy(t.bugs, 'area');
       body.append(table({ name: 'bug-log', rows: [...t.bugs].reverse(), filters: ['area'],
-        explain: { find: areas[0] ? `L'area con più bug: <b>${E(areas[0][0])} (${areas[0][1]})</b>.` : '', next: areas[0] ? 'prima di una review in quell\'area, guarda questi bug: gli schemi si ripetono' : '', says: 'ogni bug confermato, con il suo schema.', why: 'gli schemi che tornano diventano controlli del reviewer.' },
+        explain: { find: areas[0] ? `L'area con più bug: <b>${E(areas[0][0])} (${areas[0][1]})</b>.` : '', next: areas[0] ? 'prima di una review in quell\'area, guarda questi bug: gli schemi si ripetono' : '', says: 'ogni bug confermato, con il suo schema.', why: 'gli schemi che tornano diventano controlli della review.' },
         cols: [{ key: 'data', label: 'Data', nowrap: true }, { key: 'area', label: 'Area' }, { key: 'bug', label: 'Bug', clip: true }, { key: 'pattern', label: 'Schema', help: 'Il tipo di errore ricorrente (review-catalog.md)' }, { key: 'fonte', label: 'Trovato da', clip: true }, { key: 'rif', label: 'Rif.', clip: true }] }));
     }
   });

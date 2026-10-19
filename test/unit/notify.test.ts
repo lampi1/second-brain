@@ -9,7 +9,7 @@ const ev = (id: string, kind: string, at: number, extra: Partial<FeedEvent> = {}
 describe('notify', () => {
   it('tiers: only what needs the user now toasts (policy 2026-10-13), the rest stays quiet', () => {
     for (const k of ['chat-waiting', 'chat-failed', 'login', 'sync-blocked', 'sync-error']) expect(tierOf(k)).toBe('toast');
-    for (const k of ['chat-done', 'error', 'win', 'idea', 'sync-ok', 'mail-blocked', 'reflection', 'playbook', 'proposal', 'done', 'decision', 'now', 'mail']) expect(tierOf(k)).toBe('quiet');
+    for (const k of ['chat-done', 'error', 'win', 'idea', 'sync-ok', 'mail-blocked', 'reflection', 'proposal', 'done', 'decision', 'now', 'mail']) expect(tierOf(k)).toBe('quiet');
     // budget: a toast only at 100 % (priority urgent)
     expect(tierOf(ev('b1', 'budget', 1, { priority: 'urgent' }))).toBe('toast');
     expect(tierOf(ev('b2', 'budget', 1, { priority: 'normal' }))).toBe('quiet');
@@ -18,7 +18,7 @@ describe('notify', () => {
   it('bell: counts unread actionable events only', () => {
     const feed = [
       ev('q', 'question', 9), ev('w', 'chat-waiting', 8), ev('f', 'chat-failed', 7), ev('sb', 'sync-blocked', 6), ev('b100', 'budget', 5, { priority: 'urgent' }),
-      ev('b80', 'budget', 4), ev('d', 'chat-done', 3), ev('e', 'error', 2), ev('i', 'idea', 1), ev('p', 'playbook', 1), ev('n', 'now', 1), ev('ok', 'sync-ok', 1),
+      ev('b80', 'budget', 4), ev('d', 'chat-done', 3), ev('e', 'error', 2), ev('i', 'idea', 1), ev('n', 'now', 1), ev('ok', 'sync-ok', 1),
     ];
     expect(feed.filter(e => isActionable(e)).map(e => e.id)).toEqual(['q', 'w', 'f', 'sb', 'b100']);
     expect(bellCount(feed, emptyRead)).toBe(5);
@@ -31,14 +31,13 @@ describe('notify', () => {
   });
 
   it('badges: silent kinds and error/win/idea/chat-done never badge', () => {
-    const feed = ['error', 'win', 'idea', 'reflection', 'chat-done', 'playbook', 'proposal', 'now', 'done', 'decision', 'mail', 'sync-ok'].map((k, i) => ev(`x${i}`, k, i + 1));
+    const feed = ['error', 'win', 'idea', 'reflection', 'chat-done', 'proposal', 'now', 'done', 'decision', 'mail', 'sync-ok'].map((k, i) => ev(`x${i}`, k, i + 1));
     expect(badges(feed, emptyRead)).toEqual({});
   });
 
   it('sections of the badges', () => {
     expect(sectionOf('idea')).toBe('idee');
     expect(sectionOf('reflection')).toBe('idee');
-    expect(sectionOf('playbook')).toBe('qualita');
     expect(sectionOf('budget')).toBe('costi');
     expect(sectionOf('chat-done')).toBe('home');
     expect(sectionOf('mail-blocked')).toBeNull(); // Comunicazione is gone: center (and bell) only
@@ -74,8 +73,8 @@ describe('notify', () => {
     // ideas and reflections open Idee filtered by author (the AI's: "Dall'IA"), not the raw file
     expect(linkOfEvent(ev('7', 'idea', 1, { file: 'ideas.md', who: "dell'IA" }))).toBe('sb://idee/ia');
     expect(linkOfEvent(ev('8', 'idea', 1, { file: 'ideas.md', who: 'tua' }))).toBe('sb://idee/mie');
-    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Regia' }))).toBe('sb://idee/ia');
-    expect(linkOfEvent(ev('10', 'playbook', 1, { file: 'playbooks/x.md' }))).toBe('sb://esplora/playbooks/x.md');
+    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Orchestrator' }))).toBe('sb://idee/ia');
+    expect(linkOfEvent(ev('10', 'proposal', 1, { file: 'rules/x.md' }))).toBe('sb://esplora/rules/x.md');
     expect(parseLink('sb://esplora/ops/runbook/x.md')).toEqual({ page: 'esplora', element: 'ops/runbook/x.md' });
     expect(parseLink('sb://workspace/chat-qa')).toEqual({ page: 'workspace', element: 'chat-qa' });
     expect(parseLink(' sb://costi ')).toEqual({ page: 'costi', element: null });

@@ -1,12 +1,12 @@
 // Cloud agents in the Grindhouse (ADR 0080, issue #79), on the frozen demo's fake cloud agents (no CLI, no network):
 // one strip per agent under the local ones, grouped by area with a "cloud" badge and the engine; the Cursor strip
 // expands to its streamed messages and takes a follow-up; Codex says follow-up and stop are on its page; Claude shows
-// "stato su claude.ai". "Nuovo agente" offers "Dove: Locale / Cloud" with each engine's readiness. Screenshots in
-// test-results/shots/cloud-strips.png, cloud-strip-expanded.png, cloud-newchat.png (dark) and cloud-strips-light.png.
+// "stato su claude.ai". A cloud agent starts only from the Orchestrator (app_create_chat where "cloud", ADR 0083: no
+// start dialog). Screenshots in test-results/shots/cloud-strips.png, cloud-strip-expanded.png (dark) and cloud-strips-light.png.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
-test('cloud agents: strips with badge and engine, expand + follow-up, Locale / Cloud in Nuovo agente', async () => {
+test('cloud agents: strips with badge and engine, expand + follow-up', async () => {
   const { app, page } = await launchDemo({ width: 1500, height: 1000 });
   try {
     const strips = page.getByTestId('cloud-strips');
@@ -44,21 +44,6 @@ test('cloud agents: strips with badge and engine, expand + follow-up, Locale / C
     await page.mouse.move(2, 2);
     await shot(page, 'cloud-strip-expanded');
 
-    // Nuovo agente: Dove → Cloud, each engine's readiness for the folder
-    await page.keyboard.press('Control+N');
-    await expect(page.getByTestId('newchat')).toBeVisible();
-    await page.getByTestId('newchat-prompt').fill('Rendi più veloce la ricerca prodotti');
-    // a work agent, not an Orchestrator: only then is "Dove" offered
-    if (await page.getByTestId('newchat-regia').isChecked()) await page.getByTestId('newchat-regia').uncheck();
-    await page.getByTestId('newchat-where-pick').getByRole('radio', { name: 'Cloud' }).click();
-    await expect(page.getByTestId('newchat-cloud-cursor')).toContainText('pronto');
-    await expect(page.getByTestId('newchat-cloud-cursor')).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('newchat-create')).toHaveText('Avvia nel cloud');
-    await page.mouse.move(2, 2);
-    await shot(page, 'cloud-newchat');
-    await page.getByTestId('newchat-create').click();
-    await expect(page.getByTestId('newchat')).toHaveCount(0);
-    await expect(page.locator('[data-testid^="cloud-strip-cursor-demo-"]')).toHaveCount(1);
   } finally {
     await app.close();
   }

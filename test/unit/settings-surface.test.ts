@@ -28,7 +28,7 @@ it('inventories every current schema setting without changing protection or defa
 it('renders four essential groups with no model routing, per-engine policy wall or settings mutation',()=>{
  const before=JSON.stringify(mock.state),html=renderToStaticMarkup(createElement(SettingsPage));
  expect(html).toContain('Account e strumenti');expect(html).toContain('Aggiornamenti');expect(html).toContain('Il mio spazio');expect(html).toContain('Aspetto e lingua');expect(html).toContain('Notifiche');
- expect(html).not.toContain('Le Regie possono usare');expect(html).not.toContain('Instradamento modelli');expect(html).not.toContain('brainrules');
+ expect(html).not.toContain('Gli Orchestrator possono usare');expect(html).not.toContain('Instradamento modelli');expect(html).not.toContain('brainrules');
  expect(mock.setSetting).not.toHaveBeenCalled();expect(JSON.stringify(mock.state)).toBe(before);
 });
 it('renders the essential surface and appearance controls in English',()=>{

@@ -7,14 +7,14 @@ import { approvedFiles, inspectPack } from '../../src/main/agents/pack/read';
 import { emitAgentToml, readAgentToml } from '../../src/main/agents/pack/toml';
 import { checkPackPath, readZip, writeZip, ZIP_LIMITS } from '../../src/main/agents/pack/zip';
 import { sameBehaviour } from '../../src/main/agents/versions';
+import type { AgentBehaviour } from '../../src/shared/agents';
 
 const hash = 'a'.repeat(64);
 const manifest = (): AgentPackManifest => ({
   format: 1, packId: 'reviewer-0123456789abcdef', revision: 1, contentHash: hash,
-  agent: { id: 'reviewer', name: 'Reviewer', role: 'Review changes', category: 'development', instructionsFile: 'agents/reviewer.md',
-    manifest: { whenToUse: 'Before merging', input: 'Diff', output: 'Findings', successCriteria: ['Cite evidence'] },
+  agent: { id: 'reviewer', name: 'Judge', role: 'judge', summary: 'Review changes', instructionsFile: 'agents/reviewer.md',
     engine: 'claude', model: null, effort: 'high', tools: { allow: ['read'] }, permissionCeiling: 'default' },
-  icon: { symbol: 'eye', tone: 'blue' }, skills: [{ name: 'reviewer', ownership: 'owned', hash }],
+  skills: [{ name: 'reviewer', ownership: 'owned', hash }],
   createdAt: '2026-10-18T00:00:00Z', exportedAt: '2026-10-18T00:00:00Z', appVersion: '0.1.0',
 });
 const skills = () => new Map([
@@ -43,12 +43,12 @@ describe('portable agent packs', () => {
       if (target === 'codex') {
         const agent = readAgentToml(projected.get('.codex/agents/reviewer.toml')!.toString());
         expect(agent).toMatchObject({ name: 'reviewer', description: 'Review changes', features: { shell_tool: false }, model_reasoning_effort: 'high' });
-        expect(agent.developer_instructions).toContain('## Contratto'); expect(agent).not.toHaveProperty('model');
+        expect(agent.developer_instructions).toContain('Use the `reviewer` skill'); expect(agent).not.toHaveProperty('model');
       } else {
         const md = parseMd(projected.get(`.${target}/agents/reviewer.md`)!.toString());
         const allowed = target === 'cursor' ? ['name', 'description', 'model', 'readonly'] : ['name', 'description', 'model', 'readonly', 'effort', 'tools', 'skills'];
         expect(md.fields.every(f => allowed.includes(f.key))).toBe(true);
-        expect(md.body).toContain('Usa la skill `reviewer`');
+        expect(md.body).toContain('Use the `reviewer` skill');
       }
     }
   });
@@ -103,9 +103,10 @@ describe('portable agent packs', () => {
     for (const suffix of ['\n[mcp_servers]\na = true', '\nname = "duplicate"', '\nother = 5']) expect(() => readAgentToml(raw + suffix)).toThrow();
   });
   it('makes know-how content changes behavioral while preserving location-only moves', () => {
-    const original = { instructions: 'Review.', engine: 'claude', model: null, knowhow: { folder: 'agents/reviewer', linked: [], hash } };
-    expect(sameBehaviour(original, { ...original, knowhow: { ...original.knowhow, hash: 'b'.repeat(64) } })).toBe(false);
-    expect(sameBehaviour(original, { ...original, knowhow: { ...original.knowhow, folder: 'other/reviewer' } })).toBe(true);
+    const knowhow = { folder: 'agents/reviewer', linked: [], hash };
+    const original: AgentBehaviour = { instructions: 'Review.', engine: 'claude', model: null, tools: { allow: ['read'] }, permissionCeiling: 'plan', tier: 'top', tierMax: 'top', independent: true, launches: [], skills: [], knowhow };
+    expect(sameBehaviour(original, { ...original, knowhow: { ...knowhow, hash: 'b'.repeat(64) } })).toBe(false);
+    expect(sameBehaviour(original, { ...original, knowhow: { ...knowhow, folder: 'other/reviewer' } })).toBe(true);
   });
 });
 

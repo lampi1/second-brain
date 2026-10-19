@@ -1,6 +1,7 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Skill, Regole, Memoria, Classificatori and the Mappa of their
 // links, each thing shown and edited in one place) and app tools (Dashboard = statistics only, Guida). Role-specific
-// pages exclude destinations already supplied by the shell. Used by App.tsx.
+// pages exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
+// tree (SidebarTree.tsx). Used by App.tsx.
 import type { ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
@@ -12,9 +13,9 @@ import {
   IconBook, IconBrain, IconBranch, IconChart, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
-import {useAgents} from '../store/agents';
-import {activeRole} from '../lib/role-consumers';
+import {workProfile} from '../../shared/work-profiles';
 import { useApprovalCount } from '../store/agent-approvals';
+import { SidebarTree } from './SidebarTree';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
@@ -37,8 +38,8 @@ function Badge({ n, warn }: { n: number; warn?: boolean }) {
 }
 
 export function Sidebar() {
-  const {catalog}=useAgents(),role=ui.use(s=>s.prefs.role);
-  const composition=activeRole(role,catalog,BRAIN_PAGES.map(page=>page.id));
+  const saved=ui.use(s=>s.prefs.workProfile);
+  const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
   const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','task','fatto','impostazioni',...BRAIN_CORE].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
@@ -73,6 +74,7 @@ export function Sidebar() {
     <nav className="sidebar" aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
         {page1('home')}
+        <SidebarTree />
         {title(t('dialogs.sidebar.work'), 'work')}
         {tasksOn && show('task') && page1('task')}
         {show('fatto')&&page1('fatto')}

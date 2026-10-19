@@ -7,7 +7,7 @@
 // ~470k tokens of context re-read per call) and a "stato" took ~11 tool calls (~1 $); this answers it in one call.
 // Used by appctl/tools.ts (tool app_digest); pinned by test/unit/appctl-digest.test.ts.
 import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../shared/contract';
-import { chatName } from '../../shared/regia';
+import { chatName } from '../../shared/orchestrator';
 import { redact } from '../log';
 import { engineLabel } from '../engines/registry';
 
@@ -86,10 +86,10 @@ export function digest(inp: DigestInput): string {
     return `- ${name(c)}: ${head}${e ? ` · ${e}` : ''}${tail}`;
   };
 
-  const wait: string[] = [], err: string[] = [], run: string[] = [], done: string[] = [], same: string[] = [], regie: string[] = [];
+  const wait: string[] = [], err: string[] = [], run: string[] = [], done: string[] = [], same: string[] = [], orchestrators: string[] = [];
   for (const c of open) {
     const rs = asks.get(c.id) ?? [];
-    if (c.isRegia) { regie.push(`${name(c)}: ${c.state}${rs.length ? `, ${rs.length} richieste aperte` : ''}`); continue; }
+    if (c.isOrchestrator) { orchestrators.push(`${name(c)}: ${c.state}${rs.length ? `, ${rs.length} richieste aperte` : ''}`); continue; }
     if (rs.length) { for (const r of rs) wait.push(line(c, `aspetta l'utente da ${ago(now - r.at)}: ${askLine(r)}`, false)); continue; }
     if (c.state === 'error') { err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
     if (!changed(c)) { same.push(`«${c.title}»`); continue; }
@@ -110,7 +110,7 @@ export function digest(inp: DigestInput): string {
   const runs = inp.runs.filter(r => (r.endedAt ?? r.startedAt) >= (since ?? now - 2 * 3600_000))
     .map(r => `- «${titleOf(r.chatId)}»: \`${one(redact(r.code.split('\n')[0] ?? ''), 120)}\` ${r.state === 'running' ? 'in corso' : `${r.state}, uscita ${r.exitCode ?? '-'}`}`);
 
-  const counts = [`${open.filter(c => !c.isRegia).length} chat aperte`, wait.length && `${wait.length} richieste per l'utente`, err.length && `${err.length} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
+  const counts = [`${open.filter(c => !c.isOrchestrator).length} chat aperte`, wait.length && `${wait.length} richieste per l'utente`, err.length && `${err.length} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
   const out = [`Stato alle ${hhmm(now)}${since !== null ? ` (novità dalle ${hhmm(since)})` : ''}: ${counts}.`];
   const section = (title: string, rows: string[]) => { if (rows.length) out.push('', `${title}:`, ...rows); };
   section('Aspettano l\'utente (l\'app glielo mostra già: nello stato basta dire quale chat e su cosa)', wait);
@@ -120,7 +120,7 @@ export function digest(inp: DigestInput): string {
   if (same.length) out.push('', `Invariate: ${same.join(', ')}.`);
   section(since !== null ? 'Chiuse da allora' : 'Chiuse nelle ultime 24 h', closed);
   section('Comandi eseguiti dall\'utente con Esegui', runs);
-  if (regie.length) section('Orchestrator', regie);
+  if (orchestrators.length) section('Orchestrator', orchestrators);
 
   const d = inp.tasks;
   if (!d || !d.at) out.push('', `Task (Azure DevOps): non letti dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`);

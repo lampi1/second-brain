@@ -239,7 +239,7 @@ async function read(which) {
     cursorHit = hits.find(h => !h.archived && !h.subagent) || hits[0]; // the chats `list` shows come first
   }
   // Claude chat by id start, or by title in the last 30 days; a title in both tools → the live, newest one (review 10/10:
-  // "regia" matched an older Cursor chat while the Claude Orchestrator was active)
+  // "orchestrator" matched an older Cursor chat while the Claude Orchestrator was active)
   const cl = id ? undefined : claudeChats(isId ? { idPrefix: q } : { since: Date.now() - 30 * 864e5, titleQ: q }).sort((a, b) => b.at - a.at)[0];
   if (cursorHit && !(cl && (cursorHit.archived || cursorHit.subagent || cl.at > cursorHit.at))) id = cursorHit.id;
   if (!id) {

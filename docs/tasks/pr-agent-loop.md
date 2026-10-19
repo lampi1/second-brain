@@ -15,7 +15,7 @@ The agents' improvement loop now runs from run start to the user's decision (ADR
   end, verdict, stored feedback and in the daily pass.
 - **Feedback wake** (`agents/feedback-wake.ts`, `lifecycle.ts` `WAKE_POLICY`): one batched message, at most 3 a day, 2 h
   apart, once 5 runs wait or the oldest waited 3 h; only to an open, idle Orchestrator on an enabled engine, quiet for
-  5 min, with nothing waiting for the user, never resuming it (`liveOnly`); off with `regiaEvents` and in test suites.
+  5 min, with nothing waiting for the user, never resuming it (`liveOnly`); off with `orchestratorEvents` and in test suites.
   Runs the user (or a verified review, or a feedback) already judged leave the queue without a wake. The message also
   asks for `agent_learn_propose`: learned-rule proposals (#47) are produced there, with no Battito job.
 - **Always under approval**: `agent_update` / `agent_rollback` / `agent_archive` / `agent_restore` now queue an

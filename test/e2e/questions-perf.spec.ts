@@ -19,7 +19,7 @@ const resetOpen = (page: Page) => page.evaluate(() => { (globalThis as unknown a
 
 test('the questions window opens fast, stays still, and other chats never render it', async () => {
   const { app, page } = await launchDemo({ config: { questionsModal: true } });
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
 
   // opening: under 100 ms, the card takes the keyboard (nobody is typing)
@@ -64,8 +64,8 @@ test('the questions window opens fast, stays still, and other chats never render
 test('ten requests waiting: the rail lists them, the keyboard answers them one after another', async () => {
   test.setTimeout(90_000);
   const { app, page } = await launchDemo({ config: { questionsModal: true } });
-  for (const id of ['regia', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
-  const chats = ['regia', 'qa', 'feedback', 'fix', 'sms'];
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  const chats = ['orchestrator', 'qa', 'feedback', 'fix', 'sms'];
   for (let i = 0; i < 10; i++) await demo(app, (d, id, q) => d.ask(id, q), chats[i % chats.length]!, question(`Passo ${i + 1}: procedo?`, ['Sì', 'No']));
   await expect(page.getByTestId('qwin-count')).toHaveText('10');
   await expect(page.getByTestId('qwin-pick')).toHaveCount(9);

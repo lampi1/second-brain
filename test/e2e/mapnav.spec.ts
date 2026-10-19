@@ -15,7 +15,7 @@ test('The Mappa notes view and the 3D map keep the coordinator beside exploratio
   const { app, page } = await launchDemo({ env: { SB_BRAIN: brain } });
   try {
     await openNotesMap(page);
-    const coordinator = page.getByTestId('regia-overlay');
+    const coordinator = page.getByTestId('orchestrator-overlay');
     const dashboard = page.getByTestId('bm-map-page');
     const besideCoordinator = async (selector: string) => {
       await expect(coordinator).toBeVisible();
@@ -38,7 +38,7 @@ test('The Mappa notes view and the 3D map keep the coordinator beside exploratio
     const canvas = page.getByTestId('bx-map-canvas').locator('canvas');
     await expect(canvas).toBeVisible();
     const initialWidth = (await canvas.boundingBox())!.width;
-    await page.getByTestId('regia-resize').focus();
+    await page.getByTestId('orchestrator-resize').focus();
     await page.keyboard.press('ArrowLeft');
     await expect.poll(async () => (await canvas.boundingBox())?.width ?? initialWidth).toBeLessThan(initialWidth);
     await besideCoordinator('[data-testid="brain-map"]');
@@ -48,13 +48,13 @@ test('The Mappa notes view and the 3D map keep the coordinator beside exploratio
     await shot(page, 'mapnav-beside-orchestrator');
     await page.getByTestId('bx-map-close').click();
     await page.locator('.dash-inspector .dash-discuss').click();
-    await expect(page.getByTestId('regia-overlay')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
     await expect(dashboard).toBeVisible();
     await expect(page.locator('.dash-inspector h2')).toBeVisible();
     await besideCoordinator('[data-testid="bm-map-page"]');
     await expect.poll(() => coordinator.evaluate(el => el.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Control+r');
-    await expect(page.getByTestId('regia-overlay')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
     await expect(dashboard).toBeVisible();
   } finally { await app.close(); }
 });

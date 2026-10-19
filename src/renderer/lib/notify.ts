@@ -18,7 +18,7 @@ export const TOAST_KINDS = new Set(['chat-waiting', 'chat-failed', 'budget', 'lo
 export const ACTIONABLE_KINDS = new Set([...TOAST_KINDS, 'question', 'sync-blocked', 'sync-error', 'mail-blocked']);
 
 /** Kinds kept in the center's list only: no bell, no badge, no toast. */
-export const SILENT_KINDS = new Set(['now', 'done', 'decision', 'proposal', 'mail', 'sync-ok', 'playbook', 'chat-closed']);
+export const SILENT_KINDS = new Set(['now', 'done', 'decision', 'proposal', 'mail', 'sync-ok', 'chat-closed']);
 
 /** Kinds with no sidebar badge (besides the silent ones): logged for a look later, never a call to act. */
 const NO_BADGE = new Set(['error', 'win', 'idea', 'reflection', 'chat-done']);
@@ -45,7 +45,7 @@ export function isActionable(e: Ev & Partial<Pick<FeedEvent, 'chatId'>>, open?: 
 export function sectionOf(kind: string): string | null {
   if (kind === 'idea') return 'idee';
   if (kind === 'reflection') return 'idee';
-  if (kind === 'error' || kind === 'win' || kind === 'playbook' || kind === 'proposal') return 'qualita';
+  if (kind === 'error' || kind === 'win' || kind === 'proposal') return 'qualita';
   if (kind === 'budget') return 'costi';
   if (kind.startsWith('chat-')) return 'home';
   // sync-* (the brain's own sync) had Oggi's badge, mail-* had Comunicazione's; both pages are gone: center only

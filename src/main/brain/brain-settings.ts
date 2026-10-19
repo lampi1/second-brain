@@ -1,4 +1,4 @@
-// Reads the brain's delivery timing words (regiaMail) for chats/regia-delivery.ts. UTF-8 (with or without BOM)
+// Reads the brain's delivery timing words (orchestratorMail) for chats/orchestrator-delivery.ts. UTF-8 (with or without BOM)
 // and UTF-16 LE files are accepted. The retired crossHarnessMessages key no longer controls delivery.
 // The explicit retirement migration updates only a valid legacy false in brain-settings.json,
 // keeping every unrelated key; unreadable files are left intact. Used by brain/index.ts at product startup.
@@ -54,9 +54,9 @@ export function migrateCrossHarness(root: string): 'unchanged' | 'migrated' | 'u
   } finally { try { fs.unlinkSync(tmp); } catch { /* renamed or already removed */ } }
 }
 
-/** The words that time the mail to an Orchestrator without a sender's kind (`regiaMail`: { urgent, progress, action } lists,
- *  chats/regia-delivery.ts). undefined = the file says nothing or is unreadable: the defaults apply. */
-export function readRegiaMail(root: string): unknown {
+/** The words that time the mail to an Orchestrator without a sender's kind (`orchestratorMail`: { urgent, progress, action } lists,
+ *  chats/orchestrator-delivery.ts). undefined = the file says nothing or is unreadable: the defaults apply. */
+export function readOrchestratorMail(root: string): unknown {
   const r = readRaw(root);
-  return r && r !== 'unreadable' ? r.regiaMail : undefined;
+  return r && r !== 'unreadable' ? r.orchestratorMail : undefined;
 }

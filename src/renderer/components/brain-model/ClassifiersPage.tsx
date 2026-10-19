@@ -1,8 +1,8 @@
 // "Classificatori" (G K, ADR 0077, #84): read only, how the app chooses by itself and how it is going. Model choice:
 // the routing table in force (kind → model, effort, why) with, per row, the chats it decided, the verified success
 // rate and the average cost, and the table's history; the outcomes per kind of work and who chose the model (table,
-// agent profile, default, the user). Agent choice: for the latest chats, the agent suggested today versus the agent
-// used. Quality over time: per route and per agent-choice channel, by week. A value without data says "nessun dato
+// role, default, the user). Skill choice: for the latest role chats, the skills suggested today versus the skills
+// the launch gave. Quality over time: per route, by week. A value without data says "nessun dato
 // ancora", never zero. Data: 'classifiers:state' (main/brainmodel/classifiers.ts). In the Dashboard's look
 // (dashboard.css). Rendered by App.tsx PageFrame for 'classificatori'.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -40,7 +40,6 @@ export function ClassifiersPage() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   const r = state?.routing;
-  const qLabel = (key: string, label: string) => (key === 'agent:words' ? t('bm.cls.agentWords') : key === 'agent:hybrid' ? t('bm.cls.agentHybrid') : label);
   return <div className="dashboard bm-dash" data-testid="bm-classifiers-page">
     <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.cls.eyebrow')}</span><h1>{t('bm.cls.title')}</h1><p>{t('bm.cls.lead')}</p></div>
       <button type="button" className="btn btn-ghost btn-s" onClick={() => void load()}><span aria-hidden="true">↻</span> {t('bm.cls.refresh')}</button></header>
@@ -66,11 +65,12 @@ export function ClassifiersPage() {
       </Panel>
       <Panel testId="bm-cls-choices" title={t('bm.cls.choices')} lead={t('bm.cls.choicesLead')}>
         {state.choices.length ? <div className="bm-table-wrap"><table className="bm-table">
-          <thead><tr><th>{t('bm.cls.col.when')}</th><th>{t('bm.cls.col.goal')}</th><th>{t('bm.cls.col.suggested')}</th><th>{t('bm.cls.col.used')}</th><th /></tr></thead>
+          <thead><tr><th>{t('bm.cls.col.when')}</th><th>{t('bm.cls.col.goal')}</th><th>{t('bm.cls.col.role')}</th><th>{t('bm.cls.col.suggested')}</th><th>{t('bm.cls.col.used')}</th><th /></tr></thead>
           <tbody>{state.choices.map(c => { const m = choiceMatch(c); return <tr key={`${c.chatId}-${c.at}`} data-testid="bm-cls-choice">
             <td className="num">{when(c.at)}</td><td className="goal">{c.goal}</td>
-            <td>{c.suggested ? <>{c.suggested.name} <small className="bm-nodata">{t('bm.cls.score', { n: c.suggested.score })}</small></> : '—'}</td>
-            <td>{c.used.name}{c.used.score !== null && <> <small className="bm-nodata">{t('bm.cls.score', { n: c.used.score })}</small></>}{c.used.mode === 'words' || c.used.mode === 'hybrid' ? <> <small className="bm-nodata">· {t(`bm.cls.mode.${c.used.mode}`)}</small></> : null}</td>
+            <td>{c.role.name}</td>
+            <td>{c.suggested.length ? c.suggested.join(', ') : '—'}</td>
+            <td>{c.used.length ? c.used.join(', ') : '—'}</td>
             <td><span className="bm-match" data-match={m}>{t(`bm.cls.${m}`)}</span></td>
           </tr>; })}</tbody>
         </table></div> : <p className="bm-empty">{t('bm.cls.choicesEmpty')}</p>}
@@ -78,7 +78,7 @@ export function ClassifiersPage() {
       <Panel testId="bm-cls-quality" title={t('bm.cls.quality')} lead={t('bm.cls.qualityLead')}>
         {state.quality.length ? <div className="bm-table-wrap"><table className="bm-table">
           <thead><tr><th>{t('bm.cls.col.route')}</th>{state.quality[0]!.weeks.map(w => <th key={w.week} className="num">{w.week}</th>)}</tr></thead>
-          <tbody>{state.quality.map(q => <tr key={q.key} data-nodata={noData(q.weeks)}><td>{qLabel(q.key, q.label)}{noData(q.weeks) && <> <NoData /></>}</td>
+          <tbody>{state.quality.map(q => <tr key={q.key} data-nodata={noData(q.weeks)}><td>{q.label}{noData(q.weeks) && <> <NoData /></>}</td>
             {q.weeks.map(w => <td key={w.week} className="num">{w.runs ? <span className="bm-week"><span>{w.success === null ? <NoData /> : pct(w.success, locale())}</span><small>{t('bm.cls.runsN', { n: w.runs })}{w.avgCostUsd !== null ? ` · ${usd(w.avgCostUsd, locale())}` : ''}</small></span> : <span aria-label={t('bm.noData')} className="bm-nodata">—</span>}</td>)}</tr>)}</tbody>
         </table></div> : <p className="bm-empty">{t('bm.noData')}</p>}
       </Panel>

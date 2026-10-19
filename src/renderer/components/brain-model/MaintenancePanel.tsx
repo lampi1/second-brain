@@ -55,18 +55,16 @@ export function MaintenancePanel({ kinds, job, runLabel, testId = 'bm-maintenanc
   </section>;
 }
 
-/** The one-time migration's report: every former section, the skill it became and the agents that use it. */
-export function MigrationReportPanel({ report, agentName }: { report: MigrationReport; agentName: (id: string) => string }) {
+/** The procedures' report: every runbook or routines section and the skill it became. */
+export function MigrationReportPanel({ report }: { report: MigrationReport }) {
   const count = (s: MigrationReport['items'][number]['status']) => report.items.filter(i => i.status === s).length;
-  const lines = report.lessons.reduce((n, l) => n + l.lines, 0);
-  if (!report.items.length && !lines) return null;
+  if (!report.items.length) return null;
   return <details className="bm-panel bm-migration" data-testid="bm-migration" open={report.items.length <= 12}>
     <summary><h3>{t('bm.mig.title')}</h3><p>{t('bm.mig.lead', { moved: count('moved'), existing: count('existing'), skipped: count('skipped'), at: when(report.at) })}</p></summary>
-    {lines > 0 && <p className="bm-note">{t('bm.mig.lessons', { lines, agents: report.lessons.filter(l => l.lines).length })}</p>}
     <ul className="bm-mig-list">{report.items.map(i => <li key={i.source} data-status={i.status}>
       <span className="bm-mig-from" title={i.source}>{i.title}<small>{i.source}</small></span>
       <span aria-hidden="true" className="bm-mig-arrow">→</span>
-      <span className="bm-mig-to">{i.skill ? <code>{i.skill}</code> : '—'}<small>{i.agents.length ? i.agents.map(agentName).join(', ') : t('bm.mig.noAgent')}</small></span>
+      <span className="bm-mig-to">{i.skill ? <code>{i.skill}</code> : '—'}</span>
       <span className="bm-tag" data-status={i.status}>{t(`bm.mig.${i.status}`)}</span>
       {i.note && <small className="bm-mig-note">{i.note}</small>}
     </li>)}</ul>

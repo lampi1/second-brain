@@ -1,22 +1,19 @@
-// The Guida's content (src/shared/concept-guide.ts) and its «Discutine» plan (renderer/lib/concept-discuss.ts): every card
-// is complete in both languages, cites source files that exist, keeps diagram labels short, and the Discuss action sends
-// the card's content to an explainer agent when one can start, else to the Orchestrator with the Explainer instruction.
+// The Guida's content (src/shared/concept-guide.ts): every card is complete in both languages, cites source files that
+// exist, keeps diagram labels short, and «Discuti» sends the card's content to the Orchestrator.
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { AgentCatalog, AgentModelChoice, AgentProfile } from '@shared/agents';
-import { CONCEPTS, cardText, discussText, isExplainer, regiaText, type Bi } from '@shared/concept-guide';
-import { explainerOf, planDiscuss } from '../../src/renderer/lib/concept-discuss';
+import { CONCEPTS, cardText, discussText, orchestratorText, type Bi } from '@shared/concept-guide';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const full = (b: Bi) => b.it.trim().length > 0 && b.en.trim().length > 0;
 
 describe('concept guide content', () => {
-  it('has unique ids and the prominent card «Ogni compito passa da un agente» first', () => {
+  it('has unique ids and the prominent card «Ogni compito passa da un ruolo» first', () => {
     expect(new Set(CONCEPTS.map(c => c.id)).size).toBe(CONCEPTS.length);
     expect(CONCEPTS.filter(c => c.prominent)).toHaveLength(1);
     expect(CONCEPTS[0]!.prominent).toBe(true);
-    expect(CONCEPTS[0]!.title.it).toBe('Ogni compito passa da un agente');
+    expect(CONCEPTS[0]!.title.it).toBe('Ogni compito passa da un ruolo');
     // the target (not today's behaviour) is stated apart on the prominent card
     expect(CONCEPTS[0]!.target?.length).toBeGreaterThan(0);
   });
@@ -81,51 +78,12 @@ describe('card text for a chat', () => {
   });
 });
 
-const choice = (over: Partial<AgentModelChoice> = {}): AgentModelChoice => ({
-  engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, models: [], source: 'registry', installed: true, authenticated: true,
-  defaultModel: true, modelSelectable: true, modelReason: null, ...over,
-});
-const profile = (id: string, name: string, over: Partial<AgentProfile> = {}): AgentProfile => ({
-  id, name, purpose: 'p', instructions: 'i', engine: 'claude', model: null, avatar: { kind: 'symbol', symbol: 'spark', tone: 'blue' },
-  origin: { kind: 'user' }, version: 1, activeVersion: 1, lastEditedBy: 'user', userLocked: true, status: 'active', ...over,
-} as AgentProfile);
-const catalog = (profiles: AgentProfile[], models = [choice()]): AgentCatalog => ({
-  profiles, archived: [], models, problem: null, legacyRouting: { preserved: true, imported: 0, remaining: 0 },
-  imageGeneration: { available: false, reason: '' },
-} as AgentCatalog);
-
-describe('«Discutine» plan', () => {
+describe('«Discuti» text for the Orchestrator', () => {
   const card = CONCEPTS[0]!;
-  it('recognises only an explicitly named explainer, never incidental purpose prose', () => {
-    expect(isExplainer({ id: 'x', name: 'Explainer' })).toBe(true);
-    expect(isExplainer({ id: 'x', name: 'Spiegazioni' })).toBe(true);
-    expect(isExplainer({ id: 'explainer', name: 'Tutor' })).toBe(true);
-    expect(isExplainer({ id: 'x', name: 'Spiegazioni tecniche' })).toBe(false);
-    expect(isExplainer({ id: 'x', name: 'Tutor', role: 'spiega i concetti' })).toBe(false);
-    expect(isExplainer({ id: 'default-research', name: 'Ricerca' })).toBe(false);
-  });
-
-  it('goes to an explainer agent that can start, with the card as its draft', () => {
-    const plan = planDiscuss(card, 'it', catalog([profile('default-general', 'Assistente'), profile('a1', 'Explainer')]), 'C:\\brain');
-    expect(plan).toMatchObject({ via: 'agent', agentId: 'a1', harness: 'claude', cwd: 'C:\\brain', title: `Guida · ${card.title.it}` });
-    expect(plan.draft).toBe(discussText(card, 'it'));
-    expect(plan.draft).toContain(card.points[0]!.it);
-  });
-
-  it('goes to the Orchestrator with the Explainer instruction when no explainer exists', () => {
-    const plan = planDiscuss(card, 'en', catalog([profile('default-general', 'Assistente')]), '/brain');
-    expect(plan.via).toBe('regia');
-    expect(plan.draft).toBe(regiaText(card, 'en'));
-    expect(plan.draft).toContain('agent_catalog');
-    expect(plan.draft).toContain('"Explainer"');
-    expect(plan.draft).toContain(card.points[0]!.en);
-  });
-
-  it('skips an explainer whose engine cannot start, and goes to the Orchestrator without a folder', () => {
-    const off = catalog([profile('a1', 'Explainer')], [choice({ enabled: false })]);
-    expect(explainerOf(off)).toBeNull();
-    expect(planDiscuss(card, 'it', off, '/brain').via).toBe('regia');
-    expect(planDiscuss(card, 'it', catalog([profile('a1', 'Explainer')]), null).via).toBe('regia');
-    expect(planDiscuss(card, 'it', null, '/brain').via).toBe('regia');
+  it('asks the Orchestrator to explain the card, with its content, in the language asked for', () => {
+    const it = orchestratorText(card, 'it'), en = orchestratorText(card, 'en');
+    expect(en).toContain(card.points[0]!.en);
+    expect(it).toContain(card.points[0]!.it);
+    expect(en).toContain('Scout');
   });
 });

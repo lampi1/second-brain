@@ -65,10 +65,10 @@ export function folderName(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'regia';
+export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'orchestrator';
 
 /** The state pill of a chat: Italian label + color tone. */
-export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren'] }): { label: string; tone: Tone } {
+export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren'] }): { label: string; tone: Tone } {
   const s: ChatState = c.state;
   if (s === 'waiting' || c.pending > 0) return { label:t('ui.state.waiting'), tone: 'wait' };
   // an agent's start or turn waiting for the machine's load (ADR 0036): not finished
@@ -79,7 +79,7 @@ export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'pending' |
   if (s === 'closed') return { label:t('ui.state.closed'), tone: 'off' };
   // its turn is over but a sub-agent it started still works: not finished yet (owner, #69)
   if (waitsOnChildren(c.agentChildren)) return { label:t('ui.state.children'), tone: 'run' };
-  return c.isRegia ? { label:t('ui.state.regia'), tone: 'regia' } : { label:t('ui.state.done'), tone: 'done' };
+  return c.isOrchestrator ? { label:t('ui.state.orchestrator'), tone: 'orchestrator' } : { label:t('ui.state.done'), tone: 'done' };
 }
 
 /** Why a chat waits in the CPU queue (ADR 0036): the figure over its limit, or the chats ahead of it. */

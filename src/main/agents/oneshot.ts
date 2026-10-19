@@ -41,7 +41,7 @@ export class OneShotService {
   }
   profile(id: string): AgentProfile | undefined { return this.d.profile(id); }
   pick(agent: AgentProfile | undefined): EngineDef | undefined {
-    if (!agent || agent.status !== 'active') return undefined;
+    if (!agent) return undefined;
     const available = new Set(this.availability().filter(e => e.available).map(e => e.id));
     const usable = (e: EngineDef) => available.has(e.id) && (e.kind !== 'api' || !!this.modelFor(agent, e));
     const preferred = engines().find(e => e.id === agent.engine && usable(e));
@@ -64,7 +64,7 @@ export class OneShotService {
       || !Number.isFinite(req.timeoutMs) || req.timeoutMs < 1 || req.timeoutMs > 120_000
       || req.prompt.length > 12_000 || req.system.length > 12_000) return failed('Richiesta Battito non valida');
     const agent = this.d.profile(req.agentId);
-    if (!agent || agent.status !== 'active') return failed('Agente non disponibile', true);
+    if (!agent) return failed('Ruolo non disponibile', true);
     const engine = this.pick(agent);
     if (!engine) return failed('Nessun motore isolato disponibile', true);
     const registry = this.d.registry();

@@ -93,7 +93,7 @@ export interface AcpOptions extends SessionOptions {
   /** with subagentHooks, the hooks file those commands come from: default ~/.cursor/hooks.json, none under tests
    *  unless given */
   hooksFile?: string | null;
-  /** Cursor only: the user's reasoning and fast for every Cursor chat (settings regiaChats.cursorReasoning/cursorFast);
+  /** Cursor only: the user's reasoning and fast for every Cursor chat (settings orchestratorChats.cursorReasoning/cursorFast);
    *  params the chat's own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
   modelConfig?: { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** Cursor only: price the prompt's token usage with Cursor's list prices (cursor-prices.ts). Default false: the
@@ -948,7 +948,7 @@ export class AcpSession implements HarnessSession {
       });
       this.asks.set(rid, { rpcId: id, method, questions: acp });
       // the text streamed before the question is finished now (no tool call closes it): the Orchestrator's card reads its
-      // commands from finished messages only (lib/regia-route.ts commandsOfTurn)
+      // commands from finished messages only (lib/orchestrator-route.ts commandsOfTurn)
       this.flushAll(true);
       this.pending({ id: rid, type: 'question', tool: 'AskQuestion', title: cut(s(p.title) || questions[0]?.question || 'Domanda', 140), detail: questions.map(q => q.question).join('\n'), input: trimInput(p), questions, at });
       return;

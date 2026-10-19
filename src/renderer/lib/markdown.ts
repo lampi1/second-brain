@@ -4,9 +4,9 @@
 // which would open a remote page in the app window); href survives only on <a>, and http(s) links open outside the
 // app through main's window-open handler. Small LRU cache: finished messages and finished blocks of a streaming one
 // (splitBlocks) are parsed once; a streaming tail is never cached. markdownParts splits out the top-level fenced code
-// blocks (their toolbar: CodeBlock.tsx); codeBlocks gives only those blocks (the Orchestrator's card: lib/regia-route.ts).
+// blocks (their toolbar: CodeBlock.tsx); codeBlocks gives only those blocks (the Orchestrator's card: lib/orchestrator-route.ts).
 // Copyable inline code is marked data-copy (lib/copyable.ts) for the click handler of LinkPeek.tsx.
-// Used by ChatItems.tsx, lib/regia-route.ts; pinned by test/e2e/security-ui.spec.ts, test/e2e/review.spec.ts (S1) and test/e2e/codeblocks.spec.ts.
+// Used by ChatItems.tsx, lib/orchestrator-route.ts; pinned by test/e2e/security-ui.spec.ts, test/e2e/review.spec.ts (S1) and test/e2e/codeblocks.spec.ts.
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { isCopyable, isFilePath } from './copyable';

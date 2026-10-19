@@ -3,7 +3,7 @@
 // dialogs), one at a time as a page read top to bottom (ADR 0049, the user 2026-10-14: "non lo trovo molto leggibile"):
 // who asks, a muted lead (context), the question large, a text to approve as a document, the options as large cards
 // (RequestPanel.tsx size `window`), a question with the shell blocks its chat gave in the same turn (each with "Esegui",
-// run as that chat's block: lib/regia-route.ts commandsOfTurn), and the keys in the footer. With more than one request a
+// run as that chat's block: lib/orchestrator-route.ts commandsOfTurn), and the keys in the footer. With more than one request a
 // rail on the left lists them all in the order they came; a click answers that one now and the rest stay (any order,
 // ADR 0044). The chats' tiles and the Orchestrator keep one line each. It never takes the user's text (lib/questions.ts): while
 // they type a request waits as a pill, and when it shows it takes the keyboard only if no other field has it (a note
@@ -21,7 +21,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { focusChat, reqKey } from '../actions';
 import { isEditable, qwinStats, questionsModalOn, typingLeft, writingElsewhere } from '../lib/questions';
-import { commandsOfTurn } from '../lib/regia-route';
+import { commandsOfTurn } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { callQuestions, parkQuestions, setQuestionsAside, setQuestionsShown, ui } from '../store/ui';
@@ -127,11 +127,11 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
-  const name = useApp(s => (s.chats[cur.chatId]?.isRegia ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
+  const name = useApp(s => (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
   const harness = useApp(s => s.chats[cur.chatId]?.harness ?? 'claude');
-  const isRegia = useApp(s => !!s.chats[cur.chatId]?.isRegia);
-  const titles = useApp(s => all.map(p => (s.chats[p.chatId]?.isRegia ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
-  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${s.chats[p.chatId]?.isRegia ? ':r' : ''}`), sameList);
+  const isOrchestrator = useApp(s => !!s.chats[cur.chatId]?.isOrchestrator);
+  const titles = useApp(s => all.map(p => (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
+  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
   const now = useNow(30_000);
   // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)
   const items = useApp(s => (cur.type === 'question' ? s.items[cur.chatId] : undefined));
@@ -192,7 +192,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
               {all.map((p, i) => {
                 const k = reqKey(p);
                 const [h, r] = harnesses[i]!.split(':');
-                const body = <><HarnessMark harness={h ?? 'claude'} regia={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
+                const body = <><HarnessMark harness={h ?? 'claude'} orchestrator={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
                 return k === curKey
                   ? <div key={k} className="qwin-rail-item cur" aria-current="true" data-testid="qwin-current">{body}</div>
                   : <button key={k} type="button" className="qwin-rail-item" onClick={() => callQuestions(k)} data-testid="qwin-pick" data-key={k}
@@ -203,11 +203,11 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
         )}
         <div className="qwin-main">
           <div className="qwin-head">
-            <HarnessMark harness={harness} regia={isRegia} size={16} />
+            <HarnessMark harness={harness} orchestrator={isOrchestrator} size={16} />
             <b className="qwin-chat" data-testid="qwin-chat">{name}</b>
             <span className="qwin-age">{ago(cur.at, now)}</span>
             <span className="sp" />
-            {!isRegia && (
+            {!isOrchestrator && (
               <button type="button" className="btn btn-subtle btn-s" onClick={() => { if (setting) later(); else parkQuestions(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>
             )}
           </div>
@@ -237,7 +237,7 @@ export function InWindowLine({ reqs, testid, queued }: { reqs: readonly PendingR
   const r = t('chat.questions.requestsCount', { n: reqs.length });
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   return (
-    <div className={`sent-to-regia in-window ${queued ? 'in-queue' : ''}`} role="status" data-testid={testid} data-queued={queued ? '' : undefined}>
+    <div className={`sent-to-orchestrator in-window ${queued ? 'in-queue' : ''}`} role="status" data-testid={testid} data-queued={queued ? '' : undefined}>
       <IconQuestion size={13} />
       <span>{queued ? t('chat.questions.inQueue', { noun: r }) : t('chat.questions.inWindow', { noun: n })}</span>
       <button type="button" className="btn btn-ghost btn-s" onClick={() => (queued ? openQueue(first) : callQuestions(first))} data-testid={`${testid}-open`}>{queued ? t('chat.questions.openQueue') : t('chat.questions.openWindow')}</button>

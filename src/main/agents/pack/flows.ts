@@ -1,17 +1,20 @@
-// Main-owned agent pack transactions. Review tokens bind bounded staging bytes to one operation for ten minutes.
+// Main-owned pack transactions (ADR 0069, 0083): a pack is a role's skills and the brain's rules. Export writes a role's
+// pack (for this app, Claude, Cursor or Codex); import attaches a pack's skills to the built-in role the user picks.
+// Review tokens bind bounded staging bytes to one operation for ten minutes. Used by pack/wiring.ts (agents:* IPC).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { inProbation, type AgentDraft, type AgentProfile } from '../../../shared/agents';
+import type { AgentDraft, AgentProfile } from '../../../shared/agents';
+import { isWorkRole, type WorkRoleId } from '../../../shared/roles';
 import { checkedPack, SKILL_SPEC_KEYS, type AgentPackManifest, type PackExportPlan, type PackFinding, type PackImportReview, type PackStats, type PackTarget } from '../../../shared/agent-pack';
 import { parseMd, setFields } from '../../../shared/skillmd';
 import type { AgentCatalogService, PackInstall } from '../catalog';
 import type { GuardPaths, GuardResult } from '../../brain/guard';
 import { log } from '../../log';
-import { PROBATION_CAP } from '../probation';
+import { runtimePluginName } from '../role-gate';
 import { approvedFiles, inspectPack, readPackSource, type PackInspection } from './read';
-import { agentBody, emitPack, emitTarget, hashFiles, skillFiles } from './emit';
+import { emitPack, emitTarget, hashFiles, skillFiles } from './emit';
 import { checkPackPath, writeZip, type PackFiles } from './zip';
 import { installRules, packRules, packTools, TOOLS_FILE } from './rules';
 
@@ -28,7 +31,6 @@ export interface PackFlowDeps {
   now?: () => number;
   tempRoot?: string;
   runtimeRoot?: string;
-  presetSkills?: (id: string) => PackFiles | null;
 }
 interface BaseToken { root: string; staging: string; expires: number; busy: boolean }
 interface ExportToken extends BaseToken { kind: 'export'; profile: AgentProfile; target: PackTarget; manifest: AgentPackManifest; instructions: string; skills: PackFiles; rules: PackFiles; excluded: Set<string>; extraAllowed: Set<string>; files: PackFiles; findings: PackFinding[]; warnings: string[] }
@@ -55,15 +57,25 @@ export class AgentPackFlows {
   constructor(readonly deps: PackFlowDeps) {}
   private now(): number { return this.deps.now?.() ?? Date.now(); }
   root(): string { const root = this.deps.brainRoot(); if (!root || !fs.statSync(root).isDirectory()) throw new Error('Choose a brain folder first'); return fs.realpathSync(root); }
-  profile(id: string): AgentProfile { const p = this.deps.catalog.list().profiles.find(p => p.id === id); if (!p) throw new Error('Agent not found'); return p; }
-  runtime(id: string): { pluginDir: string; skillRoot: string; instructions: string } {
-    const profile = this.profile(id), files = this.ownSkills(profile);
-    for (const name of profile.knowhow?.linked ?? []) {
-      const shared = this.deps.sharedSkills?.().find(s => s.name === name);
-      // a declared skill that is gone (undone, merged, deleted by hand) never blocks the agent's start
+  profile(id: string): AgentProfile { const p = this.deps.catalog.list().profiles.find(p => p.id === id); if (!p) throw new Error('Role not found'); return p; }
+  /** The plugin a launch runs with: the role's own know-how, its default and linked skills and the skills this launch
+   *  asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
+   *  (and the role gate refuses a call to it). A launch skill that does not exist refuses the start, by name. */
+  runtime(id: string, launch: readonly string[] = []): { pluginDir: string; skillRoot: string; instructions: string; skills: string[] } {
+    const profile = this.profile(id), files = this.ownSkills(profile), all = this.deps.sharedSkills?.() ?? [];
+    const missing = launch.filter(name => !all.some(s => s.name === name));
+    if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
+    const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
+    const skills = [...new Set([...declared, ...launch])];
+    const loaded: string[] = [portableId(id)];
+    for (const name of skills) {
+      const shared = all.find(s => s.name === name);
+      // a declared skill that is gone (undone, merged, deleted by hand) never blocks the role's start
       if (!shared) { log.warn('agents', 'Declared skill missing at start', { data: { agent: id, skill: name }, cause: 'The skill folder is gone', hint: 'Run the maintenance on the Skill page: it relinks or drops missing skills' }); continue; }
       for (const [file, data] of readPackSource(shared.folder)) files.set(`skills/${name}/${file}`, data);
+      loaded.push(name);
     }
+    for (const key of files.keys()) { const name = key.split('/')[1]; if (name && !loaded.includes(name)) loaded.push(name); }
     const hash = hashFiles(files), base = this.deps.runtimeRoot ?? path.join(this.deps.tempRoot ?? os.tmpdir(), 'sb-agent-runtime');
     fs.mkdirSync(base, { recursive: true });
     const pluginDir = path.join(base, hash);
@@ -73,7 +85,7 @@ export class AgentPackFlows {
         // Reuse the foreign-import sanitizer: no hooks/configuration can enter the generated runtime plugin.
         const candidate = new Map(files); candidate.set('plugin.json', Buffer.from('{"name":"agent-runtime"}'));
         const safe = approvedFiles(inspectPack(candidate), true);
-        safe.set('.claude-plugin/plugin.json', Buffer.from(JSON.stringify({ name: `agent-${hash.slice(0, 16)}`, author: { name: 'second-brain' } })));
+        safe.set('.claude-plugin/plugin.json', Buffer.from(JSON.stringify({ name: runtimePluginName(hash), author: { name: 'second-brain' } })));
         writePackFiles(staging, safe); fs.renameSync(staging, pluginDir);
       } catch (e) { fs.rmSync(staging, { recursive: true, force: true }); throw e; }
     }
@@ -84,8 +96,8 @@ export class AgentPackFlows {
     // what several agents knew (moved there once by the maintenance, memory/shared.md) reaches each of them
     let shared = '';
     try { const file = brainPath(this.root(), 'memory/shared.md'); if (fs.existsSync(file) && fs.statSync(file).size <= 256 * 1024) shared = fs.readFileSync(file, 'utf8').trim().slice(-2000); } catch { /* none */ }
-    const linked = profile.knowhow?.linked ?? [];
-    return { pluginDir, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job): ${linked.join(', ')}.` : '',
+    const linked = loaded.filter(n => n !== own);
+    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job): ${linked.join(', ')}.` : '',
       shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
       `Your memory (agents/${own}/memory.md; add a line with the product memory writer: agent "<brain>" "${own}" "…")${memory ? `:\n${memory}` : ': empty so far.'}`, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }
@@ -119,7 +131,7 @@ export class AgentPackFlows {
     const id = portableId(profile.id);
     const current = profile.knowhow && editable ? brainPath(this.root(), `agents/${id}/skills`) : null;
     const files: PackFiles = current && fs.existsSync(current) ? new Map([...readPackSource(current)].map(([name, data]) => [`skills/${name}`, data]))
-      : profile.knowhow ? new Map([...readPackSource(brainPath(this.root(), profile.knowhow.folder))].filter(([name]) => name.startsWith('skills/'))) : this.deps.presetSkills?.(profile.id) ?? new Map();
+      : profile.knowhow ? new Map([...readPackSource(brainPath(this.root(), profile.knowhow.folder))].filter(([name]) => name.startsWith('skills/'))) : new Map();
     for (const [name, data] of new Map([
       [`skills/${id}/SKILL.md`, Buffer.from(`---\nname: ${id}\ndescription: ${JSON.stringify(profile.purpose)}\n---\nRead the files in references/ when they apply.\n`)],
     ])) if (!files.has(name)) files.set(name, data);
@@ -128,6 +140,7 @@ export class AgentPackFlows {
   async exportPlan(id: string, target: PackTarget): Promise<PackExportPlan> {
     if (!['sbagent', 'claude', 'cursor', 'codex'].includes(target)) throw new Error('Invalid pack target');
     let profile = this.profile(id); const safeId = portableId(profile.id), now = new Date(this.now()).toISOString();
+    if (!isWorkRole(profile.id)) throw new Error('Only a work role has a pack');
     if (!profile.pack) { this.deps.catalog.packIdentity(id, { id: `${safeId}-${randomBytes(8).toString('hex')}`, revision: 1 }); profile = this.profile(id); }
     const skills = this.ownSkills(profile, true), metadata: AgentPackManifest['skills'] = [];
     for (const name of new Set([...skills.keys()].map(p => p.split('/')[1]!))) metadata.push({ name, ownership: 'owned', hash: hashFiles(skillFiles(skills, name)) });
@@ -139,9 +152,8 @@ export class AgentPackFlows {
       metadata.push({ name, ownership: 'shared', hash: hashFiles(skillFiles(skills, name)) });
     }
     const manifest = checkedPack({ format: 1, packId: profile.pack!.id, revision: profile.pack!.revision + 1, contentHash: '0'.repeat(64),
-      agent: { id: safeId, name: profile.name, role: profile.role, category: profile.category, instructionsFile: `agents/${safeId}.md`, manifest: profile.manifest ?? {},
+      agent: { id: safeId, name: profile.name, role: profile.id, summary: profile.purpose, instructionsFile: `agents/${safeId}.md`,
         engine: profile.engine, model: profile.model, effort: profile.effort, tools: profile.tools ?? { allow: [] }, permissionCeiling: profile.permissionCeiling ?? 'default' },
-      icon: profile.avatar.kind === 'symbol' ? { symbol: profile.avatar.value, tone: profile.avatar.tone ?? 'blue' } : { symbol: profile.category === 'development' ? 'code' : 'briefcase', tone: 'blue' },
       skills: metadata, createdAt: new Date(profile.createdAt).toISOString(), exportedAt: now, appVersion: this.deps.version });
     const item: ExportToken = { ...this.base(), kind: 'export', profile, target, manifest, instructions: profile.instructions, skills, rules: packRules(this.root()), excluded: new Set(), extraAllowed: new Set(), files: new Map(), findings: [], warnings: [] };
     const key = tokenId(); this.tokens.set(key, item);
@@ -218,7 +230,7 @@ export class AgentPackFlows {
     if (typeof includeStats !== 'boolean') throw new Error('Invalid summary choice');
     const item = this.get(key, 'export'); item.busy = true;
     try {
-      if (this.profile(item.profile.id).updatedAt !== item.profile.updatedAt || this.profile(item.profile.id).pack?.revision !== item.profile.pack?.revision) throw new Error('Agent changed; plan export again');
+      if (this.profile(item.profile.id).updatedAt !== item.profile.updatedAt || this.profile(item.profile.id).pack?.revision !== item.profile.pack?.revision) throw new Error('Role changed; plan export again');
       const freshManifest = checkedPack(JSON.parse(item.files.get('sbagent.json')!.toString()));
       delete freshManifest.stats;
       if (includeStats) {
@@ -230,7 +242,7 @@ export class AgentPackFlows {
       if (item.findings.length) return { ok: false, findings: item.findings };
       const destination = await this.deps.pickExport(item.target, item.manifest.agent.id);
       if (!destination) return { ok: false, findings: [] };
-      if (item.root !== this.root() || this.profile(item.profile.id).updatedAt !== item.profile.updatedAt) throw new Error('Agent changed; plan export again');
+      if (item.root !== this.root() || this.profile(item.profile.id).updatedAt !== item.profile.updatedAt) throw new Error('Role changed; plan export again');
       if (item.target === 'sbagent') fs.writeFileSync(destination, writeZip(item.files));
       else { fs.mkdirSync(destination, { recursive: true }); if (fs.readdirSync(destination).length) throw new Error('Choose an empty export folder'); writePackFiles(destination, emitTarget(item.files, item.target)); }
       this.deps.catalog.packIdentity(item.profile.id, { ...item.profile.pack!, revision: item.manifest.revision });
@@ -249,20 +261,16 @@ export class AgentPackFlows {
       if (item.findings.some(secretFinding)) throw new Error('Pack contains secrets; import refused');
       const profiles = this.deps.catalog.list().profiles, manifest = inspection.manifest;
       const prior = manifest && profiles.find(p => p.pack?.id === manifest.packId);
-      item.collision = prior ? { kind: manifest!.revision > prior.pack!.revision ? 'update' : 'present', agentId: prior.id }
-        : profiles.some(p => inspection.agents.some(a => a.name === p.id || a.description === p.name)) ? { kind: 'rename' } : { kind: 'none' };
-      const clamps = ['Imported permissions are limited to default or plan; tools are explicit.'];
-      if (manifest?.agent.permissionCeiling === 'acceptEdits') clamps.push('acceptEdits requested, not granted');
-      const unknown = manifest?.agent.tools.mcp?.filter(n => !this.deps.mcpNames?.().includes(n)) ?? [];
-      if (unknown.length) clamps.push(`Unavailable MCP servers removed: ${unknown.join(', ')}`);
-      return { token: key, kind: inspection.kind, agents: inspection.agents.map(a => ({ name: a.name, description: a.description })), skills: inspection.skills, rules: inspection.rules,
+      item.collision = prior ? { kind: manifest!.revision > prior.pack!.revision ? 'update' : 'present', agentId: prior.id } : { kind: 'none' };
+      const clamps = ['Il pacchetto porta abilità e regole: il ruolo tiene le sue istruzioni, i suoi strumenti e i suoi permessi.'];
+      return { token: key, kind: inspection.kind, role: manifest?.agent.role ?? null, agents: inspection.agents.map(a => ({ name: a.name, description: a.description })), skills: inspection.skills, rules: inspection.rules,
         scripts: inspection.scripts, ignored: inspection.ignored, findings: item.findings, clamps, collision: item.collision, warnings: inspection.warnings };
     } catch (e) { this.cancel(key); throw e; }
   }
   /** Store immutable behavior files in the user's brain; catalog versions retain their exact snapshot folder. */
   skillSnapshot(id: string, files: PackFiles, linked: string[] = []): NonNullable<AgentDraft['knowhow']> {
     const skills = new Map([...files].filter(([name]) => name.startsWith('skills/'))), hash = hashFiles(skills);
-    if ([...skills.values()].reduce((n, b) => n + b.length, 0) > 10 * 1024 ** 2 || [...skills.keys()].filter(n => n.includes('/references/')).length > 50) throw new Error('Agent know-how limit exceeded');
+    if ([...skills.values()].reduce((n, b) => n + b.length, 0) > 10 * 1024 ** 2 || [...skills.keys()].filter(n => n.includes('/references/')).length > 50) throw new Error('Role know-how limit exceeded');
     const folder = `agents/${portableId(id)}/revisions/${hash.slice(0, 16)}`;
     return { folder, linked, hash };
   }
@@ -304,18 +312,17 @@ export class AgentPackFlows {
     }
     } catch { log.warn('agents', 'Could not access editable agent files', { cause: 'Brain folder unavailable', hint: 'The committed snapshot is preserved; reconnect the brain folder' }); }
   }
-  async importApply(key: string, approveScripts: boolean, collision: 'update' | 'copy' | 'rename', approvePersonalData = false): Promise<AgentProfile[]> {
-    if (typeof approveScripts !== 'boolean' || typeof approvePersonalData !== 'boolean' || !['update', 'copy', 'rename'].includes(collision)) throw new Error('Invalid import choices');
+  /** Attaches the reviewed pack to the built-in role `roleId`: the role's know-how (its own skill and the pack's skills)
+   *  changes as a trial version; the pack's shared skills and rules are written to the brain when absent. The pack's role
+   *  text, tools and permissions are never applied: the role keeps its own. A pack of shared skills only installs them. */
+  async importApply(key: string, approveScripts: boolean, roleId: WorkRoleId, approvePersonalData = false): Promise<AgentProfile[]> {
+    if (typeof approveScripts !== 'boolean' || typeof approvePersonalData !== 'boolean' || !isWorkRole(roleId)) throw new Error('Invalid import choices');
     const item = this.get(key, 'import');
     if (item.findings.length && !approvePersonalData) throw new Error('Review personal-data findings before importing');
-    if (collision === 'update' && item.collision.kind !== 'update') throw new Error('No newer update to apply');
     item.busy = true;
     try {
       const review = item.inspection, files = approvedFiles(review, approveScripts), profiles = this.deps.catalog.list().profiles;
-      const count = review.agents.length;
-      // an update becomes a trial of the existing agent; only new agents enter the shared probation and its cap
-      if (collision !== 'update' && profiles.filter(p => p.status === 'active' && inProbation(p)).length + count > PROBATION_CAP) throw new Error('PROBATION_CAP');
-      if (!count) {
+      if (!review.agents.length) {
         for (const name of review.skills) if (fs.existsSync(brainPath(item.root, `.agents/skills/${name}`))) throw new Error('Shared skill already exists');
         const created: string[] = [];
         this.tokens.delete(key);
@@ -325,46 +332,28 @@ export class AgentPackFlows {
           created.push(destination);
           fs.mkdirSync(destination, { recursive: true }); writePackFiles(destination, new Map([...skillFiles(files, name)].map(([file, data]) => [file.slice(`skills/${name}/`.length), data])));
         }
+        created.push(...installRules(item.root, files).created);
         } catch (e) { for (const folder of created) fs.rmSync(folder, { recursive: true, force: true }); throw e; }
         finally { fs.rmSync(item.staging, { recursive: true, force: true }); }
         return [];
       }
-      const installs: PackInstall[] = [];
-      // the pack's shared skills go back to the brain's shared skills and are declared by the agent (ADR 0077); its own
-      // skill stays in the agent's know-how snapshot
-      const shared = (review.manifest?.skills ?? []).filter(s => s.ownership === 'shared' && s.name !== review.manifest!.agent.id).map(s => s.name);
-      const own: PackFiles = new Map([...files].filter(([n]) => !shared.some(s => n.startsWith(`skills/${s}/`))));
-      for (const agent of review.agents) {
-        const m = review.manifest, update = collision === 'update', old = update ? this.profile(item.collision.agentId!) : undefined;
-        if (update && (!m || old!.pack?.id !== m.packId || old!.pack.revision >= m.revision)) throw new Error('Import collision changed; inspect again');
-        let id = old?.id ?? agent.name, suffix = 2;
-        while (!update && [...profiles, ...installs].some(p => p.id === id)) id = `${agent.name.slice(0, 55)}-${suffix++}`;
-        const modelChoice = this.deps.catalog.list().models.find(model => model.enabled && model.trusted && model.engine === m?.agent.engine)
-          ?? this.deps.catalog.list().models.find(model => model.enabled && model.trusted);
-        if (!modelChoice) throw new Error('No enabled engine for imported agent');
-        const tools = m?.agent.tools ?? { allow: [] };
-        const localMcp = tools.mcp?.filter(n => this.deps.mcpNames?.().includes(n));
-        const packId = collision === 'copy' || !m ? `${portableId(id)}-${randomBytes(8).toString('hex')}` : m.packId;
-        const revision = collision === 'copy' || !m ? 1 : m.revision;
-        const generatedSuffix = m ? agentBody(m, '').trimStart() : '';
-        const instructions = m && agent.instructions.trimEnd().endsWith(generatedSuffix.trimEnd()) ? agent.instructions.trimEnd().slice(0, -generatedSuffix.trimEnd().length).trim() : agent.instructions.trim();
-        const draft: AgentDraft = { name: (m?.agent.name ?? agent.name).slice(0, 65) + (id !== agent.name && !update ? ' (importato)' : ''), purpose: agent.description.slice(0, 400),
-          role: m?.agent.role ?? agent.description.slice(0, 160), category: m?.agent.category ?? 'other', instructions, manifest: m?.agent.manifest,
-          engine: modelChoice.engine, model: modelChoice.models.some(model => model.id === m?.agent.model) ? m!.agent.model : null, effort: m?.agent.effort,
-          avatar: { kind: 'symbol', value: m?.icon.symbol ?? 'briefcase', tone: m?.icon.tone ?? 'blue' },
-          tools: { allow: [...tools.allow], ...(tools.allow.includes('mcp') ? { mcp: localMcp ?? [] } : {}) }, permissionCeiling: m?.agent.permissionCeiling === 'plan' ? 'plan' : 'default',
-          knowhow: this.skillSnapshot(id, own, shared), pack: { id: packId, revision, ...(m ? { importedFrom: m.packId } : {}) } };
-        installs.push({ value: draft, id, source: { kind: 'import', packId, revision }, update });
-      }
-      this.deps.catalog.validatePacks(installs);
+      const m = review.manifest, old = this.profile(roleId);
+      if (item.collision.kind === 'present' && item.collision.agentId === roleId) throw new Error('This pack revision is already on the role');
+      // the pack's shared skills go back to the brain's shared skills and are declared by the role (ADR 0077); its own
+      // skill stays in the role's know-how snapshot
+      const shared = (m?.skills ?? []).filter(s => s.ownership === 'shared' && s.name !== m!.agent.id).map(s => s.name);
+      const own: PackFiles = new Map([...files].filter(([n]) => n.startsWith('skills/') && !shared.some(s => n.startsWith(`skills/${s}/`))));
+      const linked = [...new Set([...(old.knowhow?.linked ?? []), ...shared])];
+      const update = !!m && old.pack?.id === m.packId;
+      const pack = { id: m && (update || !old.pack) ? m.packId : `${portableId(roleId)}-${randomBytes(8).toString('hex')}`, revision: m?.revision ?? 1, ...(m ? { importedFrom: m.packId } : {}) };
+      const install: PackInstall = { id: roleId, knowhow: this.skillSnapshot(roleId, own, linked), pack };
+      this.deps.catalog.validatePacks([install]);
       this.tokens.delete(key);
       const created: string[] = [];
       try {
-        for (const install of installs) {
-          const folder = brainPath(item.root, install.value.knowhow!.folder);
-          if (!fs.existsSync(folder)) created.push(folder);
-          this.persistSkills(install.id, own, shared);
-        }
+        const folder = brainPath(item.root, install.knowhow.folder);
+        if (!fs.existsSync(folder)) created.push(folder);
+        this.persistSkills(roleId, own, linked);
         for (const name of shared) {
           const destination = brainPath(item.root, `.claude/skills/${name}`);
           if (fs.existsSync(destination)) continue; // the brain's own copy of that skill is used
@@ -373,7 +362,7 @@ export class AgentPackFlows {
           writePackFiles(destination, new Map([...skillFiles(files, name)].map(([file, data]) => [file.slice(`skills/${name}/`.length), data])));
         }
         created.push(...installRules(item.root, files).created);
-        const applied = this.deps.catalog.applyPacks(installs);
+        const applied = this.deps.catalog.applyPacks([install]);
         for (const profile of applied) this.publishCurrent(profile, profiles.find(p => p.id === profile.id)?.knowhow?.hash);
         return applied;
       } catch (e) { for (const folder of created) fs.rmSync(folder, { recursive: true, force: true }); throw e; }

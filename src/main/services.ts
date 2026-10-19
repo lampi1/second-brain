@@ -14,8 +14,10 @@ export interface ChatService {
   pending(): PendingRequest[];
   /** the "/" commands the chat's engine reported; null = none yet (ADR 0018) */
   commands(chatId: string): ChatCommand[] | null;
-  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036) */
-  create(req: NewChat, by?: 'user' | 'agent'): Promise<ChatSummary>;
+  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036).
+   *  opts.boundByOrchestrator: a call from the unauthenticated /mcp/app mount: the chat runs no wider than the open
+   *  Orchestrator (refused without one), since any local process can reach that mount */
+  create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean }): Promise<ChatSummary>;
   /** images: the chat:send attachments, checked by the service (main/chats/images.ts) */
   /** from = not the user's message: who sent it (another chat, the Orchestrator), shown above the bubble */
   /** liveOnly = mail: fails instead of starting or reopening the chat (main/chats/mail.ts) */
@@ -30,6 +32,8 @@ export interface ChatService {
   reopen(chatId: string): Promise<ChatSummary>;
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
   resumedByUser?(chatId: string, text?: string): void;
+  /** the user typed this in the chat himself (chat:send only): the Orchestrator and the chat's parent learn it (ADR 0083) */
+  userWrote?(chatId: string, text: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */
   runMetrics?(opts?: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
   /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */

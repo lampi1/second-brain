@@ -107,7 +107,7 @@ describe('ProfileService', () => {
     const root = brain(), service = new ProfileService({ root: () => root });
     const got = await service.get();
     if (!got.ok) throw new Error(got.reason);
-    fs.appendFileSync(path.join(root, 'me.md'), '- **New rule**: added by brain-editor\n');
+    fs.appendFileSync(path.join(root, 'me.md'), '- **New rule**: added with the brain-edit skill\n');
     const before = fs.readFileSync(path.join(root, 'me.md'), 'utf8');
     await expect(service.save({ revision: got.profile.revision, fields: { role: 'qa' } })).rejects.toThrow('PROFILE_CHANGED');
     expect(fs.readFileSync(path.join(root, 'me.md'), 'utf8')).toBe(before);

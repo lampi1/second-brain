@@ -20,7 +20,7 @@ await T('parse: ai-errors with " · " in the chat name and an off-format line', 
   const rows = P.aiErrors([
     '# header', '- **Read when:** not a row',
     '- 2026-10-10 15:00 · OS · Tool · ops/tools · regola-ignorata · detto: "a · b" scritto · vero: rotto · visto da: {{OWNER}} · regola: `me.md` X',
-    '- 2026-09-30 --:-- · Regia · Importer · richiesta-fraintesa · detto: x · vero: y · visto da: z',
+    '- 2026-09-30 --:-- · Orchestrator · Importer · richiesta-fraintesa · detto: x · vero: y · visto da: z',
     '- 2026-10-01 12:00 · niente formato',
   ].join('\n'));
   ok(rows.length === 3, `3 rows, got ${rows.length}`);
@@ -31,8 +31,8 @@ await T('parse: ai-errors with " · " in the chat name and an off-format line', 
 });
 
 await T('parse: wins, journal, now, ideas, proposals, bugs, jsonl', () => {
-  const w = P.aiWins('- 2026-10-10 17:59 · claude · OS · Tool · Regia · pieno · parole: "perfetto" · consegnato: fatto');
-  ok(w[0]?.chat === 'OS · Tool' && w[0].area === 'Regia' && w[0].esito === 'pieno' && w[0].parole === 'perfetto', `wins: ${JSON.stringify(w)}`);
+  const w = P.aiWins('- 2026-10-10 17:59 · claude · OS · Tool · Orchestrator · pieno · parole: "perfetto" · consegnato: fatto');
+  ok(w[0]?.chat === 'OS · Tool' && w[0].area === 'Orchestrator' && w[0].esito === 'pieno' && w[0].parole === 'perfetto', `wins: ${JSON.stringify(w)}`);
   const j = P.journal('# d\n- 09:51 UTC · verificato · x\n- 16:09 · fatto · [personale] OS · y\n- loose line', '2026-10-10');
   ok(j.length === 3 && j[0].utc && j[1].area === 'personale' && j[1].testo === 'OS · y' && j[2].tag === '', `journal: ${JSON.stringify(j)}`);
   const nw = P.now('# Now\n- **not in a section** · x\n## Lavoro · codice\n- **Fix A** · branch x · prossimo: PR · (2026-10-08)\n');
@@ -54,11 +54,11 @@ await T('parse: wins, journal, now, ideas, proposals, bugs, jsonl', () => {
 });
 
 await T('Adesso: chat list and messages from chats.mjs text', () => {
-  const l = parseChatList('Chat Claude e Cursor aggiornate negli ultimi 2 giorni: 2\n- Claude · OS · Mappa 3D · {{BRAIN_NAME}} (worktree) · 11/10, 08:46 · in corso · id 45ba291b\n- Cursor · Regia · {{BRAIN_NAME}} · 10/10, 21:55 · aspetta te (comando da lanciare) · id 1c194f13\n');
+  const l = parseChatList('Chat Claude e Cursor aggiornate negli ultimi 2 giorni: 2\n- Claude · OS · Mappa 3D · {{BRAIN_NAME}} (worktree) · 11/10, 08:46 · in corso · id 45ba291b\n- Cursor · Orchestrator · {{BRAIN_NAME}} · 10/10, 21:55 · aspetta te (comando da lanciare) · id 1c194f13\n');
   ok(l.length === 2 && l[0].title === 'OS · Mappa 3D' && l[0].harness === 'Claude' && l[0].state === 'in corso' && l[0].id === '45ba291b' && l[1].state === 'aspetta te (comando da lanciare)', `chat list: ${JSON.stringify(l)}`);
   const m = parseChatRead('Claude · X · f · 11/10 · in corso · id a\nUltimi 3 di 9 messaggi:\nOwner: ciao\nAgente: prima riga\nseconda riga\nAgente: [Bash]\n');
   ok(m.length === 3 && m[1].text === 'prima riga seconda riga' && m[0].who === 'Owner', `chat read: ${JSON.stringify(m)}`);
-  const m2 = parseChatRead('Owner: ciao\n· (messaggio da un\'altra chat o agente) testo della Regia\n');
+  const m2 = parseChatRead('Owner: ciao\n· (messaggio da un\'altra chat o agente) testo dell’Orchestrator\n');
   ok(m2.length === 2 && m2[0].text === 'ciao' && m2[1].who === 'Altro', `mail from another chat is never {{OWNER}}'s: ${JSON.stringify(m2)}`);
   // ages are Rome time whatever the PC timezone; a future date is last year's
   const noon = Date.parse('2026-10-11T10:00:00Z'); // 12:00 in Rome (CEST)
@@ -76,8 +76,7 @@ put(root, 'me.md', '# {{OWNER}}\n');
 put(root, 'ops/tools/foo.mjs', '// foo: reads now.md and calls dev.azure.com for the PRs.\n// Second line.\nimport fs from "node:fs";\n');
 put(root, '.claude/hooks/bar.mjs', '// Stop hook: writes now.md\n');
 put(root, '.claude/settings.json', JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: `node ${root}/.claude/hooks/bar.mjs` }] }] } }));
-put(root, '.claude/agents/rev.md', '---\nname: rev\ndescription: Reviews a diff.\nmodel: opus\n---\nBody.\nNotebook: before working read `playbooks/rev.md`.\n');
-put(root, 'playbooks/rev.md', '# Taccuino: rev\n');
+put(root, '.claude/agents/rev.md', '---\nname: rev\ndescription: Reviews a diff.\nmodel: opus\n---\nBody.\n');
 put(root, 'harness/cursor/hooks.json', JSON.stringify({ version: 1, hooks: { stop: [{ command: `node ${root}/ops/tools/foo.mjs` }] } }));
 put(home, '.claude/skills/stato/SKILL.md', '---\nname: stato\ndescription: Status of everything.\n---\nReads now.md.\n');
 put(home, '.claude/settings.json', JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `node ${root}/.claude/hooks/bar.mjs` }] }] } }));
@@ -93,24 +92,19 @@ await T('brain-map: helpers', () => {
 });
 
 await T('brain-map: pieces and arrows come from the files', () => {
-  const m = collect({ root, home, usage: { days: 30, skills: [['stato', 0]], agents: [['rev', 4]], tools: [['foo', 2]], files: [['now.md', 9]] },
-    playbooks: [{ agent: 'rev', punti: 1, proposti: [], size: 10, review: ['RV-1'] }], inbox: { boxes: [{ box: 'os-tool', unread: 2, listening: false }], stats: { 'os-tool -> regia': { sent: 3, delivered: 3, via: {} } } } });
+  const m = collect({ root, home, usage: { days: 30, skills: [['stato', 0]], agents: [['rev', 4]], tools: [['foo', 2]], files: [['now.md', 9]] }, inbox: { boxes: [{ box: 'os-tool', unread: 2, listening: false }], stats: { 'os-tool -> orchestrator': { sent: 3, delivered: 3, via: {} } } } });
   const ids = new Set(m.nodes.map(x => x.id));
-  for (const id of ['tool:foo', 'hook:brain:bar', 'agent:rev', 'playbook:rev', 'skill:stato', 'mem:now.md', 'rule:hub.md', 'chat:box:os-tool', 'ext:devops'])
+  for (const id of ['tool:foo', 'hook:brain:bar', 'agent:rev', 'skill:stato', 'mem:now.md', 'rule:hub.md', 'chat:box:os-tool', 'ext:devops'])
     ok(ids.has(id), `node ${id} missing`);
   const has = (from, to, kind) => m.edges.some(e => e.from === from && e.to === to && e.kind === kind);
   ok(has('harness:claude', 'hook:brain:bar', 'hook'), 'hook wiring from the project settings');
   ok(m.nodes.find(x => x.id === 'hook:brain:bar').events.length === 2, 'both settings files wire the hook');
   ok(has('harness:cursor', 'tool:foo', 'hook'), 'Cursor hooks.json wiring');
   ok(has('tool:foo', 'ext:devops', 'esterno') && has('tool:foo', 'mem:now.md', 'usa'), 'tool → external and → memory');
-  ok(has('agent:rev', 'playbook:rev', 'legge'), 'agent → its notebook');
-  ok(has('chat:box:os-tool', 'chat:regia-claude', 'posta'), 'mail pair from inbox stats');
+  ok(has('chat:box:os-tool', 'chat:orchestrator-claude', 'posta'), 'mail pair from inbox stats');
   ok(m.nodes.find(x => x.id === 'tool:foo').uses === 2 && m.nodes.find(x => x.id === 'mem:now.md').reads === 9, 'use counts');
-  ok(m.weak.some(w => /skill mai usati.*stato/.test(w.text)) && m.weak.some(w => /RV-1/.test(w.text)) && m.weak.some(w => /os-tool: 2 messaggi/.test(w.text)), `weak: ${JSON.stringify(m.weak.map(w => w.text))}`);
+  ok(m.weak.some(w => /skill mai usati.*stato/.test(w.text)) && m.weak.some(w => /os-tool: 2 messaggi/.test(w.text)), `weak: ${JSON.stringify(m.weak.map(w => w.text))}`);
   ok(m.warnings.some(w => /gone\.md/.test(w)), 'a map.md row without its file is reported');
-  const flow = m.flows.find(f => f.id === 'regia').steps[0];
-  ok(flow.verified, `the cited sentence is found: ${JSON.stringify(flow)}`);
-  ok(m.flows.find(f => f.id === 'regia').steps.some(s => !s.verified), 'a step whose file lacks the sentence is unverified');
   const nodeIds = new Set(m.nodes.map(x => x.id));
   ok(m.edges.every(e => nodeIds.has(e.from) && nodeIds.has(e.to)), 'every arrow joins two pieces');
   ok(m.nodes.every(x => !('text' in x)), 'file bodies are not shipped to the page (only the proof lines)');
@@ -133,7 +127,7 @@ await T('brain-map: speaking labels, technical name kept', () => {
   const m = collect({ root, home, inbox: { boxes: [{ box: 'os-tool-prova', unread: 0, listening: true }], stats: {} } });
   const by = id => m.nodes.find(x => x.id === id);
   ok(by('tool:foo').name === 'foo.mjs' && by('tool:foo').label === 'Foo', `tool: ${JSON.stringify([by('tool:foo').label, by('tool:foo').name])}`);
-  ok(by('agent:rev').name === 'rev' && by('agent:rev').label === 'Rev' && by('playbook:rev').label === 'Taccuino: Rev', `agent and notebook: ${by('agent:rev').label} / ${by('playbook:rev').label}`);
+  ok(by('agent:rev').name === 'rev' && by('agent:rev').label === 'Rev', `agent: ${by('agent:rev').label}`);
   ok(by('skill:stato').name === '/stato' && by('chat:box:os-tool-prova').label === boxLabel('os-tool-prova') && by('chat:box:os-tool-prova').label !== 'os-tool-prova', `skill and box: ${by('skill:stato').label} / ${by('chat:box:os-tool-prova').label}`);
   ok(by('mem:now.md').name === 'now.md' && by('mem:now.md').label !== 'now.md', `memory file: ${by('mem:now.md').label}`);
   ok(m.edges.some(e => e.from === 'tool:foo' && e.to === 'mem:now.md'), 'arrows still found by the technical name');
@@ -148,8 +142,8 @@ await T('brain-map: check finds a proof that disappeared', () => {
   put(root, 'ops/tools/foo.mjs', '// foo: changed.\n');
   const after = check(m, { home });
   ok(after.some(p => /foo\.mjs/.test(p)), `changed file detected: ${after.join(' | ')}`);
-  fs.rmSync(path.join(root, 'playbooks', 'rev.md'));
-  ok(check(m, { home }).some(p => /playbook:rev/.test(p)), 'missing file detected');
+  fs.rmSync(path.join(root, '.claude', 'agents', 'rev.md'));
+  ok(check(m, { home }).some(p => /agent:rev/.test(p)), 'missing file detected');
 });
 
 await T('brain-site: only tracked files, only localhost, only GET', async () => {

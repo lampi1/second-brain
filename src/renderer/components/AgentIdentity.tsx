@@ -3,17 +3,14 @@
 import { Select } from './Select';
 import type{ChatSummary}from'@shared/contract';
 import {useCallback,useRef,useState}from'react';
-import{useApp,setChat}from'../store/store';
-import{sameList}from'../store/state';
-import{focusChat,go}from'../actions';
+import{setChat}from'../store/store';
+import{go}from'../actions';
 import{t,locale}from'../i18n';
 import {Popover}from'./ui';
 import'../styles/agent-identity.css';
 export function AgentIdentity({chat}:{chat:ChatSummary}){
  const anchor=useRef<HTMLButtonElement>(null),[open,setOpen]=useState(false);
  const close=useCallback(()=>{setOpen(false);anchor.current?.focus();},[]);
- const parent=useApp(s=>chat.regiaOf?s.chats[chat.regiaOf]:undefined);
- const coordinated=useApp(s=>s.order.filter(id=>s.chats[id]?.regiaOf===chat.id&&!s.chats[id]?.closedAt),sameList);
  const children=chat.agentChildren;
  const summary=!children||children.coverage==='unknown'?t('product.teamUnknown'):children.coverage==='complete'&&children.active!==null&&children.total!==null?t('product.teamComplete',{active:children.active,total:children.total}):t('product.teamPartial',{active:children.observedActive,total:children.observedTotal});
  return <div className="agent-identity agent-team-details" data-testid={`agent-identity-${chat.id}`}>
@@ -29,11 +26,7 @@ export function AgentIdentity({chat}:{chat:ChatSummary}){
    <b>{summary}</b><p>{t('product.teamExplain')}</p>
    {children?.observedAt?<small>{new Intl.DateTimeFormat(locale(),{timeStyle:'short'}).format(children.observedAt)}</small>:null}
    {children?.children.length?<ul>{children.children.slice(0,100).map(child=><li key={child.key}><b>{child.task||t('product.noTask')}</b> · {t(`product.${child.state}`)}<small>{t('product.parent')}: {child.parentNativeId===null?t('product.notReported'):children.children.find(candidate=>candidate.nativeId===child.parentNativeId)?.task||t('product.parentMissing')}{child.source==='replay'?` · ${t('product.replayed')}`:''}</small></li>)}</ul>:<p>{children?.coverage==='complete'?t('product.teamEmpty'):t('product.teamIncomplete')}</p>}
-   {!!coordinated.length&&<h4>{t('product.coordinated',{count:coordinated.length})}</h4>}
-   {coordinated.map(id=><CoordinatedAgent key={id} id={id}/>)}
-   {parent&&<button type="button" className="link-btn" onClick={()=>focusChat(parent.id)}>{t('product.backRegia',{name:parent.agent?.name||parent.title})}</button>}
   </div>
   </Popover>
  </div>;
 }
-function CoordinatedAgent({id}:{id:string}){const chat=useApp(s=>s.chats[id]);return chat?<button type="button" className="link-btn" onClick={()=>focusChat(id)}>{chat.agent?.name||t('product.unassigned')} · {chat.title}</button>:null;}

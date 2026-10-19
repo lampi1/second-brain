@@ -18,7 +18,6 @@ export interface Reflection { data: string; chat: string; titolo: string; notato
 export interface Proposal { id: string; data: string; proposta: string; tipo: string; stato: string; dettaglio: string }
 export interface BugRow { data: string; area: string; bug: string; pattern: string; fonte: string; rif: string }
 export interface Measure { date: string; metric: string; value: number; breakdown?: Record<string, number>; human?: number; model?: string; brain?: string }
-export interface Playbook { agent: string; punti: number; proposti: string[]; size: number; review: string[] }
 export interface RuleRow { date: string; type: string; area: string; rule: string; again: number }
 /** recurrence.mjs quality(): ai-errors.md as the Qualità page needs it (canonical types, unreadable lines, who saw them). */
 export type RuleStatus = 'tornato' | 'non-tornato' | 'troppo-presto' | 'senza-tipo';
@@ -33,7 +32,7 @@ export interface Tables {
   today: string;
   errors: ErrorRow[]; wins: WinRow[]; journal: JournalRow[]; now: NowRow[]; ideas: Idea[]; reflections: Reflection[];
   proposals: Proposal[]; bugs: BugRow[]; measures: Measure[]; briefs: string[];
-  playbooks: Playbook[]; recurrence: { totals: [string, number][]; rules: RuleRow[] };
+  recurrence: { totals: [string, number][]; rules: RuleRow[] };
   /** null = a brain whose recurrence.mjs has no quality() yet */
   quality: ErrQuality | null;
 }
@@ -74,7 +73,7 @@ export interface Brief { date: string; day: string; devops: boolean | null; area
 export interface MapMember { id: string; label: string; name?: string; what?: string; uses?: number }
 export interface MapNode {
   id: string; layer: string; kind: string; label: string; name?: string; short?: string; what?: string; file?: string; modified?: string; degree?: number;
-  members?: MapMember[]; uses?: number; reads?: number; events?: string[]; fields?: { model?: string; effort?: string }; playbook?: { punti: number };
+  members?: MapMember[]; uses?: number; reads?: number; events?: string[]; fields?: { model?: string; effort?: string };
 }
 export interface MapEdge { from: string; to: string; kind: string; label: string; source?: { file: string; text: string }; count?: number }
 export interface FlowStep { from: string; to: string; label: string; verified: boolean; source: { file: string; text: string }; fromLabel?: string; toLabel?: string }
@@ -122,7 +121,6 @@ export function normTables(v: unknown): Tables {
     bugs: rows(o.bugs, ['data', 'area', 'bug', 'pattern', 'fonte', 'rif']),
     measures: arr(o.measures).filter(isObj).map(m => ({ ...m, date: str(m.date), metric: str(m.metric), value: num(m.value), breakdown: isObj(m.breakdown) ? Object.fromEntries(Object.entries(m.breakdown).map(([k, x]) => [k, num(x)])) : {} })) as Measure[],
     briefs: arr(o.briefs).map(str),
-    playbooks: arr(o.playbooks).filter(isObj).map(p => ({ agent: str(p.agent), punti: num(p.punti), proposti: arr(p.proposti).map(str), size: num(p.size), review: arr(p.review).map(str) })),
     recurrence: {
       totals: arr(rec.totals).filter(Array.isArray).map(t => [str((t as unknown[])[0]), num((t as unknown[])[1])] as [string, number]),
       rules: arr(rec.rules).filter(isObj).map(r => ({ date: str(r.date), type: str(r.type), area: str(r.area), rule: str(r.rule), again: num(r.again) })),

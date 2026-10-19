@@ -17,7 +17,7 @@ describe('usage', () => {
     const c = parseCost(fixture, day);
     expect(c.todayUsd).toBe(12.5);
     expect(c.costKnown).toBe(true);
-    expect(c.chats.map(x => [x.title, x.usd])).toEqual([['Fix login error', 8.25], ['Regia', 4.25]]);
+    expect(c.chats.map(x => [x.title, x.usd])).toEqual([['Fix login error', 8.25], ['Orchestrator', 4.25]]);
     expect(c.cursorTodayUsd).toBe(1.5);
     expect(c.cursorNote).toMatch(/fino alle \d\d:\d\d/);
   });

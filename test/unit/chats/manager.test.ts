@@ -6,7 +6,6 @@ import path from 'node:path';
 import { ChatManager, type ChatManagerOptions, type TurnEndInfo } from '../../../src/main/chats/manager';
 import { ClaudeSession } from '../../../src/main/chats/claude';
 import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, killStray, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
-import { regieOf } from '../../../src/shared/regia';
 
 interface Env { userData: string; home: string; cwd: string; argLog: string }
 const managers: ChatManager[] = [];
@@ -31,7 +30,7 @@ describe('ChatManager', () => {
     const e = env();
     const { m, em } = manager(e);
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there', model: 'sonnet', effort: 'high' });
-    expect(c).toMatchObject({ origin: 'app', harness: 'claude', title: 'hello there', model: 'sonnet', permissionMode: null, isRegia: false });
+    expect(c).toMatchObject({ origin: 'app', harness: 'claude', title: 'hello there', model: 'sonnet', permissionMode: null, isOrchestrator: false });
     await waitFor(() => results(m, c.id).length === 1, 'first result');
     const items = m.items(c.id);
     expect(items[0]).toMatchObject({ kind: 'user', text: 'hello there' });
@@ -59,11 +58,11 @@ describe('ChatManager', () => {
   it('routes a question to pending and back', async () => {
     const e = env();
     const { m, em } = manager(e);
-    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'ask me', regia: true });
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'ask me', orchestrator: true });
     const p = await waitFor(() => m.pending()[0], 'pending question');
     expect(p).toMatchObject({ chatId: c.id, type: 'question', title: 'Che colore?' });
     expect(em.of('pending:added')).toHaveLength(1);
-    expect(m.list()[0]).toMatchObject({ state: 'waiting', pending: 1, isRegia: true });
+    expect(m.list()[0]).toMatchObject({ state: 'waiting', pending: 1, isOrchestrator: true });
     await m.answer(c.id, p.id, { kind: 'question', answers: { 'Che colore?': 'Rosso' } });
     expect(em.of('pending:resolved')).toEqual([{ chatId: c.id, requestId: p.id }]);
     await expect(m.answer(c.id, p.id, { kind: 'question', answers: {} })).rejects.toThrow(/non è più aperta/);
@@ -178,14 +177,14 @@ describe('ChatManager', () => {
     expect(argvs(e)).toHaveLength(1); // only the first chat's engine ever started
   });
 
-  it('an agent never wakes a stopped chat on an engine the Regie may not use; the user still can', async () => {
+  it('an agent never wakes a stopped chat on an engine the Orchestrators may not use; the user still can', async () => {
     const e = env();
     const { m } = manager(e);
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello' });
     await waitFor(() => results(m, c.id).length === 1, 'first result');
     await m.shutdown();
     const { m: again } = manager(e, { agentsMayOpen: () => false });
-    await expect(again.send(c.id, 'from an agent', undefined, false, 'Regia')).rejects.toThrow(/Gli Orchestrator possono usare Claude/);
+    await expect(again.send(c.id, 'from an agent', undefined, false, 'Orchestrator')).rejects.toThrow(/Gli Orchestrator possono usare Claude/);
     expect(argvs(e)).toHaveLength(1);
     await again.send(c.id, 'from the user');
     await waitFor(() => results(again, c.id).length === 1, 'the user resumed it');
@@ -329,11 +328,11 @@ describe('ChatManager', () => {
     const { m } = manager(e);
     const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
     try {
-      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Regia', regia: true });
+      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Orchestrator', orchestrator: true });
       const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
       await waitFor(() => orphans().length === 2, 'the background command and its child');
       await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
-      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true, replaces: old.id }); // the old Regia's process ends
+      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id }); // the old Orchestrator's process ends
       await waitFor(() => !alive(pid), 'the old engine exited');
       await new Promise(r => setTimeout(r, 5000)); // longer than a quick process list: a reap would have run
       expect(orphans().every(alive)).toBe(true);
@@ -375,21 +374,6 @@ describe('ChatManager', () => {
     expect(m.list()[0]?.permissionMode).toBe('auto');
   });
 
-  it('reads a v1 chats.json "default" as no choice (v1 wrote it for every chat) and keeps the other modes', async () => {
-    const e = env();
-    const base = { harness: 'claude', cwd: e.cwd, sessionId: null, title: 'T', model: null, effort: null, isRegia: false, createdAt: 1 };
-    fs.writeFileSync(path.join(e.userData, 'chats.json'), JSON.stringify({ version: 1, chats: [{ ...base, id: 'c_a', permissionMode: 'default' }, { ...base, id: 'c_b', permissionMode: 'plan' }] }));
-    const { m } = manager(e);
-    expect(m.list().map(c => [c.id, c.permissionMode]).sort()).toEqual([['c_a', null], ['c_b', 'plan']]);
-    await m.set('c_a', { permissionMode: 'default' }); // chosen now: saved as a real choice (v2)
-    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { version: number; chats: { id: string; permissionMode: unknown }[] };
-    expect(stored.version).toBe(2);
-    expect(stored.chats.find(c => c.id === 'c_a')?.permissionMode).toBe('default');
-    const again = manager(e).m;
-    expect(again.list().find(c => c.id === 'c_a')?.permissionMode).toBe('default');
-  });
-
-  // finding B: a mode the CLI took by itself is shown, never saved
   it('shows but never persists a permission mode set by the CLI ("always" with a setMode suggestion)', async () => {
     const e = env();
     const { m } = manager(e);
@@ -428,8 +412,8 @@ describe('ChatManager', () => {
     const curLog = path.join(e.userData, 'cursor.jsonl');
     const opts = { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
     const first = manager(e, opts);
-    const c = await first.m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'perm', regia: true });
-    expect(c).toMatchObject({ harness: 'cursor', isRegia: true, sessionId: null, costKnown: false });
+    const c = await first.m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'perm', orchestrator: true });
+    expect(c).toMatchObject({ harness: 'cursor', isOrchestrator: true, sessionId: null, costKnown: false });
     const p = await waitFor(() => first.m.pending()[0], 'permission');
     expect(p).toMatchObject({ chatId: c.id, type: 'permission', noAlways: true });
     await first.m.answer(c.id, p.id, { kind: 'permission', allow: true });
@@ -521,72 +505,33 @@ describe('ChatManager', () => {
     await waitFor(() => results(m, c.id).length === 1, 'resumed turn');
   });
 
-  // several Orchestrators (ADR 0021): a chats.json keeps every Orchestrator with its tab name, and each work chat its Orchestrator
-  it('a chats.json with two Regie restores both, with their names and the work chats\' Regia', () => {
-    const e = env();
-    const c = (id: string, createdAt: number, more: object = {}) => ({ id, harness: 'claude', cwd: e.cwd, sessionId: null, title: 'Regia', model: null, effort: null, permissionMode: null, isRegia: true, createdAt, costTotalUsd: 0, ...more });
-    fs.writeFileSync(path.join(e.userData, 'chats.json'), JSON.stringify({ version: 2, chats: [c('old', 1), c('app', 2, { title: 'Regia · App', regiaName: 'App' }), c('w', 3, { title: 'Fix', isRegia: false, regiaOf: 'app' })] }));
-    const { m } = manager(e);
-    expect(m.list().map(x => [x.id, x.isRegia, x.regiaName ?? null, x.regiaOf ?? null])).toEqual([['old', true, null, null], ['app', true, 'App', null], ['w', false, null, 'app']]);
-  });
-
-  it('adds a second Regia next to the first (named, own title) and closes one only while another stays', async () => {
-    const e = env();
-    const { m } = manager(e);
-    const first = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true });
-    await expect(m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: '  ' })).rejects.toThrow(/Nome dell’Orchestrator/);
-    const app = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'App' });
-    expect([app.title, app.regiaName]).toEqual(['Orchestrator · App', 'App']);
-    expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([first.id, app.id]);
-    const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: app.id });
-    expect(work.regiaOf).toBe(app.id);
-    // a regiaOf that is not an Orchestrator is dropped (the first Orchestrator answers then)
-    expect((await m.create({ harness: 'claude', cwd: e.cwd, title: 'Altro', regiaOf: work.id })).regiaOf).toBeUndefined();
-    // the auto-close never takes an Orchestrator; the user's close does while another stays, and her chats move
-    await expect(m.archive(app.id, { auto: true })).rejects.toThrow(/unico|non si chiude/);
-    await m.archive(app.id);
-    expect(m.list().find(c => c.id === app.id)).toMatchObject({ isRegia: false });
-    expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(first.id);
-    await expect(m.archive(first.id)).rejects.toThrow(/unico/);
-    // the first Orchestrator never closes (its "Orchestrator" title is the mail address); replacing it keeps its place among the
-    // tabs, so the chats without a regiaOf keep answering to it, not to the next tab
-    const ricerca = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'Ricerca' });
-    await expect(m.archive(first.id)).rejects.toThrow(/primo Orchestrator/);
-    const neu = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Regia', regia: true, replaces: first.id });
-    expect(regieOf(m.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
-    const restarted = manager(e).m;
-    expect(regieOf(restarted.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
-  });
-
-  // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Orchestrator takes the role, name and work chats; the
+  // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Orchestrator takes the role; the
   // old one stays as a normal chat and its process (started with the app-control tools) is closed, so its next
   // message resumes it without them. Each Orchestrator gets its own app-control endpoint; the Cursor Orchestrator gets it too.
-  it('moves the Regia role to a new chat (persisted, both updated) and gives a Cursor Regia the app MCP server', async () => {
+  it('moves the Orchestrator role to a new chat (persisted, both updated) and gives a Cursor Orchestrator the app MCP server', async () => {
     const e = env();
     const curLog = path.join(e.userData, 'cursor.jsonl');
-    const appUrl = (id: string) => `http://127.0.0.1:4329/mcp/app/r/${id}/tok`;
+    const appUrl = (id: string) => `http://127.0.0.1:4329/mcp/app/o/${id}/tok`;
     const browserUrl = (id: string) => `http://127.0.0.1:4329/mcp/chat/${id}/tok`;
     const opts = { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, appMcpUrl: appUrl, mcpUrlFor: browserUrl, env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } };
     const { m, em } = manager(e, opts);
-    const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello', title: 'Regia', regia: true, regiaName: 'Lavoro' });
-    await waitFor(() => results(m, old.id).length === 1 && m.list()[0]?.state === 'idle', 'claude regia turn');
+    const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello', title: 'Orchestrator', orchestrator: true });
+    await waitFor(() => results(m, old.id).length === 1 && m.list()[0]?.state === 'idle', 'claude orchestrator turn');
     expect(argvs(e)[0]?.join(' ')).toContain('--allowedTools mcp__second-brain-app');
-    const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: old.id });
+    const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix' });
 
     const before = em.of('chat:updated').length;
-    await expect(m.create({ harness: 'cursor', cwd: e.cwd, regia: true, replaces: work.id })).rejects.toThrow(/sostituire/);
-    const neu = await m.create({ harness: 'cursor', cwd: e.cwd, title: 'Regia', regia: true, replaces: old.id });
-    expect(neu.isRegia).toBe(true);
-    expect(neu.regiaName).toBe('Lavoro');
-    expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([neu.id]);
-    expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(neu.id);
+    expect((await m.create({ harness: 'cursor', cwd: e.cwd, orchestrator: true, replaces: work.id })).id).toBe(old.id); // only the Orchestrator is replaced
+    const neu = await m.create({ harness: 'cursor', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id });
+    expect(neu.isOrchestrator).toBe(true);
+    expect(m.list().filter(c => c.isOrchestrator).map(c => c.id)).toEqual([neu.id]);
     const updates = em.of('chat:updated').slice(before);
-    expect(updates.some(u => u.id === old.id && !u.isRegia)).toBe(true);
-    expect(updates.some(u => u.id === neu.id && u.isRegia)).toBe(true);
-    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; isRegia: boolean }[] };
-    expect(stored.chats.map(c => [c.id, c.isRegia])).toEqual([[old.id, false], [work.id, false], [neu.id, true]]);
+    expect(updates.some(u => u.id === old.id && !u.isOrchestrator)).toBe(true);
+    expect(updates.some(u => u.id === neu.id && u.isOrchestrator)).toBe(true);
+    const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; isOrchestrator: boolean }[] };
+    expect(stored.chats.map(c => [c.id, c.isOrchestrator])).toEqual([[old.id, false], [work.id, false], [neu.id, true]]);
     // the old Orchestrator is not deleted: its idle process ends, its history stays
-    await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'closed', 'old regia process closed');
+    await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'closed', 'old orchestrator process closed');
     expect(m.items(old.id).some(i => i.kind === 'user' && i.text === 'hello')).toBe(true);
 
     // the Cursor Orchestrator receives the app-control server (app_create_chat) next to its browser endpoint
@@ -601,7 +546,7 @@ describe('ChatManager', () => {
     await waitFor(() => cursorLog(curLog).filter(l => l.method === 'session/new').length === 2, 'second cursor session');
     expect(cursorLog(curLog).filter(l => l.method === 'session/new')[1]?.params?.mcpServers).toEqual([{ type: 'http', name: 'second-brain', url: expect.stringContaining('/mcp/chat/'), headers: [] }]);
     await m.send(old.id, 'again');
-    await waitFor(() => results(m, old.id).length === 2, 'former regia resumed');
+    await waitFor(() => results(m, old.id).length === 2, 'former orchestrator resumed');
     expect(argvs(e).at(-1)?.join(' ')).not.toContain('mcp__second-brain-app');
   });
 
@@ -661,19 +606,19 @@ describe('ChatManager', () => {
     expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
   });
 
-  it('an idle chat with an explicitly complete census releases after the delay and resumes; never a Regia', async () => {
+  it('an idle chat with an explicitly complete census releases after the delay and resumes; never a Orchestrator', async () => {
     const e = env();
     // Simulate a provider that can prove there are no unobserved children. Real Claude's partial census is covered
     // by archive.test.ts and must not be interpreted as a complete zero by releaseIdle.
     const { m } = manager(e, { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) });
     const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there' });
-    const regia = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello regia', regia: true });
-    await waitFor(() => results(m, c.id).length === 1 && results(m, regia.id).length === 1, 'both turns');
+    const orchestrator = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello orchestrator', orchestrator: true });
+    await waitFor(() => results(m, c.id).length === 1 && results(m, orchestrator.id).length === 1, 'both turns');
     await waitFor(() => m.list().every(x => x.state === 'idle'), 'both idle');
     expect(m.releaseIdle(60_000)).toBe(0); // not idle long enough
     expect(m.releaseIdle(60_000, Date.now() + 61_000)).toBe(1);
-    await waitFor(() => m.engines().live.length === 1, 'one engine left (the Regia)');
-    expect(m.engines().live[0]?.chatId).toBe(regia.id);
+    await waitFor(() => m.engines().live.length === 1, 'one engine left (the Orchestrator)');
+    expect(m.engines().live[0]?.chatId).toBe(orchestrator.id);
     expect(m.list().find(x => x.id === c.id)).toMatchObject({ state: 'idle' });
     await m.send(c.id, 'again');
     await waitFor(() => results(m, c.id).length === 2, 'resumed turn');

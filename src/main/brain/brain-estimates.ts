@@ -35,7 +35,7 @@ function kindWord(s: string, kinds: BrainTable['kinds']): string | null {
  *  a label that names a kind ("Fix · …") → altro. */
 export function areaOf(title: string, kinds: BrainTable['kinds']): string {
   const t = String(title ?? '').trim();
-  if (/^regia\b/i.test(t)) return 'Regia';
+  if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
   const m = t.match(/^([A-Za-zÀ-ú-]{2,12}) · (.*)$/);
   if (!m || kindWord(m[1]!, kinds)) return 'altro';
   return m[1] + (m[1] === 'Pers' && /^(App|second-brain)\b/i.test(m[2]!) ? ' · App' : '');

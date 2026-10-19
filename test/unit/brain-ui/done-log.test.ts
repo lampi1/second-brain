@@ -13,7 +13,7 @@ const report = (rows: DayReport['rows']): DayReport => ({ date: '2026-10-18', da
 const at = (day: string, hm: string) => new Date(`${day}T${hm}:00`).getTime();
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 } as ChatSummary);
 
 describe('done log', () => {
@@ -27,14 +27,14 @@ describe('done log', () => {
     expect(rowEntry({ kind: 'chat-cursor', title: 'Cursor · Ricerca librerie · finito', area: 'A' }, 'd', 5, names)).toMatchObject({ kind: 'chat', what: 'Ricerca librerie', who: 'Cursor' });
   });
 
-  it('an app chat counts when a turn ended well or its work completed; never a Regia', () => {
+  it('an app chat counts when a turn ended well or its work completed; never a Orchestrator', () => {
     const t = at('2026-10-18', '14:20');
     expect(chatEntry(chat({ id: 'a', title: 'Fix', lastResult: { at: t, isError: false }, agent: { name: 'Correzione bug' } as ChatSummary['agent'] }), engine))
       .toMatchObject({ day: '2026-10-18', time: '14:20', who: 'Correzione bug', chatId: 'a', what: 'Fix' });
     expect(chatEntry(chat({ id: 'b', harness: 'codex', work: { status: 'completed', updatedAt: t } }), engine)).toMatchObject({ who: 'Codex' });
     expect(chatEntry(chat({ id: 'c', lastResult: { at: t, isError: true } }), engine)).toBe(null);
     expect(chatEntry(chat({ id: 'd', lastResult: { at: t, isError: false, interrupted: true } }), engine)).toBe(null);
-    expect(chatEntry(chat({ id: 'o', isRegia: true, lastResult: { at: t, isError: false } }), engine)).toBe(null);
+    expect(chatEntry(chat({ id: 'o', isOrchestrator: true, lastResult: { at: t, isError: false } }), engine)).toBe(null);
   });
 
   it('days newest first; within a day newest first, untimed last; one entry per chat', () => {

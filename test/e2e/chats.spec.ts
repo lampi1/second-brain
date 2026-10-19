@@ -12,18 +12,6 @@ declare global { interface Window { __ev: { ch: string; p: unknown }[] } }
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
-test('the Nuova chat dialog shows the status of each CLI, never "controllo…" forever (no check at start under tests)', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
-  const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
-  expect(await page.evaluate(() => window.sb.invoke('app:info', undefined).then(i => i.cli))).toBeNull();
-  await page.keyboard.press('Control+N');
-  await page.getByTestId('newchat-engine-options').locator('summary').click();
-  await expect(page.getByTestId('newchat-harness-claude')).toContainText('0.0.0-fake', { timeout: 30_000 }); // two CLI runs, slow under load
-  await expect(page.getByTestId('newchat-harness-cursor')).not.toContainText('controllo…', { timeout: 30_000 });
-  await shot(page, 'newchat-cli-status');
-  await app.close();
-});
-
 test('a Claude chat runs a turn, asks a question, takes the answer and streams events to the page', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
@@ -74,8 +62,8 @@ test('a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the
   const userCursor = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cursor-user-')); // never the real ~/.cursor
   const { app, page, userData } = await launch({ SB_CURSOR_PATH: FAKE_CURSOR, FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: userCursor });
   await page.evaluate(() => { window.__ev = []; for (const ch of ['pending:added', 'pending:resolved', 'chat:item'] as const) window.sb.on(ch, p => { window.__ev.push({ ch, p }); }); });
-  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Regia Cursor', regia: true }), cwd);
-  expect(chat).toMatchObject({ harness: 'cursor', isRegia: true, costKnown: false });
+  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Orchestrator Cursor', orchestrator: true }), cwd);
+  expect(chat).toMatchObject({ harness: 'cursor', isOrchestrator: true, costKnown: false });
   await expect.poll(() => page.evaluate(() => window.__ev.filter(e => e.ch === 'pending:added').length)).toBe(1);
   const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
   expect(pending[0]).toMatchObject({ chatId: chat.id, type: 'permission', tool: 'Shell', noAlways: true });

@@ -1,7 +1,7 @@
 // Cloud agents on the page (ADR 0080): main's CloudState kept live from 'cloud:changed' after one 'cloud:list'
 // (refresh: the vendors are asked now, main limits it to every 30 s), which strip is expanded (its messages stream,
 // Cursor) and the user's actions (start, follow-up, stop, "Porta in locale", "Apri", dismiss) with their errors as
-// toasts. Starts itself on first use, like handoffs.ts. Used by CloudStrips.tsx, CloudWhere.tsx and AgentStrips.tsx.
+// toasts. Starts itself on first use, like handoffs.ts. Used by CloudStrips.tsx and AgentStrips.tsx.
 import type { CloudAgent, CloudStartRequest, CloudState } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';

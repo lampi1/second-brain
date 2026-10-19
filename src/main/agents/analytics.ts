@@ -30,7 +30,7 @@ export interface AgentSessionObservation {
   taskType: string | null;
   model: string | null;
   effort: string | null;
-  /** Event-observed metadata only; legacy/default model/effort above never backfill these fields. */
+  /** Event-observed metadata only; the session-level model/effort above never backfill these fields. */
   provenance?: Partial<ObservedProvenance>;
   modelAttribution?: 'single-model-observed' | 'mixed' | 'unknown';
 }

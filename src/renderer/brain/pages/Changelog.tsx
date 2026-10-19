@@ -31,7 +31,7 @@ function Entry({ e }: { e: ChangelogEntry }) {
   const openable = e.action !== 'deleted' && /\.[a-z0-9]+$/i.test(e.target) && !e.target.includes('..');
   const open = () => script ? go({ page: 'script', arg: encodeURIComponent(e.target.slice('scripts/'.length)) }) : goTarget(`file/${e.target}`);
   const discuss = () => {
-    if (!brainBridge.draftToRegia(`${copy('Cambiamento al brain', 'Brain change')} ${e.at}: ${kindLabel(e.kind)} ${copy(...ACTION[e.action])} · ${e.target}\n${e.summary} (${e.by})\n\n${copy('Era giusto? Va tenuto, corretto o annullato?', 'Was it right? Keep, fix or undo?')}`, () => {}))
+    if (!brainBridge.draftToOrchestrator(`${copy('Cambiamento al brain', 'Brain change')} ${e.at}: ${kindLabel(e.kind)} ${copy(...ACTION[e.action])} · ${e.target}\n${e.summary} (${e.by})\n\n${copy('Era giusto? Va tenuto, corretto o annullato?', 'Was it right? Keep, fix or undo?')}`, () => {}))
       toast(copy('Apri un Orchestrator per discuterne.', 'Open an Orchestrator to discuss it.'));
   };
   return (
@@ -44,7 +44,7 @@ function Entry({ e }: { e: ChangelogEntry }) {
         <p>{e.summary}</p>
         <small>{copy('da', 'by')} {e.by}</small>
       </div>
-      <button type="button" className="btn btn-subtle btn-s dash-discuss dash-discuss-quiet bc-discuss" onClick={discuss} aria-label={`${copy('Discutine', 'Discuss')}: ${e.target}`}><span aria-hidden="true">↗</span> {copy('Discutine', 'Discuss')}</button>
+      <button type="button" className="btn btn-subtle btn-s dash-discuss dash-discuss-quiet bc-discuss" onClick={discuss} aria-label={`${copy('Discuti', 'Discuss')}: ${e.target}`}><span aria-hidden="true">↗</span> {copy('Discuti', 'Discuss')}</button>
     </li>
   );
 }

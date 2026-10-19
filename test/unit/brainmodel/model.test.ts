@@ -1,6 +1,6 @@
 // The Brain pages' reader (src/main/brainmodel/model.ts, ADR 0077): skills (brain first, then the user's own folders;
 // who declares each one; the tools it calls), rules (always-loaded, topic, or on disk only; never me.md) and memory
-// (knowledge groups by folder name, open threads, journal, errors, the shared memory and one per agent), bounded file
+// (knowledge groups by folder name, open threads, journal, errors, the shared memory and one per role), bounded file
 // reads only. Temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,7 +13,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-model-'))); dirs.push(d); return d; };
 const put = (root: string, rel: string, text: string) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
-const agent = (id: string, linked: string[], status: 'active' | 'archived' = 'active') => ({ id, name: id.toUpperCase(), status, knowhow: { folder: 'x', linked, hash: 'a'.repeat(64) } }) as unknown as AgentProfile;
+const role = (id: string, linked: string[], skills: string[] = [], scope: 'role' | 'background' = 'role') => ({ id, name: id.toUpperCase(), scope, skills, knowhow: { folder: 'x', linked, hash: 'a'.repeat(64) } }) as unknown as AgentProfile;
 
 describe('readSkills', () => {
   it('lists brain skills before the user\'s, with who declares them and what they call', () => {
@@ -23,9 +23,9 @@ describe('readSkills', () => {
     put(home, '.claude/skills/fatture/SKILL.md', '---\nname: fatture\ndescription: copia dell\'utente\n---\n');
     put(home, '.claude/skills/mia/SKILL.md', '---\nname: mia\n---\nLa mia skill personale.\n');
     put(root, '.claude/skills/Not_A_Name/SKILL.md', 'x');
-    const s = readSkills([{ dir: path.join(root, '.claude/skills'), home: 'brain' }, { dir: path.join(home, '.claude/skills'), home: 'user' }], root, [agent('a', ['fatture']), agent('b', ['fatture'], 'archived')]);
+    const s = readSkills([{ dir: path.join(root, '.claude/skills'), home: 'brain' }, { dir: path.join(home, '.claude/skills'), home: 'user' }], root, [role('a', ['fatture']), role('b', [], ['fatture']), role('pulse', ['fatture'], [], 'background')]);
     expect(s.map(x => [x.name, x.home, x.rel])).toEqual([['fatture', 'brain', '.claude/skills/fatture/SKILL.md'], ['mia', 'user', null]]);
-    expect(s[0]).toMatchObject({ description: 'Esportare le fatture', usedBy: ['a'], tools: ['Bash', 'Read', 'mcp__jira__search', 'node tools/export.mjs', 'scripts/check.ps1'] });
+    expect(s[0]).toMatchObject({ description: 'Esportare le fatture', usedBy: ['a', 'b'], tools: ['Bash', 'Read', 'mcp__jira__search', 'node tools/export.mjs', 'scripts/check.ps1'] });
     expect(s[1]!.description).toBe('La mia skill personale.'); // no description: its first line of prose
   });
 });
@@ -58,7 +58,7 @@ describe('readMemory', () => {
     put(root, 'memory/shared.md', '# Condivisa\n- uno\n');
     put(root, 'agents/a/memory.md', '# Memoria\n\n- 2026-10-19 · fatto\n');
     put(root, 'agents/a/clienti/x.md', '- not knowledge: inside agents/');
-    const m = readMemory(root, [agent('a', [])]);
+    const m = readMemory(root, [role('a', [])]);
     expect(m.map(x => [x.kind, x.group, x.file, x.entries])).toEqual([
       ['knowledge', 'Ambienti', 'ambienti/test.md', 1],
       ['knowledge', 'Clienti', 'areas/clienti/rossi.md', 2],

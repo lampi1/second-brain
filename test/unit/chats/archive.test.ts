@@ -56,10 +56,10 @@ describe('ChatManager archive (auto-close)', () => {
     await waitFor(() => m.items(c.id).filter(i => i.kind === 'result').length === 2, 'resumed turn');
   });
 
-  it('never closes the Regia; the auto archive is refused while the chat works or runs background tasks', async () => {
+  it('never closes the Orchestrator; the auto archive is refused while the chat works or runs background tasks', async () => {
     const { m, cwd } = setup();
-    const regia = await m.create({ harness: 'claude', cwd, regia: true });
-    await expect(m.archive(regia.id, { auto: true })).rejects.toThrow(/Orchestrator/);
+    const orchestrator = await m.create({ harness: 'claude', cwd, orchestrator: true });
+    await expect(m.archive(orchestrator.id, { auto: true })).rejects.toThrow(/Orchestrator/);
 
     const c = await m.create({ harness: 'claude', cwd, prompt: 'background job' });
     await waitFor(() => (summary(m, c.id).background ?? 0) === 1, 'background task counted');

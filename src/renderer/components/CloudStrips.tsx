@@ -33,7 +33,7 @@ export function CloudStrips() {
   const ids = useCloudIds();
   const state = useCloudState();
   const maximized = ui.use(s => s.maximized);
-  if (!state || !ids.length || (maximized && maximized !== 'regia')) return null;
+  if (!state || !ids.length || (maximized && maximized !== 'orchestrator')) return null;
   const groups = new Map<string, CloudAgent[]>();
   for (const a of state.agents) groups.set(cloudArea(a), [...(groups.get(cloudArea(a)) ?? []), a]);
   let row = 0;

@@ -71,7 +71,7 @@ export function readSkills(dirs: SkillDir[], root: string | null, profiles: read
       const p = parseMd(text);
       found.set(name, {
         name, description: (field(p, 'description') ?? '').trim() || firstProse(p.body), file, rel: inside(root, file), home,
-        usedBy: profiles.filter(a => a.status === 'active' && a.knowhow?.linked.includes(name)).map(a => a.id),
+        usedBy: profiles.filter(a => a.scope === 'role' && (a.skills.includes(name) || !!a.knowhow?.linked.includes(name))).map(a => a.id),
         tools: skillTools(text, path.join(dir, name)), lines: text.split(/\r?\n/).length, changedAt: mtime(file), madeBy: null,
       });
     }

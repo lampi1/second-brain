@@ -3,7 +3,7 @@
 // waits, and while "Rispondi dopo" is on (they wait in "Da rispondere", lib/later.ts). A polite live region announces new requests to screen readers. Used by App.tsx (focus mode's Ctrl+J peek only: the workspace dropped it on 2026-10-12).
 import { memo } from 'react';
 import type { PendingRequest } from '@shared/contract';
-import { chatName } from '@shared/regia';
+import { chatName } from '@shared/orchestrator';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { ui } from '../store/ui';

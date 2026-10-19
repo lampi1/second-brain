@@ -59,7 +59,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_BRAIN: fixtureBrain() }));
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
   // the frames the map draws (a burst of WebGL draw calls = one frame), as in map-perf.spec.ts
   await page.evaluate(() => {
     const w = window as unknown as W;
@@ -83,7 +83,7 @@ test.beforeAll(async () => {
   // what the chats do now: Fix reads the brain's now.md and calls the reviewer, the Orchestrator writes to App · Feedback
   await tool('fix', { id: 'live-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'live-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
-  await tool('regia', { id: 'live-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'vai' }, summary: 'a App · Feedback' });
+  await tool('orchestrator', { id: 'live-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'vai' }, summary: 'a App · Feedback' });
   await tool('fix', { id: 'live-out', name: 'Read', input: { file_path: 'C:/progetti/alfa-shop/Order.cs' }, summary: 'Order.cs' });
 });
 test.afterAll(async () => { await app?.close(); });
@@ -93,7 +93,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await openMap();
   const m = page.getByTestId('brain-map');
   // The map fills the workspace beside the persistent column; the toast wrapper takes no flex space.
-  const column = (await page.getByTestId('regia-overlay').boundingBox())!;
+  const column = (await page.getByTestId('orchestrator-overlay').boundingBox())!;
   const mapBox = (await m.boundingBox())!;
   expect(mapBox.width).toBeGreaterThan(column.x * 0.95);
   expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(column.x + 1);
@@ -101,7 +101,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await expect(legend).toContainText('Attività osservata');
   await expect(legend).toContainText('Fix totale ordine');
   await expect(legend).toContainText('Bug notifiche SMS');
-  await expect(legend).toContainText('Regia');
+  await expect(legend).toContainText('Orchestrator');
   await expect(legend).not.toContainText('Order.cs'); // Repo files never become brain neurons.
   await expect(m.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(4000); // the layout settles, the live neurons find their place
@@ -168,7 +168,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   // a live chat's neuron opens its chat; the legend opens a chat too
   await openMap();
   await page.getByTestId('brain-map').getByRole('button', { name: 'Elenco' }).click();
-  await page.getByTestId('bx-map-flat').locator('button.live').filter({ hasText: 'App · Feedback' }).click(); // the Regia wrote to it
+  await page.getByTestId('bx-map-flat').locator('button.live').filter({ hasText: 'App · Feedback' }).click(); // the Orchestrator wrote to it
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
   await openMap();
   await page.getByTestId('bx-map-live').getByTestId('bx-map-live-chat').filter({ hasText: 'Bug notifiche SMS' }).click();

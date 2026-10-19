@@ -1,10 +1,10 @@
-// An agent's own page (components/AgentStudio.tsx, AgentDetail) and the browser marker of a strip (ChatTile.tsx), in
+// A role's own page (components/AgentStudio.tsx) and the browser marker and estimate of a strip (ChatTile.tsx), in
 // Italian. English counterpart in agent-detail.en.ts (ADR 0057).
 export const agentDetailIt = {
-  'agentDetail.back': 'Tutti gli agenti',
-  'agentDetail.prompt': 'Prompt dell’agente',
-  'agentDetail.promptHint': 'Le istruzioni che il motore riceve a ogni avvio di questo agente: sono ciò che lo rende un agente.',
-  'agentDetail.promptEmpty': 'Nessuna istruzione scritta per questo agente.',
+  'agentDetail.back': 'Tutti i ruoli',
+  'agentDetail.prompt': 'Istruzioni del ruolo',
+  'agentDetail.promptHint': 'Ciò che il motore riceve a ogni avvio di questo ruolo, dopo le regole comuni a tutti i ruoli.',
+  'agentDetail.promptEmpty': 'Nessuna istruzione scritta per questo ruolo.',
   'agentDetail.promptSize': ({ n }: { n: number }) => n === 1 ? '1 carattere' : `${n} caratteri`,
   'agentDetail.purpose': 'Scopo',
   'agentDetail.config': 'Configurazione',
@@ -17,9 +17,6 @@ export const agentDetailIt = {
   'agentDetail.version': 'Versione',
   'agentDetail.updated': 'Ultima modifica',
   'agentDetail.closeEditor': 'Chiudi senza salvare',
-  'agentDetail.updateBanner': 'È disponibile un aggiornamento del preset di questo agente.',
-  'agentDetail.reviewUpdate': 'Rivedi aggiornamento',
-  'agentDetail.noDraft': 'Nessuna bozza aperta. Le proposte da approvare sono nella pagina Agenti.',
   'agentDetail.browserOn': ({ n }: { n: number }) => n === 1 ? 'Nascondi il browser' : `Nascondi i ${n} browser`,
   'agentDetail.browserOff': ({ n }: { n: number }) => n === 1 ? 'Mostra il browser agganciato' : `Mostra i ${n} browser agganciati`,
   'agentDetail.estimate': 'stima',

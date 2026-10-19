@@ -8,7 +8,7 @@ import { SETUP_STEPS, canAdvance, canJump, canSignIn, clampStep, exitStatus, lin
 import type { EngineLinkPort } from '../../src/renderer/lib/setup-wizard';
 import { closeModal, openModal, ui } from '../../src/renderer/store/ui';
 
-const blank: SetupDraft = { step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] };
+const blank: SetupDraft = { step: 0, work: '', goals: '', tools: '', style: 'balanced' };
 const state = (status: SetupState['status'], preferences: Partial<SetupDraft> = {}): SetupState => ({ version: 1, status, preferences: { ...blank, ...preferences }, updatedAt: 1 });
 const status = (patch: Partial<CliStatus> = {}): CliStatus => ({ found: true, path: '/bin/x', version: '1', loggedIn: false, ...patch });
 

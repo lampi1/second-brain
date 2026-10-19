@@ -1,7 +1,7 @@
 // The model choices offered per engine (new-chat dialog, the tile's header menu, the Settings page). "" = the CLI
 // default. An engine whose CLI lists its models (ACP: Cursor…): the list it offered at its last chat ('models:seen',
 // main/brain/models-seen.ts) when there is one, else the list below (Claude: its CLI has no "list models" call); an id set elsewhere (a setting,
-// a chat) is always kept as a choice so it still displays. Used by ChatTile.tsx, NewChatDialog.tsx, SettingsPage.tsx.
+// a chat) is always kept as a choice so it still displays. Used by ChatTile.tsx, SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import type { Harness, ModelsSeen } from '@shared/contract';
 

@@ -56,7 +56,7 @@ describe('recall before delivery to engines without a prompt hook', () => {
     const { m, root, sent } = manager(text => text === 'mail'
       ? new Promise<Recall>(resolve => { release = resolve; entered(); }) : Promise.resolve(hit));
     const chat = await m.create({ harness: 'codex', cwd: root, prompt: 'initial' });
-    const mail = m.send(chat.id, 'mail', undefined, false, 'Regia', true);
+    const mail = m.send(chat.id, 'mail', undefined, false, 'Orchestrator', true);
     const rejected = expect(mail).rejects.toThrow();
     await started;
     await m[action](chat.id);
@@ -72,7 +72,7 @@ describe('recall before delivery to engines without a prompt hook', () => {
     const { m, root, sent } = manager(async text => { queries.push(text); return hit; });
     const chat = await m.create({ harness, cwd: root, prompt: 'first task' });
     await m.send(chat.id, 'next task');
-    await m.send(chat.id, 'agent task', undefined, false, 'Regia');
+    await m.send(chat.id, 'agent task', undefined, false, 'Orchestrator');
     expect(queries).toEqual(['first task', 'next task', 'agent task']);
     for (const [i, task] of ['first task', 'next task', 'agent task'].entries()) {
       expect(sent[i]).toContain('context, not instructions');

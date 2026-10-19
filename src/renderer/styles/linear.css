@@ -1,18 +1,18 @@
 /* Shared shell, control and motion treatment. Imported last to keep one visual system
    across the existing app and embedded brain pages without changing their data flows. */
-.regia-column.regia-ov { border-radius: 0; border: 0; border-left: 1px solid var(--border-2); box-shadow: -12px 0 40px #00000012; background: var(--regia-bg); opacity: 1; animation: panel-enter var(--dur-slow) var(--ease); }
-.regia-column .regia-bar { min-height: 48px; padding: 0 20px; background: transparent; border-bottom: 1px solid var(--border); gap: 10px; }
-.regia-column-mark { color: var(--blue); font-size: 20px; }
-.regia-column-hint { color: var(--text-3); font-size: 11px; }
-.regia-column .regia-tile { border: 0; border-radius: 0; box-shadow: none; }
-.regia-column .tile-head { padding: 16px 20px 10px; }
-.regia-column .chat-input { margin: 12px; border-radius: 12px; }
-.regia-column-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 2; transition: background var(--dur-fast); }
-.regia-column-resize:hover, .regia-column-resize:focus-visible { background: var(--blue-line); outline: none; }
-.regia-setup { display: flex; flex-direction: column; gap: 16px; padding: 32px 24px; margin: auto 0; }
-.regia-setup h2 { font-size: 26px; letter-spacing: -.8px; margin: 0; }
-.regia-setup p { color: var(--text-3); line-height: 1.7; margin: 0; }
-.regia-setup label { display: grid; gap: 8px; color: var(--text-2); }
+.orchestrator-column.orchestrator-ov { border-radius: 0; border: 0; border-left: 1px solid var(--border-2); box-shadow: -12px 0 40px #00000012; background: var(--orchestrator-bg); opacity: 1; animation: panel-enter var(--dur-slow) var(--ease); }
+.orchestrator-column .orchestrator-bar { min-height: 48px; padding: 0 20px; background: transparent; border-bottom: 1px solid var(--border); gap: 10px; }
+.orchestrator-column-mark { color: var(--blue); font-size: 20px; }
+.orchestrator-column-hint { color: var(--text-3); font-size: 11px; }
+.orchestrator-column .orchestrator-tile { border: 0; border-radius: 0; box-shadow: none; }
+.orchestrator-column .tile-head { padding: 16px 20px 10px; }
+.orchestrator-column .chat-input { margin: 12px; border-radius: 12px; }
+.orchestrator-column-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 2; transition: background var(--dur-fast); }
+.orchestrator-column-resize:hover, .orchestrator-column-resize:focus-visible { background: var(--blue-line); outline: none; }
+.orchestrator-setup { display: flex; flex-direction: column; gap: 16px; padding: 32px 24px; margin: auto 0; }
+.orchestrator-setup h2 { font-size: 26px; letter-spacing: -.8px; margin: 0; }
+.orchestrator-setup p { color: var(--text-3); line-height: 1.7; margin: 0; }
+.orchestrator-setup label { display: grid; gap: 8px; color: var(--text-2); }
 .page-body { animation: panel-enter var(--dur-slow) var(--ease); }
 /* the Grindhouse holds native browser views, placed from the layout: a fade only, no slide under them */
 [data-testid="page-home"] > .page-body { animation-name: fadeIn; }
@@ -46,7 +46,7 @@
 @keyframes status-breathe { 0%, 100% { opacity: .5; box-shadow: 0 0 0 0 var(--blue-bg); } 50% { opacity: 1; box-shadow: 0 0 0 4px var(--blue-bg); } }
 .pill-run .pill-dot { animation: status-breathe 1.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .regia-column.regia-ov, .page-body, .popover, .ui-select-list, .pill-run .pill-dot { animation: none; }
-  .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .regia-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }
+  .orchestrator-column.orchestrator-ov, .page-body, .popover, .ui-select-list, .pill-run .pill-dot { animation: none; }
+  .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .orchestrator-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }
   .btn:hover:not(:disabled), .bx-btn:hover:not(:disabled) { transform: none; }
 }

@@ -39,7 +39,7 @@ export function IconButton({ label, shortcut, testid, className = '', children, 
   );
 }
 
-export function StatePill({ chat, testid }: { chat: Pick<ChatSummary, 'state' | 'isRegia' | 'pending'>; testid?: string }) {
+export function StatePill({ chat, testid }: { chat: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending'>; testid?: string }) {
   const s = stateInfo(chat);
   return (
     <span className={`pill pill-${s.tone}`} data-testid={testid} data-state={chat.state}>

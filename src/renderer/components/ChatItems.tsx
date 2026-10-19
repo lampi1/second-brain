@@ -10,7 +10,7 @@
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
 // and a "Nuova chat" badge on a message sent with that toggle (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
-// and RegiaTile.
+// and OrchestratorTile.
 import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
 import '../styles/follow-bottom.css';
@@ -316,7 +316,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
   const open = useMemo(() => thinkingBeforeAsk(items, asking), [items, asking]);
   // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
-  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia ? titlesKey(s.chats) : ''; });
+  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKey(s.chats) : ''; });
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];

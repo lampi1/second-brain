@@ -4,7 +4,7 @@
 // styles/tokens.css, grid.ts pairSlots): a chat keeps its color while it lives, so closing one pair never recolors the
 // others. The mouse over a page (a native view the UI cannot see) comes from main as 'browser:pointer'.
 // Why: the user, 2026-10-11, "vorrei che in qualche modo si vedesse che il browser è legato a quella chat comunque".
-// Used by ChatTile, RegiaTile and BrowserTile.
+// Used by ChatTile, OrchestratorTile and BrowserTile.
 import { useEffect, type CSSProperties } from 'react';
 import { sb } from '../sb';
 import { createStore } from '../store/createStore';

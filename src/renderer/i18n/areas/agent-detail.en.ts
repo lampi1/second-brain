@@ -1,10 +1,10 @@
 // An agent's own page and the browser marker of a strip: English labels; parity checked against agent-detail.it.ts.
 import type { agentDetailIt } from './agent-detail.it';
 export const agentDetailEn: typeof agentDetailIt = {
-  'agentDetail.back': 'All agents',
-  'agentDetail.prompt': 'Agent prompt',
-  'agentDetail.promptHint': 'The instructions the engine receives every time this agent starts: they are what makes it an agent.',
-  'agentDetail.promptEmpty': 'No instructions written for this agent.',
+  'agentDetail.back': 'All roles',
+  'agentDetail.prompt': 'Role instructions',
+  'agentDetail.promptHint': 'What the engine receives every time this role starts, after the rules every role shares.',
+  'agentDetail.promptEmpty': 'No instructions written for this role.',
   'agentDetail.promptSize': ({ n }) => n === 1 ? '1 character' : `${n} characters`,
   'agentDetail.purpose': 'Purpose',
   'agentDetail.config': 'Configuration',
@@ -17,9 +17,6 @@ export const agentDetailEn: typeof agentDetailIt = {
   'agentDetail.version': 'Version',
   'agentDetail.updated': 'Last edited',
   'agentDetail.closeEditor': 'Close without saving',
-  'agentDetail.updateBanner': 'A preset update is available for this agent.',
-  'agentDetail.reviewUpdate': 'Review update',
-  'agentDetail.noDraft': 'No draft open. Proposals waiting for you are on the Agents page.',
   'agentDetail.browserOn': ({ n }) => n === 1 ? 'Hide the browser' : `Hide the ${n} browsers`,
   'agentDetail.browserOff': ({ n }) => n === 1 ? 'Show the attached browser' : `Show the ${n} attached browsers`,
   'agentDetail.estimate': 'estimate',

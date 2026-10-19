@@ -10,7 +10,7 @@ it('retains augmented Cursor context across restart without widening plain profi
   try {
     const store = new ChatStore(root), pluginDir = path.join(root, 'agent-pack-runtime', 'a'.repeat(64));
     const agentAssets = { pluginDir, skillRoot: path.join(pluginDir, 'skills') };
-    const base: StoredChat = { id: 'c_pack', harness: 'cursor', cwd: root, sessionId: null, title: 'Review', model: null, effort: null, permissionMode: null, isRegia: false, createdAt: 1 };
+    const base: StoredChat = { id: 'c_pack', harness: 'cursor', cwd: root, sessionId: null, title: 'Review', model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1 };
     const instructions = 'x'.repeat(8000) + '\n\n# Learned rules\nCite evidence.';
     store.save([{ ...base, agentInstructions: instructions, agentAssets }, { ...base, id: 'c_plain', agentInstructions: instructions }]);
     const restored = new ChatStore(root).load();

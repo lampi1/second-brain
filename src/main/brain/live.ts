@@ -3,7 +3,7 @@
 // harness/cursor/chats.mjs only (the user, 2026-10-11: "vedrò aggiornarsi in automatico tutto quanto ... un meccanismo di
 // notifiche tipo 'un'idea aggiunta, un errore trovato'"). Port of the tested prototype (<brain>/app/prototype/core/
 // live.mjs). The brain's own parsers (<brainRoot>/ops/tools/brain-site/parse.mjs) are imported at runtime; without
-// them the feed has chats, playbooks and mail only. The first scan is a baseline: it emits nothing except what changed
+// them the feed has chats and mail only. The first scan is a baseline: it emits nothing except what changed
 // since the last run of the app (keys persisted in userData/live-state.json), marked away ("mentre eri via").
 // Used by brain/index.ts, which stamps, stores and notifies the events. Pure diff functions are exported for tests.
 import { timersFor } from '../timers';
@@ -19,14 +19,10 @@ import { brainScript } from '../rules/tools';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
-  'agent-created': { label: 'Agente creato', priority: 'quiet' },
-  'agent-suggested': { label: 'Agente suggerito', priority: 'normal' },
-  'agent-proposal': { label: 'Modifica proposta', priority: 'normal' },
-  'agent-updated': { label: 'Agente aggiornato', priority: 'quiet' },
-  'agent-archived': { label: 'Agente archiviato', priority: 'quiet' },
-  'agent-restored': { label: 'Agente ripristinato', priority: 'quiet' },
+  'agent-proposal': { label: 'Proposta su un ruolo', priority: 'normal' },  // Agenti → Da approvare (agents/lifecycle.ts)
+  'agent-updated': { label: 'Ruolo aggiornato', priority: 'quiet' },          // a maintenance change, with Annulla
   'agent-rolledback': { label: 'Versione ripristinata', priority: 'quiet' },
-  'agent-feedback': { label: 'Feedback Agente', priority: 'quiet' },
+  'agent-feedback': { label: 'Giudizio su un ruolo', priority: 'quiet' },
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
   login: { label: 'Accesso da rifare', priority: 'urgent' },   // browser: an agent waits for the user to sign in to an environment
   question: { label: 'Domanda per te', priority: 'urgent' },
@@ -39,7 +35,6 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   win: { label: 'Lode registrata', priority: 'normal' },
   budget: { label: 'Limite di spesa', priority: 'normal' },
   proposal: { label: 'Proposta', priority: 'quiet' },
-  playbook: { label: 'Taccuino aggiornato', priority: 'quiet' },
   done: { label: 'Fatto', priority: 'quiet' },
   decision: { label: 'Decisione', priority: 'quiet' },
   now: { label: 'Filo aggiornato', priority: 'quiet' },
@@ -51,8 +46,6 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'brain-sync': { label: 'Sincronizzazione del cervello ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
   task: { label: 'Task', priority: 'normal' },   // tasks/service.ts: news on my work items, PRs and the tickets I follow
   'task-alert': { label: 'Task per te', priority: 'normal' },  // tasks/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
-  'agent-kept': { label: 'Agente tenuto', priority: 'quiet' },      // chats/manager.ts: a probation agent passed (AGENTS-DESIGN §4.7)
-  'agent-retired': { label: 'Agente ritirato', priority: 'normal' }, // a probation agent was archived; the card offers Ripristina
 };
 
 /** An event before stamping. `priority` overrides the kind's default (a budget alert at 100 % is urgent). */
@@ -63,10 +56,9 @@ export function feedAction(v: unknown): FeedAction | undefined {
   if (a?.kind === 'agent-proposals') return { kind: 'agent-proposals' };
   if (a?.kind === 'agent-undo') {
     const u = a.undo;
-    if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && ['archive', 'restore', 'version'].includes(u.operation) && (u.operation !== 'version' || Number.isSafeInteger(u.version) && u.version! > 0)) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, operation: u.operation, ...(u.operation === 'version' ? { version: u.version } : {}) } };
-    return undefined;
+    if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && Number.isSafeInteger(u.version) && u.version > 0) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, version: u.version } };
   }
-  return a && typeof a === 'object' && a.kind === 'agent-restore' && typeof a.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId) ? { kind: 'agent-restore', agentId: a.agentId } : undefined;
+  return undefined;
 }
 
 export function stamp(e: RawEvent, at = Date.now()): FeedEvent {
@@ -163,8 +155,8 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
 
 /** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. An Orchestrator's own turns are no event (it reports in its own tile);
  *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
-export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
-  if (!c || c.isRegia) return null;
+export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isOrchestrator' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
+  if (!c || c.isOrchestrator) return null;
   // the CLI died mid-turn (no result): a failure too, with the engine's error as the detail
   if (crash) return { kind: 'chat-failed', title: c.title || 'Chat', detail: cut(`il motore si è chiuso a metà turno: ${crash}`, 200), chatId: c.id };
   return c.lastResult?.isError
@@ -182,7 +174,7 @@ export const IGNORED = /^(\.git|node_modules|app\/node_modules|\.claude\/worktre
 /** Loads the brain's parsers; null (and a warning) when the brain has none or they fail to load. */
 export async function loadParsers(root: string): Promise<Parsers | null> {
   const f = brainScript(root, 'ops/tools/brain-site/parse.mjs') ?? path.join(root, 'ops', 'tools', 'brain-site', 'parse.mjs');
-  if (!fs.existsSync(f)) { log.warn('brain', 'no parsers in this brain: feed of chats, playbooks and mail only', { data: { file: f } }); return null; }
+  if (!fs.existsSync(f)) { log.warn('brain', 'no parsers in this brain: feed of chats and mail only', { data: { file: f } }); return null; }
   try { return (await import(/* @vite-ignore */ pathToFileURL(f).href)) as Parsers; }
   catch (e) { log.error('brain', 'brain parsers failed to load', { cause: errText(e), hint: `check ${f} with: node --check "${f}"` }); return null; }
 }
@@ -230,7 +222,6 @@ export class Live {
       this.snap.set(s.id, new Map(rows.map(r => [r.key, r])));
     }
     this.persist();
-    this.hashPlaybooks();
     if (away.length) this.o.onEvents(away.map(e => ({ ...e, away: true })));
     try {
       this.watcher = fs.watch(this.o.root, { recursive: true }, (_ev, f) => { if (f) this.changed(String(f).replace(/\\/g, '/')); });
@@ -243,28 +234,6 @@ export class Live {
       this.chatTimer = setInterval(() => void this.pollChats(false), this.o.chatsEveryMs ?? 15000);
     } else log.warn('brain', 'no chats.mjs in this brain: no chat events', { data: { file: this.chatsScript } });
     log.info('brain', 'live feed started', { data: { root: this.o.root, sources: this.src.map(x => x.id), away: away.length } });
-  }
-
-  /** content hash of each playbook: a save that leaves the text as it was (a touch, an editor re-save) is no event */
-  private playbooks = new Map<string, string>();
-
-  /** Baseline of the playbooks' hashes (at start): only a later change of content is an event. */
-  private hashPlaybooks(): void {
-    let names: string[] = [];
-    try { names = fs.readdirSync(path.join(this.o.root, 'playbooks')).filter(n => n.endsWith('.md')); } catch { return; }
-    for (const n of names) { const h = this.fileHash(`playbooks/${n}`); if (h) this.playbooks.set(`playbooks/${n}`, h); }
-  }
-
-  private fileHash(f: string): string | null {
-    try { return hash(fs.readFileSync(path.join(this.o.root, f))); } catch { return null; }
-  }
-
-  /** A playbook event when its content changed since the last look (deleted or unreadable: nothing). */
-  playbookEvent(f: string): RawEvent[] {
-    const h = this.fileHash(f);
-    if (!h || this.playbooks.get(f) === h) return [];
-    this.playbooks.set(f, h);
-    return [{ kind: 'playbook', title: f.replace(/^playbooks\/|\.md$/g, ''), detail: '', file: f }];
   }
 
   stop(): void {
@@ -317,7 +286,6 @@ export class Live {
   changed(f: string): void {
     if (this.stopped || IGNORED.test(f)) return;
     this.o.onFile?.(f);
-    if (/^playbooks\/[^/]+\.md$/.test(f)) return this.debounce(f, () => { const ev = this.playbookEvent(f); if (ev.length) this.o.onEvents(ev); });
     if (/^ops\/state\/inbox\//.test(f)) return this.debounce('inbox', () => this.o.onEvents(this.inboxEvents()), 3000);
     const s = this.src.find(x => this.fileOf(x) === f);
     if (!s) return;

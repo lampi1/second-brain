@@ -8,7 +8,7 @@
 // things (a mention, his items and PRs, a state/assignee change on a followed ticket) also as a task-alert, which the
 // renderer shows as a toast with a short sound: never twice for the same change (keys kept in tasks.json), nothing on
 // the very first read (baseline), zero tokens (ADR 0029). The repos of the PRs on the page are matched to local clones
-// (repoDirs: "Apri chat" starts a PR's chat in its repo). State and read marks are kept in
+// (repoDirs: "Discuti" tells the Orchestrator the folder of a PR's work). State and read marks are kept in
 // userData/tasks.json so the page opens with the last read. Then, when the brain has it, ops/tools/qa-status.mjs
 // --mine --json: the "Test e QA" section (my PRs' test plans); a failure there keeps the last QA and never fails the read. Read-only by construction: the app never writes to DevOps.
 // Used by wiring.ts (tasks:* channels); logic in model.ts.

@@ -3,21 +3,21 @@
 // pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
 // palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { demoLayout, expandChats, showBrowsers, launch, launchDemo, openRegia, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { demoLayout, expandChats, showBrowsers, launch, launchDemo, openOrchestrator, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their requests and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
-  await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Regia's own floats in the layer
+  await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Orchestrator's own floats in the layer
   for (const id of ['qa', 'fix', 'sms', 'feedback']) await expect(page.getByTestId(`tile-chat-${id}`)).toBeVisible();
   await expect(page.getByTestId('tile-browser-tab-qa')).toBeVisible();
   // no "Finite oggi" dock: a finished chat stays a tile until it closes by itself (autoclose.spec.ts)
   await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
   await expect(page.getByTestId('folded-dock')).toHaveCount(0);
   // the Orchestrator column is always open beside the Grindhouse (ADR 0068)
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
   // one column: each browser follows the chat that drives it
   const panes = await page.locator('[data-workspace-pane]').evaluateAll(els => els.map(e => e.getAttribute('data-workspace-pane')));
   expect(panes.indexOf('browser:tab-qa')).toBe(panes.indexOf('chat:qa') + 1);
@@ -30,21 +30,21 @@ test('agents workspace: one column of chat strips, each browser right under its 
 
 test('answering a tile panel with "1" resolves the request without opening the chat', async () => {
   const { page, app } = await launchDemo();
-  await openRegia(page); // her decision on screen (reduced, it would float in the layer)
-  await expect(page.getByTestId('regia-input')).toBeFocused(); // opened: the keyboard is in her input first
+  await openOrchestrator(page); // her decision on screen (reduced, it would float in the layer)
+  await expect(page.getByTestId('orchestrator-input')).toBeFocused(); // opened: the keyboard is in her input first
   await expandChats(page, 'qa', 'feedback'); // their cards are on the open strips
-  await page.keyboard.press('Control+J'); // the oldest first: the Regia's decision
-  await expect(page.getByTestId('request-regia-regia-q1')).toBeFocused();
+  await page.keyboard.press('Control+J'); // the oldest first: the Orchestrator's decision
+  await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toBeFocused();
   await page.keyboard.press('1');
-  await expect(page.getByTestId('request-regia-regia-q1')).toHaveCount(0);
+  await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toHaveCount(0);
   await expect(page.getByTestId('request-qa-qa-q1')).toBeFocused(); // focus moved to the next card
   await page.keyboard.press('1');
   await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
   await expect(page.locator('[data-request-key]')).toHaveCount(1);
   await expect(page.getByTestId('tile-chat-qa')).toContainText('Apro il bug');
   await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
-  await openRegia(page);
-  await expect(page.getByTestId('tile-regia')).toContainText('Segnato: riparto da QA rimborsi');
+  await openOrchestrator(page);
+  await expect(page.getByTestId('tile-orchestrator')).toContainText('Segnato: riparto da QA rimborsi');
   // a permission: Esc on the focused card rejects it
   await page.keyboard.press('Control+J');
   await expect(page.getByTestId('request-feedback-feedback-p1')).toBeFocused();
@@ -157,22 +157,15 @@ test('ui:command from main steers the UI (maximize, restore, page, palette)', as
   await app.close();
 });
 
-test('Ctrl+N creates a chat: its tile appears with the first message and gets the focus', async () => {
-  const { page, app } = await launchDemo();
+test('Ctrl+N is a new request to the Orchestrator: its input takes the keyboard, the request goes to it', async () => {
+  const { page, app } = await launchDemo({ orchestrator: true });
   await page.keyboard.press('Control+N');
-  await expect(page.getByTestId('newchat')).toBeVisible();
-  // the folder is not asked: it defaults to the brain folder, the rest lives under Avanzate
-  await expect(page.getByTestId('newchat-cwd')).toBeHidden();
-  await page.getByTestId('newchat-advanced').locator('summary').click();
-  await page.getByTestId('newchat-title').fill('Prova nuova chat');
-  await page.getByTestId('newchat-prompt').fill('Controlla i log di oggi');
-  await shot(page, 'new-chat');
-  await page.keyboard.press('Control+Enter');
-  await expect(page.getByTestId('newchat')).toHaveCount(0);
-  const tile = page.locator('[data-testid^="tile-chat-"]', { hasText: 'Prova nuova chat' });
-  await expect(tile).toBeVisible();
-  await expect(tile).toContainText('Controlla i log di oggi');
-  await expect(tile.locator('textarea')).toBeFocused();
+  const input = page.getByTestId('orchestrator-input');
+  await expect(input).toBeFocused();
+  await page.keyboard.type('Controlla i log di oggi');
+  await shot(page, 'new-request');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tile-orchestrator')).toContainText('Controlla i log di oggi');
   await app.close();
 });
 
@@ -215,7 +208,7 @@ test('screenshots at 1280x800, in light theme, and with no data (empty states)',
     await setSize(app, 1600, 1000);
     await page.emulateMedia({ colorScheme: 'dark' });
     // no Orchestrator yet: the column offers to create one
-    await expect(page.getByTestId('regia-create')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-create')).toBeVisible();
     await expect(page.getByTestId('agents-empty')).toBeVisible();
     await shot(page, 'empty');
     await app.close();

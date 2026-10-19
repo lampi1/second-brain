@@ -16,7 +16,7 @@ const brief: Brief = {
     { section: 'Lavoro', label: 'Prodotto · Fix sconto', date: '2026-10-11', next: 'prossimo: aspetta la revisione della !4102', stale: false, done: false, area: 'Prodotto' },
     { section: 'Lavoro', label: 'Prodotto · Stampa', date: '2026-10-11', next: 'prossimo: rieseguire il test dopo il fix #90680', stale: false, done: false, area: 'Prodotto' },
     { section: 'Lavoro', label: 'Clienti · Export', date: '2026-10-10', next: 'prossimo: Alex decide se il PDF entra', stale: false, done: false, area: 'Prodotto' },
-    { section: 'Agenti e sessioni attive', label: 'Regia', date: '2026-10-11', next: 'prossimo: scaletta', stale: false, done: false, area: 'Personale e OS' },
+    { section: 'Agenti e sessioni attive', label: 'Orchestrator', date: '2026-10-11', next: 'prossimo: scaletta', stale: false, done: false, area: 'Personale e OS' },
   ],
   text: '',
 };

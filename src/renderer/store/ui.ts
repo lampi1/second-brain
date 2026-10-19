@@ -5,19 +5,18 @@
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, PermissionMode } from '@shared/contract';
-import type { RoleSelection } from '@shared/role-presets';
 import { readFileViewArg } from '@shared/file-view';
 import {readAppearance,type AppearancePreference} from '@shared/appearance';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { emptyRead, type ReadState } from '../lib/notify';
 import { now } from '../lib/clock';
-import { DEFAULT_V, type DockSize } from '../lib/regia-dock';
+import { DEFAULT_V, type DockSize } from '../lib/orchestrator-dock';
 import { createStore } from './createStore';
 import{t,type TextKey}from'../i18n';
 
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
-export type Modal = 'palette' | 'newChat' | 'shortcuts' | 'confirm' | 'settings' | 'regiaRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
+export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
 export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
@@ -29,23 +28,24 @@ export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.p
 export interface Place { page: 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
 
 export interface Prefs {
-  /** Validate against the loaded agent/page catalogs before use; preserve invalid saved data for explicit recovery. */
-  role?: RoleSelection;
+  /** the work profile's id (shared/work-profiles.ts): which Brain pages the sidebar shows; absent = all of them */
+  workProfile?: string;
   appearance:AppearancePreference;
   chatPanelsV:0|1|2;
   chatExpanded:Record<string,boolean>;
   /** an expanded strip shows its browsers beside it only when the user opened them (owner, 18/10: collapsed by default) */
   browserOpen:Record<string,boolean>;
+  /** parents whose delegated children are folded, in the Grindhouse and the sidebar tree alike (lib/chat-tree.ts) */
+  treeCollapsed:Record<string,boolean>;
   density: Density;
   theme: Theme;
   /** the Orchestrator widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
    *  the tab shown; when the user last saw its replies (the bar's unread count starts there) */
-  regiaOpen: boolean;
-  regiaSize: DockSize | null;
-  /** the default size's version the saved regiaSize was made under (lib/regia-dock.ts DEFAULT_V): an older one is dropped */
-  regiaSizeV: number;
-  regiaTab: string | null;
-  regiaSeenAt: number;
+  orchestratorOpen: boolean;
+  orchestratorSize: DockSize | null;
+  /** the default size's version the saved orchestratorSize was made under (lib/orchestrator-dock.ts DEFAULT_V): an older one is dropped */
+  orchestratorSizeV: number;
+  orchestratorSeenAt: number;
   /** chat | browser split of the focus mode */
   pairSplit: number;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
@@ -57,12 +57,12 @@ export interface ConfirmSpec { title: string; body: string; items?: string[]; co
 
 export interface UiState {
   prefs: Prefs;
-  maximized: string | null;      // tile key: 'regia' | 'chat:<id>' | 'browser:<id>'
+  maximized: string | null;      // tile key: 'orchestrator' | 'chat:<id>' | 'browser:<id>'
   focusMode: string | null;      // chat id
   focused: string | null;        // tile key that has the keyboard focus
   modal: Modal | null;
   confirm: ConfirmSpec | null;
-  regiaRenew: { chatId: string; to: Harness } | null; // the new-Orchestrator dialog: which Orchestrator, which engine preselected
+  orchestratorRenew: { chatId: string; to: Harness } | null; // the new-Orchestrator dialog: which Orchestrator, which engine preselected
   handoffChat: string | null;    // the chat whose hand-off the 'handoff' dialog shows
   handoffSession: string | null; // set: the note one cold continuation started from (read only, ADR 0031)
   ctxHidden: Record<string, number>; // long-chat notice hidden by the user, per chat: the context size when hidden
@@ -73,7 +73,6 @@ export interface UiState {
   history: Place[];              // back/forward (Alt+←/→); the recent places in the palette
   hist: number;
   center: boolean;               // the notification center panel
-  newChatRegia: boolean;         // the "Nuova chat" dialog opened as "Nuovo Orchestrator" (the overlay's +)
   read: ReadState;               // what was read / seen (badges, center), remembered
   highlight: { id: string; n: number } | null;
   toastDismissed: string[];      // event ids whose toast was closed or used
@@ -84,7 +83,7 @@ export interface UiState {
   hidden: string[];              // chats being closed (undo toast running)
   hiddenTabs: string[];          // browser tabs being closed (undo toast running)
   closing: string[];             // chats fading out before they are archived (auto-close)
-  regiaFirst: string | null;     // the request the Orchestrator widget shows first (Ctrl+J asked for it), else the oldest
+  orchestratorFirst: string | null;     // the request the Orchestrator widget shows first (Ctrl+J asked for it), else the oldest
   layerHeld: string | null;      // the global layer's card that has the keyboard (Ctrl+J took it there): the one popup until answered, "Rispondi dopo" or the app is back
   later: boolean;                // "Rispondi dopo" is on (main/later.ts, mirrored by lib/later.ts): every request waits in "Da rispondere", no popup
   announce: string;              // screen-reader live region
@@ -100,8 +99,8 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},
-  density: 'comfortable', theme: 'dark', regiaOpen: true, regiaSize: null, regiaSizeV: DEFAULT_V, regiaTab: null, regiaSeenAt: 0, pairSplit: 0.42,
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},treeCollapsed:{},
+  density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0, pairSplit: 0.42,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
 };
 const READ_KEY = 'sb.read.v1';
@@ -119,31 +118,32 @@ const flags=(raw:unknown):Record<string,boolean>=>raw&&typeof raw==='object'&&!A
 
 /** The remembered prefs, each field checked; `at` = now, the unread count's start when none was saved. */
 export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
-  if (!raw) return { ...defaultPrefs, regiaSeenAt: at };
+  if (!raw) return { ...defaultPrefs, orchestratorSeenAt: at };
   try {
-    // Retired and dropped: regiaRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
-    // Corsie views); navCollapsed (the icon-only sidebar); regiaPlacement, regiaTopHeight (the Orchestrator at the top);
+    // Retired and dropped: orchestratorRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
+    // Corsie views); navCollapsed (the icon-only sidebar); orchestratorPlacement, orchestratorTopHeight (the Orchestrator at the top);
     // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows); feedOpen (the Orchestrator's
-    // "Novità" feed, replaced by "N novità in attesa", #88).
-    const { regiaRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, regiaPlacement: _g, regiaTopHeight: _h, browsersHidden: _i, feedOpen: _j, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'regiaRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'regiaPlacement' | 'regiaTopHeight' | 'browsersHidden' | 'feedOpen', unknown>;
+    // "Novità" feed, replaced by "N novità in attesa", #88); role (a composition of pages and agents, now workProfile).
+    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, workProfile, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
       chatPanelsV:p.chatPanelsV===2?2:p.chatPanelsV===1?1:0,
       chatExpanded:flags(p.chatExpanded),
       browserOpen:flags(p.browserOpen),
+      treeCollapsed:flags(p.treeCollapsed),
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
-      regiaOpen: p.regiaOpen === true,
+      orchestratorOpen: p.orchestratorOpen === true,
       // a size saved under an older default goes back to the new default once (ADR 0028, 2026-10-13: wider and lower)
-      regiaSize: p.regiaSizeV === DEFAULT_V ? sizeOf(p.regiaSize) : null,
-      regiaSizeV: DEFAULT_V,
-      regiaTab: typeof p.regiaTab === 'string' ? p.regiaTab : null,
-      regiaSeenAt: typeof p.regiaSeenAt === 'number' && Number.isFinite(p.regiaSeenAt) ? p.regiaSeenAt : at,
+      orchestratorSize: p.orchestratorSizeV === DEFAULT_V ? sizeOf(p.orchestratorSize) : null,
+      orchestratorSizeV: DEFAULT_V,
+      orchestratorSeenAt: typeof p.orchestratorSeenAt === 'number' && Number.isFinite(p.orchestratorSeenAt) ? p.orchestratorSeenAt : at,
+      ...(typeof workProfile === 'string' ? { workProfile } : {}),
     };
-  } catch { return { ...defaultPrefs, regiaSeenAt: at }; }
+  } catch { return { ...defaultPrefs, orchestratorSeenAt: at }; }
 }
 
 const sizeOf = (v: unknown): DockSize | null => {
@@ -152,13 +152,13 @@ const sizeOf = (v: unknown): DockSize | null => {
 };
 
 function readPrefs(): Prefs {
-  try { return loadPrefs(localStorage.getItem(PREFS_KEY)); } catch { return { ...defaultPrefs, regiaSeenAt: Date.now() }; }
+  try { return loadPrefs(localStorage.getItem(PREFS_KEY)); } catch { return { ...defaultPrefs, orchestratorSeenAt: Date.now() }; }
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, regiaRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
-  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], regiaFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
-  map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, newChatRegia: false, read: readRead(), highlight: null, toastDismissed: [],
+  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
+  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], orchestratorFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
+  map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
 export function setRead(fn: (r: ReadState) => ReadState): void {
@@ -177,11 +177,12 @@ export function savePrefs(): void {
   saveTimer = null;
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(ui.get().prefs)); } catch { /* storage off: keep in memory */ }
 }
-/** Explicit role commits are durable before publishing; stale previews cannot overwrite a newer choice. */
-export function saveRolePreference(role: RoleSelection | undefined, expected: string | undefined): void {
+/** The work profile, saved at once (a stale choice from another window cannot overwrite a newer one: `expected`). */
+export function saveWorkProfile(id: string | undefined, expected: string | undefined): void {
   const current = ui.get().prefs;
-  if (JSON.stringify(current.role) !== expected) throw new Error('Role preference changed; preview again.');
-  const next = { ...current, role };
+  if (current.workProfile !== expected) throw new Error('Work profile changed; choose again.');
+  const { workProfile: _w, ...rest } = current;
+  const next: Prefs = id === undefined ? rest : { ...rest, workProfile: id };
   localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   ui.set(s => ({ ...s, prefs: next }));
 }
@@ -194,14 +195,18 @@ export function setBrowserOpen(id:string,open:boolean):void{
   const {chatExpanded,browserOpen}=ui.get().prefs;
   setPrefs({browserOpen:{...browserOpen,[id]:open},...(open&&chatExpanded[id]!==true?{chatExpanded:{...chatExpanded,[id]:true}}:{})});
 }
+/** Fold or unfold a parent's delegated children (saved: the tree comes back as it was after a restart). */
+export function setTreeCollapsed(id:string,collapsed:boolean):void{
+  const next={...ui.get().prefs.treeCollapsed};
+  if(collapsed)next[id]=true;else delete next[id];
+  setPrefs({treeCollapsed:next});
+}
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });
 
-export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal, newChatRegia: false }));
-/** "Nuova chat" as "Nuovo Orchestrator" (the overlay's +): name instead of title, no first message needed */
-export const openNewRegia = () => ui.set(s => ({ ...s, modal: 'newChat', newChatRegia: true }));
-export const closeModal = () => ui.set(s => ({ ...s, modal: null, confirm: null, regiaRenew: null, newChatRegia: false }));
-export const openRegiaRenew = (regiaRenew: { chatId: string; to: Harness }) => ui.set(s => ({ ...s, modal: 'regiaRenew', regiaRenew }));
+export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal }));
+export const closeModal = () => ui.set(s => ({ ...s, modal: null, confirm: null, orchestratorRenew: null }));
+export const openOrchestratorRenew = (orchestratorRenew: { chatId: string; to: Harness }) => ui.set(s => ({ ...s, modal: 'orchestratorRenew', orchestratorRenew }));
 export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 'confirm', confirm }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));
 /** The × of the long-chat notice: hidden until the context grows by another quarter of the threshold (any tile of it). */
@@ -214,9 +219,8 @@ export const setMap = (map: boolean, arg: string | null = null) => ui.set(s => (
 export const setCenter = (center: boolean) => ui.set(s => ({ ...s, center }));
 /** The Orchestrator widget expanded (the panel) or collapsed (the bar); remembered. Both ways its replies count as seen: what
  *  the open panel showed is read, the bar counts only what arrives after. */
-export const setRegiaOpen = (regiaOpen: boolean) => { if (ui.get().prefs.regiaOpen !== regiaOpen) { setPrefs({ regiaOpen, regiaSeenAt: now() }); savePrefs(); } }; // a click, not a drag: saved at once
+export const setOrchestratorOpen = (orchestratorOpen: boolean) => { if (ui.get().prefs.orchestratorOpen !== orchestratorOpen) { setPrefs({ orchestratorOpen, orchestratorSeenAt: now() }); savePrefs(); } }; // a click, not a drag: saved at once
 /** The Orchestrator tab shown (an Orchestrator's chat id); remembered. */
-export const setRegiaTab = (regiaTab: string) => { if (ui.get().prefs.regiaTab !== regiaTab) setPrefs({ regiaTab }); };
 let hlN = 0;
 export const highlight = (id: string) => ui.set(s => ({ ...s, highlight: { id, n: ++hlN } }));
 export const dismissEventToasts = (ids: string[]) => ui.set(s => ({ ...s, toastDismissed: [...new Set([...s.toastDismissed, ...ids])].slice(-500) }));
@@ -254,7 +258,7 @@ export function dismissToast(id:number){clearToastTimer(id);ui.set(s=>s.toasts.s
 /** Real wall-clock deadlines are independent of the frozen demo clock and catch up on focus/visibility changes. */
 export function expireToasts(){for(const item of ui.get().toasts)if(item.expiresAt<=Date.now())dismissToast(item.id);}
 
-export const setRegiaFirst = (key: string | null) => ui.set(s => (s.regiaFirst === key ? s : { ...s, regiaFirst: key }));
+export const setOrchestratorFirst = (key: string | null) => ui.set(s => (s.orchestratorFirst === key ? s : { ...s, orchestratorFirst: key }));
 export const setLayerHeld = (key: string | null) => ui.set(s => (s.layerHeld === key ? s : { ...s, layerHeld: key }));
 export const setLater = (on: boolean) => ui.set(s => (s.later === on ? s : { ...s, later: on }));
 export const setClosing = (chatId: string, on: boolean) => ui.set(s => ({ ...s, closing: on ? [...new Set([...s.closing, chatId])] : s.closing.filter(id => id !== chatId) }));

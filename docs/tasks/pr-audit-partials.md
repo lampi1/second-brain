@@ -9,7 +9,7 @@ ADR 41 (Fatto and appRepo), ADR 56 (timer registry), ADR 57 (IT/EN UI, app shell
 - **Timer registry (ADR 56).** `src/main/timers.ts` wraps setInterval/setTimeout per owner (`timersFor(owner)`): each
   live timer is tracked until it fires or is cleared. `app_state` exposes the snapshot (`appctl/tools.ts`) and doctor
   reports it (`scripts/doctor-timers.mjs`, wired in `scripts/doctor.mjs`). The recurring owners in main use it
-  (chats manager, mail, regia-wake, sweep, warm, admission, jobs scheduler, sync, headline, overlay, browser tabs,
+  (chats manager, mail, orchestrator-wake, sweep, warm, admission, jobs scheduler, sync, headline, overlay, browser tabs,
   compare queue, devops, brain live/usage/engines/estimates, demo and demo-browser). Tests: `test/unit/timers.test.ts`.
 - **IT/EN app shell (ADR 57).** Every visible text in `src/renderer/components/`, `App.tsx` and `main.tsx` now comes from
   the dictionary: new areas `audit`, `audit-expressions` and `components` (`src/renderer/i18n/areas/`). The Italian text

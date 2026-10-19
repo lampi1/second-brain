@@ -33,7 +33,7 @@ export function fromSaved(raw: unknown): Settings {
   let s = defaults();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return s;
   for (const d of schema()) {
-    if (d.key === 'mute.*' || /^(engineOn|engines)\./.test(d.key)) continue;
+    if (d.key === 'mute.*' || /^(engineOn|engines|modelTiers)\./.test(d.key)) continue;
     const v = d.key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), raw);
     if (v === undefined) continue;
     const c = validate(d.key, v);
@@ -63,9 +63,15 @@ export function fromSaved(raw: unknown): Settings {
       if (c.ok) s = setAt(s, c.key, c.value);
     }
   }
+  // the tier models of every engine the file names, also one the brain defines later
+  const tiers = (raw as { modelTiers?: unknown }).modelTiers;
+  if (tiers && typeof tiers === 'object' && !Array.isArray(tiers)) for (const [id, o] of Object.entries(tiers)) {
+    if (REMOVED_ENGINES.has(id) || !o || typeof o !== 'object' || Array.isArray(o)) continue;
+    for (const [tier, v] of Object.entries(o)) { const c = validate(`modelTiers.${id}.${tier}`, v); if (c.ok && c.value) s = setAt(s, c.key, c.value); }
+  }
   // the Orchestrator's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
-  const regiaEngine = (raw as { regiaChats?: { harness?: unknown } }).regiaChats?.harness;
-  if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine) && !REMOVED_ENGINES.has(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
+  const orchestratorEngine = (raw as { orchestratorChats?: { harness?: unknown } }).orchestratorChats?.harness;
+  if (typeof orchestratorEngine === 'string' && ENGINE_ID.test(orchestratorEngine) && !REMOVED_ENGINES.has(orchestratorEngine)) s = { ...s, orchestratorChats: { ...s.orchestratorChats, harness: orchestratorEngine } };
   return s;
 }
 

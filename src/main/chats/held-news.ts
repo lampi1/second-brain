@@ -1,15 +1,15 @@
 // "N novità in attesa" (#88): what the app holds back for the Orchestrators, gathered for the user. The delivery rule
-// (regia-delivery.ts) holds a work chat's news (regia-wake.ts) and mail to an Orchestrator (mail.ts) while the Orchestrator waits for
-// the user, groups it for REGIA_GROUP_MS, or lets quiet news ride along with the next delivery; to the user that looked
+// (orchestrator-delivery.ts) holds a work chat's news (orchestrator-wake.ts) and mail to an Orchestrator (mail.ts) while the Orchestrator waits for
+// the user, groups it for ORCHESTRATOR_GROUP_MS, or lets quiet news ride along with the next delivery; to the user that looked
 // like "news arrives only when I write" (2026-10-19). This module only reads both queues and tells the page
-// ('regia:held', 'regia:heldChanged'): it never delivers, never wakes an Orchestrator, spends no token and changes no rule.
+// ('orchestrator:held', 'orchestrator:heldChanged'): it never delivers, never wakes an Orchestrator, spends no token and changes no rule.
 // Each source calls back when its queue may have changed; the page is told only when the list really changed.
 // Used by wiring.ts / demo-wiring.ts (attachHeldNews), read by the Orchestrator's tile (renderer HeldNews.tsx);
 // pinned by test/unit/chats/held-news.test.ts.
 import type { EventMap, HeldNewsItem, HeldNewsState } from '../../shared/contract';
 import { errText, log } from '../log';
 
-/** A queue that holds news for an Orchestrator: RegiaWake (heldNews) or ChatMail (heldMail). */
+/** A queue that holds news for an Orchestrator: OrchestratorWake (heldNews) or ChatMail (heldMail). */
 export interface HeldSource { list(): HeldNewsItem[]; onChange(fn: () => void): void }
 
 export class HeldNewsHub {
@@ -20,7 +20,7 @@ export class HeldNewsHub {
     for (const s of sources) s.onChange(() => this.refresh());
   }
 
-  /** The list now ('regia:held'): oldest first. */
+  /** The list now ('orchestrator:held'): oldest first. */
   get(): HeldNewsState { return this.state; }
 
   /** Reads the sources again; tells the page when the list changed. */
@@ -38,7 +38,7 @@ export class HeldNewsHub {
   }
 }
 
-/** The wiring: the news of RegiaWake and, when there is one, ChatMail's held mail, sent as 'regia:heldChanged'. */
+/** The wiring: the news of OrchestratorWake and, when there is one, ChatMail's held mail, sent as 'orchestrator:heldChanged'. */
 export function attachHeldNews(
   emitter: { emit<K extends keyof EventMap>(channel: K, payload: EventMap[K]): void },
   wake: { heldNews(): HeldNewsItem[]; onHeldChange(fn: () => void): void },
@@ -46,5 +46,5 @@ export function attachHeldNews(
 ): HeldNewsHub {
   const sources: HeldSource[] = [{ list: () => wake.heldNews(), onChange: fn => wake.onHeldChange(fn) }];
   if (mail) sources.push({ list: () => mail.heldMail(), onChange: fn => mail.onHeldChange(fn) });
-  return new HeldNewsHub(sources, state => emitter.emit('regia:heldChanged', state));
+  return new HeldNewsHub(sources, state => emitter.emit('orchestrator:heldChanged', state));
 }

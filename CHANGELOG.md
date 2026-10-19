@@ -5,7 +5,44 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
+  Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
+  tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its
+  launch gave it. A role delegates to the roles it may launch, only those that fit within its own tools (the
+  planners Strategist and Router launch Scout and Judge; changes go back to the Orchestrator), with `agent_delegate`: visible child chats with a
+  self-contained contract, never more permissions than the parent, inside its folder, within your limits (Impostazioni
+  → Ruoli e deleghe: depth, children at once); each reports once with `agent_report`. No hidden sub-agents: an
+  engine's own sub-agent only for a quick read-only search. A child's permission above its parent's is refused and said
+  in its chat. Old catalogs are not carried over: export custom agents as packs from the previous stable first.
+- **Work starts only from the Orchestrator**: "Nuovo agente" and the role page's launch are gone; Ctrl+N and the
+  palette put the cursor in the Orchestrator's input ("Cosa vuoi fare?"), which plans and delegates (cloud agents too).
+- **The delegation tree** (the owner's design): in the Grindhouse each delegated chat is a thread card under its parent
+  on a curved line tinted by its state (task, character, role, skills, model, time, its steps, a state pill, what it
+  needs: a permission to answer, an error, a limit, a nudge); a click expands it in place into the whole chat, "Vai alla
+  chat" opens focus mode; the parent's bar counts its children and folds them. The sidebar shows the same tree in two
+  lines per chat under the Orchestrator; a click brings the card on screen, expanded. The fold is kept across
+  restarts. The steps cost no token: the engine's own plan (Claude TodoWrite, Codex plan, Cursor plan and todos), else
+  the contract's criteria, plus the recent tool calls in readable lines ("Letti 42 file in src/payments/").
+- **Questions go to the parent first** (`agent_ask_parent` / `agent_answer_child`); only a permission, an irreversible
+  or external action, a choice that changes the goal, or what the parent cannot answer reaches you, once: in the chat
+  you look at (the child's pause panel in its parent's chat, tagged with who asks) or in the questions window, never a
+  second panel in the Orchestrator.
+- **The Orchestrator sees state only**, plus your own words: what you write in any work chat reaches it as quiet news
+  (no extra turn) and the chat's parent as a note, so nothing conflicts; a child that followed you to a new goal says
+  so in its report and its card shows the new goal.
+- One "Discuti" button (EN "Discuss") replaces every "Apri chat" / "Apri una chat" entry point: Task records (work
+  items, pull requests, test plans and test cases), Idee, Qualità, Costi, Confronto, the charts, Script, Changelog and
+  the Dashboard. It puts a ready draft (title, source, link, numbers, folder hint) in the Orchestrator's input, never
+  sent by itself, and never creates a work chat: the Orchestrator decides and delegates. A discussed Task record shows
+  "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
+  chat".
 ### Fixed
+- The Scribe can write on Claude again: its brain-write class gives Edit and Write, and each edit is refused unless
+  the file's real path is inside the brain folder (no "..", no link or hard link out of it).
+- **Read-only commands are checked strictly** (#89 review): a role that may only read commands no longer runs
+  `sort -o`, `uniq a out`, `git grep -O`, PowerShell `( … )`/`@( … )`/`{ … }` or abbreviated `--output`; a command
+  beyond a delegating chat that may only read is refused, one beyond the role but within its parent asks you.
 - Security review fixes: a work chat's lessons (agent_learn_propose) apply only to its own agent, never as a rule for
   every agent, and wait until the Orchestrator accepts them with you; agent changes check the Orchestrator inside the
   authoring service; a sub-agent never gets more tools, MCP servers or permissions than its parent and runs in its
@@ -19,6 +56,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Local stores retry the rename on a transient Windows lock (EPERM/EACCES/EBUSY) and log a warning instead of an
   error when a retry worked (#71).
 ### Added
+- The Judge reviews a few finished role runs a day on another model (Impostazioni → Ruoli e deleghe, only in the stable
+  app); its verdict is the run's reviewed evidence for the improvement loop.
 - "N novità in attesa" on the Orchestrator (#88): the news and mail the delivery rule holds back for it (a worker that
   finished while it waits for your answer, a quiet question/permission/command, mail grouped or held) are counted above
   its input; a click lists chat, kind, since when and why it waits; it clears on delivery. No rule changed, no extra
@@ -30,8 +69,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Dove: Locale / Cloud" gated by each engine's readiness; `app_create_chat` takes `where: 'cloud'`; "Porta in locale"
   into a new worktree; the Cursor Cloud Agents key in Settings → Motori → Cursor; fake cloud agents in the demo.
   GitHub repos only; the app never pushes.
+- Role characters (#89): every role (Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe)
+  and Pulse is drawn as its own cartoon character, hand-written SVG in the app: a badge colour and a silhouette that
+  read at 16 px in the tree, a face and a prop from 24 px, in dark and light. Approval sheets:
+  `node scripts/agent-avatar-sheets.mjs` → `docs/screenshots/agent-avatars/`.
 
 ### Changed
+- The brain template ships no hidden sub-agents (issue #89): brain-editor, flow-optimizer, code-investigator and
+  reviewer are now the skills `brain-edit` (loaded by Scribe), `flow-review`, `code-investigation` (Scout) and
+  `code-review` (Sentinel), with their references and texts updated; an old notebook of a removed specialist is named
+  by `playbook.mjs list`, never deleted.
 - **The Orchestrator changes agents by itself** (ADR 0082, #84 point 6): `agent_update`, `agent_propose`,
   `agent_rollback`, `agent_archive`, `agent_restore` and a "Contesto massimo" from `agent_learn_propose` apply at once
   (a behavioural change as a trial version), each logged on the Skill page with "Annulla" and in the feed with "Annulla

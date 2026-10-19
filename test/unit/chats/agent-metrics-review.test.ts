@@ -9,7 +9,7 @@ import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { ChatStore } from '../../../src/main/chats/store';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 import { RUNS_MAX, endRun } from '../../../src/main/agents/runs';
 
 const roots: string[] = [], managers: ChatManager[] = [];
@@ -32,7 +32,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}, idleOnStart = true) {
   managers.push(m);
   const create = async () => {
     const c = await m.create({ harness: 'claude', cwd: dir, prompt: 'Rivedi il PR' }, 'user',
-      { owner: { ...compatibleOwner('claude', null), source: 'catalog', id: 'reviewer', version: 3 }, instructions: 'Sei un revisore.', policy: null }, {});
+      { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'reviewer', version: 3 }, instructions: 'Sei un revisore.', policy: null }, {});
     sinks.set(c.id, last);
     return c;
   };
@@ -111,7 +111,7 @@ describe('a pruned run is never counted again', () => {
 
   it('chats.json keeps only a well-formed pruned run id', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-review-22-')); roots.push(dir);
-    const chat = { harness: 'claude', cwd: dir, sessionId: null, title: 'x', model: null, effort: null, permissionMode: null, isRegia: false, createdAt: 1 };
+    const chat = { harness: 'claude', cwd: dir, sessionId: null, title: 'x', model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1 };
     fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 2, chats: [
       { ...chat, id: 'a', runPruned: 'r_0123456789ab' }, { ...chat, id: 'b', runPruned: 'not-a-run' }, { ...chat, id: 'c', runPruned: 7 },
     ] }));
@@ -133,7 +133,7 @@ describe('a run report goes to its own turn', () => {
     // Claude emits submission on a fresh send or autonomous activity, even when running is unchanged.
     s.changed({ effortSubmitted: null });
     reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
-    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' });
+    expect(f.run(c.id)?.report).toMatchObject({ summary: 'prima' });
   });
 
   it('a turn that died without a result does not let a later post-end turn overwrite the ended run’s report', async () => {
@@ -143,13 +143,13 @@ describe('a run report goes to its own turn', () => {
     reply(s, report({ outcome: 'done', verified: 'yes', summary: 'prima' }), Date.now());
     s.changed({ state: 'running' }); // a turn starts...
     s.changed({ state: 'error' }); // ...and the CLI dies: no result, r.turnAt stays set
-    await f.m.set(c.id, { workStatus: 'completed' }); // its Regia completes the run while idle
+    await f.m.set(c.id, { workStatus: 'completed' }); // its Orchestrator completes the run while idle
     const ended = f.run(c.id)!.endedAt!;
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(ended + 60_000);
-    s.changed({ state: 'running' }); // the Regia writes to the chat later: a turn after the end (no reopen)
+    s.changed({ state: 'running' }); // the Orchestrator writes to the chat later: a turn after the end (no reopen)
     reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
-    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' }); // an ended run takes nothing
+    expect(f.run(c.id)?.report).toMatchObject({ summary: 'prima' }); // an ended run takes nothing
   });
 
   it('a queued turn during which the run is completed still takes its report', async () => {
@@ -158,9 +158,9 @@ describe('a run report goes to its own turn', () => {
     const s = f.sink(c.id);
     s.changed({ state: 'running' });
     reply(s, 'primo turno, nessun report', Date.now()); // the CLI had a queued message: the chat stays running
-    await f.m.set(c.id, { workStatus: 'completed' }); // the Regia completes the run during the queued turn
+    await f.m.set(c.id, { workStatus: 'completed' }); // the Orchestrator completes the run during the queued turn
     reply(s, report({ outcome: 'done', verified: 'yes', summary: 'turno in coda' }), Date.now() + 1);
-    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, summary: 'turno in coda' } });
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { summary: 'turno in coda' } });
   });
 
   it('a session that exits mid-turn ends that turn: a later post-end turn in a new session takes nothing', async () => {
@@ -174,12 +174,12 @@ describe('a run report goes to its own turn', () => {
     const ended = f.run(c.id)!.endedAt!;
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(ended + 60_000);
-    await f.m.send(c.id, 'continua', undefined, false, 'regia'); // a new session (no reopen: not the user)
+    await f.m.send(c.id, 'continua', undefined, false, 'orchestrator'); // a new session (no reopen: not the user)
     const t = f.latest();
     expect(t).not.toBe(s);
     t.changed({ state: 'running' });
     reply(t, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
-    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { ok: true, summary: 'prima' } });
+    expect(f.run(c.id)).toMatchObject({ endReason: 'completed', report: { summary: 'prima' } });
   });
 
   it('a turn that ends with a result and goes idle does not lend its start to the next turn', async () => {
@@ -195,7 +195,7 @@ describe('a run report goes to its own turn', () => {
     vi.setSystemTime(ended + 60_000);
     s.changed({ state: 'running' });
     reply(s, report({ outcome: 'blocked', verified: 'no', summary: 'dopo la fine' }), Date.now());
-    expect(f.run(c.id)?.report).toMatchObject({ ok: true, summary: 'prima' });
+    expect(f.run(c.id)?.report).toMatchObject({ summary: 'prima' });
   });
 });
 

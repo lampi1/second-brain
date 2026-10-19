@@ -31,8 +31,10 @@ export class PulseStore {
       }
       for (const r of s.runs) if (!r || !['pulse', 'headline'].includes(r.job) || !finite(r.at) || !(r.usd === null || finite(r.usd))
         || !['reported', 'estimated', 'unknown'].includes(r.basis) || !text(r.id, 80) || !text(r.slot, 100) || !text(r.digestHash, 80) || !text(r.result, 100)) throw Error();
+      // a kind this release does not apply is left out (tolerant reader); a malformed entry stops the store
+      s.approvals = s.approvals.filter(a => !a || ['learned-rule', 'maintenance'].includes(a.kind));
       for (const a of s.approvals) if (!a || !text(a.id, 80) || !text(a.agentId, 80) || !text(a.title, 80) || !text(a.text, 4000)
-        || !finite(a.createdAt) || !['learned-rule', 'agent-suggestion', 'maintenance'].includes(a.kind)
+        || !finite(a.createdAt)
         || !['pending', 'approved', 'discarded'].includes(a.state) || !Array.isArray(a.evidence) || !a.evidence.every(e => text(e, 240))) throw Error();
       for (const [id, claim] of Object.entries(s.claims)) if (!['pulse', 'headline'].includes(id) || !claim || !finite(claim.at) || !text(claim.slot, 100)) throw Error();
       if (s.headline && (!text(s.headline.text, 160) || !finite(s.headline.monthUsd) || !finite(s.headline.monthCalls))) throw Error();

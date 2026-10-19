@@ -1,11 +1,10 @@
-// "Discutine" / "Apri una chat" on the ideas and the AI's suggestions (Idee), on the recurring AI errors and on every
-// number of Qualità and Costi (ADR 0037): the ready texts (a draft for the Orchestrator that quotes the topic with its source
-// file, its numbers or its line, the first message of a dedicated work chat), the line of an idea in its file, and the "discussa" record (which chat,
-// when) kept per topic in the app's own storage. The idea's state in ideas.md is never changed here: only the Orchestrator
+// "Discuti" on the ideas and the AI's suggestions (Idee), on the recurring AI errors and on every number of Qualità and
+// Costi (ADR 0037): the ready draft for the Orchestrator (quotes the topic with its source file, its numbers or its line),
+// the line of an idea in its file, and the "discussa" record (which chat, when) kept per topic in the app's own storage
+// (a DevOps record's too: components/RecordDiscussButton.tsx). The idea's state in ideas.md is never changed here: only the Orchestrator
 // changes it, when the owner asks. DOM-free and unit-tested (test/unit/brain-ui/discuss.test.ts); the buttons are
 // components/Discuss.tsx.
 import type { Idea, Reflection } from '../types';
-import { t as i18nT } from '../../i18n';
 import { short } from './text';
 
 /** A recurring error or a number of a stats page, quoted as it is on screen: its source file and its facts (count,
@@ -20,8 +19,6 @@ export interface Quote {
   facts: string[];
   /** the opening question; the default one by `what` otherwise */
   question?: string;
-  /** the source is a file of the brain folder (the dedicated chat can reread it); else it works from the facts */
-  inBrain?: boolean;
 }
 
 /** What can be discussed: an idea of ideas.md (the owner's or the AI's), a reflection of ai-reflections.md, a quoted
@@ -84,7 +81,7 @@ export function openingQuestion(t: Topic): string {
   return 'Does it still make sense? Give me pros, cons and the first small step to try it.';
 }
 
-/** The draft for the Orchestrator ("Discutine"): quotes the topic with file and line, ends with the opening question. */
+/** The draft for the Orchestrator ("Discuti"): quotes the topic with file and line, ends with the opening question. */
 export function discussText(t: Topic, line: number | null): string {
   if (t.kind === 'quote') {
     const q = t.quote;
@@ -115,31 +112,10 @@ export function discussText(t: Topic, line: number | null): string {
 /** Paragraphs of non-empty lines, separated by one blank line; an empty paragraph disappears. */
 const blocks = (...ps: string[][]): string => ps.map(p => p.filter(Boolean).join('\n')).filter(Boolean).join('\n\n');
 
-/** Title of the dedicated work chat ("Idea · <titolo>", short enough for a tile). */
-export const chatTitle = (t: Topic): string =>
-  `${t.kind === 'idea' ? i18nT('brainLib.discuss.kindIdea') : t.kind === 'reflection' ? i18nT('brainLib.discuss.kindReflection') : t.quote.what === 'errore' ? i18nT('brainLib.discuss.kindError') : i18nT('brainLib.discuss.kindNumber')} · ${short(titleOf(t), 44)}`;
-
-/** First message of the dedicated work chat ("Apri una chat"): read the topic, propose before touching anything. */
-export function chatPrompt(t: Topic, line: number | null): string {
-  if (t.kind === 'quote') {
-    const q = t.quote;
-    return [
-      `Let's work on ${q.what === 'errore' ? 'the recurring error' : 'the number'} «${q.title}» (source: ${q.source}${q.inBrain ? ', in the brain folder' : ''}).`,
-      ...q.facts.filter(f => f.trim()).map(f => `- ${short(f.trim().replace(/\s+/g, ' '), 300)}`),
-      `${q.inBrain ? 'Re-read the source' : 'Start from the numbers above'}, then in 5 lines: ${q.what === 'errore' ? 'why it happens and just one proposal to prevent it' : 'what the number tells us and what you would do'}, before touching anything.`,
-    ].join('\n');
-  }
-  const what = t.kind === 'idea' ? `on the idea «${t.idea.titolo}»` : `on the AI's reflection «${t.reflection.titolo}»`;
-  return [
-    `Let's work ${what} (${where(t, line)} in the brain folder).`,
-    `Read it completely${line ? ` from line ${line}` : ''}, then propose to me in 5 lines how to start and the first step, before touching anything.`,
-    'Only the Orchestrator changes the state of the idea in ideas.md, when I ask it to.',
-  ].join('\n');
-}
-
 // ── the "discussa" record ───────────────────────────────────────────────────────────────────────────────────────────
-/** One discussion: with the Orchestrator (the draft was sent) or in a dedicated work chat. */
-export interface Discussed { via: 'regia' | 'chat'; chatId: string; chatTitle: string; at: number }
+/** One discussion: with the Orchestrator (the draft was sent); `chat` = a dedicated work chat, kept only to read the
+ *  records written before 2026-10-19, when the bar could still open one. */
+export interface Discussed { via: 'orchestrator' | 'chat'; chatId: string; chatTitle: string; at: number }
 export type DiscussedMap = Record<string, Discussed[]>;
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
 
@@ -153,7 +129,7 @@ export function readDiscussed(kv: KV | null): DiscussedMap {
     const out: DiscussedMap = {};
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
       if (!Array.isArray(v)) continue;
-      const list = v.filter((d): d is Discussed => !!d && typeof d === 'object' && (d.via === 'regia' || d.via === 'chat') && typeof d.chatId === 'string' && typeof d.at === 'number')
+      const list = v.filter((d): d is Discussed => !!d && typeof d === 'object' && (d.via === 'orchestrator' || d.via === 'chat') && typeof d.chatId === 'string' && typeof d.at === 'number')
         .map(d => ({ via: d.via, chatId: d.chatId, chatTitle: typeof d.chatTitle === 'string' ? d.chatTitle : '', at: d.at }));
       if (list.length) out[k] = list;
     }

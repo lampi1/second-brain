@@ -1,5 +1,5 @@
 ---
-when: {"prompt":["regia","orchestrat","coordina","altre chat","sub-agent","subagent"],"tools":["Agent","Task"],"paths":["**/hub.md"]}
+when: {"prompt":["orchestrator","orchestrat","coordina","altre chat","sub-agent","subagent"],"tools":["Agent","Task"],"paths":["**/hub.md"]}
 ---
 # Hub: the Orchestrator
 

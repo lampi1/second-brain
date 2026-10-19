@@ -80,7 +80,7 @@ describe('the recall endpoint', () => {
 describe('HybridSearch.recall', () => {
   // one chunk: the PowerShell error first (line 10), then enough other errors for recall to run
   const errorText = (others = RECALL_MIN_ERRORS) => [
-    '- 2026-10-16 18:00 · Regia · brain · altro · detto: test node -e con virgolette · vero: PowerShell le rimuove',
+    '- 2026-10-16 18:00 · Orchestrator · brain · altro · detto: test node -e con virgolette · vero: PowerShell le rimuove',
     ...Array.from({ length: others }, (_, n) => `- 2026-10-17 09:00 · ui · app · bug · detto: chat ${n} avviate come sottoagenti · vero: chat visibili`),
   ].join('\n');
   class Fake extends HybridSearch {
@@ -119,7 +119,7 @@ describe('HybridSearch.recall', () => {
     const r = await ask(h);
     expect(r.ready).toBe(true);
     expect(r.errors.map(e => e.line)).toEqual([10]);
-    expect(r.errors[0]!.text).toMatch(/^Regia · brain · altro · detto: test node -e/);
+    expect(r.errors[0]!.text).toMatch(/^Orchestrator · brain · altro · detto: test node -e/);
 
     h.rows[0]!.text += '\n- 2026-10-18 08:00 · ui · app · bug · detto: x · vero: y';
     expect((await ask(h)).ready).toBe(true); // the previous vectors

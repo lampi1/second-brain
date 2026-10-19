@@ -33,7 +33,7 @@ function Preview() {
       key: spec.component, at: 0, target: 'chat', title: spec.component, summary: `${language === 'it' ? 'Revisione' : 'Revision'} ${revision}`,
       ui: spec.component === 'barChart' ? { ...spec, props: { ...spec.props, bars: spec.props.bars.map((b, i) => i === 0 ? { ...b, value: b.value + revision } : b) } } : spec }} />)}
     <div key={language}>
-      {(['window', 'tile', 'regia', 'lane', 'compact'] as const).map(variant => <section key={variant} style={{ marginTop: 32 }}>
+      {(['window', 'tile', 'orchestrator', 'lane', 'compact'] as const).map(variant => <section key={variant} style={{ marginTop: 32 }}>
         <RequestPanel req={{ ...richQuestion, id: variant }} variant={variant} chatTitle="Fixture"
           onAnswer={() => answerSet(n => n + 1)} />
       </section>)}

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession } from '../../../src/main/chats/session';
 import { BufferedSink, WarmPool, sameDir } from '../../../src/main/chats/warm';
-import { compatibleOwner } from '../../../src/main/agents/catalog';
+import { plainOwner } from '../../../src/main/agents/catalog';
 import { FAKE, alive, fakeLog, recEmitter, recSink, tmp, waitFor } from './helpers';
 
 interface Env { userData: string; home: string; cwd: string; argLog: string }
@@ -69,13 +69,13 @@ describe('warm Claude engine', () => {
     await waitFor(() => !alive(warmPid), 'the old waiting engine closed');
   });
 
-  it('Regie, worktrees and bypass chats never take it', async () => {
+  it('Orchestrators, worktrees and bypass chats never take it', async () => {
     const e = env();
     const m = manager(e);
     const c1 = await m.create({ harness: 'claude', cwd: e.cwd });
     await waitFor(() => starts(e).length === 2, 'the waiting engine');
     const warmPid = warmStart(e, c1.sessionId).pid;
-    await m.create({ harness: 'claude', cwd: e.cwd, regia: true });
+    await m.create({ harness: 'claude', cwd: e.cwd, orchestrator: true });
     await m.create({ harness: 'claude', cwd: e.cwd, permissionMode: 'bypassPermissions' });
     await waitFor(() => starts(e).length === 4, 'two cold starts');
     expect(alive(warmPid)).toBe(true);
@@ -87,7 +87,7 @@ describe('warm Claude engine', () => {
     const c1 = await m.create({ harness: 'claude', cwd: e.cwd });
     await waitFor(() => starts(e).length === 2, 'the waiting engine');
     const warmPid = warmStart(e, c1.sessionId).pid;
-    const c2 = await m.create({ harness: 'claude', cwd: e.cwd }, 'user', { owner: compatibleOwner('claude', null), instructions: '', policy: { tools: { allow: ['read'] }, ceiling: 'default' } });
+    const c2 = await m.create({ harness: 'claude', cwd: e.cwd }, 'user', { owner: plainOwner('claude', null), instructions: '', policy: { tools: { allow: ['read'] }, ceiling: 'default' } });
     const cold = await waitFor(() => starts(e).find(l => l.argv?.join(' ').includes(`--session-id=${c2.sessionId}`) && l.pid !== warmPid), 'the cold start');
     expect(cold.argv?.some(x => x.startsWith('--tools='))).toBe(true);
     expect(alive(warmPid)).toBe(true);

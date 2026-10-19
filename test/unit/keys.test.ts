@@ -37,12 +37,12 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(k('/', 'Slash', ctrl))).toEqual({ type: 'shortcuts' });
   });
 
-  it('navigation keys: back/forward, notifications, Regia, map', () => {
+  it('navigation keys: back/forward, notifications, Orchestrator, map', () => {
     expect(resolveShortcut(k('ArrowLeft', 'ArrowLeft', { altKey: true }))).toEqual({ type: 'back' });
     expect(resolveShortcut(k('ArrowRight', 'ArrowRight', { altKey: true }))).toEqual({ type: 'forward' });
     expect(resolveShortcut(k('N', 'KeyN', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'center' });
-    expect(resolveShortcut(k('r', 'KeyR', ctrl))).toEqual({ type: 'regia' });
-    expect(resolveShortcut(k('R', 'KeyR', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'regiaRenew' });
+    expect(resolveShortcut(k('r', 'KeyR', ctrl))).toEqual({ type: 'orchestrator' });
+    expect(resolveShortcut(k('R', 'KeyR', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'orchestratorRenew' });
     expect(resolveShortcut(k('M', 'KeyM', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'map' });
   });
 

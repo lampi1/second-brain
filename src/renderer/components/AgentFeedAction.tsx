@@ -1,4 +1,5 @@
-// Human-click actions for agent feed entries; calls typed IPC and never treats agent mail as approval.
+// Human-click actions for role feed entries (Annulla on an applied change, the way to Da approvare); typed IPC only,
+// never agent mail as approval. Used by the feed cards.
 import { useState } from 'react';
 import type { FeedAction } from '@shared/contract';
 import { sb } from '../sb';
@@ -13,11 +14,10 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     if (action.kind === 'agent-proposals') { go({ page: 'agenti', arg: 'studio' }); return; }
     setBusy(true); setError('');
     try {
-      if (action.kind === 'agent-restore') await sb.invoke('agents:restore', { id: action.agentId });
-      else await sb.invoke('agents:undo', action.undo);
+      await sb.invoke('agents:undo', action.undo);
       await refreshAgents();
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  return <><button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void click()}>{action.kind === 'agent-proposals' ? 'Esamina proposta' : action.kind === 'agent-restore' ? 'Ripristina' : 'Annulla modifica'}</button>{error && <span role="alert">{error}</span>}</>;
+  return <><button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void click()}>{action.kind === 'agent-proposals' ? 'Esamina proposta' : 'Annulla modifica'}</button>{error && <span role="alert">{error}</span>}</>;
 }

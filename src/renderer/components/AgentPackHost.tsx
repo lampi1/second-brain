@@ -1,6 +1,8 @@
-// Global import/export review surface; reusable from the agent list and window-wide file drops.
+// The pack review surface, from the Agenti page and window-wide file drops: export a role's pack, or import one whose
+// skills (and rules) attach to the built-in role the user picks, as a trial version of that role.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PackExportPlan, PackImportReview, PackTarget } from '@shared/agent-pack';
+import { ROLE_DEFAULTS, WORK_ROLE_IDS, type WorkRoleId } from '@shared/roles';
 import { sb } from '../sb';
 import { t } from '../i18n';
 import { toast } from '../store/ui';
@@ -36,7 +38,7 @@ export function AgentPackHost() {
 function PackReview({ request, close }: { request: PackRequest; close: () => void }) {
   const [target, setTarget] = useState<PackTarget>('sbagent'), [plan, setPlan] = useState<PackExportPlan | null>(null), [review, setReview] = useState<PackImportReview | null>(null);
   const [stats, setStats] = useState(false), [scripts, setScripts] = useState(false), [personal, setPersonal] = useState(false);
-  const [collision, setCollision] = useState<'update' | 'copy' | 'rename'>('rename');
+  const [roleId, setRoleId] = useState<WorkRoleId>('artisan');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const active = useRef(false), token = useRef<string | null>(null);
   const run = async (action: () => Promise<void>) => {
@@ -49,7 +51,7 @@ function PackReview({ request, close }: { request: PackRequest; close: () => voi
     if (request.kind === 'import') void run(async () => {
       const result = await sb.invoke('agents:importInspect', request.dropped ? { dropped: request.dropped } : { pick: true });
       if (!result) { close(); return; }
-      token.current = result.token; setReview(result); setCollision(result.collision.kind === 'update' ? 'update' : result.collision.kind === 'present' ? 'copy' : 'rename');
+      token.current = result.token; setReview(result); if (result.role) setRoleId(result.role);
     });
     return () => { if (token.current) void sb.invoke('agents:importCancel', { token: token.current }).catch(() => {}); };
   }, []);
@@ -65,7 +67,7 @@ function PackReview({ request, close }: { request: PackRequest; close: () => voi
       if (!result.ok) { setPlan({ ...plan, findings: result.findings }); return; }
       token.current = null; toast(t('pack.saved'), 'ok');
     } else if (review) {
-      await sb.invoke('agents:importApply', { token: review.token, approveScripts: scripts, approvePersonalData: personal, collision });
+      await sb.invoke('agents:importApply', { token: review.token, approveScripts: scripts, approvePersonalData: personal, roleId });
       token.current = null; await refreshAgents(); toast(t('pack.imported'), 'ok');
     } else return;
     close();
@@ -95,10 +97,9 @@ function PackReview({ request, close }: { request: PackRequest; close: () => voi
         <h3>{t('pack.permissions')}</h3><ul>{review.clamps.map(value => <li key={value}>{value}</li>)}</ul>
         {!!review.findings.length && <><h3>{t('pack.findings')}</h3><ul>{review.findings.map((f, i) => <li key={i}>{f.file}:{f.line ?? 0} · {f.rule}</li>)}</ul><label className="pack-check"><input type="checkbox" checked={personal} onChange={e => setPersonal(e.target.checked)} />{t('pack.personal')}</label></>}
         {review.collision.kind === 'present' && <p>{t('pack.present')}</p>}
-        <label>{t('pack.collision')} <select value={collision} onChange={e => setCollision(e.target.value as typeof collision)}>
-          {review.collision.kind === 'update' && <option value="update">{t('pack.update')}</option>}
-          {(review.collision.kind === 'update' || review.collision.kind === 'present') ? <option value="copy">{t('pack.copy')}</option> : <option value="rename">{t('pack.rename')}</option>}
-        </select></label><Notes values={review.warnings} />
+        <label>{t('pack.role')} <select value={roleId} onChange={e => setRoleId(WORK_ROLE_IDS.find(r => r === e.target.value) ?? 'artisan')} data-testid="pack-role">
+          {WORK_ROLE_IDS.map(id => <option key={id} value={id}>{ROLE_DEFAULTS[id].name}</option>)}
+        </select></label><p>{t('pack.roleHint')}</p><Notes values={review.warnings} />
       </>}
     </fieldset>{busy && <p role="status">{t('pack.working')}</p>}</div>
     <div className="modal-foot"><button type="button" className="btn" disabled={busy} onClick={dismiss}>{t('pack.close')}</button><button type="button" className="btn btn-primary" disabled={busy || !plan && !review || !!plan?.findings.length || !!review?.findings.length && !personal} onClick={() => void finish()}>{t(request.kind === 'export' ? 'pack.save' : 'pack.apply')}</button></div>

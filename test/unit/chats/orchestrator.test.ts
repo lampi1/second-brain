@@ -1,20 +1,18 @@
-// The unified Orchestrator (SPEC point 16): one coordinator for work and for the app's own code. Pinned here: the migration of
-// persisted Orchestrators (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
-// OrchestratorService (concurrent ensure), the tool scope only for the authenticated canonical caller, news of every chat (the app's code too)
-// and mail reaching it, and the updater's apply staying hard off.
+// The Orchestrator: one coordinator for work and for the app's own code. Pinned here: the singleton in ChatManager and in
+// OrchestratorService (concurrent ensure), the role text on its first message, the tool scope only for the authenticated
+// caller, news of every chat reaching it, and the updater's apply staying hard off.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager, restoredOwner } from '../../../src/main/chats/manager';
+import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { StoredChat } from '../../../src/main/chats/store';
-import { migrateOrchestrator, ORCHESTRATOR_ROLE } from '../../../src/main/chats/orchestrator';
+import { ORCHESTRATOR_ROLE } from '../../../src/main/agents/orchestrator-role';
 import { OrchestratorService } from '../../../src/main/chats/orchestrator-service';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
-import { ORCHESTRATOR_AGENT_ID } from '../../../src/main/agents/orchestrator-preset';
-import { RegiaWake } from '../../../src/main/chats/regia-wake';
-import { ChatMail, inboxDir, mailTools } from '../../../src/main/chats/mail';
+import { ORCHESTRATOR_AGENT_ID } from '../../../src/shared/agents';
+import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY } from '../../../src/main/brain/routing-demo';
@@ -29,61 +27,11 @@ afterEach(async () => {
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-orch-')); roots.push(d); return d; };
 
 const row = (p: Partial<StoredChat> & { id: string }): StoredChat => ({
-  harness: 'claude', cwd: 'C:/brain', sessionId: null, title: p.id, model: null, effort: null, permissionMode: null, isRegia: false, createdAt: 1, ...p,
+  harness: 'claude', cwd: 'C:/brain', sessionId: null, title: p.id, model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, ...p,
 });
 const summary = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
-  state: 'idle', costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
-});
-
-describe('migrateOrchestrator', () => {
-  const legacy = (): StoredChat[] => [
-    row({ id: 'appR', title: "Regia dell'app", space: 'app', appRegia: true, createdAt: 9, sessionId: '11111111-1111-4111-8111-111111111111' }),
-    row({ id: 'w2', title: 'Regia · Due', isRegia: true, regiaName: 'Due', regiaSince: 5, createdAt: 5 }),
-    row({ id: 'w1', title: 'Nuova chat', isRegia: true, regiaSince: 2, createdAt: 2, sessionId: '22222222-2222-4222-8222-222222222222' }),
-    row({ id: 'child2', regiaOf: 'w2' }),
-    row({ id: 'appWorker', space: 'app', cwd: 'C:/repo' }),
-    row({ id: 'loose' }),
-  ];
-
-  it('keeps the first work Regia as the Orchestrator, demotes the others and reassigns every child', () => {
-    const out = migrateOrchestrator(legacy());
-    const by = Object.fromEntries(out.map(c => [c.id, c]));
-    expect(by.w1).toMatchObject({ isRegia: true, orchestrator: true, title: 'Orchestrator', regiaName: 'Orchestrator', regiaSince: 2, sessionId: '22222222-2222-4222-8222-222222222222' });
-    expect(by.w1!.mailAliases).toEqual(expect.arrayContaining(['Nuova chat', 'Regia · Due', "Regia dell'app"]));
-    for (const id of ['w2', 'appR']) {
-      expect(by[id]).toMatchObject({ isRegia: false, regiaOf: 'w1' });
-      expect(by[id]).not.toHaveProperty('appRegia');
-      expect(by[id]).not.toHaveProperty('orchestrator');
-      expect(by[id]).not.toHaveProperty('regiaName');
-    }
-    // history kept: the demoted app Orchestrator keeps its session and title; app workers keep their scope
-    expect(by.appR).toMatchObject({ sessionId: '11111111-1111-4111-8111-111111111111', title: "Regia dell'app" });
-    expect(by.appWorker).toMatchObject({ cwd: 'C:/repo', regiaOf: 'w1' });
-    expect(by.child2!.regiaOf).toBe('w1');
-    expect(by.loose!.regiaOf).toBe('w1');
-    expect(out.filter(c => c.orchestrator)).toHaveLength(1);
-  });
-
-  it('falls back to the newest app Regia when there is no work Regia', () => {
-    const out = migrateOrchestrator([
-      row({ id: 'oldApp', space: 'app', appRegia: true, createdAt: 1 }),
-      row({ id: 'newApp', space: 'app', appRegia: true, createdAt: 3, cwd: 'C:/repo' }),
-    ]);
-    const o = out.find(c => c.orchestrator)!;
-    expect(o.id).toBe('newApp');
-    expect(o).not.toHaveProperty('space');
-    // known limit: the cwd stays where the session was started (resume needs it)
-    expect(o.cwd).toBe('C:/repo');
-    expect(out.find(c => c.id === 'oldApp')).toMatchObject({ isRegia: false, regiaOf: 'newApp' });
-  });
-
-  it('is idempotent and leaves rows without any coordinator untouched', () => {
-    const once = migrateOrchestrator(legacy());
-    expect(migrateOrchestrator(once)).toEqual(once);
-    const none = [row({ id: 'a' }), row({ id: 'b' })];
-    expect(migrateOrchestrator(none)).toEqual(none);
-  });
+  state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 });
 
 function fixture(stored?: StoredChat[]) {
@@ -91,7 +39,7 @@ function fixture(stored?: StoredChat[]) {
   if (stored) fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 2, chats: stored }));
   const sent: string[] = [];
   const agents = new AgentCatalogService({ userData: dir, models: () => [{ engine: 'anthropic', label: 'API', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }] });
-  const m = new ChatManager({ userData: dir, resolveAgent: req => agents.resolve(req), emitter: { emit() {} }, coldEveryMs: 0, unifiedOrchestrator: true, sessionFactory: (_h, _o, s: SessionSink) => {
+  const m = new ChatManager({ userData: dir, resolveAgent: req => agents.resolve(req), emitter: { emit() {} }, coldEveryMs: 0, sessionFactory: (_h, _o, s: SessionSink) => {
     let state = 'idle';
     return { harness: 'anthropic', sessionId: null, pid: null, root: null, alive: true, get busy() { return state === 'running'; },
       start() { s.changed({ state: 'idle' }); },
@@ -103,60 +51,51 @@ function fixture(stored?: StoredChat[]) {
   return { m, dir, sent, agents, file: () => JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] } };
 }
 
-describe('ChatManager with the unified Orchestrator', () => {
-  it('migrates persisted Regie before restoring, persists once, and a second start changes nothing', async () => {
-    const f = fixture([row({ id: 'w1', harness: 'anthropic', title: 'Nuova chat', isRegia: true, regiaSince: 1 }), row({ id: 'appR', harness: 'anthropic', space: 'app', appRegia: true, createdAt: 4 })]);
-    expect(f.m.list().filter(c => c.orchestrator).map(c => c.id)).toEqual(['w1']);
-    expect(f.m.list().find(c => c.id === 'w1')!.mailAliases).toContain('Nuova chat');
+describe('ChatManager with the Orchestrator', () => {
+  it('restores the saved Orchestrator once and a second start changes nothing', async () => {
+    const f = fixture([row({ id: 'w1', harness: 'anthropic', title: 'Orchestrator', isOrchestrator: true }), row({ id: 'kid', harness: 'anthropic', createdAt: 4 })]);
+    expect(f.m.list().filter(c => c.isOrchestrator).map(c => c.id)).toEqual(['w1']);
     const first = f.file();
-    expect(first.chats.find(c => c.id === 'w1')).toMatchObject({ orchestrator: true, title: 'Orchestrator' });
     await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, unifiedOrchestrator: true }); managers.push(again);
-    expect(again.list().filter(c => c.orchestrator).map(c => c.id)).toEqual(['w1']);
-    const roles = (rows: StoredChat[]) => rows.map(c => [c.id, c.title, c.isRegia, c.orchestrator, c.regiaOf, c.mailAliases, c.space, c.appRegia, c.sessionId]);
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0 }); managers.push(again);
+    expect(again.list().filter(c => c.isOrchestrator).map(c => c.id)).toEqual(['w1']);
+    const roles = (rows: StoredChat[]) => rows.map(c => [c.id, c.title, c.isOrchestrator, c.sessionId]);
     expect(roles(f.file().chats)).toEqual(roles(first.chats));
   });
 
   it('is a singleton: a second request returns it, an agent cannot create it, concurrent creations share one', async () => {
     const f = fixture(), cwd = tmp();
-    const [a, b] = await Promise.all([f.m.create({ harness: 'anthropic', cwd, regia: true }), f.m.create({ harness: 'anthropic', cwd, regia: true })]);
+    const [a, b] = await Promise.all([f.m.create({ harness: 'anthropic', cwd, orchestrator: true }), f.m.create({ harness: 'anthropic', cwd, orchestrator: true })]);
     expect(b.id).toBe(a.id);
-    expect(a).toMatchObject({ orchestrator: true, isRegia: true, title: 'Orchestrator' });
+    expect(a).toMatchObject({ isOrchestrator: true, title: 'Orchestrator' });
     expect(a).not.toHaveProperty('space');
-    await expect(f.m.create({ harness: 'anthropic', cwd, regia: true }, 'agent')).rejects.toThrow(/Only the user/);
+    await expect(f.m.create({ harness: 'anthropic', cwd, orchestrator: true }, 'agent')).rejects.toThrow(/Only the user/);
     // replacing another chat id does not sneak in a second one
-    expect((await f.m.create({ harness: 'anthropic', cwd, regia: true, replaces: 'c_nope' })).id).toBe(a.id);
-    expect(f.m.list().filter(c => c.orchestrator)).toHaveLength(1);
+    expect((await f.m.create({ harness: 'anthropic', cwd, orchestrator: true, replaces: 'c_nope' })).id).toBe(a.id);
+    expect(f.m.list().filter(c => c.isOrchestrator)).toHaveLength(1);
   });
 
-  it('a replacement takes the role and the aliases; the old one gives up the name', async () => {
-    const f = fixture([row({ id: 'w1', harness: 'anthropic', title: 'Nuova chat', isRegia: true, regiaSince: 1 }), row({ id: 'kid', harness: 'anthropic', regiaOf: 'w1' })]);
-    const n = await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, replaces: 'w1' });
+  it('a replacement takes the role; the old one gives up the name', async () => {
+    const f = fixture([row({ id: 'w1', harness: 'anthropic', title: 'Orchestrator', isOrchestrator: true }), row({ id: 'kid', harness: 'anthropic' })]);
+    const n = await f.m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, replaces: 'w1' });
     const by = Object.fromEntries(f.m.list().map(c => [c.id, c]));
-    expect(by[n.id]).toMatchObject({ orchestrator: true, title: 'Orchestrator', mailAliases: ['Nuova chat'], regiaSince: 1 });
-    expect(by.w1).toMatchObject({ isRegia: false });
+    expect(by[n.id]).toMatchObject({ isOrchestrator: true, title: 'Orchestrator' });
+    expect(by.w1).toMatchObject({ isOrchestrator: false });
     expect(by.w1!.title).not.toBe('Orchestrator');
-    expect(by.w1).not.toHaveProperty('mailAliases');
-    expect(by.kid!.regiaOf).toBe(n.id);
   });
 
-  it('gives a Regia saved with the old "Assistente" owner the Orchestrator\'s face back (#61)', () => {
-    const old = { id: 'routed-abc', name: 'Assistente', purpose: 'x', avatar: { kind: 'symbol' as const, value: 'briefcase' as const }, engine: 'claude', model: null, revision: 1, source: 'routed' as const };
-    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isRegia: true })).toMatchObject({ id: 'routed-abc', name: 'Orchestrator', avatar: { value: 'compass' }, source: 'routed' });
-    expect(restoredOwner({ agent: old, harness: 'claude', model: null, isRegia: false }).name).toBe('Assistente');
-  });
   it('primes the first message with the Orchestrator role', async () => {
     const f = fixture();
-    await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
-    expect(f.sent[0]!.startsWith(ORCHESTRATOR_ROLE)).toBe(true);
+    await f.m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
+    expect(f.sent[0]!.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
+    expect(ORCHESTRATOR_ROLE.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
   });
-  it('starts from the edited catalog preset and composes its instructions once', async () => {
+  it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
     f.agents.save({ ...seed, instructions: 'My custom coordination brief' }, seed.id);
-    const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), regia: true, prompt: 'Ciao' });
-    expect(chat.agent?.source).toBe('routed');
-    // the tile shows the Orchestrator's face, not the generic "Assistente" (#61)
+    const chat = await f.m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
+    expect(chat.agent?.source).toBe('catalog');
     expect(chat.agent).toMatchObject({ name: seed.name, purpose: seed.purpose, avatar: seed.avatar });
     expect(chat.run).toBeUndefined();
     expect(f.sent[0]!.split('My custom coordination brief')).toHaveLength(2);
@@ -171,7 +110,7 @@ describe('OrchestratorService', () => {
     let release!: () => void;
     const create = vi.fn(async (req: Record<string, unknown>) => {
       await new Promise<void>(r => { release = r; });
-      const c = summary({ id: 'o1', isRegia: true, orchestrator: true, title: String(req.title) });
+      const c = summary({ id: 'o1', isOrchestrator: true, title: String(req.title) });
       rows.push(c); return c;
     });
     const s = new OrchestratorService({ list: () => rows, create } as unknown as Pick<ChatService, 'list' | 'create'>, () => 'C:/brain');
@@ -181,32 +120,32 @@ describe('OrchestratorService', () => {
     expect((await p1).id).toBe('o1');
     expect((await p2).id).toBe('o1');
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create.mock.calls[0]![0]).toMatchObject({ cwd: 'C:/brain', regia: true, harness: 'claude' });
+    expect(create.mock.calls[0]![0]).toMatchObject({ cwd: 'C:/brain', orchestrator: true, harness: 'claude' });
     expect(await s.ensure({ harness: 'claude' })).toBe(rows[0]);
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('ensure routes like a Regia: the row for kind regia gives model and effort, a named model beats it', async () => {
+  it('ensure routes like a Orchestrator: the row for kind orchestrator gives model and effort, a named model beats it', async () => {
     const table = { version: 1, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
-      { kind: 'regia', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Regia: Sonnet', since: '2026-10-17', evidence: 'prova' },
+      { kind: 'orchestrator', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Orchestrator: Sonnet', since: '2026-10-17', evidence: 'prova' },
     ] } as RoutingTable;
     const make = () => {
       const made: Record<string, unknown>[] = [];
-      const create = async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `o${made.length}`, isRegia: true, orchestrator: true }); };
+      const create = async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `o${made.length}`, isOrchestrator: true }); };
       const s = new OrchestratorService({ list: () => [], create } as unknown as Pick<ChatService, 'list' | 'create'>, () => 'C:/brain', {
         route: r => routeChat(r, table, DEMO_REGISTRY, null, 7), engineOn: () => true, agentsMayOpen: () => true,
-        regiaChats: () => ({ harness: 'claude', claudeModel: 'claude-opus-5-5', cursorModel: '', claudeEffort: 'medium', cursorReasoning: 'medium', cursorFast: false }),
+        orchestratorChats: () => ({ harness: 'claude', claudeModel: 'claude-opus-5-5', cursorModel: '', claudeEffort: 'medium', cursorReasoning: 'medium', cursorFast: false }),
       });
       return { made, s };
     };
     const a = make();
     await a.s.ensure({ harness: 'claude' });
-    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', regia: true, regiaName: 'Orchestrator', title: 'Orchestrator', cwd: 'C:/brain' });
-    expect(a.made[0]!.route).toMatchObject({ kind: 'regia', source: 'table' });
+    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', orchestrator: true, title: 'Orchestrator', cwd: 'C:/brain' });
+    expect(a.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'table' });
     const b = make();
     await b.s.ensure({ harness: 'claude', model: 'claude-opus-5-5' });
     expect(b.made[0]).toMatchObject({ model: 'claude-opus-5-5' });
-    expect(b.made[0]!.route).toMatchObject({ kind: 'regia', source: 'override' });
+    expect(b.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'override' });
   });
 
   it('without a brain folder it refuses and creates nothing', async () => {
@@ -219,31 +158,33 @@ describe('OrchestratorService', () => {
 
 describe('app control scope', () => {
   const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
-  function tools(list: ChatSummary[], unified: boolean, caller: string) {
+  function tools(list: ChatSummary[], caller: string) {
     const made: Record<string, unknown>[] = [];
     const chats = { list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `n${made.length}`, title: String(req.title) }); } } as unknown as ChatService;
-    const regiaChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const code = { repo: () => 'C:/repo', inRepo: async (d: string) => d.replace(/\\/g, '/').startsWith('C:/repo') };
-    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', unified, code }, caller);
+    const catalog = new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-orch-roles-')), models: () => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }] });
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', code,
+      agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, caller);
     return { made, create: all.find(t => t.name === 'app_create_chat')!, all };
   }
-  const orch = summary({ id: 'o', isRegia: true, orchestrator: true, title: 'Orchestrator' });
-  const work = summary({ id: 'w', regiaOf: 'o' });
+  const orch = summary({ id: 'o', isOrchestrator: true, title: 'Orchestrator' });
+  const work = summary({ id: 'w' });
 
-  it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never a Regia', async () => {
-    const t = tools([orch, work], true, 'o');
-    expect(await t.create.run({ title: 'A', prompt: 'p' })).toMatchObject({ cwd: 'C:/brain' });
-    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
-    expect(t.made[1]).toMatchObject({ regiaOf: 'o', regia: false });
-    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', regia: true }))).rejects.toThrow(/Orchestrator/);
+  it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never a Orchestrator', async () => {
+    const t = tools([orch, work], 'o');
+    expect(await t.create.run({ title: 'A', prompt: 'p', roleId: 'artisan' })).toMatchObject({ cwd: 'C:/brain' });
+    expect(await t.create.run({ title: 'B', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
+    expect(t.made[1]).toMatchObject({ orchestrator: false });
+    await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', roleId: 'artisan', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
     expect(t.made).toHaveLength(2);
   });
 
   it('derives app-code routing from cwd (ADR 0079: no app space any more)', async () => {
-    const t = tools([orch, work], true, 'o');
-    await t.create.run({ title: 'Neutral title', prompt: 'p', cwd: 'C:/repo' });
-    await t.create.run({ title: 'Other', prompt: 'p', cwd: 'C:/elsewhere' });
+    const t = tools([orch, work], 'o');
+    await t.create.run({ title: 'Neutral title', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' });
+    await t.create.run({ title: 'Other', prompt: 'p', roleId: 'artisan', cwd: 'C:/elsewhere' });
     expect(t.made[0]).toMatchObject({ cwd: 'C:/repo', route: { area: 'App' } });
     expect(t.made[1]).toMatchObject({ cwd: 'C:/elsewhere' });
     expect((t.made[1] as { route?: { area?: string } }).route?.area).not.toBe('App');
@@ -252,77 +193,37 @@ describe('app control scope', () => {
   });
 
   it('another chat on the same mount gets no union scope', async () => {
-    const t = tools([orch, work], true, 'w');
-    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
+    const t = tools([orch, work], 'w');
+    expect(await t.create.run({ title: 'B', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
     expect(t.made).toHaveLength(1);
     expect(t.made[0]).not.toHaveProperty('space');
   });
 
-  it('a new chat may not take a former Regia\'s title (the Orchestrator\'s mail box)', async () => {
-    const t = tools([{ ...orch, mailAliases: ['Nuova chat'] }, work], true, 'o');
-    await expect(Promise.resolve(t.create.run({ title: 'nuova  CHAT', prompt: 'p' }))).rejects.toThrow(/reserved/);
+  it('a new chat may not take the Orchestrator\'s title (its mail box)', async () => {
+    const t = tools([orch, work], 'o');
+    await expect(Promise.resolve(t.create.run({ title: 'orchestrator', prompt: 'p', roleId: 'artisan' }))).rejects.toThrow(/reserved/);
     expect(t.made).toHaveLength(0);
   });
 
   it('a generic endpoint never offers the space parameter', () => {
-    const t = tools([orch], false, 'o');
+    const t = tools([orch], 'o');
     expect(JSON.stringify(t.create.inputSchema)).not.toContain('"space"');
   });
 });
 
 describe('news and mail reach the Orchestrator', () => {
-  it('a work chat\'s finished turn wakes its Regia, Orchestrator or not', async () => {
+  it('a work chat\'s finished turn wakes the Orchestrator', async () => {
     vi.useFakeTimers();
     try {
-      for (const orchestrator of [true, false]) {
-        const sent: string[] = [];
-        const regia = summary({ id: 'r', isRegia: true, title: 'Orchestrator', ...(orchestrator ? { orchestrator: true as const } : {}) });
-        const w = new RegiaWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => [regia], groupMs: 10, perChatMs: 0, now: () => Date.now() });
-        w.observe('chat:updated', summary({ id: 'fix', regiaOf: 'r', state: 'running' }));
-        w.observe('chat:updated', summary({ id: 'fix', regiaOf: 'r', state: 'idle', lastText: 'PR pronta' }));
-        await vi.advanceTimersByTimeAsync(20);
-        expect(sent.some(t => t.includes('«fix»'))).toBe(true);
-        w.stop();
-      }
+      const sent: string[] = [];
+      const orchestrator = summary({ id: 'r', isOrchestrator: true, title: 'Orchestrator' });
+      const w = new OrchestratorWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => [orchestrator], groupMs: 10, perChatMs: 0, now: () => Date.now() });
+      w.observe('chat:updated', summary({ id: 'fix', state: 'running' }));
+      w.observe('chat:updated', summary({ id: 'fix', state: 'idle', lastText: 'PR pronta' }));
+      await vi.advanceTimersByTimeAsync(20);
+      expect(sent.some(t => t.includes('«fix»'))).toBe(true);
+      w.stop();
     } finally { vi.useRealTimers(); }
-  });
-
-  it('a migrated Regia\'s mailbox is served by the Orchestrator unless a live chat still holds that title', async () => {
-    const root = tmp(), dir = inboxDir(root);
-    fs.mkdirSync(path.join(dir, 'nuova-chat'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'nuova-chat', '1.json'), JSON.stringify({ id: '1', thread: '1', hop: 1, replyTo: null, from: 'x', to: 'Nuova chat', at: new Date().toISOString(), text: 'stato?' }));
-    const o = summary({ id: 'o', isRegia: true, orchestrator: true, title: 'Orchestrator', mailAliases: ['Nuova chat'], state: 'running' });
-    let list = [o];
-    const got: string[] = [];
-    const mail = new ChatMail({ root: () => root, instance: 't', chats: { list: () => list, send: async id => { got.push(id); } } });
-    expect(mail.hasWork('o')).toBe(true);
-    expect(mail.liveChats().get('nuova-chat')?.id).toBe('o');
-    // a live chat still titled "Nuova chat" keeps its own box
-    const old = summary({ id: 'old', title: 'Nuova chat', state: 'idle' });
-    list = [o, old];
-    expect(mail.liveChats().get('nuova-chat')?.id).toBe('old');
-    expect(mail.hasWork('o')).toBe(false);
-    // so does an open one that is not live (send_to_chat still targets it); a closed one gives the box up
-    for (const state of ['starting', 'error', 'closed'] as const) {
-      list = [o, summary({ id: 'old', title: 'Nuova chat', state })];
-      expect(mail.liveChats().get('nuova-chat')?.id).not.toBe('o');
-      expect(mail.hasWork('o')).toBe(false);
-    }
-    list = [o, summary({ id: 'old', title: 'Nuova chat', state: 'closed', closedAt: 1 })];
-    expect(mail.liveChats().get('nuova-chat')?.id).toBe('o');
-    list = [o];
-    expect(await mail.tick()).toBe(1);
-    expect(got).toEqual(['o']);
-    mail.stop();
-  });
-
-  it('send_to_chat to an old Regia title lands in the Orchestrator\'s box', () => {
-    const root = tmp();
-    const o = summary({ id: 'o', isRegia: true, orchestrator: true, title: 'Orchestrator', mailAliases: ['Nuova chat'] });
-    const me = summary({ id: 'w', title: 'Worker', regiaOf: 'o' });
-    const send = mailTools({ root: () => root, chats: () => [o, me], crossRefusal: () => null, deliver: () => {}, chainOf: () => null }).find(t => t.name === 'send_to_chat')!;
-    expect(send.run({ to: 'Nuova chat', text: 'finito' }, { params: { chatId: 'w' } })).toContain('inviato a "Orchestrator"');
-    expect(fs.readdirSync(path.join(inboxDir(root), 'orchestrator')).filter(n => n.endsWith('.json'))).toHaveLength(1);
   });
 });
 

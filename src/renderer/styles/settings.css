@@ -1,4 +1,4 @@
-/* The Settings page (components/SettingsPage.tsx, ProfileSettings.tsx and the parts they host: RolePreferences,
+/* The Settings page (components/SettingsPage.tsx, ProfileSettings.tsx and the parts they host: WorkProfilePreferences,
    CodexAutonomy, AppearancePreview, the onboarding connector cards): the same look as the Dashboard (dashboard.css):
    a page header with eyebrow, title and search, section links, then one card per group with an icon, a title and a
    one-line description; inside, rows with the text left and the control right. Buttons keep one hierarchy: primary
@@ -136,7 +136,7 @@
 .st-value.mono { font-family: var(--mono); }
 .st-essential select { max-width: 100%; min-height: 32px; }
 /* a plain .btn inside the page (hosted parts) reads as secondary, never as the browser's grey button */
-.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-regia) {
+.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-orchestrator) {
   background: var(--surface-2); border-color: var(--border-2); color: var(--text); }
 .st-essential .btn:not(.btn-s):not(.btn-m):not(.btn-l) { min-height: 32px; padding: 0 12px; font-size: var(--fs-m); }
 .st-essential .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -157,7 +157,7 @@
 .st-key .st-input { width: 30ch; max-width: 100%; text-align: left; background: var(--surface); }
 .st-key .st-desc { align-self: center; }
 
-/* Il mio spazio: the role picker (RolePreferences.tsx) */
+/* Il mio spazio: the work profile picker (WorkProfilePreferences.tsx) */
 .st-card > section.st-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 20px; }
 .st-card > section.st-tool > :not(label):not(.btn) { flex-basis: 100%; }
 .st-card > section.st-tool h3 { margin: 0; font-size: var(--fs-m); font-weight: 600; color: var(--text); }
@@ -166,7 +166,7 @@
 .st-card > section.st-tool p.st-desc { color: var(--text-3); }
 .st-card > section.st-tool p[role="status"]:empty { display: none; }
 .st-card > section.st-tool label { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-s); color: var(--text-2); font-weight: 500; }
-.st-card > section.st-tool [data-testid="role-preview"] { display: grid; gap: 6px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+.st-card > section.st-tool [data-testid="work-profile-pages"] { display: grid; gap: 6px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
 
 /* Codex: repository-scoped consent (CodexAutonomy.tsx), readable with long Windows paths */
 .st-autonomy { display: grid; gap: 10px; justify-items: start; padding: 16px 20px 18px; border-top: 1px solid var(--border); }
@@ -224,3 +224,9 @@
 /* Aggiornamenti (AppUpdateSettings.tsx): the new commits from GitHub */
 .st-update-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
 .st-update-list code { font-size: 12px; opacity: .75; margin-right: 4px; }
+/* Ruoli e deleghe: the model of each tier per engine (DelegationSettings.tsx) */
+.st-tiers { display:grid; gap:6px; width:100%; margin-top:8px; }
+.st-tiers-row { display:grid; grid-template-columns:minmax(90px, 140px) repeat(3, minmax(0, 1fr)); gap:8px; align-items:center; }
+.st-tiers-head { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
+.st-tiers-engine { font-weight:600; color:var(--text-2); }
+.st-tier-input { width:100%; min-width:0; font-family:var(--mono); font-size:12px; }

@@ -47,8 +47,7 @@ import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
 import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
-import { classifierRequest, classifyByWords } from './agents/classifier';
-import { ClassifierTuning } from './agents/classifier-calibration';
+import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
 
 /** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
@@ -124,7 +123,7 @@ app.whenReady().then(async () => {
     });
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
-    regiaChats: () => s.brain.settings().regiaChats,
+    orchestratorChats: () => s.brain.settings().orchestratorChats,
   });
   // the Grindhouse's headline (SPEC 18): never a model call in the demo or under test
   const readBrain = (rel: string): string => {
@@ -171,20 +170,16 @@ app.whenReady().then(async () => {
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'agents:list': () => s.agents.list(),
-    // the demo has no local model: its ranking is words only, labelled as such in the dialog
-    'agents:classify': a => s.classifyAgents ? s.classifyAgents(a?.request) : classifyByWords(classifierRequest(a?.request), s.agents.list().profiles),
-    // the demo has no runs to calibrate from: defaults, nothing pending; a decision there changes nothing on disk
-    'agents:classifierCalibration': () => (s.classifierTuning ?? new ClassifierTuning(null, () => ({ runs: [], profiles: [] }))).read(),
-    'agents:classifierDecide': a => (s.classifierTuning ?? new ClassifierTuning(null, () => ({ runs: [], profiles: [] }))).decide(a),
-    'agents:proposals': () => s.agentAuthoring?.proposals() ?? [],
-    'agents:proposalDecide': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.decide(a.id, a.accept); },
-    'agents:undo': a => { if (!s.agentAuthoring) throw new Error('Authoring unavailable.'); return s.agentAuthoring.undo(a); },
+    // the brain skills that fit a request (the role start dialog); the demo ranks by words only
+    'skills:suggest': a => { if (!s.suggestSkills) throw new Error('Suggerimenti delle skill non disponibili.'); return s.suggestSkills(suggestRequest(a?.request)); },
+    'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },
     'agents:save': a => s.agentPacks.learning.save(a.profile, a.id),
+    'agents:reset': a => s.agents.reset(String(a?.id ?? '')),
     'agents:exportPlan': a => s.agentPacks.packs.exportPlan(a.id, a.target),
     'agents:exportFix': a => s.agentPacks.packs.exportFix(a.token, a.item, a.action),
     'agents:export': a => s.agentPacks.packs.export(a.token, a.includeStats),
     'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
-    'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.collision, a.approvePersonalData),
+    'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.roleId, a.approvePersonalData),
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.state(),
@@ -195,12 +190,7 @@ app.whenReady().then(async () => {
     'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
     // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
     'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },
-    'agents:duplicate': a => s.agents.duplicate(a.id),
-    'agents:archive': a => s.agents.archive(a.id),
-    'agents:restore': a => s.agents.restore(a.id),
     'agents:history': a => s.agents.history(a.id),
-    'agents:keep': a => s.agents.keep(a?.id, 'brother'),
-    'agents:retire': a => s.agents.retire(a?.id, typeof a?.reason === 'string' ? a.reason.slice(0, 600) : '', 'brother'),
     'run:outcome': a => markRunOutcome(s.chats, a),
     'agents:metrics': a => {
       const root = demo ? null : s.brain.info().brainRoot;
@@ -257,17 +247,12 @@ app.whenReady().then(async () => {
     'chat:list': () => s.chats.list(),
     'chat:items': a => s.chats.items(a.chatId),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
-    'chat:create': async a => { const chat = await s.chats.create(a); if (a.prompt) s.agentAuthoring?.rememberHumanMessage(chat.id, a.prompt); return chat; },
-    // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
+    'chat:create': a => s.chats.create(a),
+    // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { const before = s.chats.items(a.chatId).map(i => i.id); await s.chats.send(a.chatId, a.text, a.images); s.agentAuthoring?.rememberHumanMessage(a.chatId, a.text, before); s.chats.resumedByUser?.(a.chatId, a.text); },
-    'chat:answer': a => {
-      // the user's own answer in a question panel may approve one agent creation (agent_create, issue #73)
-      const q = a.answer?.kind === 'question' ? s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId && r.type === 'question') : undefined;
-      if (q && a.answer.kind === 'question') s.agentAuthoring?.rememberHumanAnswer(a.chatId, a.requestId, q.questions?.map(x => x.question).join(' / ') || q.title, a.answer.answers);
-      return s.chats.answer(a.chatId, a.requestId, a.answer);
-    },
+    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); if (typeof a.text === 'string' && a.text.trim()) s.chats.userWrote?.(a.chatId, a.text); },
+    'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
     'chat:close': a => s.chats.close(a.chatId),
@@ -373,7 +358,7 @@ app.whenReady().then(async () => {
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
-    'regia:held': () => s.heldNews?.get() ?? { items: [] },
+    'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
     }) : pulseStubHandlers())),

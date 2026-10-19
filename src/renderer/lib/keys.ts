@@ -22,8 +22,8 @@ export type Command =
   | { type: 'back' }
   | { type: 'forward' }
   | { type: 'center' }
-  | { type: 'regia' }
-  | { type: 'regiaRenew' }
+  | { type: 'orchestrator' }
+  | { type: 'orchestratorRenew' }
   | { type: 'map' }
   | { type: 'stato' }
   | { type: 'settings' };
@@ -36,8 +36,8 @@ export const getKeymap = (): readonly { keys: string; what: string }[] => [
   { keys: t('tools.keys.backToChatsKey'), what: t('tools.keys.backToChatsWhat') },
   { keys: t('tools.keys.backForwardKey'), what: t('tools.keys.backForwardWhat') },
   { keys: t('tools.keys.goToKey'), what: t('tools.keys.goToWhat') },
-  { keys: t('tools.keys.regiaKey'), what: t('tools.keys.regiaWhat') },
-  { keys: t('tools.keys.newRegiaKey'), what: t('tools.keys.newRegiaWhat') },
+  { keys: t('tools.keys.orchestratorKey'), what: t('tools.keys.orchestratorWhat') },
+  { keys: t('tools.keys.newOrchestratorKey'), what: t('tools.keys.newOrchestratorWhat') },
   { keys: t('tools.keys.notificationsKey'), what: t('tools.keys.notificationsWhat') },
   { keys: t('tools.keys.statusKey'), what: t('tools.keys.statusWhat') },
   { keys: t('tools.keys.map3dKey'), what: t('tools.keys.map3dWhat') },
@@ -67,7 +67,7 @@ export function resolveShortcut(e: KeyLike): Command | null {
     if (e.code === 'KeyF') return { type: 'focusMode' };
     if (e.code === 'KeyN') return { type: 'center' };
     if (e.code === 'KeyM') return { type: 'map' };
-    if (e.code === 'KeyR') return { type: 'regiaRenew' };
+    if (e.code === 'KeyR') return { type: 'orchestratorRenew' };
     if (e.code === 'KeyS') return { type: 'stato' };
     return null;
   }
@@ -75,7 +75,7 @@ export function resolveShortcut(e: KeyLike): Command | null {
     if (e.code === 'KeyK') return { type: 'palette' };
     if (e.code === 'KeyJ') return { type: 'next' };
     if (e.code === 'KeyN') return { type: 'newChat' };
-    if (e.code === 'KeyR') return { type: 'regia' };
+    if (e.code === 'KeyR') return { type: 'orchestrator' };
     if (e.code === 'Period') return { type: 'stopFocused' };
     if (e.key.toLowerCase() === 'w') return { type: 'closeFocused' }; // the character, like Electron's menu (AZERTY)
     if (e.code === 'Slash' || e.key === '/') return { type: 'shortcuts' };

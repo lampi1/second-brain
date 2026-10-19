@@ -90,7 +90,7 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
         : r2.data ? trend(c.total, prev ? prev.usd : null, { what: '', now: t('costs.currentPeriod',{days}), before: t('costs.previousPeriod',{days}), fmtN: fmt.usd })
           : null;
   const range = c ? (c.from === c.to ? t('costs.onDay',{day:fmt.day(c.to)}) : t('costs.range',{from:fmt.day(c.from),to:fmt.day(c.to)})) : '';
-  const q = (id: string, title: string, facts: string[], question?: string): Quote => ({ id: `costi|${id}`, what: 'numero', title, source: `${t('costs.source')}, ${range}`, facts, question, inBrain: false });
+  const q = (id: string, title: string, facts: string[], question?: string): Quote => ({ id: `costi|${id}`, what: 'numero', title, source: `${t('costs.source')}, ${range}`, facts, question });
   const byDay = c ? Object.entries(c.byDay).sort(([a], [b]) => a.localeCompare(b)) : [];
   const nDays = Math.max(1, byDay.length);
   const kinds = c ? topN(moneyEntries(c.byKind), 7) : [];

@@ -104,7 +104,7 @@ function copy(from, to) {
 }
 copy(HERE, output);
 writeFileSync(join(output, 'me.md'), render(readFileSync(join(HERE, 'me.template.md'), 'utf8')));
-for (const d of ['journal/brief', 'playbooks', 'reviews']) mkdirSync(join(output, d), { recursive: true });
+for (const d of ['journal/brief', 'reviews']) mkdirSync(join(output, d), { recursive: true });
 
 try {
   // A parent shell's GIT_DIR/WORK_TREE/config must not redirect initialization or run user/global hooks/signers.
@@ -144,9 +144,9 @@ if (harness.includes('claude')) {
     const t = existsSync(p) ? readFileSync(p, 'utf8') : '';
     if (!t.includes(`@${B}/me.md`)) writeFileSync(p, `${t}${t && !t.endsWith('\n') ? '\n' : ''}\n# ${V.BRAIN_NAME}: ${V.OWNER}'s brain\n- Durable knowledge lives in ${B} (AGENTS.md), not in Claude's private memory.\n\n@${B}/me.md\n`);
   }]);
-  plan.push([`~/.claude/output-styles/${V.OWNER}.md e regia.md, skill ${V.BRAIN_NAME} ed explain in ~/.claude/skills`, () => {
+  plan.push([`~/.claude/output-styles/${V.OWNER}.md e orchestrator.md, skill del prodotto (${V.BRAIN_NAME}, explain, brain-edit, code-review…) in ~/.claude/skills`, () => {
     const os_ = join(C, 'output-styles'); mkdirSync(os_, { recursive: true });
-    for (const [from, to] of [['owner.md', `${V.OWNER}.md`], ['regia.md', 'regia.md']]) {
+    for (const [from, to] of [['owner.md', `${V.OWNER}.md`], ['orchestrator.md', 'orchestrator.md']]) {
       const p = join(os_, to); backup(p);
       writeFileSync(p, readFileSync(join(dir, 'harness', 'claude', 'output-styles', from), 'utf8'));
     }
@@ -176,7 +176,6 @@ if (!apply && rl && plan.length) {
 rl?.close();
 if (apply) for (const [what, run] of plan) { run(); steps.push(`fatto: ${what}`); }
 else for (const [what] of plan) steps.push(`da fare (rilancia con --user-config, o a mano): ${what}`);
-if (harness.includes('cursor')) steps.push(`Cursor: puntatori degli agenti con "node ${B}/harness/cursor/sync-agents.mjs"`);
 
 console.log(`\nCervello creato in ${dir} (${files} file, nome "${V.BRAIN_NAME}", proprietario ${V.OWNER}).`);
 for (const s of steps) console.log(`- ${s}`);

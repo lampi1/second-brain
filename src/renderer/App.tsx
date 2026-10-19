@@ -1,7 +1,7 @@
 // The app shell: top bar, the left navigation (the Grindhouse, brain sections, the map), the needs-you lane (focus mode's
 // peek), a brain page (the Grindhouse holds the agents' vertical strips; focus mode replaces it with one chat), the full-screen 3D map, the
 // persistent Orchestrator column on the right (always, on every page, the Dashboard and the 3D map included: the user,
-// 2026-10-18, «io voglio sempre l'orchestratore a destra»; RegiaOverlay.tsx, ADR 0068), the notification center, toasts, the live
+// 2026-10-18, «io voglio sempre l'orchestratore a destra»; OrchestratorOverlay.tsx, ADR 0068), the notification center, toasts, the live
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
@@ -16,25 +16,24 @@ import { sameList } from './store/state';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia, askRenewRegia,
+  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
 import { HealthBanner } from './components/HealthBanner';
 import { Sidebar } from './components/Sidebar';
 import { NeedsLane, LiveRegion } from './components/NeedsLane';
-import { RegiaOverlay, useDockReserve } from './components/RegiaOverlay';
+import { OrchestratorOverlay, useDockReserve } from './components/OrchestratorOverlay';
 import {UpdateCheckpointStatus} from './components/UpdateCheckpointStatus';
 
 import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
-import { AgentStartDialog as NewChatDialog } from './components/AgentStartDialog';
 import { AgentPackHost } from './components/AgentPackHost';
 import { AgentCatalogPage } from './components/AgentCatalogPage';
 import { FirstInterviewGate } from './components/FirstInterview';
-import { RegiaRenewDialog } from './components/RegiaRenewDialog';
+import { OrchestratorRenewDialog } from './components/OrchestratorRenewDialog';
 import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
 import { HandoffDialog } from './components/HandoffDialog';
 import { CredentialsDialog } from './components/LoginsDialog';
@@ -85,7 +84,7 @@ function onKey(e: KeyboardEvent): void {
   switch (cmd.type) {
     case 'palette': openModal('palette'); break;
     case 'next': nextThing(); break;
-    case 'newChat': openModal('newChat'); break;
+    case 'newChat': newRequest(); break;
     case 'stopFocused': stopFocused(); break;
     case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
@@ -96,8 +95,8 @@ function onKey(e: KeyboardEvent): void {
     case 'back': back(); break;
     case 'forward': forward(); break;
     case 'center': toggleCenter(); break;
-    case 'regia': toggleRegia(); break;
-    case 'regiaRenew': askRenewRegia(); break;
+    case 'orchestrator': toggleOrchestrator(); break;
+    case 'orchestratorRenew': askRenewOrchestrator(); break;
     case 'map': if (u.map) setMap(false); else go({ page: 'mappa' }); break;
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'stato': openModal('stato'); break;
@@ -221,12 +220,12 @@ export function App() {
 
   const inFocus = !!focusMode && page === 'home';
   // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
-  // aspettano, adesso me le fa la regia"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
+  // aspettano, adesso me le fa l’Orchestrator"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
   // its Ctrl+J peek
   const showLane = inFocus && lanePeek;
   return (
     // the Orchestrator column's room: the workspace, the map and the questions window leave it free (shell.css)
-    <div className="app" data-testid="app" style={{ '--regia-r': `${dock.right}px`, '--regia-b': `${dock.bottom}px`,'--regia-t':`${dock.top??0}px` } as CSSProperties}>
+    <div className="app" data-testid="app" style={{ '--orchestrator-r': `${dock.right}px`, '--orchestrator-b': `${dock.bottom}px`,'--orchestrator-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
       <AgentPackHost />
@@ -237,7 +236,7 @@ export function App() {
         <Sidebar />
         <div className="main-col">
           {showLane && <NeedsLane peek={lanePeek} />}
-          <main className="workspace no-regia" data-testid="workspace">
+          <main className="workspace no-orchestrator" data-testid="workspace">
             <div className="view-area">
               {inFocus ? <FocusView chatId={focusMode} /> : <PageFrame id={page} />}
             </div>
@@ -252,7 +251,7 @@ export function App() {
             live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} />
         </div>
       )}
-      <RegiaOverlay />{/* always: the Dashboard and the 3D map sit beside it, never over it */}
+      <OrchestratorOverlay />{/* always: the Dashboard and the 3D map sit beside it, never over it */}
       {center && <NotificationCenter />}
       <QuestionsWindow />
       <LiveRegion />
@@ -261,10 +260,9 @@ export function App() {
       <FirstInterviewGate />
       <UpdateCheckpointStatus />
       {modal === 'palette' && <CommandPalette />}
-      {modal === 'newChat' && <NewChatDialog />}
       {modal === 'shortcuts' && <ShortcutsDialog />}
       {modal === 'confirm' && <ConfirmDialog />}
-      {modal === 'regiaRenew' && <RegiaRenewDialog />}
+      {modal === 'orchestratorRenew' && <OrchestratorRenewDialog />}
       {modal === 'handoff' && <HandoffDialog />}
       {modal === 'credentials' && <CredentialsDialog />}
       {modal === 'stato' && <StatoDialog />}

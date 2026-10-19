@@ -28,9 +28,9 @@ const AT_WORDS = /\bB\b|release|\bbeta\b/i;
 export function areaOf(text, { branch } = {}) {
   const t = String(text ?? '');
   if (branch) return /release/.test(branch) ? 'Beta' : 'Alfa';
-  const label = t.replace(/^- /, '').replace(/^\*\*/, '').match(/^(A|B|Prod|OS|Pers|Regia)\b/)?.[1];
-  if (label) return { A: 'Alfa', B: 'Beta', Prod: 'Produzione', OS: 'Personale e OS', Pers: 'Personale e OS', Regia: 'Personale e OS' }[label];
-  if (/\[personale\]|^\s*-?\s*\*?\*?Pers\b|{{BRAIN_NAME}}|cervello|Regia\b|Orchestrator\b/i.test(t)) return 'Personale e OS';
+  const label = t.replace(/^- /, '').replace(/^\*\*/, '').match(/^(A|B|Prod|OS|Pers|Orchestrator)\b/)?.[1];
+  if (label) return { A: 'Alfa', B: 'Beta', Prod: 'Produzione', OS: 'Personale e OS', Pers: 'Personale e OS', Orchestrator: 'Personale e OS' }[label];
+  if (/\[personale\]|^\s*-?\s*\*?\*?Pers\b|{{BRAIN_NAME}}|cervello|Orchestrator\b|Orchestrator\b/i.test(t)) return 'Personale e OS';
   if (AT_WORDS.test(t)) return 'Beta';
   if (/\bprod\b|produzione|ring-?\d|rilascio|incident|urgenza|nodi? /i.test(t)) return 'Produzione';
   return 'Alfa';

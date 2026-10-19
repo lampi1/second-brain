@@ -16,7 +16,7 @@ import { FAKE, fakeLog, recEmitter, recSink, tmp, waitFor } from './helpers';
 
 const MIN = 60_000;
 const base: ColdView = {
-  harness: 'claude', isRegia: false, state: 'idle', pending: 0, background: 0, busy: false, alive: true, handoffTurn: false,
+  harness: 'claude', isOrchestrator: false, state: 'idle', pending: 0, background: 0, busy: false, alive: true, handoffTurn: false,
   contextTokens: 250_000, lastTurnAt: 1_000, noteAt: 0, lastCallAt: 1_000,
 };
 
@@ -27,7 +27,7 @@ describe('cold rules', () => {
     expect(coldAsk(base, at(50), 50 * MIN)).toBe(true);
     expect(coldAsk(base, at(56), 50 * MIN)).toBe(false); // the cache is gone: a note would cost a full re-read
     for (const v of [
-      { harness: 'cursor' }, { isRegia: true }, { continuedBy: { id: 'x' } }, { state: 'running' },
+      { harness: 'cursor' }, { isOrchestrator: true }, { continuedBy: { id: 'x' } }, { state: 'running' },
       { pending: 1 }, { background: 1 }, { busy: true }, { alive: false }, { handoffTurn: true }, { contextTokens: COLD_MIN_TOKENS - 1 },
       { noteAt: 2_000 }, { askedFor: 1_000 }, { lastTurnAt: 0 },
     ] satisfies Partial<ColdView>[]) expect(coldAsk({ ...base, ...v }, at(50), 50 * MIN), JSON.stringify(v)).toBe(false);
@@ -151,15 +151,15 @@ describe('ChatManager cold chats', () => {
     expect(JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')).chats[0].pastSessions[0].sessionId).toBe(oldSession);
   }, 30_000);
 
-  it('a message while the cache is warm stays in the old session, and the Regia and short chats are never asked', async () => {
+  it('a message while the cache is warm stays in the old session, and the Orchestrator and short chats are never asked', async () => {
     const { make, cwd, userData } = setup({ cacheTtlMs: 60_000 });
     const m = make();
     const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
     const short = await m.create({ harness: 'claude', cwd, prompt: 'hello' });
-    const regia = await m.create({ harness: 'claude', cwd, regia: true, prompt: 'big' });
+    const orchestrator = await m.create({ harness: 'claude', cwd, orchestrator: true, prompt: 'big' });
     // each engine reports its context after its turn (get_context_usage): the tick reads all three sizes, so wait for each
-    await waitFor(() => idle(m, c.id) && idle(m, short.id) && idle(m, regia.id)
-      && summary(m, c.id)?.contextTokens === 250_000 && summary(m, short.id)?.contextTokens === 1234 && summary(m, regia.id)?.contextTokens === 250_000, 'all idle, sizes reported');
+    await waitFor(() => idle(m, c.id) && idle(m, short.id) && idle(m, orchestrator.id)
+      && summary(m, c.id)?.contextTokens === 250_000 && summary(m, short.id)?.contextTokens === 1234 && summary(m, orchestrator.id)?.contextTokens === 250_000, 'all idle, sizes reported');
     expect(m.coldTick()).toBe(1);
     await waitFor(() => summary(m, c.id)?.handoffAt, 'cold note');
     const sid = summary(m, c.id)!.sessionId;
@@ -170,7 +170,7 @@ describe('ChatManager cold chats', () => {
     // the message went into the old session: the note is stale (a turn cut before its result keeps it so)
     expect(JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')).chats.find((x: { id: string }) => x.id === c.id).coldNoteAt).toBeUndefined();
     expect(summary(m, short.id)?.handoffAt).toBeUndefined();
-    expect(summary(m, regia.id)?.handoffAt).toBeUndefined();
+    expect(summary(m, orchestrator.id)?.handoffAt).toBeUndefined();
   }, 20_000);
 
   it('a long chat whose last answer waits for its work is asked no note (2026-10-16); the next turn lifts it', async () => {

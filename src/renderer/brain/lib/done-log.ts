@@ -61,7 +61,7 @@ export function rowEntry(r: DayRow, day: string, i: number, names: WhoNames): Lo
 
 /** A chat of the app that did some work: its last finished turn (or its last update when closed). */
 export function chatEntry(c: ChatSummary, engineName: (h: string) => string): LogEntry | null {
-  if (c.isRegia || c.orchestrator) return null;
+  if (c.isOrchestrator) return null;
   const at = c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted ? c.lastResult.at : c.work?.status === 'completed' ? c.work.updatedAt : null;
   if (!at) return null;
   const { day, time } = localDay(at);

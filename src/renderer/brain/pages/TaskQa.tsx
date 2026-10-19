@@ -4,14 +4,14 @@
 // only, ids only inside links. Data: the brain's read-only qa-status.mjs --mine, read with the page by main's
 // TaskService (zero tokens). Why: the user asked QA progress ~30 times in a week (2026-10-13: "quali abbiamo fatto,
 // quali ha fatto Anna", "quanti test case mancano?", "a quale PR appartiene questo bug", a stand-up card).
-// Each test plan and test case has "Apri chat" (components/RecordChatButton.tsx). Used by pages/Task.tsx.
+// Each test plan and test case has "Discuti" (components/RecordDiscussButton.tsx). Used by pages/Task.tsx.
 import type { DevopsPrRef, QaBug, QaPlan, QaReport } from '@shared/contract';
 import { fmt } from '../lib/format';
 import { qaHeadline, qaOrder, qaOutcome, qaPeople, qaStandup } from '../lib/qa';
 import { Empty } from '../components/States';
 import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast } from '../components/ui';
 import { stateTone } from '../lib/tasks';
-import { RecordChatButton } from '../components/RecordChatButton';
+import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
 
 function Bar({ t }: { t: QaReport['totals'] }) {
@@ -42,7 +42,7 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
         <span className="t">Test plan <b>{p.name}</b></span>
         <span className="small muted">{p.totals.done} su {p.totals.total}</span>
         <span className="sp" />
-        <RecordChatButton rec={{ kind: 'testplan', plan: p, pr }} />
+        <RecordDiscussButton rec={{ kind: 'testplan', plan: p, pr }} />
         <ExtLink href={p.url} className="dv-open" title="Apri il test plan in DevOps">Apri <IconExternal /></ExtLink>
       </summary>
       <ul className="qa-points">
@@ -58,7 +58,7 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
                 </span>
                 {x.bugs.map(id => bugs.get(id)).filter((b): b is QaBug => !!b).map(b => <BugLine key={b.id} b={b} />)}
               </span>
-              <RecordChatButton rec={{ kind: 'testcase', point: x, plan: p, pr }} />
+              <RecordDiscussButton rec={{ kind: 'testcase', point: x, plan: p, pr }} />
             </li>
           );
         })}

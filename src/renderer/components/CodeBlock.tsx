@@ -8,7 +8,7 @@
 // to send, Copia leaves "Copiato hh:mm" (the chat hears it with the user's next message: copying is not sending) and
 // Mandato leaves "Mandato ✓ hh:mm" and, after a few seconds to undo it, tells the chat "[Mandato] <first words…>"
 // (store/store.ts markSent). A text tagged md / mail / teams / comment shows formatted and Copia copies it formatted
-// (lib/richtext.ts). Used by ChatItems.tsx (assistant messages), RegiaTile.tsx and AskContext.tsx.
+// (lib/richtext.ts). Used by ChatItems.tsx (assistant messages), OrchestratorTile.tsx and AskContext.tsx.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RunInfo } from '@shared/contract';
 import { isRunnable, MAX_RUN_CODE, prodRisk, runReport } from '@shared/runnable';

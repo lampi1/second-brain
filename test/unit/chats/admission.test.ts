@@ -10,7 +10,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { AdmissionQueue, forcedSampler, type AdmissionLimits, type LoadSample } from '../../../src/main/chats/admission';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
-import { RegiaWake } from '../../../src/main/chats/regia-wake';
+import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
 import { ChatMail, inboxDir, sendMail, slug, unread } from '../../../src/main/chats/mail';
 import type { ChatSummary } from '../../../src/shared/contract';
 import { FAKE, fakeLog, recEmitter, tmp, waitFor } from './helpers';
@@ -152,12 +152,12 @@ describe('ChatManager with the CPU queue', () => {
     await waitFor(() => starts() === 1, 'its engine');
   });
 
-  it('a queued chat never looks busy: no "ha finito il turno" to the Regia before its first turn ran', async () => {
+  it('a queued chat never looks busy: no "ha finito il turno" to the Orchestrator before its first turn ran', async () => {
     const emitter = recEmitter();
     const { m, cwd, users } = setup({ emitter });
     const sent: string[] = [];
-    const wake = new RegiaWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => m.list(), groupMs: 50, perChatMs: 0 });
-    const regia = await m.create({ harness: 'claude', cwd, regia: true });
+    const wake = new OrchestratorWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => m.list(), groupMs: 50, perChatMs: 0 });
+    const orchestrator = await m.create({ harness: 'claude', cwd, orchestrator: true });
     const c = await m.create({ harness: 'claude', cwd, prompt: 'screenshot nelle PR' }, 'agent');
     for (const e of emitter.events) wake.observe(e.channel, e.payload);
     const states = (emitter.of('chat:updated') as ChatSummary[]).filter(x => x.id === c.id).map(x => x.state);
@@ -175,7 +175,7 @@ describe('ChatManager with the CPU queue', () => {
     for (const e of emitter.events.slice(seen)) wake.observe(e.channel, e.payload);
     expect(wake.queued().map(e => [e.chatId, e.kind])).toEqual([[c.id, 'done']]);
     wake.stop();
-    void regia;
+    void orchestrator;
   });
 
   it("the user's own chat and message never wait; the user's message takes the queued one with it, in order", async () => {
@@ -185,12 +185,12 @@ describe('ChatManager with the CPU queue', () => {
     await waitFor(() => m.list().find(x => x.id === mine.id)?.state === 'idle', 'my turn done');
     // an agent reopening it once closed (archived) waits for the load (a new engine)
     await m.archive(mine.id);
-    await m.send(mine.id, 'from the regia', undefined, false, 'Regia');
+    await m.send(mine.id, 'from the orchestrator', undefined, false, 'Orchestrator');
     expect(m.list().find(x => x.id === mine.id)?.queued?.kind).toBe('start');
     expect(users(mine.id)).toEqual(['mine']);
     await m.send(mine.id, 'me again');
     await waitFor(() => users(mine.id).length === 3, 'both delivered');
-    expect(users(mine.id)).toEqual(['mine', 'from the regia', 'me again']);
+    expect(users(mine.id)).toEqual(['mine', 'from the orchestrator', 'me again']);
     expect(m.list().find(x => x.id === mine.id)?.queued).toBeUndefined();
   });
 
@@ -198,13 +198,13 @@ describe('ChatManager with the CPU queue', () => {
     const { m, cwd, users } = setup();
     const mine = await m.create({ harness: 'claude', cwd, prompt: 'mine' });
     await waitFor(() => m.list().find(x => x.id === mine.id)?.state === 'idle', 'my turn done');
-    await m.send(mine.id, 'from the regia', undefined, false, 'Regia');
+    await m.send(mine.id, 'from the orchestrator', undefined, false, 'Orchestrator');
     expect(m.list().find(x => x.id === mine.id)?.queued).toBeUndefined();
-    await waitFor(() => users(mine.id).includes('from the regia'), 'a new turn at once, CPU 90%');
+    await waitFor(() => users(mine.id).includes('from the orchestrator'), 'a new turn at once, CPU 90%');
     // a chat whose first turn still waits in the queue: that work goes first, then the message
     const queued = await m.create({ harness: 'claude', cwd, prompt: 'do it' }, 'agent');
     expect(queued.queued?.kind).toBe('start');
-    await m.send(queued.id, 'and this', undefined, false, 'Regia');
+    await m.send(queued.id, 'and this', undefined, false, 'Orchestrator');
     await waitFor(() => users(queued.id).length === 2, 'both delivered');
     expect(users(queued.id)).toEqual(['do it', 'and this']);
     expect(m.queueState()?.waiting).toEqual([]);
@@ -235,7 +235,7 @@ describe('ChatManager with the CPU queue', () => {
   });
 
   it('chats cut by a restart resume through the queue, not all at once', async () => {
-    const cut = (id: string, cwd: string) => ({ id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title: id, model: null, effort: null, permissionMode: null, isRegia: false, createdAt: 1, working: true });
+    const cut = (id: string, cwd: string) => ({ id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title: id, model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, working: true });
     const { m, starts } = setup({}, (ud, cwd) => fs.writeFileSync(path.join(ud, 'chats.json'), JSON.stringify({ version: 2, chats: [cut('c_a', cwd), cut('c_b', cwd)] })));
     expect(m.resumeInterrupted()).toBe(2);
     await new Promise(r => setTimeout(r, 50));
@@ -271,7 +271,7 @@ describe('ChatManager with the CPU queue', () => {
     expect(other.queued?.position).toBe(1);
     const root = tmp('brain');
     const dir = inboxDir(root);
-    sendMail(dir, { from: 'Regia', fromHarness: 'claude', to: 'Shop · sprint', toHarness: 'claude', text: 'riprendi il lavoro', refusal: () => null });
+    sendMail(dir, { from: 'Orchestrator', fromHarness: 'claude', to: 'Shop · sprint', toHarness: 'claude', text: 'riprendi il lavoro', refusal: () => null });
     const mail = new ChatMail({ root: () => root, chats: m, instance: 'second-brain-dev' });
     expect(await mail.tick()).toBe(1);
     mail.stop();

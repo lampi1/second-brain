@@ -1,8 +1,8 @@
 // Main-only screenshot regression. Uses frozen demo text and synthetic geometry, no model or network.
 import {expect,test} from '@playwright/test';
 import {launchDemo,shot} from './helpers';
-for(const owner of ['fix','regia'] as const)test(`${owner}: follows content and resizing while preserving a reader above`,async()=>{
-  const {app,page}=await launchDemo({regia:owner==='regia'});
+for(const owner of ['fix','orchestrator'] as const)test(`${owner}: follows content and resizing while preserving a reader above`,async()=>{
+  const {app,page}=await launchDemo({orchestrator:owner==='orchestrator'});
   try{
     if(owner==='fix')await page.getByTestId('chat-max-fix').click();
     const log=page.locator(`[data-chat-log="${owner}"]`);await expect(log).toBeVisible();

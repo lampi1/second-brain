@@ -10,6 +10,8 @@
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
 // off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
 // browsers stay folded until it is pressed, then sit beside the chat (on a collapsed strip it expands it too; AgentStrips.tsx).
+// An expanded chat also shows the open requests of the chats it delegated (lib/child-requests.ts), each tagged with the
+// role and task that asks: answering goes to that child, which then goes on (ADR 0083).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
@@ -18,7 +20,7 @@ import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
-import { callQuestions, setBrowserOpen, setFocused, setChatExpanded, ui } from '../store/ui';
+import { callQuestions, setBrowserOpen, setFocused, setFocusMode, setChatExpanded, ui } from '../store/ui';
 import {locale,t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
 import { answerLater, openQueue } from '../lib/later';
@@ -39,6 +41,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
+import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
 import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
@@ -50,6 +53,7 @@ export function closeFromX(e: { detail: number }, close: () => void): void {
   close();
 }
 const EMPTY_REQS: readonly PendingRequest[] = [];
+const sameAsks = (a: ChildRequest[], b: ChildRequest[]) => a.length === b.length && a.every((x, i) => x.req === b[i]!.req && x.chat === b[i]!.chat);
 export const pendingOf = (list: readonly PendingRequest[], chatId: string) => {
   const r = list.filter(p => p.chatId === chatId);
   return r.length ? r : EMPTY_REQS;
@@ -68,10 +72,15 @@ export function useFlash(key: string): boolean {
   return on;
 }
 
-export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean }) {
+export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus, embedded }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean; embedded?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
+  // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
+  const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
+  const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey };
+  const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending).filter(c => requestHost(c.req.chatId, s.chats, view) === chatId), sameAsks);
+  const hostsOwn = useApp(s => requestHost(chatId, s.chats, view) === chatId || !!focus);
   const inWindow = useApp(questionsModalOn);
   const queued = ui.use(s => s.later);
   const key = `chat:${chatId}`;
@@ -85,7 +94,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const expandedChoice=ui.use(s=>s.prefs.chatExpanded[chatId]===true);
-  const expanded=!!maximized||!!focus||expandedChoice;
+  const expanded=!!maximized||!!focus||!!embedded||expandedChoice;
   const expansionButton=useRef<HTMLButtonElement>(null);
   const downSelection=useRef('');
   const reveal=(compose=false)=>{setChatExpanded(chatId,true);if(compose)requestAnimationFrame(()=>input.current?.focus());};
@@ -106,8 +115,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
   if (!chat) return null;
-  const compact = !expanded || !maximized && !focus && size.height > 0 && size.height < COMPACT_TILE_H;
-  const smallPanel = !maximized && !focus && size.height > 0 && size.height < 440;
+  const compact = !expanded || !maximized && !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
+  const smallPanel = !maximized && !focus && !embedded && size.height > 0 && size.height < 440;
   const busy = isBusy(chat);
   const st = stateInfo(chat);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
@@ -116,7 +125,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);
-  const strip = !focus && !maximized;
+  const strip = !focus && !maximized && !embedded;
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) expands or collapses it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
@@ -127,10 +136,10 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   return (
-    <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}`} style={pair.style} role="region"
+    <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}${embedded ? ' is-embedded' : ''}`} style={pair.style} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => { downSelection.current = window.getSelection()?.toString() ?? ''; setFocused(key); }} {...pairHover(chatId)} data-pair={pair.index ?? undefined}>
-      <header className="tile-head">
+      {!embedded && <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
@@ -153,7 +162,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <IconButton label={t(maximized ? 'chat.tile.restore' : 'chat.tile.maximize')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
           </IconButton>
-          {!chat.isRegia && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
+          {!chat.isOrchestrator && <IconButton label={t('chat.tile.close')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
           </div>
         </div>
         {expanded && <div className="chat-topic-row">{renaming?<TitleInput chat={chat} onDone={()=>setRenaming(false)}/>:chat.agent?.name&&chat.title!==chat.agent.name?<span className="chat-topic" title={chat.title} onDoubleClick={()=>setRenaming(true)}>{chat.title}</span>:null}<AgentIdentity chat={chat}/></div>}
@@ -166,7 +175,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <ContextMeter chat={chat} warn={warn} />
         </div>
         {!compact && <ChatLinkChips chatId={chatId} />}
-      </header>
+      </header>}
       <AutoCloseNotice chatId={chatId} />
       {!expanded&&<div className="chat-strip-line">{busy?<Typing what={activity} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
@@ -176,9 +185,24 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
-      {expanded && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
+      {expanded && hostsOwn && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
           {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
+        </div>
+      ))}
+      {expanded && childReqs.length > 0 && (queued ? <InWindowLine reqs={childReqs.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={childReqs.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} /> : (
+        <div className="tile-requests child-requests">
+          {childReqs.map(({ req, chat: c }) => <div key={`${req.chatId}:${req.id}`} className="child-request pause-panel" data-testid={`child-request-${req.chatId}`}>
+            <div className="pause-tag">
+              <AgentAvatar avatar={c.agent?.avatar} name={c.agent?.name || c.title} size={28} />
+              <span className="pause-who"><b>{t('tree.asks', { role: c.agent?.name || '', title: c.title })}</b> {t('tree.asksVerb')}</span>
+              <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) })}</span>
+            </div>
+            <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={answerLater} />
+            <div className="pause-foot">
+              <button type="button" className="btn btn-s btn-ghost" data-testid={`child-request-open-${req.chatId}`} onClick={() => setFocusMode(c.id)}><span aria-hidden="true">↗</span> {t('tree.goToOf', { role: c.agent?.name || c.title })}</button>
+            </div>
+          </div>)}
         </div>
       ))}
       {chat.queued && !chat.closedAt && (

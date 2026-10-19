@@ -2,7 +2,7 @@
 // too), optionally in the demo (SB_DEMO=1, frozen = SB_DEMO_FREEZE=1) at a fixed window size and color scheme, wait
 // until it is settled (data loaded, clock frozen, browser snapshots in), read what the UI reported to main for the
 // browser views (globalThis.__sbDemo, demo only) and save screenshots in test-results/shots/. A spec may seed the
-// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `regia: true` waits for its chat.
+// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
 import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -69,7 +69,7 @@ export async function setSize(app: ElectronApplication, width: number, height: n
 }
 
 /** The demo, settled: data loaded, (frozen) clock applied, browser snapshots shown. */
-export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; regia?: boolean; env?: Record<string, string> } = {}): Promise<Launched> {
+export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; orchestrator?: boolean; env?: Record<string, string> } = {}): Promise<Launched> {
   const { freeze = true, width = 1600, height = 1000, scheme = 'dark' } = opts;
   const userData = opts.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
   // a fresh profile gets the settings the spec seeds; a reused one keeps its own
@@ -78,17 +78,17 @@ export async function launchDemo(opts: { freeze?: boolean; width?: number; heigh
   const l = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: freeze ? '1' : '0', ...opts.env }, userData);
   await setSize(l.app, width, height);
   await l.page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-  await expect(l.page.locator('[data-regia-overlay]')).toBeVisible(); // the persistent Orchestrator column
-  if (opts.regia) await openRegia(l.page);
+  await expect(l.page.locator('[data-orchestrator-overlay]')).toBeVisible(); // the persistent Orchestrator column
+  if (opts.orchestrator) await openOrchestrator(l.page);
   if (freeze) await expect(l.page.locator('html[data-clock="frozen"]')).toHaveCount(1);
   await l.page.mouse.move(2, 2);
   return l;
 }
 
 /** The Orchestrator column is always open (ADR 0068): waits until it shows its chat. */
-export async function openRegia(page: Page): Promise<void> {
-  await expect(page.getByTestId('regia-overlay')).toBeVisible();
-  await expect(page.getByTestId('tile-regia')).toBeVisible();
+export async function openOrchestrator(page: Page): Promise<void> {
+  await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
 }
 
 /** A fresh profile opens the first-run setup by itself (FirstInterview.tsx): closes it, as a user who skips it would. */
@@ -158,8 +158,8 @@ export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void>
   await page.keyboard.press(GO_KEY[id]);
 }
 
-/** Opens the agents overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
- *  "Agenti" only when the chosen role lists it; Ctrl+K reaches it too. "Crea agente" lives here (AgentCreateDialog). */
+/** Opens the roles overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
+ *  "Agenti" only when the chosen profile lists it; Ctrl+K reaches it too. */
 export async function openAgentOverview(page: Page): Promise<void> {
   await page.getByTestId('nav-home').click();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
@@ -168,14 +168,12 @@ export async function openAgentOverview(page: Page): Promise<void> {
   await expect(page.getByTestId('agent-overview')).toBeVisible();
 }
 
-/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card: a
- *  click flips the card (#81), "Apri profilo" on its back opens the page; Generale is in every catalog. */
-export async function openAgents(page: Page, agent = 'Generale'): Promise<void> {
+/** Opens one role's page (its editor, versions and progress) from its overview card: a click flips the card (#81),
+ *  "Apri profilo" on its back opens the page. */
+export async function openAgents(page: Page, role = 'scout'): Promise<void> {
   await openAgentOverview(page);
-  const card = page.getByTestId('agent-overview').locator('article.catalog-card').filter({ has: page.getByRole('heading', { name: agent, exact: true }) });
-  await card.getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
-  await expect(card).toHaveAttribute('data-flipped', 'true');
-  await card.getByRole('button', { name: /^(Apri profilo|Open profile)$/ }).click();
+  await page.getByTestId(`catalog-flip-${role}`).click();
+  await page.getByTestId(`catalog-open-${role}`).click();
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 

@@ -2,7 +2,7 @@
 // the theme applies at once (light and dark screenshots); cross-engine messaging is always available;
 // the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
 // 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
-// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort and "Nuova chat" starts
+// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort, and every chat it opens starts
 // from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
 // (ADR 0046). Screenshots: test-results/shots/settings-*.png.
 import fs from 'node:fs';
@@ -74,7 +74,7 @@ test('Impostazioni: groups, theme live, messaging always available, model compar
   await app.close();
 });
 
-test('spending limits, Windows notifications, the engines the Regia may use, the brain folder read only', async () => {
+test('spending limits, Windows notifications, the engines the Orchestrator may use, the brain folder read only', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
@@ -142,11 +142,11 @@ test('spending limits, Windows notifications, the engines the Regia may use, the
   await app.close();
 });
 
-test('Chat aperte dalla Regia: engine, models (Cursor\'s own list), effort; saved at once, "Nuova chat" starts from them', async () => {
+test('Chat aperte dall’Orchestrator: engine, models (Cursor\'s own list), effort; saved at once', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
-  const g = page.getByTestId('st-group-regia-chats');
+  const g = page.getByTestId('st-group-orchestrator-chats');
   await g.scrollIntoViewIfNeeded();
   await expect(g).toBeVisible();
   // CLI defaults until chosen
@@ -165,28 +165,15 @@ test('Chat aperte dalla Regia: engine, models (Cursor\'s own list), effort; save
   await expect(g.getByTestId('st-rc-cursor-fast-switch')).toHaveAttribute('aria-checked', 'false');
   await g.getByTestId('st-rc-cursor-reasoning-select').selectOption('low');
   await g.getByTestId('st-rc-cursor-fast-switch').click();
-  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).regiaChats))
+  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).orchestratorChats))
     .toEqual({ harness: 'cursor', claudeModel: 'claude-opus-5-5', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'low', cursorFast: true });
   await expect(g.getByTestId('st-rc-harness-choice-cursor')).toHaveAttribute('aria-checked', 'true');
-  await shot(page, 'settings-regia-chats');
+  await shot(page, 'settings-orchestrator-chats');
 
-  // "Nuova chat" starts from them: Cursor with Grok 4.7; switching to Claude takes Claude's model and effort
-  await page.getByTestId('page-back').click();
-  await page.keyboard.press('Control+N');
-  const d = page.getByTestId('newchat');
-  await d.getByTestId('newchat-engine-options').locator('summary').click();
-  await expect(d.getByTestId('newchat-harness-cursor')).toHaveAttribute('aria-checked', 'true');
-  await d.getByTestId('newchat-advanced').locator('summary').click();
-  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'grok-4.7');
-  await shot(page, 'settings-regia-chats-newchat');
-  await d.getByTestId('newchat-harness-claude').click();
-  await expect(d.getByTestId('newchat-model')).toHaveAttribute('data-value', 'claude-opus-5-5');
-  // the effort stays "automatico" (the table's, ADR 0051) until the user picks one
-  await expect(d.getByTestId('newchat-effort-default')).toHaveAttribute('aria-checked', 'true');
   await app.close();
 });
 
-test('Impostazioni: the Claude chats compact at 200k by default and «Regie corte» is on; both saved at once', async () => {
+test('Impostazioni: the Claude chats compact at 200k by default and «Orchestrators corte» is on; both saved at once', async () => {
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('settings').click();
@@ -195,7 +182,7 @@ test('Impostazioni: the Claude chats compact at 200k by default and «Regie cort
     const row = s.getByTestId('st-compact');
     await row.scrollIntoViewIfNeeded();
     await expect(row.getByRole('radio', { name: '200k' })).toHaveAttribute('aria-checked', 'true');
-    const day = s.getByTestId('st-regia-day-switch');
+    const day = s.getByTestId('st-orchestrator-day-switch');
     await expect(day).toHaveAttribute('aria-checked', 'true');
     await page.mouse.move(2, 2);
     await shot(page, 'settings-compact');
@@ -204,7 +191,7 @@ test('Impostazioni: the Claude chats compact at 200k by default and «Regie cort
     await expect(day).toHaveAttribute('aria-checked', 'false');
     await expect.poll(() => page.evaluate(async () => {
       const st = await window.sb.invoke('settings:get', undefined);
-      return [st.compactWindowTokens, st.regiaDayCompact];
+      return [st.compactWindowTokens, st.orchestratorDayCompact];
     })).toEqual([150_000, false]);
   } finally {
     await app.close();

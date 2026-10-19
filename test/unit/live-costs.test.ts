@@ -7,7 +7,7 @@ import { CostHistory, costRows, liveTotal } from '../../src/renderer/lib/live-co
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...p,
 });
 const usage = (p: Partial<Usage> = {}): Usage => ({ todayUsd: 10, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, costKnown: true, costAt: 1000, ...p });
 

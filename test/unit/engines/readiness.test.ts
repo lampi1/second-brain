@@ -18,7 +18,7 @@ it.each(['codex', 'cursor'])('chooses %s when it is the only logged-in engine', 
   }
 });
 it('does not route when every engine is unavailable', () => {
-  expect(resolve(null, { kind: 'regia', area: 'App' }, {}, { harness: 'claude', models: {}, effort: null }, null, () => false)).toHaveProperty('error');
+  expect(resolve(null, { kind: 'orchestrator', area: 'App' }, {}, { harness: 'claude', models: {}, effort: null }, null, () => false)).toHaveProperty('error');
 });
 it('launch gates reject missing/logged-out engines while preserving off switches', () => {
   recordReadiness('codex', status(false));

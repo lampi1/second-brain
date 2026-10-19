@@ -238,7 +238,6 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
                     {node.reads != null && <><dt>Letto</dt><dd>{node.reads} volte in 30 giorni</dd></>}
                     {node.events?.length ? <><dt>Scatta su</dt><dd>{node.events.join(', ')}</dd></> : null}
                     {node.fields?.model && <><dt>Modello</dt><dd>{node.fields.model}{node.fields.effort ? ` · impegno ${node.fields.effort}` : ''}</dd></>}
-                    {node.playbook && <><dt>Taccuino</dt><dd>{node.playbook.punti} punti</dd></>}
                   </dl>
                   {node.members?.length ? <><h4>{node.kind === 'gruppo' ? `Dentro · ${node.members.length}` : `Insieme a lui · ${node.members.length}`}</h4><ul>{node.members.map(x => <li key={x.id}><b style={{ color: '#fff' }}>{x.label}</b>{x.name && x.name !== x.label ? <span className="muted mono"> {x.name}</span> : null}{x.what ? ` · ${short(x.what, 90)}` : ''}{x.uses != null ? <span className="muted"> · {x.uses} usi</span> : null}</li>)}</ul></> : null}
                   </details>

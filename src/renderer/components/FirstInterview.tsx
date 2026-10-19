@@ -15,7 +15,7 @@ import type { FormEvent, ReactNode } from 'react';
 import type { AgentCatalog, SetupDraft, SetupProfile, SetupState } from '@shared/agents';
 import type { OwnerProfile } from '@shared/profile';
 import { PROFILE_LIMITS } from '@shared/profile';
-import { answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, recommendedAgents, wizardLocked, wizardProfile } from '../lib/agent-setup';
+import { answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, wizardLocked, wizardProfile } from '../lib/agent-setup';
 import { LAST_STEP, SETUP_STEPS, canAdvance, canJump, clampStep, exitStatus, openingDraft, stepId, stepProblems, withEngine } from '../lib/setup-wizard';
 import type { SetupExit, SetupStepId } from '../lib/setup-wizard';
 import { profileError, workAreas } from '../lib/profile';
@@ -65,7 +65,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
   const enabledEngines = useApp(s => s.settings?.engineOn);
   const [draft, setDraft] = useState<SetupDraft>(() => openingDraft(initial, enabledEngines));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
-  const saving = useRef(false), terminal = useRef(false), suggestionsMade = useRef(['new', 'draft'].includes(initial.status) && initial.preferences.step >= SETUP_STEPS.indexOf('agents'));
+  const saving = useRef(false), terminal = useRef(false);
   const info = useApp(s => s.info);
   const [candidates, setCandidates] = useState<string[]>([]);
   useEffect(() => { void sb.invoke('app:brainCandidates', undefined).then(setCandidates, () => setCandidates([])); }, []);
@@ -120,9 +120,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
   const goTo = (target: number) => {
     const to = clampStep(target);
     if (busy || !canJump(step, to, problems)) return;
-    // the first time the agents step opens, it proposes a team from the answers (editable)
-    if (to >= SETUP_STEPS.indexOf('agents') && !suggestionsMade.current) { suggestionsMade.current = true; change({ step: to, agentIds: recommendedAgents(draft, catalog?.profiles ?? []) }); }
-    else change({ step: to });
+    change({ step: to });
   };
   const submit = (e: FormEvent) => { e.preventDefault(); if (busy || blocked) return; if (step < LAST_STEP) goTo(step + 1); else void exit('finish'); };
   const pickBrain = async () => {
@@ -137,7 +135,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
     catch { setError(t('cmp.interview.folderNotLinked')); }
     finally { setBusy(false); }
   };
-  const selected = catalog?.profiles.filter(p => draft.agentIds.includes(p.id)) ?? [];
+  const team = catalog?.profiles.filter(p => p.scope === 'role') ?? [];
   const brainReady = !!info?.brainRoot && !info.brainProblem;
   const stepLabel = (s: SetupStepId) => t(`setup.step.${s}`);
   const row = (label: string, value: ReactNode, at: SetupStepId) => <div className="sw-summary-row"><dt>{label}</dt><dd>{value}</dd><button type="button" className="sw-edit" aria-label={t('setup.done.editAria', { step: stepLabel(at) })} onClick={() => goTo(SETUP_STEPS.indexOf(at))}>{t('setup.done.edit')}</button></div>;
@@ -196,7 +194,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
             </div>}
             {id === 'agents' && <div className="sw-stack">
               {catalog?.profiles.length
-                ? <div className="sw-agent-grid">{catalog.profiles.map(p => <label key={p.id} className="sw-choice sw-agent"><input type="checkbox" checked={draft.agentIds.includes(p.id)} onChange={e => change({ agentIds: e.target.checked ? [...draft.agentIds, p.id] : draft.agentIds.filter(a => a !== p.id) })}/><AgentAvatar avatar={p.avatar} name={p.name}/><span><b>{p.name}</b><small>{p.purpose}</small></span></label>)}</div>
+                ? <><p className="sw-lead">{t('setup.team.lead')}</p><ul className="sw-agent-grid" data-testid="setup-team">{team.map(p => <li key={p.id} className="sw-choice sw-agent"><AgentAvatar avatar={p.avatar} name={p.name} size={40}/><span><b>{p.name}</b><small>{p.purpose}</small></span></li>)}</ul></>
                 : <div className="sw-card" role="status"><span className="sw-card-icon"><IconInfo size={16}/></span><div className="sw-card-text"><p>{t('audit.FirstInterview.theCatalogueIsNotAvailableYet')}</p></div></div>}
             </div>}
             {id === 'done' && <div className="sw-stack">
@@ -210,7 +208,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
                 {row(t('audit.FirstInterview.context'), draft.work === 'employee' ? t('auditExpression.FirstInterview.text43') : draft.work === 'independent' ? t('auditExpression.FirstInterview.text44') : draft.work === 'other' ? t('auditExpression.FirstInterview.text45') : t('auditExpression.FirstInterview.text46'), 'you')}
                 {row(t('audit.FirstInterview.workAreas'), (workAreas(answers.areas).length ? workAreas(answers.areas) : workAreas(inMeMd.areas)).join(', ') || t('auditExpression.FirstInterview.text46'), 'work')}
                 {row(t('audit.FirstInterview.goals'), draft.goals || t('cmp.interview.toDefine'), 'work')}
-                {row(t('audit.FirstInterview.favouriteAgents'), selected.map(p => p.name).join(', ') || t('cmp.interview.chooseLater'), 'agents')}
+                {row(t('setup.team.title'), team.map(p => p.name).join(', ') || t('cmp.interview.chooseLater'), 'agents')}
               </dl>
               {stepProblems(step, problems).map(message => <p key={message} role="alert" className="sw-field-error">{message}{' '}{t('audit.FirstInterview.goBackToCorrectIt')}</p>)}
               <p className="sw-note"><IconInfo size={15}/><span>{t('audit.FirstInterview.onConfirmationYourNameRoleLanguage')}</span></p>

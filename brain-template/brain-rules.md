@@ -4,7 +4,7 @@ when: {"prompt":["d'ora in poi","non fare più","regola","rule","skill","agente 
 # Brain rules: how the brain itself is changed
 
 The rules every agent follows when it changes the brain (rules, preferences, skills, agents, tests), above all the
-`brain-editor` agent, which applies {{OWNER}}'s requests like "d'ora in poi fai X", "non fare più Y", "cambia questa
+`brain-edit` skill, which applies {{OWNER}}'s requests like "d'ora in poi fai X", "non fare più Y", "cambia questa
 skill". Read when: before changing any rule, preference, skill, agent, output style or test. Write when: {{OWNER}}
 changes how the brain must be edited.
 
@@ -13,7 +13,7 @@ changes how the brain must be edited.
    from the other (duplicates drift apart).
 2. **The right place, chosen from `map.md`.** How {{OWNER}} wants every chat to talk or work → `me.md`; only the hub →
    `hub.md`; code work → `code.md`; a recurring procedure → `routines.md`; production → `ops/AGENTS.md` or
-   `ops/runbook/`; a skill → its `SKILL.md`; a subagent → `.claude/agents/<name>.md` (`rules/agent-standard.md`);
+   `ops/runbook/`; a skill → its `SKILL.md` (a role's know-how is a skill too: the roles live in the app);
    how the brain is edited → this file; a new kind of knowledge → propose a new file with a `map.md` row.
 3. **Remove before adding.** If the request makes an existing line obsolete, delete it; the shorter text wins. **The
    fixed context never grows**: a change that adds to it removes, shortens or moves at least as much in the same edit.

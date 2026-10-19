@@ -261,7 +261,9 @@ export class ClaudeSession implements HarnessSession {
     }
     // an agent's tool policy (A2): only its built-in tools exist; without 'mcp' only the app's own servers load
     const agentMcp = !op.readOnly && op.toolPolicy ? claudeMcp(op.toolPolicy) : null;
-    if (!op.readOnly && op.toolPolicy) a.push(`--tools=${claudeTools(op.toolPolicy).join(',')}`); // `=`: the variadic flag takes only this list
+    // a role chat also gets the Skill tool, asked for at every call: the role gate allows only the skills of its launch
+    const roleSkills = !op.readOnly && !!op.toolPolicy && !!op.agentAssets;
+    if (!op.readOnly && op.toolPolicy) a.push(`--tools=${[...claudeTools(op.toolPolicy), ...(roleSkills ? ['Skill'] : [])].join(',')}`); // `=`: the variadic flag takes only this list
     if (agentMcp?.strict) a.push('--strict-mcp-config');
     // `--flag=<id>`: an id can never be read as another flag (ids are UUIDs, checked by the manager)
     if (op.resume && op.sessionId) { a.push(`--resume=${op.sessionId}`); if (op.fork) a.push('--fork-session'); }
@@ -271,7 +273,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];

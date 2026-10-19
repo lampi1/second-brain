@@ -7,7 +7,7 @@ import { initialState, reduce, runningCount, toFlush, todayCost, type AppState }
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'idle',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1000, browserTabIds: [], ...p,
 });
 const req = (chatId: string, id: string, at: number): PendingRequest => ({ id, chatId, type: 'permission', tool: 'Bash', title: 't', detail: 'd', input: {}, at });
 const say = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, at: 1, text });
@@ -83,14 +83,14 @@ describe('reduce', () => {
     expect(reduce(s, { type: 'chat:updated', chat: chat('a') })).toBe(s);
   });
 
-  // several Orchestrators (ADR 0021): main moves a role and sends both updates; the store shows what main says
-  it('a second Regia sits next to the first; a role moves only with main\'s update of the old one', () => {
-    let s = reduce(init(), { type: 'chat:updated', chat: chat('a', { isRegia: true }) });
+  // Ricomincia / Cambia motore: main moves the role and sends both updates; the store shows what main says
+  it('the Orchestrator role moves only with main\'s update of the old one', () => {
+    let s = reduce(init(), { type: 'chat:updated', chat: chat('a', { isOrchestrator: true }) });
     const bRef = s.chats.b;
-    s = reduce(s, { type: 'chat:updated', chat: chat('n', { isRegia: true, harness: 'cursor', regiaName: 'App' }) });
-    expect(Object.values(s.chats).filter(c => c.isRegia).map(c => c.id).sort()).toEqual(['a', 'n']);
-    s = reduce(s, { type: 'chat:updated', chat: chat('a', { isRegia: false }) });
-    expect(Object.values(s.chats).filter(c => c.isRegia).map(c => c.id)).toEqual(['n']);
+    s = reduce(s, { type: 'chat:updated', chat: chat('n', { isOrchestrator: true, harness: 'cursor' }) });
+    expect(Object.values(s.chats).filter(c => c.isOrchestrator).map(c => c.id).sort()).toEqual(['a', 'n']);
+    s = reduce(s, { type: 'chat:updated', chat: chat('a', { isOrchestrator: false }) });
+    expect(Object.values(s.chats).filter(c => c.isOrchestrator).map(c => c.id)).toEqual(['n']);
     expect(s.chats.b).toBe(bRef);
   });
 

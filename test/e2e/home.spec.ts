@@ -12,7 +12,7 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
     await expect(page.getByTestId('home').getByRole('heading', { level: 1 })).toHaveCount(0); // no greeting
     await expect(page.getByTestId('dash-headline')).toHaveCount(0); // the headline is the Dashboard's
     await expect(page.getByTestId('view-agents')).toBeVisible();
-    await expect(page.getByTestId('regia-overlay')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0); // a decision waits as a pill on its strip
     await expect(page.getByTestId('chat-wait-qa')).toBeVisible();
     await shot(page, `home-${lang}`);
@@ -22,9 +22,8 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
       await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     }
     await expect(page.getByRole('button', { name: it ? 'Nuovo agente' : 'New agent', exact: true })).toHaveCount(0);
-    await page.keyboard.press('Control+N'); // a new agent starts from Ctrl+N, the palette or the Orchestrator
-    await expect(page.getByTestId('newchat')).toBeVisible();
-    await page.keyboard.press('Escape');
+    // work starts only from the Orchestrator's column (ADR 0083): Ctrl+N gives its input the keyboard, no dialog
+    await page.keyboard.press('Control+N');
     await expect(page.getByTestId('newchat')).toHaveCount(0);
     await openAgents(page);
   } finally { await app.close(); }

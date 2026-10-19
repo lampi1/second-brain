@@ -18,7 +18,7 @@ import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
-import { StatoButton } from './RegiaOverlay';
+import { StatoButton } from './OrchestratorOverlay';
 import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {

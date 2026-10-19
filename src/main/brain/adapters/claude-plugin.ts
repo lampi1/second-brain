@@ -35,7 +35,8 @@ const MAX_FILE = 2_000_000;
 export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null }
 
 /** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
-export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on?: boolean }): ClaudeLaunch {
+/** `skills: false` = a role chat: the brain's skills stay out (its launch's own plugin carries the ones it was given). */
+export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on?: boolean }, opts: { skills?: boolean } = {}): ClaudeLaunch {
   const none: ClaudeLaunch = { args: [], pluginDir: null, rulesFile: null };
   const rules = input ? null : launchRules();
   const domains = input?.domains ?? rules?.domains ?? [];
@@ -48,12 +49,13 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
   try {
     const base = path.join(userData, 'claude-plugin');
     const tools = product ? ensureTools(root) : null;
-    const files = collect(domains, tools && configOf(root).appRules ? tools : null);
+    const noSkills = opts.skills === false;
+    const files = collect(domains, tools && configOf(root).appRules ? tools : null).filter(f => !noSkills || !f.rel.split(/[\\/]/)[0]!.startsWith('skills'));
     const productText = productInstructions(root, false, tools ? tools.replace(/\\/g, '/') : undefined);
     let instructions = productText === null ? instructionsOf(domains) : [productText, instructionsOf(domains.slice(1))].filter(Boolean).join('\n\n');
     const sig = signature(files, (instructions ?? '') + productSignature(root));
     // A running chat keeps its exact product/root binding when another brain is selected or a release changes.
-    const dir = path.join(base, product ? `${PLUGIN_NAME}-${sig}` : PLUGIN_NAME);
+    const dir = path.join(base, product ? `${PLUGIN_NAME}-${sig}` : `${PLUGIN_NAME}${noSkills ? '-roles' : ''}`);
     const rulesFile = product ? path.join(dir, 'rules.md') : path.join(base, 'rules.md');
     if (product) instructions += '\n\n' + memoryInstructions(path.join(dir, 'product-rules'), root, tools ?? undefined);
     if (readText(path.join(dir, '.signature')) !== sig) build(base, dir, files, domains, sig, tools);

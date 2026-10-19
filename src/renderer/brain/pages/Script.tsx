@@ -1,7 +1,7 @@
 // Script: the brain's reusable, tested scripts (ADR 0076; the owner, 2026-10-19: "una sezione dedicata agli script, tutti
 // gli script creati e riutilizzabili provati che funzionano"). Dashboard look: header, three numbers, search and filters,
 // then one card per script in a grid (title, what it does, language, last test, tags); a card opens in place, full width,
-// with how to run it, the code (credentials already masked by main), "Copia", "Apri il file" and "Discutine" (a draft for
+// with how to run it, the code (credentials already masked by main), "Copia", "Apri il file" and "Discuti" (a draft for
 // the Orchestrator, never sent by itself). Read-only and zero tokens: nothing here runs a script; the Orchestrator adds,
 // fixes and deletes them (brain_script_save / brain_script_delete) and every change shows on the Changelog page.
 // Mounted by App.tsx's PageFrame. Data: /api/scripts, /api/script?id=… (main brain/scripts.ts).
@@ -31,7 +31,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
   const d = r.data;
   if (!d) return <div className="bs-detail-body"><p className="bs-muted">{r.error ? `${copy('Non riesco a leggere lo script', 'Cannot read the script')}: ${r.error}` : copy('Carico…', 'Loading…')}</p></div>;
   const discuss = () => {
-    const ok = brainBridge.draftToRegia(`${copy('Script del brain', 'Brain script')}: ${d.title} (${d.file})\n${d.description}\n${copy('Ultimo test', 'Last test')}: ${d.tested.state}${d.tested.at ? ` ${d.tested.at}` : ''} ${d.tested.note}\n\n${copy('Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?', 'Let us review it: is it still right? Should it be fixed, extended or deleted?')}`, () => {});
+    const ok = brainBridge.draftToOrchestrator(`${copy('Script del brain', 'Brain script')}: ${d.title} (${d.file})\n${d.description}\n${copy('Ultimo test', 'Last test')}: ${d.tested.state}${d.tested.at ? ` ${d.tested.at}` : ''} ${d.tested.note}\n\n${copy('Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?', 'Let us review it: is it still right? Should it be fixed, extended or deleted?')}`, () => {});
     if (!ok) toast(copy('Apri un Orchestrator per discuterne.', 'Open an Orchestrator to discuss it.'));
   };
   return (
@@ -48,7 +48,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
         <pre data-testid="bs-script-code"><code>{d.code}</code></pre>
       </section>
       <div className="bs-detail-actions">
-        <button type="button" className="btn btn-primary btn-s" onClick={discuss} data-testid="bs-script-discuss"><span aria-hidden="true">↗</span> {copy('Discutine con l’Orchestrator', 'Discuss with the Orchestrator')}</button>
+        <button type="button" className="btn btn-primary btn-s" onClick={discuss} data-testid="bs-script-discuss"><span aria-hidden="true">↗</span> {copy('Discuti', 'Discuss')}</button>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => openFileViewer(d.path)} data-testid="bs-script-open">{copy('Apri il file', 'Open the file')}</button>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyText(d.path).then(ok => toast(ok ? copy('Percorso copiato', 'Path copied') : copy('Copia non riuscita', 'Copy failed')))}>{copy('Copia percorso', 'Copy path')}</button>
         <span className="sp" />

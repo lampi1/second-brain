@@ -27,6 +27,8 @@
 //   a cold continuation ([second-brain · continuazione] …) → "Continuo dal passaggio: <the user's part>"
 //   the app's hand-off request (<<<PASSAGGIO) → a hand-off between the markers (FAKE_CLAUDE_HANDOFF=off: plain text)
 //   "Riprendi un lavoro…" (a chat continuing another) → "Ripreso dal passaggio…"; both ignore the words above
+//   mcpcall <server> <tool> <json> (anywhere on a line, JSON to its end) → a real MCP tools/call to that --mcp-config server,
+//     asked for with can_use_tool unless --allowedTools has mcp__<server>__<tool>; the answer is "Fatto: <tool>" or "Errore: …"
 //   orphan → starts a child with its own child that outlive this process (FAKE_CLAUDE_LOG gets {orphan: pid} twice)
 // FAKE_CLAUDE_INIT_DELAY=<ms> delays the initialize reply (a slow start-up); every FAKE_CLAUDE_LOG line has at: Date.now().
 //   anything else → streams "Ciao dal motore".
@@ -52,6 +54,28 @@ const opt = f => {
   if (eq) return eq.slice(f.length + 1);
   return argv.includes(f) ? argv[argv.indexOf(f) + 1] : undefined;
 };
+// --allowedTools (comma list) and the --mcp-config servers (inline JSON or a file), for "mcpcall"
+const allowedTools = new Set((opt('--allowedTools') ?? '').split(',').map(x => x.trim()).filter(Boolean));
+const mcpServers = (() => {
+  const v = opt('--mcp-config');
+  if (!v) return {};
+  try { return JSON.parse(v.trim().startsWith('{') ? v : fs.readFileSync(v, 'utf8')).mcpServers ?? {}; } catch { return {}; }
+})();
+// a minimal MCP client over HTTP (what the real CLI does with an http server of --mcp-config)
+async function mcpCall(name, tool, args) {
+  const srv = mcpServers[name];
+  if (!srv?.url) return { ok: false, text: `no MCP server ${name}` };
+  const post = async (body, sid) => {
+    const res = await fetch(srv.url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(srv.headers ?? {}), ...(sid ? { 'mcp-session-id': sid } : {}) }, body: JSON.stringify(body) });
+    return { sid: res.headers.get('mcp-session-id'), json: await res.json() };
+  };
+  try {
+    const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } } });
+    const r = (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: args } }, init.sid)).json;
+    const text = r.error ? r.error.message : (r.result?.content ?? []).map(c => c.text ?? '').join('\n');
+    return { ok: !r.error && !r.result?.isError, text };
+  } catch (e) { return { ok: false, text: String(e?.message ?? e) }; }
+}
 const resumeId = opt('--resume');
 let sessionId = argv.includes('--fork-session') ? crypto.randomUUID() : resumeId ?? opt('--session-id') ?? crypto.randomUUID();
 // no --permission-mode: the user's settings.json decides (FAKE_CLAUDE_SETTINGS_MODE stands for its defaultMode)
@@ -178,6 +202,13 @@ async function runTurn(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, permissionMode, cwd: process.cwd(), tools: ['Bash', 'Edit', 'AskUserQuestion'], mcp_servers: [{ name: 'broken', status: 'failed' }], claude_code_version: '0.0.0-fake', effort: opt('--effort') ?? null });
   }
   record({ type: 'user', message: { role: 'user', content: text } });
+  // the role text the app puts before an Orchestrator's first message is not the user's: its words trigger nothing
+  text = text.replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '');
+  // the fixed rules of a delegation contract (shared/delegation.ts delegationPrompt) are the app's: their words ("ask") trigger nothing
+  text = text.replace(/^(When the output is ready|An ambiguity in this contract|If the user writes to you here)[^\n]*$/gm, '');
+  // the MCP calls are taken out first: their JSON's words ("tasks", "summary") trigger nothing
+  const mcpCalls = [...text.matchAll(/mcpcall (\S+) (\S+) (\{.*\})\s*$/gm)];
+  text = text.replace(/mcpcall (\S+) (\S+) (\{.*\})\s*$/gm, '');
   // like the real CLI on a claude.ai login: plan windows as utilization 0-1, resets in unix seconds
   out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', utilization: 0.25, resetsAt: Math.floor(Date.now() / 1000) + 3600 }, session_id: sessionId, uuid: crypto.randomUUID() });
   if (/\bbig\b/.test(text)) ctxTokens = 250000;
@@ -285,6 +316,23 @@ async function runTurn(text) {
     // reasoning streamed until interrupted (FAKE_CLAUDE_SLOW_TICKS sentences): "Correggi il pensiero" selects one of them
     const ticks = Number(process.env.FAKE_CLAUDE_SLOW_TICKS ?? 200);
     await streamThinking(['Penso di usare la libreria vecchia. ', ...Array.from({ length: ticks }, (_, i) => `Passo ${i + 1}. `)]);
+  }
+  // "mcpcall <server> <tool> <json to the end of the line>": a real MCP tools/call over HTTP to a server of --mcp-config,
+  // asked for with can_use_tool unless --allowedTools pre-approves mcp__<server>__<tool> (like the real CLI)
+  if (!/slow/.test(text)) for (const [, server, tool, args] of mcpCalls) {
+    if (turn.aborted) break;
+    const name = `mcp__${server}__${tool}`, id = `toolu_mcp_${++n}`;
+    let input;
+    try { input = JSON.parse(args); } catch { final = `Errore: JSON non valido per ${tool}`; continue; }
+    assistant([{ type: 'tool_use', id, name, input }]);
+    if (!allowedTools.has(name)) {
+      const r = await ask(name, input, id);
+      if (r?.behavior !== 'allow') { toolResult(id, r ? `Permission denied: ${r.message}` : '[Request interrupted by user for tool use]', true); final = `Negato: ${tool}`; continue; }
+    }
+    const r = await mcpCall(server, tool, input);
+    logLine({ mcpcall: { server, tool, ok: r.ok, text: r.text } });
+    toolResult(id, r.text, !r.ok);
+    final = r.ok ? `Fatto: ${tool}` : `Errore: ${r.text}`;
   }
   if (/slow/.test(text)) {
     // a child of the CLI (a Bash tool, an MCP server): outside our parent's job, like claude.exe's own children;

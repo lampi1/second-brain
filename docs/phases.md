@@ -7,7 +7,7 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
 
 ## v1 · the cockpit (monolith, two engines: ADR 0010)
 - [ ] Two engines: **Claude embedded** (official binary, the user's claude.ai login) and **Cursor CLI** over ACP — "sarà proprio con quella che la proverò all'inizio": Cursor must work first and well.
-- [ ] "sempre un box regia disponibile": fixed violet Regia tile, on Claude or on Cursor, default focus.
+- [ ] "sempre un box orchestrator disponibile": fixed violet Orchestrator tile, on Claude or on Cursor, default focus.
 - [ ] "tutte le chat come tanti quadratini in cui posso scrivere dentro ognuno senza premere": chat tiles with an always-active input, Mosaico and Corsie views ("selezionare la preferenza").
 - [ ] "fermare tutto come se fosse claude desktop, il nome del modello": ■ per chat, ■ Ferma tutto, model (and effort for Claude) visible and changeable.
 - [ ] "un pannellino di domande a risposta multipla" + "mi compaiano ovunque io stia navigando nell'app": questions and permissions as panels in the tile, in "Ti aspettano" and in the global question layer; 1-9 / Enter / Esc.
@@ -16,7 +16,7 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
 - [ ] "lavorare all'app direttamente dall'app": stable release + dev instance, promotion only with green tests, rollback, chats cannot kill or modify the stable instance (ADR 0007).
 - [ ] "loggarmi nelle loro cli": login state shown; the official login opens in a visible terminal; credentials never handled.
 - [ ] "renderlo navigabile il mio cervello e la mappa 3d … in questo bello stile professionale": brain pages (oggi/da fare/standup, idee e spunti e riflessioni dell'IA, costi, qualità, esplora) and the 3D map (essential view, full screen from its own button, menu, weak points, flows) inside the app in its style, reusing the v2 site code (moved into v1 by the user, 2026-10-11).
-- [ ] "vorrei lavorare navigando al meglio possibile": three notification tiers (questions = global layer; important events = short grouped toast with one action; the rest = notification center + badges), a notification center openable anywhere (filter, mark read, each item goes to the exact element), badges per section, sidebar always visible and collapsible, Ctrl+K go anywhere, Alt+←/→ history, Ctrl+1 back to the grid, the Regia reachable from any page, copyable internal links, mute per kind, timed do-not-disturb, never sounds.
+- [ ] "vorrei lavorare navigando al meglio possibile": three notification tiers (questions = global layer; important events = short grouped toast with one action; the rest = notification center + badges), a notification center openable anywhere (filter, mark read, each item goes to the exact element), badges per section, sidebar always visible and collapsible, Ctrl+K go anywhere, Alt+←/→ history, Ctrl+1 back to the grid, the Orchestrator reachable from any page, copyable internal links, mute per kind, timed do-not-disturb, never sounds.
 - [ ] "anche l'app abbia tutte le sezioni che aveva il sito. fatte meglio da app enterprise" (2026-10-11): every v2 site section exists in the app, in the app style (filterable/sortable tables, exports, a short explanation on top, calm density), each proven by an e2e test + screenshot:
   - [ ] Oggi (home): today's costs, what was done, what waits for you, AI insights
   - [ ] Adesso: live chats with their state, mailbox, now.md line, message box

@@ -40,7 +40,7 @@ test('Il mio profilo: shows me.md, saves only the managed lines, refuses a concu
     expect(saved).toContain('- **Reply style**: Breve, la decisione per prima.\n- **Name things, not numbers**');
     expect(saved.endsWith('## Machine\n\n- Windows.\n')).toBe(true);
 
-    // brain-editor adds a rule while the form is open: the save is refused, the draft stays, the next save lands
+    // a chat with the brain-edit skill adds a rule while the form is open: the save is refused, the draft stays, the next save lands
     await p.getByTestId('profile-edit').click();
     await p.getByTestId('profile-role').fill('head of product');
     fs.appendFileSync(path.join(brain, 'me.md'), '- **New rule**: added meanwhile\n');

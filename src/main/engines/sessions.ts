@@ -50,8 +50,9 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
   };
   switch (engine.kind) {
     case 'claude': {
-      // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act
-      const brain = opts.readOnly ? [] : [...claudeLaunch(ctx.userData).args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])];
+      // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act; a role
+      // chat takes the brain without its skills and its launch's own plugin (only the skills it was given)
+      const brain = opts.readOnly ? [] : [...claudeLaunch(ctx.userData, undefined, { skills: !opts.agentAssets }).args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])];
       return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
     }
     case 'codex': {
@@ -61,7 +62,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
       return new CodexSession({
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
-        configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: [...launch.skillRoots, ...(!opts.readOnly && opts.agentAssets ? [opts.agentAssets.skillRoot] : [])],
+        configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: opts.readOnly ? [] : opts.agentAssets ? [opts.agentAssets.skillRoot] : launch.skillRoots,
         approvalPolicy: launch.approvalPolicy, sandbox: launch.sandbox,
         executionPolicy: () => codexPolicyFor(opts.cwd, opts.readOnly, agentPolicy),
         showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,

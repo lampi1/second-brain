@@ -1,14 +1,28 @@
+// The app-control MCP tools (main/appctl/tools.ts): effort changes, messages labelled as an agent's, role delegation
+// (app_create_chat with roleId), long-chat hand-offs, the routing table tools, logs and UI steering, endpoint auth.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, regiaEndpointAuth } from '../../src/main/appctl/tools';
+import { AgentCatalogService } from '../../src/main/agents/catalog';
+import type { AgentModelChoice } from '../../src/shared/agents';
+import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
-import { DEMO_REGISTRY, DemoRouting } from '../../src/main/brain/routing-demo';
-import type { RoutingRow, RoutingTable } from '../../src/shared/contract';
+import { DemoRouting } from '../../src/main/brain/routing-demo';
+import type { NewChat, RoutingRow, RoutingTable } from '../../src/shared/contract';
 
-/** a brain with no routing table and no registry: every chat gets the user's "Chat aperte dall'Orchestrator" */
+/** a brain with no routing table and no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
 const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
+/** the real role catalog with a Claude engine whose tiers map to m-top / m-mid / m-light */
+function roleCatalog(): AgentCatalogService {
+  const models = (): AgentModelChoice[] => [
+    { engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true },
+    { engine: 'cursor', label: 'Cursor', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: false, authenticated: null }];
+  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => ({ model: `m-${tier}`, independent: true }) });
+}
 
 function deps() {
   const sent: { chatId: string; text: string }[] = [];
@@ -45,16 +59,16 @@ describe('app control tools', () => {
     expect(tools.filter(t => /resolve/.test(t.name)).map(t => t.name)).toEqual(['app_resolve_question']);
   });
 
-  describe('app_resolve_question: the answer the user gave in the Regia closes the work chat\'s question', () => {
+  describe('app_resolve_question: the answer the user gave in the Orchestrator closes the work chat\'s question', () => {
     const q = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 100,
       questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }, { question: 'Chi lo segue?', options: [], multiSelect: false }] };
     const perm = { id: 'p1', chatId: 'w', type: 'permission', tool: 'Bash', title: 'git push', detail: '', input: {}, at: 100 };
-    function setup(regiaItems: unknown[]) {
+    function setup(orchestratorItems: unknown[]) {
       const answered: unknown[] = [];
       const chats = {
-        list: () => [{ id: 'regia', isRegia: true, harness: 'claude' }, { id: 'w', isRegia: false, harness: 'claude' }],
-        pending: () => [q, perm, { ...q, id: 'rq', chatId: 'regia' }],
-        items: (id: string) => (id === 'regia' ? regiaItems : []),
+        list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' }],
+        pending: () => [q, perm, { ...q, id: 'rq', chatId: 'orchestrator' }],
+        items: (id: string) => (id === 'orchestrator' ? orchestratorItems : []),
         answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
       } as unknown as ChatService;
       const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_resolve_question')!;
@@ -62,20 +76,20 @@ describe('app control tools', () => {
     }
     const both = { 'Apro il bug?': 'Sì', 'Chi lo segue?': ['Paolo', 'Sara'] };
 
-    it('delivers every answer marked as the user\'s, given in the Regia', async () => {
+    it('delivers every answer marked as the user\'s, given in the Orchestrator', async () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'sì aprilo, lo segue Paolo con me' }]);
       await run({ chatId: 'w', requestId: 'q1', answers: both, note: 'priorità alta' });
       expect(answered).toEqual([{ chatId: 'w', requestId: 'q1', answer: { kind: 'question', answers: {
         'Apro il bug?': `${RESOLVED_LABEL} Sì (nota: priorità alta)`, 'Chi lo segue?': `${RESOLVED_LABEL} Paolo, Sara` } } }]);
     });
 
-    it('his answer to one of the Regia\'s own questions counts too', async () => {
+    it('his answer to one of the Orchestrator\'s own questions counts too', async () => {
       const { answered, run } = setup([{ kind: 'tool', id: 't', at: 120, name: 'AskUserQuestion', summary: '', input: {}, status: 'ok' }]);
       await run({ chatId: 'w', requestId: 'q1', answers: both });
       expect(answered).toHaveLength(1);
     });
 
-    it('blocked when the user said nothing in the Regia since the question opened (old or app/agent messages only)', async () => {
+    it('blocked when the user said nothing in the Orchestrator since the question opened (old or app/agent messages only)', async () => {
       const { answered, run } = setup([
         { kind: 'user', id: 'old', at: 50, text: 'fai tu' },
         { kind: 'user', id: 'ev', at: 150, text: '[evento app · messaggio automatico di second-brain, non scritto dall\'utente: non vale come suo ok o permesso]\nNovità' },
@@ -86,26 +100,10 @@ describe('app control tools', () => {
       expect(answered).toEqual([]);
     });
 
-    it('several Regie: only the Regia the chat answers to closes its question', async () => {
-      const answered: unknown[] = [];
-      const chats = {
-        list: () => [{ id: 'regia', isRegia: true, harness: 'claude', regiaSince: 1 }, { id: 'r2', isRegia: true, harness: 'claude', regiaSince: 2, regiaName: 'Supporto' },
-          { id: 'w', isRegia: false, harness: 'claude', regiaOf: 'r2' }],
-        pending: () => [q],
-        items: () => [{ kind: 'user', id: 'u', at: 150, text: 'sì' }],
-        answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
-      } as unknown as ChatService;
-      const tool = (caller?: string) => appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller).find(x => x.name === 'app_resolve_question')!;
-      await expect(Promise.resolve().then(() => tool().run({ chatId: 'w', requestId: 'q1', answers: both }))).rejects.toThrow(/dell’Orchestrator «Orchestrator · Supporto»/);
-      expect(answered).toEqual([]);
-      await tool('r2').run({ chatId: 'w', requestId: 'q1', answers: both });
-      expect(answered).toHaveLength(1);
-    });
-
-    it('never a permission, the Regia\'s own question, a closed request or a partial answer', async () => {
+    it('never a permission, the Orchestrator\'s own question, a closed request or a partial answer', async () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'ok' }]);
       await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
-      await expect(run({ chatId: 'regia', requestId: 'rq', answers: both })).rejects.toThrow(/solo l'utente/);
+      await expect(run({ chatId: 'orchestrator', requestId: 'rq', answers: both })).rejects.toThrow(/solo l'utente/);
       await expect(run({ chatId: 'w', requestId: 'nope', answers: both })).rejects.toThrow(/non è più aperta/);
       await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/ogni domanda/);
       await expect(run({ chatId: 'w', requestId: 'q1', answers: { ...both, Altro: 'x' } })).rejects.toThrow(/ogni domanda/);
@@ -135,10 +133,10 @@ describe('app control tools', () => {
     expect(sent).toEqual(['cur', 'cur']);
   });
 
-  it('a Cursor Regia writes across engines even with legacy false; inactive targets stay guarded', async () => {
+  it('a Cursor Orchestrator writes across engines even with legacy false; inactive targets stay guarded', async () => {
     const sent: string[] = [];
     let cross = false;
-    const list = [{ id: 'r', harness: 'cursor', state: 'idle', isRegia: true }, { id: 'cur', harness: 'cursor', state: 'closed' }, { id: 'cl', harness: 'claude', state: 'idle' }, { id: 'cloff', harness: 'claude', state: 'closed' }];
+    const list = [{ id: 'r', harness: 'cursor', state: 'idle', isOrchestrator: true }, { id: 'cur', harness: 'cursor', state: 'closed' }, { id: 'cl', harness: 'claude', state: 'idle' }, { id: 'cloff', harness: 'claude', state: 'closed' }];
     const chats = { list: () => list, send: async (id: string) => { sent.push(id); } } as unknown as ChatService;
     const brain = { settings: () => ({ messaging: { crossHarness: cross } }) } as unknown as BrainService;
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_send_to_chat')!;
@@ -150,42 +148,67 @@ describe('app control tools', () => {
     expect(sent).toEqual(['cur', 'cl', 'cl']);
   });
 
-  it('the Regia creates work chats in the brain folder, labelled, and obeys the engine switches', async () => {
+  it('the Orchestrator delegates a role chat in the brain folder, labelled; the role decides engine and model; the engine switches hold', async () => {
     const made: Record<string, unknown>[] = [];
-    let cross = true, cursorOn = true, regia: 'claude' | 'cursor' = 'claude';
-    const chats = { list: () => [{ id: 'r', harness: regia, isRegia: true }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
-    const regiaChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: cross }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: cursorOn }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain' });
+    let cursorOn = true;
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
+    const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: cursorOn }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
+    expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale', roleId: 'artisan' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain', model: 'm-mid', route: { source: 'agent', agent: { id: 'artisan', chosenBy: 'orchestrator' } } });
     expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
-    expect(made[0]).not.toHaveProperty('model');
-    expect(made[0]).not.toHaveProperty('effort');
-    // never a second Orchestrator, not even silently: the role is the user's choice
-    expect(made[0]!.regia).toBe(false);
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', regia: true }))).rejects.toThrow(/Orchestrator/);
-    expect(made).toHaveLength(1);
-    cross = false;
-    expect(await t.run({ title: 'X', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
-    // A legacy false does not restrict either engine; engine launch permissions below still apply.
-    regia = 'cursor';
-    expect(await t.run({ title: 'Cursor · Prova', prompt: 'y', harness: 'cursor' })).toMatchObject({ harness: 'cursor' });
-    expect(await t.run({ title: 'X', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
-    cross = true;
-    expect(await t.run({ title: 'Claude · Prova', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
-    expect(made.map(m => [m.harness, m.regia])).toEqual([['claude', false], ['cursor', false], ['cursor', false], ['claude', false], ['claude', false]]);
-    // «Gli Orchestrator possono usare Cursor» off: refused to every Orchestrator, a Cursor one too (review 2026-10-14)
+    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false, independentOf: { engine: 'claude', model: 'claude-opus-5-5' } });
+    // the role decides: no engine, model or effort from the caller; never a second Orchestrator; a role is required
+    for (const extra of [{ harness: 'cursor' }, { model: 'opus' }, { effort: 'high' }]) await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', ...extra }))).rejects.toThrow(/the role decides it/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y' }))).rejects.toThrow(/roleId required/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'reviewer' }))).rejects.toThrow(/roleId required/);
+    // a tier up to the role's maximum; above it, refused
+    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' })).toMatchObject({ model: 'm-top', route: { agent: { tier: 'top' } } });
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', tier: 'top' }))).rejects.toThrow(/massimo/);
+    expect(made).toHaveLength(2);
+    // a role on Cursor while «Gli Orchestrator possono usare Cursor» is off: refused, nothing created
+    catalog.save({ ...catalog.list().profiles.find(p => p.id === 'scout')!, engine: 'cursor', model: null }, 'scout');
     cursorOn = false;
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
+    expect(made).toHaveLength(2);
+  });
+
+  it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {
+    const ui: unknown[] = [];
+    const list = [{ id: 'c_root', title: 'Root', isOrchestrator: false }, { id: 'c_kid', parentId: 'c_root', title: 'Kid', isOrchestrator: false }];
+    const chats = { list: () => list } as unknown as ChatService;
+    const browser = { list: () => [{ id: 'tab-kid', ownerChatId: 'c_kid' }, { id: 'tab-root', ownerChatId: 'c_root' }] } as unknown as BrowserService;
+    const ui_ = appControlTools({ chats, browser, brain: {} as BrainService, window: () => null, emitUi: c => ui.push(c), version: '0' }, 'o').find(x => x.name === 'app_ui')!;
+    for (const value of ['c_kid', 'chat:c_kid', 'tab-kid', 'browser:tab-kid']) expect(() => ui_.run({ action: 'maximize', value })).toThrow(/delegata/);
+    expect(ui).toEqual([]);
+    expect(ui_.run({ action: 'maximize', value: 'c_root' })).toBe('ok');
+    expect(ui_.run({ action: 'maximize', value: 'tab-root' })).toBe('ok');
+    expect(ui).toHaveLength(2);
+  });
+
+  it('app_create_chat on the plain /mcp/app mount (any local process) asks for a chat bound by the Orchestrator; its own mount does not', async () => {
+    const opts: unknown[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }],
+      create: async (req: Record<string, unknown>, _by: unknown, _i: unknown, _l: unknown, o: unknown) => { opts.push(o); return { id: `n${opts.length}`, title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const deps = { chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: (req: NewChat) => catalog.resolve(req) };
+    const create = (caller?: string) => appControlTools(deps, caller).find(x => x.name === 'app_create_chat')!;
+    await create('r').run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan' });
+    await create().run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan' });
+    await create('not-an-orchestrator').run({ title: 'Ordini · Fix 3', prompt: 'p', roleId: 'artisan' });
+    expect(opts).toEqual([{ boundByOrchestrator: false }, { boundByOrchestrator: true }, { boundByOrchestrator: true }]);
   });
 
   it('long chats: hand-off and continuation cross engines with legacy false and keep their labels', async () => {
     const calls: [string, string, Record<string, unknown>][] = [];
     let cross = true;
     const list = [
-      { id: 'cl', harness: 'claude', state: 'closed', title: 'Fix', pending: 0, model: null, costUsd: 1, isRegia: false, lastText: '', contextTokens: 250_000, handoffAt: 5 },
-      { id: 'cu', harness: 'cursor', state: 'idle', title: 'Sms', pending: 0, model: null, costUsd: 0, isRegia: false, lastText: '', contextTokens: 30_000, contextEstimated: true },
-      { id: 'cx', harness: 'cursor', state: 'closed', title: 'Old', pending: 0, model: null, costUsd: 0, isRegia: false, lastText: '' },
+      { id: 'cl', harness: 'claude', state: 'closed', title: 'Fix', pending: 0, model: null, costUsd: 1, isOrchestrator: false, lastText: '', contextTokens: 250_000, handoffAt: 5 },
+      { id: 'cu', harness: 'cursor', state: 'idle', title: 'Sms', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '', contextTokens: 30_000, contextEstimated: true },
+      { id: 'cx', harness: 'cursor', state: 'closed', title: 'Old', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '' },
     ];
     const chats = {
       list: () => list,
@@ -210,81 +233,40 @@ describe('app control tools', () => {
     await t('app_handoff_chat').run({ chatId: 'cu' });
     await expect(Promise.resolve(t('app_handoff_chat').run({ chatId: 'nope' }))).rejects.toThrow(/sconosciuta/);
     // A Cursor Orchestrator can reach Claude too; the stopped-chat wake rules still apply.
-    list.push({ id: 'r', harness: 'cursor', state: 'idle', title: 'Regia', pending: 0, model: null, costUsd: 0, isRegia: true, lastText: '' });
+    list.push({ id: 'r', harness: 'cursor', state: 'idle', title: 'Orchestrator', pending: 0, model: null, costUsd: 0, isOrchestrator: true, lastText: '' });
     await t('app_handoff_chat').run({ chatId: 'cx' });
     expect(calls.at(-1)![2].allowStart).toBe(true);
     await t('app_continue_chat').run({ chatId: 'cl' });
     cross = true;
     await t('app_continue_chat').run({ chatId: 'cl' });
     expect(calls.at(-1)![2].allowStart).toBe(false);
+    // a delegated chat's hand-off is its content: only its parent reads it, and it goes on under its parent (ADR 0083)
+    list.push({ id: 'kid', harness: 'claude', state: 'idle', title: 'Scout', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'segreto', parentId: 'cl' } as typeof list[number]);
+    const before = calls.length;
+    await expect(Promise.resolve().then(() => t('app_handoff_chat').run({ chatId: 'kid' }))).rejects.toThrow(/delegata/);
+    await expect(Promise.resolve().then(() => t('app_continue_chat').run({ chatId: 'kid' }))).rejects.toThrow(/delegata/);
+    expect(calls).toHaveLength(before);
   });
 
-  it('what the Regia does not say comes from "Chat aperte dalla Regia", read at each call', async () => {
-    const made: Record<string, unknown>[] = [];
-    const regiaChats = { harness: 'cursor', claudeModel: 'claude-opus-5-5', cursorModel: 'grok-4.7', claudeEffort: 'high' };
-    const chats = { list: () => [], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    // nothing said: the default engine and its model; no effort for Cursor
-    expect(await t.run({ title: 'A', prompt: 'p' })).toMatchObject({ harness: 'cursor', model: 'grok-4.7', effort: null });
-    expect(made[0]).toMatchObject({ harness: 'cursor', model: 'grok-4.7' });
-    expect(made[0]).not.toHaveProperty('effort');
-    // the engine said: that engine's default model and the Claude effort
-    await t.run({ title: 'B', prompt: 'p', harness: 'claude' });
-    expect(made[1]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high' });
-    // the model said: kept as is
-    await t.run({ title: 'C', prompt: 'p', harness: 'cursor', model: 'gpt-5' });
-    expect(made[2]).toMatchObject({ harness: 'cursor', model: 'gpt-5' });
-    // a model without its engine is refused: "opus" must never become a Cursor chat because Cursor is the default
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', model: 'opus' }))).rejects.toThrow(/harness/);
-    expect(made).toHaveLength(3);
-    // a change applies at the next call, no restart
-    regiaChats.harness = 'claude'; regiaChats.claudeModel = ''; regiaChats.claudeEffort = '';
-    await t.run({ title: 'D', prompt: 'p' });
-    expect(made[3]).toMatchObject({ harness: 'claude' });
-    expect(made[3]).not.toHaveProperty('model');
-    expect(made[3]).not.toHaveProperty('effort');
-  });
-
-  it('routes by the table: omitted engine = its row; an override needs a reason; hard rules hold; the route travels with the chat', async () => {
-    const made: Record<string, unknown>[] = [];
-    const table: RoutingTable = { version: 4, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
-      { kind: '*', area: ['App', 'Pers · App'], harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'app: Opus', since: '2026-10-12', evidence: 'regola' },
-      { kind: 'triage', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', why: 'smistare: Sonnet', since: '2026-10-12', evidence: 'n=31' },
-    ] };
-    const rules = { tasks: [['triage', String.raw`\b(triage|smista\w*)\b`, 'i'], ['bug-fix', String.raw`\b(fix|bug)\b`, 'i']] as [string, string, string][] };
-    const regiaChats = { harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high' };
-    const chats = { list: () => [], create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
-    const brain = {
-      routingInfo: () => ({ registry: DEMO_REGISTRY }), route: (req: RouteRequest) => routeChat(req, table, DEMO_REGISTRY, rules, 7),
-      settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }),
-    } as unknown as BrainService;
-    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_create_chat')!;
-    // the kind read from the title picks the row
-    expect(await t.run({ title: 'Posta · smista la inbox', prompt: 'p' })).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', route: { source: 'table', kind: 'triage', tableVersion: 4 } });
-    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', route: { policy: 'routing', source: 'table', kind: 'triage', area: 'Posta', version: 4, at: 7 } });
-    // naming what the row says is no override
-    expect(await t.run({ title: 'Posta · smista', prompt: 'p', model: 'claude-sonnet-5-5' })).toMatchObject({ route: { source: 'table' } });
-    // something else without a reason: refused, nothing created; with a reason: an override, logged with it
-    await expect(Promise.resolve().then(() => t.run({ title: 'Posta · smista', prompt: 'p', model: 'claude-opus-5-5' }))).rejects.toThrow(/override senza motivo/);
-    expect(await t.run({ title: 'Posta · smista', prompt: 'p', model: 'opus', reason: 'mail delicate' })).toMatchObject({ model: 'opus', route: { source: 'override', reason: 'mail delicate' } });
-    // no row: the user's defaults (Cursor here), and naming another engine stays free as before
-    expect(await t.run({ title: 'Ordini · fix totale', prompt: 'p' })).toMatchObject({ harness: 'cursor', model: 'grok-4.7', effort: null, route: { source: 'default', kind: 'bug-fix' } });
-    expect(await t.run({ title: 'Ordini · fix totale', prompt: 'p', harness: 'claude' })).toMatchObject({ harness: 'claude', effort: 'high', route: { source: 'override', reason: null } });
-    // a known model brings its engine; an agent's kind wins over the words
-    expect(await t.run({ title: 'Ordini · x', prompt: 'p', model: 'claude-haiku-5-5', kind: 'ops-read' })).toMatchObject({ harness: 'claude', route: { kind: 'ops-read' } });
-    // Hard rules: max needs a reason, models stay on their engine, and app chats may explicitly choose Cursor.
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', effort: 'max' }))).rejects.toThrow(/max/);
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'cursor', model: 'claude-opus-5-5' }))).rejects.toThrow(/solo su claude/);
-    expect(await t.run({ title: 'App · tema', prompt: 'p', harness: 'cursor', reason: 'prova' })).toMatchObject({ harness: 'cursor', route: { area: 'App', source: 'override' } });
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', kind: 'boh' }))).rejects.toThrow(/kind sconosciuto/);
-    await expect(Promise.resolve().then(() => t.run({ title: 'Ordini · x', prompt: 'p', harness: 'claude', model: 'claude-mistero-9' }))).rejects.toThrow(/models\.json/);
-    expect(made).toHaveLength(7);
+  it('app_digest leaves out the commands run in delegated chats (state only, never their content)', async () => {
+    const list = [
+      { id: 'root', harness: 'claude', state: 'idle', title: 'Root', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '' },
+      { id: 'kid', harness: 'claude', state: 'idle', title: 'Kid', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '', parentId: 'root' },
+    ];
+    const at = Date.now();
+    const runs = [{ id: 'x1', chatId: 'root', itemId: 'i', code: 'npm test', cwd: '/w', state: 'ok', exitCode: 0, output: '', startedAt: at, endedAt: at },
+      { id: 'x2', chatId: 'kid', itemId: 'i', code: 'cat kid-secret.txt', cwd: '/w', state: 'ok', exitCode: 0, output: '', startedAt: at, endedAt: at }];
+    const chats = { list: () => list, pending: () => [] } as unknown as ChatService;
+    const brain = { settings: () => ({ contextWarnTokens: 200_000 }) } as unknown as BrainService;
+    const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', runs: () => runs } as unknown as Parameters<typeof appControlTools>[0]);
+    const out = JSON.stringify(await tools.find(x => x.name === 'app_digest')!.run({}));
+    expect(out).toContain('npm test');
+    expect(out).not.toContain('kid-secret');
   });
 
   it('app_routing reads the table; app_routing_save writes a new version by itself, signed, with reason and data; hard rules hold', async () => {
     const routing = new DemoRouting('2026-10-14T08:00:00.000Z');
-    const chats = { list: () => [{ id: 'r1', isRegia: true, title: 'Regia' }] } as unknown as ChatService;
+    const chats = { list: () => [{ id: 'r1', isOrchestrator: true, title: 'Orchestrator' }] } as unknown as ChatService;
     const brain = {
       routingInfo: () => routing.info(),
       saveRouting: (routes: RoutingRow[], reason: string | null, o: { by: string; evidence?: string | null; base?: number; exploration?: number }) =>
@@ -301,7 +283,7 @@ describe('app control tools', () => {
     // built on an older version: refused, the newer one stays (no silent overwrite)
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
     expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, exploration: 0.2, rows: 5 });
-    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Regia', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', exploration: { from: 0, to: 0.2 } });
+    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', exploration: { from: 0, to: 0.2 } });
     // Never Fable, and changing an app row must still preserve every locked row.
     await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
     await expect(Promise.resolve().then(() => save.run({ routes: [{ kind: 'review', harness: 'claude', model: 'claude-fable-5-1', effort: 'high', why: 'w' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/Fable mai/);
@@ -323,9 +305,9 @@ describe('app control tools', () => {
     expect(() => tool('app_ui').run({ action: 'view', value: 'corsie' })).toThrow(/not allowed/);
   });
 
-  it('lists the recent closed chats apart and lets the Regia reopen one', async () => {
+  it('lists the recent closed chats apart and lets the Orchestrator reopen one', async () => {
     const now = Date.now();
-    const base = { harness: 'claude', state: 'closed', pending: 0, model: null, costUsd: 0, isRegia: false, lastText: 'fatto' };
+    const base = { harness: 'claude', state: 'closed', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'fatto' };
     const list = [
       { ...base, id: 'open', title: 'Aperta', state: 'idle' },
       { ...base, id: 'old', title: 'Vecchia', closedAt: now - 8 * 24 * 3600_000, closedBy: 'auto' },
@@ -347,7 +329,7 @@ describe('app control tools', () => {
     const chats = { list: () => [], items: () => [], pending: () => [] } as unknown as ChatService;
     const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
     const code = { repo: () => 'C:/code/app', inRepo: async () => true, pull: async () => ({ ok: true, message: '' }) };
-    for (const tools of [appControlTools(base), appControlTools({ ...base, code }), appControlTools({ ...base, unified: true, code }, 'or')]) {
+    for (const tools of [appControlTools(base), appControlTools({ ...base, code }), appControlTools({ ...base, code }, 'or')]) {
       expect(tools.map(x => x.name).some(n => /promot|restart|merge|release|improve|proposal/i.test(n))).toBe(false);
     }
   });
@@ -355,15 +337,15 @@ describe('app control tools', () => {
   it('app_update_code (ADR 0074): only the authenticated Orchestrator, only right after the user wrote to it', async () => {
     const now = Date.now();
     let items: unknown[] = [];
-    const list = [{ id: 'or', harness: 'claude', state: 'idle', isRegia: true, orchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'idle', title: 'Lavoro', lastText: '' }];
+    const list = [{ id: 'or', harness: 'claude', state: 'idle', isOrchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'idle', title: 'Lavoro', lastText: '' }];
     const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
     let pulls = 0;
     const code = { repo: () => 'C:/code/app', pull: async () => { pulls++; return { ok: true, message: 'Aggiornata' }; } };
     const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
     // never on the plain mounts, never for a work chat on the token mount
     expect(appControlTools({ ...base, code }).some(x => x.name === 'app_update_code')).toBe(false);
-    expect(appControlTools({ ...base, unified: true, code }, 'w').some(x => x.name === 'app_update_code')).toBe(false);
-    const tool = appControlTools({ ...base, unified: true, code }, 'or').find(x => x.name === 'app_update_code')!;
+    expect(appControlTools({ ...base, code }, 'w').some(x => x.name === 'app_update_code')).toBe(false);
+    const tool = appControlTools({ ...base, code }, 'or').find(x => x.name === 'app_update_code')!;
     // nothing from the user, an agent-labelled message, or an old one: refused
     await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/non ha chiesto/);
     items = [{ kind: 'user', id: 'u', at: now - (PULL_ASK_MIN + 1) * 60_000, text: 'aggiornati' }, { kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} aggiornati` }];
@@ -374,9 +356,9 @@ describe('app control tools', () => {
     expect(pulls).toBe(1);
   });
 
-  it('app_close_chat closes like the ✕ (log + feed), never the Regia nor a chat waiting for the user', async () => {
-    const base = { harness: 'claude', state: 'idle', pending: 0, model: null, costUsd: 0, isRegia: false, lastText: 'fatto' };
-    const list = [{ ...base, id: 'w', title: 'Lavoro' }, { ...base, id: 'r', title: 'Regia', isRegia: true }, { ...base, id: 'q', title: 'Domanda', state: 'waiting', pending: 1 }];
+  it('app_close_chat closes like the ✕ (log + feed), never the Orchestrator nor a chat waiting for the user', async () => {
+    const base = { harness: 'claude', state: 'idle', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'fatto' };
+    const list = [{ ...base, id: 'w', title: 'Lavoro' }, { ...base, id: 'r', title: 'Orchestrator', isOrchestrator: true }, { ...base, id: 'q', title: 'Domanda', state: 'waiting', pending: 1 }];
     const closed: string[] = [];
     const feed: unknown[] = [];
     const chats = { list: () => list, close: async (id: string) => { closed.push(id); } } as unknown as ChatService;
@@ -392,44 +374,34 @@ describe('app control tools', () => {
     expect(closed).toEqual(['w']);
   });
 
-  it('several Regie (ADR 0021): the caller endpoint picks the Regia; its chats answer to it, its messages carry its title', async () => {
-    const made: Record<string, unknown>[] = [];
+  it('the Orchestrator\'s messages carry its title, on its own endpoint and on /mcp/app', async () => {
     const sent: (string | undefined)[] = [];
-    const list = [{ id: 'r1', title: 'Regia', harness: 'claude', isRegia: true, state: 'idle' }, { id: 'r2', title: 'Regia · App', harness: 'cursor', isRegia: true, state: 'idle' }, { id: 'w', title: 'W', harness: 'cursor', state: 'idle' }];
+    const list = [{ id: 'r1', title: 'Orchestrator', harness: 'cursor', isOrchestrator: true, state: 'idle' }, { id: 'w', title: 'W', harness: 'cursor', state: 'idle' }];
     const chats = {
-      list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n', title: req.title }; },
+      list: () => list,
       send: async (_id: string, _t: string, _i?: unknown, _r?: boolean, from?: string) => { sent.push(from); },
     } as unknown as ChatService;
-    const regiaChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: false }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: false }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const tools = (caller?: string) => appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }, caller);
     const run = (caller: string | undefined, n: string, a: Record<string, unknown>) => tools(caller).find(t => t.name === n)!.run(a);
-    // (not an "App · …" title: the app's own chats never go to Cursor, a hard rule of the routing, ADR 0032)
-    await run('r2', 'app_create_chat', { title: 'Sms · Fix', prompt: 'x', harness: 'cursor' });
-    expect(made[0]).toMatchObject({ regiaOf: 'r2', harness: 'cursor' });
-    expect(String(made[0]!.prompt)).toContain('Il tuo Orchestrator è «Regia · App»: scrivigli con send_to_chat.');
-    // no caller or a stale one = the first Orchestrator (test agents on /mcp/app)
-    await run(undefined, 'app_create_chat', { title: 'Lavoro · Fix', prompt: 'x', harness: 'claude' });
-    await run('gone', 'app_create_chat', { title: 'Lavoro · Fix 2', prompt: 'x', harness: 'claude' });
-    expect(made.slice(1).map(m => m.regiaOf)).toEqual(['r1', 'r1']);
-    await run('r2', 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
-    expect(sent).toEqual(['Regia · App']);
-    // Both callers can reach the chat, retaining their own sender identity.
     await run('r1', 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
-    expect(sent).toEqual(['Regia · App', 'Regia']);
+    // no caller (test agents on /mcp/app) acts for the Orchestrator too
+    await run(undefined, 'app_send_to_chat', { chatId: 'w', text: 'ciao' });
+    expect(sent).toEqual(['Orchestrator', 'Orchestrator']);
   });
 
-  it("a Regia's own endpoint answers only that open Regia with its own token, never a guessed or borrowed one", () => {
+  it("a Orchestrator's own endpoint answers only that open Orchestrator with its own token, never a guessed or borrowed one", () => {
     const tokens = new EndpointTokens();
-    const list = [{ id: 'r1', isRegia: true }, { id: 'r2', isRegia: true }, { id: 'w', isRegia: false }];
-    const ok = regiaEndpointAuth(tokens, () => list);
+    const list = [{ id: 'r1', isOrchestrator: true }, { id: 'r2', isOrchestrator: true }, { id: 'w', isOrchestrator: false }];
+    const ok = orchestratorEndpointAuth(tokens, () => list);
     const t1 = tokens.tokenFor('r1'), t2 = tokens.tokenFor('r2'), tw = tokens.tokenFor('w');
     expect(ok({ chatId: 'r1', token: t1 })).toBe(true);
-    expect(ok({ chatId: 'r2', token: t1 })).toBe(false); // another Regia's token
+    expect(ok({ chatId: 'r2', token: t1 })).toBe(false); // another Orchestrator's token
     expect(ok({ chatId: 'r2', token: '' })).toBe(false);
     expect(ok({ chatId: 'r2' })).toBe(false);
-    expect(ok({ chatId: 'w', token: tw })).toBe(false); // not a Regia
-    list[1]!.isRegia = false; // replaced or closed: its endpoint stops answering
+    expect(ok({ chatId: 'w', token: tw })).toBe(false); // not a Orchestrator
+    list[1]!.isOrchestrator = false; // replaced or closed: its endpoint stops answering
     expect(ok({ chatId: 'r2', token: t2 })).toBe(false);
   });
 });

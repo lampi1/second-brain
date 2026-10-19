@@ -9,7 +9,7 @@ import { defaultPrefs, loadPrefs } from '../../src/renderer/store/ui';
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'running',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p,
 });
 const tab = (id: string, owner: string | null): BrowserTab => ({ id, url: 'https://x', title: id, loading: false, ownerChatId: owner });
 
@@ -76,10 +76,10 @@ describe('format', () => {
   });
 
   it('state pills never rely on color alone (they have a label)', () => {
-    expect(stateInfo({ state: 'running', isRegia: false, pending: 0 })).toEqual({ label: 'al lavoro', tone: 'run' });
-    expect(stateInfo({ state: 'running', isRegia: false, pending: 1 })).toEqual({ label: 'ti aspetta', tone: 'wait' });
-    expect(stateInfo({ state: 'idle', isRegia: true, pending: 0 }).label).toBe('ti ascolta');
-    expect(stateInfo({ state: 'idle', isRegia: false, pending: 0 }).label).toBe('finito');
+    expect(stateInfo({ state: 'running', isOrchestrator: false, pending: 0 })).toEqual({ label: 'al lavoro', tone: 'run' });
+    expect(stateInfo({ state: 'running', isOrchestrator: false, pending: 1 })).toEqual({ label: 'ti aspetta', tone: 'wait' });
+    expect(stateInfo({ state: 'idle', isOrchestrator: true, pending: 0 }).label).toBe('ti ascolta');
+    expect(stateInfo({ state: 'idle', isOrchestrator: false, pending: 0 }).label).toBe('finito');
   });
 
   it('times and durations', () => {
@@ -106,7 +106,7 @@ describe('fuzzy', () => {
   it('matches subsequences, accent and case insensitive, word starts first', () => {
     expect(fuzzyScore('qari', 'QA · Rimborsi')).toBeGreaterThan(0);
     expect(fuzzyScore('qualita', 'Apri: Qualità')).toBeGreaterThan(0);
-    expect(fuzzyScore('zzz', 'Regia')).toBe(-1);
+    expect(fuzzyScore('zzz', 'Orchestrator')).toBe(-1);
     const list = ['Fix totale ordine', 'Bug notifiche SMS', 'Apri: Diario'];
     expect(fuzzyFilter(list, 'sms', x => x)[0]).toBe('Bug notifiche SMS');
     expect(fuzzyFilter(list, '', x => x)).toEqual(list);
@@ -116,7 +116,7 @@ describe('fuzzy', () => {
 describe('grid', () => {
   it('puts each browser right after the chat that drives it; finished chats stay until they close, closed ones leave', () => {
     const chats = {
-      r: chat('r', { isRegia: true }), a: chat('a'), b: chat('b', { state: 'idle', updatedAt: 0 }), c: chat('c'),
+      r: chat('r', { isOrchestrator: true }), a: chat('a'), b: chat('b', { state: 'idle', updatedAt: 0 }), c: chat('c'),
       d: chat('d', { state: 'closed', closedAt: 1 }),
     };
     const tiles = workspaceTiles(['r', 'a', 'b', 'c', 'd'], chats, [tab('t1', 'c'), tab('t2', 'a'), tab('t3', null), tab('t4', 'r')]);
@@ -129,10 +129,10 @@ describe('prefs', () => {
     expect(loadPrefs(null, 0)).toEqual(defaultPrefs);
     expect(loadPrefs('not json', 0)).toEqual(defaultPrefs);
     // the retired views (Mosaico, Corsie), the icon-only sidebar and the top Orchestrator leave nothing behind
-    const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] }, rows: {}, browserZone: 0.5, navCollapsed: true, regiaPlacement: 'top', regiaTopHeight: 300 }));
+    const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] }, rows: {}, browserZone: 0.5, navCollapsed: true, orchestratorPlacement: 'top', orchestratorTopHeight: 300 }));
     expect(p.density).toBe('compact');
     expect(p.theme).toBe('system');
-    for (const key of ['view', 'cols', 'rows', 'browserZone', 'navCollapsed', 'regiaPlacement', 'regiaTopHeight']) expect(p).not.toHaveProperty(key);
+    for (const key of ['view', 'cols', 'rows', 'browserZone', 'navCollapsed', 'orchestratorPlacement', 'orchestratorTopHeight']) expect(p).not.toHaveProperty(key);
     // the retired hide-browsers switch (#82): a saved "on" is dropped, an opened browser always shows
     expect(loadPrefs(JSON.stringify({ browsersHidden: true, density: 'compact' }))).not.toHaveProperty('browsersHidden');
     expect(loadPrefs(JSON.stringify({ browsersHidden: true, density: 'compact' })).density).toBe('compact');

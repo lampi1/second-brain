@@ -34,20 +34,20 @@ process.stdin.on('data', d => (raw += d)).on('end', async () => {
       // harness/tools.md from "Same in both" to the end of the table (2026-10-10 "un solo modo")
       (read(`${OPS}/harness/tools.md`).match(/^Same in both[\s\S]*?\n\|[^\n]*(?:\n\|[^\n]*)*/m)?.[0] ?? ''),
   ];
-  if (inMain && await isRegia(input)) parts.push(REGIA);
-  else if (inMain) parts.push('## {{BRAIN_NAME}} main workspace\nYou are a work chat, not the Orchestrator. Only if {{OWNER}} types `/regia` ' +
-    '(project skill .cursor/skills/regia) does this chat become the Orchestrator.');
+  if (inMain && await isOrchestrator(input)) parts.push(ORCHESTRATOR);
+  else if (inMain) parts.push('## {{BRAIN_NAME}} main workspace\nYou are a work chat, not the Orchestrator. Only if {{OWNER}} types `/orchestrator` ' +
+    '(project skill .cursor/skills/orchestrator) does this chat become the Orchestrator.');
   const text = parts.filter(Boolean).join('\n\n');
   if (text.length > 200) process.stdout.write(JSON.stringify({ additional_context: text }));
 });
 
-// The Orchestrator = the {{BRAIN_NAME}} chat whose Cursor title starts with "Orchestrator" (or the older "Regia"; Cursor names a chat started with `/regia`
-// after its first message; {{OWNER}} can rename it). A new chat has no title yet: there the `/regia` skill does the same.
+// The Orchestrator = the {{BRAIN_NAME}} chat whose Cursor title starts with "Orchestrator" (or the older "Orchestrator"; Cursor names a chat started with `/orchestrator`
+// after its first message; {{OWNER}} can rename it). A new chat has no title yet: there the `/orchestrator` skill does the same.
 // Title read-only from Cursor's composerHeaders (as harness/cursor/chats.mjs); any failure → not the Orchestrator.
-const REGIA = '## You are the Orchestrator\nThis chat is {{OWNER}}\'s hub (the Orchestrator). Read ' + `${OPS}/hub.md` + ' now and follow it ' +
+const ORCHESTRATOR = '## You are the Orchestrator\nThis chat is {{OWNER}}\'s hub (the Orchestrator). Read ' + `${OPS}/hub.md` + ' now and follow it ' +
   '(role, jobs, decisions, how work chats start in Cursor), with the output style ' +
-  `${HOME.replace(/\\/g, '/')}/.claude/output-styles/regia.md. For the state of the other chats use the skill stato.`;
-async function isRegia(input) {
+  `${HOME.replace(/\\/g, '/')}/.claude/output-styles/orchestrator.md. For the state of the other chats use the skill stato.`;
+async function isOrchestrator(input) {
   const id = input.conversation_id || input.session_id;
   if (!id) return false;
   try {
@@ -55,6 +55,6 @@ async function isRegia(input) {
     const db = new DatabaseSync(process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'), { readOnly: true });
     const v = db.prepare('SELECT value FROM composerHeaders WHERE composerId = ?').get(String(id))?.value;
     db.close();
-    return /^\s*(regia|orchestrator)\b/i.test(JSON.parse(v || '{}').name || '');
+    return /^\s*(orchestrator|orchestrator)\b/i.test(JSON.parse(v || '{}').name || '');
   } catch { return false; }
 }

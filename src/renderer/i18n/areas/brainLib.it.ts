@@ -14,14 +14,9 @@ export const brainLibIt = {
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
 
-  // task-chat.ts
-  'brainLib.taskChat.untitled': 'senza titolo',
+  // record-discuss.ts
+  'brainLib.recordDiscuss.untitled': 'senza titolo',
 
-  // discuss.ts
-  'brainLib.discuss.kindIdea': 'Idea',
-  'brainLib.discuss.kindReflection': 'Riflessione',
-  'brainLib.discuss.kindError': 'Errore',
-  'brainLib.discuss.kindNumber': 'Numero',
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `in attesa dei primi ${p.n} casi dopo il cambio`,

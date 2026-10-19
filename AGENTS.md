@@ -5,12 +5,15 @@ Grindhouse, coordinated by the Orchestrator), answers their questions and permis
 (a brain folder chosen at setup) update live. Vision: `docs/VISION.md`. Architecture: `docs/architecture.md`. Decisions:
 `docs/adr/`. Human contributors: `CONTRIBUTING.md`. UI language Italian; code, comments, commits and docs English.
 
-Words used everywhere: **Orchestrator** = the coordinating chat (it plans, starts agents from the catalog, answers
-their mail; one or more, in a full-height column on the right; called "Regia" before ADR 0068, a name still found in
-code identifiers such as `regia`, `RegiaTile`, `regia-wake.ts`); **Grindhouse** = the home page, the one place for the
+Words used everywhere: **Orchestrator** = the coordinating chat and the one place where work starts (it plans, opens
+role chats, answers their mail; a full-height column on the right; it sees the work chats' state and the user's own
+messages to them, never their content, ADR 0083); **role** = one of nine fixed roles (Orchestrator, Strategist,
+Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe) a chat runs; **delegation** = a role chat starting visible
+child chats with `agent_delegate` (permissions only go down, questions go to the parent first, one `agent_report`
+back, ADR 0083); **Grindhouse** = the home page, the one place for the
 agents (a strip each, the browsers they drive under them; the old Mosaico / Corsie views are retired, ADR 0068);
-**agent** = who works: a catalog profile with engine, model, effort, permissions and the skills it uses (the profile
-decides a chat's engine, model and effort, not a per-chat choice or a routing row, ADR 0078); **skill** = how a job is
+**agent** = who works: a chat running a role, whose tools, ceiling, tier and skills decide its engine, model and
+permissions (not a per-chat choice or a routing row, ADR 0078, 0083); **skill** = how a job is
 done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077); **Brain** section = Agenti, Skill,
 Regole, Memoria, Classificatori, Mappa; **brain** = the user's folder of notes, rules and tools the agents read and
 write (a template ships in the product; a fresh install starts empty); **Task** = the page of the user's work items and
@@ -36,7 +39,7 @@ run from this repo; **Aggiorna** (the button, Settings → Aggiornamenti) = upda
 | Logs | `npm run logs -- --level warn --since 1h [--scope chats] [--chat <id>] [--grep x] [--json]`; files in `%APPDATA%/second-brain-dev/logs/` (dev, `--dev`) or `%APPDATA%/second-brain/logs/` (stable) |
 | Demo data (no CLIs, no tokens) | `npm run demo` (build + fake chats, tabs and a synthetic brain; `-- --frozen` fixed clock, `-- --hidden` for agents); bare: `SB_DEMO=1 npm start` (brain pages empty), deterministic: `SB_DEMO_FREEZE=1` |
 | README screenshots | `npm run shots` (frozen demo → `docs/screenshots/*.webp`, < 300 KB each); look at them before committing |
-| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each Orchestrator calls its own `/mcp/app/r/<regiaId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
+| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each Orchestrator calls its own `/mcp/app/o/<orchestratorId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
 
 **Stable vs dev (ADR 0007).** The user's cockpit is a frozen release in `%LOCALAPPDATA%/second-brain/releases/`
 started by `%LOCALAPPDATA%/second-brain/launch.cmd` (userData `second-brain`, MCP 4319). Anything run from this repo

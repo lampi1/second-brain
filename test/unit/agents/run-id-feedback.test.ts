@@ -1,15 +1,13 @@
-// The Orchestrator's way to an agent run id: app_chats lists each agent chat's run (runId, agent, version, state), and a
-// runId that names no run gets an actionable error (a chat id → that chat's runId; a plain chat → not a run; else pruned).
-// Reproduces the owner's report: agent_feedback with the Orchestrator's own chat id answered a bare "Unknown run.".
+// The way to a role run id: app_chats lists each role chat's run (runId, role, version, state), and a runId that names no
+// run gets an actionable error (a chat id → that chat's runId; a plain chat → not a run; else pruned). Reproduces the
+// owner's report: a feedback with a chat id answered a bare "Unknown run.".
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
-import { AgentLifecycle } from '../../../src/main/agents/lifecycle';
-import { createLifecycleApi } from '../../../src/main/agents/lifecycle-api';
-import { AgentAuthoring } from '../../../src/main/agents/authoring';
+import { RunFeedback } from '../../../src/main/agents/run-feedback';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentRunStore, unknownRunError } from '../../../src/main/agents/runs';
 import type { AgentRun } from '../../../src/shared/agents';
@@ -21,12 +19,11 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 
 const run = (over: Partial<AgentRun> = {}): AgentRun => ({ runId: 'r_0123456789ab', chatId: 'c_work000001', agentId: 'reviewer', version: 2, goal: 'g', startedBy: 'orchestrator', startedAt: 1,
   counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null, ...over });
-const chatRow = (id: string, extra: Record<string, unknown> = {}) => ({ id, harness: 'claude', state: 'idle', title: id, pending: 0, model: null, costUsd: 0, isRegia: false, lastText: '', ...extra });
-const feedbackArgs = (runId: string) => ({ runId, verdict: 'partial', notes: 'Missed the tests', evidence: [] });
+const chatRow = (id: string, extra: Record<string, unknown> = {}) => ({ id, harness: 'claude', state: 'idle', title: id, pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '', ...extra });
 
 describe('app_chats exposes the agent run of each agent chat', () => {
   it('lists runId, agentId, version and running/ended state; a plain chat has no run', async () => {
-    const list = [chatRow('c_work000001', { run: run() }), chatRow('c_done000001', { run: run({ runId: 'r_ba9876543210', chatId: 'c_done000001', endedAt: 5, endReason: 'completed' }) }), chatRow('c_cb79813eb5', { isRegia: true })];
+    const list = [chatRow('c_work000001', { run: run() }), chatRow('c_done000001', { run: run({ runId: 'r_ba9876543210', chatId: 'c_done000001', endedAt: 5, endReason: 'completed' }) }), chatRow('c_cb79813eb5', { isOrchestrator: true })];
     const chats = { list: () => list } as unknown as ChatService;
     const brain = { settings: () => ({}) } as unknown as BrainService;
     const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });
@@ -35,8 +32,8 @@ describe('app_chats exposes the agent run of each agent chat', () => {
     expect(out.app[1]!.run).toEqual({ runId: 'r_ba9876543210', agentId: 'reviewer', version: 2, state: 'ended' });
     expect(out.app[2]!.run).toBeUndefined();
   });
-  it('the agent_feedback and agent_run_report runId says where the id comes from', () => {
-    expect(AGENT_FEEDBACK_SCHEMA.properties.runId.description).toMatch(/runId\) from app_chats, not the chat id/);
+  it('a feedback\'s runId says where the id comes from', () => {
+    expect(AGENT_FEEDBACK_SCHEMA.properties.runId.description).toMatch(/runId\) from agent_children, not the chat id/);
   });
 });
 
@@ -59,31 +56,24 @@ describe('a runId that names no run gets an actionable error', () => {
   });
 });
 
-describe('reported case: the Orchestrator passes a chat id to agent_feedback', () => {
+describe('reported case: a feedback names a chat id instead of a run id', () => {
   function wired() {
     const userData = tmp(), now = Date.now();
-    const catalog = new AgentCatalogService({ userData, models: () => [], now: () => now, approvedRoots: () => [userData] });
+    const catalog = new AgentCatalogService({ userData, models: () => [], now: () => now });
     const runs = new AgentRunStore(userData);
-    const work = runs.start({ agentId: 'reviewer', chatId: 'c_work000001', version: 1, goal: 'Review', startedBy: 'orchestrator', startedAt: now, costKnown: true });
+    const work = runs.start({ agentId: 'scout', chatId: 'c_work000001', version: 1, goal: 'Review', startedBy: 'orchestrator', startedAt: now, costKnown: true });
     const chats = [{ id: 'c_work000001', run: work }, { id: 'c_cb79813eb5' }];
     const chat = (id: string) => chats.find(c => c.id === id);
-    const lifecycle = new AgentLifecycle({ userData, wake: () => false, feedback: { list: () => [], problem: null } });
-    // the same shape as wiring.ts: the facade is agent_feedback's entry point, recordFeedback the one store
-    // eslint-disable-next-line prefer-const
-    let authoring: AgentAuthoring;
-    const api = createLifecycleApi(lifecycle, id => runs.get(id), (a, c) => authoring.recordFeedback(a, c), id => unknownRunError(id, runs.list(), chat));
-    authoring = new AgentAuthoring({ userData, catalog, runs, items: () => [], publish: () => {}, suggestionSpend: () => 0, send: async () => undefined, feedback: (a, c) => api.feedback(a, c), chat, now: () => now, isOrchestrator: () => true });
-    return { authoring, work };
+    const feedback = new RunFeedback({ userData, catalog, runs, publish: () => {}, send: async () => undefined, chat, now: () => now });
+    return { feedback, work };
   }
   it('names the run to use instead of a bare "Unknown run."', async () => {
-    const { authoring, work } = wired();
-    const err = authoring.call('agent_feedback', feedbackArgs('c_work000001'), 'c_cb79813eb5');
-    await expect(err).rejects.not.toThrow('Unknown run.');
-    await expect(authoring.call('agent_feedback', feedbackArgs('c_work000001'), 'c_cb79813eb5')).rejects.toThrow(`runId "${work.runId}"`);
-    await expect(authoring.call('agent_feedback', feedbackArgs('c_cb79813eb5'), 'c_cb79813eb5')).rejects.toThrow(/c_cb79813eb5 is not an agent run/);
-    await expect(authoring.call('agent_run_report', { runId: 'c_work000001' }, 'c_cb79813eb5')).rejects.toThrow(`runId "${work.runId}"`);
+    const { feedback, work } = wired();
+    const args = (runId: string) => ({ runId, verdict: 'partial' as const, notes: 'Missed the tests', evidence: [] });
+    await expect(feedback.recordFeedback(args('c_work000001'), 'c_cb79813eb5')).rejects.toThrow(`runId "${work.runId}"`);
+    await expect(feedback.recordFeedback(args('c_cb79813eb5'), 'c_cb79813eb5')).rejects.toThrow(/c_cb79813eb5 is not an agent run/);
     // the runId itself works: a chat id is never silently accepted as one
-    await expect(authoring.call('agent_feedback', feedbackArgs(work.runId), 'c_cb79813eb5')).resolves.toMatchObject({ runId: work.runId, agentId: 'reviewer' });
-    await expect(authoring.recordFeedback({ runId: 'r_ffffffffffff', verdict: 'fail', notes: 'x', evidence: [] }, 'c_cb79813eb5')).rejects.toThrow(/may have been pruned/);
+    await expect(feedback.recordFeedback(args(work.runId), 'c_cb79813eb5')).resolves.toMatchObject({ runId: work.runId, agentId: 'scout' });
+    await expect(feedback.recordFeedback({ runId: 'r_ffffffffffff', verdict: 'fail', notes: 'x', evidence: [] }, 'c_cb79813eb5')).rejects.toThrow(/may have been pruned/);
   });
 });

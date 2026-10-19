@@ -2,13 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
 import { app, dialog, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import type { BrainService } from '../../services';
 import type { AgentCatalogService } from '../catalog';
 import { AgentPackFlows } from './flows';
-import { presetSkills } from './read';
 import { AgentPackLearning } from './learning';
 import { discoverDomains, domainsOfConfig } from '../../brain/domains';
 import { appScanner, findGuard, scanTree } from '../../brain/guard';
@@ -27,7 +25,6 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     return guard ? { ...guard, allow: path.join(path.dirname(guard.deny), 'allow-agentpacks.txt') } : null;
   });
   const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, version: app.getVersion(), guards, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
-    presetSkills: id => presetSkills(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'agent-presets'), id),
     scan: folder => scanTree(folder, guards(), electronNode()),
     openFile: file => new Promise<void>((resolve, reject) => {
       // Never invoke a script through its shell association: this action is an editor, not an execution grant.
@@ -60,7 +57,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
         monthsUsed: Math.max(0, Math.floor((Date.now() - profile.createdAt) / (30.4375 * 86400000))) };
     },
   });
-  // Every version change that swaps the know-how (IPC restore, trial decisions, the Orchestrator's rollback) republishes it.
+  // Every version change that swaps the know-how (a restore, a trial decision, an Annulla) republishes it.
   catalog.onKnowhowChange((profile, previousHash) => packs.publishCurrent(profile, previousHash));
   const learning = new AgentPackLearning(packs, userData);
   return { packs, learning };

@@ -8,7 +8,7 @@
 // becomes a PendingRequest of type 'command' (pending:added + the onAsk notification). It leaves (pending:resolved)
 // when the block runs (ran(), from run:start: Esegui in the chat or on the card), when the user says "Non serve"
 // (dismiss), or when the chat goes on (a new message, a new turn, archived or removed; the app's own news to the Orchestrator,
-// chats/regia-wake.ts, and a run's result, run/results.ts, are not the chat going on). It never blocks the chat:
+// chats/orchestrator-wake.ts, and a run's result, run/results.ts, are not the chat going on). It never blocks the chat:
 // ChatSummary.pending does not count it, so messages are never queued behind it. Nothing is persisted: after a
 // restart the chats are closed and their blocks keep their Esegui in the chat.
 // Used by wiring.ts (attachCommandAsks, for the real app and the demo) and index.ts (chat:pending, run:*).
@@ -16,7 +16,7 @@ import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest } from 
 import { askedBlocks } from '../../shared/command-ask';
 import { prodRisk } from '../../shared/runnable';
 import { log } from '../log';
-import { APP_EVENT_LABEL } from '../chats/regia-wake';
+import { APP_EVENT_LABEL } from '../chats/orchestrator-wake';
 import { RUN_RESULT_LABEL } from './results';
 import { isNotesOnly } from '../../shared/notes';
 

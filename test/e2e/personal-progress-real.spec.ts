@@ -11,12 +11,12 @@ import { launch, openAgents, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
-test('the real profile awards its milestones: "Confermo" on a finished result, a customized Agent, a completed setup', async () => {
+test('the real profile awards its milestones: "Confermo" on a finished result, a customized role, a completed setup', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   // a profile past its first run (the "Collega la tua IA" gate was skipped), as a returning user's
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
-  fs.writeFileSync(path.join(userData, 'setup.json'), JSON.stringify({ version: 1, status: 'skipped', updatedAt: 1, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced', agentIds: [] } }));
+  fs.writeFileSync(path.join(userData, 'setup.json'), JSON.stringify({ version: 1, status: 'skipped', updatedAt: 1, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced' } }));
   const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home }, userData);
   try {
     await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'hello', title: 'Traguardo' }), cwd);
@@ -34,10 +34,10 @@ test('the real profile awards its milestones: "Confermo" on a finished result, a
     await expect(progress).toContainText('1 di 3 traguardi');
     await expect(confirm).toHaveCount(0);
 
-    // the other two are earned where they happen: a customized Agent (a copy counts) and the first completed setup
+    // the other two are earned where they happen: a customized role and the first completed setup
     await page.evaluate(async () => {
-      const agent = (await window.sb.invoke('agents:list', undefined)).profiles.find(p => p.status === 'active')!;
-      await window.sb.invoke('agents:duplicate', { id: agent.id });
+      const role = (await window.sb.invoke('agents:list', undefined)).profiles.find(p => p.id === 'scout')!;
+      await window.sb.invoke('agents:save', { id: role.id, profile: { ...role, instructions: `${role.instructions}\nAlways cite the file.` } });
       const setup = await window.sb.invoke('setup:get', undefined);
       await window.sb.invoke('setup:save', { preferences: setup.preferences, status: 'completed' });
     });

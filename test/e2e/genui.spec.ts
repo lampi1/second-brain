@@ -33,7 +33,7 @@ const VISUALS = {
     { area: 'Test', files: [{ path: 'test/order/total.test.ts', why: 'i 3 casi del TC 7', added: 40, removed: 0 }, { path: 'C:\\progetti\\report\\pr-27.md', why: 'descrizione della PR' }] },
   ] } },
   barChart: { title: 'Costo per chat oggi', summary: 'QA rimborsi la più cara: 1,84 $.', props: { unit: '$', bars: [
-    { label: 'Regia', value: 4.12 }, { label: 'QA · Rimborsi', value: 1.84 }, { label: 'Fix totale ordine', value: 0.92 }, { label: 'App · Feedback', value: 0.35, note: 'Sonnet' },
+    { label: 'Orchestrator', value: 4.12 }, { label: 'QA · Rimborsi', value: 1.84 }, { label: 'Fix totale ordine', value: 0.92 }, { label: 'App · Feedback', value: 0.35, note: 'Sonnet' },
   ] } },
 } as const;
 
@@ -117,14 +117,14 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   await app.close();
 });
 
-test('target regia: the visual shows in the Regia widget, with the chat that sent it', async () => {
-  const { app, page } = await launchDemo({ regia: true, width: 1600, height: 1000 });
-  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'regia', ...VISUALS.board })).toContain('nell’Orchestrator «Orchestrator»');
-  const card = page.getByTestId('tile-regia').getByTestId('artifact-stato-qa');
+test('target orchestrator: the visual shows in the Orchestrator widget, with the chat that sent it', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true, width: 1600, height: 1000 });
+  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'orchestrator', ...VISUALS.board })).toContain('nell’Orchestrator «Orchestrator»');
+  const card = page.getByTestId('tile-orchestrator').getByTestId('artifact-stato-qa');
   await expect(card).toBeVisible();
   await expect(page.getByTestId('artifact-from-stato-qa')).toHaveText('da «QA · Rimborsi»');
   await expect(page.getByTestId('tile-chat-qa').getByTestId('artifact-stato-qa')).toHaveCount(0);
   await card.scrollIntoViewIfNeeded();
-  await shot(page, 'genui-regia');
+  await shot(page, 'genui-orchestrator');
   await app.close();
 });

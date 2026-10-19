@@ -16,7 +16,7 @@ it.each(['la password è ValueToKeepPrivate', '**Password:** `ValueToKeepPrivate
   expect(owner.status).toBe(0);
   const saved = fs.readFileSync(path.join(root, 'ops/state/chat-feed.jsonl'), 'utf8');
   expect(saved).toContain('***'); expect(saved).not.toContain('ValueToKeepPrivate');
-  const forwarded = run({ hook_event_name: 'UserPromptSubmit', session_id: 'hub', session_title: 'Regia', cwd: root, prompt: 'Show current work' });
+  const forwarded = run({ hook_event_name: 'UserPromptSubmit', session_id: 'hub', session_title: 'Orchestrator', cwd: root, prompt: 'Show current work' });
   expect(forwarded.status).toBe(0);
   expect(forwarded.stdout).toContain('***'); expect(forwarded.stdout).not.toContain('ValueToKeepPrivate');
 });

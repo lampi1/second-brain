@@ -14,7 +14,7 @@ function setup(engines: Record<string, boolean> = { claude: true, cursor: true, 
     state: () => ({ agents: [{ id: 'bc_1', engine: 'cursor', title: 'Shop · X', status: 'running', repo: 'acme/shop', url: null, by: 'agent', updatedAt: 0, costUsd: 0.4 }], caps: {}, todayUsd: 0.4, polling: false }),
   } as unknown as CloudService;
   const chats = { list: () => [], pending: () => [], create: async () => { throw new Error('no local chat'); } } as unknown as ChatService;
-  const brain = { settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true, codex: true }, engines, regiaChats: { harness: 'claude' }, contextWarnTokens: 1 }), info: () => ({ brainRoot: '/brain' }), routingInfo: () => ({ registry: null }) } as unknown as BrainService;
+  const brain = { settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true, codex: true }, engines, orchestratorChats: { harness: 'claude' }, contextWarnTokens: 1 }), info: () => ({ brainRoot: '/brain' }), routingInfo: () => ({ registry: null }) } as unknown as BrainService;
   const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', cloud });
   return { started, tool: (n: string) => tools.find(t => t.name === n)! };
 }

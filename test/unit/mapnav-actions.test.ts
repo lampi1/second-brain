@@ -2,12 +2,12 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
-import { brainBridge, focusChat, go, toggleRegia } from '../../src/renderer/actions';
+import { brainBridge, focusChat, go, toggleOrchestrator } from '../../src/renderer/actions';
 import { dispatch } from '../../src/renderer/store/store';
 import { ui } from '../../src/renderer/store/ui';
 
 beforeEach(() => {
-  dispatch({ type: 'init', chats: [{ id: 'r', title: 'Regia', isRegia: true, orchestrator: true, state: 'idle', browserTabIds: [] } as unknown as ChatSummary], pending: [], tabs: [], feed: [], usage: null, info: null });
+  dispatch({ type: 'init', chats: [{ id: 'r', title: 'Orchestrator', isOrchestrator: true, orchestrator: true, state: 'idle', browserTabIds: [] } as unknown as ChatSummary], pending: [], tabs: [], feed: [], usage: null, info: null });
 });
 it('focuses the coordinator without leaving Dashboard', () => {
   go({ page: 'dashboard' });
@@ -16,7 +16,7 @@ it('focuses the coordinator without leaving Dashboard', () => {
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
-it.each([toggleRegia, () => focusChat('r')])('keeps the 3D map open when focusing the coordinator (%#)', focus => {
+it.each([toggleOrchestrator, () => focusChat('r')])('keeps the 3D map open when focusing the coordinator (%#)', focus => {
   go({ page: 'dashboard' });
   go({ page: 'mappa' });
   focus();
@@ -26,7 +26,7 @@ it.each([toggleRegia, () => focusChat('r')])('keeps the 3D map open when focusin
 });
 it('keeps Dashboard on the coordinator shortcut', () => {
   go({ page: 'dashboard' });
-  toggleRegia();
+  toggleOrchestrator();
   expect(ui.get().page).toBe('dashboard');
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
@@ -34,7 +34,7 @@ it('keeps Dashboard on the coordinator shortcut', () => {
 it('prepares discussion beside Dashboard without navigating or sending', () => {
   go({ page: 'dashboard' });
   const onSent = vi.fn();
-  expect(brainBridge.draftToRegia('Discuss this brain note', onSent)).toBe(true);
+  expect(brainBridge.draftToOrchestrator('Discuss this brain note', onSent)).toBe(true);
   expect(ui.get().page).toBe('dashboard');
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');

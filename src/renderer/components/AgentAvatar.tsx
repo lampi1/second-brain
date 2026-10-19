@@ -1,28 +1,40 @@
-// Persistent agent identity: trusted legacy/designed glyphs or validated raster data; never user-supplied SVG.
-import type { AgentAvatar as Avatar, AgentSymbol } from '@shared/agents';
-import type { CSSProperties } from 'react';
-import { isRoleGlyph, type RoleGlyph } from '@shared/agent-glyphs';
-import { GLYPH_TONES, GLYPH_INK } from '../lib/agent-glyph-tones';
-import { AgentGlyph } from './AgentGlyphs';
-import '../styles/agent-glyphs.css';
-import {t}from'../i18n';
-import { IconBook, IconChart, IconCheck, IconClock, IconCompass, IconFile, IconFocus, IconGlobe, IconSearch, IconSend, IconSettings, IconShield, IconSparkle, IconTarget, IconTerminal, IconTicket } from './Icons';
+// A role's cartoon character as a round badge (lib/character-art.ts: trusted shapes in code, never user or model
+// content), from 16 px in the sidebar tree to 96 px in the role editor: below 24 px the small variant (closer frame,
+// no prop), from 24 px the full one. A chat without a role gets a neutral badge with its initial. Used by the
+// Grindhouse strips, the sidebar tree, the child cards, the catalog and the role editor.
+import { useId, type ReactElement } from 'react';
+import type { AgentAvatar as Avatar } from '@shared/agents';
+import { isCharacterId } from '@shared/characters';
+import { CHARACTERS, FULL_MIN, characterShapes, frameOf, type Shape } from '../lib/character-art';
+import { t } from '../i18n';
+import '../styles/agent-avatar.css';
 
-// Every catalog symbol needs an entry: the Record type makes a new symbol without an icon a type error.
-const symbols: Record<Exclude<AgentSymbol, RoleGlyph>, typeof IconTicket> = { briefcase: IconTicket, search: IconSearch, pen: IconBook, chart: IconChart, compass: IconCompass, code: IconSparkle, spark: IconSparkle,
-  bug: IconTarget, eye: IconFocus, globe: IconGlobe, server: IconTerminal, mail: IconSend, calendar: IconClock, book: IconFile, shield: IconShield, wrench: IconSettings, check: IconCheck };
+function shape(s: Shape, key: number): ReactElement {
+  const line = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+  if ('p' in s) return <path key={key} d={s.p} fill={s.f} opacity={s.o} />;
+  if ('s' in s) return <path key={key} d={s.s} {...line} stroke={s.c} strokeWidth={s.w} opacity={s.o} />;
+  if ('e' in s) return <ellipse key={key} cx={s.e[0]} cy={s.e[1]} rx={s.e[2]} ry={s.e[3]} fill={s.f} opacity={s.o} />;
+  if ('r' in s) return <circle key={key} cx={s.r[0]} cy={s.r[1]} r={s.r[2]} {...line} stroke={s.c} strokeWidth={s.w} opacity={s.o} />;
+  return <circle key={key} cx={s.c[0]} cy={s.c[1]} r={s.c[2]} fill={s.f} opacity={s.o} />;
+}
 
 export function AgentAvatar({ avatar, name, size = 28 }: { avatar: Avatar | undefined; name: string; size?: number }) {
-  if (avatar?.kind === 'image' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar.dataUrl) && avatar.dataUrl.length <= 360_000) {
-    return <img className="agent-avatar" src={avatar.dataUrl} alt={t('product.avatar',{name})} width={size} height={size} style={{ borderRadius: '50%', objectFit: 'cover' }} draggable={false} />;
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const label = t('product.avatar', { name });
+  if (avatar?.kind !== 'character' || !isCharacterId(avatar.value)) {
+    return <span className="agent-avatar plain" role="img" aria-label={label} style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.45)) }}>{(name.trim()[0] ?? '?').toUpperCase()}</span>;
   }
-  const icon = avatar?.kind === 'symbol' ? avatar.value : 'briefcase';
-  if (isRoleGlyph(icon)) {
-    const tone = avatar?.kind === 'symbol' ? avatar.tone ?? 'blue' : 'blue';
-    const colors = GLYPH_TONES[tone] ?? GLYPH_TONES.blue;
-    const style = { width: size, height: size, '--glyph-dark-a': colors.dark[0], '--glyph-dark-b': colors.dark[1], '--glyph-light-a': colors.light[0], '--glyph-light-b': colors.light[1], '--glyph-dark-ink': GLYPH_INK.dark, '--glyph-light-ink': GLYPH_INK.light } as CSSProperties;
-    return <span className="agent-avatar role-glyph" data-tone={tone} data-shadow={size >= 28} role="img" aria-label={t('product.avatar',{name})} style={style}><AgentGlyph symbol={icon} size={size} /></span>;
-  }
-  const Symbol = Object.hasOwn(symbols, icon) ? symbols[icon] : IconTicket;
-  return <span className="agent-avatar symbol" data-tone={avatar?.kind === 'symbol' ? avatar.tone : undefined} role="img" aria-label={t('product.avatar',{name})} style={{ width: size, height: size }}><Symbol size={Math.round(size * 0.65)} /></span>;
+  const small = size < FULL_MIN, { cx, cy, r } = frameOf(small), [a, b] = CHARACTERS[avatar.value].bg;
+  return <svg className="agent-avatar character" data-character={avatar.value} data-variant={small ? 'small' : 'full'}
+    viewBox={`${cx - r} ${cy - r} ${2 * r} ${2 * r}`} width={size} height={size} role="img" aria-label={label}>
+    <defs>
+      <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} /></linearGradient>
+      <clipPath id={`c${id}`}><circle cx={cx} cy={cy} r={r} /></clipPath>
+    </defs>
+    <g clipPath={`url(#c${id})`}>
+      <rect width="64" height="64" fill={`url(#g${id})`} />
+      {characterShapes(avatar.value, small).map(shape)}
+    </g>
+    <circle className="agent-avatar-ring" cx={cx} cy={cy} r={r * 0.976} fill="none" strokeWidth={r * 0.047} />
+  </svg>;
 }

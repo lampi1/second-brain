@@ -10,7 +10,7 @@ import { positiveKind } from './signals-regex.mjs';
 import { originField } from './event-origin.mjs';
 
 export const WINS = process.env.BRAIN_WINS_FILE || '{{BRAIN}}/ai-wins.md';
-const AREAS = ['Regia', 'Prod', 'B', 'A', 'OS', 'Pers'];
+const AREAS = ['Orchestrator', 'Prod', 'B', 'A', 'OS', 'Pers'];
 const rome = o => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', ...o }).format(new Date());
 
 // Secrets never reach the file: everything after a password/credential/token-like word ("la password è X", "pw: X",
@@ -40,7 +40,7 @@ export const delivered = text => {
 // Area: the "<Area> · <cosa>" prefix of the chat title, the Orchestrator, else the repo folder of the cwd.
 export const areaOf = (chat, cwd) => {
   const t = String(chat ?? '');
-  if (/^regia\b/i.test(t)) return 'Regia';
+  if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
   const pre = AREAS.find(a => t.toLowerCase().startsWith(`${a.toLowerCase()} ·`));
   if (pre) return pre;
   const p = String(cwd ?? '').replace(/\\/g, '/');

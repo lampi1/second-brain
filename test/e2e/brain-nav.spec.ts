@@ -14,11 +14,9 @@ function fixtureBrain(): string {
   fs.mkdirSync(path.join(d, 'ops', 'tools'), { recursive: true });
   fs.copyFileSync(path.join(FIX, 'brain-site.mjs'), path.join(d, 'ops', 'tools', 'brain-site.mjs'));
   fs.copyFileSync(path.join(FIX, 'data.mjs'), path.join(d, 'ops', 'tools', 'brain-ui-data.mjs'));
-  fs.mkdirSync(path.join(d,'playbooks'),{recursive:true});
   fs.writeFileSync(path.join(d,'AGENTS.md'),'# Produzione\n');
   fs.writeFileSync(path.join(d,'map.md'),'# Mappa della memoria\n');
   fs.writeFileSync(path.join(d,'proposals.md'),'# Proposals\n');
-  fs.writeFileSync(path.join(d,'playbooks','reviewer.md'),'# Reviewer\n');
   return d;
 }
 const settled = async (page: Page) => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 }); };

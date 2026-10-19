@@ -1,5 +1,5 @@
-// Typed local catalog/setup bridge: the agent catalog, its manual edits and the first-run setup state.
-// Profile edits affect future conversations; authoritative owner/model snapshots of running agents stay in main.
+// Typed local catalog/setup bridge: the role catalog, the user's edits and "Ripristina predefinito", and the first-run
+// setup state. Role edits affect future chats; the owner/model snapshots of running chats stay in main.
 import type { AgentCatalog, AgentDraft, SetupDraft, SetupState } from '@shared/agents';
 import { useEffect } from 'react';
 import { sb } from '../sb';
@@ -24,12 +24,10 @@ function start(): void {
   void refreshSetup();
 }
 export function useAgents() { useEffect(start, []); return agents.use(s => s); }
-export async function saveAgent(profile: AgentDraft, id?: string) {
-  const saved = await sb.invoke('agents:save', { profile, ...(id ? { id } : {}) }); await refreshAgents(); return saved;
+export async function saveAgent(profile: AgentDraft, id: string) {
+  const saved = await sb.invoke('agents:save', { profile, id }); await refreshAgents(); return saved;
 }
-export async function duplicateAgent(id: string) { const saved = await sb.invoke('agents:duplicate', { id }); await refreshAgents(); return saved; }
-export async function archiveAgent(id: string) { const saved = await sb.invoke('agents:archive', { id }); await refreshAgents(); return saved; }
-export async function restoreAgent(id: string) { const saved = await sb.invoke('agents:restore', { id }); await refreshAgents(); return saved; }
+export async function resetAgent(id: string) { const saved = await sb.invoke('agents:reset', { id }); await refreshAgents(); return saved; }
 export const agentHistory = (id: string) => sb.invoke('agents:history', { id });
 export async function restoreAgentVersion(id: string, version: number) { const saved = await sb.invoke('agents:restoreVersion', { id, version }); await refreshAgents(); return saved; }
 let saving: Promise<unknown> = Promise.resolve();

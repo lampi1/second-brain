@@ -36,7 +36,7 @@ const COMMENT = [
 ].join('\n');
 
 async function clear(app: ElectronApplication, page: Page) {
-  for (const id of ['regia', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
+  for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
   // a turn that ends with shell blocks leaves them as commands to run: "Non serve" takes them away
   for (let i = 0; i < 5; i++) {
     await page.waitForTimeout(300);
@@ -78,8 +78,8 @@ for (const [scheme, width, height] of [['dark', 1366, 768], ['light', 1920, 1080
     await clear(app, page);
 
     // 3. several questions in one request, long texts
-    await demo(app, (d, id, t) => d.say(id, t), 'regia', 'La mappa 3D è pronta in due varianti. La prima tiene i nodi fermi e muove solo la camera; la seconda ricalcola il layout a ogni nota nuova, più viva ma più pesante sulla GPU integrata.');
-    await demo(app, (d, id, q) => d.ask(id, q), 'regia', question([
+    await demo(app, (d, id, t) => d.say(id, t), 'orchestrator', 'La mappa 3D è pronta in due varianti. La prima tiene i nodi fermi e muove solo la camera; la seconda ricalcola il layout a ogni nota nuova, più viva ma più pesante sulla GPU integrata.');
+    await demo(app, (d, id, q) => d.ask(id, q), 'orchestrator', question([
       { q: 'Quale variante della mappa 3D porto in main, considerando che il portatile ha solo la GPU integrata e che la mappa resta aperta tutto il giorno accanto alle chat?', header: 'Mappa', opts: [
         { label: 'Nodi fermi, camera mobile (consigliato)', description: 'leggera: 60 fps anche con 2000 note, il layout cambia solo quando apri la mappa; le note nuove compaiono in un angolo finché non la riapri' },
         { label: 'Layout vivo', description: 'ogni nota nuova sposta i vicini con un\'animazione; più bella, ma 25-30 fps con 2000 note sulla GPU integrata' },
@@ -105,7 +105,7 @@ for (const [scheme, width, height] of [['dark', 1366, 768], ['light', 1920, 1080
     await clear(app, page);
 
     // 6. ten requests waiting
-    const chats = ['regia', 'qa', 'feedback', 'fix', 'sms'];
+    const chats = ['orchestrator', 'qa', 'feedback', 'fix', 'sms'];
     for (let i = 0; i < 10; i++) {
       await demo(app, (d, id, q) => d.ask(id, q), chats[i % chats.length]!, question([{ q: `Domanda ${i + 1}: procedo con il passo ${i + 1}?`, header: 'Passo', opts: ['Sì', 'No'] }]));
     }

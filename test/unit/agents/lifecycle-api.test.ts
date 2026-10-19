@@ -14,9 +14,9 @@ afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: 
 const make = (withWriter = true) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-lifecycle-api-')); dirs.push(dir);
   const stored: AgentFeedback[] = [], calls: { args: unknown; caller: string }[] = [];
-  const service = new AgentLifecycle({ userData: dir, wake: () => false, feedback: { list: id => stored.filter(f => f.agentId === id), problem: null } });
+  const service = new AgentLifecycle({ userData: dir, feedback: { list: id => stored.filter(f => f.agentId === id), problem: null } });
   const runs = [1, 2].map(n => ({ runId: `r_00000000000${n}`, agentId: 'reviewer', version: 1 } as AgentRun));
-  // stands in for AgentAuthoring.recordFeedback: agent/version from the run, basis decided by main
+  // stands in for RunFeedback.recordFeedback: agent/version from the run, basis decided by main
   const write: FeedbackWriter = async (args, caller) => {
     calls.push({ args, caller });
     const run = runs.find(r => r.runId === args.runId)!;
@@ -33,21 +33,21 @@ it('rejects extra query fields and feedback identity/basis injection', async () 
   expect(() => api.read({ path: '../../private' })).toThrow();
   expect(() => api.read({ agentId: '../other' })).toThrow();
   for (const extra of [{ basis: 'human' }, { agentId: 'other' }, { version: 3 }, { outcome: { basis: 'human' } }, { reason: 'x' }])
-    await expect(api.feedback(args(extra), 'regia')).rejects.toThrow(/unknown argument/);
-  await expect(api.feedback(args({ runId: 'r_000000000999' }), 'regia')).rejects.toThrow(/no agent run with id r_000000000999/);
-  await expect(api.feedback({ runId: 'r_000000000001', verdict: 'partial' }, 'regia')).rejects.toThrow();
-  await expect(make(false).api.feedback(args(), 'regia')).rejects.toThrow('Feedback store unavailable.');
+    await expect(api.feedback(args(extra), 'orchestrator')).rejects.toThrow(/unknown argument/);
+  await expect(api.feedback(args({ runId: 'r_000000000999' }), 'orchestrator')).rejects.toThrow(/no agent run with id r_000000000999/);
+  await expect(api.feedback({ runId: 'r_000000000001', verdict: 'partial' }, 'orchestrator')).rejects.toThrow();
+  await expect(make(false).api.feedback(args(), 'orchestrator')).rejects.toThrow('Feedback store unavailable.');
   expect(calls).toHaveLength(0);
 });
-it('accepts the shared agent_feedback shape, writes once through the one store and proposes a repeated gap', async () => {
+it('accepts the shared agent_feedback shape, writes once through the one store, and a repeated gap never queues (role text is the maintenance\'s)', async () => {
   const { api, calls, service } = make();
-  const record = await api.feedback(args({ worked: 'Read', failed: 'Test', gap: 'instructions', gapKey: 'tests' }), 'regia-1');
-  expect(calls).toEqual([{ caller: 'regia-1', args: { ...args(), worked: 'Read', failed: 'Test', gap: 'instructions', gapKey: 'tests' } }]);
+  const record = await api.feedback(args({ worked: 'Read', failed: 'Test', gap: 'instructions', gapKey: 'tests' }), 'orchestrator-1');
+  expect(calls).toEqual([{ caller: 'orchestrator-1', args: { ...args(), worked: 'Read', failed: 'Test', gap: 'instructions', gapKey: 'tests' } }]);
   expect(record).toMatchObject({ agentId: 'reviewer', version: 1, outcome: { basis: 'orchestrator-opinion', note: 'Missed the tests' } });
   expect(service.proposals()).toEqual([]);
-  await api.feedback(args({ runId: 'r_000000000002', gap: 'instructions', gapKey: 'Tests' }), 'regia-1');
-  expect(service.proposals().map(p => p.key)).toEqual(['gap:reviewer:1:instructions:tests']);
-  await api.feedback(args({ runId: 'r_000000000002' }), 'regia-1'); // notes only (the #49 minimum): accepted, no gap
+  await api.feedback(args({ runId: 'r_000000000002', gap: 'instructions', gapKey: 'Tests' }), 'orchestrator-1');
+  expect(service.proposals()).toEqual([]);
+  await api.feedback(args({ runId: 'r_000000000002' }), 'orchestrator-1'); // notes only (the #49 minimum): accepted, no gap
   const first = api.read({ agentId: 'reviewer' }); expect(first.feedback).toHaveLength(3);
   first.feedback.length = 0;
   expect(api.read({ agentId: 'reviewer' }).feedback).toHaveLength(3); expect(api.read({}).feedback).toHaveLength(0);

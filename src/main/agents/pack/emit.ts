@@ -21,15 +21,11 @@ export function validateSkill(name: string, body: string, allowExtra = false): s
 }
 
 export function agentBody(manifest: AgentPackManifest, instructions: string): string {
-  const m = manifest.agent.manifest;
-  return `${instructions.trim()}\n\n## Contratto\n\n${[
-    m.whenNotToUse && `Non usare: ${m.whenNotToUse}`, m.input && `Input: ${m.input}`, m.output && `Output: ${m.output}`,
-    ...(m.successCriteria ?? []).map(s => `- ${s}`),
-  ].filter(Boolean).join('\n')}\n\nUsa la skill \`${manifest.agent.id}\` e le altre skill del pacchetto: come si fa il lavoro, con i file di riferimento.\n`;
+  return `${instructions.trim()}\n\nUse the \`${manifest.agent.id}\` skill and the pack's other skills: how the work is done, with the reference files.\n`;
 }
 
 function agentMd(manifest: AgentPackManifest, body: string, cursor: boolean): string {
-  const a = manifest.agent, desc = `${a.role}${a.manifest.whenToUse ? `. ${a.manifest.whenToUse}` : ''}`.slice(0, 1024);
+  const a = manifest.agent, desc = a.summary.slice(0, 1024);
   const lines = ['---', `name: ${a.id}`, `description: ${JSON.stringify(desc)}`, 'model: inherit'];
   if (!cursor) {
     if (a.effort) lines.push(`effort: ${a.effort}`);
@@ -65,13 +61,13 @@ export function emitPack(input: AgentPackManifest, instructions: string, skills:
     files.set(name, Buffer.from(data));
   }
   const a = manifest.agent, body = agentBody(manifest, instructions);
-  const plugin = { name: a.id, version: `1.0.${manifest.revision}`, description: a.role };
+  const plugin = { name: a.id, version: `1.0.${manifest.revision}`, description: a.summary };
   const json = (v: unknown): Buffer => Buffer.from(JSON.stringify(v, null, 2) + '\n');
   // Claude's strict validator requires attribution. Identify the generator, never the user's personal identity.
   files.set('.claude-plugin/plugin.json', json({ ...plugin, author: { name: 'second-brain' } })); files.set('.cursor-plugin/plugin.json', json(plugin));
   files.set('plugin.json', json({ $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json', ...plugin }));
   files.set(a.instructionsFile, Buffer.from(agentMd(manifest, body, false)));
-  files.set(`codex/agents/${a.id}.toml`, Buffer.from(emitAgentToml({ name: a.id, description: a.role, developer_instructions: body,
+  files.set(`codex/agents/${a.id}.toml`, Buffer.from(emitAgentToml({ name: a.id, description: a.summary, developer_instructions: body,
     ...(a.effort ? { model_reasoning_effort: a.effort === 'max' ? 'xhigh' : a.effort } : {}),
     ...(!a.tools.allow.includes('shell') ? { features: { shell_tool: false } } : {}) })));
   manifest.contentHash = hashFiles(files);

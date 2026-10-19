@@ -7,7 +7,7 @@ import type { ArtifactTarget, UiComponent, UiLink, UiSpec, UiStatus } from './co
 
 export const UI_COMPONENTS: readonly UiComponent[] = ['table', 'cards', 'board', 'diffList', 'barChart'];
 export const UI_STATUSES: readonly UiStatus[] = ['ok', 'fail', 'blocked', 'running', 'todo', 'info', 'warn'];
-export const ARTIFACT_TARGETS: readonly ArtifactTarget[] = ['chat', 'regia', 'next-ask'];
+export const ARTIFACT_TARGETS: readonly ArtifactTarget[] = ['chat', 'orchestrator', 'next-ask'];
 /** visuals kept per chat (the oldest go first) */
 export const ARTIFACT_MAX_PER_CHAT = 20;
 /** one visual's props as JSON, at most */

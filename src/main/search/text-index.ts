@@ -1,6 +1,6 @@
 // The Ctrl+K full-text index, pure: documents (a chat with its messages, a git branch, a brain markdown file) kept in
 // memory, matched by every word of the query (accent- and case-insensitive; "-", "_", "/", "." count as spaces, so
-// "regia overlay" finds feat/regia-overlay), ranked (title > phrase > all words; word starts, recency over 30 days and
+// "orchestrator overlay" finds feat/orchestrator-overlay), ranked (title > phrase > all words; word starts, recency over 30 days and
 // how many messages matched add up), and cut into a snippet with the match marked. Why no library: a few MB of text
 // scanned with indexOf answers in milliseconds, and the index must cost nothing at rest. Used by search/service.ts;
 // pinned by test/unit/search.test.ts.

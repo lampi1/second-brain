@@ -21,4 +21,4 @@ Template:
 ## Casi
 
 Vuoto il primo giorno: il primo caso nasce dalla prima correzione ("d'ora in poi...", "non fare più..."), scritto
-dall'agente `brain-editor` insieme alla regola. "Testa il cervello" rilegge i casi e dice quali sono verdi.
+dalla skill `brain-edit` insieme alla regola. "Testa il cervello" rilegge i casi e dice quali sono verdi.

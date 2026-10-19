@@ -14,7 +14,7 @@ function Row({ r, onOpen }: { r: CostRow; onOpen?: (chatId: string) => void }) {
   const cost = r.unpriced ? (r.usd > 0 ? `≈ ${formatCost(r.usd)} + ?` : t('costs.unavailable')) : `${r.approx ? '≈ ' : ''}${formatCost(r.usd)}`;
   const body = (
     <>
-      <HarnessMark harness={r.harness} regia={r.isRegia} size={16} />
+      <HarnessMark harness={r.harness} orchestrator={r.isOrchestrator} size={16} />
       <span className="ub-label ub-chat" title={r.title}>{r.title || t('costs.untitled')}</span>
       {tag ? <span className={`lc-tag ${r.running ? 'run' : ''}`}>{tag}</span> : null}
       {r.unpriced ? <span className="ub-tag" data-tip={t('costs.unpricedHint')}>{t('costs.unpriced')}</span> : null}

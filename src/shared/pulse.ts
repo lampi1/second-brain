@@ -40,7 +40,7 @@ export type PulseResult = { ok: true } | { ok: false; error: string };
 export type PulseActResult = { ok: true; chatId: string } | { ok: false; error: string };
 /** Pending changes never expire or apply automatically. Evidence is plain text / card IDs. */
 export interface ApprovalItem {
-  id: string; kind: 'learned-rule' | 'agent-suggestion' | 'maintenance';
+  id: string; kind: 'learned-rule' | 'maintenance';
   agentId: string; title: string; text: string; evidence: string[];
   engine: string | null; createdAt: number;
   state: 'pending' | 'approved' | 'discarded';

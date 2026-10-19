@@ -12,7 +12,6 @@ import { areaOf, nowThreads, claudeChatsOn, renderBrief, renderReport, romeDay }
 import { land, status } from './wt-land.mjs';
 import { parse as parseErrors, recurrence, render as renderRecurrence } from './recurrence.mjs';
 import { apply as applyHooks } from './install-inbox-hooks.mjs';
-import { parse as pbParse, op as pbOp, render as pbRender } from './playbook.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-tools-'));
@@ -103,8 +102,8 @@ const mem = (...a) => run('mem.mjs', ['now', 'me', '--root', memRoot, ...a]);
 T('mem error --agent', () => {
   fs.writeFileSync(path.join(memRoot, 'ai-errors.md'), '# Errori\n');
   const line = '2026-10-14 10:00 · Alfa · Fix · prod · fatto-non-verificato · detto: x · vero: y · visto da: {{OWNER}}';
-  const r = run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'reviewer']);
-  ok(r.status === 0 && fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8').includes(`- ${line} · agente: reviewer`), `--agent tags the line: ${r.stdout}${r.stderr}`);
+  const r = run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'Explore']);
+  ok(r.status === 0 && fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8').includes(`- ${line} · agente: Explore`), `--agent tags the line: ${r.stdout}${r.stderr}`);
   ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'a b']).status === 1, '--agent: a type, no spaces');
   ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent']).status === 1, '--agent without its type refused');
   ok(run('mem.mjs', ['error', '--root', memRoot, '--agent', '--text', line]).status === 1, '--agent followed by another flag refused');
@@ -196,7 +195,7 @@ T('chat-prompt', () => {
   const job = 'Fai la review della PR.';
   const c = buildPrompt({ title: 'A · Review login', kind: 'code', repo: 'my-app', job, words: 'fai la review', date: '2026-10-10' });
   ok(c.includes('Sei la chat di lavoro "A · Review login"') && c.includes('Repo di lavoro: {{REPOS_JS}}\\my-app.') && c.includes('code.md'), 'chat-prompt: claude head');
-  ok(c.includes('inbox.mjs" send --to "regia" --from "a-review-login"') && c.includes('(AskUserQuestion;') && c.includes('blocco `powershell`') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Regia, wait-devops, env-lease, now.md)');
+  ok(c.includes('inbox.mjs" send --to "orchestrator" --from "a-review-login"') && c.includes('(AskUserQuestion;') && c.includes('blocco `powershell`') && !c.includes('SendMessage') && c.includes('mem.mjs" now me --label "A · Review login"'), 'chat-prompt: fixed lines missing (Orchestrator, wait-devops, env-lease, now.md)');
   ok(c.includes('Suite di test pesanti') && c.includes('`sb-tests`') && c.includes('`release` sempre'), 'chat-prompt: heavy-suite turn line missing (code.md "Heavy test suites")');
   ok(c.includes('Parole di {{OWNER}} (2026-10-10): "fai la review"') && c.includes(job), 'chat-prompt: words and job');
   const k = buildPrompt({ title: 'B · QA', kind: 'qa', harness: 'cursor', repo: 'my-app', job });
@@ -285,16 +284,16 @@ T('wt-land', () => {
 
 T('recurrence', () => {
   const rows = parseErrors([
-    '- 2026-10-01 10:00 · Regia · prod DB · azione-pericolosa · detto: query in più · vero: no · visto da: {{OWNER}} · regola: me.md ok',
+    '- 2026-10-01 10:00 · Orchestrator · prod DB · azione-pericolosa · detto: query in più · vero: no · visto da: {{OWNER}} · regola: me.md ok',
     '- 2026-10-02 --:-- · OS · Tool · ops/tools · regola-ignorata · detto: heredoc · vero: regola 5 · visto da: io',
     '- 2026-10-03 11:00 · chat X · prod, DB clienti · azione pericolosa · detto: altra query · vero: no · visto da: {{OWNER}}',
-    '- 2026-10-04 11:00 · chat Y · App QA · fatto-non-verificato · detto alla Regia: tutto ok · vero: no · visto da: QA',
+    '- 2026-10-04 11:00 · chat Y · App QA · fatto-non-verificato · detto all’Orchestrator: tutto ok · vero: no · visto da: QA',
     '- 2026-10-05 11:00 · chat Z · stile · tipo-inventato · detto: x · vero: y · visto da: {{OWNER}}',
     '- not a line',
   ].join('\n'));
   ok(rows.length === 5, `recurrence parse: ${rows.length}`);
   ok(rows[1].who === 'OS · Tool' && rows[1].area === 'ops/tools' && rows[1].type === 'regola-ignorata', `recurrence chat with dot: ${JSON.stringify(rows[1])}`);
-  ok(rows[3].type === 'fatto-non-verificato', `recurrence "detto alla Regia:": ${rows[3].type}`);
+  ok(rows[3].type === 'fatto-non-verificato', `recurrence "detto all’Orchestrator:": ${rows[3].type}`);
   const res = recurrence(rows);
   ok(res.rules.length === 1 && res.rules[0].again === 1, `recurrence came back once (same type, area shares "prod"): ${JSON.stringify(res.rules)}`);
   ok(res.outside.length === 1 && res.outside[0].type === 'tipo-inventato', 'recurrence outside list');
@@ -318,8 +317,8 @@ T('compact-now hook', () => {
   ].map(r => JSON.stringify(r)).join('\n'));
   const b = JSON.parse(h({ source: 'compact', transcript_path: tr }) || '{}').hookSpecificOutput?.additionalContext || '';
   ok(b.includes('C:\\Users\\d\\{{BRAIN_NAME}}\\tmp\\prompt-x.md, C:/r/code.md)') && !/not-this|later|README/.test(b), `compact-now: brief files (no URLs): ${b}`);
-  fs.writeFileSync(tr, JSON.stringify({ type: 'custom-title', customTitle: 'Regia' }));
-  ok(h({ source: 'compact', transcript_path: tr }) === '', 'compact-now: silent for the Regia');
+  fs.writeFileSync(tr, JSON.stringify({ type: 'custom-title', customTitle: 'Orchestrator' }));
+  ok(h({ source: 'compact', transcript_path: tr }) === '', 'compact-now: silent for the Orchestrator');
   ok(spawnSync(process.execPath, [hook], { input: 'garbage', encoding: 'utf8' }).status === 0, 'compact-now: never fails');
 });
 
@@ -385,51 +384,6 @@ T('install-inbox-hooks', () => {
   const f = path.join(tmp, 'settings.json'); fs.writeFileSync(f, '﻿' + JSON.stringify(base));
   const out = spawnSync(process.execPath, [path.join(here, 'install-inbox-hooks.mjs'), '--file', f], { encoding: 'utf8' });
   ok(out.status === 0 && fs.existsSync(`${f}.bak-${new Date().toISOString().slice(0, 10)}-inbox`) && JSON.parse(fs.readFileSync(f, 'utf8')).hooks.SessionStart, `install hooks CLI: ${out.stdout}${out.stderr}`);
-});
-
-T('playbook', () => {
-  const empty = pbParse('');
-  let b = pbOp('reviewer', empty, 'propose', { text: 'Before a finding on SQL, check that the app DBs have no FKs · see review-catalog', source: 'ai-errors 2026-10-08 10:37 · reviewer', date: '2026-10-10' });
-  ok(b.Proposti[0].id === 'RV-1' && !b.Proposti[0].text.includes(' · ') && b.Punti.length === 0, `playbook propose: ${JSON.stringify(b)}`);
-  const refused = f => { try { f(); return false; } catch (e) { return e.code === 4; } };
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'Before any finding on SQL check that the app DBs have no FKs', source: 'x' })), 'playbook: near-duplicate refused');
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'new point', source: '' })), 'playbook: source required');
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'x'.repeat(301), source: 's' })), 'playbook: point too long');
-  // review 10/10: a line we can't read refuses the write instead of vanishing; "·" in a source can't break the fields
-  const good = pbRender('reviewer', pbOp('reviewer', b, 'accept', { id: 'RV-1', date: '2026-10-10' }));
-  ok(pbParse(good.replace('dal 2026-10-10', 'dal 2026-10-10   ').replace(/\n/g, '\r\n')).Punti.length === 1, 'playbook: trailing spaces and CRLF tolerated');
-  ok(refused(() => pbParse(good.replace('+0/-0', '+0/−0'))), 'playbook: malformed line refused, not dropped');
-  ok(refused(() => pbParse(`${good}\n## Appunti\n- x`)), 'playbook: unknown section refused');
-  const dots = pbOp('reviewer', pbParse(''), 'propose', { text: 'Primo punto qualsiasi', source: '{{OWNER}} · · fonte: chat 10/10', date: '2026-10-10' });
-  const back = pbParse(pbRender('reviewer', dots)).Proposti[0];
-  ok(back.text === 'Primo punto qualsiasi' && back.source === '{{OWNER}}, , fonte: chat 10/10' && back.date === '2026-10-10', `playbook: dots in source: ${JSON.stringify(back)}`);
-  b = pbOp('reviewer', b, 'accept', { id: 'RV-1', date: '2026-10-11' });
-  ok(b.Punti[0].id === 'RV-1' && b.Punti[0].date === '2026-10-11' && !b.Proposti.length, 'playbook accept');
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'harmful' });
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'harmful' });
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'helpful' });
-  ok(b.Punti[0].up === 1 && b.Punti[0].down === 2, 'playbook vote');
-  ok(pbOp('reviewer', b, 'vote', { id: 'RV-1,RV-1', kind: 'helpful' }).Punti[0].up === 2, 'playbook: repeated id voted once');
-  ok(refused(() => pbOp('reviewer', b, 'vote', { id: 'RV-1,RV-9', kind: 'helpful' })) && b.Punti[0].up === 1, 'playbook: unknown id refuses the whole vote');
-  const round = pbParse(pbRender('reviewer', b));
-  ok(JSON.stringify(round) === JSON.stringify(b), `playbook render/parse round trip:\n${pbRender('reviewer', b)}`);
-  b = pbOp('reviewer', b, 'propose', { text: 'Report a finding only with a concrete failing input', source: '{{OWNER}} 2026-10-10' });
-  ok(b.Proposti[0].id === 'RV-2', 'playbook ids grow');
-  b = pbOp('reviewer', b, 'remove', { id: 'RV-1', why: 'more harmful than helpful', date: '2026-10-12' });
-  b = pbOp('reviewer', b, 'propose', { text: 'Third point about tests', source: 's' });
-  ok(b.Tolti[0].id === 'RV-1' && /tolto: more harmful/.test(b.Tolti[0].note) && b.Proposti[1].id === 'RV-3', 'playbook remove keeps history, ids never reused');
-  let big = pbParse('');
-  const distinct = k => Array.from({ length: 56 }, (_, j) => `p${k}w${j}`).join(' ').slice(0, 280); // no shared words
-  for (let k = 0; k < 8; k++) { big = pbOp('qa', big, 'propose', { text: distinct(k), source: 's' }); big = pbOp('qa', big, 'accept', { id: big.Proposti[0].id }); }
-  const ninth = pbOp('qa', big, 'propose', { text: distinct(8), source: 's' });
-  ok(refused(() => pbOp('qa', ninth, 'accept', { id: ninth.Proposti[0].id })), 'playbook: Punti cap refused');
-  // CLI on a temp root
-  const proot = path.join(tmp, 'pb');
-  const cli = args => spawnSync(process.execPath, [path.join(here, 'playbook.mjs'), ...args, '--root', proot], { encoding: 'utf8' });
-  ok(cli(['propose', 'prod-log-reader', '--text', 'Say which subscription was searched', '--source', 'me.md Safety']).status === 0, 'playbook CLI propose');
-  ok(cli(['accept', 'prod-log-reader', 'PL-1']).status === 0 && cli(['vote', 'prod-log-reader', 'PL-1', 'helpful']).status === 0, 'playbook CLI accept+vote');
-  ok(/prod-log-reader: 1 punti/.test(cli(['list']).stdout), `playbook CLI list: ${cli(['list']).stdout}`);
-  ok(cli(['propose', 'nobody', '--text', 'x', '--source', 's']).status === 4, 'playbook CLI unknown agent');
 });
 
 T('brain-site (own test file)', () => {

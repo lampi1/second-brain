@@ -1,17 +1,17 @@
-// Unit tests of the "Discutine" / "Apri una chat" texts and records (src/renderer/brain/lib/discuss.ts): the idea's
-// line in ideas.md, the Orchestrator draft (file + line, fields, opening question by state, the state rule), the work chat's
-// title and first message, and the "discussa" store (bad storage, dedup, caps).
+// Unit tests of the "Discuti" texts and records (src/renderer/brain/lib/discuss.ts): the idea's line in ideas.md, the
+// Orchestrator draft (file + line, fields, opening question by state, the state rule), and the "discussa" store (bad
+// storage, dedup, caps, an old record of a work chat still read).
 import { describe, expect, it } from 'vitest';
 import type { Idea, Reflection } from '../../../src/renderer/brain/types';
 import {
-  addDiscussed, chatPrompt, chatTitle, discussText, lineOf, openingQuestion, readDiscussed, topicKey, writeDiscussed, type KV, type Topic,
+  addDiscussed, discussText, lineOf, openingQuestion, readDiscussed, topicKey, writeDiscussed, type KV, type Topic,
 } from '../../../src/renderer/brain/lib/discuss';
 
 const idea = (o: Partial<Idea> = {}): Idea => ({
   data: '2026-10-05', area: 'personale', titolo: 'Diario vocale', stato: 'aperta', idea: 'Dettare tre righe a fine giornata.', come: '', perche: 'scrivere stanca',
   riprendere: '', fonte: '', per: '', notato: '', penso: '', sicurezza: '', nonso: '', testo: '', chi: 'Tu', scaduta: '', ...o,
 });
-const refl: Reflection = { data: '2026-10-09', chat: 'Regia', titolo: 'Troppo centralino', notato: 'giro troppi messaggi', penso: 'meglio delegare', sicurezza: 'media', nonso: '' };
+const refl: Reflection = { data: '2026-10-09', chat: 'Orchestrator', titolo: 'Troppo centralino', notato: 'giro troppi messaggi', penso: 'meglio delegare', sicurezza: 'media', nonso: '' };
 const I = (o?: Partial<Idea>): Topic => ({ kind: 'idea', idea: idea(o) });
 const R: Topic = { kind: 'reflection', reflection: refl };
 
@@ -47,14 +47,14 @@ describe('discussText', () => {
   });
   it('without a line names only the file', () => expect(discussText(I(), null)).toContain('(ideas.md, from 05/10'));
   it("an AI idea is called a suggestion, with its reasoning and source", () => {
-    const t = discussText(I({ chi: 'IA', notato: 'tre chat', penso: 'chiudere', fonte: 'IA · Regia · revisione' }), 3);
+    const t = discussText(I({ chi: 'IA', notato: 'tre chat', penso: 'chiudere', fonte: 'IA · Orchestrator · revisione' }), 3);
     expect(t).toContain("the AI's suggestion «Diario vocale»");
     expect(t).toContain('- Noticed: tre chat');
-    expect(t).toContain('- Born in: Regia · revisione');
+    expect(t).toContain('- Born in: Orchestrator · revisione');
   });
   it('a reflection quotes ai-reflections.md and its chat', () => {
     const t = discussText(R, 4);
-    expect(t).toContain('«Troppo centralino» (ai-reflections.md, line 4, from 09/10, chat Regia)');
+    expect(t).toContain('«Troppo centralino» (ai-reflections.md, line 4, from 09/10, chat Orchestrator)');
     expect(t).toContain('- You noticed: giro troppi messaggi');
   });
   it('long fields are shortened', () => expect(discussText(I({ idea: 'x'.repeat(1000) }), 1).length).toBeLessThan(800));
@@ -71,21 +71,6 @@ describe('openingQuestion', () => {
   });
 });
 
-describe('work chat', () => {
-  it('title "Idea · <titolo>", shortened', () => {
-    expect(chatTitle(I())).toBe('Idea · Diario vocale');
-    expect(chatTitle(I({ titolo: 'a'.repeat(80) })).length).toBeLessThanOrEqual(51);
-    expect(chatTitle(R)).toBe('Riflessione · Troppo centralino');
-  });
-  it('first message points at the file and line and asks for a plan first', () => {
-    const p = chatPrompt(I(), 10);
-    expect(p).toContain("Let's work on the idea «Diario vocale» (ideas.md, line 10");
-    expect(p).toContain('from line 10');
-    expect(p).toContain('Only the Orchestrator');
-    expect(chatPrompt(I(), null)).not.toContain('from line');
-  });
-});
-
 describe('discussed records', () => {
   const mem = (init?: string): KV & { v: string | null } => ({ v: init ?? null, getItem() { return this.v; }, setItem(_k, v) { this.v = v; } });
   it('reads nothing from bad or missing storage', () => {
@@ -96,9 +81,9 @@ describe('discussed records', () => {
   });
   it('round-trips, newest first, one entry per chat', () => {
     const kv = mem();
-    let m = addDiscussed({}, 'k', { via: 'regia', chatId: 'r', chatTitle: 'Regia', at: 1 });
+    let m = addDiscussed({}, 'k', { via: 'orchestrator', chatId: 'r', chatTitle: 'Orchestrator', at: 1 });
     m = addDiscussed(m, 'k', { via: 'chat', chatId: 'c1', chatTitle: 'Idea · X', at: 2 });
-    m = addDiscussed(m, 'k', { via: 'regia', chatId: 'r', chatTitle: 'Regia', at: 3 });
+    m = addDiscussed(m, 'k', { via: 'orchestrator', chatId: 'r', chatTitle: 'Orchestrator', at: 3 });
     writeDiscussed(kv, m);
     const back = readDiscussed(kv);
     expect(back.k!.map(d => d.at)).toEqual([3, 2]);

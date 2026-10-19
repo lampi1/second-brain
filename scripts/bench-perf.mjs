@@ -65,7 +65,7 @@ await page.waitForLoadState('domcontentloaded');
 await page.evaluate(() => { window.sb.on('chat:item', () => { globalThis.__bench.items++; }); });
 
 const cwd = tmp('sb-bench-cwd-');
-await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, title: 'Regia', regia: true }), cwd);
+await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, title: 'Orchestrator', orchestrator: true }), cwd);
 const ids = [];
 for (let i = 0; i < CHATS; i++) ids.push((await page.evaluate(([dir, n, prompt]) => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt, title: `Bench ${n}` }), [cwd, i, promptOf(i)])).id);
 // at rest: every tile is there, the working chats show their running tool, the rest have answered or asked
@@ -79,7 +79,7 @@ await page.waitForTimeout(IDLE ? 5000 : 3000); // warm-up: every chat is streami
 if (process.env.BENCH_DEBUG) console.log(await page.evaluate(() => document.querySelector('[data-testid^="tile-chat-"]')?.innerText));
 const view = await page.evaluate(() => ({
   tiles: document.querySelectorAll('[data-testid^="tile-chat-"]').length,
-  lists: document.querySelectorAll('[data-testid^="tile-chat-"] .items, [data-testid="tile-regia"] .items').length,
+  lists: document.querySelectorAll('[data-testid^="tile-chat-"] .items, [data-testid="tile-orchestrator"] .items').length,
   streaming: document.querySelectorAll('.md.streaming').length,
 }));
 
@@ -134,13 +134,13 @@ const type = async (sel, text) => {
 const half = Math.floor(SECS * 1000 / 2) - 600;
 const chars = IDLE ? 40 : Math.floor(half / 100);
 const typeBoth = async () => {
-  await type('[data-testid="tile-regia"] textarea', 'x'.repeat(chars));
-  const regia = await page.evaluate(() => globalThis.__bench.lag.splice(0));
+  await type('[data-testid="tile-orchestrator"] textarea', 'x'.repeat(chars));
+  const orchestrator = await page.evaluate(() => globalThis.__bench.lag.splice(0));
   await type(`[data-testid="chat-input-${ids[0]}"]`, 'y'.repeat(chars));
-  return [regia, await page.evaluate(() => globalThis.__bench.lag.splice(0))];
+  return [orchestrator, await page.evaluate(() => globalThis.__bench.lag.splice(0))];
 };
-let lagRegia = [], lagChat = [];
-if (!IDLE) [lagRegia, lagChat] = await typeBoth();
+let lagOrchestrator = [], lagChat = [];
+if (!IDLE) [lagOrchestrator, lagChat] = await typeBoth();
 await page.waitForTimeout(Math.max(0, SECS * 1000 - (Date.now() - t0)));
 const secs = (Date.now() - t0) / 1000;
 const c1 = busy();
@@ -167,7 +167,7 @@ if (prof) {
   console.log([...self].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => `${(100 * v / total).toFixed(1)}%  ${k}`).join('\n'));
 }
 // at rest the typing comes after the measured window (and after the trace/profile): it is the lag, not the load
-if (IDLE) [lagRegia, lagChat] = await typeBoth();
+if (IDLE) [lagOrchestrator, lagChat] = await typeBoth();
 const m = m1.map(p => ({ type: p.type, mem: p.mem, cpu: 100 * (p.s - (m0.find(x => x.pid === p.pid)?.s ?? 0)) / ((tEnd - t0) / 1000) }));
 const b = await page.evaluate(() => { const x = globalThis.__bench; return { commits: x.commits, items: x.items, frames: x.frames, long: x.long, lat: x.lat }; });
 await app.close();
@@ -180,7 +180,7 @@ const mb = t => Math.round(m.filter(p => t ? p.type === t : !UI.includes(p.type)
 const deltas = IDLE ? 1 : Math.round(CHATS * secs * 1000 / DELAY);
 const r = {
   mode: IDLE ? 'idle' : 'streaming', machineCpuPct: machinePct, chats: CHATS, secs: Math.round(secs), view,
-  inputLagRegiaMs: { p50: q(lagRegia, 0.5), p95: q(lagRegia, 0.95), n: lagRegia.length },
+  inputLagOrchestratorMs: { p50: q(lagOrchestrator, 0.5), p95: q(lagOrchestrator, 0.95), n: lagOrchestrator.length },
   inputLagChatMs: { p50: q(lagChat, 0.5), p95: q(lagChat, 0.95), n: lagChat.length },
   cliToScreenMs: { p50: q(b.lat, 0.5), p95: q(b.lat, 0.95), n: b.lat.length },
   cpuPct: { main: cpu('Browser'), renderers: cpu('Tab'), gpu: cpu('GPU'), other: cpu() },

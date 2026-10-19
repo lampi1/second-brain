@@ -1,9 +1,10 @@
-// Agent runs (AGENTS-DESIGN §1.2, §5): one record per chat started from a catalog agent, kept in agent-runs.json after
+// Role runs (AGENTS-DESIGN §1.2, §5): one record per chat started from a role, kept in agent-runs.json after
 // chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns.
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunRouting, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { readLocal, writeLocal } from './local-store';
@@ -19,6 +20,7 @@ export const ROLLUP_BYTES = 1_000_000;
 
 const ENDS: readonly AgentRunEnd[] = ['completed', 'closed', 'stale'];
 const VERDICTS: readonly AgentRunOutcome['verdict'][] = ['success', 'partial', 'fail', 'unknown'];
+const STARTED_BY: readonly AgentRun['startedBy'][] = ['user', 'orchestrator', 'parent', 'app'];
 const BASES: readonly AgentRunOutcome['basis'][] = ['human', 'reviewed-evidence', 'orchestrator-opinion', 'self-report', 'unknown'];
 export const RUN_ID = /^r_[a-f0-9]{12}$/;
 const AGENT_ID = /^[a-z][a-z0-9_-]{0,79}$/;
@@ -78,36 +80,24 @@ function readTokens(v: unknown): AgentRunTokens | null {
 function readReport(v: unknown): AgentRunReport | null {
   const r = v as Record<string, unknown> | null;
   if (!r || typeof r !== 'object' || !time(r.at)) return null;
-  if (r.ok === false) return { ok: false, at: r.at };
-  if (r.ok !== true || !['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
+  if (!['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
     || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
-  return { ok: true, at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
-    ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}) };
+  return { at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
+    ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
+    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}) };
 }
 function readCorrections(v: unknown): AgentRunCorrections | null {
   const c = v as Partial<AgentRunCorrections> | null;
   return c && typeof c === 'object' && count(c.tagged) && count(c.afterReport) ? { tagged: c.tagged, afterReport: c.afterReport } : null;
 }
 
-/** A routing snapshot (agents/routing-snapshot.ts), or null when out of shape. */
-export function readRouting(v: unknown): AgentRunRouting | null {
-  const r = v as Record<string, unknown> | null;
-  const nullable = (x: unknown, ok: (x: unknown) => boolean) => x === null || ok(x);
-  if (!r || typeof r !== 'object' || !time(r.at) || !str(r.agentId, 80) || !AGENT_ID.test(r.agentId) || !count(r.version)
-    || !nullable(r.mode, x => x === 'hybrid' || x === 'words') || !nullable(r.score, x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100)
-    || !nullable(r.rank, x => count(x) && (x as number) >= 1)) return null;
-  const t = r.trial as Record<string, unknown> | undefined | null;
-  if (t !== undefined && (!t || typeof t !== 'object' || !count(t.baseline) || (t.baseline as number) < 1 || !(t.parentWins === null || typeof t.parentWins === 'boolean'))) return null;
-  return { at: r.at, agentId: r.agentId, version: r.version, mode: r.mode as AgentRunRouting['mode'], score: r.score as number | null, rank: r.rank as number | null,
-    ...(t ? { trial: { baseline: t.baseline as number, parentWins: t.parentWins as boolean | null } } : {}) };
-}
-
 /** A stored run, or null when any field is out of shape (the store refuses the file; chats.json drops the mirror). */
 export function readRun(v: unknown): AgentRun | null {
   const r = v as Record<string, unknown> | null;
   if (!r || typeof r !== 'object' || !str(r.runId, 20) || !RUN_ID.test(r.runId) || !str(r.chatId, 80) || !str(r.agentId, 80) || !AGENT_ID.test(r.agentId)
-    || !count(r.version) || typeof r.goal !== 'string' || r.goal.length > GOAL_MAX || (r.startedBy !== 'user' && r.startedBy !== 'orchestrator') || !time(r.startedAt)) return null;
-  for (const k of ['parentRunId', 'spawnedBy', 'reviewOf', 'reworkOf', 'continuedFrom'] as const) if (r[k] !== undefined && !(typeof r[k] === 'string' && RUN_ID.test(r[k]))) return null;
+    || !count(r.version) || typeof r.goal !== 'string' || r.goal.length > GOAL_MAX || !STARTED_BY.includes(r.startedBy as AgentRun['startedBy']) || !time(r.startedAt)) return null;
+  for (const k of ['parentRunId', 'reviewOf', 'reworkOf', 'continuedFrom'] as const) if (r[k] !== undefined && !(typeof r[k] === 'string' && RUN_ID.test(r[k]))) return null;
+  if (r.tier !== undefined && !MODEL_TIERS.includes(r.tier as ModelTier) || r.model !== undefined && r.model !== null && !str(r.model, 120)) return null;
   if ((r.endedAt === undefined) !== (r.endReason === undefined) || (r.endedAt !== undefined && !time(r.endedAt)) || (r.endReason !== undefined && !ENDS.includes(r.endReason as AgentRunEnd))) return null;
   const outcome = r.outcome === undefined ? undefined : readOutcome(r.outcome);
   if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
@@ -121,14 +111,15 @@ export function readRun(v: unknown): AgentRun | null {
   if (!(r.costUsd === null || time(r.costUsd))) return null;
   const tokens = r.tokens === null ? null : readTokens(r.tokens);
   if (r.tokens !== null && !tokens) return null;
-  const report = r.report === undefined ? undefined : readReport(r.report);
+  // a report without its fields (a turn whose block was out of shape) counts as no report
+  const report = r.report === undefined || (r.report as { ok?: unknown } | null)?.ok === false ? undefined : readReport(r.report);
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
-  const routing = r.routing === undefined ? undefined : readRouting(r.routing);
-  if (report === null || corrections === null || tags === null || routing === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
   return {
-    runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy, startedAt: r.startedAt,
-    ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}), ...(r.spawnedBy ? { spawnedBy: r.spawnedBy as string } : {}),
+    runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,
+    ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}),
+    ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
     ...(r.reviewOf ? { reviewOf: r.reviewOf as string } : {}), ...(r.reworkOf ? { reworkOf: r.reworkOf as string } : {}),
     ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
     ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
@@ -138,7 +129,7 @@ export function readRun(v: unknown): AgentRun | null {
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
-    ...(tags ? { tags } : {}), ...(routing ? { routing } : {}),
+    ...(tags ? { tags } : {}),
   };
 }
 
@@ -165,9 +156,10 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
   for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
 }
 
-/** Links a new run may carry (set by the Orchestrator tools, A7): each must name a run the store knows. */
-export interface RunLinks { parentRunId?: string; spawnedBy?: string; reviewOf?: string; reworkOf?: string }
-export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags }
+/** Links a new run may carry: the delegating chat's run (agent_delegate), the run a Judge reviews, the run it reworks;
+ *  each must name a run the store knows. */
+export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
+export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
 
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time); };
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
@@ -243,23 +235,23 @@ export class AgentRunStore {
   list(): AgentRun[] { return [...this.runs.values()]; }
   /** What the pruned runs left (runMetrics merges them in). */
   rolledUp(): RunTally[] { return structuredClone(this.rollups); }
-  /** Open runs started by this one through agent_spawn. */
-  children(runId: string): AgentRun[] { return this.list().filter(r => r.spawnedBy === runId && r.endedAt === undefined); }
+  /** Open runs delegated by this one (agent_delegate). */
+  children(runId: string): AgentRun[] { return this.list().filter(r => r.parentRunId === runId && r.endedAt === undefined); }
 
-  /** Refuses links to unknown runs, and a spawned run whose parent is another run. */
+  /** Refuses links to unknown runs. */
   checkLinks(l: RunLinks): void {
-    for (const k of ['parentRunId', 'spawnedBy', 'reviewOf', 'reworkOf'] as const) if (l[k] !== undefined && !this.runs.has(l[k])) throw new Error(`Esecuzione collegata non trovata: ${String(l[k])}`);
-    if (l.spawnedBy && l.parentRunId && l.parentRunId !== l.spawnedBy) throw new Error('Un’esecuzione avviata da un’altra ha quella come genitore.');
+    for (const k of ['parentRunId', 'reviewOf', 'reworkOf'] as const) if (l[k] !== undefined && !this.runs.has(l[k])) throw new Error(`Esecuzione collegata non trovata: ${String(l[k])}`);
   }
 
-  /** save = false: the caller writes once after several starts (the backfill). */
+  /** save = false: the caller writes once after several starts. */
   start(s: RunStart, save = true): AgentRun {
     if (this.problem) throw new Error(this.problem);
     if (!AGENT_ID.test(s.agentId) || !str(s.chatId, 80) || !count(s.version) || (s.tags !== undefined && !readTags(s.tags))) throw new Error('Esecuzione non valida.');
     this.checkLinks(s);
     const run: AgentRun = {
       runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: s.goal.trim().slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
-      ...(s.spawnedBy ? { parentRunId: s.spawnedBy, spawnedBy: s.spawnedBy } : s.parentRunId ? { parentRunId: s.parentRunId } : {}),
+      ...(s.parentRunId ? { parentRunId: s.parentRunId } : {}),
+      ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
       ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
       costUsd: s.costKnown ? 0 : null, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
@@ -280,13 +272,6 @@ export class AgentRunStore {
     if (run.endedAt !== undefined && run.endedAt <= this.prunedThrough) return undefined;
     this.runs.set(run.runId, run); this.dirty = true;
     return run;
-  }
-  /** The routing snapshot of a known run, set once (its agent and version must match the run's); false = refused. */
-  setRouting(runId: string, routing: AgentRunRouting): boolean {
-    const run = this.runs.get(runId), checked = readRouting(routing);
-    if (this.problem || !run || run.routing || !checked || checked.agentId !== run.agentId || checked.version !== run.version) return false;
-    run.routing = checked; this.dirty = true;
-    return true;
   }
   /** Something changed in a record that is worth a write on the next flush (cost, tokens, context peak). */
   touch(): void { this.dirty = true; }

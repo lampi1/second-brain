@@ -5,7 +5,7 @@
 // "troppo presto"); 3) his active PRs held by a failed build or QA; 4) his resolved bugs sent back to an open state.
 // The improvement proposals are one row. Praise, notebooks and measures are gone until they have real data. Below the
 // numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, rule, this week against the
-// one before). Every number and every pattern has its reading and the discussion bar ("Discutine" / "Apri una chat").
+// one before). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
 // bugs); computations in lib/quality.ts and lib/stats.ts.
 import type { ReactNode } from 'react';
@@ -81,7 +81,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                 help="Errori degli agenti che hai scoperto tu, non un reviewer, la QA o un controllo automatico. Più il numero è basso, meno tempo perdi a ricontrollare il loro lavoro."
                 value={caught?.per100 != null ? caught.per100.toLocaleString('it-IT') : '—'} unit="ogni 100 turni" tone={caught?.per100 ? 'warn' : undefined}
                 reading={caughtReading}
-                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: 'errori che ho dovuto trovare io, ogni 100 turni', inBrain: false, source: 'ai-errors.md («visto da») ÷ turni nei log dell\'app',
+                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: 'errori che ho dovuto trovare io, ogni 100 turni', source: 'ai-errors.md («visto da») ÷ turni nei log dell\'app',
                   facts: [`${caught.per100.toLocaleString('it-IT')} ogni 100 turni ${range(caught.from, caught.to)}: ${caught.caught} trovati da me su ${caught.turns} turni, ${caught.others} trovati da altri`,
                     caughtReading ? caughtReading.text : '', 'le chat fuori dall\'app hanno errori ma non turni: il numero può essere più alto del vero'],
                   question: 'Cosa ci dice questo numero? Quali errori avrei potuto non dover trovare io, e con quale controllo automatico?' } : undefined}
@@ -102,7 +102,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
               {q && rules && out && <Metric id="tornati" title="Errori tornati dopo la regola"
                 help="Dopo un errore si scrive una regola perché non si ripeta. Qui conti le regole che non sono bastate: lo stesso tipo di errore è tornato entro pochi giorni."
                 value={rules.judged ? `${rules.tornato} su ${rules.judged}` : '—'} unit={`regole: l'errore è tornato entro ${q.windowDays} giorni`} tone={rules.tornato ? 'bad' : undefined}
-                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: 'regole che non hanno fermato il loro errore', inBrain: true, source: 'ai-errors.md, righe con «regola:»',
+                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: 'regole che non hanno fermato il loro errore', source: 'ai-errors.md, righe con «regola:»',
                   facts: [`${rules.tornato} ${rules.tornato === 1 ? 'regola' : 'regole'} su ${rules.judged} giudicate: l'errore è tornato entro ${q.windowDays} giorni (${range(q.from, q.to)})`,
                     ...rules.rules.filter(r => r.status === 'tornato').slice(0, 4).map(r => `non ha tenuto: ${r.rule} (${r.type}, ${r.area}; di nuovo il ${r.again.map(x => fmt.day(x.date)).join(', ')})`),
                     `${rules.presto} ${rules.presto === 1 ? 'regola troppo recente' : 'regole troppo recenti'} per dirlo`],

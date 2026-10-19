@@ -9,7 +9,7 @@ import { productInstructions } from '../../../src/main/rules/instructions';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 it('does not resolve built assets or mutate a legacy brain plugin', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rule-legacy-')); roots.push(root);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rule-brain-')); roots.push(root);
   expect(() => installHooks(path.join(root, 'plugin'), root, path.join(root, 'state'))).not.toThrow();
   expect(fs.readdirSync(root)).toEqual([]);
 });

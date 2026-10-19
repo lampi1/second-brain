@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { migrateCrossHarness, readRegiaMail } from '../../../src/main/brain/brain-settings';
+import { migrateCrossHarness, readOrchestratorMail } from '../../../src/main/brain/brain-settings';
 import { Live } from '../../../src/main/brain/live';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-bset-'));
@@ -14,7 +14,7 @@ describe('brain-settings.json delivery timing', () => {
     expect(migrateCrossHarness(root)).toBe('unchanged');
     const file = path.join(root, 'brain-settings.json');
     expect(fs.existsSync(file)).toBe(false);
-    const original = { other: { value: 7 }, crossHarnessMessages: false, regiaMail: { urgent: ['now'] } };
+    const original = { other: { value: 7 }, crossHarnessMessages: false, orchestratorMail: { urgent: ['now'] } };
     for (const raw of [Buffer.from(`\ufeff${JSON.stringify(original)}`),
       Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(JSON.stringify(original), 'utf16le')])]) {
       fs.writeFileSync(file, raw);
@@ -44,25 +44,25 @@ describe('brain-settings.json delivery timing', () => {
 
   it('reads timing words without rewriting a legacy false or other keys', () => {
     const root = tmp();
-    expect(readRegiaMail(root)).toBeUndefined();
+    expect(readOrchestratorMail(root)).toBeUndefined();
     const f = path.join(root, 'brain-settings.json');
-    const raw = JSON.stringify({ other: 1, crossHarnessMessages: false, regiaMail: { urgent: ['urgent'] } });
+    const raw = JSON.stringify({ other: 1, crossHarnessMessages: false, orchestratorMail: { urgent: ['urgent'] } });
     fs.writeFileSync(f, raw);
-    expect(readRegiaMail(root)).toEqual({ urgent: ['urgent'] });
+    expect(readOrchestratorMail(root)).toEqual({ urgent: ['urgent'] });
     expect(fs.readFileSync(f, 'utf8')).toBe(raw);
   });
 
   it('accepts BOM and UTF-16 and leaves unreadable files unchanged', () => {
     const root = tmp();
     const f = path.join(root, 'brain-settings.json');
-    for (const raw of [Buffer.from('\ufeff{"regiaMail":{"urgent":["now"]},"crossHarnessMessages":false}'),
-      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"regiaMail":{"urgent":["now"]},"crossHarnessMessages":false}', 'utf16le')])]) {
+    for (const raw of [Buffer.from('\ufeff{"orchestratorMail":{"urgent":["now"]},"crossHarnessMessages":false}'),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"orchestratorMail":{"urgent":["now"]},"crossHarnessMessages":false}', 'utf16le')])]) {
       fs.writeFileSync(f, raw);
-      expect(readRegiaMail(root)).toEqual({ urgent: ['now'] });
+      expect(readOrchestratorMail(root)).toEqual({ urgent: ['now'] });
       expect(fs.readFileSync(f)).toEqual(raw);
     }
     fs.writeFileSync(f, '{oops');
-    expect(readRegiaMail(root)).toBeUndefined();
+    expect(readOrchestratorMail(root)).toBeUndefined();
     expect(fs.readFileSync(f, 'utf8')).toBe('{oops');
   });
 

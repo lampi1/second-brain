@@ -6,7 +6,6 @@ import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
 import { componentsEn } from './areas/components.en';
 import { catalogEn } from './areas/catalog.en';
-import { agentCreateEn } from './areas/agent-create.en';
 import { connectorsEn } from './areas/connectors.en';
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
@@ -20,7 +19,6 @@ import { brainPagesEn } from './areas/brainPages.en';
 import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
-import {lifecycleEn}from'./areas/lifecycle.en';
 import { agentsGridEn } from './areas/agents-grid.en';
 import { agentDetailEn } from './areas/agent-detail.en';
 import { approvalsEn } from './areas/approvals.en';
@@ -28,6 +26,7 @@ import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
+import { treeEn } from './areas/tree.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
 
@@ -37,7 +36,6 @@ export const en: Dict = {
   ...componentsEn,
   ...agentPackEn,
   ...catalogEn,
-  ...agentCreateEn,
   ...costsEn,
   ...connectorsEn,
   ...reviewedContextEn,
@@ -45,6 +43,7 @@ export const en: Dict = {
   ...homeEn,
   ...cloudEn,
   ...guideEn,
+  ...treeEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
@@ -64,7 +63,6 @@ export const en: Dict = {
   ...studioEn,
   ...brainModelEn,
   ...productEn,
-  ...lifecycleEn,
   ...agentsGridEn,
   ...agentDetailEn,
   ...approvalsEn,

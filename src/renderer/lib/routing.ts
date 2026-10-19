@@ -11,7 +11,7 @@ export type TakesEffort = (h: Harness) => boolean;
 
 export const getKindIt = (): Record<TaskKind | '*', string> => ({
   '*': t('tools.routing.kindAny'), 'qa-run': t('tools.routing.kindQaRun'), review: t('tools.routing.kindReview'), 'bug-fix': t('tools.routing.kindBugFix'), 'ops-read': t('tools.routing.kindOpsRead'), writing: t('tools.routing.kindWriting'),
-  triage: t('tools.routing.kindTriage'), 'research-web': t('tools.routing.kindResearchWeb'), investigation: t('tools.routing.kindInvestigation'), 'app-feature': t('tools.routing.kindAppFeature'), regia: t('tools.routing.kindRegia'), altro: t('tools.routing.kindOther'),
+  triage: t('tools.routing.kindTriage'), 'research-web': t('tools.routing.kindResearchWeb'), investigation: t('tools.routing.kindInvestigation'), 'app-feature': t('tools.routing.kindAppFeature'), orchestrator: t('tools.routing.kindOrchestrator'), altro: t('tools.routing.kindOther'),
 });
 
 /** What the table may pick: the 'auto' models of 'auto' harnesses, never Fable (main refuses it: too costly); a model a

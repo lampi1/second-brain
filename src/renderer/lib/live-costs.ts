@@ -66,7 +66,7 @@ export interface CostRow {
   chatId?: string;
   title: string;
   harness: Harness;
-  isRegia?: boolean;
+  isOrchestrator?: boolean;
   usd: number;
   /** "≈": a running turn's estimate or Cursor's ledger estimate */
   approx: boolean;
@@ -97,7 +97,7 @@ export function costRows(u: Usage | null, chats: ChatSummary[], h: CostHistory =
     const unpriced = c.harness === 'cursor' && !!c.sessionId && unpricedIds.has(c.sessionId);
     if (!(usd > 0) && !unpriced) continue;
     const running = c.state === 'running' || c.state === 'starting';
-    rows.push({ key: c.id, chatId: c.id, title: c.title, harness: c.harness, isRegia: c.isRegia, usd, approx, running, closed: !!c.closedAt || c.state === 'closed', ...(unpriced ? { unpriced } : {}) });
+    rows.push({ key: c.id, chatId: c.id, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, usd, approx, running, closed: !!c.closedAt || c.state === 'closed', ...(unpriced ? { unpriced } : {}) });
   }
   for (const s of day.values()) {
     if (used.has(s.sessionId) || !(s.usd > 0)) continue;

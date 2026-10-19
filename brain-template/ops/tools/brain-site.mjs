@@ -86,8 +86,7 @@ export async function tables(root) {
   const days = (fs.existsSync(jdir) ? fs.readdirSync(jdir) : []).filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort();
   const journal = days.flatMap(f => P.journal(read(path.join(jdir, f)), f.slice(0, 10)));
   const imp = f => import(pathToFileURL(path.join(HERE, f)).href);
-  let playbooks = null, recurrence = null, quality = null, inbox = null;
-  try { playbooks = (await imp('playbook.mjs')).summary(root); } catch { /* none */ }
+  let recurrence = null, quality = null, inbox = null;
   // quality: what the app's Qualità page shows from ai-errors.md (canonical types, unreadable lines, who saw them, rules in a 14-day window)
   try { const m = await imp('recurrence.mjs'); const t = read(path.join(root, 'ai-errors.md')) ?? ''; recurrence = m.recurrence(m.parse(t)); quality = m.quality?.(t, { today: romeDay() }) ?? null; } catch { /* none */ }
   try { const m = await imp('inbox.mjs'); const Pa = m.paths(root); inbox = { boxes: m.list(Pa), stats: m.stats(Pa), log: P.jsonl(read(Pa.log)) }; } catch { /* none */ }
@@ -105,7 +104,7 @@ export async function tables(root) {
     measures: P.jsonl(read(path.join(root, 'measures.jsonl'))),
     envs: P.jsonl(read(path.join(root, 'ops', 'state', 'envs.log'))),
     briefs: briefs.map(f => `journal/brief/${f}`),
-    playbooks, recurrence, quality, inbox,
+    recurrence, quality, inbox,
   };
 }
 

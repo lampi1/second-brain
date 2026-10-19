@@ -50,7 +50,7 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
       } finally { fs.unlinkSync(file); fs.rmdirSync(temp); }
     },
     act: async c => {
-      const chat = s.chats.list().find(x => x.isRegia && x.orchestrator && !x.closedAt);
+      const chat = s.chats.list().find(x => x.isOrchestrator && !x.closedAt);
       if (!chat) throw Error('Apri prima l’Orchestrator');
       await s.chats.send(chat.id, `[Battito]\n${c.title}\n${c.body}\n${c.why}\nFonti: ${c.refs.map(r => r.ref).join(', ')}`);
       ctx.emitter.emit('ui:command', { action: 'focus', value: chat.id }); return chat.id;
@@ -58,7 +58,6 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
     approve: async item => {
       const agent = s.agents.list().profiles.find(p => p.id === item.agentId); if (!agent) throw Error('Agente non disponibile');
       if (item.kind === 'learned-rule') s.agents.save({ ...agent, instructions: `${agent.instructions}\n${item.text}` }, agent.id);
-      else if (item.kind === 'agent-suggestion') s.agents.save({ ...agent, name: item.title, purpose: item.text.slice(0, 400), instructions: item.text });
       else throw Error('Questa proposta richiede un’applicazione manuale.');
     },
   });

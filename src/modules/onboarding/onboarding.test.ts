@@ -10,7 +10,7 @@ import { discoverLocal, remoteHost } from './discovery';
 import { configAfter } from './config';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { OnboardingScreen, RegiaConnectAction } from './Screen';
+import { OnboardingScreen, OrchestratorConnectAction } from './Screen';
 import { message } from './i18n';
 import { locations, projectConfigs } from './locations';
 import { connectionIntent, discoveryView } from './presentation';
@@ -245,9 +245,9 @@ it('renders both surfaces in Italian and English with labelled controls', async 
   for (const language of ['it', 'en'] as const) {
     const screen = renderToStaticMarkup(createElement(OnboardingScreen, { port: service, language }));
     expect(screen).toContain('aria-labelledby'); expect(screen).toContain('for='); expect(screen).not.toContain('undefined');
-    const action = renderToStaticMarkup(createElement(RegiaConnectAction, { port: service, language }));
+    const action = renderToStaticMarkup(createElement(OrchestratorConnectAction, { port: service, language }));
     expect(action).toContain('aria-expanded="false"');
-    expect(action).toContain('onboarding-connectors'); // remains mounted even when Regia action is collapsed
+    expect(action).toContain('onboarding-connectors'); // remains mounted even when Orchestrator action is collapsed
   }
 });
 const boardFixture: Discovery = { evidence: [

@@ -1,6 +1,6 @@
-// Agent metrics per agent and version (AGENTS-DESIGN §5), read from agent-runs.json: the ended runs still kept plus the
+// Role metrics per role and version (AGENTS-DESIGN §5), read from agent-runs.json: the ended runs still kept plus the
 // rollups of the ones pruned. Pure. Every metric is `value · n · coverage`: n = the runs it was computed on, coverage =
-// n / ended runs. v0 (legacy, what it ran is unknown) has its own row but never enters the agent's all-versions row.
+// n / ended runs. Used by run-feedback.ts (agent_metrics), trials.ts and the Agenti page.
 import type { AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
 
 /** the newest values kept per sample for medians (n counts them all) */
@@ -88,7 +88,7 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (o && (o.basis === 'human' || o.basis === 'reviewed-evidence')) addVerdict(t.verdicts, o.verdict);
   if (o?.basis === 'orchestrator-opinion') addVerdict(t.opinion, o.verdict);
   if (o?.basis === 'self-report') addVerdict(t.selfReport, o.verdict);
-  else if (run.report?.ok) addVerdict(t.selfReport, REPORTED[run.report.outcome]);
+  else if (run.report) addVerdict(t.selfReport, REPORTED[run.report.outcome]);
   if (run.corrections) { t.corrections.runs++; t.corrections.tagged += run.corrections.tagged; t.corrections.afterReport += run.corrections.afterReport; }
   if (aiErrors) { t.aiErrors.runs++; t.aiErrors.lines += aiErrors.get(run.runId) ?? 0; }
   const end = run.endedAt;
@@ -101,12 +101,12 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (typeof run.executionMs === 'number') push(t.execution, run.executionMs);
   const first = new Map<string, AgentRun>();
   for (const v of index.reviews.get(run.runId) ?? []) {
-    if (!v.report?.ok || v.report.findings === undefined) continue;
+    if (!v.report || v.report.findings === undefined) continue;
     const k = keyOf(v.agentId, v.version), seen = first.get(k);
-    if (!seen || v.report.at < (seen.report as { at: number }).at) first.set(k, v);
+    if (!seen || v.report.at < seen.report!.at) first.set(k, v);
   }
   for (const [k, v] of first) {
-    const rep = v.report as Extract<NonNullable<AgentRun['report']>, { ok: true }>;
+    const rep = v.report!;
     const r = t.reviews[k] ??= { runs: 0, findings: 0, blockingRuns: 0, blocking: 0 };
     r.runs++; r.findings += rep.findings!;
     if (rep.blocking !== undefined) { r.blockingRuns++; r.blocking += rep.blocking; }
@@ -221,7 +221,7 @@ const rate = (v: Verdicts): { value: number | null; n: number } => { const n = v
 export function finalize(t: RunTally, version: number | null, window: number | null = null): VersionMetrics {
   const e = t.ended, success = rate(t.verdicts), peak = median(t.contextPeak.values);
   return {
-    agentId: t.agentId, version, legacy: version === 0, ended: e,
+    agentId: t.agentId, version, ended: e,
     successRate: metric(success.value, success.n, e), opinion: rate(t.opinion), selfReport: rate(t.selfReport),
     correctionsPerRun: metric(ratio(t.corrections.tagged + t.corrections.afterReport, t.corrections.runs), t.corrections.runs, e),
     aiErrorsPerRun: metric(ratio(t.aiErrors.lines, t.aiErrors.runs), t.aiErrors.runs, e),
@@ -238,7 +238,7 @@ export function finalize(t: RunTally, version: number | null, window: number | n
   };
 }
 
-/** The §5 read model: per agent, one row per version (v0 flagged legacy) and an all-versions row without v0. */
+/** The §5 read model: per role, one row per version and an all-versions row. */
 export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}): AgentMetrics[] {
   const index = indexRuns(runs), tallies = new Map<string, RunTally>(), open = new Map<string, number>();
   const rollupsIn = input.since === undefined, filter = input.filter ?? {};
@@ -257,11 +257,10 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()]);
   return [...agents].sort((a, b) => a.localeCompare(b, 'en')).map(agentId => {
     const own = [...tallies.values()].filter(t => t.agentId === agentId).sort((a, b) => a.version - b.version);
-    const real = own.filter(t => t.version > 0);
     return {
       agentId, open: open.get(agentId) ?? 0,
       versions: own.map(t => finalize(t, t.version, input.windowOf?.(agentId, t.version) ?? null)),
-      all: real.length ? finalize(real.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), real[0]!), null) : null,
+      all: own.length ? finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null) : null,
     };
   });
 }

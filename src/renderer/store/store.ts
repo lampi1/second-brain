@@ -362,7 +362,7 @@ export async function runCommand(req: PendingRequest, confirmProd = false): Prom
   try {
     await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}) });
     const chat = app.get().chats[req.chatId];
-    toast(`Comando avviato: l’output è nella chat ${chat?.isRegia ? 'Orchestrator' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
+    toast(`Comando avviato: l’output è nella chat ${chat?.isOrchestrator ? 'Orchestrator' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
     return true;
   } catch (e) {
     // the card comes back usable everywhere (the layer re-mounts it: its key carries the attempt)
@@ -411,7 +411,7 @@ export async function createChat(req: NewChat): Promise<ChatSummary | null> {
   } catch (e) { fail('Chat non creata')(e); return null; }
 }
 
-/** A chat whose engine, model and effort the routing table picks in main (DevOps "Apri chat", ADR 0032). */
+/** A chat whose engine, model and effort the routing table picks in main ("Nuova chat", a new Orchestrator; ADR 0032). */
 export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary | null> {
   try {
     const c = await sb.invoke('chat:createRouted', req);

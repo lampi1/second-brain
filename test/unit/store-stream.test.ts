@@ -14,7 +14,7 @@ vi.mock('../../src/renderer/sb', () => ({
 
 const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   id, harness: 'claude', origin: 'app', title: id, cwd: 'C:\\x', sessionId: null, model: null, effort: null, permissionMode: null, state: 'running',
-  costUsd: 0, pending: 0, isRegia: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
+  costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
 });
 const text = (id: string, t: string, streaming = true): ChatItem => ({ kind: 'assistant', id, at: 1, text: t, streaming });
 const emit = (ch: string, p: unknown) => handlers.get(ch)!(p);

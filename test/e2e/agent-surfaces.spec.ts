@@ -13,7 +13,7 @@ test('expanded run records all three human verdicts and handles failure without 
   const { app, page } = await launchDemo();
   try {
     const source = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.id === 'fix')!);
-    const run: AgentRun = { runId: 'r_123456789abc', chatId: source.id, agentId: 'default-general', version: 7,
+    const run: AgentRun = { runId: 'r_123456789abc', chatId: source.id, agentId: 'scout', version: 7,
       goal: 'Verify UI', startedBy: 'orchestrator', startedAt: 1, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0, tokens: null };
     await app.evaluate(({ ipcMain, BrowserWindow }, { source, run }) => {
       let count = 0;
@@ -42,54 +42,25 @@ test('expanded run records all three human verdicts and handles failure without 
       await tile.getByTestId(`run-outcome-${verdict}`).click();
       await expect(tile.getByTestId(`run-outcome-${verdict}`)).toHaveAttribute('aria-pressed', 'true');
     }
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'run-outcome-human');
   } finally { await app.close(); }
 });
 
-test('Run on the agent page confirms only a successful launch, respects reduced motion and opens Home', async () => {
+test('a role\'s page starts nothing: work starts only from the Orchestrator\'s column (ADR 0083)', async () => {
   const { app, page } = await launchDemo();
   try {
-    const catalog = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
-    const profile = catalog.profiles.find(p => p.id === 'default-general')!;
-    const source = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.id === 'fix')!);
-    await app.evaluate(({ ipcMain, BrowserWindow }, { catalog, profile, source }) => {
-      const ready = { ...catalog, profiles: [profile], problem: null, models: catalog.models.map(m => m.engine === profile.engine
-        ? { ...m, enabled: true, trusted: true, installed: true, authenticated: true, defaultModel: true, effort: true, modelSelectable: true,
-          models: profile.model ? [{ id: profile.model, name: profile.model }] : m.models } : m) };
-      ipcMain.removeHandler('agents:list'); ipcMain.handle('agents:list', () => ready);
-      BrowserWindow.getAllWindows()[0]!.webContents.send('agents:changed', ready);
-      let attempt = 0;
-      ipcMain.removeHandler('chat:create');
-      ipcMain.handle('chat:create', (_e, request: { agentId: string; prompt: string; cwd: string }) => {
-        if (request.agentId !== profile.id || request.prompt !== 'Verify catalog launch' || !request.cwd) throw new Error('Invalid launch request');
-        if (++attempt === 1) throw new Error('Simulated launch failure');
-        return { ...source, state: 'idle', title: request.prompt };
-      });
-    }, { catalog, profile, source });
     await visit(page, 'sb://agenti');
-    const overview = page.getByTestId(`catalog-card-${profile.id}`);
-    await expect(overview).toBeVisible();
-    await expect(overview).toHaveCSS('animation-name', 'none');
-    // the card has no Avvia (#81): the launch lives on the agent's own page
-    await expect(overview.getByTestId(`catalog-run-${profile.id}`)).toHaveCount(0);
-    await visit(page, `sb://agenti/${profile.id}`);
-    const card = page.getByTestId('agent-studio');
-    await card.getByTestId(`catalog-run-${profile.id}`).click();
-    await card.getByLabel('Obiettivo', { exact: true }).fill('Verify catalog launch');
-    await card.getByLabel('Cartella', { exact: true }).fill(source.cwd);
-    await card.locator('button[type=submit]').click();
-    await expect(card.getByRole('alert')).toContainText('Avvio non riuscito');
-    await card.locator('button[type=submit]').click();
-    await expect(page.getByText('Avviata, la trovi nella Home', { exact: true })).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
-    await shot(page, 'catalog-run-confirmation');
-    await page.getByRole('button', { name: 'Apri', exact: true }).click();
-    await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
+    await expect(page.getByTestId('catalog-card-scout')).toBeVisible();
+    await expect(page.locator('[data-testid^="catalog-run-"]')).toHaveCount(0);
+    await visit(page, 'sb://agenti/scout');
+    await expect(page.getByTestId('agent-studio')).toBeVisible();
+    await expect(page.locator('[data-testid^="catalog-run-"]')).toHaveCount(0);
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
   } finally { await app.close(); }
 });
 
-test('Battito appears only in matching agent/search/file contexts and dismissal propagates', async () => {
+test('Battito appears only in matching role/search/file contexts and dismissal propagates', async () => {
   const { app, page } = await launchDemo();
   try {
     const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
@@ -98,13 +69,13 @@ test('Battito appears only in matching agent/search/file contexts and dismissal 
       ipcMain.removeHandler('app:readFile');
       ipcMain.handle('app:readFile', () => ({ kind: 'text', path: `${root}/AGENTS.md`, size: 10, offset: 0, shown: 10, text: '# Rules', more: false, firstLine: 1 }));
     }, info.brainRoot);
-    await visit(page, 'sb://agenti/default-general');
-    await expect(page.locator('[data-place="agent:default-general"]')).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await visit(page, 'sb://agenti/artisan');
+    await expect(page.locator('[data-place="agent:artisan"]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'agent-context-pulse');
     await visit(page, 'sb://esplora/AGENTS.md');
     await expect(page.locator('[data-place="file:AGENTS.md"]')).toBeVisible();
-    await expect(page.locator('[data-regia-overlay]')).toBeVisible();
+    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'file-context-pulse');
     await page.keyboard.press('Control+K');
     await page.getByTestId('palette-input').fill('zzzznoresultszzzz');

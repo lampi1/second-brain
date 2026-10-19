@@ -82,10 +82,10 @@ test('a message: copy what is copyable, preview files and links on click', async
   await app.close();
 });
 
-test('question context and a full Regia visual open files without answering the question or covering the viewer',async()=>{
+test('question context and a full Orchestrator visual open files without answering the question or covering the viewer',async()=>{
  const cwd=path.resolve('test-results','cited-chat-folder');fs.mkdirSync(cwd,{recursive:true});
  const report=path.join(cwd,'report.ts');fs.writeFileSync(report,'// first\n// cited\n');
- const regiaFile=path.join(dir,'regia.ts');fs.writeFileSync(regiaFile,'// Regia source\n');
+ const orchestratorFile=path.join(dir,'orchestrator.ts');fs.writeFileSync(orchestratorFile,'// Orchestrator source\n');
  const{app,page}=await launchDemo({env:{SB_BRAIN:dir},config:{questionsModal:false}});
  try{
   const chat=await page.evaluate(cwd=>window.sb.invoke('chat:create',{cwd,harness:'claude',title:'Citation context'}),cwd);
@@ -99,10 +99,10 @@ test('question context and a full Regia visual open files without answering the 
   await page.locator(`[data-testid^="request-${chat.id}-"] .ctx-link.file`).first().click();
   await expect(page.getByTestId('cited-file-viewer').locator('[data-l="2"]')).toContainText('cited');
   expect((await requests()).some(req=>req.id===pending.id)).toBe(true);
-  await app.evaluate((_electron,regiaFile)=>(globalThis as unknown as {__sbDemo:{show(id:string,args:object):string}}).__sbDemo.show('regia',{id:'file-modal',component:'diffList',title:'Source',summary:'Synthetic source',props:{groups:[{area:'Source',files:[{path:regiaFile}]}]}}),regiaFile);
+  await app.evaluate((_electron,orchestratorFile)=>(globalThis as unknown as {__sbDemo:{show(id:string,args:object):string}}).__sbDemo.show('orchestrator',{id:'file-modal',component:'diffList',title:'Source',summary:'Synthetic source',props:{groups:[{area:'Source',files:[{path:orchestratorFile}]}]}}),orchestratorFile);
   await page.getByTestId('artifact-expand-file-modal').click();
-  const full=page.getByTestId('artifact-full-file-modal');await expect(full).toBeVisible();await full.getByRole('button',{name:regiaFile,exact:true}).click();
-  await expect(full).toHaveCount(0);await expect(page.getByTestId('cited-file-viewer')).toContainText('Regia source');
-  expect((await requests()).some(req=>req.id===pending.id)).toBe(true);await shot(page,'cited-question-and-regia');
+  const full=page.getByTestId('artifact-full-file-modal');await expect(full).toBeVisible();await full.getByRole('button',{name:orchestratorFile,exact:true}).click();
+  await expect(full).toHaveCount(0);await expect(page.getByTestId('cited-file-viewer')).toContainText('Orchestrator source');
+  expect((await requests()).some(req=>req.id===pending.id)).toBe(true);await shot(page,'cited-question-and-orchestrator');
  }finally{await app.close();}
 });
