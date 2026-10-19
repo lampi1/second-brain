@@ -27,6 +27,17 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   agent's profile decides it and shows it (#75).
 - Question panels: the question and its context use the app's type scale (the questions window's question 16 px
   instead of 22 px, the context 14 px; the tile's lead and context 13 px).
+- Agent first (ADR 0078, #70): the chosen agent's profile decides engine, model and effort; the routing table only
+  fills a missing model (no more "override senza motivo"); without an agent the classifier picks one above its
+  threshold, else Generale; workers start catalog sub-agents with `agent_start_subagent`; legacy imported profiles get
+  a real "quando usarlo" and short instructions.
+- Routing learns from the app (#72): an agent run's verdict is a known outcome in the ledger, and a row's reason shows
+  today's counts ("16 chat, 10 con esito, 70% riuscite").
+- The Orchestrator can create a missing agent after the user approves it in a panel; a refused `agent_create` no
+  longer uses up the approval, and its description lists the valid category, avatar and preset values (#73).
+- Agent editor: "Contesto massimo" per agent, versioned, applied on Claude engines, proposable with `agent_update` /
+  `agent_learn_propose` (#80).
+
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
   in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
@@ -64,6 +75,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   GitHub Actions off (ADR 0074). The README lists every version with its installer and source downloads.
 - Texts for colleagues (blocks tagged md, mail, teams, comment) show formatted in the chat, and Copia copies them
   formatted: bold, lists and links survive a paste into Outlook, Teams or DevOps (ADR 0043).
+
+### Fixed
+- Local stores retry the rename on a transient Windows lock (EPERM/EACCES/EBUSY) and log a warning instead of an
+  error when a retry worked (#71).
 
 ## [0.1.0] - 2026-10-13
 

@@ -44,7 +44,9 @@ import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
 import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
-import { predictionLine } from './brain/routing';
+import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
+import { runMetrics } from './agents/run-metrics';
+import { subagentTools } from './agents/subagent-tool';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
@@ -304,7 +306,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
-      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort,
+      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
         models: seen[e.id]?.ids ?? [], source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
@@ -377,7 +379,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o))]);
+  // agent_learn_propose also takes an agent's "Contesto massimo" (#80): an agent_update proposal for the user
+  const authoringRef: { current?: AgentAuthoring } = {};
+  const learnSetting: Parameters<typeof agentLearnTool>[1] = (agentId, patch, evidence, chatId) => {
+    if (!authoringRef.current) throw new Error('Agent proposals are not available yet.');
+    return authoringRef.current.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, chatId ?? 'agent');
+  };
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning, learnSetting), brainSearchTool((q, o) => hybrid.query(q, o))]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -411,7 +419,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     probation: { catalog: agents, publish: events => brain.publish(events), propose: (agent, j) => loopRef.current?.probation(agent, j) },
     onRunStarted: run => loopRef.current?.started(run),
     onRunEnded: run => loopRef.current?.ended(run),
-    onRunOutcome: run => loopRef.current?.outcome(run),
+    onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
@@ -574,11 +582,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
+  // an agent run's verdict (the user's, a reviewed one, the Orchestrator's) is the known outcome of its chat's ledger
+  // line (issue #72, ADR 0078): the routing loop and the rows' reasons learn from the app's own results
+  function routingVerdict(run: AgentRun): void {
+    const outcome = knownOutcome(run), chat = manager.list().find(c => c.id === run.chatId);
+    if (!outcome || !chat?.route) return;
+    brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
+  }
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
     suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
     chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
+    onOutcome: run => routingVerdict(run),
   });
+  authoringRef.current = agentAuthoring;
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
   // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
   // works). One feedback store: the authoring store (agent-authoring.json) behind agent_feedback and agent_child_feedback;
@@ -602,7 +619,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get(), cloud }, improve, false, regiaTokens);
+  // agent first (ADR 0078): an agent's route says how its active version has done so far
+  const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
+  const appDeps: Parameters<typeof attachAppTools>[1] = { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get(), cloud, agentStats };
+  attachAppTools(mcp, appDeps, improve, false, regiaTokens);
+  // a worker starts a catalog agent as its own sub-agent, through its Orchestrator's app_create_chat (agents/subagent-tool.ts)
+  addChatTools(subagentTools({ chats: () => chats.list(), runs: () => manager.runs.list(),
+    create: async (regiaId, args) => {
+      const tool = appControlTools({ ...appDeps, unified: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }, regiaId).find(t => t.name === 'app_create_chat')!;
+      return tool.run(args);
+    } }));
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();

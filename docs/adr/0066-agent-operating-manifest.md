@@ -1,6 +1,9 @@
 <!-- Decision for catalog consumers and maintainers: bounded declarations help delegation without changing permission policy. -->
 # 0066: Agent operating manifest
 
+> Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
+> effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
+
 Status: accepted for first-build integration.
 
 AgentDraft/Profile gains optional `manifest` fields: whenToUse, whenNotToUse, input, output,

@@ -883,6 +883,7 @@ export class DemoBrain implements BrainService {
   route(req: RouteRequest): RouteResult { return this.routingNow().route(req, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }
+  observeRoutingOutcome(): void { /* the demo keeps no ledger */ }
   // SB_BRAIN set (e2e: a fixture brain): its data server answers, so the brain pages work with the demo's chats
   private localApi: LocalApi = new Map();
   private realApi: BrainApi | null = process.env.SB_BRAIN ? new BrainApi(process.env.SB_BRAIN, electronNode(), undefined, this.localApi) : null;

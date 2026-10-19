@@ -1,7 +1,7 @@
 // Authenticated Orchestrator operations; persistent reservations, proposals and feedback never grant human authority.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { AgentEvidenceRef, AgentProfile, AgentRunOutcome } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, TOOL_CLASSES, type AgentEvidenceRef, type AgentProfile, type AgentRun, type AgentRunOutcome } from '../../shared/agents';
 import { AGENT_PROPOSAL_OPS, type AgentProposal, type AgentProposalOp, type AgentUndo } from '../../shared/agent-authoring';
 import { AGENT_FEEDBACK_SCHEMA, DEFINITION_GAPS, RUN_ID_DESCRIPTION, parseAgentFeedbackArgs, parseEvidence, type AgentFeedback, type AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatItem, FeedAction } from '../../shared/contract';
@@ -15,7 +15,13 @@ import { readLocal, writeLocal } from './local-store';
 import { sameBehaviour } from './versions';
 import { log, errText } from '../log';
 
-interface Store { version: 1; used: string[]; human?: string[]; proposals: AgentProposal[]; feedback: AgentFeedback[] }
+/** answers = the user's answers in a question panel of a chat (key `${chatId}:answer:${requestId}`): a click through the
+ *  sender-checked UI, so an approval given there may create the agent it approved (issue #73) */
+interface Store { version: 1; used: string[]; human?: string[]; answers?: { key: string; at: number; text: string }[]; proposals: AgentProposal[]; feedback: AgentFeedback[] }
+/** How long a typed message or a panel answer stays fresh enough to create an agent. */
+const FRESH_MS = 30 * 60_000;
+/** A panel answer that says no: it never approves a creation. */
+const DECLINED = /^\s*(no|non|annulla|rifiut|nessun|cancel|decline|don'?t|stop|lascia perdere)\b/i;
 interface Deps {
   userData: string; catalog: AgentCatalogService; runs: AgentRunStore;
   items: (chatId: string) => readonly ChatItem[];
@@ -28,6 +34,8 @@ interface Deps {
   feedback?: (args: Record<string, unknown>, callerId: string) => Promise<AgentFeedback>;
   /** the chat with this id and its run mirror (undefined = no such chat): turns a chat id passed as runId into the run to use */
   chat?: (id: string) => { run?: { runId: string } } | undefined;
+  /** a run's outcome changed (agent_feedback): its verdict becomes the routing ledger's known outcome (ADR 0078) */
+  onOutcome?: (run: AgentRun) => void;
   now?: () => number;
 }
 const object = (v: unknown): Record<string, unknown> => {
@@ -52,6 +60,7 @@ export class AgentAuthoring {
         const s = object(raw);
         if (s.version !== 1 || !Array.isArray(s.used) || !s.used.every(x => typeof x === 'string') || !Array.isArray(s.proposals) || !Array.isArray(s.feedback)) throw new Error('Invalid authoring store.');
         if (s.human !== undefined && (!Array.isArray(s.human) || !s.human.every(x => typeof x === 'string'))) throw new Error('Invalid human provenance.');
+        if (s.answers !== undefined && (!Array.isArray(s.answers) || !s.answers.every(x => x && typeof x === 'object' && typeof (x as { key?: unknown }).key === 'string' && Number.isFinite((x as { at?: unknown }).at) && typeof (x as { text?: unknown }).text === 'string'))) throw new Error('Invalid panel answers.');
         for (const value of s.proposals) {
           const p = object(value);
           if (typeof p.id !== 'string' || !['suggestion', 'proposal'].includes(String(p.kind)) || !['pending', 'accepted', 'rejected'].includes(String(p.state)) || typeof p.at !== 'number' || !Number.isFinite(p.at) || typeof p.reason !== 'string' || typeof p.expectedEffect !== 'string') throw new Error('Invalid stored proposal.');
@@ -116,6 +125,49 @@ export class AgentAuthoring {
       catch (error) { log.warn('agents', 'Human creation intent not recorded', { cause: errText(error), hint: 'Agent creation stays disabled for this message; check the local authoring store.' }); }
     }
   }
+  /** Called only by the sender-checked chat:answer UI handler, before the answer reaches the engine: the user's own
+   *  answer in a question panel (AskUserQuestion). It can approve one agent creation (agent_create), never anything else. */
+  rememberHumanAnswer(chatId: string, requestId: string, question: string, answers: Record<string, string | string[]>): void {
+    if (this.problem || typeof chatId !== 'string' || typeof requestId !== 'string' || !requestId || requestId.length > 200) return;
+    const chosen = Object.values(answers ?? {}).flatMap(v => Array.isArray(v) ? v : [v]).filter((v): v is string => typeof v === 'string' && !!v.trim());
+    if (!chosen.length) return;
+    const key = `${chatId}:answer:${requestId}`, list = this.state.answers ?? [];
+    if (list.some(x => x.key === key)) return;
+    const text = `${String(question ?? '').slice(0, 300)} → ${chosen.join(' | ')}`.slice(0, 600);
+    try { this.write({ ...this.state, answers: [...list.slice(-199), { key, at: this.now(), text }] }); }
+    catch (error) { log.warn('agents', 'Panel answer not recorded', { cause: errText(error), hint: 'Agent creation from this answer stays disabled; check the local authoring store.' }); }
+  }
+  /** The human input an agent_create rests on (issue #73): the id it names (a typed message's item id, or
+   *  "answer:<requestId>" for a panel answer), else this chat's most recent fresh, unused one. Throws when there is none. */
+  private creationKey(callerId: string, requestItemId: unknown): { key: string; id: string } {
+    const now = this.now();
+    const answer = (key: string) => {
+      const a = (this.state.answers ?? []).find(x => x.key === key);
+      if (!a || this.state.used.includes(key) || now - a.at > FRESH_MS || a.at > now) return null;
+      return DECLINED.test(a.text.split(' → ').slice(1).join(' → ')) ? null : a;
+    };
+    if (requestItemId !== undefined) {
+      const id = text(requestItemId, 200);
+      if (id.startsWith('answer:')) {
+        const key = `${callerId}:${id}`;
+        if (!answer(key)) throw new Error('No fresh, unused panel answer approving this creation (or the user declined). Ask the user in a panel first.');
+        return { key, id };
+      }
+      const key = `${callerId}:${id}`;
+      if (!this.state.human?.includes(key)) throw new Error('A message typed through the user interface is required. Suggest it instead.');
+      checkCreationRequest(this.d.items(callerId), id, this.state.used.includes(key) ? [id] : [], now);
+      return { key, id };
+    }
+    const items = this.d.items(callerId);
+    const typed = (this.state.human ?? []).filter(k => k.startsWith(`${callerId}:`) && !this.state.used.includes(k)).map(k => {
+      const id = k.slice(callerId.length + 1), item = items.find(i => i.id === id);
+      try { checkCreationRequest(items, id, [], now); return item ? { key: k, id, at: item.at } : null; } catch { return null; }
+    }).filter((x): x is { key: string; id: string; at: number } => !!x);
+    const panel = (this.state.answers ?? []).filter(a => a.key.startsWith(`${callerId}:answer:`) && answer(a.key)).map(a => ({ key: a.key, id: a.key.slice(callerId.length + 1), at: a.at }));
+    const best = [...typed, ...panel].sort((x, y) => y.at - x.at)[0];
+    if (!best) throw new Error('Creation needs the user\'s approval: a message they typed in the last 30 minutes, or their answer in a panel (AskUserQuestion) proposing this agent. Ask first.');
+    return best;
+  }
   /** Only the typed, sender-checked UI IPC calls this (agents:proposalDecide); never exposed as an MCP tool. Accepting is
    *  the user's act: a new agent is saved, a behavioural change of an existing one opens a trial against its active
    *  version (catalog.approveTrial), a rollback / archive / restore is applied. A refused application leaves it pending. */
@@ -175,12 +227,13 @@ export class AgentAuthoring {
     if (name === 'agent_feedback') return this.d.feedback ? this.d.feedback(a, callerId) : this.recordFeedback(parseAgentFeedbackArgs(a), callerId);
     const reason = text(a.reason ?? a.notes);
     if (name === 'agent_create') {
-      const id = text(a.requestItemId, 200), key = `${callerId}:${id}`;
-      if (!this.state.human?.includes(key)) throw new Error('A message typed through the user interface is required. Suggest it instead.');
-      checkCreationRequest(this.d.items(callerId), id, this.state.used.includes(key) ? [id] : [], this.now());
-      // Persist before writing the catalog, preventing concurrent calls and restart replay (failure stays consumed).
+      const { key, id } = this.creationKey(callerId, a.requestItemId);
+      // Persist before writing the catalog, preventing concurrent calls and restart replay. A call the catalog refuses
+      // (a wrong category, avatar, preset…) gives the approval back: the user need not type again (issue #73).
       this.write({ ...this.state, used: [...this.state.used, key] });
-      const p = catalog.author(a.draft, { reason, evidence: evidence(a.evidence ?? []), presetId: text(a.presetId, 80), requestItemId: id, probation: a.probation === true });
+      let p: AgentProfile;
+      try { p = catalog.author(a.draft, { reason, evidence: evidence(a.evidence ?? []), presetId: text(a.presetId, 80), requestItemId: id, probation: a.probation === true }); }
+      catch (error) { this.write({ ...this.state, used: this.state.used.filter(k => k !== key) }); throw error; }
       this.event('agent-created', reason, p.id, { kind: 'agent-undo', undo: { agentId: p.id, expectedRevision: p.updatedAt, operation: 'archive' } }, evidence(a.evidence ?? [])); return p;
     }
     if (name === 'agent_suggest' || name === 'agent_propose') {
@@ -213,7 +266,7 @@ export class AgentAuthoring {
       toVersion = a.toVersion as number;
       const entry = Number.isSafeInteger(toVersion) && toVersion >= 1 && toVersion < p.activeVersion ? catalog.history(p.id).find(v => v.version === toVersion) : undefined;
       if (!entry) throw new Error('Choose an earlier version that is still in the history.');
-      draft = catalog.validateDraft({ ...p, manifest: undefined, effort: undefined, knowhow: undefined, ...entry.behaviour });
+      draft = catalog.validateDraft({ ...p, manifest: undefined, effort: undefined, knowhow: undefined, maxContext: undefined, ...entry.behaviour });
     } else {
       if (op === 'archive' ? p.status !== 'active' : p.status !== 'archived') throw new Error(op === 'archive' ? 'The agent is not active.' : 'The agent is not archived.');
       draft = catalog.validateDraft(p);
@@ -263,6 +316,7 @@ export class AgentAuthoring {
       const previous = run.outcome;
       run.outcome = outcome;
       try { this.d.runs.save(); } catch (error) { run.outcome = previous; throw error; }
+      try { this.d.onOutcome?.(structuredClone(run)); } catch (error) { log.warn('agents', 'run verdict not passed to routing', { cause: errText(error), hint: 'the verdict is saved; the routing ledger misses this outcome' }); }
     }
     this.event('agent-feedback', notes, run.agentId);
     if (a.sendToRun === true) await this.d.send(run.chatId, notes);
@@ -270,13 +324,17 @@ export class AgentAuthoring {
   }
 }
 
+/** agent_create's description: what the approval is and every valid value, so a first call can be right (issue #73). */
+function createGuide(presets: readonly string[] = []): string {
+  return `Creates an agent when no catalog agent fits, after the user approved it: propose it first in a panel (AskUserQuestion: name, what it does, engine), then call this; requestItemId is optional (default: the user's most recent fresh approval, a typed message or the panel answer; "answer:<requestId>" names a panel answer). A call refused for a wrong value does not use up the approval: fix and retry. Then start it with app_create_chat agentId. Required: presetId = an active preset to start from${presets.length ? ` (${presets.join(' | ')})` : ' (agent_list, origin "preset")'}; draft = { name ≤80, purpose ≤400, instructions ≤8000, role? ≤160, category: ${AGENT_CATEGORIES.join(' | ')}, engine, model (id or null = engine default), effort?: low | medium | high | xhigh (max only on request), avatar: { kind: "symbol", value: ${AGENT_SYMBOLS.join(' | ')}, tone?: ${AGENT_TONES.join(' | ')} }, tools: { allow: [${TOOL_CLASSES.join(' | ')}] , mcp?: [enabled server names] } (a subset of the preset's), permissionCeiling: plan | default, manifest?: { whenToUse, whenNotToUse }, maxContext?: tokens 100000-1000000 }; reason; probation?: true (on trial until its runs keep it).`;
+}
 /** The tools that only queue a proposal for the user's decision (agents:proposalDecide). */
 const QUEUED = ['agent_suggest', 'agent_propose', 'agent_update', 'agent_rollback', 'agent_archive', 'agent_restore'];
 /** The caller check runs on every invocation, so a former coordinator cannot retain write authority. */
-export function authoringTools(service: AgentAuthoring, callerId: string, authenticated: () => boolean): ToolDef[] {
+export function authoringTools(service: AgentAuthoring, callerId: string, authenticated: () => boolean, presets: () => readonly string[] = () => []): ToolDef[] {
   const names = ['agent_list', 'agent_get', 'agent_create', 'agent_suggest', 'agent_update', 'agent_propose', 'agent_archive', 'agent_restore', 'agent_rollback', 'agent_feedback', 'agent_run_report', 'agent_metrics'];
   const required: Record<string, string[]> = {
-    agent_create: ['draft', 'presetId', 'requestItemId', 'reason'], agent_suggest: ['draft', 'reason', 'expectedEffect'],
+    agent_create: ['draft', 'presetId', 'reason'], agent_suggest: ['draft', 'reason', 'expectedEffect'],
     agent_get: ['agentId'], agent_update: ['agentId', 'patch', 'reason'], agent_propose: ['agentId', 'patch', 'reason', 'expectedEffect'],
     agent_archive: ['agentId', 'reason'], agent_restore: ['agentId', 'reason'], agent_rollback: ['agentId', 'toVersion', 'reason'],
     agent_run_report: ['runId'], // agent_feedback: AGENT_FEEDBACK_SCHEMA (shared with the lifecycle facade)
@@ -287,7 +345,7 @@ export function authoringTools(service: AgentAuthoring, callerId: string, authen
     inputSchema: AGENT_FEEDBACK_SCHEMA,
     run: async (a: Record<string, unknown>) => { if (!authenticated()) throw new Error('Authenticated unified Orchestrator required.'); return await service.call(name, a, callerId) as object; },
   } : ({
-    name, description: `${name}: bounded agent management. Definitions never grant permissions. ${QUEUED.includes(name) ? 'Queues a proposal for the user (Agenti → Da approvare); nothing changes until the user accepts it, and an accepted behavioural change runs as a trial against the current version.' : name === 'agent_create' ? 'Creation requires an active presetId, full draft with explicit tools/permissionCeiling, and a fresh human requestItemId.' : 'Read only.'}`,
+    name, description: `${name}: bounded agent management. Definitions never grant permissions. ${QUEUED.includes(name) ? `Queues a proposal for the user (Agenti → Da approvare); nothing changes until the user accepts it, and an accepted behavioural change runs as a trial against the current version.${name === 'agent_update' ? ' patch may change model, effort, instructions, manifest.whenToUse or maxContext (tokens 100000-1000000, null = app setting; only Claude engines apply it).' : ''}` : name === 'agent_create' ? createGuide(presets()) : 'Read only.'}`,
     inputSchema: { type: 'object', required: required[name] ?? [], properties: {
       agentId: string, presetId: string, draft: record, patch: record, requestItemId: string, reason: string, expectedEffect: string,
       evidence: { type: 'array', items: record }, runId: { type: 'string', description: RUN_ID_DESCRIPTION }, verdict: { type: 'string', enum: ['success', 'partial', 'fail', 'unknown'] },

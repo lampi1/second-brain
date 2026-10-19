@@ -218,6 +218,7 @@ export const toolsIt = {
   'tools.routing.kindOther': 'Altro',
   'tools.routing.errorNoStart': 'Non parte',
   'tools.routing.reasoning': 'ragionamento',
+  'tools.routing.agentSource': 'dal profilo dell’agente',
   'tools.routing.overrideSource': 'scelto da te: vince sulla tabella',
   'tools.routing.tableSource': 'dalla tabella',
   'tools.routing.exploreSource': 'prova un modello poco usato',

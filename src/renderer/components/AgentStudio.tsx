@@ -7,7 +7,7 @@
 // running sessions. Rendered by AgentCatalogPage.tsx. Styles: styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AGENT_CATEGORIES, AGENT_TONES, inProbation, type AgentDraft, type AgentMetrics, type AgentProfile } from '@shared/agents';
+import { AGENT_CATEGORIES, AGENT_TONES, MAX_CONTEXT_RANGE, inProbation, type AgentDraft, type AgentMetrics, type AgentProfile } from '@shared/agents';
 import { ROLE_GLYPHS } from '@shared/agent-glyphs';
 import { duplicateAgentAvatars, unusedAgentTone } from '../lib/agent-avatar-choice';
 import { GLYPH_ART, GLYPH_LABELS_IT } from '../lib/agent-glyph-art';
@@ -152,6 +152,10 @@ export function AgentStudio({ initialProfile, children }: { initialProfile?: Age
           <AgentReadiness choice={choice} />
           {!choice?.modelSelectable && choice?.modelReason && <p role="status">{choice.modelReason}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={editing.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
+          <label className="field"><span>{t('studio.maxContext')}</span><input type="number" inputMode="numeric" min={MAX_CONTEXT_RANGE.min / 1000} max={MAX_CONTEXT_RANGE.max / 1000} step={10}
+            value={editing.maxContext ? Math.round(editing.maxContext / 1000) : ''} placeholder={t('studio.maxContextDefault')} data-testid="agent-max-context"
+            onChange={e => { const k = Number(e.target.value); change({ maxContext: e.target.value === '' || !Number.isFinite(k) ? null : Math.round(k) * 1000 }); }} />
+            <small data-testid="agent-max-context-note">{choice?.maxContext ? t('studio.maxContextHint') : t('studio.maxContextUnsupported')}</small></label>
           <fieldset className="agent-editor-avatar"><legend>{t('studio.avatar')}</legend><div className="avatar-options">{ROLE_GLYPHS.map(value => {
             const tone = editing.avatar.kind === 'symbol' ? editing.avatar.tone ?? 'blue' : unusedAgentTone(catalog.profiles, editing.category, id);
             const label = lang() === 'it' ? GLYPH_LABELS_IT[value] : GLYPH_ART[value].label;
@@ -210,6 +214,7 @@ function AgentDetail({ profile, busy, editorOpen, hasUpdate, status, editor, onE
     [t('catalog.engine'), engine],
     [t('studio.model'), profile.model ?? t('studio.defaultEngine')],
     [t('studio.effort'), profile.effort ? effortLabel(profile.effort) ?? profile.effort : t('studio.defaultModel')],
+    [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
     [t('studio.category'), t(`studio.category.${profile.category}`)],
     [t('agentDetail.tools'), profile.tools ? [...profile.tools.allow, ...(profile.tools.mcp ?? []).map(s => `mcp:${s}`)].join(', ') || t('agentDetail.toolsNone') : t('agentDetail.toolsAll')],
     [t('agentDetail.ceiling'), profile.permissionCeiling ? t(`agentDetail.ceiling.${profile.permissionCeiling}`) : t('agentDetail.ceilingNone')],
