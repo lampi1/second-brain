@@ -10,11 +10,13 @@
 // Mounted by AgentStrips.tsx; the sidebar tree (SidebarTree.tsx) brings a card on screen with focusChat.
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { explainTool } from '@shared/explain';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
 import { sameList } from '../store/state';
 import { childState, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
+import { requestHost } from '../lib/child-requests';
+import { reqKey } from '../actions';
 import { useNow } from '../lib/clock';
 import { formatCost, prettyModel } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
@@ -24,13 +26,7 @@ import { ChatTile, useFlash } from './ChatTile';
 import { IconChevronDown, IconChevronRight } from './Icons';
 import '../styles/tree.css';
 
-const STEPS = 4;
-type Tool = Extract<ChatItem, { kind: 'tool' }>;
-const EMPTY: Tool[] = [];
-const toolsOf = (items: readonly ChatItem[] | undefined): Tool[] => {
-  const tools = (items ?? []).filter((i): i is Tool => i.kind === 'tool');
-  return tools.length ? tools : EMPTY;
-};
+const EMPTY: readonly ChatItem[] = [];
 const refusedIn = (items: readonly ChatItem[] | undefined): boolean => (items ?? []).some(i => i.kind === 'system' && i.code === 'aboveParent');
 const lastRefusal = (items: readonly ChatItem[] | undefined): string => {
   const r = [...(items ?? [])].reverse().find(i => i.kind === 'system' && i.code === 'aboveParent');
@@ -54,14 +50,14 @@ export function ChildPill({ state, testid }: { state: ChildState; testid?: strin
 }
 
 function useChild(chatId: string) {
-  const tools = useApp(s => toolsOf(s.items[chatId]), sameList);
+  const items = useApp(s => s.items[chatId] ?? EMPTY);
   const refused = useApp(s => refusedIn(s.items[chatId]));
   const refusal = useApp(s => lastRefusal(s.items[chatId]));
   const loaded = useApp(s => !!s.items[chatId]);
   const reqs = useApp(s => s.pending.filter(p => p.chatId === chatId && p.type !== 'command'), sameList);
   const parent = useApp(s => { const p = s.chats[chatId]?.parentId; const c = p ? s.chats[p] : undefined; return c ? c.agent?.name || c.title : ''; });
   useEffect(() => { if (!loaded) void loadItems(chatId); }, [chatId, loaded]);
-  return { tools, refused, refusal, reqs, parent };
+  return { items, refused, refusal, reqs, parent };
 }
 
 /** The curved thread lines of a delegated card: the ancestors' lines that run on, then its own elbow, tinted by state. */
@@ -89,20 +85,18 @@ function Who({ chat }: { chat: ChatSummary }) {
   </div>;
 }
 
-function Steps({ tools, state }: { tools: Tool[]; state: ChildState }) {
-  const shown = tools.slice(-STEPS), earlier = tools.length - shown.length;
+function Steps({ chat, items, state }: { chat: ChatSummary; items: readonly ChatItem[]; state: ChildState }) {
   const live = state === 'run' || state === 'start';
-  if (!shown.length) return <ul className="dc-steps"><li className={`dc-step ${live ? 'is-cur' : 'is-todo'}`}><span className="mk" aria-hidden="true">{live ? '✱' : '○'}</span><span className="dc-step-text">{t('tree.noSteps')}</span><span className="at">{live ? t('tree.now') : ''}</span></li></ul>;
+  const { steps, earlier } = runSteps(items, { live, doneWhen: chat.delegation?.doneWhen, ...(chat.delegation?.result ? { result: chat.delegation.result } : {}) });
+  const shown = steps.length ? steps : [{ mark: live ? 'cur' : 'todo', text: t('tree.noSteps') } as RunStep];
+  const MARK: Record<StepMark, string> = { done: '✓', cur: '✱', todo: '○', bad: '✗' };
   return <>
-    <ul className="dc-steps" aria-label={t('tree.steps')}>
-      {shown.map(s => {
-        const cls = s.status === 'error' ? 'is-bad' : s.status === 'running' && live ? 'is-cur' : 'is-done';
-        return <li key={s.id} className={`dc-step ${cls}`}>
-          <span className="mk" aria-hidden="true">{cls === 'is-bad' ? '✗' : cls === 'is-cur' ? '✱' : '✓'}</span>
-          <span className="dc-step-text" title={s.summary}>{explainTool(s.name, s.input, s.summary.replace(/^[^:]+:\s*/, '')).line}</span>
-          <span className="at">{cls === 'is-cur' ? t('tree.now') : hhmm(s.at)}</span>
-        </li>;
-      })}
+    <ul className="dc-steps" aria-label={t('tree.steps')} data-testid={`delegation-steps-${chat.id}`}>
+      {shown.map((s, k) => <li key={k} className={`dc-step is-${s.mark}`}>
+        <span className="mk" aria-hidden="true">{MARK[s.mark]}</span>
+        <span className="dc-step-text" title={s.code ? `${s.text} ${s.code}` : s.text}>{s.text}{s.code && <> <code>{s.code}</code></>}</span>
+        <span className="at">{s.mark === 'cur' ? t('tree.now') : s.at ? hhmm(s.at) : ''}</span>
+      </li>)}
     </ul>
     {earlier > 0 && <div className="dc-more">{t('tree.more', { n: earlier })}</div>}
   </>;
@@ -112,7 +106,7 @@ function Steps({ tools, state }: { tools: Tool[]; state: ChildState }) {
  *  the parent's open chat or in the child's own (the button expands the card). */
 function Ask({ req, chatId }: { req: PendingRequest; chatId: string }) {
   const perm = req.type === 'permission';
-  return <div className="dc-ask" data-testid={`delegation-ask-${chatId}`}>
+  return <div className="dc-ask" data-testid={`delegation-ask-${chatId}`} data-waits-keys={reqKey(req)}>
     <div className="dc-k">{t(perm ? 'tree.ask.permission' : 'tree.ask.question')}</div>
     <div className="dc-ask-q">{req.questions?.[0]?.question ?? req.title}</div>
     {req.detail && req.detail !== req.title && <div className="dc-ask-why">{req.detail}</div>}
@@ -153,6 +147,9 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
   const c = useChild(chatId);
   const open = ui.use(s => s.prefs.chatExpanded[chatId] === true);
+  // the question shows on the card only when no open chat holds it (lib/child-requests.ts requestHost: once on screen)
+  const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
+  const hostsAsk = useApp(s => requestHost(chatId, s.chats, { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey }) === chatId);
   const flash = useFlash(`chat:${chatId}`);
   const ref = useRef<HTMLElement>(null);
   const down = useRef('');
@@ -185,14 +182,15 @@ export function DelegationCard({ chatId }: { chatId: string }) {
         <ChildPill state={state} testid={`delegation-state-${chatId}`} />
       </div>
       <Who chat={chat} />
-      {state !== 'queued' && <Steps tools={c.tools} state={state} />}
+      {state !== 'queued' && <Steps chat={chat} items={c.items} state={state} />}
     </div>
-    {!open && state === 'wait' && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}
+    {!open && hostsAsk && state === 'wait' && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}
     {state === 'queued' && <div className="dc-note">{t('tree.queuedNote')}</div>}
     {state === 'err' && <div className="dc-err"><span className="dc-k">{t('tree.error')}</span>{chat.lastError || t('tree.errorNone')}</div>}
     {state === 'refused' && <div className="dc-err" data-testid={`delegation-refused-${chatId}`}><span className="dc-k">{t('tree.error')}</span>{c.refusal}</div>}
     {state === 'stall' && <div className="dc-note"><b>{t('tree.stallNote')}</b> {t('tree.stallNoteB')}</div>}
     {depthHit && <div className="dc-note" data-testid={`delegation-depth-${chatId}`}><b>{t('tree.limit.depth', { limit: depthHit.limit })}.</b> {t('tree.depthNote')}</div>}
+    {chat.delegation?.originalGoal && <div className="dc-note" data-testid={`delegation-goal-${chatId}`} title={t('tree.goalWas', { goal: chat.delegation.originalGoal })}><b>{t('tree.goalChanged')}</b> {chat.delegation.goal}</div>}
     <Result chat={chat} />
     {open && <div className="dc-chat" data-testid={`delegation-chat-${chatId}`}><ChatTile chatId={chatId} embedded /></div>}
     <Foot chat={chat}>{actions}</Foot>

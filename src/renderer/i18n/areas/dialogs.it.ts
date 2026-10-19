@@ -139,6 +139,7 @@ export const dialogsIt = {
   'dialogs.orchestrator.heldKind.command': 'Comando',
   'dialogs.orchestrator.heldKind.mail': 'Messaggio',
   'dialogs.orchestrator.heldKind.started': 'Avviata',
+  'dialogs.orchestrator.heldKind.userMessage': 'Hai scritto',
   'dialogs.orchestrator.heldWhy.user': 'aspetta la tua risposta all’Orchestrator',
   'dialogs.orchestrator.heldWhy.busy': 'l’Orchestrator è occupato: arriva appena si libera',
   'dialogs.orchestrator.heldWhy.group': 'arriva tra pochi secondi, insieme alle altre',

@@ -13,6 +13,8 @@ export const treeEn: typeof treeIt = {
   'tree.stop': 'Stop',
   'tree.depthNote': 'It cannot delegate further: it does the work itself.',
   'tree.origin': (p: { time: string }) => `started this chat · ${p.time}`,
+  'tree.goalChanged': 'Goal changed by you:',
+  'tree.goalWas': (p: { goal: string }) => `It was: ${p.goal}`,
   'tree.goToOf': (p: { role: string }) => `Go to ${p.role}'s chat`,
   'tree.state.start': 'started',
   'tree.state.run': 'working',

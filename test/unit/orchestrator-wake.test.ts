@@ -274,3 +274,42 @@ describe('OrchestratorWake', () => {
     expect(sent).toEqual(['nuova']);
   });
 });
+
+describe('the user writes in a work chat (ADR 0083)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('quiet news with his words, role and parent: no wake by itself, rides along with the next delivery, held meanwhile, kept beside the chat\'s finish', async () => {
+    const { w, sent, up } = make();
+    up({ id: 'strat', title: 'Piano', state: 'idle' });
+    up({ id: 'kid', title: 'Log', state: 'idle', parentId: 'strat', agent: { id: 'scout', name: 'Scout' } as ChatSummary['agent'] });
+    await vi.advanceTimersByTimeAsync(5000);
+    sent.length = 0;
+    w.userMessage({ chatId: 'kid', title: 'Log', role: 'Scout', parentTitle: 'Piano', text: `Solo marzo, per favore. ${'y'.repeat(500)}` });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]);
+    expect(w.heldNews().map(h => h.kind)).toEqual(['started', 'user-message']);
+    const kidRow = { title: 'Log', parentId: 'strat', agent: { id: 'scout', name: 'Scout' } as ChatSummary['agent'] };
+    up({ id: 'kid', state: 'running', ...kidRow });
+    up({ id: 'kid', state: 'idle', lastText: 'testo del figlio che non deve passare', ...kidRow });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(1);
+    const t = sent[0]!.text;
+    expect(t).toContain("«Log» (Scout, delegata da «Piano»): l'utente ci ha scritto direttamente");
+    expect(t).toContain('«Solo marzo, per favore.');
+    expect(t).toContain("non disfare ciò che l'utente le ha chiesto");
+    expect(t).toContain('«Log» (Scout, delegata da «Piano»): ha finito il turno.');
+    expect(t).not.toContain('testo del figlio');
+    expect(t.length).toBeLessThan(1200);
+    expect(w.queued()).toEqual([]);
+  });
+
+  it('nothing for the Orchestrator\'s own chat, nor with the events off', async () => {
+    const { w, setOn } = make();
+    w.userMessage({ chatId: 'orchestrator', title: 'Orchestrator', role: null, parentTitle: null, text: 'ciao' });
+    expect(w.queued()).toEqual([]);
+    setOn(false);
+    w.userMessage({ chatId: 'x', title: 'x', role: null, parentTitle: null, text: 'ciao' });
+    expect(w.queued()).toEqual([]);
+  });
+});

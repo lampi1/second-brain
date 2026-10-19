@@ -3,7 +3,7 @@
 // restart (store/ui.ts loadPrefs); a child's open request shows in its ancestors' chat (lib/child-requests.ts).
 import { describe, expect, it } from 'vitest';
 import { chatTree, visibleTree } from '../../src/renderer/lib/chat-tree';
-import { childRequestsFor } from '../../src/renderer/lib/child-requests';
+import { childRequestsFor, requestHost } from '../../src/renderer/lib/child-requests';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 
 const c = (id: string, extra: Partial<ChatSummary> = {}) => ({ id, cwd: '/w/a', title: id, harness: 'claude', ...extra }) as ChatSummary;
@@ -39,3 +39,22 @@ describe('childRequestsFor', () => {
     expect(out[1]!.chat.id).toBe('g');
   });
 });
+
+describe('requestHost: each request renders once', () => {
+  const chats = { o: { isOrchestrator: true }, r: { parentId: 'o', isOrchestrator: false }, s: { parentId: 'r', isOrchestrator: false }, g: { parentId: 's', isOrchestrator: false } } as const;
+  const v = (expanded: Record<string, boolean>, focusMode: string | null = null, maximized: string | null = null) => ({ expanded, focusMode, maximized });
+  it('the asker when its own chat is open, else its nearest open ancestor, else its own card; never the Orchestrator', () => {
+    const all = ['o', 'r', 's', 'g'];
+    const hosts = (view: ReturnType<typeof v>) => all.filter(id => requestHost('g', chats, view) === id);
+    expect(hosts(v({}))).toEqual(['g']);
+    expect(hosts(v({ r: true }))).toEqual(['r']);
+    expect(hosts(v({ r: true, s: true }))).toEqual(['s']);
+    expect(hosts(v({ r: true, s: true, g: true }))).toEqual(['g']);
+    expect(hosts(v({ o: true }))).toEqual(['g']);
+    // focus mode and a maximized chat: only that chat is on screen
+    expect(hosts(v({ s: true }, 'r'))).toEqual(['r']);
+    expect(hosts(v({ s: true }, null, 'chat:r'))).toEqual(['r']);
+    expect(hosts(v({ s: true }, null, 'orchestrator'))).toEqual(['s']);
+  });
+});
+

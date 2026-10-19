@@ -56,6 +56,8 @@ const DELEGATION: Record<string, (i: Obj) => string> = {
   },
   agent_report: i => (str(i.summary) ? `Consegna il risultato: ${cut(str(i.summary), 80)}` : 'Consegna il risultato a chi ha delegato'),
   agent_children: () => 'Controlla le chat delegate',
+  agent_ask_parent: i => (str(i.question) ? `Chiede a chi ha delegato: ${cut(str(i.question), 80)}` : 'Chiede a chi ha delegato'),
+  agent_answer_child: i => (i.askUser === true ? 'Rimanda la domanda all’utente' : str(i.answer) ? `Risponde alla chat delegata: ${cut(str(i.answer), 80)}` : 'Risponde alla chat delegata'),
 };
 
 const VERBS: Record<string, string> = {

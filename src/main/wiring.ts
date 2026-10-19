@@ -583,6 +583,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
+  manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);

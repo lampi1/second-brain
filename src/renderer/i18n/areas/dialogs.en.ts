@@ -141,6 +141,7 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.orchestrator.heldKind.command': 'Command',
   'dialogs.orchestrator.heldKind.mail': 'Message',
   'dialogs.orchestrator.heldKind.started': 'Started',
+  'dialogs.orchestrator.heldKind.userMessage': 'You wrote',
   'dialogs.orchestrator.heldWhy.user': 'waits for your answer to the Orchestrator',
   'dialogs.orchestrator.heldWhy.busy': 'the Orchestrator is busy: it goes as soon as it is free',
   'dialogs.orchestrator.heldWhy.group': 'goes in a few seconds, with the others',

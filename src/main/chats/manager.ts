@@ -323,6 +323,14 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
+/** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
+export const USER_NOTE_MAX = 300;
+const NOTES_KEPT = 8;
+export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
+/** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
+export interface UserWroteNote { chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
+export const userNoteLine = (n: Pick<UserWroteNote, 'title' | 'role' | 'at' | 'text'>): string =>
+  `- ${n.role ?? 'Chat'} «${n.title}», ${new Date(n.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: «${n.text}»`;
 /** A saved chat's owner: its snapshot, else a plain chat's (the Orchestrator always shows the Orchestrator's face). */
 export function restoredOwner(c: Pick<StoredChat, 'agent' | 'harness' | 'model' | 'isOrchestrator'>): AgentOwnerSnapshot {
   const owner = c.agent ?? plainOwner(c.harness, c.model);
@@ -366,6 +374,9 @@ export class ChatManager implements ChatService {
   private runTimer: NodeJS.Timeout | null = null;
   private chats = new Map<string, Rec>();
   private deliveries = new Map<string, Promise<void>>();
+  /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
+  private notesFor = new Map<string, string[]>();
+  private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
   private store: ChatStore;
@@ -711,7 +722,11 @@ export class ChatManager implements ChatService {
     this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
-    const body = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
+    const text0 = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
+    // what the user wrote in its children since its last message rides along (shown in its transcript already)
+    const notes = this.notesFor.get(chatId);
+    if (notes?.length) this.notesFor.delete(chatId);
+    const body = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
     // the role once per session: the Orchestrator's with the role catalog, a role chat's composed instructions
     const role = r.agentPrimed ? '' : r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
       : r.agentInstructions ? `${roleFrame(r.s.agent?.name ?? 'Chat', r.agentInstructions)}\n\n` : '';
@@ -912,6 +927,27 @@ export class ChatManager implements ChatService {
     if (r.s.closedAt) this.unarchive(r);
     return { ...r.s };
   }
+
+  /** The user typed in this chat himself (chat:send only, ADR 0083): so that nothing conflicts, the Orchestrator learns it
+   *  as quiet news (orchestrator-wake.ts, its own listener) and, for a delegated chat, its parent gets the same note with
+   *  its next message (and a line in its transcript now). The user's own words go, never the child's. */
+  userWrote(chatId: string, text: string): void {
+    const r = this.chats.get(chatId);
+    if (!r || r.s.isOrchestrator || r.s.closedAt) return;
+    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    const note: UserWroteNote = { chatId, title: r.s.title, role: r.s.agent?.name ?? null, parentId: parent?.s.id ?? null, parentTitle: parent?.s.title ?? null, at: Date.now(), text: cut(text.replace(/\s+/g, ' ').trim(), USER_NOTE_MAX) };
+    if (parent && !parent.s.closedAt) {
+      const list = [...(this.notesFor.get(parent.s.id) ?? []), userNoteLine(note)].slice(-NOTES_KEPT);
+      this.notesFor.set(parent.s.id, list);
+      this.addItem(parent, sysItem('userWroteChild', { role: note.role ?? 'Chat', title: note.title }, 'info'), false);
+      this.updated(parent);
+    }
+    for (const fn of this.userWroteListeners) { try { fn(note); } catch (e) { log.warn('chats', 'user note listener failed', { chat: chatId, cause: errText(e), hint: 'the Orchestrator may not learn of this message' }); } }
+  }
+  /** orchestrator-wake.ts: told of every message the user typed in a work chat */
+  onUserWrote(fn: (n: UserWroteNote) => void): void { this.userWroteListeners.push(fn); }
+  /** the notes waiting for this chat's next message (tests, diagnostics) */
+  notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
   /** The user went on with this chat himself (typed in it, reopened it: the IPC handlers only): an ended agent run is
    *  open again and counts as reworked. A message from an agent, the Orchestrator or the app never reopens a run. */
@@ -1406,7 +1442,9 @@ export class ChatManager implements ChatService {
     if (!d || !parentId) throw new Error('agent_report: only a delegated chat reports (agent_delegate started it); report to the Orchestrator with send_to_chat.');
     if (d.result) throw new Error('agent_report: this delegation already has its result.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
-    r.s.delegation = { ...d, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
+    // the user changed the child's goal in its chat: the card shows the user's goal, the contract's stays as originalGoal
+    const goal = result.goalChangedByUser && result.newGoal ? { goal: result.newGoal, originalGoal: d.originalGoal ?? d.goal } : {};
+    r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
     const run = r.s.run;
     if (run && run.endedAt === undefined) {
       run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };

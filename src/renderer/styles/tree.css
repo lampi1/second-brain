@@ -46,12 +46,14 @@
 .dc-step { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: baseline; gap: 4px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .dc-step .mk { font-weight: 700; text-align: center; }
 .dc-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-step code { font: 11.5px var(--mono); color: var(--md-text, var(--text)); background: var(--surface-3); padding: 0 4px; border-radius: 4px; }
 .dc-step.is-done { color: var(--text-3); }
 .dc-step.is-done .mk { color: var(--green); }
 .dc-step.is-cur { color: var(--text); font-weight: 500; }
 .dc-step.is-cur .mk { color: var(--blue); }
-.dc-step.is-todo, .dc-step.is-todo .mk { color: var(--text-4); font-weight: 400; }
+.dc-step.is-todo, .dc-step.is-todo .mk { color: var(--text-4); }
 .dc-step.is-bad .mk { color: var(--red); }
+.dc-step.is-todo .mk { font-weight: 400; }
 .dc-step .at { color: var(--text-4); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .dc-more { font-size: 11.5px; color: var(--text-4); padding-left: 22px; margin-top: 1px; }
 .dc-k { display: block; font: 700 10px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 2px; }

@@ -41,7 +41,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { childRequestsFor, type ChildRequest } from '../lib/child-requests';
+import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
 import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
@@ -76,7 +76,11 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const chat = useApp(s => s.chats[chatId]);
   const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
-  const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending), sameAsks);
+  // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
+  const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
+  const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey };
+  const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending).filter(c => requestHost(c.req.chatId, s.chats, view) === chatId), sameAsks);
+  const hostsOwn = useApp(s => requestHost(chatId, s.chats, view) === chatId || !!focus);
   const inWindow = useApp(questionsModalOn);
   const queued = ui.use(s => s.later);
   const key = `chat:${chatId}`;
@@ -181,7 +185,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
-      {expanded && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
+      {expanded && hostsOwn && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
           {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
         </div>

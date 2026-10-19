@@ -251,7 +251,7 @@ app.whenReady().then(async () => {
     // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
+    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); if (typeof a.text === 'string' && a.text.trim()) s.chats.userWrote?.(a.chatId, a.text); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),

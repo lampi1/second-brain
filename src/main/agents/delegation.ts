@@ -3,7 +3,10 @@
 // Cursor (chats/app-tool-approval.ts): agent_delegate starts 1..n visible child chats at once, each running a role the
 // caller's role may launch, with a self-contained contract (the child never sees the parent's conversation);
 // agent_report is the child's one result, delivered to its parent as a message; agent_children lists the caller's
-// children with their state and results. What holds whoever asks: permissions only go down (a contract asking for a
+// children with their state and results. Questions go to the parent first (agent_ask_parent: a child's ambiguity reaches
+// its parent as a message, answered with agent_answer_child from what the parent knows, or sent on to the user with
+// askUser); only what needs a person (a permission, an irreversible or external action, a choice that changes the goal,
+// what the parent could not answer) is asked of the user. What holds whoever asks: permissions only go down (a contract asking for a
 // tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts), the
 // child's folder stays inside the parent's, the depth and parallel limits of Impostazioni → Ruoli e deleghe are checked
 // with the slots reserved synchronously (two calls at once cannot both pass the last slot) and a refusal shows in the
@@ -24,6 +27,8 @@ export interface DelegationChats {
   agentPolicy(chatId: string): AgentPolicy | null;
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
   limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void;
+  /** a message from another chat (from = its title): agent_ask_parent, agent_answer_child */
+  send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -38,6 +43,7 @@ export interface DelegationDeps {
 
 export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
+const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000;
 
 const callerOf = (params: Record<string, string>): string => {
   const id = params.chatId;
@@ -140,6 +146,41 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     })) };
   }
 
+  async function askParent(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    const self = chat(callerId);
+    if (!self?.delegation || !self.parentId) throw new Error('agent_ask_parent: only a delegated chat has a parent to ask; ask the user instead.');
+    if (self.delegation.result) throw new Error('agent_ask_parent: you reported already.');
+    const parent = chat(self.parentId);
+    if (!parent || parent.closedAt) throw new Error('agent_ask_parent: your parent chat is closed: ask the user.');
+    const question = typeof a.question === 'string' ? a.question.trim() : '';
+    if (!question || question.length > QUESTION_MAX) throw new Error(`agent_ask_parent: question = 1 to ${QUESTION_MAX} characters.`);
+    const options = a.options === undefined ? [] : Array.isArray(a.options) && a.options.length <= OPTIONS_MAX && a.options.every(o => typeof o === 'string' && o.trim() && o.length <= 200) ? (a.options as string[]).map(o => o.trim()) : null;
+    if (!options) throw new Error(`agent_ask_parent: options = up to ${OPTIONS_MAX} short texts.`);
+    const why = typeof a.why === 'string' ? a.why.trim().slice(0, 500) : '';
+    const role = ROLE_DEFAULTS[self.delegation.role].name;
+    const text = [`[domanda · ${role} «${self.title}» · chatId ${self.id}] ${question}`,
+      ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${o}`).join(' · ')}`] : []), ...(why ? [`Perché: ${why}`] : []),
+      `Rispondi con agent_answer_child (chatId "${self.id}", answer) da ciò che sai del compito. Se serve una persona (un permesso, un'azione irreversibile o esterna, una scelta che cambia l'obiettivo) o non lo sai, agent_answer_child con askUser: true: chiederà all'utente.`].join('\n');
+    await d.chats.send(parent.id, text, undefined, false, self.title);
+    log.info('agents', 'child asked its parent', { chat: callerId, data: { parent: parent.id, options: options.length } });
+    return { asked: parent.title, note: 'Your parent answers with a message (agent_answer_child). Go on with what does not depend on it; do not ask the user the same thing meanwhile.' };
+  }
+
+  async function answerChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    const parent = chat(callerId);
+    const childId = typeof a.chatId === 'string' ? a.chatId : '';
+    const child = chat(childId);
+    if (!parent || !child || child.parentId !== callerId) throw new Error('agent_answer_child: chatId must be one of YOUR delegated chats (agent_children).');
+    if (child.closedAt || child.delegation?.result) throw new Error('agent_answer_child: that chat is closed or reported already.');
+    const askUser = a.askUser === true;
+    const answer = typeof a.answer === 'string' ? a.answer.trim() : '';
+    if (!askUser && (!answer || answer.length > ANSWER_MAX)) throw new Error(`agent_answer_child: answer = 1 to ${ANSWER_MAX} characters, or askUser: true.`);
+    const head = `[risposta di ${parent.agent?.name ?? 'Chat'} «${parent.title}»]`;
+    const text = askUser ? `${head} Non posso deciderlo io: chiedilo all'utente (una domanda chiara, con le opzioni).${answer ? ` ${answer.slice(0, ANSWER_MAX)}` : ''}` : `${head} ${answer}`;
+    await d.chats.send(child.id, text, undefined, false, parent.title);
+    return { answered: child.title, askUser };
+  }
+
   const str = { type: 'string' };
   return [{
     name: 'agent_delegate',
@@ -167,9 +208,25 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
       doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },
       questions: { type: 'array', items: str, maxItems: 8 },
+      goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
+      newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_ask_parent',
+    description: 'Ask the chat that delegated you, before the user: an ambiguity of your contract (which file, which option, what "done" means here). It reaches your parent as a message; the answer comes back as a message. Ask the user directly only for a permission, an irreversible or external action, a choice that changes the goal, or what your parent sent on to the user.',
+    inputSchema: { type: 'object', required: ['question'], additionalProperties: false, properties: {
+      question: str, options: { type: 'array', items: str, maxItems: OPTIONS_MAX }, why: { ...str, description: 'what depends on it' },
+    } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await askParent(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_answer_child',
+    description: 'Answer a question one of YOUR delegated chats asked you with agent_ask_parent (chatId from the question), from what you know of the task. askUser: true when it needs a person (a permission, an irreversible or external action, a choice that changes the goal) or you do not know: the child then asks the user.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str, answer: str, askUser: { type: 'boolean' } } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await answerChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
     description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes.',

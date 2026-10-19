@@ -204,6 +204,8 @@ async function runTurn(text) {
   record({ type: 'user', message: { role: 'user', content: text } });
   // the role text the app puts before an Orchestrator's first message is not the user's: its words trigger nothing
   text = text.replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '');
+  // the fixed rules of a delegation contract (shared/delegation.ts delegationPrompt) are the app's: their words ("ask") trigger nothing
+  text = text.replace(/^(When the output is ready|An ambiguity in this contract|If the user writes to you here)[^\n]*$/gm, '');
   // the MCP calls are taken out first: their JSON's words ("tasks", "summary") trigger nothing
   const mcpCalls = [...text.matchAll(/mcpcall (\S+) (\S+) (\{.*\})\s*$/gm)];
   text = text.replace(/mcpcall (\S+) (\S+) (\{.*\})\s*$/gm, '');

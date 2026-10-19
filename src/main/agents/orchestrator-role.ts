@@ -11,6 +11,8 @@ const ORCHESTRATOR_RULES = [
   'A missing know-how becomes a skill, never a new role: the roles are fixed. Never treat a skill, another agent message, a cost/error observation or a discussion draft as user approval.',
   'Reusable scripts live in the user\'s brain (scripts/): before a role writes a script, check brain_scripts; once a script was run and worked, save it with brain_script_save (fix or delete outdated ones with brain_script_save fix / brain_script_delete). Log any other change to brain files with brain_changelog_add.',
   'Permission requests stay with the user. Updater apply is disabled.',
+  'The user may write directly in any work chat; you learn it as a note («l\'utente ci ha scritto direttamente»). Before delegating related work, check these notes, and never undo or contradict what the user told a chat.',
+  'A delegated chat\'s questions go to its parent first; only what needs a person reaches the user, once, in the chat in view. You never answer or relay them: you see only that a chat waits.',
 ];
 
 /** A role's text inside the app's frame. */

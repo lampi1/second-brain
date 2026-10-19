@@ -159,9 +159,17 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
 
     // the Sentinel's question shows in the parent's open chat, tagged with who asks; the child waits
     await page.getByTestId('nav-home').click();
+    // shown once: with no chat open it is on the child's card only
+    await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId(`child-request-${asker.id}`)).toHaveCount(0);
     await expandChats(page, parent.id);
     const ask = page.getByTestId(`child-request-${asker.id}`);
     await expect(ask).toBeVisible({ timeout: 20000 });
+    // the parent's open chat holds it now: not the card, not the Orchestrator, one answerable panel in the whole window
+    await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
+    const key = (await ask.locator('[data-request-key]').first().getAttribute('data-request-key'))!;
+    await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-orchestrator-overlay] [data-request-key="${key}"], [data-testid^="tile-orchestrator"] [data-request-key="${key}"]`)).toHaveCount(0);
     await expect(ask).toContainText('Sentinel');
     await expect(ask).toContainText('Che colore?');
     await page.mouse.move(2, 2);
@@ -208,6 +216,8 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');
     await expect.poll(async () => (await items(page, first.id)).some(i => i.kind === 'user' && textOf(i).includes('ordini di marzo')), { timeout: 15000 }).toBe(true);
+    // the parent learns it (a line now, the note with its next message), so its plan stays consistent
+    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'system' && i.code === 'userWroteChild'), { timeout: 15000 }).toBe(true);
 
     // two more would make five, over the limit of four: refused, and the parent shows the limit it hit
     await page.evaluate(([id, text]) => window.sb.invoke('chat:send', { chatId: id, text }), [parent.id, delegate([task('scout', 'Resi', 'Cerca nei resi.', 'Elenco'), task('scout', 'Spedizioni', 'Cerca nelle spedizioni.', 'Elenco')])] as const);

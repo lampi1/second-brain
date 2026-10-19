@@ -195,6 +195,70 @@ describe('agent_delegate', () => {
   });
 });
 
+describe('questions go to the parent first; the user\'s own messages are known (ADR 0083)', () => {
+  it('a child asks its parent; the parent answers it, or sends it on to the user; nobody else may answer', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const asked = await f.call('agent_ask_parent', kid.id, { question: 'Quale servizio: ordini o resi?', options: ['ordini', 'resi'], why: 'cambia i log da leggere' });
+    expect(asked.asked).toBe(parent.title);
+    const q = f.sent.get(parent.id)!.at(-1)!;
+    expect(q).toContain(`[domanda · Scout «Ordini · Log» · chatId ${kid.id}] Quale servizio: ordini o resi?`);
+    expect(q).toContain('Opzioni: 1) ordini · 2) resi');
+    expect(q).toContain('askUser: true');
+    await f.call('agent_answer_child', parent.id, { chatId: kid.id, answer: 'ordini, ultimi 7 giorni' });
+    expect(f.sent.get(kid.id)!.at(-1)).toContain('[risposta di Strategist «Strategist root»] ordini, ultimi 7 giorni');
+    await f.call('agent_answer_child', parent.id, { chatId: kid.id, askUser: true });
+    expect(f.sent.get(kid.id)!.at(-1)).toContain("chiedilo all'utente");
+    const other = await f.root('strategist');
+    await expect(f.call('agent_answer_child', other.id, { chatId: kid.id, answer: 'x' })).rejects.toThrow(/YOUR delegated/);
+    await expect(f.call('agent_ask_parent', parent.id, { question: 'x' })).rejects.toThrow(/only a delegated chat/);
+    // the user never sees it as a request: no pending was opened
+    expect(f.m.list().find(c => c.id === kid.id)?.pending).toBe(0);
+  });
+
+  it('the user writing in a child: the parent gets a line now and the note with its next message; the listener gets his words', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const notes: { text: string; parentTitle: string | null; role: string | null }[] = [];
+    f.m.onUserWrote(n => notes.push(n));
+    f.m.userWrote(kid.id, `Guarda solo marzo. ${'x'.repeat(400)}`);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ parentTitle: parent.title, role: 'Scout' });
+    expect(notes[0]!.text.length).toBeLessThanOrEqual(300);
+    expect(f.m.notesWaiting(parent.id)).toHaveLength(1);
+    const items = f.m.items(parent.id);
+    expect(items.some(i => i.kind === 'system' && i.code === 'userWroteChild')).toBe(true);
+    await f.m.send(parent.id, 'vai avanti');
+    const last = f.sent.get(parent.id)!.at(-1)!;
+    expect(last).toContain("l'utente ha scritto direttamente");
+    expect(last).toContain('Scout «Ordini · Log»');
+    expect(last).toContain('Guarda solo marzo.');
+    expect(last.endsWith('vai avanti')).toBe(true);
+    expect(f.m.notesWaiting(parent.id)).toHaveLength(0);
+    // the Orchestrator and a root chat give no parent note
+    f.m.userWrote(parent.id, 'ciao');
+    expect(notes.at(-1)).toMatchObject({ parentId: null });
+  });
+
+  it('a goal the user changed: the report says so, the card shows the user\'s goal and keeps the contract\'s', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    await expect(f.call('agent_report', kid.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [], newGoal: 'x' })).rejects.toThrow(/goalChangedByUser/);
+    await f.call('agent_report', kid.id, { outcome: 'done', summary: 'Resi di marzo letti', output: 'o', doneWhen: [], goalChangedByUser: true, newGoal: 'Leggere i resi di marzo' });
+    const d = f.m.list().find(c => c.id === kid.id)!.delegation!;
+    expect(d.goal).toBe('Leggere i resi di marzo');
+    expect(d.originalGoal).toBe('Goal of Ordini · Log');
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(parent.id)!.at(-1)).toContain("obiettivo cambiato dall'utente nella chat figlia: «Leggere i resi di marzo»");
+  });
+});
+
 describe('the pure parts', () => {
   it('checks a contract strictly and keeps the role output as default', () => {
     expect(checkContract({ goal: 'g', doneWhen: ['a'] }, 'scout').output).toBe(ROLE_DEFAULTS.scout.output);

@@ -16,6 +16,10 @@
 // app_digest lists them whenever the Orchestrator looks.
 // Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
 // sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
+// The user wrote in a work chat himself (ADR 0083, 'user-message'): quiet news with the chat, its role and parent, the
+// time and the user's own words (cut to ~300 characters; his words are not the child's content), so the Orchestrator
+// never plans against what he told a chat. It rides along with the next delivery, is counted in the held news, and is
+// kept beside the chat's status news (its own slot: a "finished" never replaces it).
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
@@ -27,12 +31,15 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
-export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started';
+export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
 /** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
-export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started']);
+export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
+/** the buffer's slot of an event: the user's messages beside the chat's status */
+const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind'>): string => e.kind === 'user-message' ? `${e.chatId}#user` : e.chatId;
+const USER_TEXT_MAX = 300;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent): DeliveryClass => newsClass(e.kind, e.endsTurn);
+const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' ? 'quiet' : newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
 export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean }
@@ -60,7 +67,7 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 /** One line per chat, in Italian (the Orchestrator speaks Italian with the user). */
 export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
-  const d = e.child ? '' : cut(e.detail, 200);
+  const d = e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
     case 'done': return `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
@@ -68,6 +75,7 @@ export function wakeLine(e: WakeEvent): string {
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
     case 'started': return `- ${who}: è partita.`;
+    case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${cut(e.detail, USER_TEXT_MAX)}». Tienine conto prima di delegare lavoro collegato; non disfare ciò che l'utente le ha chiesto.`;
   }
 }
 
@@ -99,7 +107,7 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); this.buffer.delete(`${chatId}#user`); }
     else return;
     this.changed();
   }
@@ -164,6 +172,20 @@ export class OrchestratorWake {
     this.add({ id: p.chatId, title: c.title, harness: c.harness, parentId: c.parentId, agent: c.agent }, p.type, detail, p.id);
   }
 
+  /** The user typed in a work chat (ChatManager.onUserWrote): quiet news with his words; the newest message of a chat wins. */
+  userMessage(n: { chatId: string; title: string; role: string | null; parentTitle: string | null; text: string; at?: number }): void {
+    if (!this.d.enabled() || !this.orchestratorId()) return;
+    const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
+    if (listed) this.remember(listed);
+    const c = known ?? listed;
+    if (!c || c.isOrchestrator || c.closedAt) return;
+    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: cut(n.text, USER_TEXT_MAX), at: n.at ?? this.now(),
+      ...(n.parentTitle !== null ? { child: { role: n.role ?? 'ruolo', parent: n.parentTitle } } : {}) };
+    this.buffer.set(slotOf(e), e);
+    this.reschedule();
+    this.changed();
+  }
+
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */
   private resolved(r: EventMap['pending:resolved']): void {
     const e = this.buffer.get(r.chatId);
@@ -199,7 +221,7 @@ export class OrchestratorWake {
       const cls = classOf(e);
       if (!passes(gate, cls)) continue;
       const base = gate === 'inject' || cls === 'now' ? e.at : cls === 'group' ? firstLoud + this.groupMs : Infinity;
-      due = Math.min(due, Math.max(base, this.readyAt(e.chatId)));
+      due = Math.min(due, Math.max(base, this.readyAt(slotOf(e))));
     }
     return due;
   }
@@ -211,8 +233,8 @@ export class OrchestratorWake {
     if (Number.isFinite(due)) this.schedule(due);
   }
 
-  /** when this chat may be told again */
-  private readyAt(chatId: string): number { return (this.lastSent.get(chatId) ?? -Infinity) + this.perChatMs; }
+  /** when this chat (its slot) may be told again */
+  private readyAt(slot: string): number { return (this.lastSent.get(slot) ?? -Infinity) + this.perChatMs; }
 
   private remember(c: ChatSummary): void {
     this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent });
@@ -249,9 +271,9 @@ export class OrchestratorWake {
     // due: something that may go through the gate now; then everything ready that the gate lets through goes with it
     // (quiet news rides along), chats told too recently wait for their turn
     if (this.nextDue(gate) > now) { this.reschedule(); return; }
-    const ready = [...this.buffer.values()].filter(e => passes(gate, classOf(e)) && this.readyAt(e.chatId) <= now);
+    const ready = [...this.buffer.values()].filter(e => passes(gate, classOf(e)) && this.readyAt(slotOf(e)) <= now);
     ready.sort((a, b) => a.at - b.at);
-    for (const e of ready) { this.buffer.delete(e.chatId); this.lastSent.set(e.chatId, now); }
+    for (const e of ready) { this.buffer.delete(slotOf(e)); this.lastSent.set(slotOf(e), now); }
     this.changed();
     this.sending = true;
     log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });

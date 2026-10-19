@@ -1000,7 +1000,7 @@ export interface AnswerLater { on: boolean }
  *  it costs no turn. kind: done = finished its turn; why: user = the Orchestrator waits for the user's answer, busy =
  *  it works on an engine that takes nothing mid-turn (or is in a hand-off, or failed), group = it goes within the
  *  grouping window with the other news, quiet = it rides along with the next delivery. */
-export type HeldNewsKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'mail';
+export type HeldNewsKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message' | 'mail';
 export type HeldNewsWhy = 'user' | 'busy' | 'group' | 'quiet';
 export interface HeldNewsItem { orchestratorId: string; chatId: string | null; title: string; kind: HeldNewsKind; at: number; why: HeldNewsWhy }
 export interface HeldNewsState { items: HeldNewsItem[] }

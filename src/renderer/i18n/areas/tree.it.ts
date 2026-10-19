@@ -13,6 +13,8 @@ export const treeIt = {
   'tree.stop': 'Ferma',
   'tree.depthNote': 'Non può delegare oltre: fa il lavoro da sola.',
   'tree.origin': (p: { time: string }) => `ha avviato questa chat · ${p.time}`,
+  'tree.goalChanged': 'Obiettivo cambiato da te:',
+  'tree.goalWas': (p: { goal: string }) => `Era: ${p.goal}`,
   'tree.goToOf': (p: { role: string }) => `Vai alla chat di ${p.role}`,
   'tree.state.start': 'avviato',
   'tree.state.run': 'al lavoro',

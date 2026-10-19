@@ -30,6 +30,8 @@ export interface ChatService {
   reopen(chatId: string): Promise<ChatSummary>;
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
   resumedByUser?(chatId: string, text?: string): void;
+  /** the user typed this in the chat himself (chat:send only): the Orchestrator and the chat's parent learn it (ADR 0083) */
+  userWrote?(chatId: string, text: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */
   runMetrics?(opts?: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
   /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */
