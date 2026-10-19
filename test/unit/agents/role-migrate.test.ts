@@ -1,0 +1,79 @@
+// ADR 0085: every role has every permission by default, and the owner's roles still on ADR 0083's restrictive defaults
+// move to the full ones once, only when the user never edited them (agents/role-migrate.ts through agents/catalog.ts).
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { AgentCatalogService } from '../../../src/main/agents/catalog';
+import { ADR0083_DEFAULTS, fullDefaultsFor } from '../../../src/main/agents/role-migrate';
+import { TOOL_CLASSES, type AgentModelChoice, type AgentProfile } from '../../../src/shared/agents';
+import { ROLE_DEFAULTS, ROLE_IDS, defaultPermissions, launchGap, isRoleId } from '../../../src/shared/roles';
+
+const roots: string[] = [];
+afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
+const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true }];
+function setup() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-migrate-')); roots.push(dir);
+  return { dir, make: () => new AgentCatalogService({ userData: dir, models }) };
+}
+/** Rewrites roles.json as a build of ADR 0083 left it, then lets `patch` change single roles. */
+function asBefore(dir: string, patch: (p: Record<string, unknown>) => void = () => {}) {
+  const file = path.join(dir, 'roles.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { roles: Record<string, unknown>[] };
+  for (const p of raw.roles) {
+    if (!isRoleId(p.id)) continue;
+    const old = ADR0083_DEFAULTS[p.id];
+    Object.assign(p, { tools: { allow: [...old.tools] }, permissionCeiling: old.ceiling, launches: [...old.launches], ...(old.instructions ? { instructions: old.instructions } : {}) });
+    patch(p);
+  }
+  fs.writeFileSync(file, JSON.stringify(raw));
+}
+
+describe('full default permissions (ADR 0085)', () => {
+  it('a fresh install: every role has every tool class and no ceiling, and every default launch fits', () => {
+    const { make } = setup(), list = make().list().profiles.filter(p => p.scope === 'role');
+    for (const p of list) {
+      expect([p.id, [...p.tools!.allow].sort()]).toEqual([p.id, [...TOOL_CLASSES].sort()]);
+      expect(p.permissionCeiling).toBeNull();
+      expect(defaultPermissions(p.id as never, p.tools, p.permissionCeiling)).toBe(true);
+      for (const kid of p.launches) expect(launchGap(ROLE_DEFAULTS[kid as never as 'scout'].tools, p.tools!.allow)).toEqual([]);
+    }
+    expect(list.find(p => p.id === 'strategist')!.launches).toEqual(expect.arrayContaining(['artisan', 'sentinel', 'herald', 'scribe']));
+    expect(defaultPermissions('scout', { allow: ['read'] }, null)).toBe(false);
+    expect(defaultPermissions('scout', { allow: [...TOOL_CLASSES] }, 'plan')).toBe(false);
+  });
+
+  it('moves the roles the user never edited, keeps the edited ones and a maintenance lesson, once', () => {
+    const { dir, make } = setup();
+    make();
+    asBefore(dir, p => {
+      if (p.id === 'scout') Object.assign(p, { userLocked: true, lastEditedBy: 'user', tools: { allow: ['read', 'web'] } });
+      if (p.id === 'judge') Object.assign(p, { lastEditedBy: 'maintenance', instructions: 'Judge with a learned lesson.' });
+    });
+    const after = make().list().profiles;
+    const get = (id: string) => after.find(p => p.id === id)!;
+    for (const id of ROLE_IDS.filter(r => r !== 'scout')) {
+      expect([id, [...get(id).tools!.allow].sort(), get(id).permissionCeiling]).toEqual([id, [...TOOL_CLASSES].sort(), null]);
+      expect(get(id)).toMatchObject({ version: 2, activeVersion: 2, lastEditedBy: 'default', userLocked: false, launches: ROLE_DEFAULTS[id].launches });
+    }
+    expect(get('strategist').instructions).toBe(ROLE_DEFAULTS.strategist.instructions);
+    expect(get('router').instructions).toBe(ROLE_DEFAULTS.router.instructions);
+    expect(get('orchestrator').instructions).toBe(ROLE_DEFAULTS.orchestrator.instructions);
+    expect(get('judge').instructions).toBe('Judge with a learned lesson.');
+    expect(get('scout')).toMatchObject({ version: 1, tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', userLocked: true });
+    const history = make().history('artisan');
+    expect(history.find(v => v.version === 2)).toMatchObject({ version: 2, author: 'default', reason: 'Permessi completi predefiniti (ADR 0085)' });
+    // a second start changes nothing
+    expect(make().list().profiles.map(p => p.version)).toEqual(after.map(p => p.version));
+  });
+
+  it('leaves a role alone when its policy is not exactly the old default, or it is on trial', () => {
+    const base = { id: 'sentinel', userLocked: false, lastEditedBy: 'default' as const, tools: { allow: [...ADR0083_DEFAULTS.sentinel.tools] }, permissionCeiling: ADR0083_DEFAULTS.sentinel.ceiling, launches: [...ADR0083_DEFAULTS.sentinel.launches], instructions: 'x' } satisfies Partial<AgentProfile>;
+    expect(fullDefaultsFor(base)).toMatchObject({ permissionCeiling: null, launches: ROLE_DEFAULTS.sentinel.launches, instructions: 'x' });
+    expect(fullDefaultsFor({ ...base, tools: { allow: ['read'] } })).toBeNull();
+    expect(fullDefaultsFor({ ...base, permissionCeiling: 'plan' })).toBeNull();
+    expect(fullDefaultsFor({ ...base, tools: { allow: ['read', 'shell', 'mcp'], mcp: ['devops'] } })).toBeNull();
+    expect(fullDefaultsFor({ ...base, trial: { version: 2, baseline: 1, startedAt: 1 } })).toBeNull();
+    expect(fullDefaultsFor({ ...base, lastEditedBy: 'user' })).toBeNull();
+    expect(fullDefaultsFor({ ...base, id: 'pulse' })).toBeNull();
+  });
+});

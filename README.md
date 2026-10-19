@@ -232,11 +232,16 @@ Costs, budgets and estimates per agent and per day sit next to them.
 - **Esegui**: shell blocks in a chat run with one click, and the output goes back to the chat.
 - **Long chats** are handed off before the context fills: a note, then "Riprendi" in a fresh chat.
 - **Nine fixed roles** (ADR 0083): Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe,
-  each with its tools, permission ceiling, model tier and skills, editable in Brain → Agenti. A role delegates parts of
-  its task to the roles it may launch (`agent_delegate`) as visible child chats with a self-contained contract; a
-  child never gets more permissions than its parent, works in its folder, and reports once (`agent_report`). The
-  planners (Strategist, Router) launch only Scout and Judge: what must change goes in their report and the
-  Orchestrator starts it, so every change starts from the Orchestrator. The
+  each with its instructions, model tier, the roles it may launch and its skills, editable in Brain → Agenti. **By
+  default every role may do everything** (ADR 0085: every tool class, no permission limit below your own mode), so a
+  fresh install has no refused calls and no flood of permission popups; a role's job comes from its instructions and
+  skills. You narrow any role from its card: the **Permessi** card (or "Modifica permessi" on the card's back) has a
+  switch per tool class and four limits, each with a "?" saying what it allows; every save is a version, "Ripristina
+  predefiniti" brings everything back. A role delegates parts of its task to the roles it may launch
+  (`agent_delegate`) as visible child chats with a self-contained contract; a child never gets more permissions than
+  its parent, works in its folder, and reports once (`agent_report`, also from a chat the Orchestrator opened). A
+  role limited to read-only commands still runs the node tools you list in `read-only-tools.md` in the brain, and the
+  Orchestrator is told when a skill it passes needs tools the role lacks. The
   depth and the children at once are your limits (Impostazioni → Ruoli e deleghe). The Orchestrator sees only their
   state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day on
   another model.

@@ -25,7 +25,6 @@ export const studioEn: typeof studioIt = {
   'studio.independent': 'On a model other than its launcher’s',
   'studio.independentHint': 'A check is worth more when another model makes it.',
   'studio.tools': 'Tools',
-  'studio.toolsHint': 'They narrow what the engine and your settings already allow; they grant nothing more.',
   'studio.tool.read': 'Read', 'studio.tool.edit': 'Edit files', 'studio.tool.shell': 'Commands', 'studio.tool.shell-read': 'Read-only commands',
   'studio.tool.web': 'Web', 'studio.tool.browser': 'Browser', 'studio.tool.browser-read': 'Browser, read only', 'studio.tool.mail-draft': 'Mail drafts',
   'studio.tool.calendar-read': 'Calendar, read only', 'studio.tool.brain-write': 'Brain writes', 'studio.tool.mcp': 'MCP servers',

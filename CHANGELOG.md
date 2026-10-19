@@ -6,6 +6,20 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Every role may do everything by default** (ADR 0085, owner 2026-10-19): all tool classes and no permission limit
+  below your own mode, so a fresh install has no refused calls and no flood of popups; each role keeps its job
+  (instructions, skills, tier, the roles it launches). The planners launch Artisan, Sentinel, Herald and Scribe again.
+  Roles you never edited move to the new defaults once (a version "Permessi completi predefiniti"); edited ones stay.
+  A role's **Permessi** card (Brain → Agenti → the role, or "Modifica permessi" on the card's back) narrows it: a
+  switch per tool class, four limits, a "?" on each, saved as a version, "Ripristina predefiniti". A chat from the
+  unauthenticated `/mcp/app` mount still reads only, in plan mode.
+
+### Fixed
+- **Read-only roles and the brain's node tools** (#93): a role limited to read-only commands runs the node scripts
+  listed in `read-only-tools.md` in the brain (exact path, links resolved; any other script stays refused; only you
+  edit the list). `agent_report` works in a chat the Orchestrator opened with `app_create_chat` (it reports to the
+  Orchestrator). `app_create_chat`, `agent_delegate` and `agent_catalog` warn when a skill needs tools the role lacks.
+
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its

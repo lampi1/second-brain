@@ -3,7 +3,7 @@
 // as thread cards under it in the Grindhouse (expanding in place into their chat, "Vai alla chat" opening focus mode)
 // and in the sidebar tree (a row brings its card on screen), their results come back to it as messages,
 // and the fold of the tree survives a restart; a child's question shows in the parent's open chat and the child goes on
-// after the answer; a child's permission above its parent's is refused visibly; three Scouts run at once, each one
+// after the answer; a child's permission above its parent's (a Strategist the user narrowed) is refused visibly; three Scouts run at once, each one
 // writable; the parallel limit refuses a call over it and shows on the parent. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/delegation-*.png (dark and light).
 import { expect, test, type Page } from '@playwright/test';
@@ -26,9 +26,9 @@ const items = (page: Page, chatId: string): Promise<ChatItem[]> => page.evaluate
 const childrenOf = async (page: Page, id: string) => (await list(page)).filter(c => c.parentId === id && !c.closedAt);
 const textOf = (i: ChatItem) => ('text' in i && typeof i.text === 'string' ? i.text : '');
 
-async function start(userData?: string) {
+async function start(userData?: string, env: Record<string, string> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
-  const l = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home }, userData);
+  const l = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, ...env }, userData);
   await setSize(l.app, 1500, 950);
   await l.page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   return { ...l, home };
@@ -141,9 +141,19 @@ test('a Strategist launches a Scout and a Judge: indented children, results back
 
 test('a child\'s question waits in the parent\'s open chat; a permission above the parent\'s is refused visibly', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
-  const { app, page, home } = await start();
+  const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-')); // the catalog is saved in a brain
+  const { app, page, home } = await start(undefined, { SB_BRAIN: brain });
   try {
-    await closeSetup(page);
+    await skipSetup(page);
+    // every role may do everything by default (ADR 0085): the user narrows the Strategist to reading, in plan mode, and
+    // its two children to what fits under it (a Scout's read-only shell is not a gap), so both launch
+    await page.evaluate(async () => {
+      const narrow = { strategist: [['read', 'web'], 'plan'], judge: [['read'], 'plan'], scout: [['read', 'web', 'browser-read', 'shell-read'], 'default'] } as const;
+      for (const [id, [allow, ceiling]] of Object.entries(narrow)) {
+        const p = (await window.sb.invoke('agents:list', undefined)).profiles.find(x => x.id === id)!;
+        await window.sb.invoke('agents:save', { id, profile: { ...p, tools: { allow: [...allow] }, permissionCeiling: ceiling } });
+      }
+    });
     const parent = await strategist(page, cwd, delegate([
       task('judge', 'Scelta ambiente', reportGoal('Prima ask, poi riferisci.', 'Ambiente scelto e verificato', 'Ambiente scelto'), 'Ambiente scelto'),
       task('scout', 'Comando', reportGoal('Lancia bash, poi riferisci.', 'Fatto senza shell', 'Esito'), 'Esito'),
@@ -152,7 +162,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     const kids = await childrenOf(page, parent.id);
     const asker = kids.find(c => c.agent?.id === 'judge')!, shell = kids.find(c => c.agent?.id === 'scout')!;
 
-    // the Scout's Bash is above the Strategist's own permissions: refused by the app, said in its chat, never asked
+    // the Scout's Bash is above the narrowed Strategist's permissions: refused by the app, said in its chat, never asked
     await expect.poll(async () => (await items(page, shell.id)).some(i => i.kind === 'system' && i.code === 'aboveParent' && (i.params as { parent?: string } | undefined)?.parent === 'Piano rilascio'), { timeout: 20000 }).toBe(true);
     const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
     expect(pending.filter(p => p.chatId === shell.id)).toEqual([]);
@@ -191,6 +201,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     await app.close();
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });
+    fs.rmSync(brain, { recursive: true, force: true });
   }
 });
 

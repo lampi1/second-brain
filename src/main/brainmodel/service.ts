@@ -162,6 +162,11 @@ export class BrainModelService {
     const root = this.root();
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, description: s.description }));
   }
+  /** The brain's skills with the tools each calls (model.ts skillTools), for the launch warnings (agents/skill-needs.ts). */
+  skillTools(): { name: string; tools: string[] }[] {
+    const root = this.root();
+    return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, tools: s.tools }));
+  }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
       suggest: goal => this.d.suggestSkills(goal) }, this.now());

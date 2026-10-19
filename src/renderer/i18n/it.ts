@@ -13,6 +13,7 @@ import { connectorsIt } from './areas/connectors.it';
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
 import { genuiRequestIt } from './areas/genui-request.it';
 import {studioIt}from'./areas/studio.it';
+import { permissionsIt } from './areas/permissions.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
@@ -62,6 +63,7 @@ export const it = {
   'genui.permission.session': "Consenti per questa sessione",
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
+  ...permissionsIt,
   ...brainModelIt,
   ...productIt,
   ...agentsGridIt,

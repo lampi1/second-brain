@@ -149,11 +149,25 @@ export const COMMAND_TOOLS: readonly string[] = ['Bash', 'PowerShell', 'Shell', 
 const OUTPUT_TOOLS: readonly string[] = ['BashOutput', 'TaskOutput'];
 /** True when the policy lets this command-class request through: any with 'shell'; with shell-read only, a command that
  *  only reads (readOnlyCommand) or reading a command's output; nothing else (killing, monitoring, an unreadable input). */
-export function shellWithin(p: AgentPolicy | null | undefined, tool: string, input: unknown): boolean {
+export function shellWithin(p: AgentPolicy | null | undefined, tool: string, input: unknown, scripts?: ReadScripts): boolean {
   if (!allowsClass(p, 'shell')) return false;
   if (!commandsReadOnly(p)) return true;
   if (OUTPUT_TOOLS.includes(tool)) return true;
-  return COMMAND_TOOLS.includes(tool) && readOnlyCommand((input as { command?: unknown } | null)?.command);
+  return COMMAND_TOOLS.includes(tool) && readOnlyCommand((input as { command?: unknown } | null)?.command, scripts);
+}
+
+/** The brain's declared read-only tools (agents/read-tools.ts, issue #93): `node <script> [args]` reads when <script>,
+ *  resolved from `cwd` with its links, is exactly one of `paths` (real paths). Anything else run by node stays refused. */
+export interface ReadScripts { cwd: string; paths: readonly string[] }
+const samePath = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+/** `node <declared script> [args]`: no node option before the script (`-e`, `--require`, `--import` run other code), a
+ *  plain path (no glob), and its real path one of the declared ones. */
+function declaredScript(words: Word[], scripts: ReadScripts | undefined): boolean {
+  const script = words[1];
+  if (!scripts || !script || script.glob || !script.text || script.text.startsWith('-') || !path.isAbsolute(scripts.cwd)) return false;
+  let real: string;
+  try { real = fs.realpathSync.native(path.resolve(scripts.cwd, script.text)); } catch { return false; }
+  return scripts.paths.some(p => samePath(p, real));
 }
 
 // sort and uniq are not here: they read stdin only (STDIN_ONLY), their operands are files they may write
@@ -229,10 +243,11 @@ function stdinOnly(rule: StdinRule, args: string[]): boolean {
   return true;
 }
 
-/** One read-only command: a known reader, `git` reading or listing, `find` without actions, `sort`/`uniq` on stdin;
+/** One read-only command: a known reader, `git` reading or listing, `find` without actions, `sort`/`uniq` on stdin,
+ *  `node` running one of the brain's declared read-only tools (`scripts`, issue #93);
  *  no chaining, redirection, substitution, subexpression or script block, and a pipe only into another reader. Anything
  *  else is not read-only (refused under shell-read). Both shells count: bash and PowerShell (`(`, `@(`, `{`, `&`). */
-export function readOnlyCommand(raw: unknown): boolean {
+export function readOnlyCommand(raw: unknown, scripts?: ReadScripts): boolean {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return false;
   // chaining, redirection, substitution (bash $( ${ backtick <( >(, PowerShell $( @( ( { and its ` escape), quoted or
   // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it. Any other `$` is
@@ -252,6 +267,7 @@ export function readOnlyCommand(raw: unknown): boolean {
     if (NO_GLOB.has(cmd) && args.some(w => w.glob)) return false;
     const texts = args.map(w => w.text);
     if (texts.some(w => writingLong(w) || writingShort(cmd, w) || FIND_ACTIONS.has(w.toLowerCase()))) return false;
+    if (cmd === 'node') return declaredScript(words, scripts);
     const stdin = STDIN_ONLY[cmd];
     if (stdin) return stage > 0 && stdinOnly(stdin, texts);
     if (cmd === 'git') {

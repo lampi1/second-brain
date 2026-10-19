@@ -10,7 +10,7 @@ export const agentDetailEn: typeof agentDetailIt = {
   'agentDetail.config': 'Configuration',
   'agentDetail.results': 'Observed results',
   'agentDetail.tools': 'Tools',
-  'agentDetail.toolsNone': 'None', 'agentDetail.toolsAll': 'The engine’s own',
+  'agentDetail.toolsNone': 'None',
   'agentDetail.ceiling': 'Maximum permissions',
   'agentDetail.ceilingNone': 'Your settings',
   'agentDetail.ceiling.plan': 'Plan only', 'agentDetail.ceiling.default': 'Asks first', 'agentDetail.ceiling.acceptEdits': 'Accepts edits',

@@ -20,6 +20,8 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import type { McpTool } from '../mcp/server';
 import { allowsClass, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
+import { gapLines, skillGaps } from './skill-needs';
+import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
 
 /** What delegation needs from the chats (ChatManager). */
@@ -28,6 +30,8 @@ export interface DelegationChats {
   create(req: NewChat, by: 'agent'): Promise<ChatSummary>;
   agentPolicy(chatId: string): AgentPolicy | null;
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
+  /** a root role chat the Orchestrator opened reports to it (issue #93); absent = refused as before */
+  reportRoot?(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean };
   limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void;
   /** a message from another chat (from = its title): agent_ask_parent, agent_answer_child */
   send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
@@ -43,6 +47,8 @@ export interface DelegationDeps {
   /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
   worktrees?: (cwd: string) => Promise<string[]>;
   runs: () => readonly AgentRun[];
+  /** the brain's skills with their tools: a part whose skill needs tools its role lacks is said in the answer (#93) */
+  skillTools?: SkillToolsSource;
 }
 
 export const TASKS_MAX = 10;
@@ -127,8 +133,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
       }, 'agent')));
+      const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
+      // a skill whose tools the child lacks (its own policy, already narrowed by yours)
+      const warnings = (i: number, chatId: string): { warnings?: string[] } => {
+        const p = plans[i]!, lines = known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : [];
+        return lines.length ? { warnings: lines } : {};
+      };
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       log.info('agents', 'delegated', { chat: parent.id, data: { children: children.map(c => ({ role: c.role, chatId: 'chatId' in c ? c.chatId : null })), depth } });
       return { children, note: 'Each child reports to you with agent_report (it arrives as a message); agent_children shows their state. Do not wait idle: go on with your own part.' };
@@ -140,7 +152,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   function report(a: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
-    if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a delegated chat reports (agent_delegate started it). A root chat reports to the Orchestrator with send_to_chat.');
+    // a root chat the Orchestrator opened (app_create_chat) reports to the Orchestrator: its contract's criteria are prose,
+    // so every criterion it answers is checked for shape only (issue #93)
+    if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run?.startedBy === 'orchestrator' && d.chats.reportRoot) {
+      const done = d.chats.reportRoot(callerId, checkResult(a, []));
+      return { reported: true, to: 'orchestrator', delivered: done.delivered, ...(done.delivered ? {} : { note: 'No Orchestrator is open: the result stays on your chat and its run.' }) };
+    }
+    if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
     const result = checkResult(a, self.delegation.doneWhen);
     const done = d.chats.reportDelegation(callerId, result);
     return { reported: true, parentId: done.parentId, delivered: done.delivered };
@@ -216,7 +234,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that delegated you: outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions. It reaches your parent at once; call it once, at the end.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions. It reaches your parent at once; call it once, at the end.',
     inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
       doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },

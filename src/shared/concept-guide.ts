@@ -104,8 +104,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('agent_delegate avvia da 1 a 10 chat figlie insieme, ognuna con un contratto che basta a sé: obiettivo, risultato atteso, criteri di fatto, contesto. Il figlio non legge mai la conversazione del genitore.',
         'agent_delegate starts 1 to 10 child chats at once, each with a self-contained contract: goal, expected output, done-when criteria, context. The child never reads the parent’s conversation.'),
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
-      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Per questo chi pianifica (Strategist, Router) lancia solo chi legge (Scout, Judge): il lavoro che cambia qualcosa lo scrive nel suo risultato e lo avvia l’Orchestrator.',
-        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. That is why a planner (Strategist, Router) launches only the reading roles (Scout, Judge): the work that changes something goes in its result and the Orchestrator starts it.'),
+      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist, Router) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald, Scribe); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
+        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist, Router) also launches the roles that change something (Artisan, Sentinel, Herald, Scribe); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
       // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
@@ -119,8 +119,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
       // src/main/chats/manager.ts reportDelegation; src/shared/delegation.ts resultMessage
-      b('Il figlio chiude con agent_report: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato.',
-        'The child closes with agent_report: the result reaches the parent as a message; the Orchestrator sees only the state.'),
+      b('Il figlio chiude con agent_report: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta con lo stesso agent_report.',
+        'The child closes with agent_report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it with the same agent_report.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e i dubbi passano prima da lui.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and questions go through him first.'),
@@ -135,15 +135,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'agents',
     title: b('I ruoli e il loro editor', 'The roles and their editor'),
-    summary: b('Un ruolo è un profilo fisso con istruzioni, motore, livello di modello, strumenti, tetto dei permessi, ruoli che può avviare e skill di serie.',
-      'A role is a fixed profile with instructions, engine, model tier, tools, permission ceiling, the roles it may launch and its default skills.'),
+    summary: b('Un ruolo è un profilo fisso con istruzioni, motore, livello di modello, ruoli che può avviare e skill di serie; di base può fare tutto, e i suoi permessi li restringi tu dalla sua scheda.',
+      'A role is a fixed profile with instructions, engine, model tier, the roles it may launch and its default skills; by default it may do everything, and you narrow its permissions from its card.'),
     points: [
       // src/shared/roles.ts ROLE_DEFAULTS
       b('Strategist pianifica, Scout cerca e legge, Artisan costruisce, Sentinel verifica, Herald comunica, Router smista lotti, Judge valuta in modo indipendente, Scribe scrive nel brain.',
         'Strategist plans, Scout searches and reads, Artisan builds, Sentinel verifies, Herald communicates, Router triages batches, Judge evaluates independently, Scribe writes to the brain.'),
       // src/renderer/components/AgentStudio.tsx RoleEditor
-      b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, strumenti, tetto, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
-        'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, tools, ceiling, launchable roles and maximum context; name, purpose and character stay the role’s.'),
+      b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
+        'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, launchable roles and maximum context; name, purpose and character stay the role’s.'),
+      // src/renderer/components/RolePermissions.tsx; src/shared/roles.ts ALL_TOOLS, defaultPermissions
+      b('Permessi: di base ogni ruolo ha tutti gli strumenti e nessun limite («Tutto consentito»), così non trovi chiamate rifiutate né popup inutili. La scheda «Permessi» del ruolo (o «Modifica permessi» sul retro della card) li restringe: un interruttore per classe di strumenti e un limite tra quattro, ognuno con il suo «?». Ogni salvataggio è una versione; «Ripristina predefiniti» torna a tutto consentito.',
+        'Permissions: by default every role has every tool and no limit ("Everything allowed"), so you find no refused calls and no useless popups. The role’s "Permissions" card (or "Edit permissions" on the back of its card) narrows them: one switch per tool class and a limit among four, each with its "?". Every save is a version; "Restore defaults" goes back to everything allowed.'),
       // src/main/agents/catalog.ts reset()
       b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma; le skill arrivate da un pacchetto restano.',
         '"Restore default" brings the role back as the app ships it, after a confirmation; skills that came from a pack stay.'),
@@ -153,9 +156,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/model-tier.ts tierModel, independentModel
       b('Il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge prendono un modello diverso da quello del genitore quando c’è.',
         'The tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge take a model other than their parent’s when there is one.'),
-      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand
-      b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat (se l’ha delegato una chat che può eseguirlo, decidi tu), uno che legge ti arriva come permesso senza «sempre».',
-        'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat (when a chat that may run it delegated Scout, you decide), one that reads reaches you as a permission without "always".'),
+      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand; src/main/agents/skill-needs.ts
+      b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel cervello, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito (app_create_chat, agent_delegate, agent_catalog).',
+        'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once (app_create_chat, agent_delegate, agent_catalog).'),
       // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
       b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: sotto i 24 px restano colore, capigliatura o copricapo e occhi; da 24 px anche viso e attrezzo.',
         'Every role has a cartoon character recognisable even at 16 px: below 24 px the colour, the hair or headwear and the eyes stay; from 24 px the face and the prop too.'),
@@ -163,14 +166,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
     analogy: b('Come le schede dei reparti di un’officina: chi fa cosa, con quali attrezzi e fin dove può spingersi senza chiedere; la scheda si aggiorna, il reparto resta.',
       'Like the department cards of a workshop: who does what, with which tools and how far they may go without asking; the card is updated, the department stays.'),
     tech: [
-      tech(DATA, 'Classi di strumenti: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Tetti: plan, default, acceptEdits.',
-        'Tool classes: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Ceilings: plan, default, acceptEdits.'),
+      tech(DATA, 'Classi di strumenti: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp (di base tutte). Tetti: nessuno (predefinito), acceptEdits, default, plan.',
+        'Tool classes: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp (all by default). Ceilings: none (default), acceptEdits, default, plan.'),
       // src/main/agents/catalog.ts behaviour()
       tech(LIMITS, 'Istruzioni ≤ 8000 caratteri; al massimo 40 skill di serie; un ruolo non avvia mai sé stesso né l’Orchestrator.',
         'Instructions ≤ 8000 chars; at most 40 default skills; a role never launches itself or the Orchestrator.'),
       tech(WHERE, 'Pagina Agenti (AgentCatalogPage, la pagina del ruolo è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agents page (AgentCatalogPage, the role page is AgentStudio); catalog in the main process (AgentCatalogService).'),
     ],
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
   },
   {
     id: 'skills',

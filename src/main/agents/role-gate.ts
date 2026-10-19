@@ -8,13 +8,16 @@
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
 // brain (brain-write without edit, e.g. the Scribe) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
 // edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link,
-// a normalized path short enough that trimInput never cut it).
+// a normalized path short enough that trimInput never cut it). The brain's list of read-only tools
+// (read-only-tools.md, agents/read-tools.ts) is the user's: an edit of it by any role is refused. Under a parent that
+// may only read commands, `node` of one of those declared tools counts as reading (issue #93).
 // Refusals are visible in the chat. No state; reads the file system only to resolve links. Used by chats/manager.ts;
 // pinned by test/unit/agents/role-gate.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SysCode, SysParams } from '../../shared/sys';
-import { allowsClass, shellWithin, toolClassOf, type AgentPolicy } from './tool-policy';
+import { allowsClass, shellWithin, toolClassOf, type AgentPolicy, type ReadScripts } from './tool-policy';
+import { READ_TOOLS_FILE } from './read-tools';
 
 export interface GateRequest { type: string; tool: string; input?: unknown }
 export interface GateChat {
@@ -30,6 +33,8 @@ export interface GateChat {
   policy?: AgentPolicy | null;
   /** the brain folder (absent/null = no brain: a brain-only edit is refused) */
   brainRoot?: string | null;
+  /** the brain's declared read-only tools, from the chat's folder (agents/read-tools.ts) */
+  readScripts?: ReadScripts;
 }
 export type GateVerdict =
   | { kind: 'pass' }
@@ -87,6 +92,13 @@ export function insideBrain(brainRoot: string | null | undefined, target: string
   return true;
 }
 
+/** True when `target` (links resolved, also a file not there yet) is the brain's read-only-tools.md. */
+export function isReadToolsList(brainRoot: string, target: string): boolean {
+  if (!path.isAbsolute(target) || !path.isAbsolute(brainRoot)) return false;
+  const a = realOf(path.resolve(target)), b = realOf(path.join(brainRoot, READ_TOOLS_FILE));
+  return !!a && !!b && norm(a) === norm(b);
+}
+
 export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
   if (!chat.role || req.type !== 'permission') return { kind: 'pass' };
   if (req.tool === 'Skill') {
@@ -108,6 +120,10 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
   const tool = toolClassOf(req.tool);
   // an edit of a file inside the brain folder is a brain-write
   const target = field(req.input, 'file_path', 'path', 'notebook_path');
+  if (tool === 'edit' && chat.brainRoot && target && isReadToolsList(chat.brainRoot, target)) {
+    return { kind: 'deny', code: 'readToolsList', params: { tool: req.tool, role: chat.role.name },
+      message: `${req.tool} on ${READ_TOOLS_FILE} was refused: the list of read-only tools is the user's. Ask the user to add the script there.` };
+  }
   const brainEdit = tool === 'edit' && BRAIN_WRITE_TOOLS.has(req.tool) && insideBrain(chat.brainRoot, target);
   if (tool === 'edit' && !brainEdit && allowsClass(chat.policy, 'brain-write') && !allowsClass(chat.policy, 'edit')) {
     const shown = target.slice(0, 200) || '?';
@@ -115,7 +131,7 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
       message: `${req.tool} on «${shown}» was refused: your role (${chat.role.name}) may write only files inside the brain folder${chat.brainRoot ? ` (${chat.brainRoot})` : ' and no brain is set'}, with Edit or Write, by their absolute path.` };
   }
   const cls = brainEdit && !allowsClass(chat.parent?.policy, 'edit') ? 'brain-write' : tool;
-  if (chat.parent && cls && (cls === 'shell' ? !shellWithin(chat.parent.policy, req.tool, req.input) : !allowsClass(chat.parent.policy, cls))) {
+  if (chat.parent && cls && (cls === 'shell' ? !shellWithin(chat.parent.policy, req.tool, req.input, chat.readScripts) : !allowsClass(chat.parent.policy, cls))) {
     return { kind: 'deny', code: 'aboveParent', params: { tool: req.tool, parent: chat.parent.title },
       message: `${req.tool} goes beyond the permissions of the chat that delegated you («${chat.parent.title}»): it was refused. Do it within your permissions, or report to your parent with agent_report what you need.` };
   }

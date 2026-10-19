@@ -2,7 +2,9 @@
 
 Date: 2026-10-19 · Status: accepted (owner, issue #89: «un lavoro divino»; the tree design "variant A, thread cards",
 the questions rule and "the Orchestrator column is the only way to start work" confirmed by the owner on 2026-10-19)
-· Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
+· Amended by ADR 0085 (2026-10-19 evening: every role has every permission by default and the user narrows it from
+its card; the planners launch the writing roles again; §1's default tools and ceilings and §3's "planners launch only
+Scout and Judge" no longer hold, the narrowing rules do) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
 Orchestrator-only sub-agent launch (`agent_start_subagent`), the brain's agent pointers, playbooks and specialist
 notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes)
 

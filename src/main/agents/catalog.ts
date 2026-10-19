@@ -14,6 +14,7 @@ import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier } from './model-tier';
+import { fullDefaultsFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
@@ -111,6 +112,7 @@ export class AgentCatalogService {
       }
     } catch { this.problem = 'Il catalogo dei ruoli non è leggibile. Il file è conservato; correggilo prima di modificare i ruoli.'; return; }
     this.seed();
+    this.fullDefaults();
   }
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -147,8 +149,8 @@ export class AgentCatalogService {
       return { instructions: PULSE.instructions, engine: p.engine, model: p.model, ...(p.effort ? { effort: p.effort } : {}), tools: { allow: [] }, permissionCeiling: 'plan',
         tier: 'light', tierMax: 'light', independent: false, launches: [], skills: [] };
     }
-    const r = ROLE_DEFAULTS[id as RoleId];
-    return { instructions: r.instructions, engine: this.defaultEngine(), model: null, tools: { allow: [...r.tools] }, permissionCeiling: r.ceiling,
+    const r = ROLE_DEFAULTS[id as RoleId], engine = this.defaultEngine();
+    return { instructions: r.instructions, engine, model: null, tools: { allow: engineOf(engine)?.kind === 'api' ? ['read'] : [...r.tools] }, permissionCeiling: r.ceiling,
       tier: r.tier, tierMax: r.tierMax, independent: r.independent, launches: [...r.launches], skills: [...r.skills] };
   }
   /** Every role and Pulse are always there: a missing entry is added with its defaults (never overwriting one). */
@@ -160,6 +162,18 @@ export class AgentCatalogService {
       createdAt: at, updatedAt: at, version: 1, activeVersion: 1, lastEditedBy: 'default' as const, userLocked: false }) satisfies AgentProfile);
     try { this.commit(this.ordered([...this.profiles, ...added]), added.map(p => firstVersion(p, 'default', 'Ruolo predefinito', at))); }
     catch (e) { this.problem = this.store.problem ?? `Il catalogo dei ruoli non è stato scritto: ${errText(e)}`; this.profiles = this.ordered([...this.profiles, ...added]); }
+  }
+  /** ADR 0085: a role the user never edited that still has the restrictive defaults of ADR 0083 moves to the full ones
+   *  (role-migrate.ts), as a new version by the default ("Permessi completi predefiniti"). Once, by construction: the
+   *  new values no longer match the old ones. */
+  private fullDefaults(): void {
+    if (this.problem || this.store.problem) return;
+    for (const old of [...this.profiles]) {
+      const fields = fullDefaultsFor(old);
+      if (!fields) continue;
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Permessi completi predefiniti (ADR 0085)'); }
+      catch (e) { log.warn('agents', 'role not moved to full permissions', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
+    }
   }
   private ordered(list: AgentProfile[]): AgentProfile[] { return [...list].sort((a, b) => CATALOG_IDS.indexOf(a.id) - CATALOG_IDS.indexOf(b.id)); }
   private writable(): void { const problem = this.problem ?? this.store.problem; if (problem) throw new Error(problem); }
@@ -190,7 +204,9 @@ export class AgentCatalogService {
       if (p.userLocked || p.lastEditedBy !== 'default' || p.trial || p.id === PULSE_ID || p.engine === engine) return p;
       const current = models.find(e => e.engine === p.engine);
       if (current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
-      const updated: AgentProfile = { ...p, engine, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
+      const tools = isRoleId(p.id) ? { allow: engineOf(engine)?.kind === 'api' ? ['read' as const] : [...ROLE_DEFAULTS[p.id].tools] } : p.tools;
+      const updated: AgentProfile = { ...p, engine, tools, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
       changed.push(updated); return updated;
     });
     if (!changed.length) return;
@@ -215,9 +231,9 @@ export class AgentCatalogService {
       if (model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo motore. Usa il modello del livello.');
       if (model !== null && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
-      const tools = obj(p.tools).allow;
-      if (engineOf(engine)?.kind === 'api' && Array.isArray(tools) && tools.some(c => c !== 'read')) throw new Error('Il motore API non ha strumenti: lascia solo la lettura o scegli un altro motore.');
     }
+    // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)
+    if (engineOf(engine)?.kind === 'api') p.tools = { allow: ['read'] };
     if (!(p.permissionCeiling === undefined || p.permissionCeiling === null || has(PERMISSION_CEILINGS, p.permissionCeiling))) throw new Error('Limite dei permessi non valido.');
     if (!(p.maxContext === undefined || p.maxContext === null || Number.isSafeInteger(p.maxContext) && (p.maxContext as number) >= MAX_CONTEXT_RANGE.min && (p.maxContext as number) <= MAX_CONTEXT_RANGE.max))
       throw new Error(`Contesto massimo: un numero intero di token da ${MAX_CONTEXT_RANGE.min} a ${MAX_CONTEXT_RANGE.max}, oppure vuoto (l’impostazione dell’app).`);

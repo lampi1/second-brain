@@ -25,7 +25,6 @@ export const studioIt = {
   'studio.independent': 'Su un modello diverso da chi lo avvia',
   'studio.independentHint': 'Una verifica vale di più se la fa un altro modello.',
   'studio.tools': 'Strumenti',
-  'studio.toolsHint': 'Restringono ciò che il motore e le tue impostazioni già permettono; non concedono nulla in più.',
   'studio.tool.read': 'Lettura', 'studio.tool.edit': 'Modifica file', 'studio.tool.shell': 'Comandi', 'studio.tool.shell-read': 'Comandi di sola lettura',
   'studio.tool.web': 'Web', 'studio.tool.browser': 'Browser', 'studio.tool.browser-read': 'Browser in lettura', 'studio.tool.mail-draft': 'Bozze di posta',
   'studio.tool.calendar-read': 'Calendario in lettura', 'studio.tool.brain-write': 'Scrittura nel cervello', 'studio.tool.mcp': 'Server MCP',

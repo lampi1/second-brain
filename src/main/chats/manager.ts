@@ -47,11 +47,13 @@ import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
+import { isWorkRole } from '../../shared/roles';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
-import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
+import { readOnlyTools } from '../agents/read-tools';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
@@ -219,6 +221,8 @@ interface Rec {
   /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
    *  assignment (#86, ADR 0084); never persisted */
   report?: { text: string; at: number; blocked?: boolean };
+  /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
+  rootReportAt?: number;
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
   agentInstructions?: string;
@@ -481,17 +485,22 @@ export class ChatManager implements ChatService {
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
     const delegator = req.parentId !== undefined ? await this.delegator(req, by, opts.continuation === true) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
-    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews. A root chat the
-    // Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's read-only policy:
-    // the Orchestrator plans, the Artisan it starts writes (ADR 0083)
+    // never wider than the chat it comes from: a fork of its session (and an Orchestrator renewed without a role policy).
+    // A root chat the Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's
+    // policy: the Orchestrator plans, the Artisan it starts writes (ADR 0083)
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
     // a chat from the unauthenticated /mcp/app mount (any local process can call it) runs no wider than the Orchestrator
     const bound = opts.boundByOrchestrator ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined;
     if (opts.boundByOrchestrator && !bound) throw new Error('Senza un Orchestrator aperto questo endpoint non apre chat.');
-    const parent = delegator ?? forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? bound;
-    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes
+    // a new Orchestrator the user starts (Ricomincia, Cambia motore) runs its role as the catalog says now (the user edits
+    // it in Agenti, ADR 0085): the old chat's frozen policy bounds it only when the role has none
+    const renewed = req.orchestrator && by === 'user' && !!agent.policy;
+    const parent = delegator ?? forkSrc ?? (req.replaces && !renewed ? this.chats.get(req.replaces) : undefined) ?? bound;
+    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes. A chat from
+    // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
+    // default is every permission, the mount is any local process)
     const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
-      : narrowest(agent.policy, parent === bound && bound ? bound.policy ?? FAIL_CLOSED : parent?.policy);
+      : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
     if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
@@ -1486,6 +1495,32 @@ export class ChatManager implements ChatService {
     return { parentId, delivered: !!parent };
   }
 
+  /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
+   *  like a delegated chat's and reaches the open Orchestrator as a message (its own chats report to it, ADR 0083 §6);
+   *  the turn's end then settles the assignment as a mailed report does. At most one per assignment. */
+  reportRoot(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean } {
+    const r = this.need(chatId), run = r.s.run;
+    if (r.s.isOrchestrator || r.s.parentId || r.s.delegation || run?.startedBy !== 'orchestrator') throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it.');
+    if (r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result.');
+    const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
+    if (run.endedAt === undefined) {
+      run.report = { at, outcome: result.outcome, verified: !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };
+      this.runSave();
+    }
+    r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    r.rootReportAt = at;
+    this.persist();
+    this.updated(r);
+    const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
+    const role = r.s.agent?.id;
+    if (orchestrator && isWorkRole(role)) {
+      this.send(orchestrator.s.id, resultMessage(role, r.s.title, result), undefined, false, r.s.title)
+        .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
+    }
+    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length } });
+    return { orchestratorId: orchestrator?.s.id ?? null, delivered: !!orchestrator };
+  }
+
   /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
   limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void {
     const r = this.chats.get(chatId);
@@ -1807,7 +1842,7 @@ export class ChatManager implements ChatService {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
-      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
+      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r),
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
@@ -1831,12 +1866,17 @@ export class ChatManager implements ChatService {
     const command = (req.input as { command?: unknown } | null)?.command;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
-    if (readOnlyCommand(command) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
+    if (readOnlyCommand(command, this.readScripts(r)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
     r.session?.answer(req.id, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` });
     return true;
+  }
+
+  /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */
+  private readScripts(r: Rec): ReadScripts {
+    return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
   }
 
   /** Each request once per run, by its id: question, permission or command. */

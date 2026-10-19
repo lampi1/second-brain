@@ -35,7 +35,7 @@ test('exports a role pack and imports it onto another built-in role as a trial',
     await expect(page.getByTestId('catalog-card-sentinel')).toContainText('In prova');
     await shot(page, 'agent-pack-roundtrip-trial');
     const sentinel = await page.evaluate(async () => (await window.sb.invoke('agents:list', undefined)).profiles.find(p => p.id === 'sentinel')!);
-    expect(sentinel.trial).toBeTruthy(); expect(sentinel.permissionCeiling).toBe('default'); // the role keeps its own permissions
+    expect(sentinel.trial).toBeTruthy(); expect(sentinel.permissionCeiling).toBeNull(); // the role keeps its own permissions (every one by default, ADR 0085)
   } finally { await app.close(); }
 });
 

@@ -56,6 +56,12 @@
   result to the parent. The renderer builds the tree from `parentId` (`lib/chat-tree.ts`), the steps from the
   transcript (`lib/run-steps.ts`) and picks the one view that shows a request (`lib/child-requests.ts`). The user's
   message in a work chat (`chat:send` → `userWrote`) is quiet news for the Orchestrator and a note for the parent.
+  A root chat the Orchestrator opened reports with the same `agent_report` (`reportRoot` → the Orchestrator).
+- **Role permissions** (ADR 0085): every role defaults to every tool class and no ceiling (`shared/roles.ts`); the
+  role page's Permessi card (`RolePermissions.tsx`) narrows a role through `agents:save` (a version). At launch the
+  catalog's policy goes to the chat, narrowed by its parent's; under shell-read `refusedCommand` and the role gate pass
+  `node` of a script listed in the brain's `read-only-tools.md` (`agents/read-tools.ts`); `agents/skill-needs.ts` turns a
+  passed skill's tools into launch warnings.
 - **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip

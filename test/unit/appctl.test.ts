@@ -175,6 +175,23 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
+  it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const skillTools = () => [{ name: 'issue-open', tools: ['Write', 'node scripts/open-issue.mjs'] }];
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req), skillTools }, 'r').find(x => x.name === 'app_create_chat')!;
+    expect(await t.run({ title: 'Issue · Bozza', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
+    const herald = catalog.list().profiles.find(p => p.id === 'herald')!;
+    catalog.save({ ...herald, tools: { allow: ['read', 'web', 'mail-draft'] } }, 'herald');
+    const out = await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] }) as { warnings?: string[] };
+    expect(out.warnings).toHaveLength(1);
+    expect(out.warnings![0]).toMatch(/skill «issue-open» needs edit, shell, which Herald lacks/);
+    const cat = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), skillTools }, 'r').find(x => x.name === 'agent_catalog')!;
+    const listed = await cat.run({ id: 'herald', skills: ['issue-open'] }) as { roles: { skillWarnings?: string[] }[] };
+    expect(listed.roles[0]!.skillWarnings?.[0]).toMatch(/issue-open/);
+  });
+
   it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {
     const ui: unknown[] = [];
     const list = [{ id: 'c_root', title: 'Root', isOrchestrator: false }, { id: 'c_kid', parentId: 'c_root', title: 'Kid', isOrchestrator: false }];

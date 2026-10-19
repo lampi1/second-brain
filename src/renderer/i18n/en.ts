@@ -11,6 +11,7 @@ import { connectorsEn } from './areas/connectors.en';
 // English, short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestEn } from './areas/genui-request.en';
 import {studioEn}from'./areas/studio.en';
+import { permissionsEn } from './areas/permissions.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { dialogsEn } from './areas/dialogs.en';
@@ -61,6 +62,7 @@ export const en: Dict = {
   'genui.permission.session': "Allow for this session",
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
+  ...permissionsEn,
   ...brainModelEn,
   ...productEn,
   ...agentsGridEn,

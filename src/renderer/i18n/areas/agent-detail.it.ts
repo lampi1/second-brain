@@ -10,7 +10,7 @@ export const agentDetailIt = {
   'agentDetail.config': 'Configurazione',
   'agentDetail.results': 'Risultati osservati',
   'agentDetail.tools': 'Strumenti',
-  'agentDetail.toolsNone': 'Nessuno', 'agentDetail.toolsAll': 'Quelli del motore',
+  'agentDetail.toolsNone': 'Nessuno',
   'agentDetail.ceiling': 'Permessi massimi',
   'agentDetail.ceilingNone': 'Le tue impostazioni',
   'agentDetail.ceiling.plan': 'Solo piano', 'agentDetail.ceiling.default': 'Chiede conferma', 'agentDetail.ceiling.acceptEdits': 'Accetta modifiche',

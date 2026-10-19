@@ -396,7 +396,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModelRef.current?.skillList() ?? [], manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
-  addChatTools([agentCatalogTool(() => agents.list()), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  const skillTools = () => brainModelRef.current?.skillTools() ?? [];
+  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -617,7 +618,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees }));
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools }));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
   // user's stable app outside tests (or with SB_JUDGE_SAMPLE=1), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
@@ -634,7 +635,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   lifecycleTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { runFeedback, resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { runFeedback, resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on

@@ -1,6 +1,8 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): identity (character, English name, what it is for), engine and
 // model tier, a live status and four compact run metrics on the front; a click anywhere on the card flips it in 3D (#81)
-// to the back: the role's instructions, the skills it loads at every launch, its memory, the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
+// to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto
+// consentito» or how far the user narrowed it, with "Modifica permessi" to its permissions card, ADR 0085), the run
+// facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
 // keyboard and screen readers only reach the visible one. Under prefers-reduced-motion the faces fade instead of turning.
 // Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash with "Non
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
@@ -12,6 +14,8 @@ import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
+import { go } from '../actions';
 
 type Value = { text: string | null; samples?: string };
 
@@ -62,6 +66,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
+  const perms = permissionSummary(profile);
   return <article className="catalog-card bm-flip" data-testid={`catalog-card-${profile.id}`} data-state={state} data-flipped={flipped}
     style={{ '--row-index': Math.min(index, 8), '--tone': characterTone(characterOf(profile.id)) } as CSSProperties}>
     <div className="bm-flip-inner">
@@ -107,6 +112,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
             : <p>{t('bm.card.noSkills')}</p>}
         </section>
         <dl>
+          {profile.scope === 'role' && <div data-testid={`catalog-perms-${profile.id}`}><dt>{t('perm.card')}</dt><dd><span className="catalog-perms" data-full={perms.full}>{perms.text}</span>
+            <button type="button" className="link-btn" onClick={() => go({ page: 'agenti', arg: profile.id, element: PERMISSIONS_ELEMENT })} data-testid={`catalog-perms-edit-${profile.id}`}>{t('perm.card.edit')}</button></dd></div>}
           <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
           <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>
           <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
