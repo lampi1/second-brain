@@ -1,5 +1,5 @@
 // End-to-end: Settings → Aggiornamenti (components/AppUpdateSettings.tsx, ADR 0075) on the demo with a temp code folder
-// (SB_IMPROVE_REPO) whose scripts/pull.mjs only prints: the card counts what GitHub has and lists it, "Aggiorna" asks
+// (SB_UPDATE_REPO) whose scripts/pull.mjs only prints: the card counts what GitHub has and lists it, "Aggiorna" asks
 // once (no tests, chats resume, local work kept), then pulls and restarts the dev build on it (recorded, never real in
 // tests). Screenshots: test-results/shots/settings-update-*.png.
 import { expect, test } from '@playwright/test';
@@ -11,12 +11,12 @@ import { goPage, launchDemo, shot } from './helpers';
 function fakeCodeFolder(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-update-'));
   fs.mkdirSync(path.join(dir, 'scripts'));
-  fs.writeFileSync(path.join(dir, 'scripts', 'pull.mjs'), "const c = process.argv.includes('--check'); console.log(JSON.stringify(c ? { ok: true, check: true, behind: 2, canUpdate: true, commits: ['a1b2c3d Agenti più chiari', 'e4f5a6b DevOps più pulito'], message: '2 aggiornamenti su GitHub.' } : { ok: true, upToDate: false, from: 'a1b2c3d', to: 'e4f5a6b', message: 'ok' }));\n");
+  fs.writeFileSync(path.join(dir, 'scripts', 'pull.mjs'), "const c = process.argv.includes('--check'); console.log(JSON.stringify(c ? { ok: true, check: true, behind: 2, canUpdate: true, commits: ['a1b2c3d Agenti più chiari', 'e4f5a6b Task più puliti'], message: '2 aggiornamenti su GitHub.' } : { ok: true, upToDate: false, from: 'a1b2c3d', to: 'e4f5a6b', message: 'ok' }));\n");
   return dir;
 }
 
 test('Settings → Aggiornamenti: the GitHub count, one confirm, then the restart on the new version', async () => {
-  const { app, page } = await launchDemo({ env: { SB_IMPROVE_REPO: fakeCodeFolder() } });
+  const { app, page } = await launchDemo({ env: { SB_UPDATE_REPO: fakeCodeFolder() } });
   try {
     await goPage(page, 'impostazioni');
     const card = page.getByTestId('st-update');
@@ -32,7 +32,7 @@ test('Settings → Aggiornamenti: the GitHub count, one confirm, then the restar
 
     await expect(card.getByTestId('st-update-status')).toHaveAttribute('data-state', 'restarting', { timeout: 15_000 });
     await expect(card.getByTestId('st-update-now')).toBeDisabled();
-    await expect.poll(() => app.evaluate(() => (globalThis as unknown as { __sbImprove: { restarts: number } }).__sbImprove.restarts), { timeout: 5000 }).toBe(1);
+    await expect.poll(() => app.evaluate(() => (globalThis as unknown as { __sbUpdate: { restarts: number } }).__sbUpdate.restarts), { timeout: 5000 }).toBe(1);
     await shot(page, 'settings-update-restarting');
   } finally { await app.close(); }
 });

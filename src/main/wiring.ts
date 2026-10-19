@@ -26,7 +26,6 @@ import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import type { ProbationJudgement } from './agents/probation';
 import type { AgentProfile, AgentRun } from '../shared/agents';
-import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
@@ -34,7 +33,7 @@ import { safeStorageCipher } from './engines/secrets';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
-import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
+import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
@@ -59,9 +58,9 @@ import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { RegiaWake } from './chats/regia-wake';
 import { ReplyRules } from './chats/reply-rules';
-import { DevopsService } from './devops/service';
+import { TaskService } from './tasks/service';
 import { Quality } from './brain/quality';
-import { cleanEnv, findNode, ImproveService, type ImproveDeps } from './improve/service';
+import { AppSourceService, cleanEnv, findNode } from './update/source';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
@@ -99,13 +98,12 @@ export interface Wired {
   /** the agent classifier's thresholds and their calibration from confirmed runs (decided only by the user) */
   classifierTuning?: ClassifierTuning;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
-  proposals: ProposalBridge;
   progress: ProgressService;
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
   setup: SetupService;
-  chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
+  chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
@@ -120,8 +118,8 @@ export interface Wired {
   asks: CommandAsks;
   /** "Eventi alla Regia": work chats' news wakes the Regia (chats/regia-wake.ts) */
   wake: RegiaWake;
-  /** "Migliora l'app": branches, Aggiorna, the restart notice (ADR 0020) */
-  improve: ImproveService;
+  /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
+  source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
   later: AnswerLaterStore;
   cli(): Record<Harness, CliStatus> | null;
@@ -140,27 +138,23 @@ export function toMcp(out: ToolOut): ToolOutput {
   return JSON.stringify(out, null, 1);
 }
 
-/** The app-control tools on the local MCP server: /mcp/app for the work Regia, /mcp/improve for the Regia of
- *  "Migliora l'app" (its own chats, the branches' state). */
-export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'sourceOnly' | 'improve'>, improve: ImproveService, demo = false, regiaTokens?: EndpointTokens): void {
+/** The app-control tools on the local MCP server: /mcp/app for test agents (acts as the first Regia) and
+ *  /mcp/app/r/<id>/<token> for each Orchestrator (ADR 0021). Only the second gets app_update_code (ADR 0074). */
+export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, regiaTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Regia's input means (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${NEW_CHAT_RULE}`;
+  const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
   // /mcp/app: test agents (acts as the first Regia); /mcp/app/r/<id>/<token>: each work Regia's own, so the tools know
   // the caller (ADR 0021). Only an open Regia with its own token answers (the token lives only here and in its config).
-  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as) });
+  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
   if (regiaTokens) {
     mcp.mount('/mcp/app/r/:chatId/:token', {
       name: 'app', instructions, authorize: regiaEndpointAuth(regiaTokens, () => deps.chats.list()), who: p => p.chatId,
-      tools: c => appControlTools({ ...deps, unified: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir), pull: () => improve.pull() } }, c.params.chatId).map(as),
+      tools: c => appControlTools({ ...deps, unified: true, code: { ...code, pull: () => source.pull() } }, c.params.chatId).map(as),
     });
   }
-  mcp.mount('/mcp/improve', {
-    name: 'app',
-    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, all chats in the Grindhouse; creation requires the app source repository; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
-    tools: appControlTools({ ...deps, sourceOnly: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
-  });
 }
 
 /** "Rispondi dopo" (main/later.ts): the flag, sent to the page as 'later:changed'. */
@@ -234,31 +228,31 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
   return store;
 }
 
-/** "Migliora l'app" (ADR 0020). Stable = started by the launcher (SB_RELEASE); SB_IMPROVE_STABLE=<release id> makes a
- *  test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_IMPROVE_REPO pointing at temp folders),
- *  and then a restart is only recorded (__sbImprove.restarts), never real. */
-export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'create'>, appRepo: () => string | null, routing?: ImproveDeps['routing']): ImproveService {
-  const fake = process.env.SB_IMPROVE_STABLE;
+/** "Aggiorna" from GitHub (ADR 0075). Stable = started by the launcher (SB_RELEASE); SB_UPDATE_STABLE=<release id> makes
+ *  a test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_UPDATE_REPO pointing at temp
+ *  folders), and then a restart is only recorded (__sbUpdate.restarts), never real. */
+export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo: () => string | null): AppSourceService {
+  const fake = process.env.SB_UPDATE_STABLE;
   const running = fake ?? releaseId() ?? 'dev';
   const releasesBase = process.env.SB_RELEASES_ROOT ?? sharedDir();
   const real = !!releaseId() && !fake && !process.env.SB_TEST;
   const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const devRepo = process.env.SB_IMPROVE_REPO ?? (fs.existsSync(path.join(outDir, '.git')) ? outDir : null);
+  const devRepo = process.env.SB_UPDATE_REPO ?? (fs.existsSync(path.join(outDir, '.git')) ? outDir : null);
   const recorder = { restarts: 0 };
-  (globalThis as Record<string, unknown>).__sbImprove = recorder;
-  return new ImproveService({
-    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(), allowLegacyPromotion: false,
-    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(), ...(routing ? { routing } : {}),
-    emit: st => ctx.emitter.emit('improve:state', st),
-    offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_IMPROVE_REPO,
+  (globalThis as Record<string, unknown>).__sbUpdate = recorder;
+  return new AppSourceService({
+    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(),
+    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, node: findNode(),
+    emit: st => ctx.emitter.emit('source:state', st),
+    offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_UPDATE_REPO,
     relaunch: () => {
-      if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('improve', 'relaunch asked (test run: not relaunching)'); return; }
-      log.info('improve', 'relaunching the dev build on the new code');
+      if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('update', 'relaunch asked (test run: not relaunching)'); return; }
+      log.info('update', 'relaunching the dev build on the new code');
       app.relaunch();
       app.quit();
     },
     restart: failed => {
-      if (!real) { recorder.restarts++; log.info('improve', 'restart asked (test run: not restarting)'); return; }
+      if (!real) { recorder.restarts++; log.info('update', 'restart asked (test run: not restarting)'); return; }
       // the launcher starts the new current release (and falls back by itself) once this process is gone: this app
       // holds the single-instance lock until its quit ends (chats close, up to seconds), and a release started before
       // would exit at once and be marked bad (reviews 2026-10-12). After 60 s it starts anyway.
@@ -266,13 +260,13 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
       const waiter = restartWaiter(process.pid, launcher);
       // quit only once the waiter really started: a powershell.exe that cannot start (blocked, missing) reports it
       // asynchronously, and the app must then stay open rather than close with nothing to reopen it (review 2026-10-12)
-      const fail = (e: unknown) => { log.error('improve', 'launcher not started: the app stays open on the old version', { cause: errText(e), hint: `start it by hand: ${launcher}` }); failed(); };
+      const fail = (e: unknown) => { log.error('update', 'launcher not started: the app stays open on the old version', { cause: errText(e), hint: `start it by hand: ${launcher}` }); failed(); };
       try {
         const child = spawn(waiter.command, waiter.args, { detached: true, stdio: 'ignore', windowsHide: true, env: cleanEnv(process.env) });
         child.once('error', fail);
         child.once('spawn', () => {
           child.unref();
-          log.info('improve', 'restarting through the launcher', { data: { launcher } });
+          log.info('update', 'restarting through the launcher', { data: { launcher } });
           app.quit();
         });
       } catch (e) { fail(e); }
@@ -421,7 +415,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 75, ram: st.loadQueueRam ?? 15 }; },
     },
     // the Regia also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
-    appMcpUrl: (regiaId, space) => browser.mcpUrlFor(null).replace(/\/mcp$/, space === 'app' ? '/mcp/improve' : `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
+    appMcpUrl: regiaId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
     // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => brain.recordModels(h, list),
@@ -549,7 +543,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseTimer.unref();
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
+  const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
@@ -581,24 +575,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get() }, source, false, regiaTokens);
 
-  // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
+  // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
-  const devops = new DevopsService({
-    file: path.join(ctx.userData, 'devops.json'),
+  const tasks = new TaskService({
+    file: path.join(ctx.userData, 'tasks.json'),
     brainRoot: () => brain.info().brainRoot,
-    settings: () => brain.settings().devops,
+    settings: () => brain.settings().tasks,
     run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
-    emit: st => ctx.emitter.emit('devops:state', st),
+    emit: st => ctx.emitter.emit('tasks:state', st),
     feed: events => brain.publish(events),
   });
-  brain.onSettingChange(c => { if (c.key.startsWith('devops.') || c.key === 'brainRoot') devops.schedule(); });
-  devops.schedule();
+  brain.onSettingChange(c => { if (c.key.startsWith('tasks.') || c.key === 'brainRoot') tasks.schedule(); });
+  tasks.schedule();
   // Qualità page's app half (/api/quality): this app's turns, the PRs of the last DevOps read, the brain's bug-reopen.mjs
   const quality = new Quality({
     logDir: path.join(ctx.userData, 'logs'), cacheFile: path.join(ctx.userData, 'quality-reopen.json'), brainRoot: () => brain.info().brainRoot,
-    devops: () => devops.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
+    tasks: () => tasks.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
   });
   brain.serveApi('/api/quality', q => quality.get({ fresh: q.get('fresh') === '1' }));
   brain.serveApi('/api/agents/analytics', () => manager.analytics.readModel());
@@ -637,16 +631,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
-    proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

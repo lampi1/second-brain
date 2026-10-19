@@ -2,7 +2,7 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
-  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import type { Emitter } from './ipc';
@@ -152,12 +152,12 @@ export interface BrainService {
   shutdown(): Promise<void>;
 }
 
-/** The DevOps page (devops/service.ts): read-only reads by the brain's devops-me.mjs, never an AI chat. */
-export interface DevopsApi {
-  get(): DevopsState;
-  refresh(): Promise<DevopsState>;
-  refreshFresh(): Promise<DevopsState>;
-  markRead(keys?: string[]): DevopsState;
+/** The Task page (tasks/service.ts): read-only reads by the brain's devops-me.mjs, never an AI chat. */
+export interface TasksApi {
+  get(): TasksState;
+  refresh(): Promise<TasksState>;
+  refreshFresh(): Promise<TasksState>;
+  markRead(keys?: string[]): TasksState;
   shutdown(): void;
 }
 

@@ -28,11 +28,11 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   await expect(page.getByTestId('topbar-next-count')).toHaveText('3');
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
 
-  // on a page (DevOps): nothing floats; a new question opens nothing, the counter grows and it rings
+  // on a page (Task): nothing floats; a new question opens nothing, the counter grows and it rings
   await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('devops');
+  await page.getByTestId('palette-input').fill('task');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   const rang = await chimes(page);
   await ask(app, 'fix', 'Procedo con il commit?');
   await expect(page.getByTestId('topbar-next-count')).toHaveText('4');

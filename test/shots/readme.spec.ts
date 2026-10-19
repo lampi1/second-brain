@@ -31,7 +31,7 @@ test.afterAll(async () => { await app?.close(); });
 
 /** Screenshot → WebP in the page (Chromium's encoder: no image dependency), lowering the quality until < 300 KB. */
 async function save(name: string): Promise<void> {
-  // transient toasts ("DevOps aggiornato") would cover the page
+  // transient toasts ("Task aggiornati") would cover the page
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await page.mouse.move(2, 2);
@@ -106,13 +106,13 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
-  // 5. DevOps: pull requests, work items and the QA status of each PR, read on demand
-  await page.getByTestId('nav-devops').click();
-  const dv = page.getByTestId('brain-page-devops');
-  await dv.getByTestId('devops-refresh').click();
-  await expect(dv.getByTestId('devops-qa')).toBeVisible({ timeout: 30_000 });
+  // 5. Task: pull requests, work items and the QA status of each PR, read on demand
+  await page.getByTestId('nav-task').click();
+  const dv = page.getByTestId('brain-page-task');
+  await dv.getByTestId('task-refresh').click();
+  await expect(dv.getByTestId('task-qa')).toBeVisible({ timeout: 30_000 });
   await dv.evaluate(el => { el.scrollTop = 0; });
-  await save('devops');
+  await save('task');
 
   // 6. Qualità: four measured metrics about how the agents work, each with its source
   await goPage(page, 'qualita');

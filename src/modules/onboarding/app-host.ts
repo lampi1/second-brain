@@ -13,7 +13,7 @@ import { githubProbe, jiraProbe } from './app-providers';
 import { JiraVault } from './app-vault';
 import { credentialEntry } from './credential-entry';
 import { azureAccount, azureLogin, azureProof } from './app-azure';
-import type { DevopsState } from '../../shared/contract';
+import type { TasksState } from '../../shared/contract';
 function gh(): string {
   const exe = findCli('gh');
   if (!exe || /["\r\n%&|<>^!]/.test(exe) || (process.platform === 'win32' && !exe.toLowerCase().endsWith('.exe'))) throw new Error('Installa GitHub CLI dal sito ufficiale, poi riprova');
@@ -31,7 +31,7 @@ async function githubLogin() {
     child.once('error', () => reject(new Error('Accesso GitHub non avviato'))); child.once('spawn', () => { child.unref(); resolve(); });
   });
 }
-export function createAppConnectors(userData: string, refreshDevops: () => Promise<DevopsState>) {
+export function createAppConnectors(userData: string, refreshTasks: () => Promise<TasksState>) {
   const file = path.join(userData, 'connector-projects.json');
   let selections: ConnectorSelections = {};
   const enabled = () => {
@@ -39,7 +39,7 @@ export function createAppConnectors(userData: string, refreshDevops: () => Promi
   };
   const service = new AppConnectorService({
     async azureLogin() { enabled(); await azureLogin(); },
-    async azureProbe() { enabled(); return azureProof(azureAccount, refreshDevops); },
+    async azureProbe() { enabled(); return azureProof(azureAccount, refreshTasks); },
     vault: new JiraVault(userData, safeStorageCipher(safeStorage)),
     loadSelections: () => selections,
     async saveSelections(value) {

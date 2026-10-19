@@ -4,7 +4,7 @@
 // user is signed in to DevOps; a hidden run only records it, __sbOpened), never an internal tab.
 import { test, expect, type ElectronApplication } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
-// the demo DevOps data's pull request URL (src/main/devops/demo.ts)
+// the demo DevOps data's pull request URL (src/main/tasks/demo.ts)
 const prUrl = (id: number) => `https://dev.azure.com/o/Shop/_git/shop-web/pullrequest/${id}`;
 // what the hidden run would have opened outside the app (main/window.ts hiddenOpened)
 const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis as unknown as { __sbOpened: string[] }).__sbOpened)]);
@@ -20,7 +20,7 @@ test('a chat tile shows its DevOps links as chips; a click opens them in the sys
     await expect(chips.locator('.devlink').first()).toHaveAttribute('data-testid', 'chat-devlink-qa-build-20931');
     // before any DevOps read the PR only in a URL has no title: the type and the id
     await expect(page.getByTestId('chat-devlink-qa-pr-812')).toHaveText('PR812');
-    await page.evaluate(() => window.sb.invoke('devops:refresh', undefined));
+    await page.evaluate(() => window.sb.invoke('tasks:refresh', undefined));
     await expect(page.getByTestId('chat-devlink-qa-pr-812')).toContainText('Rimborso: lo sconto in origine entra nel totale');  // cached DevOps data
     await expect(page.getByTestId('chat-devlink-qa-pr-815')).toContainText('Resi: IVA calcolata una volta sola');              // tool result
     await expect(page.getByTestId('chat-devlink-qa-workitem-4720')).toContainText('Bug');

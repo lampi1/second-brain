@@ -105,7 +105,6 @@ export const componentsEn: typeof componentsIt = {
   "cmp.interview.chooseWhenNeeded": "To be chosen when needed",
   "cmp.interview.chooseLater": "To be chosen later",
   "cmp.interview.folderNotLinked": "Folder not linked. Try again.",
-  "cmp.improve.unavailable": "Changes are not available. You can try again without losing local work.",
   "cmp.preparedUpdate.confirmTitle": "Apply the prepared update?",
   "cmp.preparedUpdate.body": (p: { version: string }) => `Version ${p.version} has been prepared and verified.`,
   "cmp.preparedUpdate.saveFirst": "Before restarting, the chats' state and data are saved. If saving fails, the update stops.",

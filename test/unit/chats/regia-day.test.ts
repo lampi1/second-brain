@@ -21,7 +21,6 @@ describe('regia day rule', () => {
   it('a Regia with a context from yesterday, idle a few minutes, compacts once today', () => {
     expect(romeDay(Date.parse('2026-10-13T22:30:00Z'))).toBe('2026-10-14'); // past midnight in Rome
     expect(regiaDayDue(v, NOW)).toBe(true);
-    expect(regiaDayDue({ ...v, isRegia: false, appRegia: true }, NOW)).toBe(true);
     for (const x of [
       { isRegia: false }, { harness: 'cursor' }, { state: 'running' }, { pending: 1 }, { busy: true }, { alive: false }, { handoffTurn: true },
       { contextTokens: REGIA_DAY_MIN - 1 }, { lastTurnAt: NOW - REGIA_DAY_IDLE_MS + 1 }, { ctxSince: undefined },

@@ -1,12 +1,12 @@
 // app_digest: the whole status the Regia needs in ONE tool call, built from what the app already holds (zero tokens, no
 // network): every open chat with its state, what it waits for (question text, permission, command's first line), its
-// last line, git branch, long context; the chats closed and the commands the user ran; the user's PRs and unread DevOps
-// news from the DevOps page's last read. `since` keeps only what changed (the waiting and failed chats always stay).
+// last line, git branch, long context; the chats closed and the commands the user ran; the user's PRs and unread Task
+// news from the Task page's last read. `since` keeps only what changed (the waiting and failed chats always stay).
 // Why: the owner, 2026-10-13, "tante piccole ottimizzazioni che non fanno perdere qualità ma non usano LLM quando
 // possibile". Measured on the transcripts of 07-13/10: the Regia read chats one by one 157 times a week (app_chat_items,
 // ~470k tokens of context re-read per call) and a "stato" took ~11 tool calls (~1 $); this answers it in one call.
 // Used by appctl/tools.ts (tool app_digest); pinned by test/unit/appctl-digest.test.ts.
-import type { ChatSummary, DevopsState, PendingRequest, RunInfo } from '../../shared/contract';
+import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../shared/contract';
 import { chatName } from '../../shared/regia';
 import { redact } from '../log';
 import { engineLabel } from '../engines/registry';
@@ -16,7 +16,7 @@ export interface DigestInput {
   /** open questions/permissions plus the commands left for the user (app_pending's list) */
   pending: PendingRequest[];
   runs: RunInfo[];
-  devops: DevopsState | null;
+  tasks: TasksState | null;
   now: number;
   /** only what changed since this time (ms); null = everything */
   since: number | null;
@@ -48,7 +48,7 @@ export function askLine(r: PendingRequest): string {
 const VOTES: Record<string, string> = { '10': 'approvata', '5': 'approvata con suggerimenti', '-5': 'chiede modifiche', '-10': 'rifiutata' };
 
 /** One line per PR: name (the bug it fixes), build, votes that matter, QA failures; QA-blocked first. */
-export function prLines(d: DevopsState): string[] {
+export function prLines(d: TasksState): string[] {
   const rows = d.prs.map(p => {
     const bug = p.workItems.find(w => /bug/i.test(w.type)) ?? p.workItems[0];
     const name = one(bug?.title || p.title, 90);
@@ -70,7 +70,7 @@ export function digest(inp: DigestInput): string {
   const asks = new Map<string, PendingRequest[]>();
   for (const r of inp.pending) asks.set(r.chatId, [...(asks.get(r.chatId) ?? []), r]);
   const changed = (c: ChatSummary) => since === null || c.updatedAt >= since;
-  const name = (c: ChatSummary) => `«${c.appRegia ? "Regia dell'app" : chatName(c)}» (${engine(c)}, ${c.id})`;
+  const name = (c: ChatSummary) => `«${chatName(c)}» (${engine(c)}, ${c.id})`;
   const extra = (c: ChatSummary) => {
     const b = inp.branch?.(c.cwd);
     return [
@@ -89,7 +89,7 @@ export function digest(inp: DigestInput): string {
   const wait: string[] = [], err: string[] = [], run: string[] = [], done: string[] = [], same: string[] = [], regie: string[] = [];
   for (const c of open) {
     const rs = asks.get(c.id) ?? [];
-    if (c.isRegia || c.appRegia) { regie.push(`${name(c)}: ${c.state}${rs.length ? `, ${rs.length} richieste aperte` : ''}`); continue; }
+    if (c.isRegia) { regie.push(`${name(c)}: ${c.state}${rs.length ? `, ${rs.length} richieste aperte` : ''}`); continue; }
     if (rs.length) { for (const r of rs) wait.push(line(c, `aspetta l'utente da ${ago(now - r.at)}: ${askLine(r)}`, false)); continue; }
     if (c.state === 'error') { err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
     if (!changed(c)) { same.push(`«${c.title}»`); continue; }
@@ -110,7 +110,7 @@ export function digest(inp: DigestInput): string {
   const runs = inp.runs.filter(r => (r.endedAt ?? r.startedAt) >= (since ?? now - 2 * 3600_000))
     .map(r => `- «${titleOf(r.chatId)}»: \`${one(redact(r.code.split('\n')[0] ?? ''), 120)}\` ${r.state === 'running' ? 'in corso' : `${r.state}, uscita ${r.exitCode ?? '-'}`}`);
 
-  const counts = [`${open.filter(c => !c.isRegia && !c.appRegia).length} chat aperte`, wait.length && `${wait.length} richieste per l'utente`, err.length && `${err.length} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
+  const counts = [`${open.filter(c => !c.isRegia).length} chat aperte`, wait.length && `${wait.length} richieste per l'utente`, err.length && `${err.length} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
   const out = [`Stato alle ${hhmm(now)}${since !== null ? ` (novità dalle ${hhmm(since)})` : ''}: ${counts}.`];
   const section = (title: string, rows: string[]) => { if (rows.length) out.push('', `${title}:`, ...rows); };
   section('Aspettano l\'utente (l\'app glielo mostra già: nello stato basta dire quale chat e su cosa)', wait);
@@ -122,12 +122,12 @@ export function digest(inp: DigestInput): string {
   section('Comandi eseguiti dall\'utente con Esegui', runs);
   if (regie.length) section('Orchestrator', regie);
 
-  const d = inp.devops;
-  if (!d || !d.at) out.push('', `DevOps: non letto dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`);
+  const d = inp.tasks;
+  if (!d || !d.at) out.push('', `Task (Azure DevOps): non letti dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`);
   else {
-    out.push('', `PR dell'utente (DevOps letto alle ${hhmm(d.at)}${now - d.at > 3600_000 ? `, ${ago(now - d.at)} fa` : ''}):`, ...(d.prs.length ? prLines(d) : ['- nessuna PR attiva']));
+    out.push('', `PR dell'utente (Task letti alle ${hhmm(d.at)}${now - d.at > 3600_000 ? `, ${ago(now - d.at)} fa` : ''}):`, ...(d.prs.length ? prLines(d) : ['- nessuna PR attiva']));
     const news = d.news.filter(n => n.unread && (since === null || Date.parse(n.at) >= since));
-    if (news.length) out.push('', `Novità DevOps non lette (${news.length}):`, ...news.slice(0, 8).map(n => `- ${n.kind}${n.who ? ` · ${n.who.split(/\s+/)[0]}` : ''}: ${one(n.title, 90)}${n.detail ? ` — ${one(n.detail, 110)}` : ''} ${n.url}`));
+    if (news.length) out.push('', `Novità Task non lette (${news.length}):`, ...news.slice(0, 8).map(n => `- ${n.kind}${n.who ? ` · ${n.who.split(/\s+/)[0]}` : ''}: ${one(n.title, 90)}${n.detail ? ` — ${one(n.detail, 110)}` : ''} ${n.url}`));
     if (d.reviews.length) out.push(`Review che aspettano il suo voto: ${d.reviews.length}.`);
   }
   return out.join('\n');

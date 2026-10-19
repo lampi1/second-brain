@@ -70,7 +70,7 @@ export function regiaHandoff(chatId: string): string {
  *  Chiuse (its own notice offers Riapri). */
 export async function renewRegia(chatId: string, to: Harness, summary: boolean, archive = false): Promise<boolean> {
   const old = app.get().chats[chatId];
-  if (!old?.isRegia && !old?.appRegia) return false;
+  if (!old?.isRegia) return false;
   const prompt = summary ? regiaHandoff(chatId) : undefined;
   // through the routing table (ADR 0032, kind regia): the engine the user picked beats the row; the model and effort
   // come from the row for that engine, else the engine's default as before; main keeps the Orchestrator role on it
@@ -105,7 +105,7 @@ export function askRenewRegia(to?: Harness): void {
  *  old conversation stays as a closed chat to read (ADR 0021; the user, 2026-10-12: "che sia disponibile il clear"). */
 export function askClearRegia(chatId: string | null = regiaId()): void {
   const c = chatId ? app.get().chats[chatId] : null;
-  if (!chatId || !(c?.isRegia || c?.appRegia)) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
+  if (!chatId || !c?.isRegia) { toast('Non c’è ancora un Orchestrator: crealo con Nuova chat (Ctrl+N).', 'info'); return; }
   askConfirm({
     title: `Pulire l’Orchestrator «${c.title}»?`,
     body: 'Riparte vuoto sullo stesso motore e rilegge da sola la memoria (now.md). La conversazione di adesso resta tra le chat chiuse, da consultare.',
@@ -136,7 +136,7 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'devops', adesso: 'devops', dafare: 'devops', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file' };
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
@@ -505,7 +505,7 @@ export function closeFocused(): void {
   const pageOff = !!c && u.page !== 'home';
   const offScreen = !!c && (!!c.closedAt || pageOff || u.map || (!!u.maximized && u.maximized !== `chat:${c.id}`) || (!!u.focusMode && u.focusMode !== c.id));
   if (!c || offScreen) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
-  if (c.isRegia || c.appRegia) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
+  if (c.isRegia) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
   closeChat(c.id);
 }
 

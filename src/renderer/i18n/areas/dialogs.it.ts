@@ -195,8 +195,6 @@ export const dialogsIt = {
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.map': 'Mappa 3D',
   'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
-  'dialogs.sidebar.improve': 'Migliora l\'app',
-  'dialogs.sidebar.improveShortcut': 'G U',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} ti aspettano`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} nuove`,
 
@@ -211,7 +209,7 @@ export const dialogsIt = {
   'dialogs.launch.failedPrefix': 'La versione nuova non è partita.',
   'dialogs.launch.failedReason': (p: { reason: string }) => `${p.reason}: l’app è tornata a`,
   'dialogs.launch.startedPrefix': 'Partita la versione nuova',
-  'dialogs.launch.improveButton': 'Migliora l’app',
+  'dialogs.launch.updatesButton': 'Aggiornamenti',
   'dialogs.launch.dismissLabel': 'Chiudi l\'avviso',
   'dialogs.launch.dismissTip': 'Chiudi',
 

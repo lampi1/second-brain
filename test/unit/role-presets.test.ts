@@ -6,7 +6,7 @@ import { previewRoleChange, resolveRole, restoreRole, RoleValidationError, selec
 
 const refs = {
   agentIds: ['general', 'researcher', 'writer', 'reviewer', 'day-planner', 'implementer'].map(id => `default-${id}`),
-  pageIds: ['agenti', 'devops', 'fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'miglioramento', 'skill', 'impostazioni', 'migliora'],
+  pageIds: ['agenti', 'task', 'fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'miglioramento', 'skill', 'impostazioni'],
 };
 const dev = () => initialRolePreset('dev', refs);
 const selection = () => selectRole(dev(), {}, refs);
@@ -56,7 +56,7 @@ describe('packaged references and schema', () => {
 describe('personal overrides and preferences', () => {
   it('composes stable deltas and partial defaults without modifying its inputs', () => {
     const p = dev();
-    const o = { addAgentIds: ['default-writer'], removeAgentIds: ['default-researcher'], addPageIds: ['idee'], removePageIds: ['devops'], defaults: { homePageId: 'idee' } };
+    const o = { addAgentIds: ['default-writer'], removeAgentIds: ['default-researcher'], addPageIds: ['idee'], removePageIds: ['task'], defaults: { homePageId: 'idee' } };
     const original = structuredClone({ p, o });
     const result = resolveRole(p, selectRole(p, o, refs), refs);
     expect(result.agentIds).toEqual(['default-implementer', 'default-day-planner', 'default-writer']);
@@ -106,7 +106,7 @@ describe('preview, upgrade, reset and restore', () => {
     expect(restoreRole(preview.previous, dev(), refs)).toEqual(old);
   });
   it('retains personal additions and removals across preset updates', () => {
-    const p = dev(), s = selectRole(p, { addPageIds: ['idee'], removePageIds: ['devops'] }, refs);
+    const p = dev(), s = selectRole(p, { addPageIds: ['idee'], removePageIds: ['task'] }, refs);
     const updated = { ...p, revision: p.revision+1, pageIds: [...p.pageIds, 'costi'] };
     const preview = previewRoleChange(p, s, updated, s.overrides, refs);
     expect(preview.next.presetRevision).toBe(p.revision+1);
@@ -116,10 +116,10 @@ describe('preview, upgrade, reset and restore', () => {
     expect(() => restoreRole(preview.previous, updated, refs)).toThrow('exact retained preset revision');
   });
   it('keeps redundant overrides as intent for later revisions', () => {
-    const p = dev(), s = selectRole(p, { addPageIds: ['devops'], removePageIds: ['idee'] }, refs);
-    const updated = { ...p, revision: p.revision+1, pageIds: [...p.pageIds.filter(id => id !== 'devops'), 'idee'] };
+    const p = dev(), s = selectRole(p, { addPageIds: ['task'], removePageIds: ['idee'] }, refs);
+    const updated = { ...p, revision: p.revision+1, pageIds: [...p.pageIds.filter(id => id !== 'task'), 'idee'] };
     const resolved = resolveRole(updated, s, refs);
-    expect(resolved.pageIds).toContain('devops');
+    expect(resolved.pageIds).toContain('task');
     expect(resolved.pageIds).not.toContain('idee');
   });
   it('shows a reset of dormant personal intent even when the resolved view is identical', () => {

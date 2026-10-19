@@ -67,7 +67,7 @@ export function folderName(cwd: string): string {
 export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'regia';
 
 /** The state pill of a chat: Italian label + color tone. */
-export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'appRegia' | 'pending' | 'queued' | 'closedAt'>): { label: string; tone: Tone } {
+export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'pending' | 'queued' | 'closedAt'>): { label: string; tone: Tone } {
   const s: ChatState = c.state;
   if (s === 'waiting' || c.pending > 0) return { label:t('ui.state.waiting'), tone: 'wait' };
   // an agent's start or turn waiting for the machine's load (ADR 0036): not finished
@@ -76,7 +76,7 @@ export function stateInfo(c: Pick<ChatSummary, 'state' | 'isRegia' | 'appRegia' 
   if (s === 'starting') return { label:t('ui.state.starting'), tone: 'off' };
   if (s === 'error') return { label:t('ui.state.error'), tone: 'err' };
   if (s === 'closed') return { label:t('ui.state.closed'), tone: 'off' };
-  return c.isRegia || c.appRegia ? { label:t('ui.state.regia'), tone: 'regia' } : { label:t('ui.state.done'), tone: 'done' };
+  return c.isRegia ? { label:t('ui.state.regia'), tone: 'regia' } : { label:t('ui.state.done'), tone: 'done' };
 }
 
 /** Why a chat waits in the CPU queue (ADR 0036): the figure over its limit, or the chats ahead of it. */

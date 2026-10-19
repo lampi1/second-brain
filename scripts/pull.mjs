@@ -2,7 +2,7 @@
 // the local main (never a merge, rebase, reset or push: local commits stay and stop the update), reinstall the pinned
 // dependencies when the lockfile changed (npm ci, install scripts off by .npmrc, then the Electron binary) and build.
 // It never promotes, restarts or touches the stable release: "Aggiorna" (the user's click) does that.
-// Used by `npm run pull`, by the app's Orchestrator through the app_update_code tool (main/improve/service.ts), and
+// Used by `npm run pull`, by the app's Orchestrator through the app_update_code tool (main/update/source.ts), and
 // by test/unit/pull.test.ts (pullPlan, changedDeps).
 //   node scripts/pull.mjs [--json] [--remote origin] [--no-build] [--check] [--strict]
 // --strict counts untracked files as local changes too (a stable copy's promotion needs a fully clean tree).
@@ -33,7 +33,7 @@ function main() {
   const remote = args.includes('--remote') ? args[args.indexOf('--remote') + 1] : 'origin';
   if (!/^[\w.-]+$/.test(remote ?? '')) throw new Error('invalid remote name');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  // core.fsmonitor off: a hook set in .git/config never runs from here (same rule as main/improve/service.ts)
+  // core.fsmonitor off: a hook set in .git/config never runs from here (same rule as main/update/source.ts)
   const git = (...a) => execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...a], { encoding: 'utf8', windowsHide: true }).trim();
   const npm = a => execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', a, { cwd: repo, stdio: json ? ['ignore', 'ignore', 'inherit'] : 'inherit', shell: process.platform === 'win32', windowsHide: true });
   const out = r => { if (json) console.log(JSON.stringify(r)); else console.log(r.message); if (!r.ok) process.exitCode = 1; };
@@ -71,7 +71,7 @@ function main() {
     execFileSync(process.execPath, [path.join(repo, 'scripts', 'build.mjs')], { cwd: repo, stdio: json ? ['ignore', 'ignore', 'inherit'] : 'inherit', windowsHide: true });
   }
   out({ ok: true, upToDate: false, from, to, commits, behind, depsReinstalled: deps, built: build,
-    message: `Aggiornata da ${from} a ${to} (${behind} commit${deps ? ', dipendenze reinstallate' : ''}${build ? ', build fatta' : ''}). Versione stabile: premi «Aggiorna» in «Migliora l'app». Versione di sviluppo: riavviala (npm start).` });
+    message: `Aggiornata da ${from} a ${to} (${behind} commit${deps ? ', dipendenze reinstallate' : ''}${build ? ', build fatta' : ''}). Versione stabile: premi «Aggiorna» in Impostazioni → Aggiornamenti. Versione di sviluppo: riavviala (npm start).` });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

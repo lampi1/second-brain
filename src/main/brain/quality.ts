@@ -2,7 +2,7 @@
 // knows. Turns: the finished turns of the chats run in this app, per Rome day, from its own logs ('turn done' of Claude,
 // 'acp turn done' with engine cursor, earlier 'cursor turn done', of Cursor; the logs keep 14 days), the denominator of
 // "errors you had to catch per 100 turns".
-// PRs: the user's active PRs at the last DevOps read (devops/service.ts) that a failed build or QA holds (a linked
+// PRs: the user's active PRs at the last DevOps read (tasks/service.ts) that a failed build or QA holds (a linked
 // test case Failed/Blocked, a reviewer's "rifiutata" or "in attesa dell'autore"). Reopened bugs: the brain's
 // read-only ops/tools/bug-reopen.mjs (his resolved bugs sent back to an open state), run in the background at most every
 // 12 h while DevOps reading is on, its last result kept in userData/quality-reopen.json. Why: the user, 2026-10-13, "la
@@ -94,7 +94,7 @@ export interface QualityDeps {
   logDir: string;
   cacheFile: string;                                                   // userData/quality-reopen.json
   brainRoot: () => string | null;
-  devops: () => { at: number | null; prs: DevopsPr[]; details: Record<string, DevopsDetail>; error: { message: string } | null; enabled: boolean };
+  tasks: () => { at: number | null; prs: DevopsPr[]; details: Record<string, DevopsDetail>; error: { message: string } | null; enabled: boolean };
   run: (script: string, args: string[], cwd: string, timeoutMs: number) => Promise<RunResult>;
   now?: () => number;
 }
@@ -129,7 +129,7 @@ export class Quality {
 
   /** Starts a background read when the cache is older than 12 h (DevOps reading on, script present); never waits for it. */
   private maybeRefresh(cache: Omit<Reopen, 'error' | 'refreshing'> | null, fresh: boolean): void {
-    if (this.running || !this.d.devops().enabled) return;
+    if (this.running || !this.d.tasks().enabled) return;
     const age = cache?.at ? this.now() - Date.parse(cache.at) : Infinity;
     if (!fresh && (age < REOPEN_TTL_MS || this.now() - this.failedAt < REOPEN_RETRY_MS)) return;
     const root = this.d.brainRoot();
@@ -146,10 +146,10 @@ export class Quality {
 
   /** fresh = the user pressed Aggiorna (after az login, say): read DevOps now, past the 12 h cache and the wait after a failure. */
   get({ fresh = false }: { fresh?: boolean } = {}): AppQuality {
-    const dv = this.d.devops();
+    const dv = this.d.tasks();
     const cache = this.cached();
     this.maybeRefresh(cache, fresh);
-    const reopen: Reopen = { ...EMPTY_REOPEN, ...(cache ?? {}), error: this.lastError ?? (dv.enabled || cache ? null : 'lettura DevOps spenta: accendila nella pagina DevOps'), refreshing: !!this.running };
+    const reopen: Reopen = { ...EMPTY_REOPEN, ...(cache ?? {}), error: this.lastError ?? (dv.enabled || cache ? null : 'lettura DevOps spenta: accendila nella pagina Task'), refreshing: !!this.running };
     return {
       turns: this.turns(),
       prs: { at: dv.at, total: dv.prs.length, blocked: prBlocks(dv.prs, dv.details), error: dv.error?.message ?? null },

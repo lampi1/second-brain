@@ -41,7 +41,7 @@ export interface DemoBrowserHooks { act(tabId: string, action: DemoAction): void
 export interface DemoOptions { freeze: boolean; now?: () => number; seed?: number }
 
 const MIN = 60_000;
-// Demo DevOps links: the same made-up org as the demo DevOps data (devops/demo.ts), so the tile's link chips resolve
+// Demo DevOps links: the same made-up org as the demo DevOps data (tasks/demo.ts), so the tile's link chips resolve
 const prUrl = (id: number) => `https://dev.azure.com/o/Shop/_git/shop-web/pullrequest/${id}`;
 const appPr = (id: number) => `https://dev.example.com/proj/_git/app/pullrequest/${id}`;
 /** The fictional brain folder of the demo (shown in the UI, never read). */
@@ -441,12 +441,12 @@ export class DemoChats implements ChatService {
 
   async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
     // one Orchestrator, like the real manager (unifiedOrchestrator): a coordinator request returns the current one
-    // unless it replaces it; the app's Regia is folded into it
-    if (req.regia || req.appRegia) {
+    // unless it replaces it
+    if (req.regia) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = [...this.chats.values()].find(c => c.orchestrator && c.isRegia);
       if (current && req.replaces !== current.id) return current;
-      req = { ...req, regia: true, appRegia: false, space: undefined };
+      req = { ...req, regia: true };
     }
     const id = `c${++this.counter}`;
     // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
@@ -459,16 +459,12 @@ export class DemoChats implements ChatService {
       this.patch(old.id, { isRegia: false, orchestrator: undefined, regiaName: undefined, regiaSince: undefined });
       for (const x of [...this.chats.values()]) if (x.regiaOf === old.id) this.patch(x.id, { regiaOf: id });
     }
-    // one app Regia ("Migliora l'app"), never a work Regia: the new one takes the role
-    const appRegia = req.appRegia === true && !req.regia;
-    if (appRegia) for (const c of [...this.chats.values()]) if (c.appRegia) this.patch(c.id, { appRegia: undefined });
     const c: ChatSummary = {
       id, harness: req.harness, origin: 'app', title: req.title?.trim() || (regiaName && !old ? `Orchestrator · ${regiaName}` : '') || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
       ...(req.regia ? { regiaSince: old?.regiaSince ?? this.now(), orchestrator: true as const } : {}),
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(appRegia ? { appRegia: true } : {}),
       ...(req.route ? { route: req.route } : {}),
     };
     this.chats.set(id, c);

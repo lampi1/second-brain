@@ -31,5 +31,5 @@ export const homeIt = {
   'home.noRegia': 'L’Orchestrator non è attivo. Apri lo spazio modifiche o crea un Orchestrator dal suo pannello; qui non viene avviato automaticamente.',
   'home.question': 'La tua richiesta', 'home.placeholder': 'Che cosa vuoi capire o migliorare?', 'home.send': 'Invia all’Orchestrator',
   'home.openRegia': 'Apri conversazione', 'home.sent': 'Richiesta inviata.', 'home.queued': 'Richiesta in coda nell’Orchestrator.', 'home.notSent': 'Richiesta non inviata: il testo resta qui. Riprova quando la chat è disponibile.',
-  'home.improve': 'Modifiche e aggiornamenti', 'home.compare': 'Confronto modelli',
+  'home.compare': 'Confronto modelli',
 };

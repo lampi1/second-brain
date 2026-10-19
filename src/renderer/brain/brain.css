@@ -571,7 +571,7 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
 @media (max-width: 980px) { .bx-proc { grid-template-columns: 1fr; } .bx-proc-list { position: static; max-height: 360px; } }
 
-/* ── DevOps (pages/Devops.tsx): a Dashboard-style head, one quiet settings bar, four tiles, one tab per section ── */
+/* ── DevOps (pages/Task.tsx): a Dashboard-style head, one quiet settings bar, four tiles, one tab per section ── */
 .dv-page { display: grid; gap: 18px; align-content: start; min-width: 0; }
 .dv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-top: 8px; }
 .dv-head-main { display: grid; gap: 6px; min-width: 0; flex: 1; }
@@ -729,7 +729,7 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .dv-tests li { display: flex; gap: 8px; align-items: baseline; font-size: var(--bx-fs-s); color: var(--bx-text-2); }
 .dv-standup { display: grid; gap: 8px; justify-items: start; }
 .dv-standup > section { width: 100%; }
-/* "Test e QA" (pages/DevopsQa.tsx) */
+/* "Test e QA" (pages/TaskQa.tsx) */
 .qa-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bx-surface-2); }
 .qa-seg { min-width: 6px; }
 .qa-seg.good { background: var(--bx-green); }

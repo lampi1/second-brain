@@ -103,7 +103,6 @@ export const componentsIt = {
   "cmp.interview.chooseWhenNeeded": "Da scegliere quando servono",
   "cmp.interview.chooseLater": "Da scegliere più tardi",
   "cmp.interview.folderNotLinked": "Cartella non collegata. Riprova.",
-  "cmp.improve.unavailable": "Le modifiche non sono disponibili. Puoi riprovare senza perdere il lavoro locale.",
   "cmp.preparedUpdate.confirmTitle": "Applicare l’aggiornamento preparato?",
   "cmp.preparedUpdate.body": (p: { version: string }) => `La versione ${p.version} è stata preparata e verificata.`,
   "cmp.preparedUpdate.saveFirst": "Prima di riavviare vengono salvati lo stato delle chat e i dati. Se il salvataggio non riesce, l’aggiornamento si ferma.",

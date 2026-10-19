@@ -2,7 +2,7 @@
 // Personale (routines.md "Report della giornata", P-092; journal/brief/). READ-ONLY. The Regia still adds mail, Teams
 // and calendar ("Posta e chat"), picks the top 3 and writes the text for {{OWNER}}; never the reviews of others' PRs
 // (P-091). Area by heuristics (chat label, target branch release, area words): a draft, the Regia corrects it.
-// Usage (--json on both: structured rows with title, link, state, area and a chat's project folder (cwd), for the brain site's Fatto/Da fare/stand-up):
+// Usage (--json on both: structured rows with title, link, state, area, time (HH:MM, Rome) and a chat's project folder (cwd), for the brain site's Fatto/Da fare/stand-up):
 //        node "{{BRAIN}}/ops/tools/day.mjs" brief                    (live PRs, work items, now.md)
 //        node "{{BRAIN}}/ops/tools/day.mjs" report [--date AAAA-MM-GG] (journal, DevOps of the
 //          day, chats active that day in Claude and Cursor, {{BRAIN_NAME}} commits)
@@ -102,14 +102,14 @@ async function devopsDay(day) {
   const next = romeDay(Date.parse(`${day}T12:00:00Z`) + 864e5);
   const wiql = await api('/_apis/wit/wiql?api-version=7.1', { query: `SELECT [System.Id] FROM WorkItems WHERE [System.ChangedBy] = @Me AND [System.ChangedDate] >= '${day}' AND [System.ChangedDate] < '${next}' ORDER BY [System.ChangedDate] DESC` });
   const ids = wiql.workItems.map(w => w.id).slice(0, 100);
-  const items = ids.length ? (await api('/_apis/wit/workitemsbatch?api-version=7.1', { ids, fields: ['System.Id', 'System.WorkItemType', 'System.Title', 'System.State', 'System.TeamProject'] })).value.map(w => w.fields) : [];
+  const items = ids.length ? (await api('/_apis/wit/workitemsbatch?api-version=7.1', { ids, fields: ['System.Id', 'System.WorkItemType', 'System.Title', 'System.State', 'System.TeamProject', 'System.ChangedDate'] })).value.map(w => w.fields) : [];
   const wiLink = f => `${ORG}/${encodeURIComponent(f['System.TeamProject'])}/_workitems/edit/${f['System.Id']}`;
   // text = the markdown line; the other fields feed --json (the brain site's "Fatto" and stand-up)
   const target = p => p.targetRefName.replace('refs/heads/', '');
   return {
-    opened: opened.map(p => ({ kind: 'pr-aperta', title: p.title, target: target(p), url: link(p), text: `PR aperta: "${p.title}" → ${target(p)} ${link(p)}`, area: areaOf('', { branch: p.targetRefName }) })),
-    merged: merged.map(p => ({ kind: 'pr-unita', title: p.title, target: target(p), url: link(p), text: `PR unita: "${p.title}" → ${target(p)} ${link(p)}`, area: areaOf('', { branch: p.targetRefName }) })),
-    items: items.map(f => ({ kind: 'work-item', type: f['System.WorkItemType'], title: f['System.Title'], state: f['System.State'], url: wiLink(f), text: `${f['System.WorkItemType']} "${clip(f['System.Title'], 90)}" ora ${f['System.State']} ${wiLink(f)}`, area: f['System.TeamProject'] === 'Project Triage' ? 'Altro' : areaOf(f['System.Title']) })),
+    opened: opened.map(p => ({ kind: 'pr-aperta', time: romeTime(p.creationDate), title: p.title, target: target(p), url: link(p), text: `PR aperta: "${p.title}" → ${target(p)} ${link(p)}`, area: areaOf('', { branch: p.targetRefName }) })),
+    merged: merged.map(p => ({ kind: 'pr-unita', time: romeTime(p.closedDate), title: p.title, target: target(p), url: link(p), text: `PR unita: "${p.title}" → ${target(p)} ${link(p)}`, area: areaOf('', { branch: p.targetRefName }) })),
+    items: items.map(f => ({ kind: 'work-item', time: f['System.ChangedDate'] ? romeTime(f['System.ChangedDate']) : '', type: f['System.WorkItemType'], title: f['System.Title'], state: f['System.State'], url: wiLink(f), text: `${f['System.WorkItemType']} "${clip(f['System.Title'], 90)}" ora ${f['System.State']} ${wiLink(f)}`, area: f['System.TeamProject'] === 'Project Triage' ? 'Altro' : areaOf(f['System.Title']) })),
   };
 }
 

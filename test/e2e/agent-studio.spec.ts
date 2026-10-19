@@ -12,7 +12,7 @@ test('an agent page opens its editor on Modifica and the draft survives page nav
     await studio.getByTestId('agent-edit').click();
     await expect(page.getByTestId('agent-name')).toHaveValue('Generale');
     await page.getByTestId('agent-name').fill('Assistente offerte');
-    await page.getByTestId('nav-devops').click();
+    await page.getByTestId('nav-task').click();
     await openAgents(page);
     await expect(page.getByTestId('agent-name')).toHaveValue('Assistente offerte');
     await shot(page,'agent-editor-local-draft');
@@ -34,7 +34,7 @@ test('agent manifest edits survive navigation, save and restart, with safe read-
     await first.page.getByTestId('agent-manifest-output').fill('Cited result');
     await first.page.getByTestId('agent-manifest-accessScopes').fill('Authorized sources only');
     await first.page.getByTestId('agent-manifest-successCriteria').fill('Checkable references\nUnknowns explicit');
-    await first.page.getByTestId('nav-devops').click();
+    await first.page.getByTestId('nav-task').click();
     await openAgents(first.page,'Generale (copia)');
     await expect(first.page.getByTestId('agent-manifest-whenToUse')).toHaveValue('<script>untrusted declaration</script>');
     await first.page.getByTestId('agent-save').click();

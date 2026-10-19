@@ -49,8 +49,8 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'sync-blocked': { label: 'Pubblicazione bloccata dal controllo', priority: 'normal' },
   'sync-error': { label: 'Pubblicazione non riuscita', priority: 'normal' },
   'brain-sync': { label: 'Sincronizzazione del cervello ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
-  devops: { label: 'DevOps', priority: 'normal' },   // devops/service.ts: news on my work items, PRs and the tickets I follow
-  'devops-alert': { label: 'DevOps per te', priority: 'normal' },  // devops/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
+  task: { label: 'Task', priority: 'normal' },   // tasks/service.ts: news on my work items, PRs and the tickets I follow
+  'task-alert': { label: 'Task per te', priority: 'normal' },  // tasks/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
   'agent-kept': { label: 'Agente tenuto', priority: 'quiet' },      // chats/manager.ts: a probation agent passed (AGENTS-DESIGN §4.7)
   'agent-retired': { label: 'Agente ritirato', priority: 'normal' }, // a probation agent was archived; the card offers Ripristina
 };
@@ -163,8 +163,8 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
 
 /** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. A Regia's own turns are no event (it reports in its own tile);
  *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
-export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'appRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
-  if (!c || c.isRegia || c.appRegia) return null;
+export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
+  if (!c || c.isRegia) return null;
   // the CLI died mid-turn (no result): a failure too, with the engine's error as the detail
   if (crash) return { kind: 'chat-failed', title: c.title || 'Chat', detail: cut(`il motore si è chiuso a metà turno: ${crash}`, 200), chatId: c.id };
   return c.lastResult?.isError

@@ -8,11 +8,11 @@ import { launchDemo, openRegia, shot } from './helpers';
 test('Stato: chats, waiting requests, branches and PRs in one click; a row opens its chat', async () => {
   const { app, page } = await launchDemo();
   try {
-    // before any DevOps read: only the chats, and where to read DevOps
+    // before any Task read: only the chats, and where to read them
     await page.getByTestId('stato-btn').click();
     const st = page.getByTestId('stato');
     await expect(st).toBeVisible();
-    await expect(st.getByTestId('stato-devops-at')).toHaveText('DevOps non ancora letto');
+    await expect(st.getByTestId('stato-tasks-at')).toHaveText('Task non ancora letti');
     await expect(st.getByTestId('stato-chat-qa')).toContainText('QA · Rimborsi');
     await expect(st.getByTestId('stato-chat-qa')).toContainText('ti aspetta');
     await expect(st.getByTestId('stato-branch-qa')).toHaveText('alfa-e2e · feat/rimborsi-parziali');
@@ -23,8 +23,8 @@ test('Stato: chats, waiting requests, branches and PRs in one click; a row opens
     await page.keyboard.press('Escape');
     await expect(st).toBeHidden();
 
-    // the last DevOps read (the demo's fixture through the real service), then Ctrl+Shift+S
-    await page.evaluate(() => window.sb.invoke('devops:refresh', undefined));
+    // the last Task read (the demo's fixture through the real service), then Ctrl+Shift+S
+    await page.evaluate(() => window.sb.invoke('tasks:refresh', undefined));
     await page.keyboard.press('Control+Shift+KeyS');
     await expect(st).toBeVisible();
     const pr = st.getByTestId('stato-pr-812');

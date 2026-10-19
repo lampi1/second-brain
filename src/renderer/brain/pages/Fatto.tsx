@@ -1,73 +1,120 @@
-// Fatto e standup: what the work Regia and its chats did on a day (today by default; ← → or the date picker for
-// another day), grouped by topic with DevOps links (PRs, work items), the stand-up sentences (today), the diary of the
-// day as a table and the full technical report folded. The app's own work is left out (lib/appwork.ts: it has its
-// place in "Migliora l'app"). Data: /api/day?kind=report&date=…, /api/tables.
-import { normTables, type JournalRow } from '../types';
-import { useAppRepo, useBrain } from '../api';
+// Fatto: an ordered log of what was done, newest first, grouped by day, each entry with what, who, when and a link
+// (issue #85, ADR 0079). Laid out like Agenti and Guida: the page head (title, subtitle, Rileggi), the toolbar (from
+// which day, how many days), the summary, then one card per day with its entries; the stand-up box on today.
+// Entries: lib/done-log.ts, from the brain's day reports (/api/day?kind=report&date=…: PRs, work items, diary outcomes,
+// Claude and Cursor chats) merged with the app's own chats (an app chat's link opens it here, through the DiscussBridge).
+// "Mostra altri giorni" adds three more days (a past day's first read can take up to 40 s: each day card loads alone).
+// Used by brain/index.tsx (page 'fatto').
+import { useContext, useState } from 'react';
+import type { ChatSummary } from '@shared/contract';
+import { normReport, normTables } from '../types';
+import { useBrain } from '../api';
 import { dayName, fmt, isDay, shiftDay } from '../lib/format';
 import { ownerOf } from '../lib/text';
-import { normWorkReport, workJournal } from '../lib/appwork';
-import { Async, PageHead } from '../components/States';
-import { DataTable, type Col } from '../components/DataTable';
+import { buildLog, lastDays, type LogEntry } from '../lib/done-log';
+import { Async, NoDevops } from '../components/States';
 import { Markdown } from '../components/Markdown';
-import { IconChevL, IconChevR, Pill, type Navigate, type Tone } from '../components/ui';
-import { DoneView, DONE_TAGS, Standup } from './day';
+import { useAppChats, useEngineLabels } from '../components/Composer';
+import { DiscussContext } from '../components/Discuss';
+import { ExtLink, IconExternal, type Navigate } from '../components/ui';
+import { Select } from '../../components/Select';
+import { Standup } from './day';
 import { t as tr } from '../../i18n';
-import { useCallback } from 'react';
+import '../../styles/agent-catalog.css';
+import './worklog.css';
 
-const tagTone = (tag: string): Tone => (/fatto|verificato/.test(tag) ? 'good' : /decisione/.test(tag) ? 'violet' : /attrito/.test(tag) ? 'warn' : /lezione/.test(tag) ? 'blue' : '');
+const RANGES = [3, 7, 14];
+const TONE: Record<LogEntry['kind'], string> = { 'pr-merged': 'var(--green)', 'pr-open': 'var(--blue)', 'work-item': 'var(--amber)', done: 'var(--green)', decision: 'var(--violet)', chat: 'var(--text-3)' };
+
+function Entry({ e, onChat }: { e: LogEntry; onChat?: (id: string) => void }) {
+  return (
+    <li className="wl-entry" data-kind={e.kind} style={{ ['--tone' as string]: TONE[e.kind] }} data-testid="fatto-entry">
+      <time className="wl-time" dateTime={e.time ? `${e.day}T${e.time}` : e.day}>{e.time || <span className="wl-notime">{tr('brainPages.fatto.noTime')}</span>}</time>
+      <span className="wl-dot" aria-hidden="true" />
+      <div className="wl-body">
+        <span className="wl-what">
+          {e.chatId && onChat
+            ? <button type="button" className="wl-link" onClick={() => onChat(e.chatId!)} aria-label={tr('brainPages.fatto.openChat', { title: e.what })}>{e.what}</button>
+            : e.url ? <ExtLink href={e.url} className="wl-link" title={tr('brainPages.fatto.openLink')}>{e.what} <IconExternal /></ExtLink>
+              : <span>{e.what}</span>}
+        </span>
+        <span className="wl-meta">
+          <span className="catalog-chip wl-kind">{tr(`brainPages.fatto.kind.${e.kind}`)}{e.state ? ` · ${e.state}` : ''}</span>
+          <span className="wl-who">{e.who}</span>
+          {e.area && <span className="wl-area">{e.area}</span>}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function DayCard({ day, today, index, chats }: { day: string; today: string; index: number; chats: ChatSummary[] | null }) {
+  const rep = useBrain(`/api/day?kind=report&date=${day}`, normReport);
+  const engine = useEngineLabels();
+  const bridge = useContext(DiscussContext);
+  const names = { you: tr('brainPages.fatto.who.you'), claude: engine('claude'), cursor: engine('cursor') };
+  const log = buildLog([day], { [day]: rep.data ?? undefined }, chats, names, engine)[0]!;
+  const title = dayName(day, today);
+  return (
+    <section className="catalog-card wl-day" style={{ ['--row-index' as string]: index }} aria-labelledby={`wl-${day}`} data-testid={`fatto-day-${day}`}>
+      <header className="wl-day-head">
+        <h3 id={`wl-${day}`}>{title}</h3>
+        <span className="wl-date">{fmt.dayLong(day)}</span>
+        <span className="sp" />
+        {rep.data && <span className="catalog-badge" data-testid="fatto-day-count">{tr('brainPages.fatto.count', { n: log.entries.length })}</span>}
+      </header>
+      <Async loading={rep.loading && !rep.data} error={rep.data ? null : rep.error} onRetry={() => rep.reload()} label={tr('brainPages.fatto.preparing', { isToday: day === today })} lines={3}>
+        {() => (
+          <>
+            {rep.data?.devops === false && <NoDevops />}
+            {log.entries.length
+              ? <ol className="wl-list" aria-label={`${tr('brainPages.fatto.log')}, ${title}`}>{log.entries.map(e => <Entry key={e.key} e={e} onChat={bridge ? id => bridge.showChat(id) : undefined} />)}</ol>
+              : <p className="wl-empty" data-testid="fatto-day-empty"><b>{tr('brainPages.fatto.empty')}</b> {tr('brainPages.fatto.emptyHint')}</p>}
+            {rep.data?.text && (
+              <details className="wl-detail">
+                <summary>{tr('brainPages.fatto.detailTitle', { commits: rep.data.commits.length })}</summary>
+                <Markdown text={rep.data.text} name={`giornata-${day}`} />
+              </details>
+            )}
+          </>
+        )}
+      </Async>
+    </section>
+  );
+}
 
 export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
-  const appRepo = useAppRepo();
-  const normalizeReport = useCallback((v: unknown) => normWorkReport(v, appRepo), [appRepo]);
   const t = useBrain('/api/tables', normTables);
+  const chats = useAppChats();
+  const [count, setCount] = useState(3);
   const today = t.data?.today ?? '';
-  const day = isDay(arg) ? arg : today;
-  const rep = useBrain(day ? `/api/day?kind=report&date=${day}` : null, normalizeReport);
-  const owner = t.data ? ownerOf(t.data.ideas) : '';
-  const journal = workJournal((t.data?.journal ?? []).filter(r => r.data === day));
-  const outcomes = rep.data ? rep.data.rows.filter(r => r.kind !== 'diario' || DONE_TAGS.test(r.tag ?? '')) : [];
-  const prs = outcomes.filter(r => /^pr-/.test(r.kind)).length, items = outcomes.filter(r => r.kind === 'work-item').length;
-  const isToday = day === today;
+  const from = isDay(arg) && (!today || arg <= today) ? arg : today;
+  const days = from ? lastDays(from, count, shiftDay) : [];
   const go = (d: string) => nav(d === today ? 'fatto' : `fatto/${d}`);
-  const cols: Col<JournalRow>[] = [
-    { key: 'ora', label: tr('brainPages.fatto.colTime'), nowrap: true, width: '70px' },
-    { key: 'tag', label: tr('brainPages.fatto.colType'), width: '120px', help: tr('brainPages.fatto.colTypeHelp'), render: r => <Pill tone={tagTone(r.tag)}>{r.tag || '—'}</Pill> },
-    { key: 'area', label: tr('brainPages.fatto.colArea'), width: '100px' },
-    { key: 'testo', label: tr('brainPages.fatto.colWhat'), clip: true },
-  ];
-
   return (
-    <>
-      <PageHead title={isToday ? tr('brainPages.fatto.titleToday') : tr('brainPages.fatto.titleDay', { day: dayName(day, today).toLowerCase(), dayLong: fmt.dayLong(day) })}
-        at={rep.at} refreshing={rep.refreshing} onRefresh={() => rep.reload(true)}
-        lead={rep.data ? <><b>{tr('brainPages.fatto.outcomes', { n: outcomes.length })}</b>{prs ? `, ${prs} ${tr('brainPages.fatto.pr')}` : ''}{items ? `, ${items} ${tr('brainPages.fatto.workItem')}` : ''} · {tr('brainPages.fatto.diaryRows', { n: journal.length })}</> : undefined}
-        what={tr('brainPages.fatto.what')}
-        actions={day && (
-          <div className="bx-row" role="group" aria-label={tr('brainPages.fatto.dayGroup')}>
-            <button type="button" className="bx-btn s" aria-label={tr('brainPages.fatto.prevDay')} onClick={() => go(shiftDay(day, -1))}><IconChevL /></button>
-            <input className="bx-input" style={{ height: 24, fontSize: 12 }} type="date" value={day} max={today} aria-label={tr('brainPages.fatto.chooseDay')} onChange={e => { if (isDay(e.target.value)) go(e.target.value); }} />
-            <button type="button" className="bx-btn s" aria-label={tr('brainPages.fatto.nextDay')} disabled={isToday} onClick={() => go(shiftDay(day, 1))}><IconChevR /></button>
-            {!isToday && <button type="button" className="bx-btn s" onClick={() => go(today)}>{tr('brainPages.fatto.today')}</button>}
-          </div>
-        )} />
-      {isToday && t.data && <Standup tables={t.data} owner={owner} />}
-      <Async loading={rep.loading && !rep.data} error={rep.data ? null : rep.error} onRetry={() => rep.reload()}
-        label={tr('brainPages.fatto.preparing', { isToday })} lines={4} block>
-        {() => rep.data && <DoneView rep={rep.data} />}
-      </Async>
-      <details className="bx-details" open={!isToday || undefined} data-testid="bx-diary">
-        <summary>{tr('brainPages.fatto.diaryTitle', { n: journal.length })}</summary>
-        <div className="body">
-          <DataTable name={`diario-${day}`} label={tr('brainPages.fatto.diaryLabel')} rows={journal} cols={cols} filters={['tag', 'area']} search={false} empty={tr('brainPages.fatto.diaryEmpty')} />
-        </div>
-      </details>
-      {rep.data?.text && (
-        <details className="bx-details">
-          <summary>{tr('brainPages.fatto.detailTitle', { commits: rep.data.commits.length })}</summary>
-          <div className="body"><Markdown text={rep.data.text} name={`giornata-${day}`} /></div>
-        </details>
-      )}
-    </>
+    <section className="wl-page" aria-label={tr('brainPages.fatto.title')} data-testid="fatto-page">
+      <header className="catalog-head">
+        <div><h2>{tr('brainPages.fatto.title')}</h2><p>{tr('brainPages.fatto.subtitle')}</p></div>
+        <button type="button" className="btn btn-ghost" onClick={() => t.reload(true)} data-testid="fatto-refresh">{tr('brainPages.fatto.refresh')}</button>
+      </header>
+      <div className="catalog-filters">
+        <label className="field"><span>{tr('brainPages.fatto.from')}</span>
+          <input type="date" value={from} max={today || undefined} onChange={e => { if (isDay(e.target.value)) go(e.target.value); }} data-testid="fatto-from" /></label>
+        <label className="field"><span>{tr('brainPages.fatto.range')}</span>
+          <Select value={String(count)} onChange={e => setCount(Number(e.target.value))} data-testid="fatto-range">
+            {[...new Set([...RANGES, count])].sort((a, b) => a - b).map(n => <option key={n} value={String(n)}>{n}</option>)}
+          </Select></label>
+        {from && from !== today && <button type="button" className="btn btn-ghost" onClick={() => go(today)}>{tr('brainPages.fatto.today')}</button>}
+      </div>
+      {from === today && t.data && <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />}
+      <div className="catalog-summary">
+        <p className="catalog-count"><strong>{tr('brainPages.fatto.summary', { days: days.length })}</strong></p>
+        <p className="catalog-note">{tr('brainPages.fatto.note')}</p>
+      </div>
+      <div className="wl-days" data-testid="fatto-log">
+        {today && days.map((d, i) => <DayCard key={d} day={d} today={today} index={i} chats={chats} />)}
+      </div>
+      {days.length > 0 && <div className="wl-more"><button type="button" className="btn btn-ghost" onClick={() => setCount(c => Math.min(60, c + 3))} data-testid="fatto-more">{tr('brainPages.fatto.more')}</button></div>}
+    </section>
   );
 }

@@ -23,10 +23,13 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-gear');
     await page.keyboard.press('Escape');
 
-    // "…" is on the bar at any width with browsers, Credenziali and Migliora; those left the bar (the popups switch is on it)
+    // "…" is on the bar at any width with browsers and Credenziali; those left the bar (the popups switch is on it);
+    // "Migliora l'app" is gone (ADR 0079): no entry anywhere
     for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
     await page.getByTestId('topbar-more').click();
-    for (const id of ['more-browsers', 'more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
+    for (const id of ['more-browsers', 'more-credentials']) await expect(page.getByTestId(id)).toBeVisible();
+    await expect(page.getByTestId('more-improve')).toHaveCount(0);
+    await expect(page.getByTestId('topbar-more-pop')).not.toContainText('Migliora');
     await shot(page, 'menus-more');
     // hiding the browsers leaves a count on "…"
     await page.getByTestId('more-browsers').click();
@@ -50,7 +53,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: three groups, "Regole imparate" in Brain (no more "Miglioramento" next to "Migliora l'app")
+    // the sidebar: three groups, "Regole imparate" in Brain, Task (once DevOps, ADR 0079) in Lavoro
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
     await expect(nav.locator('.nav-title')).toHaveCount(3);
@@ -64,11 +67,9 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     expect(ix('nav-dashboard')).toBeGreaterThan(ix('nav-group-app'));
     expect(ix('nav-dashboard')).toBeLessThan(ix('nav-skill'));
     await expect(page.getByTestId('nav-migliora')).toHaveCount(0);
+    await expect(page.getByTestId('nav-devops')).toHaveCount(0);
+    await expect(nav).not.toContainText('DevOps');
     await shot(page, 'menus-sidebar');
-    // App improvement remains reachable from the top-bar menu, outside the rail.
-    await page.getByTestId('topbar-more').click();
-    await page.getByTestId('more-improve').click();
-    await expect(page.getByTestId('improve')).toBeVisible();
   } finally {
     await app.close();
   }

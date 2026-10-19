@@ -510,6 +510,37 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
   },
   {
+    id: 'task-fatto',
+    title: b('Task e Fatto', 'Tasks and Done'),
+    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto è il registro di quello che è stato fatto, dal più recente.',
+      'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
+    points: [
+      // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
+      b('«Task» legge con lo script del cervello devops-me.mjs le tue PR, le review, i work item e le menzioni: sola lettura, zero token.',
+        '"Tasks" reads your PRs, reviews, work items and mentions with the brain’s script devops-me.mjs: read-only, zero tokens.'),
+      b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
+        'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
+      b('Ogni record ha «Apri chat»: una chat di lavoro su quel ticket o quella PR in un clic.',
+        'Every record has "Open chat": a work chat on that ticket or PR in one click.'),
+      // src/renderer/brain/pages/Fatto.tsx, src/renderer/brain/lib/done-log.ts
+      b('«Fatto» elenca per giorno, dal più recente, PR, work item, righe «fatto» e «decisione» del diario e chat concluse.',
+        '"Done" lists by day, newest first, PRs, work items, "fatto" and "decisione" diary lines and finished chats.'),
+      b('Ogni voce dice cosa, chi (tu, o l’agente o il motore della chat), quando e ha il suo link: Azure DevOps fuori dall’app, la chat dentro.',
+        'Each entry says what, who (you, or the chat’s agent or engine), when, and has its link: Azure DevOps outside the app, the chat inside it.'),
+      b('«Mostra altri giorni» aggiunge tre giorni; lo stand-up di oggi resta in cima, da copiare.',
+        '"Show more days" adds three days; today’s stand-up stays on top, ready to copy.'),
+    ],
+    analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
+      'Tasks is the work’s inbox; Done is the logbook.'),
+    tech: [
+      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: /api/day?kind=report del cervello più l’elenco delle chat dell’app.',
+        'Tasks: the tasks.json cache in the app’s data folder; Done: the brain’s /api/day?kind=report plus the app’s chat list.'),
+      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
+        'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
+    ],
+    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/renderer/brain/lib/done-log.ts', 'brain-template/ops/tools/day.mjs'],
+  },
+  {
     id: 'brain',
     title: b('Il brain: memoria e procedure', 'The brain: memory and procedures'),
     summary: b('Una cartella di note scelta all’installazione: parte vuota, gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
@@ -685,8 +716,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'updates',
     title: b('Aggiornamenti', 'Updates'),
-    summary: b('Tu usi una copia stabile e congelata. Oggi l’app scarica e prepara la versione nuova, ma non la installa da sola.',
-      'You use a frozen stable copy. Today the app downloads and prepares the new version, but does not install it by itself.'),
+    summary: b('Tu usi una copia stabile e congelata. «Aggiorna» in Impostazioni → Aggiornamenti la porta all’ultima versione con un clic.',
+      'You use a frozen stable copy. "Aggiorna" in Settings → Updates brings it to the latest version with one click.'),
     points: [
       // ADR 0007; scripts/release.mjs
       b('Stabile = una release congelata in %LOCALAPPDATA%/second-brain/releases; dev = tutto ciò che parte dal repo, con dati separati.',
@@ -701,9 +732,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/update/wiring.ts RESTART_LIFECYCLE_VERIFIED = false: the ready package says it cannot be applied yet
       b('Quando il pacchetto è pronto lo vedi in «Aggiornamenti»: scaricato e preparato, ma non installato (l’applicazione automatica è spenta).',
         'When the package is ready you see it in "Updates": downloaded and prepared, but not installed (automatic apply is switched off).'),
-      // src/main/wiring.ts allowLegacyPromotion: false
-      b('Il vecchio «Aggiorna» in «Migliora l’app» è disattivato e rimanda al pacchetto preparato.',
-        'The old "Aggiorna" button in "Improve the app" is disabled and points to the prepared package.'),
+      // ADR 0075; src/main/update/source.ts, src/renderer/components/AppUpdateSettings.tsx
+      b('«Aggiorna» in Impostazioni → Aggiornamenti conta cosa c’è di nuovo su GitHub, poi scarica (solo avanzamento rapido), ricostruisce e riavvia sull’ultima versione, senza la suite di test.',
+        '"Aggiorna" in Settings → Updates counts what is new on GitHub, then downloads it (fast-forward only), rebuilds and restarts on the latest version, without the test suite.'),
+      // ADR 0074; src/main/appctl/tools.ts app_update_code
+      b('Puoi anche chiedere all’Orchestrator «aggiornati»: porta la cartella del codice all’ultima versione, ma passarci resta il tuo clic su «Aggiorna».',
+        'You can also ask the Orchestrator to "update": it brings the code folder to the latest version, but switching to it stays your click on "Aggiorna".'),
     ],
     analogy: b('Come il cambio di una gomma con la ruota di scorta pronta: se la nuova non tiene, rimetti quella di prima.',
       'Like changing a tyre with the spare ready: if the new one does not hold, you put the old one back.'),
@@ -718,7 +752,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Installare il pacchetto preparato e riavviare (checkpoint di bozze e preferenze, poi ripristino automatico se fallisce): il codice c’è ma è spento finché il riavvio non è verificato.',
         'Installing the prepared package and restarting (checkpoint of drafts and preferences, then automatic rollback on failure): the code is there but switched off until the restart is verified.'),
     ],
-    sources: ['scripts/release.mjs', 'src/main/update/download.ts', 'src/main/update/wiring.ts', 'src/main/update/checkpoint.ts', 'src/main/wiring.ts', 'docs/adr/0007-self-hosting.md'],
+    sources: ['scripts/release.mjs', 'scripts/pull.mjs', 'src/main/update/source.ts', 'src/renderer/components/AppUpdateSettings.tsx', 'src/main/update/download.ts', 'src/main/update/wiring.ts', 'src/main/update/checkpoint.ts', 'docs/adr/0007-self-hosting.md', 'docs/adr/0075-update-button-without-tests.md'],
   },
 ];
 

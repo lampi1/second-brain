@@ -86,9 +86,9 @@ for (const [W, H] of [[1366, 728], [1920, 1040]] as const) {
     await page.mouse.move(2, 2);
     await shot(page, `regia-dock-${W}-chat`);
     await page.keyboard.press('Control+K');
-    await page.getByTestId('palette-input').fill('devops');
+    await page.getByTestId('palette-input').fill('task');
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+    await expect(page.getByTestId('brain-page-task')).toBeVisible();
     await expect(page.getByTestId('regia-overlay')).toBeVisible(); // the same column on every place
     await apart(page, '.page-frame');
     await page.mouse.move(2, 2);

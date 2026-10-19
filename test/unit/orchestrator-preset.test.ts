@@ -40,7 +40,6 @@ describe('Orchestrator preset', () => {
     expect(result.owner).toMatchObject({ engine: harness, model: 'selected', source: 'routed' });
     expect(result.owner.id).not.toBe(ID);
     expect(result.instructions).toBe(ORCHESTRATOR_INSTRUCTIONS);
-    expect(c.resolve({ ...req, regia: false, appRegia: true })).toMatchObject({ owner: { source: 'routed' }, instructions: ORCHESTRATOR_INSTRUCTIONS });
   });
   it.each([1, 2])('adds the preset to v%s catalogs without losing existing agents', version => {
     const dir = temp(), c = service(dir), profiles = c.list().profiles.filter(p => p.id !== ID);

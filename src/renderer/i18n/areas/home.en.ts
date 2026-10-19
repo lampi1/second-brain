@@ -32,5 +32,5 @@ export const homeEn: typeof homeIt = {
   'home.noRegia': 'The app coordinator is not active. Open the changes workspace or create an App coordinator from its panel; this page never starts it automatically.',
   'home.question': 'Your request', 'home.placeholder': 'What would you like to understand or improve?', 'home.send': 'Send to coordinator',
   'home.openRegia': 'Open conversation', 'home.sent': 'Request sent.', 'home.queued': 'Request queued in the coordinator.', 'home.notSent': 'Request not sent: your text is preserved. Retry when the chat is available.',
-  'home.improve': 'Changes and updates', 'home.compare': 'Model comparison',
+  'home.compare': 'Model comparison',
 };

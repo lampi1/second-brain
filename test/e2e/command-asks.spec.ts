@@ -3,7 +3,7 @@
 // "Ti aspettano" strip, ADR 0019): the command, Esegui / Copia / Non serve, the chat's name in its label, and the
 // open requests on screen go up by one; Esegui there runs it in the chat that proposed it (output under the block) and
 // the card leaves; the chat's explanation before the block is on the card, in sight. An example in the middle of an explanation asks for nothing. A work chat's command never shows in
-// the Regia, its open overlay included (the user, 2026-10-13); "Non serve" on the tile card takes it away. On a page (DevOps) it
+// the Regia, its open overlay included (the user, 2026-10-13); "Non serve" on the tile card takes it away. On a page (Task) it
 // floats in the request layer. A production block asks a second click on the card too. When the run ends the chat gets
 // its result by itself (run/results.ts). Screenshots: test-results/shots/command-ask-lane.png (the tile card),
 // command-ask-not-regia.png, command-ask-layer.png, command-run-result.png.
@@ -123,9 +123,9 @@ test('on a page the command floats in the request layer and Esegui there runs it
     await page.evaluate(([c, r, a]) => window.sb.invoke('chat:answer', { chatId: c, requestId: r, answer: a }), [p.chatId, p.id, answer] as const);
   }
   await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('devops');
+  await page.getByTestId('palette-input').fill('task');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible(); // a page (Oggi is now DevOps)
+  await expect(page.getByTestId('brain-page-task')).toBeVisible(); // a page (Oggi is now Task)
   await turn(app, 'mappa', ASK);
   await expect.poll(async () => (await layerState(app)).cards).toBe(1);
   const layer = await layerPage(app);

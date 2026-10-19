@@ -59,7 +59,7 @@ export class Artifacts {
 
     let owner = caller.id, where = 'in questa chat';
     if (target === 'regia') {
-      const regia = caller.appRegia || caller.isRegia ? caller.id
+      const regia = caller.isRegia ? caller.id
         : regiaOfChat(caller, all.filter(c => !c.closedAt));
       if (regia) { owner = regia; where = regia === caller.id ? 'nel pannello dell’Orchestrator' : `nell’Orchestrator «${all.find(c => c.id === regia)?.title ?? 'Orchestrator'}»`; }
       else where = 'in questa chat (nessun Orchestrator aperto)';

@@ -320,13 +320,10 @@ describe('mail to an idle Regia', () => {
     expect(sent).toHaveLength(3);
   });
 
-  it('only an idle Regia waits: a work chat goes at once, the app\'s own Regia waits too, mail older than its wait goes', async () => {
+  it('only an idle Regia waits: a work chat goes at once, mail older than its wait goes', async () => {
     const work = regiaSetup('idle', { isRegia: false });
     work.post('nota: analisi scritta in x.md');
     expect(await work.mail.tick()).toBe(1);
-    const appRegia = regiaSetup('idle', { space: 'app', appRegia: true });
-    appRegia.post('nota: analisi scritta in x.md');
-    expect(await appRegia.mail.tick()).toBe(0); // "Migliora l'app"'s Regia is a Regia too
     const old = regiaSetup();
     sendMail(old.dir, { from: 'App · Lavoro', fromHarness: 'claude', to: 'Regia', toHarness: null, text: 'feat/y pronto: 9d1e2f3', refusal: () => null, now: new Date(clock.t - REGIA_GROUP_MS) });
     expect(await old.mail.tick()).toBe(1); // sent while the app was off: its minute passed already

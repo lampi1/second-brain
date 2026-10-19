@@ -52,7 +52,7 @@ export function build(now = Date.now()) {
   jl(d(0), '10:40', 'verificato', 'Prodotto · Fix calcolo sconto: build verde dopo il rebase');
   jl(d(0), '11:15', 'decisione', 'Le chat finite sopra 200k di contesto si chiudono');
   jl(d(0), '12:30', 'lezione', 'La stima dei costi va sempre mostrata con il suo intervallo');
-  jl(d(0), '13:05', 'fatto', "app: pagina Procedure al posto di Comunicazione, mandata alla Regia dell'app"); // the app's own work: not in Fatto
+  jl(d(0), '13:05', 'fatto', 'Procedure · pagina Procedure al posto di Comunicazione');
   const nowRows = [
     { sezione: 'Lavoro', filo: 'Prodotto · Fix calcolo sconto', dove: 'PR 51002, branch fix/sconto', prossimo: 'prossimo: aspetta la revisione della PR 51002', stato: 'build verde', aggiornato: d(0) },
     { sezione: 'Lavoro', filo: 'Clienti · Export fatture', dove: 'chat Clienti · Export fatture', prossimo: `prossimo: ${OWNER} decide se il PDF entra in questa versione`, stato: 'CSV fatto', aggiornato: d(1) },
@@ -218,10 +218,10 @@ export function build(now = Date.now()) {
   const report = date => ({
     date, kind: 'report', day: date, devops: true, areas: AREAS,
     rows: [
-      { kind: 'pr-unita', title: '#90680 fix(orders): apply the discount once', target: 'main', url: PR(51001), area: 'Prodotto' },
-      { kind: 'pr-aperta', title: 'feat(export): invoices CSV export', target: 'main', url: PR(51003), area: 'Clienti' },
-      { kind: 'work-item', type: 'Bug', title: '[Fatture] - Sconto applicato due volte sul totale', state: 'Resolved', url: WI(90680), area: 'Prodotto' },
-      { kind: 'work-item', type: 'User Story', title: '[Export] Export delle fatture in CSV', state: 'Active', url: WI(90701), area: 'Clienti' },
+      { kind: 'pr-unita', time: '11:52', title: '#90680 fix(orders): apply the discount once', target: 'main', url: PR(51001), area: 'Prodotto' },
+      { kind: 'pr-aperta', time: '09:30', title: 'feat(export): invoices CSV export', target: 'main', url: PR(51003), area: 'Clienti' },
+      { kind: 'work-item', time: '12:05', type: 'Bug', title: '[Fatture] - Sconto applicato due volte sul totale', state: 'Resolved', url: WI(90680), area: 'Prodotto' },
+      { kind: 'work-item', time: '09:12', type: 'User Story', title: '[Export] Export delle fatture in CSV', state: 'Active', url: WI(90701), area: 'Clienti' },
       { kind: 'diario', time: '08:50', tag: 'fatto', title: 'Clienti · Export fatture: prima versione del CSV verificata a mano', area: 'Clienti' },
       { kind: 'diario', time: '10:40', tag: 'verificato', title: 'Prodotto · Fix calcolo sconto: build verde dopo il rebase', area: 'Prodotto' },
       { kind: 'diario', time: '11:15', tag: 'decisione', title: 'Le chat finite sopra 200k di contesto si chiudono', area: 'Personale e OS' },
@@ -229,13 +229,11 @@ export function build(now = Date.now()) {
       { kind: 'chat', title: 'Produzione · lentezza login', from: '07:30', to: '07:55', his: 2, last: 'Carico normale per una domenica.', area: 'Produzione' },
       { kind: 'chat', title: 'OS · Mappa 3D', from: '13:10', to: '15:20', his: 4, last: 'La vista essenziale è in main.', area: 'Personale e OS' },
       { kind: 'chat-cursor', title: 'Cursor · Ricerca librerie grafici · finito', area: 'Personale e OS' },
-      // the app's own work ("Migliora l'app"): Fatto leaves it out
-      { kind: 'diario', time: '13:05', tag: 'fatto', title: "app: pagina Procedure al posto di Comunicazione, mandata alla Regia dell'app", area: 'Prodotto' },
-      { kind: 'chat', title: 'App · Pagina Procedure', from: '13:00', to: '14:10', his: 3, last: 'Pronta, mandata alla Regia.', area: 'Prodotto' },
-      { kind: 'chat', title: "Regia dell'app", from: '08:00', to: '18:00', his: 9, last: 'Unito in main.', area: 'Personale e OS' },
+      { kind: 'diario', time: '13:05', tag: 'fatto', title: 'Procedure · pagina Procedure al posto di Comunicazione', area: 'Prodotto' },
+      { kind: 'chat', title: 'Pagina Procedure', from: '13:00', to: '14:10', his: 3, last: 'Pronta, mandata all’Orchestrator.', area: 'Prodotto' },
     ],
-    commits: ['map: essential view', 'cost: savings per long chat', "product: publish the app's Procedure page"], brief: false,
-    text: `# Giornata ${date}: materiale per il report\n\n## Prodotto\n- PR unita "fix(orders): apply the discount once" ${PR(51001)}\n- chat "QA ordini" 09:02-11:40, 6 messaggi tuoi\n- chat Claude "App · Pagina Procedure" 13:00-14:10, 3 messaggi tuoi\n\n## Clienti\n- PR aperta "feat(export)" ${PR(51003)}\n\n| Chat | Messaggi |\n|---|---|\n| QA ordini | 6 |\n| App · Pagina Procedure | 3 |\n| OS · Mappa 3D | 4 |\n`,
+    commits: ['map: essential view', 'cost: savings per long chat', 'procedures: publish the Procedure page'], brief: false,
+    text: `# Giornata ${date}: materiale per il report\n\n## Prodotto\n- PR unita "fix(orders): apply the discount once" ${PR(51001)}\n- chat "QA ordini" 09:02-11:40, 6 messaggi tuoi\n- chat Claude "Pagina Procedure" 13:00-14:10, 3 messaggi tuoi\n\n## Clienti\n- PR aperta "feat(export)" ${PR(51003)}\n\n| Chat | Messaggi |\n|---|---|\n| QA ordini | 6 |\n| Pagina Procedure | 3 |\n| OS · Mappa 3D | 4 |\n`,
   });
   const brief = {
     date: today, kind: 'brief', day: today, devops: true, areas: AREAS,
@@ -255,7 +253,7 @@ export function build(now = Date.now()) {
     ],
     threads: [
       ...nowRows.map(x => ({ section: x.sezione, label: x.filo, date: x.aggiornato, next: x.prossimo, stale: x.aggiornato < d(7), done: /^FATT/i.test(x.prossimo), area: /^(OS|Pers)/.test(x.filo) ? 'Personale e OS' : x.filo.startsWith('Clienti') ? 'Clienti' : x.filo.startsWith('Produzione') ? 'Produzione' : 'Prodotto' })),
-      { section: 'Lavoro', label: 'App · Pagina Procedure', date: today, next: "prossimo: la Regia dell'app unisce il ramo", stale: false, done: false, area: 'Prodotto' },
+      { section: 'Lavoro', label: 'Pagina Procedure', date: today, next: "prossimo: l'Orchestrator unisce il ramo", stale: false, done: false, area: 'Prodotto' },
     ],
     text: `# Brief ${today}\n\n## Le tue PR, dal vivo\n\n- "fix(orders): apply the discount once" → main ${PR(51002)}\n  voti: nessuno (4 revisori) · ultima build: succeeded\n\n## Fili aperti\n\n- **Clienti · Export fatture**: ${OWNER} decide se il PDF entra\n`,
   };

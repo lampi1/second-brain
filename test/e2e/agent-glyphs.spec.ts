@@ -28,7 +28,7 @@ test('role glyphs and tones survive save and warn about exact duplicates', async
     await shot(page, 'agent-glyph-duplicate');
     await studio.getByRole('button', { name: 'Ambra', exact: true }).click();
     await expect(page.getByTestId('agent-avatar-duplicate')).toHaveCount(0);
-    await page.getByTestId('nav-devops').click();
+    await page.getByTestId('nav-task').click();
     await openAgents(page, 'Generale (copia)');
     await expect(studio.getByRole('button', { name: 'Ambra', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await shot(page, 'agent-glyph-picker');

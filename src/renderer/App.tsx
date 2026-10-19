@@ -44,7 +44,6 @@ import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
 import { SkillsPage } from './components/SkillsPage';
 import { QuestionsWindow } from './components/QuestionsWindow';
-import { ImprovePage } from './components/ImprovePage';
 import { LaunchBanner } from './components/LaunchBanner';
 import { Dashboard } from './dashboard/Dashboard';
 import { GuidePage } from './components/GuidePage';
@@ -165,7 +164,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>

@@ -20,9 +20,9 @@ test('requests not on screen float above a page, without taking the keyboard', a
   const { app, page } = await launchDemo();
   await expect.poll(async () => (await layerState(app)).attached).toBe(false); // the strips + the Orchestrator column: they show them all (nothing waits off screen)
   await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('devops');
+  await page.getByTestId('palette-input').fill('task');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible(); // a page (Oggi is now DevOps)
+  await expect(page.getByTestId('brain-page-task')).toBeVisible(); // a page (Oggi is now Task)
   // the Orchestrator column stays on the page (ADR 0068): its decision is the one popup on screen
   await expect(page.locator('[data-regia-overlay] [data-request-key]')).toHaveCount(1);
   await expect.poll(async () => (await layerState(app)).cards).toBe(0); // never two popups at once (the user, 2026-10-13)

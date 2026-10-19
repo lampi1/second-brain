@@ -1,6 +1,6 @@
 // Settings page (rendered by App.tsx): essential settings only, laid out like the Dashboard: a page header with the
 // search, a row of section links, then one card per group (icon, title, one-line description, rows of text left and
-// control right). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// control right). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
@@ -44,6 +44,9 @@ function ToolConnection({engine}:{engine:EngineInfo}){
 }
 export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
+ // a link to one card ("impostazioni/update": the restart notice's «Aggiornamenti») scrolls to it once the page is drawn
+ const arg=ui.use(s=>s.page==='impostazioni'?s.pageArg:null);
+ useEffect(()=>{if(!arg||!settings)return;const id=requestAnimationFrame(()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(id);},[arg,!!settings]);
  if(!settings)return null;
  const groups=[
   {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},

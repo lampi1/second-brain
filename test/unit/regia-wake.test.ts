@@ -98,11 +98,10 @@ describe('RegiaWake', () => {
     expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
   });
 
-  it('legacy app workers report to the shared coordinator', async () => {
+  it('a chat on the app\'s code reports to the shared coordinator like any other', async () => {
     const { w, sent, up, finish } = make();
-    finish('fix', 'Ramo pronto.', { space: 'app' });
-    finish('app-regia', 'Fatto.', { space: 'app', appRegia: true });
-    up({ id: 'fix', space: 'app', state: 'running' });
+    finish('fix', 'Ramo pronto.', { cwd: 'C:/repo' });
+    up({ id: 'fix', cwd: 'C:/repo', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'fix', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Unisco?', options: [], multiSelect: false }] } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toHaveLength(1);

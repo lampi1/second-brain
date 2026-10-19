@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { ChatLink, ChatSpace, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
+import type { ChatLink, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
@@ -86,8 +86,9 @@ export interface StoredChat {
   closedBy?: 'auto' | 'user';
   /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
   working?: true;
-  /** Legacy input markers; space is dropped on load, appRegia feeds coordinator migration. */
-  space?: ChatSpace;
+  /** Legacy markers of the retired "Migliora l'app" (ADR 0079): space is dropped on load; appRegia (that section's
+   *  coordinator) is read once by migrateOrchestrator, which makes it the Orchestrator or a normal chat. */
+  space?: unknown;
   appRegia?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
   route?: RouteDecision;

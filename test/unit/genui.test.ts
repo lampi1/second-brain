@@ -130,9 +130,9 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(ids[0]).toBe('n3');
   });
 
-  it('target regia: shown in the Regia the chat answers to, with the sender; the app section uses its own Regia', () => {
+  it('target regia: shown in the Regia the chat answers to, with the sender; a chat with no Regia goes to the first', () => {
     const all = [chat('r1', { isRegia: true, regiaSince: 1, title: 'Regia' }), chat('r2', { isRegia: true, regiaSince: 2, title: 'Regia · B' }), chat('w', { regiaOf: 'r2', title: 'QA · Rimborsi' }),
-      chat('ar', { appRegia: true, space: 'app', title: 'Regia dell\'app' }), chat('aw', { space: 'app' })];
+      chat('aw')];
     const { store, sent } = setup(all);
     expect(store.show('w', args({ target: 'regia' }))).toContain('nell’Orchestrator «Regia · B»');
     expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
@@ -149,8 +149,8 @@ describe('Artifacts: the store behind show_ui', () => {
     expect((sent.at(-1)?.item as Artifact).from).toBeUndefined();
   });
 
-  it('target regia from an app chat with no app Regia (unified Orchestrator): the Regia it answers to', () => {
-    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { space: 'app', regiaOf: 'o' })];
+  it('target regia from an app-code chat (unified Orchestrator): the Regia it answers to', () => {
+    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { cwd: 'C:/repo', regiaOf: 'o' })];
     const { store, sent } = setup(all);
     expect(store.show('aw', args({ target: 'regia' }))).toContain('nell’Orchestrator «Orchestrator»');
     expect(sent.at(-1)?.chatId).toBe('o');

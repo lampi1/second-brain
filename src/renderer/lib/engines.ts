@@ -1,7 +1,7 @@
 // The engines the app knows (AppInfo.engines, from main/engines/registry.ts, ADR 0046), for the UI: their names and
 // what each can do. Components ask an engine's caps, never its id. Until app:info arrives, a chat's own engine id is
 // shown as its name and nothing is offered. Used by the new-chat dialog, the chat menu, the command palette, the top
-// bar, the Regia's tile and dialogs, the request panel and store/improve.ts.
+// bar, the Regia's tile and dialogs, the request panel and store/source.ts.
 import type { EngineCaps, EngineInfo, EngineKind, Harness } from '@shared/contract';
 import { app, useApp } from '../store/store';
 

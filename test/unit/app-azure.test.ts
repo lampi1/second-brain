@@ -2,12 +2,12 @@
 import { expect, it, vi } from 'vitest';
 import { azureProof } from '../../src/modules/onboarding/app-azure';
 import { AppConnectorService, type ConnectorAdapters } from '../../src/modules/onboarding/app-service';
-import type { DevopsState } from '../../src/shared/contract';
-const state = (patch: Partial<DevopsState> = {}) => ({ at: 1, error: null, assigned: [], urgent: [], prs: [], reviews: [], ...patch }) as DevopsState;
+import type { TasksState } from '../../src/shared/contract';
+const state = (patch: Partial<TasksState> = {}) => ({ at: 1, error: null, assigned: [], urgent: [], prs: [], reviews: [], ...patch }) as TasksState;
 const account = async () => JSON.stringify({ tenant: 'tenant-a', user: 'user@example.com' });
 it('uses fresh DevOps results and deduplicates projects with organization-qualified IDs', async () => {
   const item = { url: 'https://dev.azure.com/o/Shop/_workitems/edit/1', project: 'Shop' };
-  const refresh = vi.fn(async () => state({ assigned: [{ ...item, url: 'https://[' }, item, item] as DevopsState['assigned'] }));
+  const refresh = vi.fn(async () => state({ assigned: [{ ...item, url: 'https://[' }, item, item] as TasksState['assigned'] }));
   expect(await azureProof(account, refresh)).toEqual({ identity: 'tenant-a/user@example.com', account: 'user@example.com', projects: [{ id: 'o/Shop', name: 'o/Shop' }] });
   expect(refresh).toHaveBeenCalledOnce();
 });

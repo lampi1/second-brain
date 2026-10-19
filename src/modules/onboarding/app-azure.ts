@@ -2,7 +2,7 @@
 // Credentials remain owned by Azure CLI; only account and project evidence crosses to Settings.
 import { execFile, spawn } from 'node:child_process';
 import { findCli } from '../../main/chats/cli';
-import type { DevopsState } from '../../shared/contract';
+import type { TasksState } from '../../shared/contract';
 import type { ConnectorProof } from './app-service';
 import { launchPosixLogin } from '../ai-first/login-terminal';
 
@@ -30,7 +30,7 @@ export function azureAccount(): Promise<string> {
     { windowsHide: true, windowsVerbatimArguments: cmd, timeout: 20000, maxBuffer: 65536, encoding: 'utf8' },
     (error, stdout) => error ? reject(new Error('Accesso Azure non disponibile')) : resolve(stdout)));
 }
-export async function azureProof(readAccount: () => Promise<string>, refresh: () => Promise<DevopsState>): Promise<ConnectorProof> {
+export async function azureProof(readAccount: () => Promise<string>, refresh: () => Promise<TasksState>): Promise<ConnectorProof> {
   const account = JSON.parse(await readAccount()) as { tenant?: unknown; user?: unknown };
   if (typeof account.tenant !== 'string' || !account.tenant || typeof account.user !== 'string' || !account.user || account.user.length > 254 || account.tenant.length > 100) throw new Error('Account Azure non valido');
   const state = await refresh();

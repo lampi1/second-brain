@@ -19,7 +19,7 @@ import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlo
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './RegiaOverlay';
-import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
+import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
   const ok = !!st?.found && st.loggedIn !== false;
@@ -139,7 +139,7 @@ function PopupsSwitch() {
 }
 
 /** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width): the
- *  browsers on/off (a count badge on "…" while they are hidden), Credenziali, Migliora l'app (the questions window moved
+ *  browsers on/off (a count badge on "…" while they are hidden), Credenziali (the questions window moved
  *  onto the bar, PopupsSwitch). */
 function MoreButton() {
   const hide = ui.use(s => s.prefs.browsersHidden);
@@ -155,8 +155,6 @@ function MoreButton() {
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
         <MenuItem checked={hide} onSelect={run(toggleBrowsers)} shortcut="Ctrl+Shift+B" testid="more-browsers">{hide ? auditText('auditExpression.TopBar.text191', { v0: tabs }) : auditText('auditExpression.TopBar.text192')}</MenuItem>
         <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
-        <MenuSep />
-        <MenuItem onSelect={run(() => go({ page: 'migliora' }))} shortcut="G U" testid="more-improve">{auditText('audit.TopBar.improveTheApp')}</MenuItem>
       </Popover>
     </span>
   );
@@ -205,7 +203,7 @@ export function TopBar() {
     <header ref={head} className="topbar" data-testid="topbar">
       {/* everything but the end group shrinks step by step (useFit); the end group (bell, settings) never leaves the screen */}
       <div ref={main} className="topbar-main">
-      {/* the mark only: the name and the version sit in its tooltip, the room went to "Migliora l'app" (the user, 2026-10-12) */}
+      {/* the mark only: the name and the version sit in its tooltip, the room went to the bar's actions (the user, 2026-10-12) */}
       <div className="brand" aria-label={version ? `second-brain v${version}` : 'second-brain'} data-tip={version ? `second-brain · v${version}` : 'second-brain'} data-testid="app-version"><span className="brand-mark" aria-hidden="true" /></div>
       <HistoryNav />
       <StatoButton />

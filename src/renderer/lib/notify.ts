@@ -2,8 +2,8 @@
 // the user now gets a short toast; everything else only the notification center), which events count for the bell
 // (actionable only) and for the nav badges, unread counting against what was seen/read, toast grouping, and the
 // internal link of an event. Policy (the user, 2026-10-13: "le notifiche sono troppe e non le guardo mai"): only what
-// needs his action now interrupts him; the rest is a pull-only list. DevOps: a mention or a change on his own things
-// (devops-alert, main/devops/model.ts isAlert) interrupts with a toast and a short sound; other DevOps news stay quiet
+// needs his action now interrupts him; the rest is a pull-only list. Task: a mention or a change on his own things
+// (task-alert, main/tasks/model.ts isAlert) interrupts with a toast and a short sound; other DevOps news stay quiet
 // (ADR 0029).
 // Used by lib/layer.ts (toasts), Sidebar.tsx (badges), NotificationCenter.tsx; pinned by test/unit/notify.test.ts.
 import type { FeedEvent } from '@shared/contract';
@@ -12,7 +12,7 @@ import type { FeedEvent } from '@shared/contract';
  *  chat-failed = a chat's turn ended with an error; sync-blocked / sync-error = GitHub is behind (once per problem:
  *  main/sync.ts FailureDedup; as quiet items they went unseen for three days, 2026-10-14). Everything else is tier c
  *  (center only). */
-export const TOAST_KINDS = new Set(['chat-waiting', 'chat-failed', 'budget', 'login', 'devops-alert', 'sync-blocked', 'sync-error']);
+export const TOAST_KINDS = new Set(['chat-waiting', 'chat-failed', 'budget', 'login', 'task-alert', 'sync-blocked', 'sync-error']);
 
 /** Kinds that need an action from the user: the only ones the bell counts. */
 export const ACTIONABLE_KINDS = new Set([...TOAST_KINDS, 'question', 'sync-blocked', 'sync-error', 'mail-blocked']);
@@ -49,7 +49,7 @@ export function sectionOf(kind: string): string | null {
   if (kind === 'budget') return 'costi';
   if (kind.startsWith('chat-')) return 'home';
   // sync-* (the brain's own sync) had Oggi's badge, mail-* had Comunicazione's; both pages are gone: center only
-  if (kind === 'devops' || kind === 'devops-alert') return 'devops';
+  if (kind === 'task' || kind === 'task-alert') return 'task';
   return null;
 }
 

@@ -27,7 +27,7 @@ export const REGIA_COMPACT = '/compact New day: keep only what is needed to cont
 
 /** What the continuity rules look at in a chat. noteAt = its cold note (0 = none); lastCallAt = its last API call. */
 export interface ColdView {
-  harness: string; isRegia: boolean; appRegia?: boolean; continuedBy?: unknown;
+  harness: string; isRegia: boolean; continuedBy?: unknown;
   state: string; pending: number; background: number; busy: boolean; alive: boolean; handoffTurn: boolean;
   contextTokens: number; lastTurnAt: number; noteAt: number; lastCallAt: number;
   /** the lastTurnAt the note was already asked for (once per idle stretch, even if it failed) */
@@ -36,7 +36,7 @@ export interface ColdView {
 
 /** A Regia's view: when its context in force began and the Rome day it was last asked to compact. */
 export interface RegiaDayView {
-  harness: string; isRegia: boolean; appRegia?: boolean; state: string;
+  harness: string; isRegia: boolean; state: string;
   pending: number; busy: boolean; alive: boolean; handoffTurn: boolean;
   contextTokens: number; lastTurnAt: number;
   /** when the context in force began: the first turn since the session started or the last compaction */
@@ -50,8 +50,8 @@ export interface RegiaDayView {
 export const quietChat = (v: Pick<ColdView, 'state' | 'pending' | 'busy' | 'alive' | 'handoffTurn'>): boolean =>
   v.state === 'idle' && v.pending === 0 && !v.busy && v.alive && !v.handoffTurn;
 
-const isRegia = (v: { isRegia: boolean; appRegia?: boolean }): boolean => v.isRegia || !!v.appRegia;
-const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'appRegia' | 'continuedBy'>): boolean => v.harness === 'claude' && !isRegia(v) && !v.continuedBy;
+const isRegia = (v: { isRegia: boolean }): boolean => v.isRegia;
+const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'continuedBy'>): boolean => v.harness === 'claude' && !isRegia(v) && !v.continuedBy;
 
 /** Ask for the note now: quiet, a long context, no fresh note, and the cache still warm but about to expire (idleMs
  *  after the last call, before CACHE_TTL_MS). */

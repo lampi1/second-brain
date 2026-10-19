@@ -59,17 +59,13 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
         <>
           <MenuLabel>{t('chat.menu.regiaLabel')}</MenuLabel>
           <MenuItem onSelect={pick(() => askClearRegia(id))} testid={`chat-clear-${id}`}>{t('chat.menu.clear')}</MenuItem>
-          {!chat.appRegia && (
+          <MenuItem onSelect={pick(() => askRenewRegia(chat.harness))} shortcut="Ctrl+Shift+R" testid={`chat-renew-${id}`}>{t('chat.menu.renew')}</MenuItem>
+          {to && (
             <>
-              <MenuItem onSelect={pick(() => askRenewRegia(chat.harness))} shortcut="Ctrl+Shift+R" testid={`chat-renew-${id}`}>{t('chat.menu.renew')}</MenuItem>
-              {to && (
-                <>
-                  <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
-                    {t('chat.menu.switchEngine', { engine: engineName(to) })}
-                  </MenuItem>
-                  {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
-                </>
-              )}
+              <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
+                {t('chat.menu.switchEngine', { engine: engineName(to) })}
+              </MenuItem>
+              {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
             </>
           )}
           <label className="menu-range" data-testid="regia-opacity">
@@ -105,7 +101,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
       <MenuSep />
       <MenuLabel>{t('chat.menu.handoffLabel', { tokens: chat.contextTokens ? t('chat.menu.handoffTokens', { amount: `${chat.contextEstimated ? '~' : ''}${tokensShort(chat.contextTokens)}` }) : undefined })}</MenuLabel>
       <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>{t('chat.menu.handoffRead')}</MenuItem>
-      {!chat.isRegia && !chat.appRegia && (
+      {!chat.isRegia && (
         <MenuItem onSelect={pick(() => void resumeChat(id))} disabled={!next && (isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy)} testid={`chat-resume-${id}`}>
           {next ? openNextLabel() : resumeLabel()}
         </MenuItem>

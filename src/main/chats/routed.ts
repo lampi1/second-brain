@@ -1,12 +1,12 @@
-// A chat the user starts without choosing everything (chat:createRouted): the DevOps page's "Apri chat", a brain page's
-// "Apri una chat", "Nuova chat" (its one-line preview too: previewRoute), a new Regia (Ricomincia da capo, Cambia motore,
-// Pulisci) and the "Regia dell'app" (improve/service.ts).
+// A chat the user starts without choosing everything (chat:createRouted): the Task page's "Apri chat", a brain page's
+// "Apri una chat", "Nuova chat" (its one-line preview too: previewRoute) and a new Regia (Ricomincia da capo, Cambia
+// motore, Pulisci).
 // Harness, model and effort come from the routing table (brain/routing.ts, ADR 0032), the same decision app_create_chat
 // makes for a Regia, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
 // (wiring.ts). What the user named (the engine of Cambia motore) beats the row, as an override with its reason; no row →
 // the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
-// aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths (panel of
-// the Regia dell'app, 2026-10-14). Used by index.ts and improve/service.ts; test/unit/routed-chat.test.ts.
+// aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths
+// (2026-10-14). Used by index.ts; test/unit/routed-chat.test.ts.
 import { TASK_KINDS, type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
 import { EFFORTS, type RouteRequest, type RouteResult } from '../brain/routing';
 import { engineLabel, engineOf } from '../engines/registry';
@@ -21,10 +21,9 @@ export interface RoutedChatDeps {
   create(req: NewChat): Promise<ChatSummary>;
 }
 
-/** Main-only routing context for verified app-source proposals, never a UI partition. */
-/** `byUser` = "Nuova chat" (the renderer): no cap on the first message (as chat:create), no exploration (the chat starts
+/** appCode = the chat works on the app's own code (routing area App). `byUser` = "Nuova chat" (the renderer): no cap on the first message (as chat:create), no exploration (the chat starts
  *  on the model the dialog showed) and the permission mode the user picked kept on any engine that has them. */
-export interface RoutedSpace { appCode?: boolean; appRegia?: boolean; byUser?: boolean }
+export interface RoutedSpace { appCode?: boolean; byUser?: boolean }
 
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' && engineOf(v) ? v : undefined);
@@ -33,7 +32,7 @@ const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' &&
  *  engines they may start now. `preview` = no exploration and no checks on the texts (the dialog asks while typing). */
 type Decided = { error: string } | { routed: Exclude<RouteResult, { error: string }>; title: string; prompt: string; cwd: string; harness: Harness };
 function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace, preview: boolean): Decided {
-  const regia = req?.regia === true || own.appRegia === true;
+  const regia = req?.regia === true;
   // a Regia's title is its mail address and a rename has no limit: kept whole, a work chat's capped
   const title = text(req?.title, regia ? 1000 : 80), prompt = typeof req?.prompt === 'string' ? req.prompt.trim() : '', cwd = text(req?.cwd, 1000);
   if (!preview) {
@@ -91,7 +90,6 @@ export async function createRoutedChat(d: RoutedChatDeps, req: RoutedNewChat, ow
     harness: routed.harness, cwd, ...(title ? { title } : {}), ...(prompt ? { prompt } : {}), ...(routed.model ? { model: routed.model } : {}), ...(routed.effort ? { effort: routed.effort } : {}),
     ...pm, ...wt, ...(typeof req.regiaOf === 'string' && req.regiaOf ? { regiaOf: req.regiaOf } : {}),
     ...(req.regia === true ? { regia: true, ...(text(req.replaces, 100) ? { replaces: text(req.replaces, 100) } : {}), ...(text(req.regiaName, 40) ? { regiaName: text(req.regiaName, 40) } : {}) } : {}),
-    ...(own.appRegia ? { appRegia: true } : {}),
     route: routed.route,
   });
   const r = routed.route;
