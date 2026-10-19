@@ -59,6 +59,7 @@ import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { standings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
@@ -993,8 +994,12 @@ export class ChatManager implements ChatService {
   runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
     try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
-    return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const runs = this.runs.list(), rollups = this.runs.rolledUp();
+    const metrics = runMetrics(runs, { rollups, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
+    // the card's level and performance are the agent's whole record, whatever the filter
+    const standing = standings(runs, rollups, Date.now());
+    return metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
   }
 
   /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;

@@ -26,7 +26,8 @@ import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
 import { runResultMessage } from './run/results';
 import { splitNewChat } from '../shared/newchat';
-import type { AgentRunOutcome } from '../shared/agents';
+import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
+import { demoAgentMetrics } from './demo-agent-runs';
 
 /** The fixed "now" of SB_DEMO_FREEZE=1 (2026-10-11 10:30 Rome). The UI receives it through ui:command 'clock'. */
 export const FROZEN_EPOCH = Date.UTC(2026, 9, 11, 8, 30, 0);
@@ -428,6 +429,8 @@ export class DemoChats implements ChatService {
   pending(): PendingRequest[] { return [...this.pend]; }
   /** no engine: the "/" list comes from the demo's skills on disk (skills/demo.ts) */
   commands(): null { return null; }
+  /** made-up ended runs per role (demo-agent-runs.ts): the Agenti cards' level, performance and metrics */
+  runMetrics(): AgentMetrics[] { return demoAgentMetrics(this.now()); }
 
   markRun(chatId: string, verdict: AgentRunOutcome['verdict']): ChatSummary {
     const chat = this.chats.get(chatId);
