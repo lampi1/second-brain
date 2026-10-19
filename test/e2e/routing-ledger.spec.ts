@@ -46,6 +46,8 @@ test('a chat opened without a model writes its routing prediction, then its meas
   // SB_LOAD_FORCE: a calm machine, so the agent's chat is never held in the CPU queue (ADR 0036) under the parallel suite
   const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, SB_BRAIN: brain, SB_MCP_PORT: String(port), SB_LOAD_FORCE: '10,60' });
   try {
+    // the plain /mcp/app mount opens chats only with an Orchestrator open, bounded by it (any local process can call it)
+    await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, orchestrator: true }), brain);
     const agent = new McpClient(`http://127.0.0.1:${port}/mcp/app`);
     await agent.init();
     // the role decides the model (its tier on the engine), never the table; its route still writes the ledger
