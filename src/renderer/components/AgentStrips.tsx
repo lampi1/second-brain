@@ -53,7 +53,7 @@ export function AgentStrips() {
   const keep = useHandoffTabs();
   const clouds = useCloudIds().length; // cloud agents' strips follow (CloudStrips.tsx, ADR 0080): not an empty Grindhouse
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
-  // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs from before v2 expanded them all
+  // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs with another chatPanelsV start collapsed too
   useEffect(() => { if (ready && panelsVersion !== 2) setPrefs({ chatPanelsV: 2, chatExpanded: {} }); }, [ready, panelsVersion]);
   // a browser shows beside its chat while that strip is expanded AND the user opened its browsers with the strip's globe
   // button (owner, 18/10: collapsed by default, the strip only hints at it); one waiting for the user (a login hand-off)
