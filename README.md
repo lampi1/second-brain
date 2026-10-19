@@ -169,6 +169,15 @@ Your brain is a folder of Markdown notes the agents read and write: open threads
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
 (ADR 0072). The dashboard shows it as pages and as a 3D map that lights up the files, tools and agents at work.
 
+### Scripts and a changelog for your brain
+
+![The Script page: tested, reusable scripts as cards](docs/screenshots/brain-scripts.webp)
+
+The scripts your agents wrote and tested live in the brain's `scripts/` folder, each with what it does, how to run it
+and its last test. Every chat can look them up before writing a new one; the Orchestrator adds, fixes and deletes them
+on its own, and every change to the brain (scripts, rules, procedures, notes) lands in `changelog.md`. Both have their own
+page under Brain (ADR 0076). Nothing in the app runs a script.
+
 ### DevOps in one page
 
 ![The DevOps page: mentions, pull requests, reviews and work items](docs/screenshots/devops.webp)

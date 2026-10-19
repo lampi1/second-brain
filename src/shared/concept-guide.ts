@@ -287,6 +287,41 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/Miglioramento.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
   {
+    id: 'brain-scripts',
+    title: b('Script e Changelog del brain', 'Brain scripts and changelog'),
+    summary: b('Gli script provati dei tuoi agenti stanno nel brain, riutilizzabili; ogni cambiamento al brain finisce nel Changelog.',
+      'Your agents’ tested scripts live in the brain, ready to reuse; every change to the brain lands in the Changelog.'),
+    points: [
+      // src/main/brain/scripts.ts
+      b('Gli script stanno nella cartella scripts/ del brain; l’intestazione dice titolo, cosa fa, come si usa, tag e l’ultimo test.',
+        'Scripts live in the brain’s scripts/ folder; their header says title, what it does, how to run it, tags and the last test.'),
+      // src/main/brain/scripts-tools.ts brain_scripts
+      b('Ogni chat può cercarli con brain_scripts prima di scrivere uno script nuovo, per riusarne uno che funziona.',
+        'Every chat can look them up with brain_scripts before writing a new script, to reuse one that works.'),
+      // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete
+      b('Solo l’Orchestrator li aggiunge, corregge o elimina, senza chiederti l’ok: salva solo dopo un test, rifiuta le credenziali, un eliminato va in scripts/.deleted/.',
+        'Only the Orchestrator adds, fixes or deletes them, without asking you: it saves only after a test, credentials are refused, a deleted one goes to scripts/.deleted/.'),
+      // src/main/brain/changelog.ts
+      b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, procedure e note che cambia.',
+        'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, procedures and notes it changes.'),
+      // src/renderer/brain/pages/Script.tsx, Changelog.tsx
+      b('Le pagine Script e Changelog, sotto Brain, mostrano tutto a schede; nessun bottone esegue uno script.',
+        'The Script and Changelog pages, under Brain, show it all as cards; no button runs a script.'),
+      // docs/adr/0076-brain-scripts-and-changelog.md
+      b('Nessun classificatore sceglie gli script: con pochi script che si descrivono da soli basta la ricerca per parole.',
+        'No classifier picks scripts: with a few self-describing scripts a word search is enough.'),
+    ],
+    analogy: b('Come la cassetta degli attrezzi di un’officina con il registro accanto: ogni attrezzo ha l’etichetta, e chi lo cambia lo scrive.',
+      'Like a workshop toolbox with a logbook beside it: every tool is labelled, and whoever changes one writes it down.'),
+    diagram: { kind: 'flow', steps: [b('Script provato', 'Tested script'), b('Orchestrator salva', 'Orchestrator saves'), b('scripts/', 'scripts/'), b('changelog.md', 'changelog.md'), b('Riuso', 'Reuse')] },
+    tech: [
+      tech(FILES, 'Nel brain: scripts/<nome>, scripts/.deleted/, changelog.md; creati al primo salvataggio.', 'In the brain: scripts/<name>, scripts/.deleted/, changelog.md; created on the first save.'),
+      tech(WHERE, 'Pagine: /api/scripts, /api/script?id=…, /api/changelog; evento scripts:changed.', 'Pages: /api/scripts, /api/script?id=…, /api/changelog; event scripts:changed.'),
+      tech(LIMITS, 'Uno script ≤ 200 KB; la pagina legge le ultime 500 righe del changelog.', 'A script ≤ 200 KB; the page reads the latest 500 changelog lines.'),
+    ],
+    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/brain/pages/Changelog.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
+  },
+  {
     id: 'milestones',
     title: b('Traguardi personali', 'Personal milestones'),
     summary: b('Tre traguardi locali: primo agente personalizzato, spazio configurato e primo risultato confermato.',

@@ -12,6 +12,9 @@ import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from
 import { DemoBrowser } from './demo-browser';
 import { Procedures } from './brain/procedures';
 import { writeDemoProcedures } from './brain/procedures-demo';
+import { writeDemoScripts } from './brain/scripts-demo';
+import { BrainScripts } from './brain/scripts';
+import { BrainChangelog } from './brain/changelog';
 import { demoDevopsRun } from './devops/demo';
 import { DevopsService } from './devops/service';
 import { gitBranches } from './chats/branch';
@@ -87,6 +90,13 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const procedures = new Procedures(() => procDir);
   brain.serveApi('/api/procedures', () => procedures.list());
   brain.serveApi('/api/procedure', q => procedures.get(q.get('id') ?? ''));
+  // the Script and Changelog pages (ADR 0076): made-up scripts and changelog read by the real readers
+  const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now());
+  const demoChangelog = new BrainChangelog(() => scriptsDir);
+  const demoScripts = new BrainScripts(() => scriptsDir, demoChangelog);
+  brain.serveApi('/api/scripts', () => demoScripts.list());
+  brain.serveApi('/api/script', q => demoScripts.get(q.get('id') ?? ''));
+  brain.serveApi('/api/changelog', () => demoChangelog.list());
   brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });

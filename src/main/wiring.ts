@@ -82,6 +82,9 @@ import { AgentClassifier } from './agents/classifier';
 import { ClassifierTuning } from './agents/classifier-calibration';
 import type { ClassifyAgents } from './agents/discovery';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
+import { BrainScripts, touchesScripts } from './brain/scripts';
+import { BrainChangelog } from './brain/changelog';
+import { brainScriptsTool } from './brain/scripts-tools';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
@@ -326,13 +329,29 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});
   let apiRoute: () => Harness | null = () => null;
+  // the brain's scripts and changelog (ADR 0076), read from the brain folder once it is known (created first: the
+  // brain's watcher reports their files)
+  const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
+  const brainScripts = new BrainScripts(() => brain.info().brainRoot, brainChangelog);
+  let scriptsTimer: NodeJS.Timeout | null = null;
+  const onScriptFile = (f: string) => {
+    if (!touchesScripts(f)) return;
+    brainScripts.invalidate();
+    if (scriptsTimer) clearTimeout(scriptsTimer);
+    scriptsTimer = setTimeout(() => { scriptsTimer = null; ctx.emitter.emit('scripts:changed', undefined); }, 500);
+  };
   // the hybrid brain search (SPEC 23): its worker starts after the window (index.ts); a brain file change re-syncs it
   const hybrid = new HybridSearch({
     dir: path.join(ctx.userData, 'search'), brainRoot: () => brain.info().brainRoot, workerFile: workerFileNextTo(path.dirname(fileURLToPath(import.meta.url))),
     download: !process.env.SB_TEST, onStatus: st => ctx.emitter.emit('search:status', st),
   });
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
-    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: () => hybrid.fileChanged() });
+    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: f => { hybrid.fileChanged(); onScriptFile(f); } });
+  // the brain's scripts and changelog (ADR 0076): the Script and Changelog pages, brain_scripts for every chat, the
+  // Orchestrator's write tools (attachAppTools below); a change on disk reloads both pages
+  brain.serveApi('/api/scripts', () => brainScripts.list());
+  brain.serveApi('/api/script', q => brainScripts.get(q.get('id') ?? ''));
+  brain.serveApi('/api/changelog', () => brainChangelog.list());
   // undefined when the hybrid search fails: the brain's own server answers (substring search)
   brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
   brain.serveApi('/api/themes', q => hybrid.themes(q.get('kind') === 'ideas' ? 'ideas' : 'errors'));
@@ -362,7 +381,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o))]);
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -581,7 +600,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get(), brainScripts: { scripts: brainScripts, changelog: brainChangelog } }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
