@@ -127,6 +127,9 @@ const CLAUDE_TOOLS: Partial<Record<ToolClass, readonly string[]>> = {
   // the same command tools; every command the engine asks to run is checked by readOnlyCommand (manager.ts)
   'shell-read': ['Bash', 'PowerShell', 'BashOutput'],
   web: ['WebFetch', 'WebSearch'],
+  // edits limited to the brain folder: every Edit/Write request of a role without 'edit' is checked by the role gate
+  // (agents/role-gate.ts insideBrain: real path inside the brain, no "..", no link out)
+  'brain-write': ['Edit', 'Write'],
 };
 export function claudeTools(tools: AgentToolPolicy): string[] {
   return [...new Set([...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? [])])];
@@ -202,8 +205,9 @@ export function unenforced(kind: EngineKind, p: AgentPolicy): (ToolClass | 'ceil
       // brain-write is an edit: allowed edits reach the brain folder too; commands reach files and the network. A named
       // MCP list is not narrowed (claudeMcp).
       // read-only commands: the app refuses a writing command it is asked about, but one the user's own allow rules
-      // approve never reaches it
+      // approve never reaches it; the same for brain-write's Edit/Write outside the brain (role-gate.ts)
       const gaps = reachable(c => (c === 'edit' || c === 'brain-write' || c === 'web') && can('shell') ? false : c === 'brain-write' ? !can('edit')
+        : c === 'edit' ? !can('brain-write')
         : c === 'shell' ? !can('shell-read') : c === 'shell-read' ? !can('shell') : (c === 'mail-draft' || c === 'calendar-read' || c === 'mcp') ? !connectors : true);
       return p.tools?.mcp?.length ? [...gaps, 'mcp'] : gaps;
     }

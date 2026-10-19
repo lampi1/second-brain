@@ -37,6 +37,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- The Scribe can write on Claude again: its brain-write class gives Edit and Write, and each edit is refused unless
+  the file's real path is inside the brain folder (no "..", no link or hard link out of it).
 - Security review fixes: a work chat's lessons (agent_learn_propose) apply only to its own agent, never as a rule for
   every agent, and wait until the Orchestrator accepts them with you; agent changes check the Orchestrator inside the
   authoring service; a sub-agent never gets more tools, MCP servers or permissions than its parent and runs in its

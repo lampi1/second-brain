@@ -147,6 +147,8 @@ export interface ChatManagerOptions {
   runEveryMs?: number;
   /** absolute path of the brain's mem.mjs, when it has one: the hand-off request asks to update the now.md line too */
   memTool?: () => string | null;
+  /** the brain folder: a brain-write role (no edit) may edit only inside it (agents/role-gate.ts) */
+  brainRoot?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */
   handoffTimeoutMs?: number;
 }
@@ -1783,7 +1785,7 @@ export class ChatManager implements ChatService {
   private gated(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
-    const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
+    const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [], policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
     if (verdict.kind === 'allow') {
