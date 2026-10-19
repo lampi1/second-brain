@@ -69,8 +69,8 @@ test('Battito appears only in matching role/search/file contexts and dismissal p
       ipcMain.removeHandler('app:readFile');
       ipcMain.handle('app:readFile', () => ({ kind: 'text', path: `${root}/AGENTS.md`, size: 10, offset: 0, shown: 10, text: '# Rules', more: false, firstLine: 1 }));
     }, info.brainRoot);
-    await visit(page, 'sb://agenti/scout');
-    await expect(page.locator('[data-place="agent:scout"]')).toBeVisible();
+    await visit(page, 'sb://agenti/artisan');
+    await expect(page.locator('[data-place="agent:artisan"]')).toBeVisible();
     await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
     await shot(page, 'agent-context-pulse');
     await visit(page, 'sb://esplora/AGENTS.md');
