@@ -452,7 +452,7 @@ export class ChatManager implements ChatService {
     return this.chats.get(chatId)?.commands ?? null;
   }
 
-  /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_start_subagent bounds a child by it. */
+  /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_delegate bounds a child by it. */
   agentPolicy(chatId: string): AgentPolicy | null { const p = this.chats.get(chatId)?.policy; return p ? structuredClone(p) : null; }
   pending(): PendingRequest[] {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
