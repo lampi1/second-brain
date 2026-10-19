@@ -152,7 +152,7 @@ export const chatEn: typeof chatIt = {
   'chat.command.execWithKey': 'Run',
   'chat.command.execConfirm': (p: { warning: string }) => `Confirm? ${p.warning}`,
   'chat.command.copy': 'Copy',
-  'chat.command.openChat': 'Open chat',
+  'chat.command.openChat': 'Go to the chat',
   'chat.command.later': 'Answer later',
   'chat.command.dismiss': 'Not needed',
   'chat.command.dismissTip': 'Removes the request: the block stays in the chat with its Run',

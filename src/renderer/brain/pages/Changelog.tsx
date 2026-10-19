@@ -44,7 +44,7 @@ function Entry({ e }: { e: ChangelogEntry }) {
         <p>{e.summary}</p>
         <small>{copy('da', 'by')} {e.by}</small>
       </div>
-      <button type="button" className="btn btn-subtle btn-s dash-discuss dash-discuss-quiet bc-discuss" onClick={discuss} aria-label={`${copy('Discutine', 'Discuss')}: ${e.target}`}><span aria-hidden="true">↗</span> {copy('Discutine', 'Discuss')}</button>
+      <button type="button" className="btn btn-subtle btn-s dash-discuss dash-discuss-quiet bc-discuss" onClick={discuss} aria-label={`${copy('Discuti', 'Discuss')}: ${e.target}`}><span aria-hidden="true">↗</span> {copy('Discuti', 'Discuss')}</button>
     </li>
   );
 }

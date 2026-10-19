@@ -4,7 +4,7 @@
 // maximize, focus mode, Esc backing out one level, the floating Orchestrator and its tabs (ADR 0021), a new Orchestrator in place of
 // one ("Ricomincia da capo" on the same engine, "Cambia motore" on the other, optionally starting from a handoff of the
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
-// in a new one, the brain pages' bridge ("Discutine" / "Apri una chat") and the ui:command event from main.
+// in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main.
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
 import type { EventMap, Harness, PendingRequest } from '@shared/contract';
 import type { DiscussBridge } from './brain';
@@ -22,7 +22,7 @@ import { app, closeChat, closeTab, continueChat, createRoutedChat, dispatch, set
 import { orchestratorIdOf } from './lib/orchestrator-route';
 import { questionsModalOn } from './lib/questions';
 import { answerLater, openQueue } from './lib/later';
-import { engineCan, engineLabel } from './lib/engines';
+import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
   openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setBrowserOpen, type Place,type BrainPageId,
@@ -236,9 +236,9 @@ export function toggleQuestionsModal(): void {
   void setSetting({ questionsModal: !questionsModalOn(app.get()) });
 }
 
-/** What the brain pages get for "Discutine" (the Orchestrator next to the page, a ready draft in its input, not sent) and
- *  "Apri una chat" / DevOps "Apri chat" (a work chat in the brain folder or the given one, e.g. a PR's repo; the page
- *  stays, a toast leads to the chat; both go through the routing table, ADR 0032). */
+/** What the brain pages get for "Discuti" (the Orchestrator next to the page, a ready draft in its input, not sent): every
+ *  entry point of a page goes to the Orchestrator, which decides and delegates; no page creates a work chat by itself
+ *  (owner, 2026-10-19). */
 export const brainBridge: DiscussBridge = {
   draftToOrchestrator(text, onSent) {
     const r = orchestratorId();
@@ -246,23 +246,6 @@ export const brainBridge: DiscussBridge = {
     setDraft(r, text, () => onSent({ id: r, title: app.get().chats[r]?.title ?? 'Orchestrator' }));
     focusChat(r);
     return true;
-  },
-  async newChat(title, prompt, opts) {
-    const last = ui.get().prefs.newChat;
-    const cwd = opts?.cwd || app.get().info?.brainRoot || last.cwd;
-    if (!cwd) { toast('Scegli prima la cartella del cervello (Impostazioni)', 'warn'); return null; }
-    const effortOk = engineCan(last.harness, 'effort'), permOk = engineCan(last.harness, 'permissionMode');
-    // through the routing table (ADR 0032): a DevOps record says its kind and area, a brain page's chat is read from its
-    // title and first message; the last "Nuova chat" choice only without a row
-    const c = await createRoutedChat({
-      title, prompt, cwd, ...(opts?.route ?? {}),
-      defaults: { harness: last.harness, ...(last.model ? { model: last.model } : {}), ...(effortOk && last.effort ? { effort: last.effort } : {}) },
-      // the permission mode the user saw: only an engine with permission modes carries one (another keeps a stale value)
-      ...(permOk && last.permissionMode ? { permissionMode: last.permissionMode } : {}),
-    });
-    if (!c) return null;
-    toast(`Chat aperta: ${c.title}`, 'ok', { label: 'Vai alla chat', run: () => focusChat(c.id) });
-    return { id: c.id, title: c.title };
   },
   showChat: id => focusChat(id),
 };

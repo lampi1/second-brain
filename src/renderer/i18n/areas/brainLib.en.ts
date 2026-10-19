@@ -16,14 +16,9 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} items; first: ${p.first}, ${p.value}.`,
 
 
-  // task-chat.ts
-  'brainLib.taskChat.untitled': 'untitled',
+  // record-discuss.ts
+  'brainLib.recordDiscuss.untitled': 'untitled',
 
-  // discuss.ts
-  'brainLib.discuss.kindIdea': 'Idea',
-  'brainLib.discuss.kindReflection': 'Reflection',
-  'brainLib.discuss.kindError': 'Error',
-  'brainLib.discuss.kindNumber': 'Number',
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `waiting for the first ${p.n} cases after the change`,

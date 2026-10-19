@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ErrorRow, QRule } from '../../../src/renderer/brain/types';
 import { errorPatterns, normType, previousSpend, rowType, trend } from '../../../src/renderer/brain/lib/stats';
-import { chatPrompt, chatTitle, discussText, ERROR_QUESTION, topicKey, type Topic } from '../../../src/renderer/brain/lib/discuss';
+import { discussText, ERROR_QUESTION, topicKey, type Topic } from '../../../src/renderer/brain/lib/discuss';
 import { caughtWeeks, type Caught } from '../../../src/renderer/brain/lib/quality';
 
 const row = (o: Partial<ErrorRow>): ErrorRow => ({ data: '2026-10-13', ora: '10:00', chi: 'Orchestrator', area: 'QA', tipo: 'fatto-non-verificato', detto: 'd', vero: 'v', visto: 'Alex', regola: '', ...o });
@@ -91,11 +91,8 @@ describe('quote topics', () => {
   it('quotes source and facts and ends with the error question', () => {
     expect(discussText(t, null)).toBe(`Let's discuss the recurring error «fatto non verificato» (source: ai-errors.md).\n\n- 3 volte\n- aree: QA (2)\n\n${ERROR_QUESTION}`);
   });
-  it('keys by id and titles the chat by kind', () => {
+  it('keys by id', () => {
     expect(topicKey(t)).toBe('quote|err|fatto-non-verificato');
-    expect(chatTitle(t)).toBe('Errore · fatto non verificato');
-    expect(chatTitle({ kind: 'quote', quote: { ...(t as { quote: object }).quote, what: 'numero', title: 'spesa' } as never })).toBe('Numero · spesa');
-    expect(chatPrompt(t, null)).toContain('on the recurring error «fatto non verificato» (source: ai-errors.md');
   });
 });
 

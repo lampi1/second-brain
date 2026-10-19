@@ -79,7 +79,7 @@ type PanelProps = {
  *  rejecting a permission / leaving a question (the popups: "Rispondi dopo", lib/later.ts). */
 export function RequestPanel(p: PanelProps) {
   if (p.req.type !== 'command') return <AskPanel {...p} />;
-  // "Apri chat" where the chat is not already on screen around the card: the lane, the Orchestrator, the layer
+  // "Vai alla chat" where the chat is not already on screen around the card: the lane, the Orchestrator, the layer
   const open = p.command?.onOpen ?? (p.variant === 'lane' || p.variant === 'orchestrator' ? () => focusChat(p.req.chatId) : undefined);
   // the turn's prose one click away, except in the global layer (p.command: its page can not read the chat)
   return <CommandRequest req={p.req} variant={p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;

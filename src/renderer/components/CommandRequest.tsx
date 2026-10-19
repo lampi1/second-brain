@@ -3,7 +3,7 @@
 // compact). It shows
 // who proposed it, the chat's explanation right before the block (`command.lead`, in sight; the turn's prose under
 // "Contesto", one click away, AskContext.tsx) and the command (first lines, the rest one click away), with Esegui /
-// Copia / Apri chat / "Rispondi dopo" / Non serve.
+// Copia / Vai alla chat / "Rispondi dopo" / Non serve.
 // Esegui runs the block in the chat that proposed it (run:start with that chat and message: the run, its output and
 // "Manda l'esito alla chat" stay under the block in that chat); a block that looks like production asks a second click
 // that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the layer:
@@ -28,7 +28,7 @@ export interface CommandHandlers {
   /** Esegui through someone else (the layer relays to the app page); resolves false when it did not start */
   onRun?: (confirmProd: boolean) => Promise<boolean> | boolean;
   onDismiss?: () => void;
-  /** "Apri chat": shown only when given (never on the chat's own tile, where the block already is) */
+  /** "Vai alla chat": shown only when given (never on the chat's own tile, where the block already is) */
   onOpen?: () => void;
   onEscape?: () => void;
   /** "Rispondi dopo": sets the request aside without answering (shown only when given) */

@@ -1,13 +1,13 @@
-// A chat the user starts without choosing everything (chat:createRouted): the Task page's "Apri chat", a brain page's
-// "Apri una chat", "Nuova chat" (its one-line preview too: previewRoute) and a new Orchestrator (Ricomincia da capo, Cambia
-// motore, Pulisci).
+// A chat the user starts without choosing everything (chat:createRouted): "Nuova chat" (its one-line preview too:
+// previewRoute) and a new Orchestrator (Ricomincia da capo, Cambia motore, Pulisci). The brain pages never start one:
+// their "Discuti" goes to the Orchestrator, which delegates (2026-10-19).
 // Harness, model and effort come from the routing table (brain/routing.ts, ADR 0032), the same decision app_create_chat
 // makes for an Orchestrator, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
 // (wiring.ts). What the user named (the engine of Cambia motore) beats the row, as an override with its reason; no row →
 // the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
 // aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths
 // (2026-10-14). Used by index.ts; test/unit/routed-chat.test.ts.
-import { TASK_KINDS, type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
+import { type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
 import { EFFORTS, type RouteRequest, type RouteResult } from '../brain/routing';
 import { engineLabel, engineOf } from '../engines/registry';
 import { log } from '../log';
@@ -42,7 +42,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
     if (!cwd) throw new Error('nessuna cartella per la chat');
   }
   // an Orchestrator's work is always 'orchestrator', whatever its title or handoff says
-  const kind: TaskKind | undefined = orchestrator ? 'orchestrator' : req.kind && (TASK_KINDS as readonly string[]).includes(req.kind) ? req.kind as TaskKind : undefined;
+  const kind: TaskKind | undefined = orchestrator ? 'orchestrator' : undefined;
   const def = req.defaults ?? { harness: 'claude' };
   const harness: Harness = engineOf(def.harness) ? def.harness : 'claude';
   const effort = def.effort && (EFFORTS as readonly string[]).includes(def.effort) ? def.effort : null;
@@ -56,8 +56,8 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
     : !userPick(h) && !d.agentsMayOpen(h) ? `gli Orchestrator non possono usare ${engineLabel(h)} (impostazione «Gli Orchestrator possono usare ${engineLabel(h)}»)` : null;
   const routed = d.route({
     // no title: the area is the prompt's would-be title's, i.e. none ('altro'); the kind comes from the prompt
-    title, prompt: typeof req.routeText === 'string' ? req.routeText.slice(0, 2000) : prompt.slice(0, 2000),
-    ...(kind ? { kind } : {}), ...(text(req.area, 40) ? { area: text(req.area, 40) } : {}), ...(own.appCode ? { appCode: true } : {}),
+    title, prompt: prompt.slice(0, 2000),
+    ...(kind ? { kind } : {}), ...(own.appCode ? { appCode: true } : {}),
     canRun: h => !refusal(h),
     ask: named ? { ...(said.harness ? { harness: said.harness } : {}), ...(said.model ? { model: said.model } : {}), ...(said.effort ? { effort: said.effort } : {}), reason: text(req.ask?.reason, 300) || 'scelta dell’utente' } : {},
     defaults: { harness, models: { [harness]: text(def.model, 200) || null }, effort },

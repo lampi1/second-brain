@@ -211,7 +211,8 @@ page in the Brain section (ADR 0076). Nothing in the app runs a script.
 
 Mentions, comments and votes on your pull requests, reviews waiting for you, stuck work items, failed builds and the QA
 status of each pull request, imported from Azure DevOps on demand or automatically (zero tokens, read only). Every item
-opens its agent in one click. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
+has **Discuti**: one click puts a ready message about it (title, link, state, folder) in the Orchestrator's input, and the
+Orchestrator decides and opens the work chat. Every page works the same way: no page opens a work chat by itself. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
 what, who (you, or the agent or engine of a chat), when and its link.
 
 ### Quality you can measure

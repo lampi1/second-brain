@@ -8,7 +8,7 @@
 // outcomes; "Test e QA" (TaskQa.tsx); the reviews waiting for me and since when; my work items by state, each opening
 // in place on its description, last comments and test cases; the tickets I follow with their changes; the stand-up
 // sentences. All of it from the brain's read-only script devops-me.mjs --full, kept by main's TaskService (imported
-// automatically when the read is on): zero tokens, no AI summary. Each record has "Apri chat" (RecordChatButton.tsx).
+// automatically when the read is on): zero tokens, no AI summary. Each record has "Discuti" (RecordDiscussButton.tsx: a draft for the Orchestrator).
 // A failed read says why (az login expired → the command). Why: the user, 2026-10-11 ("vorrei un aggiornamento
 // automatico da DevOps"), 2026-10-12 ("falla figa e usabile ... info aggiuntive sempre a costo 0 token"), 2026-10-19
 // (#85: "rinomina DevOps in Task", same look as Agenti). Styles: brain.css (dv-*) and worklog.css (tk-*).
@@ -25,7 +25,7 @@ import { Empty, Loading } from '../components/States';
 import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, Seg, toast, type Navigate, type Tone } from '../components/ui';
 import { Standup } from './day';
 import { QaSection } from './TaskQa';
-import { RecordChatButton } from '../components/RecordChatButton';
+import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
 import { t as tr } from '../../i18n';
 import '../../styles/agent-catalog.css';
@@ -149,7 +149,7 @@ function ItemRow({ w, d, now, state = true }: { w: DevopsItem; d: DevopsDetail |
             {last && <span className="dv-last bx-clip1" title={last.text}><b>{last.mine ? 'Tu' : firstName(last.who)}:</b> {last.text.replace(/\s+/g, ' ')}</span>}
           </span>
         </span>
-        <RecordChatButton rec={{ kind: 'workitem', item: w }} />
+        <RecordDiscussButton rec={{ kind: 'workitem', item: w }} />
       </summary>
       <DetailView w={w} d={d} />
     </details>
@@ -167,7 +167,7 @@ function NewsCard({ n, details, now }: { n: DevopsNews; details: TasksState['det
         <Avatar name={n.who ?? (n.kind === 'build' ? 'Build' : null)} />
         <span className="dv-news-who"><b>{newsLine(n)}</b><span className="muted" title={fmt.when(n.at)}> · {fmt.ago(n.at)}</span></span>
         <span className="sp" />
-        {n.item ? <RecordChatButton rec={{ kind: 'workitem', item: n.item }} /> : n.pr ? <RecordChatButton rec={{ kind: 'pr', pr: n.pr, mine: n.kind !== 'review' }} /> : null}
+        {n.item ? <RecordDiscussButton rec={{ kind: 'workitem', item: n.item }} /> : n.pr ? <RecordDiscussButton rec={{ kind: 'pr', pr: n.pr, mine: n.kind !== 'review' }} /> : null}
         {n.unread ? <Pill tone={KIND_TONE[n.kind] ?? 'blue'}>nuova</Pill> : <Pill tone="outline">letta</Pill>}
         {n.unread && <button type="button" className="bx-btn s" onClick={() => markTasksRead([n.key])} data-testid={`task-read-${n.key}`}>Letta</button>}
       </div>
@@ -201,7 +201,7 @@ function FollowedCard({ news, details }: { news: DevopsNews[]; details: TasksSta
         <ExtLink href={first.url}>{first.title}</ExtLink>
         {first.item?.assignedTo && <span className="small muted">a {first.item.assignedTo.replace(/\s*<.*$/, '')}</span>}
         <span className="sp" />
-        {first.item && <RecordChatButton rec={{ kind: 'workitem', item: first.item }} />}
+        {first.item && <RecordDiscussButton rec={{ kind: 'workitem', item: first.item }} />}
         {unread.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unread.map(n => n.key))} data-testid={`task-read-followed-${first.item?.id ?? first.key}`}>Letta</button>}
       </div>
       <ul className="dv-changes">
@@ -266,7 +266,7 @@ function PrCard({ p, details, now }: { p: DevopsPr; details: TasksState['details
   return (
     <article className={`dv-pr t-${wait.tone || 'none'}`} data-testid={`task-pr-${p.id}`}>
       <div className={`dv-wait ${wait.tone}`} data-testid={`task-wait-${p.id}`}>{wait.text}</div>
-      <div className="dv-pr-head"><h3><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title} <IconExternal /></ExtLink></h3><RecordChatButton rec={{ kind: 'pr', pr: p, mine: true }} /></div>
+      <div className="dv-pr-head"><h3><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title} <IconExternal /></ExtLink></h3><RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: true }} /></div>
       <div className="small muted">{p.draft && <Pill tone="outline">bozza</Pill>} {p.repo}{p.target ? ` → ${p.target}` : ''}{age !== null ? ` · aperta ${age === 0 ? 'oggi' : `da ${plural(age, 'giorno', 'giorni')}`}` : ''}</div>
       <div className="dv-checks" data-testid={`task-checks-${p.id}`}>
         <Check k="Build" tone={!p.build ? '' : p.build.result === 'succeeded' ? 'good' : p.build.result === 'failed' ? 'bad' : 'warn'}>{buildLink(p.build)}</Check>
@@ -358,7 +358,7 @@ function Reviews({ list, now }: { list: DevopsPrRef[]; now: number }) {
           <Avatar name={p.author} />
           <span className="t"><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title}</ExtLink><span className="small muted"> · {p.author?.replace(/\s*<.*$/, '') ?? ''} · {p.repo}</span></span>
           {d !== null && <Pill tone={d >= 3 ? 'warn' : 'outline'}>aspetta {sinceLabel(d)}</Pill>}
-          <RecordChatButton rec={{ kind: 'pr', pr: p, mine: false }} />
+          <RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: false }} />
         </li>
       );
     })}</ul></div>
