@@ -18,6 +18,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   while a sub-agent still works, "finito" only once none does (#69).
 - Agent cards and the Orchestrator's head no longer show a per-chat effort ("Attivo: …", "Prossimo turno: …"): the
   agent's profile decides it and shows it (#75).
+- Question panels: the question and its context use the app's type scale (the questions window's question 16 px
+  instead of 22 px, the context 14 px; the tile's lead and context 13 px).
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
   in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
@@ -41,6 +43,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   idle gets its assignment completed and its agent run ended "completed", then closes by itself after the delay set in
   Settings (now also 2 minutes), with closedBy "auto". One waiting for the user, a permission, colleagues or background
   tasks stays open with an "In attesa di…" label; an open browser tab alone no longer holds it (ADR 0076).
+- Agent screenshots everywhere (issue #83, ADR 0081): the file viewer renders HTML reports (sanitized, in their own
+  shadow root, no scripts or external loads) and Markdown reports with their images (base64 or local files under the
+  allowed folders), a click opens one large; chat messages show bare image paths, links to images and path-only code
+  spans as thumbnails; the chat MCP instructions, show_ui and the browser's screenshot tool say how to attach one (a
+  path). HTML and Markdown reports come whole up to 32 MB, so embedded screenshots are never cut.
 - Settings → Aggiornamenti: what is new on GitHub, and an "Aggiorna" button that downloads it, rebuilds and restarts
   the app on it at once, without the test suite (ADR 0075).
 - "Aggiornati": ask the Orchestrator and it brings a developer's clone to the latest `main` from GitHub

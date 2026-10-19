@@ -434,6 +434,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/later.ts, src/main/later.ts
       b('«Rispondi dopo» tiene tutto in «Da rispondere» senza popup; Ctrl+J apre la prossima cosa che ti aspetta.',
         '"Answer later" keeps everything in "To answer" with no popups; Ctrl+J opens the next thing waiting for you.'),
+      // src/renderer/components/AskImages.tsx, src/main/ask-image.ts SCREENSHOT_HINT
+      b('Gli screenshot che l’agente cita (un percorso PNG/JPG/WebP nella domanda o in un’opzione) compaiono come miniature, prima e dopo affiancati; un clic li apre grandi. Lo stesso vale per i messaggi in chat.',
+        'Screenshots the agent names (a PNG/JPG/WebP path in the question or an option) show as thumbnails, before and after side by side; a click opens them large. Chat messages work the same way.'),
       // src/main/chats/regia-wake.ts QUIET; no timeout
       b('Non c’è scadenza: la richiesta sparisce solo se rispondi, se la CLI la ritira o se chiudi la chat.',
         'There is no timeout: the request goes away only if you answer, the CLI withdraws it, or you close the chat.'),
@@ -446,7 +449,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'Impostazione questionsModal (default false); stato «Rispondi dopo» in userData/answer-later.json.', 'Setting questionsModal (default false); "Answer later" state in userData/answer-later.json.'),
       tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (regia-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (regia-wake.ts); the order is arrival order.'),
     ],
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/regia-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/regia-wake.ts', 'src/shared/contract.ts'],
   },
   {
     id: 'grindhouse',
@@ -597,7 +600,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'It refuses files outside these folders (checked before and after resolving the real path), drive roots and network shares.'),
       b('Non mostra file «privati»: cartelle che iniziano con un punto (tranne .github e .githooks) o nomi come secret, token, password.',
         'It does not show "private" files: folders starting with a dot (except .github and .githooks) or names like secret, token, password.'),
-      b('Testo fino a 1 MB; Markdown senza immagini; .jsonl come tabella; il resto come codice numerato.', 'Text up to 1 MB; Markdown without images; .jsonl as a table; the rest as numbered code.'),
+      b('Testo fino a 1 MB; .jsonl come tabella; il resto come codice numerato.', 'Text up to 1 MB; .jsonl as a table; the rest as numbered code.'),
+      // src/renderer/brain/components/ReportHtml.tsx, ReportImages.tsx
+      b('Report Markdown e HTML con le loro immagini (incorporate in base64 o file accanto al report), mai da internet; un clic su un’immagine la apre grande. L’HTML è ripulito: niente script, moduli o caricamenti esterni.',
+        'Markdown and HTML reports with their images (embedded as base64 or files beside the report), never from the internet; a click on an image opens it large. The HTML is cleaned: no scripts, forms or external loads.'),
       // src/main/peek-file.ts
       b('Cliccare un percorso in chat apre prima un’anteprima piccola (14 righe), senza scrivere né eseguire nulla.',
         'Clicking a path in a chat first opens a small preview (14 lines), writing and running nothing.'),
@@ -610,7 +616,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'FILE_VIEW_BYTES = 1,000,000; png/jpg/webp images ≤ 4 MB and 4096 px a side; beyond 4000 lines a window around the cited line.'),
       tech(WHERE, 'Canale app:readFile → readFileView nel main; pagina «file» (brain/pages/FileViewer.tsx).', 'Channel app:readFile → readFileView in main; page "file" (brain/pages/FileViewer.tsx).'),
     ],
-    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/index.ts', 'src/renderer/brain/pages/FileViewer.tsx'],
+    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/index.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
   },
   {
     id: 'routing',

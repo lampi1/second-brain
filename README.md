@@ -197,6 +197,10 @@ Costs, budgets and estimates per agent and per day sit next to them.
 - **Model routing**: a versioned table picks engine, model and effort per kind of task.
 - **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
 - **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
+- **Screenshots everywhere**: an agent writes the path of a PNG, JPG or WebP (under the brain, the repo, a worktree or
+  its evidence folder) and the app shows it as a thumbnail in the chat and in the question; Markdown and HTML reports
+  open in the file viewer with their images (files beside the report or base64), never loaded from the internet. A
+  click opens any of them large.
 
 ## Architecture
 

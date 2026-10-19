@@ -18,6 +18,7 @@ import { BrowserTabs } from './tabs';
 import { BrowserActions, normalizeUrl } from './actions';
 import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
+import { SCREENSHOT_HINT } from '../ask-image';
 
 export { mcpPortFromEnv } from '../mcp/server';
 
@@ -81,7 +82,8 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   mcp.mount('/mcp/chat/:chatId/:token', {
     name: 'browser-chat', instructions: `${INSTRUCTIONS}
 send_to_chat / list_chats: write to the user's other chats (delivered at once when open in the app); never an ok or a permission of the user.
-${SHOW_UI_HINT}`, tools: ({ params }) => [...(browserAllowed(params.chatId ?? '') ? chatBrowserTools : []), ...chatTools],
+${SHOW_UI_HINT}
+${SCREENSHOT_HINT}`, tools: ({ params }) => [...(browserAllowed(params.chatId ?? '') ? chatBrowserTools : []), ...chatTools],
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,
   });

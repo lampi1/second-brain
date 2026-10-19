@@ -1,7 +1,8 @@
 // Full read-only viewer for an explicitly opened file link. Any local file (Brother, SPEC 22, 2026-10-17: "any file on
 // the PC, no exceptions"), never a network share: a UNC path or a link to one would send the Windows login to that host.
 // Text comes one page at a time (at most FILE_PAGE_BYTES, see readFileView's options); a PDF comes whole up to PDF_BYTES
-// as bytes for the renderer's pdf.js (canvas only). Async reads, so a long line count never holds the app up. Bounded,
+// as bytes for the renderer's pdf.js (canvas only); an HTML or Markdown report opened at its top comes whole up to
+// REPORT_BYTES (its embedded screenshots stay intact). Async reads, so a long line count never holds the app up. Bounded,
 // nothing written, run or opened in another app. Used by index.ts (app:readFile); pinned by test/unit/file-view.test.ts.
 import fs from'node:fs';import type{FileHandle}from'node:fs/promises';import path from'node:path';
 import{fileReference,FILE_PAGE_BYTES,type FileViewResult}from'../shared/file-view';
@@ -11,6 +12,10 @@ export const FILE_VIEW_BYTES=FILE_PAGE_BYTES;
 /** How far line numbers are counted (a page further on shows no numbers; a cited line further on is not found). */
 export const FILE_SCAN_BYTES=64_000_000;
 export const PDF_BYTES=32_000_000;
+/** An HTML or Markdown report opened at its top comes whole up to this size (issue #83: its embedded base64 screenshots
+ *  must not be cut by the page size); a bigger one, or one opened at a line or a page, is paged like any text. */
+export const REPORT_BYTES=32_000_000;
+const REPORT_EXT=new Set(['.html','.htm','.md','.markdown']);
 const IMAGE_BYTES=4_000_000;
 /** Lines shown above a cited line when its page does not start at the top of the file (fewer when they are long). */
 const LINE_CONTEXT=100;
@@ -112,9 +117,10 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
    start=options.align?await lineAfter(fd,offset,offset+FILE_PAGE_BYTES):offset;
    firstLine=await linesBefore(fd,start);if(firstLine!==null)firstLine++;
   }
-  const page=await readAt(fd,start,end===null?FILE_PAGE_BYTES+1:end-start);
+  const pageBytes=!utf16&&!line&&!before&&!offset&&REPORT_EXT.has(ext)&&opened.size<=REPORT_BYTES?Math.max(FILE_PAGE_BYTES,opened.size):FILE_PAGE_BYTES;
+  const page=await readAt(fd,start,end===null?pageBytes+1:end-start);
   const final=await fd.stat();if(!same(final,opened))return{kind:'refused',reason:'changed'};
-  const read=page.subarray(0,Math.min(page.length,FILE_PAGE_BYTES)),more=page.length>FILE_PAGE_BYTES||final.size>start+read.length;
+  const read=page.subarray(0,Math.min(page.length,pageBytes)),more=page.length>pageBytes||final.size>start+read.length;
   // a page that does not reach the end of the file stops at its last line end (or at the last whole character);
   // a page asked to end at `before` already ends at a page boundary; a cited line too long to end on the page is cut
   // at its last whole character instead, so the page still shows it

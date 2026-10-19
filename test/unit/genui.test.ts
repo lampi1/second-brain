@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { ARTIFACT_MAX_BYTES, ARTIFACT_MAX_PER_CHAT, checkUi, describeUi, hasUiFence, safeHref, splitUiFences, textOfUi } from '../../src/shared/genui';
 import { Artifacts, showUiTool, type Artifact } from '../../src/main/genui/artifacts';
+import { SCREENSHOT_HINT } from '../../src/main/ask-image';
 import type { CallCtx } from '../../src/main/mcp/server';
 
 const table = { columns: ['Test', 'Esito'], rows: [{ cells: ['TC 1', 'ok'], status: 'ok', link: { label: 'evidenza', href: 'C:\\qa\\tc1.png' } }, { cells: ['TC 2'] }] };
@@ -227,5 +228,11 @@ describe('Artifacts: the store behind show_ui', () => {
     const ctx = { mount: 'browser-chat', params: { chatId: 'w', token: 't' }, sessionId: '', signal: new AbortController().signal, progress: () => false } satisfies CallCtx;
     await expect(Promise.resolve(tool.run(args(), ctx))).resolves.toContain('Mostrato in questa chat');
     expect(sent[0]?.chatId).toBe('w');
+  });
+
+  it('show_ui says how to attach a screenshot: a local path, never a remote URL (issue #83)', () => {
+    const tool = showUiTool(setup([chat('w')]).store);
+    expect(tool.description).toContain(SCREENSHOT_HINT);
+    expect(SCREENSHOT_HINT).toMatch(/absolute path/);expect(SCREENSHOT_HINT).toMatch(/AskUserQuestion/);expect(SCREENSHOT_HINT).toMatch(/data: PNG/);expect(SCREENSHOT_HINT).toMatch(/Never an http URL/);
   });
 });

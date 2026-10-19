@@ -1,7 +1,7 @@
 // Opened file links show any local file read-only and bounded (SPEC 22); never a network share, never executed.
 import fs from'node:fs';import os from'node:os';import path from'node:path';
 import{afterEach,expect,it}from'vitest';
-import{readFileView,FILE_VIEW_BYTES,PDF_BYTES}from'../../src/main/file-view';
+import{readFileView,FILE_VIEW_BYTES,PDF_BYTES,REPORT_BYTES}from'../../src/main/file-view';
 import{fileReference,fileViewArg,readFileViewArg,type FileViewResult}from'../../src/shared/file-view';
 const temporary:string[]=[];const setup=()=>{const base=fs.mkdtempSync(path.join(os.tmpdir(),'sb-viewer-'));temporary.push(base);const root=path.join(base,'work');fs.mkdirSync(root);return{base,root};};
 afterEach(()=>{for(const dir of temporary.splice(0))fs.rmSync(dir,{recursive:true,force:true});});
@@ -92,4 +92,12 @@ it('reads a PDF whole as bytes for pdf.js, bounded and only with the PDF header'
  fs.writeFileSync(path.join(root,'fake.pdf'),'<html>not a pdf');expect(await readFileView('fake.pdf',{cwd:root})).toMatchObject({kind:'unsupported',reason:'pdf'});
  const fd=fs.openSync(path.join(root,'huge.pdf'),'w');fs.writeSync(fd,'%PDF-1.4');fs.ftruncateSync(fd,PDF_BYTES+1);fs.closeSync(fd);
  expect(await readFileView('huge.pdf',{cwd:root})).toMatchObject({kind:'unsupported',reason:'pdf'});
+});
+it('reads an HTML or Markdown report whole from its top (embedded screenshots are never cut), paged otherwise',async()=>{
+ const{root}=setup(),body=`<p>report</p><img src="data:image/png;base64,${'A'.repeat(FILE_VIEW_BYTES+500)}">\n`;
+ fs.writeFileSync(path.join(root,'report.html'),body);fs.writeFileSync(path.join(root,'report.md'),body);fs.writeFileSync(path.join(root,'report.log'),body);
+ for(const name of['report.html','report.md'])expect(await readFileView(name,{cwd:root})).toMatchObject({kind:'text',text:body,more:false,offset:0});
+ const log=await readFileView('report.log',{cwd:root});expect(log.kind==='text'&&log.more).toBe(true);
+ const later=await readFileView('report.html',{cwd:root,offset:10});expect(later.kind==='text'&&later.text.length).toBeLessThanOrEqual(FILE_VIEW_BYTES);
+ expect(REPORT_BYTES).toBeGreaterThan(FILE_VIEW_BYTES);
 });
