@@ -27,6 +27,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Pages fade in on every change and progress bars move smoothly, both off under reduced motion.
 
 ### Added
+- Grindhouse: a worker that sent its final report to the Orchestrator (send_to_chat or a run-report block) and is
+  idle gets its assignment completed and its agent run ended "completed", then closes by itself after the delay set in
+  Settings (now also 2 minutes), with closedBy "auto". One waiting for the user, a permission, colleagues or background
+  tasks stays open with an "In attesa di…" label; an open browser tab alone no longer holds it (ADR 0076).
 - Settings → Aggiornamenti: what is new on GitHub, and an "Aggiorna" button that downloads it, rebuilds and restarts
   the app on it at once, without the test suite (ADR 0075).
 - "Aggiornati": ask the Orchestrator and it brings a developer's clone to the latest `main` from GitHub

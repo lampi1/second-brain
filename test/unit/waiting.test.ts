@@ -1,7 +1,7 @@
 // waitsForWork (shared/waiting.ts): the words of a chat's last answer that say it still waits for work it started, the
 // engine-independent hold of the auto-close, the idle release and the continuity rules (the chats of 2026-10-16).
 import { describe, expect, it } from 'vitest';
-import { waitsForWork } from '../../src/shared/waiting';
+import { waitsForPeople, waitsForWork } from '../../src/shared/waiting';
 
 describe('waitsForWork', () => {
   it('the last answers of the chats closed on 2026-10-16 and their like say they wait', () => {
@@ -33,5 +33,44 @@ describe('waitsForWork', () => {
       'Attendo che tu confermi, poi rilancio i test.',
       'Waiting for your ok before the build.',
     ]) expect(waitsForWork(t), String(t)).toBe(false);
+  });
+});
+
+// #86: a report that waits for the user or for a colleague keeps the chat open ("In attesa di…"); a finished one closes.
+describe('waitsForPeople', () => {
+  it('a report or answer that waits for the user', () => {
+    for (const t of [
+      'Aspetto il tuo ok.',
+      'Report inviato. Aspetto il tuo ok, poi lancio il deploy.',
+      'Attendo che tu confermi, poi rilancio i test.',
+      'Resto in attesa di una tua decisione sul nome.',
+      'In attesa dell\'utente per il login.',
+      'Waiting for your approval before merging.',
+      'Bozza pronta. Procedo?',
+      'Vuoi che apra la PR?',
+      'Mi serve il tuo ok per cancellare i file.',
+      'Attendo conferma.',
+      'Blocked on the user: the token expired.',
+    ]) expect(waitsForPeople(t), t).toBe('user');
+  });
+  it('a report that waits for a colleague', () => {
+    for (const t of [
+      'Ho chiesto a «QA rimborsi» i dati: aspetto la sua risposta da «QA rimborsi».',
+      'Aspetto la risposta della chat Backend.',
+      'Waiting for the other chat to push the fix.',
+      'In attesa dei colleghi per l\'integrazione.',
+      'Attendo l\'Orchestrator per il prossimo incarico.',
+    ]) expect(waitsForPeople(t), t).toBe('colleagues');
+  });
+  it('a finished report, running work or a denied wait is nobody', () => {
+    for (const t of [
+      '', undefined, null,
+      'Fatto: report inviato all\'Orchestrator. Ricerca conclusa, 3 fonti.',
+      'Tool aggiornato, test verdi, commit locale abc123.',
+      'Aspetto la QA sui controlli A, B e C…',
+      'Attendo l\'esito della build.',
+      'Non aspetto nulla: il lavoro è finito.',
+      'Se ti serve altro, scrivimi.',
+    ]) expect(waitsForPeople(t), String(t)).toBeNull();
   });
 });

@@ -160,6 +160,9 @@ export interface ChatSummary {
   /** its last turn's final answer says it waits for work still running (an agent, a QA run, a build: shared/waiting.ts):
    *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
   waitsOnWork?: boolean;
+  /** its last report or final answer says it waits for the user (or a decision from above) or for a colleague (another
+   *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0076) */
+  waitsOn?: 'user' | 'colleagues';
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */

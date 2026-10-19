@@ -516,6 +516,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
+    sent: (fromId, toId, text) => manager.noteMail(fromId, toId, text), // a worker's report completes its assignment (ADR 0076)
   }));
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
@@ -535,7 +536,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   } catch { keptProblem = true; }
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : (brain.settings().autoCloseMin ?? 2) * 60_000,
-    candidates: () => manager.autoCloseCandidates(id => mail.hasWork(id) || asks.pending().some(p => p.chatId === id) || runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id)),
+    // what holds a chat open, named for its "In attesa di…" label (ADR 0076); an open tab alone no longer holds it (the
+    // archive closes its tabs): only a hand-off, a dialog or a page still loading
+    candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
+      : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
+      : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
+      : mail.hasWork(id) ? 'mail' : false),
     archive: async (id, _reservation, valid) => {
       const done = await manager.archiveAutomatic(id, valid);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);

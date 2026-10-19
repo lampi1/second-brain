@@ -46,8 +46,8 @@ import { AgentMayNotWake } from '../engines/policy';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
-import { cleanRegiaName, regieOf } from '../../shared/regia';
-import { waitsForWork } from '../../shared/waiting';
+import { cleanRegiaName, regieOf, regiaOfChat } from '../../shared/regia';
+import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import type { AgentCatalogService } from '../agents/catalog';
 import { compatibleOwner, orchestratorOwner } from '../agents/catalog';
@@ -61,6 +61,7 @@ import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
+import type { AutoCloseWaiting } from '../../shared/auto-close';
 import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
@@ -199,6 +200,13 @@ export function turnReply(items: readonly ChatItem[]): string {
  *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
 export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';
 
+/** The scheduler's reason for each waiting kind (Italian, as its other reasons; the tile shows its own label). */
+export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
+  answer: 'In attesa di una tua risposta', permission: 'In attesa di un tuo permesso', command: 'In attesa di un tuo comando',
+  user: 'In attesa dell’utente', colleagues: 'In attesa dei colleghi', work: 'In attesa del lavoro in corso',
+  report: 'In attesa del report finale', mail: 'In attesa di posta', browser: 'In attesa di te nel browser',
+};
+
 /** The final answer of the turn that just ended ('' when it wrote none). */
 export function lastAnswer(items: readonly ChatItem[]): string {
   for (let i = items.length - 1; i >= 0; i--) {
@@ -212,6 +220,11 @@ export function lastAnswer(items: readonly ChatItem[]): string {
 interface Rec {
   s: ChatSummary;
   createdAt: number;
+  /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
+   *  assignment (#86, ADR 0076); never persisted */
+  report?: { text: string; at: number; blocked?: boolean };
+  /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
+  autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
@@ -571,6 +584,7 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId);
     this.autoActivity(r);
     this.needAgentMay(r, from);
+    this.reassignOnOrchestrator(r, from);
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
@@ -733,21 +747,39 @@ export class ChatManager implements ChatService {
     return () => { if (!released) { released = true; r.deliveryHolds = Math.max(0, (r.deliveryHolds ?? 1) - 1); this.autoActivity(r); } };
   }
 
-  /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero. */
-  autoCloseCandidates(externalHold: (chatId: string) => boolean = () => true): AutoCloseCandidate[] {
+  /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero.
+   *  externalHold: true / a waiting kind = held by wiring (a waiting kind also names the "In attesa di…" label). */
+  autoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting = () => true): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
       const c = r.s, child = c.agentChildren;
-      let held = true;
+      let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
       const coordinated = [...this.chats.values()].some(x => !x.s.closedAt && x.s.regiaOf === c.id);
         const eligible = !this.quitting && !updateActivity.frozen && !c.isRegia && !c.appRegia && !coordinated && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
-      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}`,
-        activityAt: r.autoActivityAt ??= autoCloseNow(), reason: child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
+      const waitingFor = eligible || c.isRegia || c.appRegia ? undefined : this.waitingOf(r, held);
+      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
+        activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
+        reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
     });
+  }
+
+  /** What a held work chat waits for, the most urgent first (#86): the user's answers before running work, running
+   *  work before a missing report. undefined = held for another reason (busy, starting, an error, ...). */
+  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): AutoCloseWaiting | undefined {
+    const c = r.s, pend = [...r.pending.values()];
+    if (pend.some(p => p.type === 'permission')) return 'permission';
+    if (pend.some(p => p.type === 'question')) return 'answer';
+    if (external === 'command' || external === 'browser') return external;
+    if (c.waitsOn) return c.waitsOn;
+    if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
+    if ((c.background ?? 0) > 0 || c.waitsOnWork || this.observedChildrenBusy(r) || (c.agentChildren?.active ?? 0) > 0 || external === 'work') return 'work';
+    if (c.work?.status === 'waiting-mail' || external === 'mail') return 'mail';
+    if (c.work?.status === 'assigned' && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return 'report';
+    return undefined;
   }
 
   /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */
@@ -880,7 +912,7 @@ export class ChatManager implements ChatService {
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';
-    delete r.s.background; delete r.s.waitsOnWork;
+    delete r.s.background; delete r.s.waitsOnWork; delete r.s.waitsOn;
     this.pruneArchived();
     this.persist();
     log.info('chats', 'chat archived', { chat: chatId, data: { auto: !!opts.auto, ...(keep ? { engineKeptForColdNote: true } : {}) } });
@@ -1503,6 +1535,48 @@ export class ChatManager implements ChatService {
     return answer;
   }
 
+  /** A chat sent mail (send_to_chat): to its own Orchestrator it is its report (#86, ADR 0076), read at its turn's end. */
+  noteMail(chatId: string, toChatId: string | null, text: string): void {
+    const r = this.chats.get(chatId), to = toChatId ? this.chats.get(toChatId) : undefined;
+    if (!r || !to || r.s.isRegia || r.s.appRegia || !(to.s.isRegia || to.s.orchestrator)) return;
+    const all = [...this.chats.values()].map(x => x.s);
+    if (regiaOfChat(r.s, all) !== to.s.id && !to.s.orchestrator) return;
+    r.report = { text, at: Date.now() };
+    // mailed while idle (a tool call never runs outside a turn, but a late hook might): settle it now
+    if (r.s.state === 'idle' && !r.session?.busy && r.s.lastResult) { this.settleReport(r); this.updated(r); }
+  }
+
+  /** At a clean turn end: who its last answer and report say it waits for (waitsOn) and, for an assigned worker that
+   *  reported and waits for nobody, its assignment completed and its agent run ended "completed" (#86, ADR 0076). The
+   *  auto-close then closes it after the delay (closedBy "auto"); a question, permission or background task holds it. */
+  private settleReport(r: Rec, item?: Extract<ChatItem, { kind: 'result' }>): void {
+    const answer = lastAnswer(r.items), report = r.report;
+    const fresh = report && (report.at >= (r.s.work?.updatedAt ?? 0));
+    const who = waitsForPeople(answer) ?? (fresh ? waitsForPeople(report.text) : null);
+    if (who) r.s.waitsOn = who; else delete r.s.waitsOn;
+    if (fresh && !r.s.waitsOnWork && waitsForWork(report.text)) r.s.waitsOnWork = true;
+    const clean = item ? !item.isError && !item.interrupted : !!r.s.lastResult && !r.s.lastResult.isError && !r.s.lastResult.interrupted;
+    if (!fresh || !clean || report.blocked || who || r.s.waitsOnWork || r.s.work?.status !== 'assigned' || r.pending.size > 0 || (r.s.background ?? 0) > 0) return;
+    r.s.work = { status: 'completed', updatedAt: Date.now() };
+    r.autoCompleted = true;
+    this.autoActivity(r);
+    this.endRunOf(r, 'completed');
+    try { this.persist(true); } catch (e) { log.warn('chats', 'completed assignment not saved', { chat: r.s.id, cause: errText(e), hint: 'it is saved with the next change' }); }
+    log.info('chats', 'assignment completed by its final report', { chat: r.s.id });
+  }
+
+  /** A new message from its Orchestrator to a worker the app completed: it is a new assignment (#86). */
+  private reassignOnOrchestrator(r: Rec, from?: string): void {
+    if (!r.autoCompleted || !from || r.s.work?.status !== 'completed') return;
+    const all = [...this.chats.values()].map(x => x.s);
+    const regia = all.find(x => x.id === regiaOfChat(r.s, all));
+    const names = regia ? [regia.title, ...(regia.mailAliases ?? [])] : [];
+    if (from !== 'Orchestrator' && !names.some(n => n && from.includes(n))) return;
+    r.autoCompleted = false; delete r.report;
+    r.s.work = { status: 'assigned', updatedAt: Date.now() };
+    try { this.persist(true); } catch { /* saved with the next change */ }
+  }
+
   /** A result arrived: the job ledger gets the turn; the plan windows are refreshed now and then. */
   private turnEnded(r: Rec, item: Extract<ChatItem, { kind: 'result' }>): void {
     const handoffTurn = r.handoffTurn;
@@ -1524,10 +1598,13 @@ export class ChatManager implements ChatService {
     const run = r.s.run, turnAt = r.turnAt;
     // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
     if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
+    const reply = turnReply(r.items), runReport = reportOf(reply, item.at);
     if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
-      const report = reportOf(turnReply(r.items), item.at);
-      if (report) { run.report = report; this.runSave(); }
+      if (runReport) { run.report = runReport; this.runSave(); }
     }
+    // a run-report block is a final report too (the Orchestrator reads it with the turn's end): "blocked" waits on it
+    if (runReport?.ok) r.report = { text: runReport.summary, at: item.at, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
+    this.settleReport(r, item);
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;

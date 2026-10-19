@@ -24,3 +24,20 @@ test('a real backend deadline is visible with an accessible keep-open action, an
     await expect(warning).toBeVisible();
   } finally { await app.close(); }
 });
+
+// #86 (ADR 0076): a held work chat says what it waits for, on its strip, from the status main sends.
+test('a held work chat shows what it waits for on its strip', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
+    await app.evaluate(({ BrowserWindow }) => {
+      const now = performance.timeOrigin + performance.now();
+      BrowserWindow.getAllWindows()[0]!.webContents.send('chat:autoCloseStatus', [{ chatId: 'fix', deadline: null, warningStartedAt: null, clockAt: now, generation: 3, keptOpen: false, reason: 'In attesa dell’utente', waitingFor: 'user' }]);
+    });
+    const label = page.getByTestId('autoclose-waiting-fix');
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText('In attesa dell’utente');
+    await expect(page.getByTestId('autoclose-warnings')).toHaveCount(0);
+    await shot(page, 'autoclose-waiting-label');
+  } finally { await app.close(); }
+});
