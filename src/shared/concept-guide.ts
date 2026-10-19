@@ -205,6 +205,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/regia-delivery.ts
       b('La posta delle chat gli arriva smistata: subito, raggruppata (30 s) o silenziosa.',
         'Mail from the chats reaches it sorted: now, grouped (30 s) or quiet.'),
+      // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
+      b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
+        'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
     ],
     analogy: b('Come un caporedattore: non scrive ogni pezzo, sceglie chi lo scrive e tiene le fila.',
       'Like an editor-in-chief: does not write every piece, picks who writes it and keeps the threads together.'),
@@ -217,7 +220,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_* e agent_catalog); l’agente lo sceglie l’Orchestrator con agentId, oppure, se non lo indica, il classificatore locale dell’app (ADR 0078).',
         'The app’s MCP on 127.0.0.1 (app_* and agent_catalog tools); the agent is chosen by the Orchestrator with agentId or, when it names none, by the app’s local classifier (ADR 0078).'),
     ],
-    sources: ['src/main/chats/orchestrator.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/regia-delivery.ts', 'src/renderer/lib/regia-route.ts'],
+    sources: ['src/main/chats/orchestrator.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/shared/newchat.ts', 'src/main/chats/regia-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/regia-route.ts'],
   },
   {
     id: 'runs',

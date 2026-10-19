@@ -64,6 +64,7 @@ import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { RegiaWake } from './chats/regia-wake';
+import { attachHeldNews, type HeldNewsHub } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
 import { Quality } from './brain/quality';
@@ -129,6 +130,8 @@ export interface Wired {
   asks: CommandAsks;
   /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/regia-wake.ts) */
   wake: RegiaWake;
+  /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */
+  heldNews?: HeldNewsHub;
   /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
   source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
@@ -576,6 +579,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseTimer.unref();
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
+  const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
@@ -692,7 +696,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   return {
     brainModel,
-    cloud, chats, browser, brain, mcp, runner, asks, wake, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

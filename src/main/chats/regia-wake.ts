@@ -14,13 +14,15 @@
 // mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Orchestrator's whole context
 // (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
 // app_digest lists them whenever the Orchestrator looks.
+// Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
+// page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('chats/regia-wake');
-import type { ChatState, ChatSummary, EventMap, Harness, PendingRequest } from '../../shared/contract';
+import type { ChatState, ChatSummary, EventMap, Harness, HeldNewsItem, PendingRequest } from '../../shared/contract';
 import { regieOf } from '../../shared/regia';
 import { errText, log } from '../log';
 import { engineLabel, engineOf } from '../engines/registry';
-import { newsClass, passes, REGIA_GROUP_MS, REGIA_PER_CHAT_MS, regiaGate, type DeliveryClass, type RegiaGate } from './regia-delivery';
+import { heldWhy, newsClass, passes, REGIA_GROUP_MS, REGIA_PER_CHAT_MS, regiaGate, type DeliveryClass, type RegiaGate } from './regia-delivery';
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
@@ -80,6 +82,9 @@ export class RegiaWake {
   private sending = false;
   /** chats in a hand-off turn: its end is not a turn of theirs */
   private handoff = new Set<string>();
+  /** held-news.ts: told when what waits may have changed (#88) */
+  private listener: (() => void) | null = null;
+  private toldEmpty = true;
 
   constructor(private readonly d: RegiaWakeDeps) {}
 
@@ -93,6 +98,29 @@ export class RegiaWake {
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
     else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); }
+    else return;
+    this.changed();
+  }
+
+  /** held-news.ts listens: called when the buffer or the Orchestrator's state may have changed (never twice for "nothing") */
+  onHeldChange(fn: () => void): void { this.listener = fn; }
+
+  /** What waits to be told, for the user's eyes (the Orchestrator's tile, #88): every queued news of an open chat, with why it
+   *  waits at the Orchestrator's gate now. Reading it sends nothing. */
+  heldNews(): HeldNewsItem[] {
+    const id = this.regiaId(), r = id ? this.chats.get(id) : undefined;
+    if (!id || !r || !this.buffer.size || !this.d.enabled()) return [];
+    const gate = gateOf(r);
+    return this.queued().filter(e => { const c = this.chats.get(e.chatId); return !!c && !c.closedAt; })
+      .map(e => ({ regiaId: id, chatId: e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
+  }
+
+  private changed(): void {
+    if (!this.listener) return;
+    const empty = !this.buffer.size;
+    if (empty && this.toldEmpty) return;
+    this.toldEmpty = empty;
+    this.listener();
   }
 
   /** What waits to be told (tests, diagnostics). */
@@ -122,7 +150,12 @@ export class RegiaWake {
   }
 
   private pending(p: PendingRequest): void {
-    const c = this.chats.get(p.chatId);
+    // a chat with no update since the app started is not seen yet (its request comes before its 'waiting'): read it from
+    // the list, so its quiet news is not lost (#88: a quiet permission is counted, and rides along as the rule says)
+    const known = this.chats.get(p.chatId);
+    const listed = known ? undefined : this.d.list?.().find(x => x.id === p.chatId);
+    if (listed) this.remember(listed);
+    const c = known ?? listed;
     if (!c || c.isRegia || c.closedAt) return;
     const detail = p.type === 'command' ? (p.command?.code ?? p.detail).split('\n')[0] ?? '' : p.type === 'question' ? (p.questions?.[0]?.question ?? p.title) : p.title;
     this.add({ id: p.chatId, title: c.title, harness: c.harness }, p.type, detail, p.id);
@@ -205,7 +238,7 @@ export class RegiaWake {
   private flush(): void {
     if (this.sending || !this.buffer.size) return;
     const id = this.regiaId();
-    if (!this.d.enabled() || !id) { this.buffer.clear(); return; }
+    if (!this.d.enabled() || !id) { this.buffer.clear(); this.changed(); return; }
     for (const [k, e] of this.buffer) if (!this.chats.get(e.chatId) || this.chats.get(e.chatId)?.closedAt) this.buffer.delete(k);
     const gate = gateOf(this.regia()!);
     const now = this.now();
@@ -215,6 +248,7 @@ export class RegiaWake {
     const ready = [...this.buffer.values()].filter(e => passes(gate, classOf(e)) && this.readyAt(e.chatId) <= now);
     ready.sort((a, b) => a.at - b.at);
     for (const e of ready) { this.buffer.delete(e.chatId); this.lastSent.set(e.chatId, now); }
+    this.changed();
     this.sending = true;
     log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });
     this.d.send(id, wakeMessage(ready))

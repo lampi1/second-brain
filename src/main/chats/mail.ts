@@ -20,13 +20,13 @@ const { setInterval, clearInterval } = timersFor('chats/mail');
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { ChatSummary, Harness } from '../../shared/contract';
+import type { ChatSummary, Harness, HeldNewsItem, HeldNewsWhy } from '../../shared/contract';
 import { log, errText } from '../log';
 import { updateActivity } from '../update/activity';
 import { AgentMayNotWake } from '../engines/policy';
 import { regiaOfChat } from '../../shared/regia';
 import { engineOf } from '../engines/registry';
-import { mailClassifier, MAIL_KINDS, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, type MailClassifier, type MailKind } from './regia-delivery';
+import { heldWhy, mailClassifier, MAIL_KINDS, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, type MailClassifier, type MailKind } from './regia-delivery';
 
 export const MAX_HOPS = 6; // as inbox.mjs: a thread of replies longer than this is refused (no endless ping-pong)
 export const MAX_SENDS_PER_MINUTE = 6; // send_to_chat of one chat: a message that says "forward me to everyone" stops here
@@ -38,7 +38,8 @@ const LIVE = new Set(['running', 'waiting', 'idle']);
 // within the group window together with the other news, pure progress with the Orchestrator's next turn, at the latest after
 // REGIA_HOLD_MS); an Orchestrator that works gets it at once, in its running turn; one that waits for the user or is in a
 // hand-off only urgent mail. Nothing is dropped: held mail stays unread in its box, delivered in full with the first
-// message that goes.
+// message that goes. What an Orchestrator's box holds is listed for the user (heldMail(), held-news.ts: "N novità in attesa" on
+// its tile, #88); listing it delivers nothing and changes no rule.
 export { REGIA_GROUP_MS, REGIA_HOLD_MS } from './regia-delivery';
 const isRegiaChat = (c: ChatSummary): boolean => c.isRegia;
 
@@ -222,7 +223,43 @@ export class ChatMail {
   private seen = new Map<string, number>();
   /** chat id -> the last check that saw it working (a Cursor Orchestrator gets no mail mid-turn: its turn is "the next one") */
   private busyAt = new Map<string, number>();
+  /** the mail each live Orchestrator's boxes hold after the last check (heldMail, #88), and who listens for its changes */
+  private held: HeldNewsItem[] = [];
+  private heldKey = '[]';
+  private heldListener: (() => void) | null = null;
   constructor(private readonly d: ChatMailDeps) {}
+
+  /** The mail the Orchestrators's boxes hold back now (the rule of regia-delivery.ts), one row per message, for the user's eyes
+   *  (the Orchestrator's tile, #88): sender, when it was sent, why it waits. Reading it delivers nothing. */
+  heldMail(): HeldNewsItem[] { return this.held; }
+  /** held-news.ts listens: called when heldMail() changed */
+  onHeldChange(fn: () => void): void { this.heldListener = fn; }
+
+  /** why an Orchestrator's held mail waits (heldMail); an Orchestrator on an engine that takes no mail mid-turn is busy */
+  private mailWhy(chat: ChatSummary, msgs: MailMsg[], midTurnBlocked: boolean): HeldNewsWhy {
+    if (midTurnBlocked) return 'busy';
+    const gate = regiaGate(chat, engineOf(chat.harness)?.kind !== 'acp');
+    const words = this.d.classify?.() ?? defaultClass;
+    const classes = msgs.map(m => words(m.text, verified(m) ? m.kind : undefined));
+    const cls = classes.includes('now') ? 'now' : classes.includes('group') ? 'group' : 'quiet';
+    return heldWhy(gate, cls, chat);
+  }
+
+  private setHeld(rows: HeldNewsItem[]): void {
+    rows.sort((a, b) => a.at - b.at);
+    const key = JSON.stringify(rows);
+    if (key === this.heldKey) return;
+    this.held = rows; this.heldKey = key;
+    try { this.heldListener?.(); } catch (e) { log.warn('mail', 'held mail not shown', { cause: errText(e), hint: 'the count on the tile may be stale; delivery is not affected' }); }
+  }
+
+  private heldRows(chat: ChatSummary, msgs: MailMsg[], why: HeldNewsWhy, all: ChatSummary[]): HeldNewsItem[] {
+    return msgs.map(m => {
+      const from = all.find(c => !c.closedAt && slug(c.title) === slug(m.from));
+      const at = Date.parse(m.at);
+      return { regiaId: chat.id, chatId: from?.id ?? null, title: senderOf(m), kind: 'mail' as const, at: Number.isFinite(at) ? at : (this.seen.get(m.id) ?? Date.now()), why };
+    });
+  }
 
   /** True while an Orchestrator's mail may still wait (regia-delivery.ts): it works → never; it waits for the user or is in a
    *  hand-off → unless one is urgent; idle → until the first message is due, which takes the whole box with it. The clock
@@ -311,11 +348,14 @@ export class ChatMail {
     if (this.running) { this.again = true; return 0; }
     this.running = true;
     let n = 0;
+    const heldRows: HeldNewsItem[] = [];
+    let checked = false;
     try {
       const root = this.d.root();
-      if (!root) return 0;
+      if (!root) { checked = true; return 0; }
       const dir = inboxDir(root);
-      if (!fs.existsSync(dir)) return 0;
+      if (!fs.existsSync(dir)) { checked = true; return 0; }
+      const all = this.d.chats.list();
       const live = this.liveChats();
       this.beat(dir, [...live.keys()]);
       const now = this.d.now?.() ?? Date.now();
@@ -327,10 +367,17 @@ export class ChatMail {
         // Cursor queues a message sent during a turn in memory, and Stop or the process's end drops that queue: it gets
         // mail only between turns (Claude's CLI keeps it in its own input)
         // Only Claude's stream input durably accepts mid-turn mail. Other adapters have volatile input queues.
-        if (engineOf(chat.harness)?.kind !== 'claude' && chat.state !== 'idle') continue;
+        if (engineOf(chat.harness)?.kind !== 'claude' && chat.state !== 'idle') {
+          if (isRegiaChat(chat)) { const msgs = unread(dir, box).map(u => u.msg); if (msgs.length) heldRows.push(...this.heldRows(chat, msgs, this.mailWhy(chat, msgs, true), all)); }
+          continue;
+        }
         const waiting = unread(dir, box);
         if (!waiting.length) continue;
-        if (this.regiaHolds(chat, waiting.map(u => u.msg), now)) continue;
+        if (this.regiaHolds(chat, waiting.map(u => u.msg), now)) {
+          const msgs = waiting.map(u => u.msg);
+          heldRows.push(...this.heldRows(chat, msgs, this.mailWhy(chat, msgs, false), all));
+          continue;
+        }
         const release = this.d.holdActivity?.(chat.id);
         this.delivering.add(chat.id);
         try {
@@ -351,9 +398,12 @@ export class ChatMail {
           }
         } finally { this.delivering.delete(chat.id); release?.(); }
       }
+      checked = !this.stopped;
     } catch (e) {
       log.warn('mail', 'mail check failed', { cause: errText(e), hint: 'ops/state/inbox unreadable? the hook and wait still deliver' });
     } finally {
+      // a check cut short (an error, the app quitting) keeps the last list
+      if (checked) this.setHeld(heldRows);
       this.running = false;
       if (this.again && !this.stopped) { this.again = false; setTimeout(() => void this.tick(), 0).unref?.(); }
     }

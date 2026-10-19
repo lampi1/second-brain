@@ -14,7 +14,7 @@
 //   a message mid-turn (Cursor over ACP: Stop drops its queue) gets nothing until its turn ends.
 // A mail's class: its sender's `kind` (send_to_chat), else the words of the user's brain (<brain>/brain-settings.json
 // `regiaMail`, defaults below). Pure: used by regia-wake.ts and mail.ts, pinned by test/unit/chats/regia-delivery.test.ts.
-import type { ChatSummary } from '../../shared/contract';
+import type { ChatSummary, HeldNewsWhy } from '../../shared/contract';
 
 export const REGIA_GROUP_MS = 30_000;
 export const REGIA_HOLD_MS = 30 * 60_000;
@@ -40,6 +40,13 @@ export function regiaGate(r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBus
 
 /** May something of this class go now through this gate (timing aside)? */
 export const passes = (gate: RegiaGate, cls: DeliveryClass): boolean => gate === 'inject' || gate === 'queue' || (gate === 'hold' && cls === 'now');
+
+/** Why something of this class still waits at this gate, as the Orchestrator's tile says it (#88: "N novità in
+ *  attesa"): the gate holds it (the Orchestrator waits for the user, or is busy), or it waits its turn by class. */
+export function heldWhy(gate: RegiaGate, cls: DeliveryClass, r: Pick<ChatSummary, 'state' | 'pending'>): HeldNewsWhy {
+  if (!passes(gate, cls)) return gate === 'hold' && (r.pending > 0 || r.state === 'waiting') ? 'user' : 'busy';
+  return gate === 'queue' && cls === 'quiet' ? 'quiet' : 'group';
+}
 
 /** How long after it arrived a 'queue' delivery of this class is due (quiet mail; quiet news: never by itself). */
 export const waitOf = (cls: DeliveryClass, group = REGIA_GROUP_MS, hold = REGIA_HOLD_MS): number =>

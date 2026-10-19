@@ -159,7 +159,9 @@ only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pus
 The Orchestrator is the chat you talk to first, always in its column on the right. It knows every agent, picks the
 right one from your catalog for each job (or proposes a new one, created only after your yes), routes mail between them
 and tells you what needs you. Model, effort and context size come from each agent's profile, never from a per-chat
-switch.
+switch. News it has not received yet (a chat that finished while it waits for your answer, a quiet permission request,
+mail held for later) shows above its input as **"N novità in attesa"**; a click lists each one with its chat, kind,
+since when and why it waits, at no token cost.
 
 ### Agents that improve by themselves, reversibly
 

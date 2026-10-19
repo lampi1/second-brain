@@ -13,6 +13,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Local stores retry the rename on a transient Windows lock (EPERM/EACCES/EBUSY) and log a warning instead of an
   error when a retry worked (#71).
 ### Added
+- "N novità in attesa" on the Orchestrator (#88): the news and mail the delivery rule holds back for it (a worker that
+  finished while it waits for your answer, a quiet question/permission/command, mail grouped or held) are counted above
+  its input; a click lists chat, kind, since when and why it waits; it clears on delivery. No rule changed, no extra
+  Orchestrator turn. It replaces the Orchestrator's "Novità" feed (the live feed stays in the bell). A request from a
+  chat with no update since the app started is no longer missed by the news to the Orchestrator.
 - Cloud agents in the Grindhouse (ADR 0080, #79): Cursor Cloud Agents (REST API: start, list, live messages,
   follow-up, stop, spend in the Cursor budget), Codex cloud tasks (start, list, `codex apply`) and Claude Code cloud
   sessions (start, follow-up, link) as strips with a "cloud" badge, grouped by repository; "Nuovo agente" gets

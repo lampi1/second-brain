@@ -980,6 +980,16 @@ export type ModelsSeen = Partial<Record<Harness, { ids: { id: string; name: stri
  *  opens the queue (Ctrl+J, the counter). The asking chats stay blocked. Kept by main (userData/answer-later.json). */
 export interface AnswerLater { on: boolean }
 
+/** News for an Orchestrator the app holds back by the delivery rule (main/chats/regia-delivery.ts; #88): a work chat's
+ *  news (regia-wake.ts) or mail to it (mail.ts) not delivered yet. Shown as "N novità in attesa" on its tile; reading
+ *  it costs no turn. kind: done = finished its turn; why: user = the Orchestrator waits for the user's answer, busy =
+ *  it works on an engine that takes nothing mid-turn (or is in a hand-off, or failed), group = it goes within the
+ *  grouping window with the other news, quiet = it rides along with the next delivery. */
+export type HeldNewsKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'mail';
+export type HeldNewsWhy = 'user' | 'busy' | 'group' | 'quiet';
+export interface HeldNewsItem { regiaId: string; chatId: string | null; title: string; kind: HeldNewsKind; at: number; why: HeldNewsWhy }
+export interface HeldNewsState { items: HeldNewsItem[] }
+
 // ── Global request layer (the user: "se l'IA vuole farmi domande mi compaiano ovunque io stia navigando nell'app") ──
 // Questions and permissions not visible elsewhere on screen float in a small top-most WebContentsView (main/overlay.ts),
 // above browser tiles and pages. The app page decides what it shows (one source of truth), the layer only renders it.
@@ -1344,6 +1354,7 @@ export interface InvokeMap {
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
+  'regia:held': [void, HeldNewsState];
   'pulse:list': [{ place: PulsePlace }, PulseList];
   'pulse:status': [void, PulseStatus];
   'pulse:seen': [{ ids: string[] }, void];
@@ -1436,6 +1447,8 @@ export interface EventMap {
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
   'headline:changed': HeadlineState;
+  /** what the app holds back for the Orchestrators changed (main/chats/held-news.ts, #88) */
+  'regia:heldChanged': HeldNewsState;
   'pulse:changed': void;
   'approvals:changed': void;
   'cloud:changed': CloudState;
@@ -1468,6 +1481,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
+  'regia:held',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
@@ -1479,6 +1493,7 @@ export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
+  'regia:heldChanged',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;
