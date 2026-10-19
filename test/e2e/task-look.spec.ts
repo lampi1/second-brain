@@ -31,7 +31,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
       await openAgentOverview(page);
       await page.mouse.move(2, 2);
-      const agents = await look(page, '.agent-overview .catalog-head h2', '.agent-overview .catalog-head p', '.catalog-grid .catalog-card');
+      const agents = await look(page, '.agent-overview .catalog-head h2', '.agent-overview .catalog-head p', '.catalog-grid .catalog-card .bm-face-front'); // the flip card's front face (#81)
       await shot(page, `look-agenti-${scheme}`);
 
       await goPage(page, 'guida');

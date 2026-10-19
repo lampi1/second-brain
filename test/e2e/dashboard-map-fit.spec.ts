@@ -1,4 +1,5 @@
-// Brain map fit (issue #77): the 2D map in Dashboard → Mappa brain fills its panel, centred, with no overlapping
+// Brain map fit (issue #77): the 2D notes map (once Dashboard → Mappa brain, now Mappa → "Note del brain" in the Brain
+// section, ADR 0077) fills its panel, centred, with no overlapping
 // labels at the default zoom, for the demo brain and for a large synthetic one (the brain-ui fixture plus 140 notes);
 // "Adatta" re-fits after zooming, and the map re-fits when the window changes shape. Frozen demo; screenshots in
 // test-results/shots/dashboard-map-fit-*.png.
@@ -6,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launchDemo, setSize, shot } from './helpers';
+import { goPage, launchDemo, setSize, shot } from './helpers';
 
 function brain(extra: number): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-map-fit-'));
@@ -52,8 +53,8 @@ function expectFilled(m: Awaited<ReturnType<typeof measure>>) {
 }
 
 async function openMap(page: Page, large: boolean) {
-  await page.getByTestId('nav-dashboard').click();
-  await page.getByRole('tab', { name: 'Mappa brain' }).click();
+  await goPage(page, 'collegamenti');
+  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Note del brain', exact: true }).click();
   const dots = page.getByTestId('dash-map').locator('.dash-node-dot');
   if (large) await expect(dots).toHaveCount(100); // the map draws at most 100 of the 150+ nodes
   else await expect(dots.first()).toBeVisible();
