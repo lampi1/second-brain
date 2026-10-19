@@ -13,17 +13,10 @@ separate. Stable profile/chats stay in `%APPDATA%/second-brain`; development use
 
 ## First-run memory
 
-The main-process `BrainCreator` supports Windows creation from the installed release's public template, after checking
-its complete inventory and SHA-256 manifest pinned in `release.json`. A development checkout, an older release without
-that manifest or a changed/incomplete template reports the capability unavailable. The UI can offer linking an existing
-brain in that case. Main owns the destination picker and confirmation; this helper does not add or wire IPC itself.
-
-Creation uses the bundled Electron in Node mode with separate arguments and never enables user-level hooks or settings.
-It prepares a separate sibling directory with final paths rendered in the files, then publishes with the Windows native
-no-replace directory move via a constant, hidden system PowerShell command. Existing files, directories and junctions are
-preserved. A failed nonempty preparation stays on disk and its location is returned in the error. Git history is optional;
-if Git is installed, initialization uses main and ignores inherited Git redirection, global hooks/templates and signing.
-Engine login remains explicit in product setup. No installer or helper signs in to an account.
+The first setup creates the memory itself: a new, empty brain in the app's data folder (`%APPDATA%/second-brain`),
+made on confirmation by `modules/ai-first/default-brain.ts` (only the owner's profile and `brain.json`, ADR 0072), or it
+links a brain the owner already has through the native folder picker. No installer, helper or hook runs, nothing is
+written outside that folder, and engine login remains explicit in product setup.
 
 ## Build and release gates
 

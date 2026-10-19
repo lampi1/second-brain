@@ -17,6 +17,7 @@ import type { FormEvent, ReactNode } from 'react';
 import type { AgentCatalog, SetupDraft, SetupProfile, SetupState } from '@shared/agents';
 import type { OwnerProfile } from '@shared/profile';
 import type { ProjectsFolderInfo } from '@shared/contract';
+import type { CreateBrainRequest } from '@shared/brain-create';
 import { PROFILE_LIMITS } from '@shared/profile';
 import { answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, wizardLocked, wizardProfile } from '../lib/agent-setup';
 import { LAST_STEP, SETUP_STEPS, canAdvance, canJump, clampStep, exitStatus, openingDraft, stepId, stepProblems, withEngine } from '../lib/setup-wizard';
@@ -107,7 +108,7 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
         // the folder found by itself becomes the owner's (before a new memory is created: it points there)
         if (projects && !projects.saved && projects.detected) await sb.invoke('settings:set', { projectsRoot: projects.detected.path });
         if (!latest.brainRoot) {
-          const created = await sb.invoke('app:createBrain', { automatic: true, name: answers.name, role: answers.role, language: /^en/i.test(answers.language) ? 'en' : 'it', harness: draft.engines?.[0] ?? 'none', folderName: 'memory' });
+          const created = await sb.invoke('app:createBrain', { language: /^en/i.test(answers.language) ? 'en' : 'it', harness: (draft.engines?.[0] ?? 'none') as CreateBrainRequest['harness'] });
           if (!created?.connected) throw new Error('memory not connected');
           await refreshInfo();
         }

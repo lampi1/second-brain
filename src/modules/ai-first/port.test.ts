@@ -18,7 +18,7 @@ beforeEach(() => {
 it('saves draft before automatic memory and uses authoritative current root, never stale created root', async () => {
   const port = createAiSetupPort(state, 'en'), result = await port.bootstrap();
   expect(mock.save.mock.invocationCallOrder[0]).toBeLessThan(mock.invoke.mock.invocationCallOrder[0]!);
-  expect(mock.invoke).toHaveBeenCalledWith('app:createBrain', expect.objectContaining({ automatic: true, harness: 'none' }));
+  expect(mock.invoke).toHaveBeenCalledWith('app:createBrain', expect.objectContaining({ harness: 'none' }));
   expect(result.root).toBe('authoritative-root'); expect(mock.create).not.toHaveBeenCalled();
 });
 it('hands login to the existing official bridge and sends no credential fields', async () => {

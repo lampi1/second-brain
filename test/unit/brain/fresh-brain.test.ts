@@ -1,5 +1,5 @@
 // A clean install starts from an EMPTY brain (the owner, 2026-10-18; ADR 0072): a brain created the way setup does
-// (the automatic memory, BrainCreator's staged installer output) holds only the owner's profile and brain.json, the
+// (the automatic memory) holds only the owner's profile and brain.json, the
 // brain pages find no rules, skills or memory in it, and the app still delivers its machinery (boot rules, topic
 // rules, agents, skills, hooks, the model table) from its own copy outside the folder. Temp folders only: the release
 // template is the repo's brain-template; no real brain, global settings, app or model is used.
@@ -7,9 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { useAssets } from '../../../src/main/rules/delivery';
-import { FRESH_FILES, prepareNewBrain, writeFreshBrain } from '../../../src/main/rules/new-brain';
+import { FRESH_FILES, writeFreshBrain } from '../../../src/main/rules/new-brain';
 import { brainFile, ensureTools, useTemplateRoot, useToolsHome } from '../../../src/main/rules/tools';
 import { claudeLaunch } from '../../../src/main/brain/adapters/claude-plugin';
 import { productInstructions } from '../../../src/main/rules/instructions';
@@ -93,19 +92,6 @@ describe('a fresh brain is empty of app content', () => {
     expect(fs.existsSync(path.join(created.root, 'projects'))).toBe(false);
     expect(JSON.parse(fs.readFileSync(path.join(created.root, 'brain.json'), 'utf8')).template.REPOS).toBe(projects.split(path.sep).join('/'));
   });
-
-  it('BrainCreator\'s staged installer output becomes the same empty brain (the template copy is removed whole)', () => {
-    const stage = path.join(base, 'stage'); fs.mkdirSync(stage);
-    const destination = path.join(base, 'Personal brain');
-    const home = path.join(base, 'home'); fs.mkdirSync(home);
-    const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k))), PATH: '', HOME: home, USERPROFILE: home };
-    const r = spawnSync(process.execPath, [path.join(TEMPLATE, 'install.mjs'), '--yes', '--home', home, '--name', 'Mario', '--harness', 'claude', '--dir', destination, '--output-dir', stage], { env, encoding: 'utf8', timeout: 30000, windowsHide: true });
-    expect(r.status, r.stderr).toBe(0);
-    expect(fs.existsSync(path.join(stage, 'hub.md'))).toBe(true); // the installer copied the whole template
-    prepareNewBrain(stage, destination, { OWNER: 'Mario', ROLE: 'consultant', LANG: 'italiano' });
-    expect(tree(stage)).toEqual([...FRESH_FILES].sort());
-    expect(fs.readdirSync(home)).toEqual([]);
-  }, 60_000);
 
   it('never writes into a folder that already has files (a legacy brain keeps all of them)', () => {
     const legacy = path.join(base, 'legacy'); fs.mkdirSync(legacy);

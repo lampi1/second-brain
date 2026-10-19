@@ -41,7 +41,7 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
   const rules = input ? null : launchRules();
   const domains = input?.domains ?? rules?.domains ?? [];
   const root = domains[0]?.root;
-  // A product brain (made by BrainCreator, no ~/.claude wiring to duplicate) is delivered unless it opted out in
+  // A product brain (made by the app, no ~/.claude wiring to duplicate) is delivered unless it opted out in
   // brain.json rules.claudeLaunch; legacy brains follow the app-wide switch, off by default.
   const product = !!root && isProduct(root);
   const on = input?.on ?? (rules?.claude || (product && configOf(root!).claudeLaunch)) ?? false;

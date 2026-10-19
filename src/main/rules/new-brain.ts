@@ -1,6 +1,6 @@
 // A fresh brain starts empty (the owner, 2026-10-18: "a installazione pulita ... mi aspetto pulito ... tutto quello che
-// riguarda l'app deve essere invisibile nel brain dell'utente"; ADR 0072). Both creators (BrainCreator, the automatic
-// memory of modules/ai-first) end here: the brain gets only the owner's profile (me.md, their own data), brain.json (the
+// riguarda l'app deve essere invisibile nel brain dell'utente"; ADR 0072). The app's only creator (the automatic
+// memory of modules/ai-first, the first setup's new memory) ends here: the brain gets only the owner's profile (me.md, their own data), brain.json (the
 // machinery marker, the values the owner typed, the rules settings) and a credentials .gitignore. Rules,
 // skills, agents, tools, hooks and the model table come from the app's own copy (rules/tools.ts, rules.appRules) at
 // each launch; files like now.md or ideas.md appear only when the owner or an agent first writes them. Never run on an
@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { atomicWrite, read } from './storage';
+import { atomicWrite } from './storage';
 import { assets } from './delivery';
 import { productInstructions } from './instructions';
 import { templateRoot, STORED_VALUES, type TemplateValues } from './tools';
@@ -51,20 +51,6 @@ export function writeFreshBrain(root: string, stored: TemplateValues = {}): void
   atomicWrite(root, 'brain.json', JSON.stringify({ machinery: 'product-v1', template, rules: { topicFiles: [], appRules: true } }, null, 2) + '\n');
   productInstructions(root, false); // the launch text must build before the brain is handed over
   try { commit(root, stored.OWNER ?? 'Owner'); } catch { fs.rmSync(path.join(root, '.git'), { recursive: true, force: true }); /* git stays optional */ }
-}
-
-/** BrainCreator: `root` = the staged brain the verified installer filled (this release's template, rendered for the
- * destination); it becomes a fresh brain. The stage is the creator's own new folder, never published yet, so its
- * template copy is removed whole; the owner's typed values survive in brain.json and me.md. */
-export function prepareNewBrain(root: string, _brain: string = root, stored: TemplateValues = {}): void {
-  assets(); templateRoot();
-  const old = read(root, 'brain.json');
-  if (old && 'machinery' in (JSON.parse(old) as Record<string, unknown>)) throw new Error('Fresh brain already has a machinery owner.');
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) throw new Error('Fresh brain contains a link.');
-    fs.rmSync(path.join(root, entry.name), { recursive: true, force: true });
-  }
-  writeFreshBrain(root, stored);
 }
 
 export function memoryInstructions(runtime: string, root: string, tools?: string): string {

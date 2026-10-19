@@ -1,7 +1,6 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
-import { findBrainCandidates } from './brain/detect';
 import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
@@ -16,7 +15,7 @@ import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
-import { engineInfos, engineOf } from './engines/registry';
+import { engineInfos } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
@@ -36,10 +35,7 @@ import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { systemLang } from './lang';
-import { BrainCreator } from './brain/create';
-import { BrainCreationController } from './brain/create-controller';
 import { ProfileService } from './brain/profile';
-import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
@@ -108,14 +104,6 @@ app.whenReady().then(async () => {
     if (channel === 'settings:changed' && payload && typeof payload === 'object' && 'key' in payload && payload.key === 'brainRoot') brainChoiceRevision++;
     emitBeforeBrainChoice(channel, payload);
   };
-  const brainCreation = new BrainCreationController({
-    creator: new BrainCreator({ appPath: app.getAppPath(), node: electronNode() }), disabled: demo,
-    chooseParent: async folderName => {
-      const result = win ? await dialog.showOpenDialog(win, { title: `Dove creare la nuova cartella «${folderName}»`, buttonLabel: 'Crea qui', properties: ['openDirectory'] }) : null;
-      return result && !result.canceled ? result.filePaths[0] ?? null : null;
-    }, currentRoot: () => s.brain.settings().brainRoot, selectionRevision: () => brainChoiceRevision, engineKnown: id => !!engineOf(id),
-    connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
-  });
   const profile = new ProfileService({ root: () => s.brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() });
   const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); }, projects: () => s.brain.settings().projectsRoot ?? null });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
@@ -161,8 +149,6 @@ app.whenReady().then(async () => {
       'update:checkpointAnswer': a => updates.answer(a),
       'update:recovery': () => updates.recovery(),
       'update:recoveryAck': a => updates.acknowledge(a?.id),
-    'app:brainCreation': () => brainCreation.capability(),
-    'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
     // read only: folder names and .git presence (projects-folder.ts); SB_HOME isolates it in trials, like the candidates
     'app:projectsFolder': () => ({ saved: s.brain.settings().projectsRoot ?? null, detected: detectProjectsFolder({ home: process.env.SB_HOME, exclude: [s.brain.settings().brainRoot, app.getPath('userData')] }), newMemoryIn: app.getPath('userData') }),
     'app:pickProjects': async () => {
@@ -171,7 +157,8 @@ app.whenReady().then(async () => {
       if (dir) await s.brain.setSettings({ projectsRoot: dir });
       return dir;
     },
-    'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
+    // the first setup's new memory, in the app's data folder (the only way the app creates one)
+    'app:createBrain': a => defaultBrain.ensure(a?.language, a?.harness),
     'progress:get': () => s.progress.get(),
     'progress:setHidden': a => s.progress.setHidden(a?.hidden),
     'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),

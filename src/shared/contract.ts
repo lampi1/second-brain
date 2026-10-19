@@ -17,7 +17,7 @@ import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
-import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
+import type { CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
@@ -1212,14 +1212,11 @@ export interface InvokeMap {
   'cli:login': [{ harness: Harness }, void];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
-  /** Suggestions only: discovering a folder never selects it. SB_HOME isolates discovery in local trials. */
-  'app:brainCandidates': [void, string[]];
   'app:pickRepo': [void, string | null];
   /** the first-run setup's folders: the projects folder saved or found by itself (read only), and where a new memory goes */
   'app:projectsFolder': [void, ProjectsFolderInfo];
   /** native folder chooser for the projects folder; saves projectsRoot (by the user) and returns it, null if cancelled */
   'app:pickProjects': [void, string | null];
-  'app:brainCreation': [void, BrainCreationCapability];
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
@@ -1484,7 +1481,7 @@ export const INVOKE_CHANNELS = [
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
-  'app:brainCreation', 'app:createBrain', 'app:brainCandidates', 'app:projectsFolder', 'app:pickProjects',
+  'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
