@@ -37,7 +37,8 @@ import type { PullResult } from '../update/source';
 import { GENERAL_AGENT_ID, ORCHESTRATOR_AGENT_ID, type AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
-import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
+import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
+import type { McpTool } from '../mcp/server';
 import type { CloudService } from '../cloud/service';
 import { isCloudEngine } from '../../shared/cloud';
 import type { BrainScripts } from '../brain/scripts';
@@ -74,11 +75,18 @@ export interface AppCtlDeps {
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
 }
 
-/** agent_learn_propose on the app endpoints: a lesson, or (with the authoring service) an agent's "Contesto massimo" as
- *  an agent_update, applied at once with an undo (issue #80, ADR 0082). */
-function learnTool(d: AppCtlDeps, callerId: string | undefined): ToolDef {
+/** agent_learn_propose on the app endpoints: for the authenticated unified Orchestrator a lesson applied at once, or
+ *  (with the authoring service) an agent's "Contesto massimo" as an agent_update, applied at once with an undo (issue
+ *  #80, ADR 0082); on any other app endpoint the lesson waits like a work chat's (no rule, no maxContext). */
+function learnTool(d: AppCtlDeps, callerId: string | undefined, authenticated: boolean): ToolDef {
   const authoring = d.agentAuthoring;
-  const tool = agentLearnTool(d.agentLearning!, authoring ? (agentId, patch, evidence) => authoring.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, callerId ?? 'orchestrator') : undefined);
+  const tool = authenticated && callerId
+    ? agentLearnTool(d.agentLearning!, authoring ? (agentId, patch, evidence) => authoring.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, callerId) : undefined)
+    : agentLearnTool(d.agentLearning!, undefined, `app:${callerId ?? 'orchestrator'}`.slice(0, 120));
+  return toolDef(tool);
+}
+/** An McpTool that answers JSON text, as an app-control ToolDef (the parsed object). */
+function toolDef(tool: McpTool): ToolDef {
   return { name: tool.name, description: tool.description, inputSchema: tool.inputSchema, run: async a => JSON.parse(String(await tool.run(a, { params: {} } as unknown as Parameters<typeof tool.run>[1]))) as object };
 }
 
@@ -139,7 +147,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   const tools: ToolDef[] = [
     ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified, () => d.agents?.().profiles.filter(p => p.origin.kind === 'preset' && p.status === 'active' && p.routable !== false && p.id !== ORCHESTRATOR_AGENT_ID).map(p => p.id) ?? []) : []),
-    ...(d.agentLearning ? [learnTool(d, callerId)] : []),
+    ...(d.agentLearning ? [learnTool(d, callerId, unified())] : []),
+    ...(d.agentLearning && unified() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && unified() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {

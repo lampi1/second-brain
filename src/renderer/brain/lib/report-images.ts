@@ -7,7 +7,8 @@
 // - embeddedRasterOk: an embedded raster is shown only when its header says a sane size (at most 16384 px a side and
 //   64 million pixels), checked before Chromium decodes it.
 // - scrubCss: a report's own CSS without anything that could load from outside (url(), @import, image-set,
-//   expression(), behaviors), so a style can never fetch.
+//   expression(), behaviors), so a style can never fetch; stripHostSelectors: no :host rules, so it cannot restyle the
+//   viewer's shadow host.
 // Used by brain/components/ReportImages.tsx and brain/components/ReportHtml.tsx; pinned by test/unit/report-images.test.ts.
 import {plainPath} from '../../lib/pathPatterns';
 import {avatarRasterSize} from '../../lib/avatar-raster';
@@ -73,7 +74,20 @@ export function scrubCss(css: string): string {
     .replace(/(?:-webkit-)?image-set\s*\((?:[^()]|\([^()]*\))*\)/gi, 'none')
     .replace(/url\s*\((?:[^()]|\([^()]*\))*\)/gi, 'none')
     .replace(/expression\s*\(/gi, 'none(')
-    .replace(/(?:behavior|-moz-binding)\s*:[^;}]*/gi, '');
+    .replace(/(?:behavior|-moz-binding)\s*:[^;}]*/gi, '')
+    // last: whatever the balanced patterns above missed (an unclosed url(…, a paren inside a quoted URL) is disarmed
+    // without needing a closing paren, and a @font-face they left (unclosed) can no longer name a source
+    .replace(/url\s*\(/gi, 'none(')
+    .replace(/(?:-webkit-)?image-set\s*\(/gi, 'none(')
+    .replace(/@font-face/gi, '@sb-blocked')
+    .replace(/(^|[\s;{])src\s*:/gi, '$1sb-blocked:');
+}
+
+/** A report's CSS without :host / :host-context selectors (they become `:not(*)`, matching nothing): only the viewer
+ *  styles the shadow host, so a report can never lift its containment or size (brain/components/ReportHtml.tsx). */
+export function stripHostSelectors(css: string): string {
+  const args = String.raw`(?:\s*\((?:[^()]|\([^()]*\))*\))?`;
+  return css.replace(new RegExp(String.raw`:host-context(?![\w-])` + args, 'gi'), ':not(*)').replace(new RegExp(String.raw`:host(?![\w-])` + args, 'gi'), ':not(*)');
 }
 
 /** Max side and pixels of an image embedded in a report (a full-page screenshot is tall). */

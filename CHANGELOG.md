@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Fixed
+- Security review fixes: a work chat's lessons (agent_learn_propose) apply only to its own agent, never as a rule for
+  every agent, and wait until the Orchestrator accepts them with you; agent changes check the Orchestrator inside the
+  authoring service; a sub-agent never gets more tools, MCP servers or permissions than its parent and runs in its
+  folder or worktrees; an HTML report's CSS can no longer lift the viewer's containment or load anything through an
+  unclosed url(; "Aggiorna" refuses to promote local commits GitHub's main does not have; a name, look or category
+  change waits for you even when bundled with a behaviour change.
 - Brain map (2D, now Mappa → Note del brain): the nodes no longer clump off centre. The layout spreads with the node
   count and is fitted to the panel's own size and aspect (centred, filling it, re-fitted on resize); labels are placed
   at their real size and a minor label with no free spot is hidden instead of overlapping; "Adatta" re-fits the whole

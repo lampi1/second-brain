@@ -30,9 +30,16 @@ const DECLINED = /^\s*(no|non|annulla|rifiut|nessun|cancel|decline|don'?t|stop|l
 /** The fields of a definition only the user changes (ADR 0082): permissions and the engine. */
 export const USER_ONLY_FIELDS = ['tools', 'permissionCeiling', 'engine'] as const;
 const norm = (v: unknown): unknown => Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, norm((v as Record<string, unknown>)[k])])) : v ?? null;
+/** The user's identity of an agent (its name and look): an automatic change waits for the user even when it comes with
+ *  a behavioural change (ADR 0082). */
+export const IDENTITY_FIELDS = ['name', 'avatar', 'category'] as const;
 /** The user-only fields that differ between two definitions. */
 export function userOnlyChanges(before: AgentDraft, after: AgentDraft): string[] {
   return USER_ONLY_FIELDS.filter(k => JSON.stringify(norm(before[k])) !== JSON.stringify(norm(after[k])));
+}
+/** The identity fields that differ between two definitions. */
+export function identityChanges(before: AgentDraft, after: AgentDraft): string[] {
+  return IDENTITY_FIELDS.filter(k => JSON.stringify(norm(before[k])) !== JSON.stringify(norm(after[k])));
 }
 /** One applied change, for the brain model's change log (brainmodel/changes.ts; wiring.ts sets AgentAuthoring.onApplied). */
 export interface AppliedAgentChange {
@@ -52,6 +59,9 @@ interface Deps {
   feedback?: (args: Record<string, unknown>, callerId: string) => Promise<AgentFeedback>;
   /** the chat with this id and its run mirror (undefined = no such chat): turns a chat id passed as runId into the run to use */
   chat?: (id: string) => { run?: { runId: string } } | undefined;
+  /** true only for an open, authenticated unified Orchestrator chat: every write operation of call() checks its caller
+   *  here, whatever tool or path reached it (wiring.ts; a work chat's endpoint never passes this check) */
+  isOrchestrator: (callerId: string) => boolean;
   /** a run's outcome changed (agent_feedback): its verdict becomes the routing ledger's known outcome (ADR 0078) */
   onOutcome?: (run: AgentRun) => void;
   now?: () => number;
@@ -243,6 +253,8 @@ export class AgentAuthoring {
       if (!run) throw this.unknownRun(id);
       return structuredClone({ run, reviews: this.d.runs.list().filter(r => r.reviewOf === run.runId), feedback: this.state.feedback.filter(f => f.runId === run.runId) });
     }
+    // every write below: only the authenticated Orchestrator, checked here and not only by the tool wrapper
+    if (typeof callerId !== 'string' || !this.d.isOrchestrator(callerId)) throw new Error('Authenticated unified Orchestrator required.');
     // the shared AgentFeedbackArgs shape (parseAgentFeedbackArgs) is the only validation: no `reason` alias here
     if (name === 'agent_feedback') return this.d.feedback ? this.d.feedback(a, callerId) : this.recordFeedback(parseAgentFeedbackArgs(a), callerId);
     const reason = text(a.reason ?? a.notes);
@@ -292,7 +304,8 @@ export class AgentAuthoring {
       draft = catalog.validateDraft(p);
     }
     const ev = evidence(a.evidence ?? []);
-    const gated = op === 'update' || op === 'rollback' ? userOnlyChanges(catalog.validateDraft(p), draft) : [];
+    const base = catalog.validateDraft(p);
+    const gated = op === 'update' || op === 'rollback' ? [...userOnlyChanges(base, draft), ...identityChanges(base, draft)] : [];
     const identityOnly = op === 'update' && !gated.length && sameBehaviour(p, draft);
     if (!gated.length && !identityOnly) return this.applyNow(p, op, draft, toVersion, reason, ev);
     if (this.state.proposals.filter(x => x.state === 'pending').length >= 128) throw new Error('Too many pending proposals.');

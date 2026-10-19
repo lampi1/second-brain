@@ -1,7 +1,7 @@
 // Report images in the file viewer (issue #83): embedded rasters stay, local files (relative to the report, absolute,
 // file:///) go to main, remote and non-raster sources never load; a report's CSS can never fetch.
 import {expect,it} from 'vitest';
-import {classifyImageSrc,embeddedRasterOk,joinPath,scrubCss} from '../../src/renderer/brain/lib/report-images';
+import {classifyImageSrc,embeddedRasterOk,joinPath,scrubCss,stripHostSelectors} from '../../src/renderer/brain/lib/report-images';
 
 const png=(w:number,h:number)=>{const b=Buffer.alloc(33);Buffer.from([137,80,78,71,13,10,26,10]).copy(b);b.writeUInt32BE(13,8);b.write('IHDR',12);b.writeUInt32BE(w,16);b.writeUInt32BE(h,20);return 'data:image/png;base64,'+b.toString('base64');};
 
@@ -31,4 +31,16 @@ it('scrubs every way CSS could load something',()=>{
   const css=scrubCss('@import url(https://x/a.css); body{background:url( "https://x/t.png" ) no-repeat;color:red} .a{background-image:image-set("a.png" 1x)} @font-face{font-family:x;src:url(x.woff)} .b{width:expression(alert(1));behavior:url(x.htc)} .c{background:u\\72l(https://x/y.png)} /* url(x) */');
   expect(css).not.toMatch(/url\s*\(|@import|image-set|expression\(|behavior|@font-face|https:/i);
   expect(css).toContain('color:red');
+});
+
+it('disarms what the balanced patterns miss: an unclosed url(, a paren inside a quoted URL, an unclosed @font-face',()=>{
+  for(const raw of ['a{background:url(https://e/x','a{background:url("https://e/x(")}','a{background:image-set("https://e/x(" 1x)}','@font-face{font-family:x;src:url(https://e/f.woff)','@font-face{src:local(x)','a{background:u\\72l(https://e/x'])
+    expect(scrubCss(raw)).not.toMatch(/url\s*\(|image-set\s*\(|@font-face|(^|[\s;{])src\s*:/i);
+  expect(scrubCss('a{color:red;background:url("https://e/x(")}')).toContain('color:red');
+});
+it('drops a report\'s :host and :host-context rules, so it cannot lift the host\'s containment',()=>{
+  const css=stripHostSelectors(scrubCss(':host{contain:none!important;max-height:none} :host(.x) p{x:y} :host-context(body){x:y} :h\\6fst{position:fixed} .ok{color:red}'));
+  expect(css).not.toMatch(/:host/i);
+  expect(css).toContain(':not(*){contain:none');
+  expect(css).toContain('.ok{color:red}');
 });

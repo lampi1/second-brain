@@ -60,8 +60,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Senza un agente indicato, l’app chiede al classificatore locale: sopra la soglia la chat va a quell’agente, altrimenti a Generale, con motore e modello dalla tabella di instradamento o dai tuoi predefiniti.',
         'Without a named agent, the app asks the local classifier: above its threshold the chat goes to that agent, otherwise to Generale, with engine and model from the routing table or your defaults.'),
       // src/main/agents/subagent-tool.ts agent_start_subagent
-      b('Un agente al lavoro può avviare un altro agente del catalogo come suo sotto-agente: è collegato alla sua run, risponde allo stesso Orchestrator e gli manda il risultato.',
-        'A working agent can start another catalog agent as its own sub-agent: it is linked to its run, answers to the same Orchestrator and sends it the result.'),
+      b('Un agente al lavoro può avviare un altro agente del catalogo come suo sotto-agente: è collegato alla sua run, risponde allo stesso Orchestrator e gli manda il risultato. Il sotto-agente non ha mai più strumenti, server MCP o permessi di chi lo avvia e lavora nella sua cartella o in un suo worktree.',
+        'A working agent can start another catalog agent as its own sub-agent: it is linked to its run, answers to the same Orchestrator and sends it the result. The sub-agent never has more tools, MCP servers or permissions than the agent that starts it, and works in its folder or one of its worktrees.'),
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
       b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. L’Orchestrator e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
         'Catalog chats, including Generale, have a "run" with counters and cost. The Orchestrator and the compatible fallback when Generale is missing have no catalog run.'),
@@ -152,8 +152,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('La pagina Skill mostra chi usa ogni skill e quali strumenti chiama; «Agenti» su una scheda la collega o la toglie subito, senza approvazione.',
         'The Skill page shows who uses each skill and which tools it calls; "Agents" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
-      b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola.',
-        'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule.'),
+      b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
+        'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
       // src/main/brainmodel/changes.ts
       // src/main/agents/authoring.ts applyNow, USER_ONLY_FIELDS (ADR 0082)
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era; anche quelle dell’Orchestrator a un agente (modello, sforzo, istruzioni: una versione in prova). Il tuo sì resta solo per produzione, permessi (strumenti e tetto di un agente), impostazioni (anche il suo motore), agenti nuovi e testi per altri.',

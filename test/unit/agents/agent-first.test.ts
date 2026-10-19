@@ -9,7 +9,8 @@ import path from 'node:path';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentRunStore } from '../../../src/main/agents/runs';
 import { AgentAuthoring, authoringTools } from '../../../src/main/agents/authoring';
-import { subagentTools } from '../../../src/main/agents/subagent-tool';
+import { subagentTools, withinPolicy } from '../../../src/main/agents/subagent-tool';
+import type { AgentPolicy } from '../../../src/main/agents/tool-policy';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
 import type { AgentDraft, AgentModelChoice, AgentRun } from '../../../src/shared/agents';
@@ -88,7 +89,8 @@ describe('agent_start_subagent (#70)', () => {
   it('starts a catalog agent through the worker\'s Orchestrator, linked to the worker\'s open run', async () => {
     const create = vi.fn(async () => ({ chatId: 'child' }));
     let runs: AgentRun[] = [run({})];
-    const [tool] = subagentTools({ chats: () => [chat({}), chat({ id: 'orch', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaOf: undefined })], runs: () => runs, create });
+    const [tool] = subagentTools({ chats: () => [chat({}), chat({ id: 'orch', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaOf: undefined })], runs: () => runs, create,
+      policy: () => null, profile: () => ({ tools: { allow: ['read'] }, ceiling: 'default' }), worktrees: async () => [] });
     await expect(Promise.resolve(tool!.run({ agentId: 'agent-review', title: 'Bug · Review', prompt: 'Review the fix' }, ctx('w')))).resolves.toContain('child');
     expect(create).toHaveBeenCalledWith('orch', { agentId: 'agent-review', title: 'Bug · Review', prompt: 'Review the fix', parentRunId: 'run-w', goal: 'Review the fix', cwd: '/repo' });
     // bounds: three open children, two levels deep, an open run, a work chat
@@ -99,6 +101,35 @@ describe('agent_start_subagent (#70)', () => {
     runs = [];
     await expect(Promise.resolve(tool!.run({ agentId: 'a', title: 't', prompt: 'p' }, ctx('w')))).rejects.toThrow(/no open agent run/);
     await expect(Promise.resolve(tool!.run({ agentId: 'a', title: 't', prompt: 'p' }, ctx('orch')))).rejects.toThrow(/app_create_chat/);
+  });
+
+  it('refuses a child wider than its parent, a folder outside the parent\'s worktrees, and reserves the cap before creating', async () => {
+    const releases: (() => void)[] = [];
+    const create = vi.fn(() => new Promise<unknown>(res => { releases.push(() => res({ chatId: 'child' })); }));
+    const profiles: Record<string, AgentPolicy> = {
+      narrow: { tools: { allow: ['read'] }, ceiling: 'plan' },
+      edits: { tools: { allow: ['read', 'edit'] }, ceiling: 'default' },
+      higher: { tools: { allow: ['read'] }, ceiling: 'acceptEdits' },
+      anyMcp: { tools: { allow: ['read', 'mcp'] }, ceiling: 'plan' },
+      unbounded: { tools: null, ceiling: null },
+    };
+    const parent: AgentPolicy = { tools: { allow: ['read', 'mcp'], mcp: ['docs'] }, ceiling: 'default' };
+    const [tool] = subagentTools({ chats: () => [chat({}), chat({ id: 'orch', title: 'Orchestrator', isRegia: true, orchestrator: true, regiaOf: undefined })], runs: () => [run({})], create,
+      policy: id => id === 'w' ? parent : null, profile: id => profiles[id], worktrees: async cwd => cwd === '/repo' ? ['/repo', '/repo-wt/fix'] : [] });
+    const go = (agentId: string, cwd?: string) => Promise.resolve(tool!.run({ agentId, title: 't', prompt: 'p', ...(cwd ? { cwd } : {}) }, ctx('w')));
+    for (const wide of ['edits', 'higher', 'anyMcp', 'unbounded']) await expect(go(wide)).rejects.toThrow(/does not have/);
+    await expect(go('ghost')).rejects.toThrow(/Unknown agent/);
+    await expect(go('narrow', '/elsewhere')).rejects.toThrow(/worktrees only/);
+    expect(create).not.toHaveBeenCalled();
+    // three concurrent starts fill the cap while none of their runs exists yet: the fourth is refused
+    const started = [go('narrow'), go('narrow', '/repo-wt/fix'), go('narrow')];
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(3));
+    await expect(go('narrow')).rejects.toThrow(/3 open sub-agents/);
+    for (const r of releases) r();
+    await Promise.all(started);
+    expect(withinPolicy(profiles.narrow!, parent)).toBe(true);
+    expect(withinPolicy({ tools: { allow: ['mcp'], mcp: ['docs'] }, ceiling: 'plan' }, parent)).toBe(true);
+    expect(withinPolicy(profiles.unbounded!, null)).toBe(true);
   });
 
   it('goes through app_create_chat with the run link, so the child reports to its parent', async () => {
@@ -120,7 +151,7 @@ describe('agent_create after a panel approval (#73)', () => {
   function fixture() {
     const userData = tmp(), now = Date.now(), items: ChatItem[] = [];
     const catalog = new AgentCatalogService({ userData, models, now: () => now, approvedRoots: () => [userData] });
-    const service = new AgentAuthoring({ userData, catalog, runs: new AgentRunStore(userData), items: () => items, now: () => now, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
+    const service = new AgentAuthoring({ userData, catalog, runs: new AgentRunStore(userData), items: () => items, now: () => now, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined), isOrchestrator: () => true });
     return { catalog, service, items, now };
   }
   const preset = (catalog: AgentCatalogService) => catalog.list().profiles.find(p => p.origin.kind === 'preset' && p.routable !== false && p.tools?.allow.includes('read'))!.id;
@@ -177,11 +208,28 @@ describe('"Contesto massimo" (#80)', () => {
   it('is applied by agent_update as a trial version with an undo (ADR 0082), and by agent_learn_propose through the setting path', async () => {
     const userData = tmp(), catalog = new AgentCatalogService({ userData, models });
     const a = catalog.save(draft());
-    const service = new AgentAuthoring({ userData, catalog, runs: new AgentRunStore(userData), items: () => [], suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
+    const service = new AgentAuthoring({ userData, catalog, runs: new AgentRunStore(userData), items: () => [], suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined), isOrchestrator: () => true });
     const done = await service.call('agent_update', { agentId: a.id, patch: { maxContext: 300_000 }, reason: 'long repo reads' }, 'orch') as { applied: boolean };
     expect(done).toMatchObject({ applied: true, agent: { maxContext: 300_000, trial: { baseline: 1 } } });
     expect(catalog.list().profiles.find(p => p.id === a.id)).toMatchObject({ maxContext: 300_000 });
     expect(service.proposals()).toEqual([]);
+  });
+
+  it('agent_learn_propose on the app endpoints: maxContext and auto-applied lessons only for the authenticated Orchestrator', async () => {
+    const propose = vi.fn((...a: unknown[]) => ({ id: 'l1', args: a }));
+    const learning = { propose, waiting: () => [], review: vi.fn() } as unknown as NonNullable<Parameters<typeof appControlTools>[0]['agentLearning']>;
+    const list = [{ id: 'orch', title: 'Orchestrator', harness: 'claude', isRegia: true, orchestrator: true }];
+    const deps = { chats: { list: () => list } as unknown as ChatService, browser: {} as BrowserService, brain: {} as BrainService, unified: true, agentLearning: learning, agentAuthoring: { call: vi.fn() } as unknown as AgentAuthoring, window: () => null, emitUi: () => {}, version: '0' };
+    const orch = appControlTools(deps, 'orch'), stranger = appControlTools(deps, 'c_work');
+    expect(JSON.stringify(orch.find(t => t.name === 'agent_learn_propose')!.inputSchema)).toContain('maxContext');
+    expect(orch.map(t => t.name)).toContain('agent_lessons_waiting');
+    const other = stranger.find(t => t.name === 'agent_learn_propose')!;
+    expect(JSON.stringify(other.inputSchema)).not.toContain('maxContext');
+    expect(stranger.map(t => t.name)).not.toContain('agent_lessons_waiting');
+    await other.run({ agentId: 'a', rule: 'r', evidence: 'e' });
+    expect(propose.mock.calls[0]).toEqual(['a', 'r', 'e', undefined, undefined, 'app:c_work']);
+    await orch.find(t => t.name === 'agent_learn_propose')!.run({ agentId: 'a', rule: 'r', evidence: 'e', target: 'rule' });
+    expect(propose.mock.calls[1]).toEqual(['a', 'r', 'e', 'rule', undefined, undefined]);
   });
 
   it('does not let a model-less profile be overridden but lets the chat bring the table\'s model', () => {

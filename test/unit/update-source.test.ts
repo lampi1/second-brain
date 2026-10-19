@@ -84,6 +84,7 @@ function makeRepo(): { dir: string; first: string; tip: string } {
   g('add', '-A'); g('commit', '-q', '-m', 'start');
   const first = g('rev-parse', 'HEAD');
   fs.writeFileSync(path.join(dir, 'b.txt'), 'b'); g('add', '-A'); g('commit', '-q', '-m', 'the new thing');
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD'); // as after a pull: HEAD is GitHub's main
   return { dir, first, tip: g('rev-parse', 'HEAD') };
 }
 
@@ -144,6 +145,18 @@ describe('AppSourceService', { timeout: 30_000 }, () => {
     expect(s.state().promote).toMatchObject({ version: '0.1.0-test', step: 'Riavvio sulla versione nuova' });
     expect(s.state().source).toMatchObject({ state: 'restarting' });
     await expect.poll(restarts, { timeout: 4000 }).toBe(1);
+  });
+
+  it('Aggiorna on a stable copy refuses to promote a HEAD with commits origin/main does not have, or no origin/main', async () => {
+    const local = makeRepo();
+    const g = (...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...a], { cwd: local.dir, encoding: 'utf8' }).trim();
+    fs.writeFileSync(path.join(local.dir, 'c.txt'), 'c'); g('add', '-A'); g('commit', '-q', '-m', 'local only');
+    const { s, restarts } = service({ dir: local.dir, running: `0.1.0-${local.first.slice(0, 7)}` });
+    expect((await s.updateNow()).source).toMatchObject({ state: 'error', message: expect.stringContaining('1 commit locali') });
+    expect(s.state().promote).toBe(null);
+    g('update-ref', '-d', 'refs/remotes/origin/main');
+    expect((await s.updateNow()).source).toMatchObject({ state: 'error', message: expect.stringContaining('origin/main') });
+    expect(restarts()).toBe(0);
   });
 
   it('a failed promotion changes nothing and never restarts', async () => {

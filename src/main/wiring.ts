@@ -14,7 +14,7 @@ import { AgentCatalogService } from './agents/catalog';
 import { AgentAuthoring } from './agents/authoring';
 import { SuggestionBudget } from './agents/suggestion-budget';
 import { createAgentPacks } from './agents/pack/wiring';
-import { agentLearnTool } from './agents/pack/learning';
+import { chatLearnTool } from './agents/pack/learning';
 import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
 import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
@@ -69,7 +69,7 @@ import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
 import { Quality } from './brain/quality';
 import { AppSourceService, cleanEnv, findNode } from './update/source';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
@@ -399,13 +399,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  // agent_learn_propose also takes an agent's "Contesto massimo" (#80): an agent_update, applied at once (ADR 0082)
-  const authoringRef: { current?: AgentAuthoring } = {};
-  const learnSetting: Parameters<typeof agentLearnTool>[1] = (agentId, patch, evidence, chatId) => {
-    if (!authoringRef.current) throw new Error('Agent proposals are not available yet.');
-    return authoringRef.current.call('agent_update', { agentId, patch, reason: evidence.slice(0, 600) }, chatId ?? 'agent');
-  };
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning, learnSetting), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  // agent_learn_propose on a work chat's endpoint: only its own agent's lessons, queued for the Orchestrator and the user
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -615,8 +610,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
     onOutcome: run => routingVerdict(run),
+    isOrchestrator: id => chats.list().some(c => c.id === id && c.isRegia && c.orchestrator && !c.closedAt),
   });
-  authoringRef.current = agentAuthoring;
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
   // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
   // works). One feedback store: the authoring store (agent-authoring.json) behind agent_feedback and agent_child_feedback;
@@ -649,7 +644,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     create: async (regiaId, args) => {
       const tool = appControlTools({ ...appDeps, unified: true, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, regiaId).find(t => t.name === 'app_create_chat')!;
       return tool.run(args);
-    } }));
+    },
+    policy: chatId => manager.agentPolicy(chatId),
+    profile: id => { const p = agents.list().profiles.find(x => x.id === id && x.status === 'active'); return p ? { tools: p.tools, ceiling: p.permissionCeiling } : undefined; },
+    worktrees: cwd => gitWorktrees(cwd) }));
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -726,4 +724,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     shutdown: async () => { brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
+}
+
+/** The git worktrees of the repository at `cwd` (agent_start_subagent's allowed folders); none when it is no repository. */
+function gitWorktrees(cwd: string): Promise<string[]> {
+  return new Promise(resolve => {
+    execFile('git', ['-C', cwd, 'worktree', 'list', '--porcelain'], { timeout: 5000, windowsHide: true }, (error, stdout) => {
+      if (error) { resolve([]); return; }
+      resolve(String(stdout).split(/\r?\n/).filter(l => l.startsWith('worktree ')).map(l => path.resolve(l.slice(9).trim())));
+    });
+  });
 }

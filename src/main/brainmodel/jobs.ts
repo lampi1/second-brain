@@ -24,6 +24,7 @@ import { NAME_RE, parseMd, setBody, yamlValue } from '../../shared/skillmd';
 import type { AgentSnapshot, ChangeLog } from './changes';
 import { legacySections, sectionText } from './legacy-sources';
 import { agentMemoryFile, readSmall } from './model';
+import { checkPermissionText } from '../agents/author-policy';
 
 /** The agent side of a job: only the role text and the declared skills (and the own skill's learned-rules.md, dropped). */
 export interface AgentWriter {
@@ -160,6 +161,8 @@ export function corrections(ctx: JobContext): JobResult {
   for (const l of ctx.lessons.pending()) {
     const p = ctx.profiles().find(x => x.id === l.agentId && x.status === 'active');
     if (!p) { ctx.lessons.settle(l.id, 'discarded', 'agente non più attivo'); continue; }
+    if (l.fromChat) continue; // a work chat's lesson waits for the Orchestrator and the user (pack/learning.ts)
+    try { checkPermissionText(l.rule); } catch { ctx.lessons.settle(l.id, 'discarded', 'una lezione non concede permessi'); continue; }
     const line = `- ${l.rule} (${day(l.createdAt)}; ${l.evidence})`;
     const skill = l.target === 'skill' ? ctx.skills().find(s => s.name === l.skill && s.home === 'brain') : undefined;
     try {

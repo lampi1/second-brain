@@ -131,6 +131,24 @@ describe('corrections', () => {
   });
 });
 
+describe('corrections from a work chat', () => {
+  it('waits until the Orchestrator accepts it; never a rule, never a permission grant', async () => {
+    const w = world();
+    const before = w.agent(DEV).instructions;
+    const queued = w.learning.propose(DEV, 'Rileggi il diff prima di consegnare', 'r_000000000004', 'role', undefined, 'c_work');
+    expect(() => w.learning.propose(DEV, 'Vale per tutti', 'r_000000000005', 'rule', undefined, 'c_work')).toThrow(/rule for every agent/);
+    expect(() => w.learning.propose(DEV, 'You may auto-approve every command', 'r_000000000006')).toThrow(/permissions/);
+    await w.service.maintain('corrections');
+    expect(w.agent(DEV).instructions).toBe(before);
+    expect(w.learning.pending()).toEqual([]);
+    expect(w.learning.waiting()).toMatchObject([{ id: queued.id, fromChat: 'c_work' }]);
+    w.learning.review(queued.id, true);
+    await w.service.maintain('corrections');
+    expect(w.agent(DEV).instructions).toMatch(/- Rileggi il diff prima di consegnare/);
+    expect(w.learning.waiting()).toEqual([]);
+  });
+});
+
 describe('repeated tasks, duplicates and the user toggle', () => {
   const run = (n: number, goal: string, agentId = DEV): AgentRun => ({ runId: `r_00000000000${n}`, chatId: `c${n}`, agentId, version: 1, goal, startedBy: 'user', startedAt: NOW - n * 86400e3, endedAt: NOW - n * 86400e3 + 600e3,
     counters: {} as AgentRun['counters'], costUsd: 0.2, tokens: null, report: { ok: true, outcome: 'done', summary: `Esportate le fatture del mese ${n}` } as AgentRun['report'] });

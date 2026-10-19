@@ -33,7 +33,11 @@ improvement loop had their own brain page ("Regole imparate" / Miglioramento) be
    the `Regia` data area keys of older logs; the hooks recognise both titles.
 
 ## Consequences
-- An Orchestrator, and any chat that calls `agent_learn_propose` with `maxContext`, can now change an agent's profile
-  without a click; the log, the feed's Annulla and the trial are the safety net.
+- An Orchestrator can now change an agent's profile without a click; the log, the feed's Annulla and the trial are the
+  safety net. Every write of `AgentAuthoring.call()` checks the authenticated Orchestrator itself. A work chat's
+  `agent_learn_propose` (its own endpoint) takes no `maxContext`, only lessons for its own open run's agent (role or
+  skill, never a rule for every agent), and they wait until the Orchestrator accepts them with the user
+  (`agent_lessons_waiting`); a lesson that grants permissions is refused. A name, look or category change waits for the
+  user even when it comes with a behavioural change (security review, 2026-10-19).
 - The Agenti "Da approvare" inbox shows only new agents, lifecycle decisions and changes to tools, permissions or engine.
 - ADRs and the CHANGELOG history keep the old words.
