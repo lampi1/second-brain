@@ -2,6 +2,7 @@ import { cloudEn } from './areas/cloud.en';
 import { agentPackEn } from './areas/agent-pack.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
+import { statsEn } from './areas/stats.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
@@ -67,6 +68,7 @@ export const en: Dict = {
   ...studioEn,
   ...brainModelEn,
   ...memoryEn,
+  ...statsEn,
   ...productEn,
   ...agentsGridEn,
   ...explainEn,

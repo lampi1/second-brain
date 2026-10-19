@@ -37,18 +37,24 @@ export function connections(chats: ChatSummary[], items: Readonly<Record<string,
   return [...edges.values()];
 }
 
-export interface ObservedError { id: string; at: number; title: string; detail: string; source: string }
+export interface ObservedError { id: string; at: number; title: string; detail: string; source: string;
+  /** the chat it happened in, its role (agent) and the skills its run started with, when known */
+  chat?: string; role?: string; skills?: string[];
+  /** a tool call that failed / a turn that ended with an error (the Errori view's cause when the text says nothing) */
+  tool?: boolean; turn?: boolean }
 /** One calm summary, with unique diagnostics retained behind the details control. */
 export function brainChecks(map: { warnings: string[]; problems: string[] } | null | undefined): string[] {
   return [...new Set([...(map?.warnings ?? []), ...(map?.problems ?? [])].filter(line => line.trim()))];
 }
 export function observedErrors(chats: ChatSummary[], items: Readonly<Record<string, readonly ChatItem[]>>, feed: readonly FeedEvent[], turnError = 'Turn ended with an error'): ObservedError[] {
-  const rows: ObservedError[] = feed.filter(e => e.kind === 'error').map(e => ({ id: `feed:${e.id}`, at: e.at, title: e.title, detail: e.detail, source: 'feed' }));
+  const where = (c: ChatSummary | undefined) => (c ? { chat: chatName(c), ...(c.agent?.name ? { role: c.agent.name } : {}), ...(c.run?.tags?.skills.length ? { skills: [...c.run.tags.skills] } : {}) } : {});
+  const rows: ObservedError[] = feed.filter(e => e.kind === 'error').map(e => ({ id: `feed:${e.id}`, at: e.at, title: e.title, detail: e.detail, source: 'feed', ...where(chats.find(c => c.id === e.chatId)) }));
   for (const c of chats) for (const item of items[c.id] ?? []) {
+    const tool = item.kind === 'tool' && item.status === 'error', turn = item.kind === 'result' && item.isError && !item.interrupted;
     const detail = item.kind === 'system' && item.level === 'error' ? item.text
       : item.kind === 'tool' && item.status === 'error' ? `${item.name}: ${item.summary}`
-        : item.kind === 'result' && item.isError && !item.interrupted ? turnError : null;
-    if (detail) rows.push({ id: `${c.id}:${item.id}`, at: item.at, title: chatName(c), detail, source: c.harness });
+        : turn ? turnError : null;
+    if (detail) rows.push({ id: `${c.id}:${item.id}`, at: item.at, title: chatName(c), detail, source: c.harness, ...where(c), ...(tool ? { tool: true } : {}), ...(turn ? { turn: true } : {}) });
   }
   return rows.sort((a, b) => b.at - a.at);
 }

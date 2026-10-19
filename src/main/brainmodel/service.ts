@@ -18,7 +18,7 @@ import type { AgentPackLearning } from '../agents/pack/learning';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
-import { classifiersState } from './classifiers';
+import { classifiersState, readJobs } from './classifiers';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
 import { memoryStats } from './memory-stats';
@@ -172,7 +172,7 @@ export class BrainModelService {
   }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      suggest: goal => this.d.suggestSkills(goal) }, this.now());
+      suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
   /** Timers: the one-time migration a minute after start (when there is something to move), then every job every 6 h. */

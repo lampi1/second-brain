@@ -2,6 +2,7 @@ import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
+import { statsIt } from './areas/stats.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -68,6 +69,7 @@ export const it = {
   ...studioIt,
   ...brainModelIt,
   ...memoryIt,
+  ...statsIt,
   ...productIt,
   ...agentsGridIt,
   ...explainIt,

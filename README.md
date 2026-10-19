@@ -225,7 +225,9 @@ learned for its estimates, model choice and alerts), Memoria (knowledge, what ha
 file rendered and opening in the viewer, plus its numbers: lines per agent, weekly growth, the most recalled memories,
 stale files, recurring errors with their trend, skills useful or never used, and curious facts, each with a "?" that
 says how it is computed),
-Classificatori (how the app picks model and agent, and how it is going) and Mappa (agent → skills → rules → memory, the
+Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
+how far it has learned, a curious fact from the data, and a detail view with its history; the task estimator's card
+shows week by week how often its estimate held) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
 Maintenance jobs keep skills, agents, rules and memory tidy by themselves; the "Manutenzione" button atop Skill, Regole
 and Memoria runs them now and says what each did; every change is logged with "Annulla".
@@ -255,7 +257,9 @@ what, who (you, or the agent or engine of a chat), when and its link.
 
 Four metrics computed from real logs, each with its source and the days it covers: errors you had to catch yourself
 per 100 turns, rules that did not stop their error, pull requests held by QA or builds, bugs reopened after a fix.
-Costs, budgets and estimates per agent and per day sit next to them.
+Costs, budgets and estimates per agent and per day sit next to them, with charts per day and per model and a few
+facts drawn from the numbers. The Errori tab groups recurring errors by cause, with how often, the trend, when last
+seen, which chats, roles and skills, what it means and what to do. Every number has a "?" that says how it is computed.
 
 ### And more
 

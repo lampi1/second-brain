@@ -227,4 +227,33 @@ export interface ClassifiersState {
   sources: { source: string; chats: number }[];
   /** success and cost per route, by week; a row without runs has no data yet */
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
+  /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
+  cards?: ClassifierCard[];
 }
+// ── Classifier cards: each classifier's numbers, its weeks and its slices, for the Classificatori grid ───────────────
+/** A share with the count it rests on; value null = no case yet (never zero). */
+export interface ClassifierStat { value: number | null; n: number }
+/** One ISO week of a classifier: its decisions, how many it "got" (its own hit measure), the verified outcomes. */
+export interface ClassifierWeek { week: string; decisions: number; hits: number; known: number; ok: number; avgCostUsd: number | null }
+/** One value it decided (a kind, a model, a skill): how often, with what outcome and cost, and who ran it most. */
+export interface ClassifierSlice { key: string; count: number; known: number; ok: number; avgCostUsd: number | null; top?: { key: string; count: number } }
+export type ClassifierCardId = 'kind' | 'model' | 'skills' | 'jobkind';
+export interface ClassifierCard {
+  id: ClassifierCardId;
+  decisions: number;
+  /** its own measure: kind/jobkind = recognised (not "altro"); skills = the launch used only suggested skills; model = decided by the table */
+  hit: ClassifierStat;
+  /** verified success of the chats it decided (the user's or a review's verdict; never a self-report) */
+  success: ClassifierStat;
+  avgCostUsd: number | null;
+  /** the score cut in force, when the classifier has one (0-100) */
+  threshold: number | null;
+  /** last 8 ISO weeks, oldest first */
+  weeks: ClassifierWeek[];
+  slices: ClassifierSlice[];
+  /** success when it hit versus when it missed (null: no verified case on either side) */
+  compare: { hit: ClassifierStat; miss: ClassifierStat } | null;
+  lastAt: number | null;
+}
+/** Verified outcomes a classifier needs before its numbers can calibrate anything (the loop's MIN_CAL). */
+export const CLASSIFIER_NEED = 20;
