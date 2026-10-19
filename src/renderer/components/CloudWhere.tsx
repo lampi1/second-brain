@@ -5,11 +5,9 @@
 import { useEffect, useState } from 'react';
 import type { CloudEngine } from '@shared/contract';
 import { CLOUD_ENGINES } from '@shared/cloud';
-import { sb } from '../sb';
 import { t } from '../i18n';
 import { engineName } from '../lib/engines';
 import { HarnessMark } from './Icons';
-import { Segmented } from './ui';
 import '../styles/cloud-strips.css';
 
 export type Where = 'local' | 'cloud';
@@ -24,7 +22,7 @@ export function CloudWhere({ cwd, where, onWhere, engine, onEngine, env, onEnv }
     let live = true;
     setReady(null);
     const timer = setTimeout(() => {
-      void sb.invoke('cloud:readiness', { cwd: cwd.trim() }).then(r => {
+      void window.sb.invoke('cloud:readiness', { cwd: cwd.trim() }).then(r => {
         if (!live) return;
         setReady(r as Ready);
         const first = CLOUD_ENGINES.find(e => r[e]?.ok);
@@ -36,8 +34,11 @@ export function CloudWhere({ cwd, where, onWhere, engine, onEngine, env, onEnv }
   return <div className="cloud-where" data-testid="newchat-where">
     <div className="field">
       <span>{t('cloud.where')}</span>
-      <Segmented<Where> value={where} onChange={onWhere} label={t('cloud.where')} testid="newchat-where-pick"
-        options={[{ value: 'local', label: t('cloud.whereLocal') }, { value: 'cloud', label: t('cloud.whereCloud') }]} />
+      {/* the app's segmented control (ui.tsx Segmented's markup and classes) */}
+      <div className="segmented" role="radiogroup" aria-label={t('cloud.where')} data-testid="newchat-where-pick">
+        {(['local', 'cloud'] as const).map(w => <button key={w} type="button" role="radio" aria-checked={where === w} className={where === w ? 'on' : ''} onClick={() => onWhere(w)} data-testid={`newchat-where-pick-${w}`}>
+          <span>{t(w === 'local' ? 'cloud.whereLocal' : 'cloud.whereCloud')}</span></button>)}
+      </div>
       {where === 'cloud' && <small>{t('cloud.whereHint')}</small>}
     </div>
     {where === 'cloud' && <>
