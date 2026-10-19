@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Memoria with its numbers** (owner, 2026-10-19): key figures, "Lo sapevi?" (curious facts from the data: the
+  recurring error, the most recalled memory, the forgotten skill, the day with most errors…), weekly growth by kind,
+  lines per agent, the most recalled lines (runs that started with them), stale files, recurring errors grouped by
+  type and area or shared words (count, 12-week trend, agents, the rule each produced) and the skills useful, to
+  review or never used (runs, success, last use); every number has a "?" that says how it is computed. Memory cards
+  show their latest lines as rendered Markdown with date chips and open the real file in the viewer. A clean brain
+  shows what will appear. Zero tokens: files and recorded runs only.
+- **"Manutenzione" button** atop Skill, Regole and Memoria: runs every maintenance job now, then says job by job what
+  it did and lists the changes of that pass, each with "Annulla". Fixes the sideways overflow of those pages.
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its

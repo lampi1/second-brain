@@ -73,6 +73,9 @@
   `agent_rollback` / `agent_archive` / `agent_restore` apply at once; each change is a `BrainChange` in
   `userData/brain-changes.json` with "Annulla" (`brainmodel/changes.ts`), a behavioural agent change as a trial version.
   Tools, permissions and the engine of an agent wait for the user in Agenti → Da approvare (`agents:proposalDecide`).
+  The "Manutenzione" button atop Skill, Regole and Memoria runs every job now (`brainmodel:maintain`) and shows what
+  each did. Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
+  memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.
 - **Live brain**: `fs.watch` on the brain folder + periodic `chats.mjs list` → diffed into `FeedEvent`s →
   `feed:events`; urgent ones also as a Windows toast when the window is not focused.
 
