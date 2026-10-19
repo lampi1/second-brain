@@ -5,6 +5,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- **MCP servers managed by the app** (ADR 0086, #91): add a server once in Settings → Connettori (a local command or an
+  https address), test it ("Prova": works or not, its tools split read/write, a clear error and fix), or import the ones
+  already in Claude Code, Claude desktop, Cursor and Codex (read only, no token copied). Every Claude, Codex and Cursor
+  chat gets the servers its role may use through the app's MCP gateway, which adds the token (encrypted, write-only)
+  and checks the role's access at every call; by default every role has every server, narrowed per server on the agent
+  card's new "Server MCP" section (all tools, read only, picked, none); a child never more than its parent.
+- **Settings → Connettori redesigned**: accounts and MCP servers as cards in a grid with totals, what each is for, its
+  state, one "Prova" and "?" explanations, in dark and light.
+
 ### Changed
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's

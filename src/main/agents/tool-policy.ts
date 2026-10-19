@@ -275,7 +275,8 @@ export const BROWSER_READ_TOOLS: readonly string[] = ['tabs_list', 'tabs_create'
 
 /** Claude MCP narrowing for a run with a tool policy. Without 'mcp': only the app's own servers (strict config) and no
  *  claude.ai connectors, unless mail/calendar need them. 'mcp' with or without names: not narrowed here (named servers
- *  would need their configs, secrets included, on the command line), reported by `unenforced`. */
+ *  would need their configs, secrets included, on the command line), reported by `unenforced`. The app's managed
+ *  servers (Impostazioni → Connettori, ADR 0086) are narrowed apart: the gateway gives or refuses each one per role. */
 export function claudeMcp(tools: AgentToolPolicy): { strict: boolean; connectors: boolean } {
   if (tools.allow.includes('mcp')) return { strict: false, connectors: true };
   return { strict: true, connectors: tools.allow.includes('mail-draft') || tools.allow.includes('calendar-read') };

@@ -219,6 +219,20 @@ has **Discuti**: one click puts a ready message about it (title, link, state, fo
 Orchestrator decides and opens the work chat. Every page works the same way: no page opens a work chat by itself. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
 what, who (you, or the agent or engine of a chat), when and its link.
 
+### MCP servers in one place, for every engine
+
+![Settings → Connettori: accounts and MCP servers as cards](docs/screenshots/connectors.webp)
+
+Settings → **Connettori** is one section for everything the app connects to: the app's own accounts (Azure DevOps for
+the Task page, GitHub, Jira) and the **MCP servers your agents use** (ADR 0086). Add a server once (a local command such
+as `npx -y @azure-devops/mcp contoso`, or an https address), press **Prova** to see whether it works and which tools it
+has (reading and writing), or import the ones you already have in Claude Code, Claude desktop, Cursor and Codex (their
+files are only read, never changed, and no token is copied). Every Claude, Codex and Cursor chat then gets the servers
+its role may use, through the app's local MCP gateway: the gateway adds the server's token (encrypted with the OS
+keyring, typed once, shown only as a mask) and checks the role's access at every call. By default every role has every
+server; on an agent's card (Brain → Agenti, the back) you narrow each server to its reading tools, a chosen few or
+none, and a delegated chat never gets more than its parent. The engines' own config files are never written.
+
 ### Quality you can measure
 
 ![The Qualità page: four metrics with their source and dates](docs/screenshots/quality.webp)
@@ -279,7 +293,8 @@ Details: [docs/architecture.md](docs/architecture.md); every decision: [docs/adr
   by local processes: this is not a boundary between programs on the same computer.
 - Browser tabs live in their own partition, apart from the app.
 - Each CLI owns its login. API keys you type in Settings are encrypted with the OS secret store and decrypted only in
-  main. App-owned conversation history is stored as plain text in your local profile: treat profile backups as private.
+  main. MCP server tokens (Settings → Connettori) too: the app's MCP gateway adds them to that server's own process or
+  request only, so no token reaches an engine's command line, a chat, a file or a log (ADR 0086). App-owned conversation history is stored as plain text in your local profile: treat profile backups as private.
 - No production access is wired in: no database, deploy or write-cloud commands.
 - Dependencies: exact versions, well-known packages, published at least 14 days before they are installed; npm install
   scripts are off (`.npmrc`). A git hook scans every commit for secrets and personal data before it leaves your PC.
@@ -302,7 +317,7 @@ Review the draft on GitHub, publish it, and add its row to the [Download](#downl
 ## Roadmap
 
 - Linux and macOS proved on real machines; installers (.dmg, .AppImage) with signing.
-- More connectors behind the same interface (issue trackers beyond Azure DevOps).
+- More connectors behind the same interface (issue trackers beyond Azure DevOps); MCP servers that sign in with OAuth.
 - Team features: handing a to-do to a colleague, a shared team layer next to each person's brain.
 
 ## Limits

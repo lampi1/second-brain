@@ -8,6 +8,7 @@ import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from '
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
+import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
@@ -1147,6 +1148,16 @@ export interface InvokeMap {
   'connectors:probe': [{ provider: ConnectorId }, ConnectorState];
   'connectors:select': [{ provider: ConnectorId; projects: string[] }, ConnectorState];
   'connectors:disconnect': [{ provider: ConnectorId }, void];
+  // the app-managed MCP servers (ADR 0086): only the user's clicks in Settings → Connettori and on the agent card
+  'mcpservers:state': [void, McpServersState];
+  'mcpservers:save': [{ def: McpServerDef; previousId?: string }, McpServersState];
+  'mcpservers:remove': [{ id: string }, McpServersState];
+  'mcpservers:setSecret': [{ id: string; slot: string; value: string }, McpServersState];
+  'mcpservers:deleteSecret': [{ id: string; slot: string }, McpServersState];
+  'mcpservers:setAccess': [{ role: string; server: string; access: McpToolAccess }, McpServersState];
+  'mcpservers:test': [{ id: string }, McpServersState];
+  'mcpservers:importScan': [void, McpImportCandidate[]];
+  'mcpservers:importApply': [{ keys: string[] }, { state: McpServersState; added: string[]; errors: { key: string; message: string }[] }];
   'update:get': [void, AppUpdateState];
   'update:apply': [{ id: string }, AppUpdateState];
   'update:checkpointAnswer': [UpdateCheckpointAnswer, void];
@@ -1463,6 +1474,7 @@ export interface EventMap {
   'pulse:changed': void;
   'approvals:changed': void;
   'cloud:changed': CloudState;
+  'mcpservers:changed': McpServersState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1474,6 +1486,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 export const INVOKE_CHANNELS = [
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
+  'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
@@ -1504,6 +1517,7 @@ export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
+  'mcpservers:changed',
   'orchestrator:heldChanged',
   'scripts:changed',
 ] as const satisfies readonly EventChannel[];

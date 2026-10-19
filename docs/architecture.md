@@ -9,6 +9,8 @@
 │   mcp/     MCP server 127.0.0.1 (Streamable HTTP): /mcp (external clients),    │
 │            /mcp/chat/<id>/<token> (one per app chat: its own tabs)            │
 │            /mcp/app, /mcp/app/o/<id>/<token> (per Orchestrator, ADR 0021)     │
+│            /mcp/ext/<chat>/<server>/<token> (managed MCP servers, 0086)       │
+│   mcp-servers/ store (+ tokens) · gateway · client · import (ADR 0086)        │
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
 │            usage · costs · budget · estimates · quality · model defaults      │
 │   tasks/   Task page (brain script, read only) · run/ "Esegui" shell blocks   │
@@ -82,6 +84,10 @@
   after a restart as `closed` and resume on the first message. CLI transcripts stay where each CLI keeps them.
   API chats also persist user and assistant messages as plaintext in `userData/api-chats/<chatId>.json`.
 - Settings in `userData/config.json` (brain folder, ports, mutes, Task reading). Never secrets.
+- App-managed MCP servers (ADR 0086): definitions, per-role access and last tests in `userData/mcp-servers.json`;
+  their tokens encrypted (safeStorage) in `userData/mcp-secrets.json`, each bound to its server's command or origin.
+  Chats reach them only through the gateway (`/mcp/ext/…`), which opens the real server in main with its tokens and
+  checks the chat's role chain at every call; the engines' own MCP configs are only read (import), never written.
 - API key ciphertext and masks are in `userData/secrets.json`, protected by the OS-backed Electron secret store;
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data

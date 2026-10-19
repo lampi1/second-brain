@@ -74,7 +74,9 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
    files or logs, credentials never handled by the app (each CLI logs in itself) with two exceptions: a login
    hand-off's password, read from the user's brain file only when they click Copia, never stored or logged (ADR 0012);
    the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
-   their own engine's process env or HTTP header (ADR 0046; the Cursor Cloud Agents key only to api.cursor.com, ADR 0080).
+   their own engine's process env or HTTP header (ADR 0046; the Cursor Cloud Agents key only to api.cursor.com, ADR 0080);
+   the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
+   that server's own process env or request header, never to an engine or a chat (ADR 0086).
 3. **Dependencies:** only well-known packages, exact versions, published ≥ 14 days before install (`npm install
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.

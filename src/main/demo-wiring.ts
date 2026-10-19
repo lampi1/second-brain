@@ -23,6 +23,7 @@ import { gitBranches } from './chats/branch';
 import path from 'node:path';
 import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
+import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
 import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
 import { attachHeldNews } from './chats/held-news';
@@ -109,6 +110,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
+  // made-up MCP servers for Settings → Connettori and the agent cards (ADR 0086): no process, no network
+  const mcpServers = demoMcpServers({ userData: ctx.userData, mcp, emit: st => ctx.emitter.emit('mcpservers:changed', st), now });
   // "Esegui" runs for real in the demo too (only on the user's click): the e2e tests run a harmless Write-Output
   const runner = commandRunner(ctx, chats);
   const asks = attachCommandAsks(ctx, runner, brain, now);
@@ -182,7 +185,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

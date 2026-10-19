@@ -125,3 +125,12 @@ test('README screenshots', async () => {
   await expect(page.getByTestId('bs-script-card')).toHaveCount(4, { timeout: 30_000 });
   await save('brain-scripts');
 });
+
+test('README screenshot: Connettori', async () => {
+  // 8. Impostazioni → Connettori: the MCP servers the app gives the agents, as cards with state, tools and fixes (ADR 0086)
+  await page.keyboard.press('Control+,');
+  const hub = page.getByTestId('st-group-connectors').getByTestId('connectors-hub');
+  await expect(hub.getByTestId('hub-server-github')).toBeVisible({ timeout: 30_000 });
+  await hub.getByTestId('hub-servers').evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await save('connectors');
+});

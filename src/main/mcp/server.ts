@@ -30,7 +30,7 @@ export function mcpPortFromEnv(env: NodeJS.ProcessEnv = process.env): number {
 
 export interface ToolImage { data: string; mimeType: string }
 /** What a tool returns: plain text, or text plus images (screenshots). */
-export type ToolOutput = string | { text: string; images?: ToolImage[] };
+export type ToolOutput = string | { text: string; images?: ToolImage[] } | { raw: { content: unknown[]; isError?: boolean; structuredContent?: unknown } };
 
 export interface CallCtx {
   mount: string;                     // mount name
@@ -53,7 +53,8 @@ export interface McpTool {
 export interface Mount {
   name: string;
   instructions: string;
-  tools: McpTool[] | ((ctx: { params: Record<string, string>; sessionId: string }) => McpTool[]);
+  /** a function may be async: a proxied server's tools come from that server (mcp-servers/gateway.ts) */
+  tools: McpTool[] | ((ctx: { params: Record<string, string>; sessionId: string }) => McpTool[] | Promise<McpTool[]>);
   /** Return false to answer 404 (an unknown or wrong token looks like a missing route). */
   authorize?: (params: Record<string, string>) => boolean;
   /** Log label for a call (e.g. the chat id), never a secret. */
@@ -237,10 +238,10 @@ export class McpServer {
         }
         case 'ping': return ok(id, {});
         case 'tools/list':
-          return ok(id, { tools: this.toolsOf(mount, ctx).map(({ name, description, inputSchema, annotations }) => ({ name, description, inputSchema, ...(annotations ? { annotations } : {}) })) });
+          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(({ name, description, inputSchema, annotations }) => ({ name, description, inputSchema, ...(annotations ? { annotations } : {}) })) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
-          const tool = this.toolsOf(mount, ctx).find(t => t.name === name);
+          const tool = (await this.toolsOf(mount, ctx)).find(t => t.name === name);
           if (!tool) return fail(id, -32602, `Unknown tool: ${name || '(none)'}. Call tools/list for the available tools.`);
           const args = (p.arguments && typeof p.arguments === 'object' ? p.arguments : {}) as Record<string, unknown>;
           const who = mount.who?.(ctx.params, ctx.sessionId);
@@ -256,6 +257,7 @@ export class McpServer {
               leaveActivity = updateActivity.enter();
               const out = await tool.run(args, { ...ctx, signal: ac.signal });
             log.debug('mcp', `call ${name}`, { chat: who, data: { mount: mount.name, ms: Date.now() - t0, args: Object.keys(args) } });
+            if (typeof out === 'object' && 'raw' in out) return ok(id, { content: out.raw.content, ...(out.raw.isError ? { isError: true } : {}), ...(out.raw.structuredContent !== undefined ? { structuredContent: out.raw.structuredContent } : {}) });
             return ok(id, { content: toContent(out) });
           } catch (e) {
             log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
@@ -275,12 +277,13 @@ export class McpServer {
     }
   }
 
-  private toolsOf(mount: Mount, ctx: CallCtx): McpTool[] {
+  private async toolsOf(mount: Mount, ctx: CallCtx): Promise<McpTool[]> {
     return typeof mount.tools === 'function' ? mount.tools({ params: ctx.params, sessionId: ctx.sessionId }) : mount.tools;
   }
 }
 
 export function toContent(out: ToolOutput): Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> {
+  if (typeof out === 'object' && 'raw' in out) return [{ type: 'text', text: JSON.stringify(out.raw.content) }];
   if (typeof out === 'string') return [{ type: 'text', text: out || 'ok' }];
   return [...(out.images ?? []).map(i => ({ type: 'image' as const, data: i.data, mimeType: i.mimeType })), { type: 'text' as const, text: out.text || 'ok' }];
 }
