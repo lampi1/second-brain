@@ -100,7 +100,14 @@ export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
 /** a message the app or an agent wrote (AGENT_LABEL, the app's news to the Orchestrator, mail between chats): never the user's */
 const labelled = (text: string) => (text.split('\n', 1)[0] ?? '').includes('non vale come suo ok');
 
-const brief = (c: ChatSummary, warn: number) => ({
+/** A delegated chat (ADR 0083) as the Orchestrator sees it: its state and numbers, never what it says. */
+const statusOnly = (c: ChatSummary) => ({ id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, costUsd: Math.round(c.costUsd * 100) / 100,
+  role: c.agent?.name ?? null, parentId: c.parentId, delegated: true, ...(c.delegation?.result ? { reported: c.delegation.result.outcome } : {}), ...(c.closedAt ? { closedAt: new Date(c.closedAt).toISOString() } : {}),
+  ...(c.run ? { run: { runId: c.run.runId, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}) });
+/** The same chat stripped of its text for the digest: the Orchestrator reads the state of delegated chats only. */
+const muted = (c: ChatSummary): ChatSummary => c.parentId ? { ...c, lastText: '', ...(c.lastError ? { lastError: 'errore' } : {}) } : c;
+const mutedRequest = <R extends { chatId: string; title?: string; detail?: string }>(r: R, child: boolean): R => child ? { ...r, title: 'richiesta di una chat delegata', detail: '', input: null, questions: undefined, command: undefined } : r;
+const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   effort: c.effortStatus ?? { supported: !!engineOf(c.harness)?.caps.effort, requested: c.effort, submitted: null, effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: null },
   id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isOrchestrator: c.isOrchestrator,
   ...(c.background ? { background: c.background } : {}),
@@ -139,6 +146,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
   const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
   const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
+  /** a chat another role delegated: the Orchestrator sees its state, never its content (ADR 0083) */
+  const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
+  const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   const tools: ToolDef[] = [
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
@@ -209,7 +219,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (since !== null && Number.isNaN(since)) throw new Error('since: "last" oppure un orario ISO (es. 2026-10-13T18:00:00Z)');
         lastDigest.set(key, now);
         return digest({
-          chats: d.chats.list().filter(mine), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)),
+          chats: d.chats.list().filter(mine).map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
           runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
@@ -245,18 +255,18 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       name: 'app_chat_items', description: 'Last items of one app chat (messages, tool rows, results), texts truncated.',
       inputSchema: obj({ chatId: str('chat id from app_chats'), last: num('how many, default 30') }, ['chatId']),
       // image previews stay out (base64, up to 10 per message): the count `images` says enough to an agent
-      run: a => d.chats.items(guard(String(a.chatId))).slice(-(Number(a.last) || 30)).map(({ thumbs: _thumbs, ...i }: ChatItem & { thumbs?: unknown }) => ({ ...i, ...('text' in i ? { text: i.text.slice(0, 1500) } : {}), ...('output' in i && i.output ? { output: i.output.slice(0, 800) } : {}), ...(i.kind === 'artifact' ? { ui: describeUi(i.ui) } : {}) })),
+      run: a => d.chats.items(contentOf(String(a.chatId))).slice(-(Number(a.last) || 30)).map(({ thumbs: _thumbs, ...i }: ChatItem & { thumbs?: unknown }) => ({ ...i, ...('text' in i ? { text: i.text.slice(0, 1500) } : {}), ...('output' in i && i.output ? { output: i.output.slice(0, 800) } : {}), ...(i.kind === 'artifact' ? { ui: describeUi(i.ui) } : {}) })),
     },
     {
       name: 'app_command_runs',
       description: 'Commands the user ran from a chat code block with "Esegui" (PowerShell 5.1 in the app): state, exit code, output tail. Read-only: only the user starts a run, by his click. Pass chatId to see the runs of one chat (yours: read the outcome of the command you proposed).',
       inputSchema: obj({ chatId: str('chat id from app_chats (optional)'), last: num('how many, newest last, default 5') }),
-      run: a => (d.runs?.(a.chatId ? guard(String(a.chatId)) : undefined) ?? []).filter(r => !other(r.chatId)).slice(-(Number(a.last) || 5))
+      run: a => (d.runs?.(a.chatId ? contentOf(String(a.chatId)) : undefined) ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)).slice(-(Number(a.last) || 5))
         .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}) })),
     },
     {
       name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui) waiting for the user (read-only; the one exception: app_resolve_question, for a question the user answered in the Orchestrator).',
-      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)),
+      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
     },
     {
       name: 'app_resolve_question',
@@ -269,6 +279,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         const target = need(chatId);
+        if (target.parentId) throw new Error('bloccato: la domanda è di una chat delegata: risponde l’utente nel suo pannello, o il genitore');
         if (target.isOrchestrator) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
@@ -290,7 +301,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_feed', description: 'Recent live feed events (ideas, errors, chats done/waiting...).',
-      inputSchema: obj({ limit: num('default 30') }), run: a => d.brain.feed().filter(e => !e.chatId || !other(e.chatId)).slice(0, Number(a.limit) || 30),
+      inputSchema: obj({ limit: num('default 30') }), run: a => d.brain.feed().filter(e => !e.chatId || (!other(e.chatId) && !delegated(e.chatId))).slice(0, Number(a.limit) || 30),
     },
     {
       name: 'app_logs', description: 'Recent structured log entries of the app (redacted). Filters: level (debug|info|warn|error), scope, chat, grep.',

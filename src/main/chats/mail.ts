@@ -449,6 +449,8 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         const box = target ? slug(target.title) : slug(to);
         if (!box) throw new MailError('to mancante: il titolo della chat (list_chats)');
         if (box === slug(from.title)) throw new MailError('è la tua stessa chat');
+        // a delegated chat reports to the chat that delegated it (agent_report), never to the Orchestrator (ADR 0083)
+        if (from.parentId && target?.isOrchestrator) throw new MailError('sei una chat delegata: riporta al tuo genitore con agent_report, non all’Orchestrator');
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
         const kind = MAIL_KINDS.find(k => k === a.kind);

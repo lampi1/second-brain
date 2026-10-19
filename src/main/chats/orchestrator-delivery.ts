@@ -111,7 +111,7 @@ export function wordsFrom(raw: unknown): OrchestratorWords {
 }
 
 /** The class of an app news (orchestrator-wake.ts): a failure at once, a turn end grouped, what waits for the user quiet. */
-export const newsClass = (kind: 'done' | 'error' | 'question' | 'permission' | 'command', endsTurn?: boolean): DeliveryClass =>
+export const newsClass = (kind: 'done' | 'error' | 'question' | 'permission' | 'command' | 'started', endsTurn?: boolean): DeliveryClass =>
   kind === 'error' ? 'now' : kind === 'done' || endsTurn ? 'group' : 'quiet';
 
 /** A classifier that follows the brain's `orchestratorMail` as it changes (rebuilt only when the lists change). */

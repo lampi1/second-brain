@@ -689,6 +689,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .tone-red .held-k { color: var(--red); }
 .tone-amber .held-k { color: var(--amber); }
 .tone-violet .held-k { color: var(--violet); }
+.tone-blue .held-k { color: var(--blue); }
 .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 20px 16px; }
 .empty-title { margin: 0; font: 600 15px var(--font-display); color: var(--text); }
 .empty-text { margin: 0 0 6px; color: var(--text-3); line-height: 1.5; max-width: 440px; }

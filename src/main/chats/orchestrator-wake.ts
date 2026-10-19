@@ -14,6 +14,8 @@
 // mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Orchestrator's whole context
 // (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
 // app_digest lists them whenever the Orchestrator looks.
+// Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
+// sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
@@ -25,15 +27,15 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
-export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command';
+export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started';
 /** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
-export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command']);
+export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started']);
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
 const classOf = (e: WakeEvent): DeliveryClass => newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean }
+export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean }
 
 export interface OrchestratorWakeDeps {
   /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
@@ -49,7 +51,7 @@ export interface OrchestratorWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending'>;
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'>;
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -57,14 +59,15 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 
 /** One line per chat, in Italian (the Orchestrator speaks Italian with the user). */
 export function wakeLine(e: WakeEvent): string {
-  const who = `«${e.title}» (${engineLabel(e.harness)})`;
-  const d = cut(e.detail, 200);
+  const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
+  const d = e.child ? '' : cut(e.detail, 200);
   switch (e.kind) {
     case 'done': return `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
+    case 'started': return `- ${who}: è partita.`;
   }
 }
 
@@ -138,7 +141,8 @@ export class OrchestratorWake {
     if (c.handoffBusy) { this.handoff.add(c.id); return; }
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
-    if (!was || c.closedAt) return;
+    if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
+    if (c.closedAt) return;
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
@@ -157,7 +161,7 @@ export class OrchestratorWake {
     const c = known ?? listed;
     if (!c || c.isOrchestrator || c.closedAt) return;
     const detail = p.type === 'command' ? (p.command?.code ?? p.detail).split('\n')[0] ?? '' : p.type === 'question' ? (p.questions?.[0]?.question ?? p.title) : p.title;
-    this.add({ id: p.chatId, title: c.title, harness: c.harness }, p.type, detail, p.id);
+    this.add({ id: p.chatId, title: c.title, harness: c.harness, parentId: c.parentId, agent: c.agent }, p.type, detail, p.id);
   }
 
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */
@@ -167,19 +171,21 @@ export class OrchestratorWake {
     this.buffer.delete(r.chatId);
     const c = this.chats.get(r.chatId);
     if (!c || c.state !== 'idle' || c.pending || c.handoffBusy) return;
-    this.buffer.set(r.chatId, { ...e, kind: 'done', detail: c.lastText, at: this.now(), requestId: undefined, endsTurn: undefined });
+    this.buffer.set(r.chatId, { ...e, kind: 'done', detail: e.child ? '' : c.lastText, at: this.now(), requestId: undefined, endsTurn: undefined });
     this.reschedule();
   }
 
-  private add(c: Pick<ChatSummary, 'id' | 'title' | 'harness'>, kind: WakeKind, detail: string, requestId?: string): void {
+  private add(c: Pick<ChatSummary, 'id' | 'title' | 'harness' | 'parentId' | 'agent'>, kind: WakeKind, detail: string, requestId?: string): void {
     if (!this.d.enabled() || !this.orchestratorId()) return;
     const at = this.now();
     // the newest news of a chat wins, except that "finished" never hides what it left for the user in the same turn
     const old = this.buffer.get(c.id);
-    if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error') return;
+    if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
     // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
     const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
-    this.buffer.set(c.id, { chatId: c.id, title: c.title, harness: c.harness, kind, detail, at, ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}) });
+    const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
+    const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
+    this.buffer.set(c.id, { chatId: c.id, title: c.title, harness: c.harness, kind, detail: child ? '' : detail, at, ...(child ? { child } : {}), ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}) });
     this.reschedule();
   }
 
@@ -209,7 +215,7 @@ export class OrchestratorWake {
   private readyAt(chatId: string): number { return (this.lastSent.get(chatId) ?? -Infinity) + this.perChatMs; }
 
   private remember(c: ChatSummary): void {
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending });
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent });
   }
 
   /** the Orchestrator, which every work chat's news go to; without the list, the one seen */
