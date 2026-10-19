@@ -430,6 +430,12 @@ T('playbook', () => {
   ok(cli(['accept', 'prod-log-reader', 'PL-1']).status === 0 && cli(['vote', 'prod-log-reader', 'PL-1', 'helpful']).status === 0, 'playbook CLI accept+vote');
   ok(/prod-log-reader: 1 punti/.test(cli(['list']).stdout), `playbook CLI list: ${cli(['list']).stdout}`);
   ok(cli(['propose', 'nobody', '--text', 'x', '--source', 's']).status === 4, 'playbook CLI unknown agent');
+  // a notebook left by a retired specialist is named by list, never read or deleted
+  fs.writeFileSync(path.join(proot, 'playbooks', 'retired-one.md'), '# Taccuino: retired-one\n');
+  fs.writeFileSync(path.join(proot, 'playbooks', 'README.md'), '# Playbooks\n');
+  const listed = cli(['list']);
+  ok(listed.status === 0 && /playbooks\/retired-one\.md: taccuino di uno specialista che non c'è più/.test(listed.stdout) && !/README/.test(listed.stdout), `playbook CLI list names an orphan notebook: ${listed.stdout}`);
+  ok(fs.existsSync(path.join(proot, 'playbooks', 'retired-one.md')), 'playbook CLI list never deletes an orphan notebook');
 });
 
 T('brain-site (own test file)', () => {

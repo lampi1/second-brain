@@ -49,7 +49,7 @@ test('setup wizard: seven steps, answers written into me.md on confirm', async (
     expect(saved).toContain('- **Main work**:\n  - Checkout\n  - App mobile\n');
     expect(saved).toContain(`- **Reply style**: ${REPLY_PRESETS.concise}\n`);
     expect(saved).toContain('## How to work with Giulia');
-    // a later edit (Settings, brain-editor) survives running the interview again: the old answers are not re-written
+    // a later edit (Settings, the brain-edit skill) survives running the interview again: the old answers are not re-written
     fs.writeFileSync(path.join(brain, 'me.md'), saved.replace('Giulia, product manager.', 'Giulia, team lead.'));
     await page.getByRole('button', { name: 'Configura il mio lavoro', exact: true }).click();
     for (let step = 0; step < 3; step++) await next();

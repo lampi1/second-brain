@@ -144,7 +144,7 @@ if (harness.includes('claude')) {
     const t = existsSync(p) ? readFileSync(p, 'utf8') : '';
     if (!t.includes(`@${B}/me.md`)) writeFileSync(p, `${t}${t && !t.endsWith('\n') ? '\n' : ''}\n# ${V.BRAIN_NAME}: ${V.OWNER}'s brain\n- Durable knowledge lives in ${B} (AGENTS.md), not in Claude's private memory.\n\n@${B}/me.md\n`);
   }]);
-  plan.push([`~/.claude/output-styles/${V.OWNER}.md e orchestrator.md, skill ${V.BRAIN_NAME} ed explain in ~/.claude/skills`, () => {
+  plan.push([`~/.claude/output-styles/${V.OWNER}.md e orchestrator.md, skill ${V.BRAIN_NAME}, explain, brain-edit e flow-review in ~/.claude/skills`, () => {
     const os_ = join(C, 'output-styles'); mkdirSync(os_, { recursive: true });
     for (const [from, to] of [['owner.md', `${V.OWNER}.md`], ['orchestrator.md', 'orchestrator.md']]) {
       const p = join(os_, to); backup(p);

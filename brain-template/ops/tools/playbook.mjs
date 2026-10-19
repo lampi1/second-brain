@@ -1,5 +1,4 @@
-// playbook: one notebook per specialist agent (reviewer, code-investigator, prod-log-reader, qa, devops-writer,
-// brain-editor, flow-optimizer), so each one gets better run after run without growing everyone's context (D3 of
+// playbook: one notebook per specialist agent (reviewer, code-investigator, prod-log-reader, qa, devops-writer), so each one gets better run after run without growing everyone's context (D3 of
 // reviews/2026-10-10-architettura-agenti.md, {{OWNER}} 2026-10-10: "taccuino per specialista"). ACE format (Zhang et al.
 // 2025): numbered points, each citing the error or praise it comes from, helpful/harmful counters, only small edits
 // (add / edit / remove / vote one point), never a rewrite of the whole notebook (that is what collapses a context).
@@ -16,14 +15,15 @@
 //   node .../playbook.mjs edit <agent> <id> --text "<…>"     (counters kept; after {{OWNER}}'s yes)
 //   node .../playbook.mjs remove <agent> <id> --why "<…>"    (moved to "Tolti", never deleted)
 //   node .../playbook.mjs vote <agent> <id[,id…]> helpful|harmful
-//   node .../playbook.mjs list                               (every notebook: points, proposals, size, points to review)
+//   node .../playbook.mjs list                               (every notebook: points, proposals, size, points to review;
+//                                                            a notebook whose specialist is gone is named, never deleted)
 // Exit: 0 ok, 3 usage, 4 refused (limit, duplicate, missing source, unknown id).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const AGENTS = { reviewer: 'RV', 'code-investigator': 'CI', 'prod-log-reader': 'PL', 'qa': 'QA', 'devops-writer': 'DW', 'brain-editor': 'BE', 'flow-optimizer': 'FO' };
+export const AGENTS = { reviewer: 'RV', 'code-investigator': 'CI', 'prod-log-reader': 'PL', 'qa': 'QA', 'devops-writer': 'DW' };
 export const MAX_POINT = 300, MAX_PUNTI = 2500;
 const SECTIONS = ['Punti', 'Proposti', 'Tolti'];
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
@@ -118,6 +118,12 @@ export function summary(root) {
   });
 }
 
+/** Notebooks left by a specialist that no longer exists (its know-how moved to a skill): never read, never deleted. */
+export function orphans(root) {
+  const dir = path.join(root, 'playbooks');
+  return (fs.existsSync(dir) ? fs.readdirSync(dir) : []).filter(f => f.endsWith('.md') && f !== 'README.md' && !AGENTS[f.slice(0, -3)]).sort();
+}
+
 // Lock (as env-lease): one writer at a time across chats; a lock older than 30 s is stale.
 function withLock(root, fn) {
   const key = path.resolve(root).replace(/[\\/]+$/, '').toLowerCase(); // one lock whatever the spelling of the root
@@ -142,6 +148,7 @@ if (isMain) {
   try {
     if (cmd === 'list') {
       for (const s of summary(root)) console.log(`${s.agent}: ${s.punti} punti (${s.size}/${MAX_PUNTI} caratteri) · proposti: ${s.proposti.join(', ') || 'nessuno'}${s.review.length ? ` · da rivedere: ${s.review.join(', ')}` : ''}`);
+      for (const f of orphans(root)) console.log(`playbooks/${f}: taccuino di uno specialista che non c'è più, nessuno lo legge: porta i punti utili nella skill che fa quel lavoro, poi toglilo`);
     } else if (['propose', 'accept', 'reject', 'edit', 'remove', 'vote'].includes(cmd)) {
       const text = arg('--file') ? fs.readFileSync(arg('--file'), 'utf8') : arg('--text');
       const out = withLock(root, () => {

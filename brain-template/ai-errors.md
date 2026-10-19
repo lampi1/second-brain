@@ -4,7 +4,7 @@ Ogni errore di un agente o di una chat, una riga, per analizzarli nel dettaglio:
 passati a torto, fatti inventati. **Storico permanente**: non si sfoltisce e non si riassume; una riga sbagliata si
 corregge, non si toglie.
 
-- **Read when:** `flow-optimizer` o una revisione (per primo); "che errori fa l'IA?".
+- **Read when:** la skill `flow-review` o una revisione (per primo); "che errori fa l'IA?".
 - **Write when:** {{OWNER}} corregge un agente, un reviewer dimostra falsa un'affermazione, o l'agente scopre di aver
   sbagliato. Scrive **subito la chat che lo riceve**, con
   `node {{BRAIN}}/ops/tools/mem.mjs error --text "<riga>"`. Mai segreti o dati di terzi.

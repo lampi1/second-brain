@@ -14,5 +14,5 @@ Nessun taccuino: il primo nasce quando un errore di uno specialista (riga in `ai
 3. ogni volta che lo specialista usa il punto, la chat che l'ha lanciato lo vota (`vote ... helpful|harmful`);
 4. in manutenzione, `playbook.mjs list` mostra i punti con più voti contrari che a favore: tornano a te.
 
-Specialisti con un taccuino: `reviewer`, `code-investigator`, `brain-editor`, `flow-optimizer`. Un punto è al
+Specialisti con un taccuino: `reviewer`, `code-investigator`. Un punto è al
 massimo 300 caratteri, un taccuino al massimo 2500: costringe a tenere solo ciò che serve.

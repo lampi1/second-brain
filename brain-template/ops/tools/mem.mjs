@@ -249,8 +249,8 @@ const journalCmd = text => {
 };
 
 // An idea, on top of ideas.md (newest first, under the template). The body (--file, several lines) holds the fields
-// "- **Idea:** …", "- **Come:** …", "- **Perché:** …", "- **Fonte:** IA · <chat> · <what made it>" (brain-editor's
-// format, 2026-10-10). Refused: a title almost equal to an idea still open (shown), a second idea of the same chat today.
+// "- **Idea:** …", "- **Come:** …", "- **Perché:** …", "- **Fonte:** IA · <chat> · <what made it>" (the format
+// of the brain-edit skill, 2026-10-10). Refused: a title almost equal to an idea still open (shown), a second idea of the same chat today.
 // Italian function words never make two titles "the same" ("Account Azure per QA" is not "Account Reader per Azure").
 const STOP = new Set('per con che dei del dell della delle degli dal dalla nel nella nei tra fra una uno gli le lo la il di da in su al alla alle agli non piu come sul sulla'.split(' '));
 const sigWords = s => new Set(words(String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ')).filter(w => w.length >= 3 && !STOP.has(w)));

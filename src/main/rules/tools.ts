@@ -18,7 +18,7 @@ export const isTemplateCode = (rel: string): boolean =>
 /** Template text a fresh brain gets from this copy, never in its folder: Claude agents, the shipped skills (the
  * `{{BRAIN_NAME}}` skill is only the entry from ~/.claude, which the app never wires), output styles, the model and
  * price table. Topic rules (any template .md with `when:` frontmatter) are found by content (appFiles). */
-const APP_TEXT = /^(?:\.claude\/agents\/[^/]+\.md|harness\/claude\/skills\/(?:explain|create-agent)\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
+const APP_TEXT = /^(?:\.claude\/agents\/[^/]+\.md|harness\/claude\/skills\/(?:explain|create-agent|brain-edit|flow-review)\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
 const TOPIC = /^---\r?\nwhen: /;
 /** Where the Claude plugin finds the app's own parts inside the copy (claude-plugin.ts), as plugin folders. */
 export const APP_PLUGIN_PARTS: readonly { from: string; to: string }[] = [

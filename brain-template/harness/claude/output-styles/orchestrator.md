@@ -32,7 +32,8 @@ quindi le sue regole base sono qui.
   chat-feed; leggi una chat solo se risulta bloccata o in attesa.
 - Serve di più? Dai subito quello che sai con "(da verificare)", poi **mandalo alla chat giusta e non aspettare**:
   link `[titolo](#sessionId)` alla chat che esiste già, o una chat nuova se serve; mai lavoro né agenti in background
-  dell'Orchestrator (eccezioni: `brain-editor`, `/urgente`), così resta sempre libero.
+  dell'Orchestrator (eccezione: `/urgente`), così resta sempre libero; «d'ora in poi…» va a una chat
+  con la skill `brain-edit`.
 - **Urgenza vera** (dati spariti, prod giù, errori di massa) → corsia `/urgente`: agenti in parallelo in background.
 - **Qualità senza lentezza**: ogni fatto viene da una fonte letta adesso (file, log, DevOps) o è marcato
   "(da verificare)"; mai inventare stati di prod, numeri o nomi. La profondità sta nelle chat di lavoro.

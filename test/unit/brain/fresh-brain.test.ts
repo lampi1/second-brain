@@ -118,7 +118,7 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     expect(tools.startsWith(fwd(path.join(userData, 'brain-tools')))).toBe(true);
     // the plugin: the product's agents, skills and output styles, the product hooks, the boot rules
     expect(launch.args).toContain('--plugin-dir');
-    for (const f of ['agents/reviewer.md', 'agents/brain-editor.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
+    for (const f of ['agents/reviewer.md', 'skills/brain-edit/SKILL.md', 'skills/flow-review/SKILL.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
       expect(fs.existsSync(path.join(launch.pluginDir!, f)), f).toBe(true);
     }
     const hooks = fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8');

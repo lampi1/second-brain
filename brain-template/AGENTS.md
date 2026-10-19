@@ -37,7 +37,7 @@ Durable knowledge lives in this folder, **not** in agent-private memory, so ever
 | "Da dove comincio?", the first days | `START-HERE.md`, then the "Primo giorno" routine (`routines.md`) |
 | "Cosa devo fare oggi?" | `now.md`, due `ideas.md`, yesterday's `journal/`; propose the top 3 |
 | "Segna nel diario"; "cosa ho fatto oggi" | `journal/` (`journal/index.md`) |
-| "D'ora in poi fai X", "non fare più Y" | Agent `brain-editor` with the exact words (`brain-rules.md`) |
+| "D'ora in poi fai X", "non fare più Y" | Skill `brain-edit` with the exact words (`brain-rules.md`) |
 | An idea, a what-if, "segnatelo" | `ideas.md` (`mem.mjs idea`) |
 | A recurring chore | `routines.md` |
 | Anything else | Answer; then check `map.md` for what to save |
