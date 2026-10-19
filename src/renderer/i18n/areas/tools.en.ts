@@ -97,13 +97,9 @@ export const toolsEn: typeof toolsIt = {
   'tools.skillsPage.theSkill': 'the skill',
 
   // Compare: model comparison labels
-  'tools.compare.agentReviewer': 'code review',
-  'tools.compare.agentCodeInvestigator': 'code investigation',
-  'tools.compare.agentProdLogReader': 'production log reading',
   'tools.compare.engineNotSet': 'engine not set',
   'tools.compare.judge': 'judge',
   'tools.compare.runsAutomatically': 'runs the work of',
-  'tools.compare.ofReviewers': 'the reviewers',
   'tools.compare.of': 'of',
   'tools.compare.ofAgents': 'the agents',
   'tools.compare.anotherModel': 'Another model',

@@ -10,7 +10,7 @@ You change {{OWNER}}'s brain (`{{BRAIN}}/`) on his explicit request, with his ex
 words, no bare ids.
 
 Read first: `brain-rules.md` (the rules: follow them exactly), `map.md` (where things live), `me.md` (already in
-context in Claude); for an agent change also `rules/agent-standard.md`. Work in the folder you were started in (the
+context in Claude). Work in the folder you were started in (the
 main checkout; in a worktree, write there and say so).
 
 Input: {{OWNER}}'s exact words and, if given, the case that triggered them. Missing words → ask back, change nothing.
@@ -19,7 +19,7 @@ Input: {{OWNER}}'s exact words and, if given, the case that triggered them. Miss
 1. Restate the request as one rule in one line. Ambiguous or in conflict with an existing rule → rule 10: change
    nothing, ask one question.
 2. Search for the same concept everywhere a rule can live (rules 1-2): `Grep -i` with 3-5 keywords and synonyms
-   (Italian and English) over the brain's `*.md` (skip `journal/`, `reviews/`, `ops/` data, `playbooks/`), plus
+   (Italian and English) over the brain's `*.md` (skip `journal/`, `reviews/`, `ops/` data), plus
    `~/.claude/output-styles/*.md`, `~/.claude/skills/*/SKILL.md` and `tests/behavior.md`.
 3. `node ops/tools/brain-lint.mjs` → fixed context and duplicate count (before).
 4. Choose the place (rule 2) and the smallest edit: update or replace the existing line, remove what becomes obsolete
@@ -35,7 +35,7 @@ Input: {{OWNER}}'s exact words and, if given, the case that triggered them. Miss
 ## Never
 - Edit `~/.claude/settings.json`, `.claude/settings.json`, hook wiring, `autoMode`, allow/deny rules; a blocked edit →
   stop and report it, never retry another way ({{OWNER}} writes permissions himself).
-- Touch production, DevOps, notebooks (`playbooks/`) or other threads' `now.md` lines. Search `{{HOME_WIN}}`
+- Touch production, DevOps or other threads' `now.md` lines. Search `{{HOME_WIN}}`
   recursively.
 
 ## Report (max 5 lines, rule 11)

@@ -95,13 +95,9 @@ export const toolsIt = {
   'tools.skillsPage.theSkill': 'la skill',
 
   // Compare: model comparison labels
-  'tools.compare.agentReviewer': 'revisione del codice',
-  'tools.compare.agentCodeInvestigator': 'indagini sul codice',
-  'tools.compare.agentProdLogReader': 'lettura dei log di produzione',
   'tools.compare.engineNotSet': 'motore non indicato',
   'tools.compare.judge': 'giudice',
   'tools.compare.runsAutomatically': 'rifà in automatico il lavoro',
-  'tools.compare.ofReviewers': 'dei reviewer',
   'tools.compare.of': 'di',
   'tools.compare.ofAgents': 'degli agenti',
   'tools.compare.anotherModel': 'Un altro modello',

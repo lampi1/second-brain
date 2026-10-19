@@ -130,7 +130,7 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     expect(rules).toContain('# Mario Rossi'); // the owner's own profile follows the product's text
     // topic rules: the template's, rendered in the copy, injected by the hook runtime from there
     const topics = JSON.parse(fs.readFileSync(path.join(tools, '.sb-tools.json'), 'utf8')).topics as string[];
-    for (const t of ['hub.md', 'code.md', 'brain-rules.md', 'map.md', 'routines.md', 'rules/agent-standard.md']) expect(topics).toContain(t);
+    for (const t of ['hub.md', 'code.md', 'brain-rules.md', 'map.md', 'routines.md']) expect(topics).toContain(t);
     const hub = fs.readFileSync(path.join(tools, 'hub.md'), 'utf8');
     expect(hub).toContain(`node ${tools}/ops/tools/chat-prompt.mjs`);
     expect(hub).not.toMatch(/\{\{[A-Z_]+\}\}|\{tools\}/);

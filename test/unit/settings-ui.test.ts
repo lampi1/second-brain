@@ -19,8 +19,8 @@ describe('model comparison words', () => {
     expect(sideName({ label: 'Claude', model: 'opus', effort: 'medium' })).toBe('Claude opus medium');
     expect(sideName({ label: 'Cursor' })).toBe('Cursor');
     expect(sideName({ label: '', model: null })).toBe('motore non indicato');
-    const agents = [{ name: 'reviewer', on: true }, { name: 'code-investigator', on: false }];
-    expect(sidesLine(exp({ agents }))).toBe('A: Cursor (reviewer) · B: Claude opus medium · giudice: Kimi k2');
+    const agents = [{ name: 'sentinel', on: true }, { name: 'scout', on: false }];
+    expect(sidesLine(exp({ agents }))).toBe('A: Cursor (Sentinel) · B: Claude opus medium · giudice: Kimi k2');
     expect(sidesLine(exp())).toBe('A: Cursor · B: Claude opus medium · giudice: Kimi k2');
   });
   it('says the cost so far per side, the rounds without a cost, and nothing before the first round', () => {
@@ -30,9 +30,9 @@ describe('model comparison words', () => {
     expect(costLine(exp({ rounds: 0 }))).toBeNull();
   });
   it('names the main switch in the user\'s words', () => {
-    const agents = [{ name: 'reviewer', on: true }, { name: 'code-investigator', on: false }];
-    expect(autoLine(exp({ agents }))).toBe('Opus rifà in automatico il lavoro dei reviewer di Cursor');
-    expect(autoLine(exp({ agents: [{ name: 'code-investigator', on: true }] }))).toBe('Opus rifà in automatico il lavoro di code-investigator di Cursor');
+    const agents = [{ name: 'sentinel', on: true }, { name: 'scout', on: false }];
+    expect(autoLine(exp({ agents }))).toBe('Opus rifà in automatico il lavoro di Sentinel, Scout di Cursor');
+    expect(autoLine(exp({ agents: [{ name: 'scout', on: true }] }))).toBe('Opus rifà in automatico il lavoro di Scout di Cursor');
     expect(autoLine(exp({ b: { engine: 'kimi', label: 'Kimi', model: null, effort: null }, agents: [] }))).toBe('Kimi rifà in automatico il lavoro degli agenti di Cursor');
   });
 });

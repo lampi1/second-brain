@@ -222,8 +222,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'A run is one assignment of a role, from start to its agent_report, with counters, cost and result.'),
     points: [
       // src/main/chats/manager.ts startRun (owner.source === 'catalog')
-      b('Nasce quando una chat parte con un ruolo di lavoro; startedBy dice se l’hai avviata tu o l’Orchestrator, parentRunId di quale run è figlia.',
-        'It starts when a chat starts with a work role; startedBy says whether you or the Orchestrator started it, parentRunId which run it is a child of.'),
+      b('Nasce quando una chat parte con un ruolo di lavoro; startedBy dice chi l’ha avviata: tu, l’Orchestrator o la chat genitore che l’ha delegata.',
+        'It starts when a chat starts with a work role; startedBy says who started it: you, the Orchestrator or the parent chat that delegated it.'),
+      // src/main/chats/manager.ts create (links.parentRunId); src/main/agents/delegation.ts
+      b('Una run delegata porta parentRunId, la run del genitore: così l’albero delle deleghe resta leggibile anche nelle metriche.',
+        'A delegated run carries parentRunId, its parent’s run: so the delegation tree stays readable in the metrics too.'),
       // src/main/chats/manager.ts countRequest
       b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione.',
         'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time.'),

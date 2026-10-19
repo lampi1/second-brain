@@ -877,13 +877,13 @@ export class DemoBrain implements BrainService {
   serveApi(p: string, fn: (query: URLSearchParams) => unknown): void { this.localApi.set(p, fn); }
   // one experiment like the real brain's, switched in memory
   private compare: CompareExperiment[] = [{
-    name: 'cursor-vs-claude', title: 'Code review agents: Cursor vs Claude Code',
-    description: 'Every run of the listed Cursor sub-agents is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
+    name: 'cursor-vs-claude', title: 'Review roles: Cursor vs Claude Code',
+    description: 'Every run of the listed roles on Cursor is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
     on: true, changedAt: '2026-10-10 08:09:21',
-    a: { engine: 'cursor', label: 'Cursor', agents: ['reviewer', 'code-investigator', 'prod-log-reader'] },
+    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'judge'] },
     b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
     judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
-    agents: [{ name: 'reviewer', on: true }, { name: 'code-investigator', on: false }, { name: 'prod-log-reader', on: false }],
+    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'judge', on: false }],
     rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
   }];
   async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }

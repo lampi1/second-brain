@@ -6,6 +6,6 @@ own brain folder from it. `{{...}}` placeholders are filled by the installer wit
 Layout after install: `START-HERE.md` (first-day guide: open it first), `AGENTS.md` (boot index for every agent),
 `map.md` (where everything lives), `me.md` (you), `hub.md`, `code.md`, `routines.md`, `brain-rules.md`, memory files
 (`now.md`, `journal/`, `ideas.md`, `ai-errors.md`, `ai-wins.md`, `ai-reflections.md`, `proposals.md`,
-`tests/behavior.md`, `playbooks/`), `ops/` (your production runbooks, with one about the brain itself as the format
-example, and the generic tools in `ops/tools/`), `.claude/` (agents, hooks), `harness/` (Claude and Cursor adapters,
+`tests/behavior.md`), `ops/` (your production runbooks, with one about the brain itself as the format
+example, and the generic tools in `ops/tools/`), `.claude/` (hooks), `harness/` (Claude and Cursor adapters,
 skills, output style, hook wiring).

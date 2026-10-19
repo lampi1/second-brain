@@ -47,7 +47,7 @@ describe('live feed', () => {
     expect(e?.title).toMatch(/aperta → fatta/);
   });
 
-  it('quiet changes while away are not replayed; playbooks and mail are quiet events', async () => {
+  it('quiet changes while away are not replayed', async () => {
     const root = tmpBrain();
     const a = make(root, () => {});
     await a.start(); a.stop();
@@ -56,10 +56,7 @@ describe('live feed', () => {
     const b = make(root, e => got.push(...e));
     await b.start();
     expect(got).toEqual([]);
-    fs.mkdirSync(path.join(root, 'playbooks'));
-    fs.writeFileSync(path.join(root, 'playbooks', 'qa-webapp.md'), '# QA\n');
-    expect(await until(() => got.some(e => e.kind === 'playbook'))).toBe(true);
-    expect(got.find(e => e.kind === 'playbook')!.title).toBe('qa-webapp');
+    b.stop();
   });
 
   it('ignores .git and worktree copies of the brain', async () => {
@@ -112,7 +109,7 @@ describe('live feed', () => {
     expect(got2).toEqual([]);
   });
 
-  it('without the brain parsers it still starts (chats, playbooks and mail only)', async () => {
+  it('without the brain parsers it still starts (chats and mail only)', async () => {
     const root = tmpBrain({ parsers: false });
     const got: RawEvent[] = [];
     await make(root, e => got.push(...e)).start();

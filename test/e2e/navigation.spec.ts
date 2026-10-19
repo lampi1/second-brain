@@ -126,7 +126,7 @@ test('the bell counts only what needs the user; the center keeps everything else
   // noise: none of these counts in the bell
   for (const e of [
     { kind: 'chat-done', title: 'Fix totale ordine', chatId: 'qa' }, { kind: 'error', title: 'Comando lanciato due volte' }, { kind: 'idea', title: 'Riassunto al ritorno' },
-    { kind: 'now', title: 'Filo aggiornato' }, { kind: 'playbook', title: 'qa' }, { kind: 'sync-ok', title: 'GitHub aggiornato' }, { kind: 'proposal', title: 'Proposta' },
+    { kind: 'now', title: 'Filo aggiornato' }, { kind: 'sync-ok', title: 'GitHub aggiornato' }, { kind: 'proposal', title: 'Proposta' },
   ]) await event(app, e);
   // what needs him: counted (sent after the noise: once both are in the list, the noise was handled too)
   await event(app, { kind: 'chat-failed', title: 'Mappa', detail: 'il turno è finito con un errore', chatId: 'mappa' });

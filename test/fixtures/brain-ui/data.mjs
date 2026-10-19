@@ -102,12 +102,6 @@ export function build(now = Date.now(), opts = {}) {
   }
   // held right now (no release yet): the Collaborazione page shows it on top
   envs.push({ ts: iso(now - 25 * 6e4), env: 'test-2', chat: 'QA ordini', action: 'take', why: 'test case 7, build 4.12' });
-  const playbooks = [
-    { agent: 'reviewer', punti: 6, proposti: ['controlla i null'], size: 1420, review: [] },
-    { agent: 'qa-runner', punti: 9, proposti: [], size: 2210, review: ['punto 4'] },
-    { agent: 'log-reader', punti: 3, proposti: ['finestra di 90 giorni', 'dedup'], size: 640, review: [] },
-    { agent: 'writer', punti: 0, proposti: [], size: 0, review: [] },
-  ];
   const recurrence = {
     totals: types.map(t => [t, errors.filter(e => e.tipo === t).length]).sort((a, b) => b[1] - a[1]),
     rules: [
@@ -169,7 +163,7 @@ export function build(now = Date.now(), opts = {}) {
   log.sort((a, b) => a.ts.localeCompare(b.ts));
   const tables = {
     today, errors, wins, journal, now: nowRows, ideas, reflections, proposals, bugs, measures, envs,
-    briefs: [`journal/brief/${d(1)}.md`, `journal/brief/${today}.md`], playbooks, recurrence, quality, inbox: { boxes, stats, log },
+    briefs: [`journal/brief/${d(1)}.md`, `journal/brief/${today}.md`], recurrence, quality, inbox: { boxes, stats, log },
   };
 
   // ── now (chats.mjs + mailbox + now.md line) ─────────────────────────────────────────────────────────────────────
@@ -276,7 +270,7 @@ export function build(now = Date.now(), opts = {}) {
     N('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', 'una per ogni lavoro vero', 'Le chat aperte dall’Orchestrator.', { degree: 6, file: 'hub.md' }),
     N('harness:claude', 'esterni', 'harness', 'Claude', 'il programma delle chat', 'Claude Code.', { degree: 4, file: 'AGENTS.md' }),
     N('harness:cursor', 'esterni', 'harness', 'Cursor', 'l\'altro programma', 'Cursor CLI.', { degree: 3, file: 'AGENTS.md' }),
-    N('agent:reviewer', 'agenti', 'agente', 'Revisore del codice', 'rilegge ogni diff prima del fatto', 'Revisione di correttezza.', { name: 'reviewer', degree: 4, file: 'agents/reviewer.md', uses: 14, playbook: { punti: 6 }, fields: { model: 'opus', effort: 'high' } }),
+    N('agent:reviewer', 'agenti', 'agente', 'Revisore del codice', 'rilegge ogni diff prima del fatto', 'Revisione di correttezza.', { name: 'reviewer', degree: 4, file: 'agents/reviewer.md', uses: 14, fields: { model: 'opus', effort: 'high' } }),
     N('agent:qa', 'agenti', 'agente', 'Tester nel browser', 'esegue i test case', 'QA nel browser.', { name: 'qa-runner', degree: 3, file: 'agents/qa-runner.md', uses: 9 }),
     { id: 'grp:skill', layer: 'agenti', kind: 'gruppo', label: 'Skill (4)', short: 'comandi brevi: /stato, /opzioni…', degree: 2, members: [
       { id: 'skill:stato', label: 'Stato di tutto', name: '/stato', what: 'Stato di tutto il lavoro aperto', uses: 12 }, { id: 'skill:opzioni', label: 'Cosa posso fare', name: '/opzioni', what: 'Cosa puoi fare adesso', uses: 0 },
@@ -369,10 +363,10 @@ export function build(now = Date.now(), opts = {}) {
     'reviews/compare/reports/pr-51004.md': '# PR 51004\n\n- Claude: 1 problema\n- Cursor: nessuno\n',
     // a hostile file (an agent can write any markdown): nothing in it may run or navigate the app window
     'notes/trappola.md': '# Trappola\n\n<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" usemap="#m"><map name="m"><area shape="default" href="../../fuori.html"></map>\n\n<a href="../fuori.html">relativo</a> · <a href="file:///C:/fuori.html">file</a> · <a href="javascript:alert(1)">js</a> · [esterno](https://example.com)\n\n<base href="https://example.com/"><script>window.__pwned = 1</script><img src="x" onerror="window.__pwned = 2">\n\n<svg><a xlink:href="../fuori.html"><text>svg</text></a></svg>\n\n<form action="../fuori.html"><button formaction="../fuori.html">invia</button></form>\n',
-    'playbooks/reviewer.md':'# Taccuino del reviewer\n\n1. Controlla i null sui campi opzionali.\n2. Un test nuovo deve fallire prima del fix.\n',
+    'ops/runbook/review.md':'# Revisione\n\n1. Controlla i null sui campi opzionali.\n2. Un test nuovo deve fallire prima del fix.\n',
   };
   const more = ['README.md', 'hub.md', 'people.md', 'routines.md', 'brain-rules.md', 'ai-errors.md', 'ai-wins.md', 'ai-reflections.md', 'proposals.md', 'bug-log.md', 'ops/AGENTS.md', 'ops/runbook/urgenze.md', 'ops/runbook/sql.md',
-    'ops/tools/mem.mjs', 'ops/tools/inbox.mjs', 'ops/tools/day.mjs', 'rules/qa.md', 'playbooks/qa-runner.md', 'agents/reviewer.md', 'agents/qa-runner.md', `journal/brief/${today}.md`, `journal/brief/${d(1)}.md`];
+    'ops/tools/mem.mjs', 'ops/tools/inbox.mjs', 'ops/tools/day.mjs', 'rules/qa.md', 'rules/qa-runner.md', 'agents/reviewer.md', 'agents/qa-runner.md', `journal/brief/${today}.md`, `journal/brief/${d(1)}.md`];
   for (const f of more) texts[f] ??= `# ${f}\n\nContenuto di prova di ${f}.\n`;
   const files = Object.keys(texts).sort();
 

@@ -12,7 +12,6 @@ import { areaOf, nowThreads, claudeChatsOn, renderBrief, renderReport, romeDay }
 import { land, status } from './wt-land.mjs';
 import { parse as parseErrors, recurrence, render as renderRecurrence } from './recurrence.mjs';
 import { apply as applyHooks } from './install-inbox-hooks.mjs';
-import { parse as pbParse, op as pbOp, render as pbRender } from './playbook.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-tools-'));
@@ -385,57 +384,6 @@ T('install-inbox-hooks', () => {
   const f = path.join(tmp, 'settings.json'); fs.writeFileSync(f, '﻿' + JSON.stringify(base));
   const out = spawnSync(process.execPath, [path.join(here, 'install-inbox-hooks.mjs'), '--file', f], { encoding: 'utf8' });
   ok(out.status === 0 && fs.existsSync(`${f}.bak-${new Date().toISOString().slice(0, 10)}-inbox`) && JSON.parse(fs.readFileSync(f, 'utf8')).hooks.SessionStart, `install hooks CLI: ${out.stdout}${out.stderr}`);
-});
-
-T('playbook', () => {
-  const empty = pbParse('');
-  let b = pbOp('prod-log-reader', empty, 'propose', { text: 'Before a finding on SQL, check that the app DBs have no FKs · see review-catalog', source: 'ai-errors 2026-10-08 10:37 · review', date: '2026-10-10' });
-  ok(b.Proposti[0].id === 'PL-1' && !b.Proposti[0].text.includes(' · ') && b.Punti.length === 0, `playbook propose: ${JSON.stringify(b)}`);
-  const refused = f => { try { f(); return false; } catch (e) { return e.code === 4; } };
-  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'Before any finding on SQL check that the app DBs have no FKs', source: 'x' })), 'playbook: near-duplicate refused');
-  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'new point', source: '' })), 'playbook: source required');
-  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'x'.repeat(301), source: 's' })), 'playbook: point too long');
-  // review 10/10: a line we can't read refuses the write instead of vanishing; "·" in a source can't break the fields
-  const good = pbRender('prod-log-reader', pbOp('prod-log-reader', b, 'accept', { id: 'PL-1', date: '2026-10-10' }));
-  ok(pbParse(good.replace('dal 2026-10-10', 'dal 2026-10-10   ').replace(/\n/g, '\r\n')).Punti.length === 1, 'playbook: trailing spaces and CRLF tolerated');
-  ok(refused(() => pbParse(good.replace('+0/-0', '+0/−0'))), 'playbook: malformed line refused, not dropped');
-  ok(refused(() => pbParse(`${good}\n## Appunti\n- x`)), 'playbook: unknown section refused');
-  const dots = pbOp('prod-log-reader', pbParse(''), 'propose', { text: 'Primo punto qualsiasi', source: '{{OWNER}} · · fonte: chat 10/10', date: '2026-10-10' });
-  const back = pbParse(pbRender('prod-log-reader', dots)).Proposti[0];
-  ok(back.text === 'Primo punto qualsiasi' && back.source === '{{OWNER}}, , fonte: chat 10/10' && back.date === '2026-10-10', `playbook: dots in source: ${JSON.stringify(back)}`);
-  b = pbOp('prod-log-reader', b, 'accept', { id: 'PL-1', date: '2026-10-11' });
-  ok(b.Punti[0].id === 'PL-1' && b.Punti[0].date === '2026-10-11' && !b.Proposti.length, 'playbook accept');
-  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'harmful' });
-  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'harmful' });
-  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'helpful' });
-  ok(b.Punti[0].up === 1 && b.Punti[0].down === 2, 'playbook vote');
-  ok(pbOp('prod-log-reader', b, 'vote', { id: 'PL-1,PL-1', kind: 'helpful' }).Punti[0].up === 2, 'playbook: repeated id voted once');
-  ok(refused(() => pbOp('prod-log-reader', b, 'vote', { id: 'PL-1,PL-9', kind: 'helpful' })) && b.Punti[0].up === 1, 'playbook: unknown id refuses the whole vote');
-  const round = pbParse(pbRender('prod-log-reader', b));
-  ok(JSON.stringify(round) === JSON.stringify(b), `playbook render/parse round trip:\n${pbRender('prod-log-reader', b)}`);
-  b = pbOp('prod-log-reader', b, 'propose', { text: 'Report a finding only with a concrete failing input', source: '{{OWNER}} 2026-10-10' });
-  ok(b.Proposti[0].id === 'PL-2', 'playbook ids grow');
-  b = pbOp('prod-log-reader', b, 'remove', { id: 'PL-1', why: 'more harmful than helpful', date: '2026-10-12' });
-  b = pbOp('prod-log-reader', b, 'propose', { text: 'Third point about tests', source: 's' });
-  ok(b.Tolti[0].id === 'PL-1' && /tolto: more harmful/.test(b.Tolti[0].note) && b.Proposti[1].id === 'PL-3', 'playbook remove keeps history, ids never reused');
-  let big = pbParse('');
-  const distinct = k => Array.from({ length: 56 }, (_, j) => `p${k}w${j}`).join(' ').slice(0, 280); // no shared words
-  for (let k = 0; k < 8; k++) { big = pbOp('qa', big, 'propose', { text: distinct(k), source: 's' }); big = pbOp('qa', big, 'accept', { id: big.Proposti[0].id }); }
-  const ninth = pbOp('qa', big, 'propose', { text: distinct(8), source: 's' });
-  ok(refused(() => pbOp('qa', ninth, 'accept', { id: ninth.Proposti[0].id })), 'playbook: Punti cap refused');
-  // CLI on a temp root
-  const proot = path.join(tmp, 'pb');
-  const cli = args => spawnSync(process.execPath, [path.join(here, 'playbook.mjs'), ...args, '--root', proot], { encoding: 'utf8' });
-  ok(cli(['propose', 'prod-log-reader', '--text', 'Say which subscription was searched', '--source', 'me.md Safety']).status === 0, 'playbook CLI propose');
-  ok(cli(['accept', 'prod-log-reader', 'PL-1']).status === 0 && cli(['vote', 'prod-log-reader', 'PL-1', 'helpful']).status === 0, 'playbook CLI accept+vote');
-  ok(/prod-log-reader: 1 punti/.test(cli(['list']).stdout), `playbook CLI list: ${cli(['list']).stdout}`);
-  ok(cli(['propose', 'nobody', '--text', 'x', '--source', 's']).status === 4, 'playbook CLI unknown agent');
-  // a notebook left by a retired specialist is named by list, never read or deleted
-  fs.writeFileSync(path.join(proot, 'playbooks', 'retired-one.md'), '# Taccuino: retired-one\n');
-  fs.writeFileSync(path.join(proot, 'playbooks', 'README.md'), '# Playbooks\n');
-  const listed = cli(['list']);
-  ok(listed.status === 0 && /playbooks\/retired-one\.md: taccuino di uno specialista che non c'è più/.test(listed.stdout) && !/README/.test(listed.stdout), `playbook CLI list names an orphan notebook: ${listed.stdout}`);
-  ok(fs.existsSync(path.join(proot, 'playbooks', 'retired-one.md')), 'playbook CLI list never deletes an orphan notebook');
 });
 
 T('brain-site (own test file)', () => {

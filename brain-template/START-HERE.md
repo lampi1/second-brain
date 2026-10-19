@@ -62,5 +62,4 @@ Una pagina vuota non è un errore: vuol dire che quella memoria non ha ancora ri
   volta che succede la stessa cosa, l'Orchestrator ti propone una regola. Non scrivere regole in anticipo.
 - **Le procedure nascono dal lavoro.** Quando risolvi un problema che tornerà, chiedi "salvalo nel runbook": nasce un
   file in `ops/runbook/` (c'è già `ops/runbook/brain.md`, sul cervello stesso, come esempio).
-- **I taccuini degli specialisti** (`playbooks/`) nascono dagli errori e dalle lodi: un punto entra solo dopo il tuo sì.
 - **Dove sta cosa**: `map.md` è l'unico indice. Il registro di ogni file dice quando leggerlo e quando scriverlo.

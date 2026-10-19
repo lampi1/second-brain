@@ -13,7 +13,7 @@ changes how the brain must be edited.
    from the other (duplicates drift apart).
 2. **The right place, chosen from `map.md`.** How {{OWNER}} wants every chat to talk or work → `me.md`; only the hub →
    `hub.md`; code work → `code.md`; a recurring procedure → `routines.md`; production → `ops/AGENTS.md` or
-   `ops/runbook/`; a skill → its `SKILL.md`; a subagent → `.claude/agents/<name>.md` (`rules/agent-standard.md`);
+   `ops/runbook/`; a skill → its `SKILL.md` (a role's know-how is a skill too: the roles live in the app);
    how the brain is edited → this file; a new kind of knowledge → propose a new file with a `map.md` row.
 3. **Remove before adding.** If the request makes an existing line obsolete, delete it; the shorter text wins. **The
    fixed context never grows**: a change that adds to it removes, shortens or moves at least as much in the same edit.

@@ -23,7 +23,7 @@
   // essential view: lobes side by side, seen from the front, shallow depth (labels never hide each other)
   const ANCHOR_E = { persone: [0, 20, 0], chat: [0, 210, 0], agenti: [-560, 80, 0], tool: [0, -240, 0], memoria: [560, 80, 0], regole: [-340, 340, 0], esterni: [0, -540, 0] };
   const ANCHOR = { persone: [0, 10, 170], chat: [0, 30, 80], agenti: [-160, 50, -10], tool: [10, -30, -50], memoria: [160, 40, -30], regole: [0, 160, -70], esterni: [0, -180, -40] };
-  const KINDS = { flusso: 'Come funziona', hook: 'Hook', posta: 'Posta tra chat', legge: 'Taccuino', contesto: 'Contesto fisso', esterno: 'Servizi esterni', istanza: 'Chat vive', usa: 'Codice che nomina file', cita: 'Citazioni' };
+  const KINDS = { flusso: 'Come funziona', hook: 'Hook', posta: 'Posta tra chat', legge: 'Legge', contesto: 'Contesto fisso', esterno: 'Servizi esterni', istanza: 'Chat vive', usa: 'Codice che nomina file', cita: 'Citazioni' };
   const ON_E = new Set(['flusso', 'hook', 'posta', 'legge', 'contesto']), ON_F = new Set(['flusso', 'hook', 'posta', 'legge', 'contesto', 'esterno', 'istanza']);
   const mix = (a, b, t) => { const h = x => x.match(/\w\w/g).map(v => parseInt(v, 16)); const p = h(a), q = h(b); return `rgb(${p.map((v, i) => Math.round(v * (1 - t) + q[i] * t)).join(',')})`; };
   const short = (s, n) => (String(s ?? '').length > n ? `${String(s).slice(0, n - 1)}…` : String(s ?? ''));
@@ -225,8 +225,7 @@
           n.uses != null ? [el('dt', 'Usato'), el('dd', `${n.uses} volte in 30 giorni`)] : null,
           n.reads != null ? [el('dt', 'Letto'), el('dd', `${n.reads} volte in 30 giorni`)] : null,
           n.events?.length ? [el('dt', 'Scatta su'), el('dd', n.events.join(', '))] : null,
-          n.fields?.model ? [el('dt', 'Modello'), el('dd', `${n.fields.model}${n.fields.effort ? ` · impegno ${n.fields.effort}` : ''}`)] : null,
-          n.playbook ? [el('dt', 'Taccuino'), el('dd', `${n.playbook.punti} punti`)] : null),
+          n.fields?.model ? [el('dt', 'Modello'), el('dd', `${n.fields.model}${n.fields.effort ? ` · impegno ${n.fields.effort}` : ''}`)] : null),
         n.members?.length ? [el('h3', n.kind === 'gruppo' ? `Dentro (${n.members.length})` : `Insieme a lui (${n.members.length})`),
           el('ul', { style: 'margin:0;padding-left:16px;display:grid;gap:4px;font-size:.86rem' }, n.members.map(m => el('li', el('b', { style: 'color:#fff' }, m.label), m.what ? ` · ${short(m.what, 90)}` : '')))] : null,
         out.length ? [el('h3', `Verso (${out.length})`), links(out, 'out')] : null,

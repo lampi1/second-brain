@@ -1,7 +1,7 @@
 // brain-map: the map of {{OWNER}}'s brain ({{BRAIN_NAME}}) read from the real files, for the 3D page of the brain site
 // (ops/tools/brain-site.mjs; {{OWNER}} 2026-10-10, "rappresentazione 3d del mio cervello... costantemente aggiornata").
 // READ-ONLY, no model, zero tokens. Which pieces exist and how they link is never written by hand: agents from
-// .claude/agents frontmatter, notebooks from playbook.mjs, tools and hooks from their header comment, hook wiring from
+// .claude/agents frontmatter (the owner's own, if any), tools and hooks from their header comment, hook wiring from
 // ~/.claude/settings.json + .claude/settings.json + harness/cursor/hooks.json, memory and rule files from the map.md
 // table, skills from ~/.claude/skills/*/SKILL.md, chats from the inbox boxes, last change from git, use from
 // brain-usage.mjs. Hand-written: the pieces' Italian names and sentences (brain-map/labels.mjs, SHORT) and FLOWS ("how
@@ -20,7 +20,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const LAYERS = [
   { id: 'persone', label: 'Persone', hint: '{{OWNER}} e i colleghi' },
   { id: 'chat', label: 'Chat', hint: 'l’Orchestrator e le chat di lavoro' },
-  { id: 'agenti', label: 'Agenti e skill', hint: 'specialisti, i loro taccuini, le skill' },
+  { id: 'agenti', label: 'Agenti e skill', hint: 'gli agenti tuoi e le skill' },
   { id: 'tool', label: 'Tool e hook', hint: 'script di ops/tools e hook che scattano da soli' },
   { id: 'memoria', label: 'Memoria', hint: 'dove il cervello scrive quello che succede' },
   { id: 'regole', label: 'Regole', hint: 'come devono lavorare gli agenti' },
@@ -129,14 +129,13 @@ export function labelFor(n, text = null) {
   const file = n.id.replace(/^(rule|mem):/, '');
   const known = LABELS[n.id] ?? (/^(rule|mem):/.test(n.id) ? LABELS[file] : undefined);
   if (known) return known;
-  if (n.id.startsWith('playbook:')) return `Taccuino: ${LABELS[`agent:${n.id.slice(9)}`] ?? humanize(n.id.slice(9))}`;
   if (n.id.startsWith('chat:box:')) return boxLabel(n.label);
   if (!/^(agent|skill|tool|hook|rule|mem):/.test(n.id)) return n.label; // people, chats, harnesses, services: already named
   const fm = text ? frontmatter(text) : {};
   if (fm.label) return fm.label;
   if (/\.md$/i.test(n.file ?? '') && n.kind !== 'cartella') { const h = headingLabel(text?.replace(/^---[\s\S]*?\r?\n---/, '')); if (h) return h; }
   if (n.id.startsWith('skill:')) return n.label; // "/stato": the command is its name
-  return humanize(n.label.replace(/^(stile|taccuino) /, '$1-'));
+  return humanize(n.label.replace(/^stile /, 'stile-'));
 }
 // Two pieces with the same speaking label get their technical name after it, so every label reads apart.
 export function uniqueLabels(nodes) {
@@ -145,11 +144,10 @@ export function uniqueLabels(nodes) {
   return nodes.map(n => (count[n.label.toLowerCase()] > 1 && n.name && n.name !== n.label ? { ...n, label: `${n.label} (${n.name})` } : n));
 }
 
-export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null, inbox = null, playbooks = null, lint = null, recurrence = null } = {}) {
+export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null, inbox = null, lint = null, recurrence = null } = {}) {
   const nodes = new Map(), edges = [], warnings = [];
   const dates = gitDates(root);
-  // playbook.mjs summary() is a list, inbox.mjs list() names a box "box": one shape here
-  if (Array.isArray(playbooks)) playbooks = Object.fromEntries(playbooks.map(p => [p.agent, p]));
+  // inbox.mjs list() names a box "box": one shape here
   if (inbox) inbox = { ...inbox, boxes: (inbox.boxes ?? []).map(b => ({ ...b, who: b.who ?? b.box })) };
   const add = n => { if (!nodes.has(n.id)) nodes.set(n.id, n); return nodes.get(n.id); };
   const modified = (abs) => {
@@ -186,19 +184,12 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   add(node('harness:claude', 'esterni', 'harness', 'Claude Code', { what: 'Il programma delle chat Claude (app desktop): esegue gli hook configurati.', ...(fs.existsSync(claudeSettings) ? { file: claudeSettings.replace(/\\/g, '/') } : {}) }));
   add(node('harness:cursor', 'esterni', 'harness', 'Cursor', { what: 'Il secondo programma: stesse regole, adattate da harness/cursor e harness/tools.md.', file: doc('harness/tools.md').replace(/\\/g, '/') }));
 
-  // Agents, notebooks, skills
+  // Agents, skills
   const agentsDir = path.join(root, '.claude', 'agents');
   for (const f of (fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir) : []).filter(f => f.endsWith('.md')).sort()) {
     const abs = path.join(agentsDir, f), text = read(abs) ?? '', fm = frontmatter(text);
     const name = fm.name || f.replace(/\.md$/, '');
-    const n = fileNode(`agent:${name}`, 'agenti', 'agente', name, abs, { what: fm.description ?? '', fields: Object.fromEntries(Object.entries(fm).filter(([k]) => k !== 'description' && k !== 'name')), text });
-    const nb = text.split(/\r?\n/).findIndex(l => /^Notebook:/.test(l) || /playbooks\/[\w-]+\.md/.test(l));
-    const pb = path.join(root, 'playbooks', `${name}.md`);
-    if (fs.existsSync(pb)) {
-      const s = playbooks?.[name];
-      fileNode(`playbook:${name}`, 'agenti', 'taccuino', `taccuino ${name}`, pb, { what: `Taccuino di ${name}: punti imparati, letti solo da lui all'avvio.`, playbook: s ?? null });
-      edges.push({ from: n.id, to: `playbook:${name}`, kind: 'legge', label: 'legge all\'avvio', source: nb >= 0 ? { file: rel(root, abs), line: nb + 1, text: text.split(/\r?\n/)[nb].slice(0, 200) } : null });
-    }
+    fileNode(`agent:${name}`, 'agenti', 'agente', name, abs, { what: fm.description ?? '', fields: Object.fromEntries(Object.entries(fm).filter(([k]) => k !== 'description' && k !== 'name')), text });
   }
   const skillsDir = path.join(home, '.claude', 'skills');
   for (const s of (fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir) : []).sort()) {
@@ -336,7 +327,6 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   }
   for (const r of recurrence?.rules ?? []) if (r.again > 0)
     weak.push({ kind: 'errore tornato', text: `${r.date} · ${r.area} · regola ${r.rule.slice(0, 90)}: l'errore (${r.type}) è tornato ${r.again} volte`, ids: ['mem:ai-errors.md'] });
-  for (const [agent, s] of Object.entries(playbooks ?? {})) if (s.review?.length) weak.push({ kind: 'taccuino', text: `Taccuino di ${agent}: punti con più voti "dannoso" che "utile": ${s.review.join(', ')}`, ids: [`playbook:${agent}`] });
   for (const b of inbox?.boxes ?? []) if (b.unread && !b.listening) weak.push({ kind: 'posta ferma', text: `${b.who}: ${b.unread} messaggi non letti e la chat non è in ascolto`, ids: [`chat:box:${b.who}`] });
   for (const w of warnings) weak.push({ kind: 'mappa', text: w, ids: [] });
 
@@ -363,16 +353,15 @@ export const SHORT = {
   'chat:orchestrator-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:orchestrator-cursor': 'la stessa Orchestrator dentro Cursor',
   'chat:lavoro': 'una chat per ogni lavoro', 'harness:claude': 'le chat Claude e i loro hook', 'harness:cursor': 'le chat Cursor, stesse regole',
   'skill:code-review': 'controlla un diff prima del merge', 'skill:code-investigation': 'trova la causa di un bug nel codice',
-  'agent:prod-log-reader': 'legge log e stato di produzione', 'agent:qa': 'prova i test case del prodotto nel browser',
-  'agent:devops-writer': 'scrive bug e commenti DevOps', 'skill:brain-edit': 'cambia le regole quando lo chiedi',
+  'skill:brain-edit': 'cambia le regole quando lo chiedi',
   'skill:flow-review': 'trova dove il flusso perde tempo',
   'tool:mem': 'scrive now, diario ed errori', 'tool:inbox': 'posta tra le chat', 'tool:chat-prompt': 'scrive il prompt di una chat nuova',
-  'tool:playbook': 'scrive i taccuini degli specialisti', 'tool:day': 'brief e report della giornata', 'tool:cost': 'quanto costa e dove risparmiare',
+  'tool:day': 'brief e report della giornata', 'tool:cost': 'quanto costa e dove risparmiare',
   'tool:brain-usage': 'cosa si usa davvero', 'tool:recurrence': "l'errore è tornato dopo la regola?", 'tool:ro-query': 'query di sola lettura in produzione',
   'tool:wt-land': 'porta un worktree in main', 'tool:brain-lint': 'salute del cervello, contesto fisso',
   'mem:now.md': 'i fili aperti, dove sei', 'mem:journal/': 'il diario di ogni giorno', 'mem:ai-errors.md': "ogni errore dell'IA",
   'mem:ai-wins.md': 'le tue lodi, scritte dagli hook', 'mem:proposals.md': 'ogni proposta e il suo esito', 'mem:tests/behavior.md': 'un test per ogni correzione',
-  'mem:playbooks/': 'i taccuini degli specialisti', 'ext:devops': 'work item, PR, build', 'ext:azure': 'le risorse del prodotto',
+  'ext:devops': 'work item, PR, build', 'ext:azure': 'le risorse del prodotto',
   'ext:appinsights': 'log e metriche', 'ext:proddb': 'DB dei clienti, solo lettura', 'ext:mail': 'posta e chat aziendali',
   'ext:transcripts': 'le conversazioni, per costi e uso', 'ext:git': 'la storia dei file',
   'grp:skill': 'comandi pronti: /stato, /urgente…', 'grp:tool': 'gli altri script di ops/tools', 'grp:hook-claude': 'scattano da soli nelle chat Claude',
@@ -387,7 +376,6 @@ export function simplify(map) {
     'grp:regole': { layer: 'regole', label: 'Regole' }, 'grp:memoria': { layer: 'memoria', label: 'Altra memoria' },
   };
   const to = n => {
-    if (n.id.startsWith('playbook:')) return `agent:${n.id.slice(9)}`;
     if (n.id.startsWith('chat:box:')) return 'chat:lavoro';
     if (n.id.startsWith('skill:')) return 'grp:skill';
     if (/^hook:(brain|claude):/.test(n.id)) return 'grp:hook-claude';
@@ -455,13 +443,12 @@ function runJson(script, args, root) {
 }
 export async function gather(root = DEFAULT_ROOT, { usage = true } = {}) {
   const imp = async f => import(pathToFileURL(path.join(HERE, f)).href);
-  let inbox = null, playbooks = null, recurrence = null;
+  let inbox = null, recurrence = null;
   try { const m = await imp('inbox.mjs'); const P = m.paths(root); inbox = { boxes: m.list(P), stats: m.stats(P) }; } catch { /* no inbox yet */ }
-  try { const m = await imp('playbook.mjs'); playbooks = m.summary(root); } catch { /* no notebooks yet */ }
   try { const m = await imp('recurrence.mjs'); const rows = m.parse(read(path.join(root, 'ai-errors.md')) ?? ''); recurrence = m.recurrence(rows); } catch { /* no errors file */ }
   const lint = runJson('brain-lint.mjs', ['--json', '--root', root], root);
   const use = usage ? runJson('brain-usage.mjs', ['--json', '--days', '30'], root) : null;
-  return { inbox, playbooks, recurrence, lint, usage: use };
+  return { inbox, recurrence, lint, usage: use };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

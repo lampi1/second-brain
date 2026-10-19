@@ -104,7 +104,7 @@ function copy(from, to) {
 }
 copy(HERE, output);
 writeFileSync(join(output, 'me.md'), render(readFileSync(join(HERE, 'me.template.md'), 'utf8')));
-for (const d of ['journal/brief', 'playbooks', 'reviews']) mkdirSync(join(output, d), { recursive: true });
+for (const d of ['journal/brief', 'reviews']) mkdirSync(join(output, d), { recursive: true });
 
 try {
   // A parent shell's GIT_DIR/WORK_TREE/config must not redirect initialization or run user/global hooks/signers.
@@ -176,7 +176,6 @@ if (!apply && rl && plan.length) {
 rl?.close();
 if (apply) for (const [what, run] of plan) { run(); steps.push(`fatto: ${what}`); }
 else for (const [what] of plan) steps.push(`da fare (rilancia con --user-config, o a mano): ${what}`);
-if (harness.includes('cursor')) steps.push(`Cursor: puntatori degli agenti con "node ${B}/harness/cursor/sync-agents.mjs"`);
 
 console.log(`\nCervello creato in ${dir} (${files} file, nome "${V.BRAIN_NAME}", proprietario ${V.OWNER}).`);
 for (const s of steps) console.log(`- ${s}`);

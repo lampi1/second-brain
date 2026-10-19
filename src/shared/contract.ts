@@ -1064,7 +1064,7 @@ export interface SkillEntry {
   path: string;
   mtime: number;
   errors: number;             // MdIssue errors in the file as it is on disk
-  /** why it cannot be saved from the app (a generated copy: "generato da sync-agents.mjs da <source>") */
+  /** why it cannot be saved from the app (a generated copy: "generato da copy-tool.mjs da <source>") */
   readOnly?: string;
 }
 /** Where a new skill or agent can go. dir = the folder that holds them (".../.claude/skills"). */

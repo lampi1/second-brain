@@ -3,7 +3,7 @@
 // harness/cursor/chats.mjs only (the user, 2026-10-11: "vedrò aggiornarsi in automatico tutto quanto ... un meccanismo di
 // notifiche tipo 'un'idea aggiunta, un errore trovato'"). Port of the tested prototype (<brain>/app/prototype/core/
 // live.mjs). The brain's own parsers (<brainRoot>/ops/tools/brain-site/parse.mjs) are imported at runtime; without
-// them the feed has chats, playbooks and mail only. The first scan is a baseline: it emits nothing except what changed
+// them the feed has chats and mail only. The first scan is a baseline: it emits nothing except what changed
 // since the last run of the app (keys persisted in userData/live-state.json), marked away ("mentre eri via").
 // Used by brain/index.ts, which stamps, stores and notifies the events. Pure diff functions are exported for tests.
 import { timersFor } from '../timers';
@@ -35,7 +35,6 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   win: { label: 'Lode registrata', priority: 'normal' },
   budget: { label: 'Limite di spesa', priority: 'normal' },
   proposal: { label: 'Proposta', priority: 'quiet' },
-  playbook: { label: 'Taccuino aggiornato', priority: 'quiet' },
   done: { label: 'Fatto', priority: 'quiet' },
   decision: { label: 'Decisione', priority: 'quiet' },
   now: { label: 'Filo aggiornato', priority: 'quiet' },
@@ -175,7 +174,7 @@ export const IGNORED = /^(\.git|node_modules|app\/node_modules|\.claude\/worktre
 /** Loads the brain's parsers; null (and a warning) when the brain has none or they fail to load. */
 export async function loadParsers(root: string): Promise<Parsers | null> {
   const f = brainScript(root, 'ops/tools/brain-site/parse.mjs') ?? path.join(root, 'ops', 'tools', 'brain-site', 'parse.mjs');
-  if (!fs.existsSync(f)) { log.warn('brain', 'no parsers in this brain: feed of chats, playbooks and mail only', { data: { file: f } }); return null; }
+  if (!fs.existsSync(f)) { log.warn('brain', 'no parsers in this brain: feed of chats and mail only', { data: { file: f } }); return null; }
   try { return (await import(/* @vite-ignore */ pathToFileURL(f).href)) as Parsers; }
   catch (e) { log.error('brain', 'brain parsers failed to load', { cause: errText(e), hint: `check ${f} with: node --check "${f}"` }); return null; }
 }
@@ -223,7 +222,6 @@ export class Live {
       this.snap.set(s.id, new Map(rows.map(r => [r.key, r])));
     }
     this.persist();
-    this.hashPlaybooks();
     if (away.length) this.o.onEvents(away.map(e => ({ ...e, away: true })));
     try {
       this.watcher = fs.watch(this.o.root, { recursive: true }, (_ev, f) => { if (f) this.changed(String(f).replace(/\\/g, '/')); });
@@ -236,28 +234,6 @@ export class Live {
       this.chatTimer = setInterval(() => void this.pollChats(false), this.o.chatsEveryMs ?? 15000);
     } else log.warn('brain', 'no chats.mjs in this brain: no chat events', { data: { file: this.chatsScript } });
     log.info('brain', 'live feed started', { data: { root: this.o.root, sources: this.src.map(x => x.id), away: away.length } });
-  }
-
-  /** content hash of each playbook: a save that leaves the text as it was (a touch, an editor re-save) is no event */
-  private playbooks = new Map<string, string>();
-
-  /** Baseline of the playbooks' hashes (at start): only a later change of content is an event. */
-  private hashPlaybooks(): void {
-    let names: string[] = [];
-    try { names = fs.readdirSync(path.join(this.o.root, 'playbooks')).filter(n => n.endsWith('.md')); } catch { return; }
-    for (const n of names) { const h = this.fileHash(`playbooks/${n}`); if (h) this.playbooks.set(`playbooks/${n}`, h); }
-  }
-
-  private fileHash(f: string): string | null {
-    try { return hash(fs.readFileSync(path.join(this.o.root, f))); } catch { return null; }
-  }
-
-  /** A playbook event when its content changed since the last look (deleted or unreadable: nothing). */
-  playbookEvent(f: string): RawEvent[] {
-    const h = this.fileHash(f);
-    if (!h || this.playbooks.get(f) === h) return [];
-    this.playbooks.set(f, h);
-    return [{ kind: 'playbook', title: f.replace(/^playbooks\/|\.md$/g, ''), detail: '', file: f }];
   }
 
   stop(): void {
@@ -310,7 +286,6 @@ export class Live {
   changed(f: string): void {
     if (this.stopped || IGNORED.test(f)) return;
     this.o.onFile?.(f);
-    if (/^playbooks\/[^/]+\.md$/.test(f)) return this.debounce(f, () => { const ev = this.playbookEvent(f); if (ev.length) this.o.onEvents(ev); });
     if (/^ops\/state\/inbox\//.test(f)) return this.debounce('inbox', () => this.o.onEvents(this.inboxEvents()), 3000);
     const s = this.src.find(x => this.fileOf(x) === f);
     if (!s) return;

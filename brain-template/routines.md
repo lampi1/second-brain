@@ -23,5 +23,4 @@ Read when: the request matches a routine. Write when: a recurring procedure is l
 
 ## Brain maintenance ("fai manutenzione")
 1. `node ops/tools/brain-lint.mjs` (sizes, duplicates, map rows) and `node ops/tools/test.mjs` (offline tests).
-2. `node ops/tools/playbook.mjs list`: points with more "harmful" than "helpful" votes go back to {{OWNER}}.
-3. Propose the fixes; apply only after the ok.
+2. Propose the fixes; apply only after the ok.

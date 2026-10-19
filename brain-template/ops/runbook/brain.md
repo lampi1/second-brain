@@ -51,13 +51,6 @@ Tutti i comandi partono dalla cartella del cervello (`{{BRAIN}}`); sono in sola 
 - **Note**: gli hook che consegnano la posta a fine turno li installa solo il proprietario:
   `node ops/tools/install-inbox-hooks.mjs --dry` mostra cosa cambierebbe.
 
-## Cursor non vede gli agenti specialisti
-
-- **Dove**: le copie generate in `.cursor/agents/` (le definizioni vere sono in `.claude/agents/`).
-- **Comando**: `node ops/tools/brain-lint.mjs` (sezione "Puntatori agenti"); per rigenerarle (scrive):
-  `node harness/cursor/sync-agents.mjs`.
-- **Atteso**: "Puntatori agenti non allineati: 0".
-
 ## Controllo generale ("il cervello sta bene?")
 
 - **Comando**: `node ops/tools/test.mjs` (test offline, cartelle temporanee) e `node ops/tools/brain-lint.mjs`

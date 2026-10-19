@@ -26,14 +26,12 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 | `ops/AGENTS.md` | Production rules and commands of {{OWNER}}'s job | Production, customers, incidents | Production rules change |
 | `ops/runbook/` | Procedures, one file per topic (`index.md`) | A problem is described (search it first) | A procedure is learned |
 | `rules/qa.md` | {{OWNER}}'s testing rules | A QA chat, a test case, verifying a fix | {{OWNER}} states or corrects a QA rule |
-| `rules/agent-standard.md` | How a specialist agent file is written | Creating or changing an agent | The agent standard changes |
 | `brain-rules.md` | How the brain itself is changed | Before changing any rule, skill, agent or test | {{OWNER}} changes how the brain is edited |
 | `tests/behavior.md` | Behaviour test cases, one per real correction | Before changing a rule; "testa il cervello" | {{OWNER}} corrects a behaviour |
 | `proposals.md` | Every improvement proposal with its metric and outcome | Before proposing an improvement | A proposal is made, answered, applied or measured |
 | `ai-errors.md` | Every AI error, one line, permanent | A review; "che errori fa l'IA?" | A correction or a proven wrong claim (`mem.mjs error`) |
 | `ai-wins.md` | {{OWNER}}'s explicit praise, one line, permanent | With `ai-errors.md` in a review | Never by hand: the hooks write it |
 | `ai-reflections.md` | The AI's own reasoning about itself and the work | A review; "come sta andando l'IA?" | Only `mem.mjs riflessione`, at the end of a job, at most one a day per chat |
-| `playbooks/` | One notebook per specialist agent | Only by that specialist at its start | Only via `ops/tools/playbook.mjs` |
 | `harness/tools.md` | Claude tool → Cursor equivalent | You run in Cursor; a rule must work in both | A tool of either harness changes |
 | `harness/cursor/` | Cursor adapters (context boot, guards, chat reader, agent pointers) | Something must work in Cursor too | A rule changes how Cursor must behave |
 
@@ -49,5 +47,5 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 `AGENTS.md START-HERE.md map.md hub.md code.md me.md now.md ideas.md routines.md` · `journal/` · `ops/` (AGENTS.md, runbook/,
 tools/: `mem.mjs` memory lines, `inbox.mjs` mail between chats, `chat-prompt.mjs` new-chat prompts, `ctx.mjs` bounded thread context, `day.mjs`
 brief/report, `cost.mjs` costs, `wt-land.mjs` worktree → main, `brain-lint.mjs` checks, `brain-site.mjs` local site,
-`playbook.mjs` notebooks, `session-find.mjs` old chats; offline tests `node ops/tools/test.mjs`) · `rules/` ·
-`.claude/` (agents/, hooks/) · `harness/` · `playbooks/` · `tests/`.
+`session-find.mjs` old chats; offline tests `node ops/tools/test.mjs`) · `rules/` ·
+`.claude/` (hooks/) · `harness/` · `tests/`.
