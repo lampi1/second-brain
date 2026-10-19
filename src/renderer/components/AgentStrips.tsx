@@ -2,12 +2,13 @@
 // strip under the other, in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside a
 // group); each browser tab sits right under the chat that drives it. There is no drag and no saved order (SPEC 10-11):
 // the user expands, maximizes or opens a strip in focus mode, the Orchestrator decides where it goes. Delegated chats
-// (ADR 0083) sit indented under the chat that delegated them (lib/chat-tree.ts), each a thread-like card until it is
-// opened (DelegationCard.tsx); a parent folds and unfolds its children, and the fold is kept across restarts.
+// (ADR 0083) sit under the chat that delegated them (lib/chat-tree.ts), each a thread card on a curved thread line
+// that expands in place into its chat (DelegationCard.tsx); a parent's KidsBar folds and unfolds its children (the fold
+// is kept across restarts); a root chat the Orchestrator started says so above it.
 import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
 import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
 import { areaOf } from '../lib/agent-order';
-import { chatTree, visibleTree, type TreeNode } from '../lib/chat-tree';
+import { chatTree, childState, visibleTree, type TreeNode } from '../lib/chat-tree';
 import { schedule } from '../lib/viewports';
 import { useApp } from '../store/store';
 import { sameList } from '../store/state';
@@ -17,7 +18,8 @@ import { t as tr } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
-import { DelegationCard, TreeToggle } from './DelegationCard';
+import { DelegationCard, KidsBar, TreeRails } from './DelegationCard';
+import { AgentAvatar } from './AgentAvatar';
 import { toggleMaximize } from '../actions';
 import { pairOf, pairStyle } from '../lib/pairs';
 import { useCloudIds } from '../store/cloud';
@@ -95,23 +97,42 @@ export function AgentStrips() {
         const node = lead.kind === 'chat' ? nodes.get(lead.id) : undefined, depth = max ? 0 : node?.depth ?? 0;
         const firstOfArea = !max && lead.kind === 'chat' && depth === 0 && area !== lastArea;
         if (lead.kind === 'chat' && depth === 0) lastArea = area;
-        // a delegated chat not opened yet is its card; opened, the full strip (writable), indented the same
-        const card = !max && lead.kind === 'chat' && depth > 0 && expansion[lead.id] !== true;
+        // a delegated chat is its thread card (expanded in place into its chat), the full strip only maximized
+        const card = !max && lead.kind === 'chat' && depth > 0;
         const accent = side.length ? pairs[tiles.indexOf(side[0]!)] ?? null : lead.kind === 'browser' && !max && owners[lead.id] ? pairs[tiles.indexOf(lead)] ?? null : null;
         const owned = lead.kind === 'browser' && !max && !!owners[lead.id];
         // the strips enter in turn (agent-strips.css, off under reduced motion)
         return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
           {firstOfArea && <h3 className="workspace-area">{area || tr('product.noArea')}</h3>}
           {/* a chat keeps the same parent with or without its browsers beside it: expanding never remounts it */}
-          {card ? <DelegationCard chatId={lead.id} /> : lead.kind === 'chat'
+          {card && node && <ChildRails node={node} />}
+          {!max && lead.kind === 'chat' && depth === 0 && <Origin chatId={lead.id} />}
+          {card ? (side.length ? <div className="strip-pair" data-testid={`strip-pair-${lead.id}`}><DelegationCard chatId={lead.id} /><div className="strip-pair-side">{side.map(pane)}</div></div> : <DelegationCard chatId={lead.id} />) : lead.kind === 'chat'
             ? <div className={side.length ? 'strip-pair' : 'strip-solo'} {...(side.length ? { 'data-testid': `strip-pair-${lead.id}` } : {})}>{pane(lead)}{side.length > 0 && <div className="strip-pair-side">{side.map(pane)}</div>}</div>
             : pane(lead)}
           {/* Child activity remains visible when its parent is collapsed, expanded or maximized. */}
           {lead.kind === 'chat' && <ChildStrips chatId={lead.id} />}
-          {!max && node && node.children.length > 0 && <TreeToggle chatId={lead.id} n={node.children.length} working={node.working} />}
+          {!max && node && node.children.length > 0 && <KidsBar chatId={lead.id} />}
         </div>;
       })}
     </div>
+  </div>;
+}
+
+/** A delegated card's thread lines, tinted by its state. */
+function ChildRails({ node }: { node: TreeNode }) {
+  const state = useApp(s => { const c = s.chats[node.id]; return c ? childState(c) : 'closed'; });
+  return <TreeRails node={node} state={state} />;
+}
+
+/** "Orchestrator ha avviato questa chat · 09:12" above a root chat the Orchestrator started. */
+function Origin({ chatId }: { chatId: string }) {
+  const at = useApp(s => { const c = s.chats[chatId]; return c && !c.isOrchestrator && c.run?.startedBy === 'orchestrator' ? c.run.startedAt : 0; });
+  const avatar = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator)?.agent?.avatar);
+  if (!at) return null;
+  return <div className="tree-origin" data-testid={`tree-origin-${chatId}`}>
+    <AgentAvatar avatar={avatar} name="Orchestrator" size={18} />
+    <span><b>Orchestrator</b> {tr('tree.origin', { time: new Date(at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) })}</span>
   </div>;
 }
 

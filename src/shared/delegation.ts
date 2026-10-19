@@ -41,7 +41,7 @@ export interface ChatDelegation {
   /** the tool classes the contract narrowed it to (absent = its role's, bounded by the parent's) */
   tools?: ToolClass[];
   /** its agent_report, once given */
-  result?: { outcome: DelegationOutcome; summary: string; at: number };
+  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[] };
 }
 /** A delegation limit the chat hit, shown on it until it delegates again. */
 export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number; at: number }
@@ -138,7 +138,10 @@ export function readDelegation(v: unknown): ChatDelegation | null {
   if (!d || typeof d !== 'object' || !isWorkRole(d.role) || typeof d.goal !== 'string' || !Array.isArray(d.doneWhen) || !d.doneWhen.every(x => typeof x === 'string')
     || typeof d.at !== 'number' || !Number.isFinite(d.at)) return null;
   const r = d.result as Record<string, unknown> | undefined;
-  const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number' ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at } : undefined;
+  const crit = Array.isArray(r?.doneWhen) ? (r!.doneWhen as unknown[]).filter((x): x is { criterion: string; met: boolean } => !!x && typeof (x as { criterion?: unknown }).criterion === 'string' && typeof (x as { met?: unknown }).met === 'boolean')
+    .slice(0, CRITERIA_MAX).map(x => ({ criterion: x.criterion.slice(0, CRITERION_MAX), met: x.met })) : [];
+  const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number'
+    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}) } : undefined;
   const tools = Array.isArray(d.tools) && d.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? d.tools as ToolClass[] : undefined;
   return { role: d.role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}) };
 }

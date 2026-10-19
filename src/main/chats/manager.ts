@@ -1406,7 +1406,7 @@ export class ChatManager implements ChatService {
     if (!d || !parentId) throw new Error('agent_report: only a delegated chat reports (agent_delegate started it); report to the Orchestrator with send_to_chat.');
     if (d.result) throw new Error('agent_report: this delegation already has its result.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
-    r.s.delegation = { ...d, result: { outcome: result.outcome, summary: result.summary, at } };
+    r.s.delegation = { ...d, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
     const run = r.s.run;
     if (run && run.endedAt === undefined) {
       run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };

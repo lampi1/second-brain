@@ -1,6 +1,7 @@
 // Direct parent-to-child delegation in the real app (ADR 0083), with the fake Claude CLI calling the chat's own MCP
 // endpoint (agent_delegate, agent_report) as the real CLI would: a Strategist launches a Scout and a Sentinel, both show
-// as indented children under it in the Grindhouse and in the sidebar tree, their results come back to it as messages,
+// as thread cards under it in the Grindhouse (expanding in place into their chat, "Vai alla chat" opening focus mode)
+// and in the sidebar tree (a row brings its card on screen), their results come back to it as messages,
 // and the fold of the tree survives a restart; a child's question shows in the parent's open chat and the child goes on
 // after the answer; a child's permission above its parent's is refused visibly; three Scouts run at once, each one
 // writable; the parallel limit refuses a call over it and shows on the parent. Hidden window (SB_HIDDEN).
@@ -72,18 +73,20 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children right under the parent, indented, as thread-like cards with their result
+    // the Grindhouse: the children right under the parent, on thread lines, as thread cards with their result
     await page.getByTestId('nav-home').click();
     const card = page.getByTestId(`delegation-card-${scout.id}`);
     await expect(card).toBeVisible();
-    await expect(page.getByTestId(`delegation-result-${scout.id}`)).toHaveText('Consegnato');
-    await expect(card).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(page.getByTestId(`delegation-state-${scout.id}`)).toHaveText('finito');
+    await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(card).toContainText('esito inviato a Strategist');
     await expect(card).toContainText('Scout');
     await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toContainText('La suite passa');
     const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, cBox = (await card.boundingBox())!;
     expect(cBox.x).toBeGreaterThan(pBox.x + 8);
     expect(cBox.y).toBeGreaterThan(pBox.y);
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2');
+    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 figli');
+    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 finiti');
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
@@ -94,9 +97,21 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await shot(page, 'delegation-tree-light');
     await theme(page, 'dark');
 
-    // a card opens the whole child chat in place, writable like any strip
-    await card.click();
+    // a click on a card expands it in place into the whole child chat, writable like any strip; on its head, folds it
+    await card.locator('.dc-title').click();
+    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toBeVisible();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
+    await card.locator('.dc-title').click();
+    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toHaveCount(0);
+    // a row of the sidebar tree brings its card on screen, expanded
+    await page.getByTestId(`nav-tree-${sentinel.id}`).locator('.tn-main').click();
+    await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toHaveAttribute('data-open', 'true');
+    await expect(page.getByTestId(`chat-input-${sentinel.id}`)).toBeVisible();
+    // "Vai alla chat" opens it in focus mode
+    await page.getByTestId(`delegation-open-${scout.id}`).click();
+    await expect(page.getByTestId('focus-view')).toBeVisible();
+    await expect(page.getByTestId('focus-view').getByTestId(`chat-input-${scout.id}`)).toBeVisible();
+    await page.getByTestId('focus-exit').click();
 
     // folding the parent hides its children in both views
     await page.getByTestId(`tree-toggle-${parent.id}`).click();
@@ -159,7 +174,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).startsWith('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
-    await page.getByTestId(`delegation-card-${shell.id}`).click();
+    await page.getByTestId(`delegation-card-${shell.id}`).locator('.dc-title').click();
     await expect(page.getByTestId(`tile-chat-${shell.id}`)).toContainText('va oltre i permessi di «Piano rilascio»');
     await page.getByTestId(`tile-chat-${shell.id}`).getByText('va oltre i permessi', { exact: false }).scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
@@ -184,10 +199,11 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     const kids = await childrenOf(page, parent.id);
     await page.getByTestId('nav-home').click();
     for (const k of kids) await expect(page.getByTestId(`delegation-card-${k.id}`)).toBeVisible();
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3');
+    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 figli');
+    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 in corso');
     // each one is a chat of its own: open it and write to it
     const first = kids[0]!;
-    await page.getByTestId(`delegation-card-${first.id}`).click();
+    await page.getByTestId(`delegation-card-${first.id}`).locator('.dc-title').click();
     const input = page.getByTestId(`chat-input-${first.id}`);
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');

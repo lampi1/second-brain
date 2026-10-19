@@ -25,7 +25,7 @@ import { answerLater, openQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setBrowserOpen, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -263,6 +263,11 @@ export function focusChat(chatId: string): void {
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode && u.focusMode !== chatId) setFocusMode(chatId);
   if (u.maximized && u.maximized !== `chat:${chatId}`) setMaximized(null);
+  // a delegated chat under a folded parent: its ancestors unfold, so its card is on screen (ADR 0083)
+  const folded = ui.get().prefs.treeCollapsed;
+  for (let p = c.parentId, n = 0; p && n < 16; p = s.chats[p]?.parentId, n++) if (folded[p]) setTreeCollapsed(p, false);
+  const orch = orchestratorIdOf(s);
+  if (orch && folded[orch]) setTreeCollapsed(orch, false);
   setChatExpanded(chatId, true); // a collapsed strip opens: its input mounts and takes the keyboard
   flashTile(`chat:${chatId}`);
   requestFocus(chatId);
