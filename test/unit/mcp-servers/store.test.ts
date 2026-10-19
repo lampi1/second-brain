@@ -34,6 +34,11 @@ describe('checkDef', () => {
     expect(() => checkDef({ ...http, url: 'http://example.com/mcp' })).toThrow(/https/);
     expect(() => checkDef({ ...http, secrets: [{ where: 'env', name: 'X' }] })).toThrow(/intestazione/);
     expect(() => checkDef({ ...stdio, args: ['a\nb'] })).toThrow(/Argomento 1/);
+    expect(() => checkDef({ ...stdio, args: ['mcp-remote', '--header', 'Authorization: Bearer sk_live_9f8e7d6c5b4a39281706aBcD'] })).toThrow(/Argomento 3.*token/);
+    expect(() => checkDef({ ...stdio, args: ['--header=Authorization: x'] })).toThrow(/token/);
+    expect(() => checkDef({ ...stdio, env: { GH_HEADER: 'Bearer abc' } })).toThrow(/segreto/);
+    expect(() => checkDef({ ...http, headers: { 'X-Team': 'Bearer abc' } })).toThrow(/segreto/);
+    expect(checkDef({ ...stdio, args: ['-y', '@scope/pkg-2024-release-candidate-9', 'C:\\tools\\server2024build-final-x64.js', 'https://example.com/v1/mcp'] }).args).toHaveLength(4);
   });
 });
 
@@ -54,6 +59,22 @@ describe('McpServerStore', () => {
     expect(() => s.setSecret('azure-devops', 'env:AZURE_DEVOPS_PAT', 'has space')).toThrow(/spazi/);
     s.deleteSecret('azure-devops', 'env:AZURE_DEVOPS_PAT');
     expect(s.secret('azure-devops', { where: 'env', name: 'AZURE_DEVOPS_PAT' })).toBeNull();
+  });
+
+  it('drops a stdio token when its command, arguments or plain env change', () => {
+    const s = new McpServerStore(tmp('mcp-store'), cipher);
+    const slot = { where: 'env' as const, name: 'AZURE_DEVOPS_PAT' };
+    s.upsert(stdio);
+    s.setSecret('azure-devops', 'env:AZURE_DEVOPS_PAT', 'pat-123456789012345');
+    s.upsert({ ...stdio, label: 'ADO' }, 'azure-devops');
+    expect(s.secret('azure-devops', slot)).toBe('pat-123456789012345');
+    for (const change of [{ args: ['-y', '@evil/other-package'] }, { env: { NODE_OPTIONS: '--require /tmp/x.js' } }, { command: 'node' }]) {
+      s.upsert(stdio, 'azure-devops');
+      s.setSecret('azure-devops', 'env:AZURE_DEVOPS_PAT', 'pat-123456789012345');
+      s.upsert({ ...stdio, ...change }, 'azure-devops');
+      expect(s.secret('azure-devops', slot)).toBeNull();
+    }
+    expect(fingerprint(stdio as never, slot)).not.toBe(fingerprint({ ...stdio, args: [] } as never, slot));
   });
 
   it('drops a token when its server now points to another host, keeps it for a path change', () => {

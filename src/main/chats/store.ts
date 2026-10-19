@@ -89,6 +89,8 @@ export interface StoredChat {
   /** the chat that delegated this one (agent_delegate) and the contract it got (shared/delegation.ts) */
   parentId?: string;
   delegation?: ChatDelegation;
+  /** a delegated chat's ancestors' catalog roles, frozen at its creation (its managed MCP access, ADR 0086) */
+  mcpAncestors?: (string | null)[];
 }
 
 export interface PastSession { sessionId: string; at: number; notePath: string }
@@ -130,6 +132,8 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
     ...(typeof c.parentId === 'string' && /^[\w-]{1,80}$/.test(c.parentId) && c.parentId !== c.id ? { parentId: c.parentId } : {}),
     ...(readDelegation(c.delegation) ? { delegation: readDelegation(c.delegation)! } : {}),
+    ...(Array.isArray(c.mcpAncestors) && c.mcpAncestors.length <= 16 && c.mcpAncestors.every(x => x === null || typeof x === 'string' && /^[\w-]{1,80}$/.test(x))
+      ? { mcpAncestors: c.mcpAncestors as (string | null)[] } : {}),
   };
 }
 

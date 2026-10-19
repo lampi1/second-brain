@@ -7,11 +7,10 @@
 // at 2 MB; unreadable ones are skipped. Pure apart from the reads; used by service.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { MCP_ID, RESERVED_IDS, SECRET_NAME, idFrom, type McpImportCandidate, type McpImportSource, type McpSecretSlot, type McpServerDef } from '../../shared/mcp-servers';
+import { MCP_ID, RESERVED_IDS, SECRET_NAME, TOKENISH, idFrom, secretLooking, type McpImportCandidate, type McpImportSource, type McpSecretSlot, type McpServerDef } from '../../shared/mcp-servers';
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw => (v && typeof v === 'object' && !Array.isArray(v) ? v as Raw : {});
-const TOKENISH = /^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9_\-.=+/:]{24,}$/;
 const TOKEN_FLAG = /^--?[a-z-]*?(token|pat|api[-_]?key|apikey|secret|password|auth(orization)?|bearer)(=|$)/i;
 
 function read(file: string): string | null {
@@ -30,7 +29,7 @@ export function convert(name: string, raw: Raw, source: McpImportSource): { def:
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(obj(raw.headers ?? raw.http_headers))) {
       if (typeof v !== 'string') continue;
-      if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization' || TOKENISH.test(v) || v.includes('${')) {
+      if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization' || TOKENISH.test(v) || secretLooking(v) || v.includes('${')) {
         const bearer = /^bearer\s/i.test(v);
         secrets.push({ where: 'header', name: k, ...(bearer ? { prefix: 'Bearer ' } : {}) });
         dropped.push(`intestazione ${k}`);
@@ -50,7 +49,7 @@ export function convert(name: string, raw: Raw, source: McpImportSource): { def:
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj(raw.env))) {
     if (typeof v !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(k)) continue;
-    if (SECRET_NAME.test(k) || TOKENISH.test(v) || v.includes('${')) { secrets.push({ where: 'env', name: k }); dropped.push(`variabile ${k}`); }
+    if (SECRET_NAME.test(k) || TOKENISH.test(v) || secretLooking(v) || v.includes('${')) { secrets.push({ where: 'env', name: k }); dropped.push(`variabile ${k}`); }
     else env[k] = v;
   }
   for (const k of Array.isArray(raw.env_vars) ? raw.env_vars : []) if (typeof k === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(k)) { secrets.push({ where: 'env', name: k }); dropped.push(`variabile ${k}`); }
@@ -59,7 +58,13 @@ export function convert(name: string, raw: Raw, source: McpImportSource): { def:
   for (let i = 0; i < list.length; i++) {
     const a = list[i]!;
     if (TOKEN_FLAG.test(a)) { dropped.push(`argomento ${a.split('=')[0]}`); if (!a.includes('=')) i++; continue; }
-    if (TOKENISH.test(a) && !/[\\/]/.test(a) && !a.startsWith('@')) { dropped.push('un argomento che sembra un token'); continue; }
+    if (secretLooking(a) || a.includes('${')) {
+      // the value of a separate flag (`--header "Authorization: Bearer …"`): the flag goes with it
+      const prev = args[args.length - 1];
+      if (!/^--?[\w-]+=/.test(a) && prev && /^--?[\w-]+$/.test(prev)) { args.pop(); dropped.push(`argomento ${prev} con il suo valore`); }
+      else dropped.push('un argomento che sembra un token');
+      continue;
+    }
     args.push(a);
   }
   return { def: { ...base, transport: 'stdio', command: raw.command, args, ...(Object.keys(env).length ? { env } : {}), secrets: dedupe(secrets) }, dropped };
