@@ -10,4 +10,4 @@ routing by intent). `me.md` is already in context through `~/.claude/CLAUDE.md`.
 
 - Memory lines (now, journal, errors, ideas): only with `node {{BRAIN}}/ops/tools/mem.mjs` (the main checkout, from
   worktrees too).
-- A preference or a correction about how to work → the `brain-editor` agent with {{OWNER}}'s exact words.
+- A preference or a correction about how to work → the `brain-edit` skill with {{OWNER}}'s exact words.

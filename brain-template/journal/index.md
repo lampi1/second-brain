@@ -20,7 +20,7 @@ commit del giorno) e ne ricava le frasi per lo standup. Un esempio inventato, pe
 
 ```
 # 2026-01-15 (giovedì)
-- 09:20 · fatto · PR "Correggi il login scaduto" aperta, test verdi, reviewer senza rilievi
+- 09:20 · fatto · PR "Correggi il login scaduto" aperta, test verdi, review senza rilievi
 - 10:05 · interruzione · 20 min · chiamata non prevista sul rilascio · fonte: telefono
 - 11:40 · decisione · il rilascio slitta a lunedì: manca il collaudo
 - 15:10 · attrito · 15 min · ambiente di test giù, rifatto il login due volte · fonte: tool

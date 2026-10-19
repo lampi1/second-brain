@@ -4,7 +4,7 @@ when: {"prompt":["d'ora in poi","non fare più","regola","rule","skill","agente 
 # Brain rules: how the brain itself is changed
 
 The rules every agent follows when it changes the brain (rules, preferences, skills, agents, tests), above all the
-`brain-editor` agent, which applies {{OWNER}}'s requests like "d'ora in poi fai X", "non fare più Y", "cambia questa
+`brain-edit` skill, which applies {{OWNER}}'s requests like "d'ora in poi fai X", "non fare più Y", "cambia questa
 skill". Read when: before changing any rule, preference, skill, agent, output style or test. Write when: {{OWNER}}
 changes how the brain must be edited.
 

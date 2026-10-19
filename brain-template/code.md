@@ -17,7 +17,8 @@ rule or a repo fact changes.
 - **Read the repo first**: its `AGENTS.md`/`README`, then the code around the change. Match its style and idioms.
 - **Prove it**: a bug fix starts from a failing test or a reproduced symptom; "done" = the change seen working in the
   real product, plus the repo's checks green.
-- **Review**: the `reviewer` agent on the diff before "done" or a commit; fix what it confirms.
+- **Review**: the `code-review` skill on the diff before "done" or a commit (in the app: a Sentinel chat); fix what
+  it confirms.
 - **Commits and PRs**: in English, conventional messages; push and PRs only where {{OWNER}} allows it.
 - **Other people's code**: never rewrite what you were not asked to touch; a bug you find elsewhere is reported, not
   fixed inside your change.

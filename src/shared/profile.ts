@@ -2,7 +2,7 @@
 // Shared by main (src/main/brain/profile.ts reads and patches the file) and the renderer (Settings → Il mio profilo,
 // first interview). Only these fields are ever written by the app; the rest of me.md stays byte-identical.
 
-/** The fields the app may change in me.md. Everything else is read-only here and grows through brain-editor. */
+/** The fields the app may change in me.md. Everything else is read-only here and grows through the brain-edit skill. */
 export interface ProfileFields {
   name: string;
   role: string;
@@ -22,7 +22,7 @@ export interface OwnerProfile extends ProfileFields {
   rules: ProfileRule[];
   /** the template's "Reply style" text ('' when unknown): the first interview may replace it, never a custom one */
   replyStyleDefault: string;
-  /** fields the file's layout does not let the app change safely (left to brain-editor) */
+  /** fields the file's layout does not let the app change safely (left to the brain-edit skill) */
   locked: (keyof ProfileFields)[];
   /** how the brain grows with use: the journal days written and the latest one (YYYY-MM-DD) */
   growth: { journalDays: number; lastJournal: string | null };

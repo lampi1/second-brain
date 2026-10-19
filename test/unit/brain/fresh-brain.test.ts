@@ -118,7 +118,7 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     expect(tools.startsWith(fwd(path.join(userData, 'brain-tools')))).toBe(true);
     // the plugin: the product's agents, skills and output styles, the product hooks, the boot rules
     expect(launch.args).toContain('--plugin-dir');
-    for (const f of ['agents/reviewer.md', 'agents/brain-editor.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
+    for (const f of ['skills/code-review/SKILL.md', 'skills/code-investigation/SKILL.md', 'skills/brain-edit/SKILL.md', 'skills/flow-review/SKILL.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
       expect(fs.existsSync(path.join(launch.pluginDir!, f)), f).toBe(true);
     }
     const hooks = fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8');
@@ -150,9 +150,10 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     fs.mkdirSync(path.join(root, 'harness'));
     fs.writeFileSync(path.join(root, 'harness/models.json'), JSON.stringify({ models: [] }));
     expect(brainFile(root, 'harness/models.json')).toBe(path.join(root, 'harness/models.json'));
-    fs.mkdirSync(path.join(root, '.claude/agents'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.claude/agents/reviewer.md'), '---\nname: reviewer\ndescription: mine\n---\nMy reviewer.\n');
+    fs.mkdirSync(path.join(root, '.claude/skills/code-review'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.claude/skills/code-review/SKILL.md'), '---\nname: code-review\ndescription: mine\n---\nMy review.\n');
     const launch = claudeLaunch(path.join(base, 'userData'), { domains: [{ name: 'brain', root }] });
-    expect(fs.readFileSync(path.join(launch.pluginDir!, 'agents/reviewer.md'), 'utf8')).toContain('My reviewer.');
+    expect(fs.readFileSync(path.join(launch.pluginDir!, 'skills/code-review/SKILL.md'), 'utf8')).toContain('My review.');
+    expect(fs.existsSync(path.join(launch.pluginDir!, 'agents'))).toBe(false); // the product ships no sub-agents
   }, 60_000);
 });

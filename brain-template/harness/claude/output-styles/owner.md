@@ -6,7 +6,7 @@ keep-coding-instructions: true
 
 # Reply style for {{OWNER}}
 
-Always on. Change it with the `brain-editor` agent ("d'ora in poi rispondi così..."), never by hand in a chat.
+Always on. Change it with the `brain-edit` skill ("d'ora in poi rispondi così..."), never by hand in a chat.
 
 ## Base rule
 - **First line = the answer or what {{OWNER}} can do now**, then the rest. One sentence, two at most.

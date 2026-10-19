@@ -69,7 +69,7 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
     id: 'scout', name: 'Scout', summary: 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
     instructions: 'Find and verify facts. Read code, logs, documents, web pages and the browser; run only read-only commands. Cite every source (path:line, URL, command and its output) and separate what you observed from what you infer. Change nothing.',
     output: 'Findings with their sources, open questions, and what could not be checked.',
-    tools: ['read', 'web', 'browser-read', 'shell-read'], ceiling: 'default', tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: [],
+    tools: ['read', 'web', 'browser-read', 'shell-read'], ceiling: 'default', tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: ['code-investigation'],
   },
   artisan: {
     id: 'artisan', name: 'Artisan', summary: 'Fa le modifiche: codice, file e configurazioni, con i controlli del repository.',
@@ -81,7 +81,7 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
     id: 'sentinel', name: 'Sentinel', summary: 'Verifica: esegue test e controlli e dice cosa passa e cosa no.',
     instructions: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. Do not fix what you find: report it.',
     output: 'Each criterion met or not, with the command run and its output; failures with how to reproduce them.',
-    tools: ['read', 'shell'], ceiling: 'default', tier: 'top', tierMax: 'top', independent: true, launches: ['scout'], skills: [],
+    tools: ['read', 'shell'], ceiling: 'default', tier: 'top', tierMax: 'top', independent: true, launches: ['scout'], skills: ['code-review'],
   },
   herald: {
     id: 'herald', name: 'Herald', summary: 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',

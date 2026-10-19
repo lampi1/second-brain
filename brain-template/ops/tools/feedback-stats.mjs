@@ -156,7 +156,7 @@ const errs = logLines('ai-errors.md');
 const TYPES = /· (test-passato-a-torto|bug-non-trovato|fatto-non-verificato|posto-sbagliato|regola-ignorata|richiesta-fraintesa|non-capito|azione-pericolosa|fuori-ruolo|blocco-aggirato|altro|[a-z-]+) · (detto|fatto)/;
 const errHead = l => l.slice(19, l.search(TYPES) > 0 ? l.search(TYPES) : 120);
 const errArea = l => { const h = errHead(l); return /orchestrator|orchestrator/i.test(h) ? 'Orchestrator' : h.match(/\b(Prod|B|A|OS|Pers)\b/)?.[1] ?? 'altro'; };
-const errType = l => { const h = errHead(l); return /orchestrator|orchestrator/i.test(h) ? 'Orchestrator' : /reviewer|investigator|packager|log-reader|brain-editor|flow-optimizer|sottoagente|subagent|agente /i.test(h) ? 'sottoagente' : 'chat'; };
+const errType = l => { const h = errHead(l); return /orchestrator|orchestrator/i.test(h) ? 'Orchestrator' : /log-reader|sottoagente|subagent|agente /i.test(h) ? 'sottoagente' : 'chat'; };
 const count = (xs, f) => xs.reduce((m, x) => { const k = f(x); m[k] = (m[k] ?? 0) + 1; return m; }, {});
 
 // 4. DevOps (only with --devops): read-only GETs.

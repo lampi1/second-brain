@@ -1,7 +1,7 @@
 // The owner's profile in the brain's me.md: read for Settings → Il mio profilo and the first interview, patched only in
 // its managed fields (name, role, language, "Main work", "Reply style"); every other byte of the file is kept as it is,
-// so the rules brain-editor adds keep growing untouched. Why patch, not render: me.md belongs to the owner and their
-// agents; the app writes the least it can. Safety: a regular file directly inside the brain folder (no symlink, size
+// so the rules the brain-edit skill adds keep growing untouched. Why patch, not render: me.md belongs to the owner
+// and their agents; the app writes the least it can. Safety: a regular file directly inside the brain folder (no symlink, size
 // cap), the save carries the revision it read (a concurrent edit is refused, never overwritten), the write goes to a
 // temp file then a rename (no half-written me.md), single-line fields only (no markdown structure can be injected).
 // Used by main/index.ts ('profile:get', 'profile:save'); unit tests: test/unit/brain/profile.test.ts.
@@ -76,7 +76,7 @@ export function parseProfile(text: string): Parsed {
 const isReply = (r: ProfileRule) => /^reply style$/i.test(r.title);
 const mentions = (line: string, name: string) => new RegExp(`(^|[^\\p{L}\\p{N}])${escape(name)}([^\\p{L}\\p{N}]|$)`, 'u').test(line);
 const ownerLines = (template: string) => template.split(/\r?\n/).filter(l => l.includes('{{OWNER}}') && !/^# /.test(l));
-/** Fields the app cannot rewrite without losing or contradicting something: the agents' brain-editor edits them instead. */
+/** Fields the app cannot rewrite without losing or contradicting something: an agent with the brain-edit skill edits them instead. */
 export function lockedFields(p: Parsed, template = ''): (keyof ProfileFields)[] {
   const locked: (keyof ProfileFields)[] = [];
   // a name the owner also wrote into their own lines (not the template's) would be left stale there

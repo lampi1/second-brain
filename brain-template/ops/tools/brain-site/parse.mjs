@@ -126,7 +126,7 @@ export function ideas(text) {
     else if (cur._k && /^\s{2,}\S/.test(l)) cur[cur._k] += ` ${l.trim()}`;
     else if (/^- /.test(l)) cur._k = null;
   }
-  // an idea is "dell'IA" when its Fonte starts with "IA" (format of brain-editor, 2026-10-10)
+  // an idea is "dell'IA" when its Fonte starts with "IA" (format of the brain-edit skill, 2026-10-10)
   return out.map(({ _k, ...x }) => ({ ...x, chi: /^ia\b/i.test(x.fonte.trim()) ? 'IA' : 'Owner', testo: x.testo.trim(), scaduta: /\d{4}-\d{2}-\d{2}/.test(x.riprendere) ? x.riprendere.match(/\d{4}-\d{2}-\d{2}/)[0] : '' }));
 }
 

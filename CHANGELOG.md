@@ -43,6 +43,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   `node scripts/agent-avatar-sheets.mjs` → `docs/screenshots/agent-avatars/`.
 
 ### Changed
+- The brain template ships no hidden sub-agents (issue #89): brain-editor, flow-optimizer, code-investigator and
+  reviewer are now the skills `brain-edit` (loaded by Scribe), `flow-review`, `code-investigation` (Scout) and
+  `code-review` (Sentinel), with their references and texts updated; an old notebook of a removed specialist is named
+  by `playbook.mjs list`, never deleted.
 - **The Orchestrator changes agents by itself** (ADR 0082, #84 point 6): `agent_update`, `agent_propose`,
   `agent_rollback`, `agent_archive`, `agent_restore` and a "Contesto massimo" from `agent_learn_propose` apply at once
   (a behavioural change as a trial version), each logged on the Skill page with "Annulla" and in the feed with "Annulla

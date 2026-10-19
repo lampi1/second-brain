@@ -19,7 +19,7 @@ git locale della cartella: niente si perde, niente esce dal PC.
 1. **Apri una chat nella cartella del cervello** («Nuovo agente» nella Grindhouse dell'app, o Ctrl+N) e scrivi "cosa devo fare oggi?".
    Il primo giorno la risposta è corta: è normale, il cervello è vuoto.
 2. **Dì come vuoi lavorare.** Leggi `me.md` e correggi a voce: "d'ora in poi rispondimi in tre righe", "non fare mai
-   commit da solo". La chat passa la frase all'agente `brain-editor`, che la scrive al posto giusto con un test.
+   commit da solo". La chat la scrive al posto giusto con un test, seguendo la skill `brain-edit`.
 3. **Apri il primo filo.** "Sto lavorando a X, il prossimo passo è Y": la chat scrive una riga in `now.md` e da lì
    la pagina Da fare la mostra.
 4. **Segna un'idea.** "Segnatelo: ..." e l'idea finisce in `ideas.md` (pagina Idee), con una data per riprenderla.

@@ -103,8 +103,8 @@ const mem = (...a) => run('mem.mjs', ['now', 'me', '--root', memRoot, ...a]);
 T('mem error --agent', () => {
   fs.writeFileSync(path.join(memRoot, 'ai-errors.md'), '# Errori\n');
   const line = '2026-10-14 10:00 · Alfa · Fix · prod · fatto-non-verificato · detto: x · vero: y · visto da: {{OWNER}}';
-  const r = run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'reviewer']);
-  ok(r.status === 0 && fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8').includes(`- ${line} · agente: reviewer`), `--agent tags the line: ${r.stdout}${r.stderr}`);
+  const r = run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'Explore']);
+  ok(r.status === 0 && fs.readFileSync(path.join(memRoot, 'ai-errors.md'), 'utf8').includes(`- ${line} · agente: Explore`), `--agent tags the line: ${r.stdout}${r.stderr}`);
   ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent', 'a b']).status === 1, '--agent: a type, no spaces');
   ok(run('mem.mjs', ['error', '--root', memRoot, '--text', line, '--agent']).status === 1, '--agent without its type refused');
   ok(run('mem.mjs', ['error', '--root', memRoot, '--agent', '--text', line]).status === 1, '--agent followed by another flag refused');
@@ -389,35 +389,35 @@ T('install-inbox-hooks', () => {
 
 T('playbook', () => {
   const empty = pbParse('');
-  let b = pbOp('reviewer', empty, 'propose', { text: 'Before a finding on SQL, check that the app DBs have no FKs · see review-catalog', source: 'ai-errors 2026-10-08 10:37 · reviewer', date: '2026-10-10' });
-  ok(b.Proposti[0].id === 'RV-1' && !b.Proposti[0].text.includes(' · ') && b.Punti.length === 0, `playbook propose: ${JSON.stringify(b)}`);
+  let b = pbOp('prod-log-reader', empty, 'propose', { text: 'Before a finding on SQL, check that the app DBs have no FKs · see review-catalog', source: 'ai-errors 2026-10-08 10:37 · review', date: '2026-10-10' });
+  ok(b.Proposti[0].id === 'PL-1' && !b.Proposti[0].text.includes(' · ') && b.Punti.length === 0, `playbook propose: ${JSON.stringify(b)}`);
   const refused = f => { try { f(); return false; } catch (e) { return e.code === 4; } };
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'Before any finding on SQL check that the app DBs have no FKs', source: 'x' })), 'playbook: near-duplicate refused');
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'new point', source: '' })), 'playbook: source required');
-  ok(refused(() => pbOp('reviewer', b, 'propose', { text: 'x'.repeat(301), source: 's' })), 'playbook: point too long');
+  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'Before any finding on SQL check that the app DBs have no FKs', source: 'x' })), 'playbook: near-duplicate refused');
+  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'new point', source: '' })), 'playbook: source required');
+  ok(refused(() => pbOp('prod-log-reader', b, 'propose', { text: 'x'.repeat(301), source: 's' })), 'playbook: point too long');
   // review 10/10: a line we can't read refuses the write instead of vanishing; "·" in a source can't break the fields
-  const good = pbRender('reviewer', pbOp('reviewer', b, 'accept', { id: 'RV-1', date: '2026-10-10' }));
+  const good = pbRender('prod-log-reader', pbOp('prod-log-reader', b, 'accept', { id: 'PL-1', date: '2026-10-10' }));
   ok(pbParse(good.replace('dal 2026-10-10', 'dal 2026-10-10   ').replace(/\n/g, '\r\n')).Punti.length === 1, 'playbook: trailing spaces and CRLF tolerated');
   ok(refused(() => pbParse(good.replace('+0/-0', '+0/−0'))), 'playbook: malformed line refused, not dropped');
   ok(refused(() => pbParse(`${good}\n## Appunti\n- x`)), 'playbook: unknown section refused');
-  const dots = pbOp('reviewer', pbParse(''), 'propose', { text: 'Primo punto qualsiasi', source: '{{OWNER}} · · fonte: chat 10/10', date: '2026-10-10' });
-  const back = pbParse(pbRender('reviewer', dots)).Proposti[0];
+  const dots = pbOp('prod-log-reader', pbParse(''), 'propose', { text: 'Primo punto qualsiasi', source: '{{OWNER}} · · fonte: chat 10/10', date: '2026-10-10' });
+  const back = pbParse(pbRender('prod-log-reader', dots)).Proposti[0];
   ok(back.text === 'Primo punto qualsiasi' && back.source === '{{OWNER}}, , fonte: chat 10/10' && back.date === '2026-10-10', `playbook: dots in source: ${JSON.stringify(back)}`);
-  b = pbOp('reviewer', b, 'accept', { id: 'RV-1', date: '2026-10-11' });
-  ok(b.Punti[0].id === 'RV-1' && b.Punti[0].date === '2026-10-11' && !b.Proposti.length, 'playbook accept');
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'harmful' });
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'harmful' });
-  b = pbOp('reviewer', b, 'vote', { id: 'RV-1', kind: 'helpful' });
+  b = pbOp('prod-log-reader', b, 'accept', { id: 'PL-1', date: '2026-10-11' });
+  ok(b.Punti[0].id === 'PL-1' && b.Punti[0].date === '2026-10-11' && !b.Proposti.length, 'playbook accept');
+  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'harmful' });
+  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'harmful' });
+  b = pbOp('prod-log-reader', b, 'vote', { id: 'PL-1', kind: 'helpful' });
   ok(b.Punti[0].up === 1 && b.Punti[0].down === 2, 'playbook vote');
-  ok(pbOp('reviewer', b, 'vote', { id: 'RV-1,RV-1', kind: 'helpful' }).Punti[0].up === 2, 'playbook: repeated id voted once');
-  ok(refused(() => pbOp('reviewer', b, 'vote', { id: 'RV-1,RV-9', kind: 'helpful' })) && b.Punti[0].up === 1, 'playbook: unknown id refuses the whole vote');
-  const round = pbParse(pbRender('reviewer', b));
-  ok(JSON.stringify(round) === JSON.stringify(b), `playbook render/parse round trip:\n${pbRender('reviewer', b)}`);
-  b = pbOp('reviewer', b, 'propose', { text: 'Report a finding only with a concrete failing input', source: '{{OWNER}} 2026-10-10' });
-  ok(b.Proposti[0].id === 'RV-2', 'playbook ids grow');
-  b = pbOp('reviewer', b, 'remove', { id: 'RV-1', why: 'more harmful than helpful', date: '2026-10-12' });
-  b = pbOp('reviewer', b, 'propose', { text: 'Third point about tests', source: 's' });
-  ok(b.Tolti[0].id === 'RV-1' && /tolto: more harmful/.test(b.Tolti[0].note) && b.Proposti[1].id === 'RV-3', 'playbook remove keeps history, ids never reused');
+  ok(pbOp('prod-log-reader', b, 'vote', { id: 'PL-1,PL-1', kind: 'helpful' }).Punti[0].up === 2, 'playbook: repeated id voted once');
+  ok(refused(() => pbOp('prod-log-reader', b, 'vote', { id: 'PL-1,PL-9', kind: 'helpful' })) && b.Punti[0].up === 1, 'playbook: unknown id refuses the whole vote');
+  const round = pbParse(pbRender('prod-log-reader', b));
+  ok(JSON.stringify(round) === JSON.stringify(b), `playbook render/parse round trip:\n${pbRender('prod-log-reader', b)}`);
+  b = pbOp('prod-log-reader', b, 'propose', { text: 'Report a finding only with a concrete failing input', source: '{{OWNER}} 2026-10-10' });
+  ok(b.Proposti[0].id === 'PL-2', 'playbook ids grow');
+  b = pbOp('prod-log-reader', b, 'remove', { id: 'PL-1', why: 'more harmful than helpful', date: '2026-10-12' });
+  b = pbOp('prod-log-reader', b, 'propose', { text: 'Third point about tests', source: 's' });
+  ok(b.Tolti[0].id === 'PL-1' && /tolto: more harmful/.test(b.Tolti[0].note) && b.Proposti[1].id === 'PL-3', 'playbook remove keeps history, ids never reused');
   let big = pbParse('');
   const distinct = k => Array.from({ length: 56 }, (_, j) => `p${k}w${j}`).join(' ').slice(0, 280); // no shared words
   for (let k = 0; k < 8; k++) { big = pbOp('qa', big, 'propose', { text: distinct(k), source: 's' }); big = pbOp('qa', big, 'accept', { id: big.Proposti[0].id }); }
@@ -430,6 +430,12 @@ T('playbook', () => {
   ok(cli(['accept', 'prod-log-reader', 'PL-1']).status === 0 && cli(['vote', 'prod-log-reader', 'PL-1', 'helpful']).status === 0, 'playbook CLI accept+vote');
   ok(/prod-log-reader: 1 punti/.test(cli(['list']).stdout), `playbook CLI list: ${cli(['list']).stdout}`);
   ok(cli(['propose', 'nobody', '--text', 'x', '--source', 's']).status === 4, 'playbook CLI unknown agent');
+  // a notebook left by a retired specialist is named by list, never read or deleted
+  fs.writeFileSync(path.join(proot, 'playbooks', 'retired-one.md'), '# Taccuino: retired-one\n');
+  fs.writeFileSync(path.join(proot, 'playbooks', 'README.md'), '# Playbooks\n');
+  const listed = cli(['list']);
+  ok(listed.status === 0 && /playbooks\/retired-one\.md: taccuino di uno specialista che non c'è più/.test(listed.stdout) && !/README/.test(listed.stdout), `playbook CLI list names an orphan notebook: ${listed.stdout}`);
+  ok(fs.existsSync(path.join(proot, 'playbooks', 'retired-one.md')), 'playbook CLI list never deletes an orphan notebook');
 });
 
 T('brain-site (own test file)', () => {

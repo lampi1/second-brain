@@ -63,6 +63,27 @@ describe('app-owned template utilities', () => {
     expect(fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8')).toContain('Other');
     expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
   }, 60_000); // renders the whole release template three times: slow on a loaded machine (check:branch runs 200 files)
+  it('a product text the release no longer ships leaves the copy and the plugin at the next render (no leftovers)', () => {
+    const template = path.join(base, 'template');
+    fs.cpSync(TEMPLATE, template, { recursive: true, filter: src => path.basename(src) !== 'node_modules' });
+    useTemplateRoot(template);
+    const root = brain();
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Anna' }, rules: { topicFiles: [], appRules: true } }));
+    fs.mkdirSync(path.join(template, 'harness/claude/skills/retired'));
+    fs.writeFileSync(path.join(template, 'harness/claude/skills/retired/SKILL.md'), '---\nname: retired\ndescription: old\n---\nOld skill.\n');
+    const userData = path.join(base, 'userData');
+    let dir = ensureTools(root);
+    expect(fs.existsSync(path.join(dir, 'harness/claude/skills/retired/SKILL.md'))).toBe(true);
+    for (const s of ['brain-edit', 'flow-review', 'code-review', 'code-investigation']) expect(fs.readFileSync(path.join(dir, `harness/claude/skills/${s}/SKILL.md`), 'utf8')).not.toMatch(/\{\{[A-Z_]+\}\}/);
+    expect(fs.existsSync(path.join(claudeLaunch(userData, { domains: [{ name: 'brain', root }] }).pluginDir!, 'skills/retired/SKILL.md'))).toBe(true);
+    fs.rmSync(path.join(template, 'harness/claude/skills/retired'), { recursive: true }); // the next release drops it
+    dir = ensureTools(root);
+    expect(fs.existsSync(path.join(dir, 'harness/claude/skills/retired/SKILL.md'))).toBe(false);
+    const plugin = claudeLaunch(userData, { domains: [{ name: 'brain', root }] }).pluginDir!;
+    expect(fs.existsSync(path.join(plugin, 'skills/retired/SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(plugin, 'skills/brain-edit/SKILL.md'))).toBe(true);
+    expect(fs.readdirSync(root).sort()).toEqual(['AGENTS.md', 'brain.json']); // nothing written into the brain
+  }, 60_000);
   it('a rendered tool serves the brain, not its own folder (brain-root.mjs)', () => {
     const root = brain();
     fs.writeFileSync(path.join(root, 'now.md'), '# Now\n\n## Agenti e sessioni attive\n\n');

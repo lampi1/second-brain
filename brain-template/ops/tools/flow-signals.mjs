@@ -1,4 +1,4 @@
-// Digest of workflow signals from Claude Code transcripts (~/.claude/projects/*/*.jsonl), for the flow-optimizer agent.
+// Digest of workflow signals from Claude Code transcripts (~/.claude/projects/*/*.jsonl), for the flow-review skill.
 // READ-ONLY (except --forced --record), no LLM, harness-independent seed: everything it reports is counted from the jsonl, never guessed.
 // Usage: node ops/tools/flow-signals.mjs [--since 2026-10-06] [--until 2026-10-07] [--max-msg 220] [--forced] [--json]
 //        dates = midnight Europe/Rome; default since = 7 days ago.

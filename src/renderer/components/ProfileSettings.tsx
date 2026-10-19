@@ -1,6 +1,6 @@
 // Settings → Il mio profilo: the owner's me.md as the agents read it ("Who" and "How to work with"), editable in its
 // managed fields only (name, role, chat language, work areas, reply style) through 'profile:save', which refuses to
-// overwrite a concurrent edit. Shows how the profile grows (rules added by brain-editor, journal days). Used by
+// overwrite a concurrent edit. Shows how the profile grows (rules added with the brain-edit skill, journal days). Used by
 // SettingsPage.tsx; the logic lives in lib/profile.ts.
 import { useEffect, useRef, useState } from 'react';
 import type { OwnerProfile, ProfileFields, ProfileResult } from '@shared/profile';
