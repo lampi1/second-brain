@@ -1,6 +1,6 @@
 // The brain model service (ADR 0077): the one entry point of the Brain pages and the maintenance jobs. It reads the
-// model (model.ts), runs the jobs (jobs.ts) with the change log (changes.ts) and serves the read-only Classificatori view
-// (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
+// model (model.ts), runs the jobs (jobs.ts) with the change log (changes.ts), adds the Memoria page's statistics
+// (memory-stats.ts) and serves the read-only Classificatori view (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
 // runbook sections and no report yet, the corrections job right after a lesson is queued, every job every six hours,
 // and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
 // an undo. Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
@@ -18,9 +18,10 @@ import type { AgentPackLearning } from '../agents/pack/learning';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
-import { classifiersState } from './classifiers';
+import { classifiersState, readJobs } from './classifiers';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
+import { memoryStats } from './memory-stats';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
 
 export interface BrainModelDeps {
@@ -105,11 +106,18 @@ export class BrainModelService {
   state(): BrainModelState {
     const root = this.root(), profiles = this.profiles(), restorer = this.restorer();
     const skills = readSkills(this.skillDirs(root), root, profiles).map(s => ({ ...s, madeBy: this.log.madeBy(s.file) }));
+    const roles = profiles.filter(p => p.scope === 'role'), memory = readMemory(root, roles);
+    let stats: BrainModelState['memoryStats'];
+    if (root) {
+      try { stats = memoryStats({ root, memory, profiles: roles, runs: (() => { try { return this.d.runs(); } catch { return []; } })(), skills, now: this.now() }); }
+      catch (e) { log.warn('brain', 'memory statistics failed', { cause: errText(e), hint: 'the Memoria page shows the files without the charts' }); }
+    }
     return {
       root,
       agents: profiles.filter(p => p.scope === 'role').map(p => ({ id: p.id, name: p.name, role: p.purpose, skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
-      skills, rules: readRules(root), memory: readMemory(root, profiles.filter(p => p.scope === 'role')),
+      skills, rules: readRules(root), memory,
       changes: this.log.list(restorer), migration: this.report(), lastRun: this.lastRun(),
+      ...(stats ? { memoryStats: stats } : {}),
     };
   }
 
@@ -162,9 +170,14 @@ export class BrainModelService {
     const root = this.root();
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, description: s.description }));
   }
+  /** The brain's skills with the tools each calls (model.ts skillTools), for the launch warnings (agents/skill-needs.ts). */
+  skillTools(): { name: string; tools: string[] }[] {
+    const root = this.root();
+    return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, tools: s.tools }));
+  }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      suggest: goal => this.d.suggestSkills(goal) }, this.now());
+      suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
   /** Timers: the one-time migration a minute after start (when there is something to move), then every job every 6 h. */

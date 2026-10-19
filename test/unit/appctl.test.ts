@@ -10,6 +10,7 @@ import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestrato
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
+import type { RunFeedback } from '../../src/main/agents/run-feedback';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
 import { DemoRouting } from '../../src/main/brain/routing-demo';
 import type { NewChat, RoutingRow, RoutingTable } from '../../src/shared/contract';
@@ -173,6 +174,37 @@ describe('app control tools', () => {
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     expect(made).toHaveLength(2);
+  });
+
+  it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const skillTools = () => [{ name: 'issue-open', tools: ['Write', 'node scripts/open-issue.mjs'] }];
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req), skillTools }, 'r').find(x => x.name === 'app_create_chat')!;
+    expect(await t.run({ title: 'Issue · Bozza', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
+    const herald = catalog.list().profiles.find(p => p.id === 'herald')!;
+    catalog.save({ ...herald, tools: { allow: ['read', 'web', 'mail-draft'] } }, 'herald');
+    const out = await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] }) as { warnings?: string[] };
+    expect(out.warnings).toHaveLength(1);
+    expect(out.warnings![0]).toMatch(/skill «issue-open» needs edit, shell, which Herald lacks/);
+    const cat = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), skillTools }, 'r').find(x => x.name === 'agent_catalog')!;
+    const listed = await cat.run({ id: 'herald', skills: ['issue-open'] }) as { roles: { skillWarnings?: string[] }[] };
+    expect(listed.roles[0]!.skillWarnings?.[0]).toMatch(/issue-open/);
+  });
+
+  it('the Orchestrator\'s own mount has task_estimate, and app_create_chat answers with the estimate from similar tasks (ADR 0087)', async () => {
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const past = Array.from({ length: 4 }, (_, i) => ({ runId: `r_00000000000${i}`, chatId: `c${i}`, agentId: 'artisan', version: 1, goal: 'Correggi il bug del totale', startedBy: 'orchestrator', startedAt: i * 1e6, endedAt: i * 1e6 + 300_000, endReason: 'completed', executionMs: 240_000, costUsd: 0.1, tokens: null, counters: {} }));
+    const runFeedback = { runList: () => past, metrics: () => [] } as unknown as RunFeedback;
+    const deps = { chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: (req: NewChat) => catalog.resolve(req), runFeedback };
+    expect(appControlTools(deps, 'r').some(x => x.name === 'task_estimate')).toBe(true);
+    expect(appControlTools(deps).some(x => x.name === 'task_estimate')).toBe(false);
+    expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 4, path: 'one-agent', quick: true });
+    const created = await appControlTools(deps, 'r').find(x => x.name === 'app_create_chat')!.run({ title: 'Ordini · Fix', prompt: 'Correggi il bug dello sconto', roleId: 'artisan' });
+    expect(created).toMatchObject({ estimate: { timeMs: 240_000, n: 4, parts: 1, path: 'one-agent', confidence: 'low' } });
   });
 
   it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {

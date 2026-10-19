@@ -26,7 +26,8 @@ import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
 import { runResultMessage } from './run/results';
 import { splitNewChat } from '../shared/newchat';
-import type { AgentRunOutcome } from '../shared/agents';
+import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
+import { demoAgentMetrics } from './demo-agent-runs';
 
 /** The fixed "now" of SB_DEMO_FREEZE=1 (2026-10-11 10:30 Rome). The UI receives it through ui:command 'clock'. */
 export const FROZEN_EPOCH = Date.UTC(2026, 9, 11, 8, 30, 0);
@@ -137,9 +138,15 @@ export function seed(E: number): Seed {
   const settled = chats.find(c => c.id === 'mappa')!;
   settled.agent = { id: 'artisan', name: 'Artisan', purpose: ROLE_DEFAULTS.artisan.summary, avatar: { kind: 'character', value: 'artisan' },
     engine: settled.harness, model: settled.model, revision: 1, version: 1, source: 'catalog' };
-  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'artisan', version: 1, goal: settled.title,
+  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'artisan', version: 1, goal: 'Aggiungi la vista 3D alla pagina Mappa',
     startedBy: 'orchestrator', startedAt: E - 30 * MIN, costUsd: settled.costUsd, tokens: null,
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: settled.contextTokens ?? null } };
+  // three runs at work the Orchestrator started (one a quick single-agent job), for the strips' estimates and its plan (ADR 0087; history: agents/run-estimates.ts)
+  for (const [id, agentId, goal, ago] of [['qa', 'sentinel', 'Esegui i test case dei rimborsi in ambiente di test e fammi il report.', 26], ['sms', 'sentinel', 'Riproduci il bug degli SMS nelle attività del cliente, in ambiente di test 2.', 6], ['feedback', 'scout', 'Cerca nei log gli errori 500 del modulo feedback di oggi', 3]] as const) {
+    const c = chats.find(x => x.id === id)!;
+    c.run = { runId: `r_00000000000${id === 'qa' ? 2 : id === 'sms' ? 3 : 4}`, chatId: id, agentId, version: 1, goal, startedBy: 'orchestrator', startedAt: E - ago * MIN, costUsd: c.costUsd || null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } };
+  }
   const items: Record<string, ChatItem[]> = {
     orchestrator: [
       // not typed by the user: mail from a work chat and an Esegui result fold to one line (renderer lib/foreign.ts)
@@ -246,6 +253,13 @@ export function seed(E: number): Seed {
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
+    // older app errors that repeat, for the Dashboard's grouped Errori view (dashboard/errors.ts)
+    ev('f-e1', 26 * 60 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'qa', away: true }),
+    ev('f-e2', 3 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'sms', away: true }),
+    ev('f-e3', 6 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: usage limit reached', { chatId: 'feedback', away: true }),
+    ev('f-e4', 2 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Strumento MCP', 'MCP server "browser" disconnected (code 1006)', { chatId: 'qa', away: true }),
+    ev('f-e5', 9 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Strumento MCP', 'MCP server "browser" disconnected (code 1006)', { chatId: 'mappa', away: true }),
+    ev('f-e6', 4 * 1440 * MIN, 'error', 'Errore', 'quiet', 'File mancante', "ENOENT: no such file or directory, open 'C:\\progetti\\shop\\config\\test.json'", { chatId: 'sms', away: true }),
   ];
   const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
   return { chats, items, pending, tabs, feed, usage };
@@ -428,6 +442,8 @@ export class DemoChats implements ChatService {
   pending(): PendingRequest[] { return [...this.pend]; }
   /** no engine: the "/" list comes from the demo's skills on disk (skills/demo.ts) */
   commands(): null { return null; }
+  /** made-up ended runs per role (demo-agent-runs.ts): the Agenti cards' level, performance and metrics */
+  runMetrics(): AgentMetrics[] { return demoAgentMetrics(this.now()); }
 
   markRun(chatId: string, verdict: AgentRunOutcome['verdict']): ChatSummary {
     const chat = this.chats.get(chatId);

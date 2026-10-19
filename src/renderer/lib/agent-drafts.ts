@@ -1,12 +1,21 @@
 // Unsaved role edits (Brain → Agenti, AgentStudio.tsx) survive navigation in a bounded memory cache, one per role, and an
 // app update (update-checkpoint.ts copies them into localStorage before the restart and restores them after). A copy is
 // checked field by field before it is trusted: a role draft holds only the editable behaviour, never a name or avatar.
+// agentDraftOf builds a draft from a role's profile.
 import { EFFORTS } from './format';
-import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft } from '@shared/agents';
+import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft, type AgentProfile } from '@shared/agents';
 import { MODEL_TIERS, isWorkRole } from '@shared/roles';
 import { isCharacterId } from '@shared/characters';
 
 export interface AgentEditorDraft { id: string; baseRevision?: number; draft: AgentDraft }
+/** The editable behaviour of a role, from its profile: the editor's starting draft (AgentStudio.tsx) and the base of a
+ *  permissions-only save (RolePermissions.tsx). */
+export const agentDraftOf = (p: AgentProfile): AgentDraft => ({
+  name: p.name, purpose: p.purpose, avatar: p.avatar, instructions: p.instructions, engine: p.engine, model: p.model,
+  ...(p.effort ? { effort: p.effort } : {}), tools: p.tools, permissionCeiling: p.permissionCeiling,
+  ...(p.knowhow ? { knowhow: p.knowhow } : {}), ...(p.pack ? { pack: p.pack } : {}),
+  maxContext: p.maxContext ?? null, tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: [...p.launches], skills: [...p.skills],
+});
 const drafts = new Map<string, AgentEditorDraft>();
 let active: string | null = null;
 export function rememberAgentEditor(state: AgentEditorDraft): void {

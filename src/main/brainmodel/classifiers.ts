@@ -7,12 +7,14 @@
 // kindStats); per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
 // time: success and cost per route, by week; a row without runs says so (null values), never zero. Nothing here writes: changes go
 // through the routing save and the maintenance jobs, logged with their rollback. Used by brainmodel/service.ts;
-// unit tests: test/unit/brainmodel/classifiers.test.ts.
+// unit tests: test/unit/brainmodel/classifiers.test.ts. The grid's cards (classifier-cards.ts) also read the ledger's
+// known outcomes and the job ledger (userData/jobs.jsonl, the cost ledger's kinds).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { ClassifierChoice, ClassifierRoute, ClassifiersState, RouteResult } from '../../shared/brain-model';
 import type { RoutingInfo, RoutingRow } from '../../shared/contract';
+import { classifierCards, type JobRow, type Launch } from './classifier-cards';
 
 interface Prediction { id: string; at: number; kind: string; area: string; harness: string; model: string | null; source: string }
 interface Actual { usd: number }
@@ -23,24 +25,42 @@ export interface ClassifierInputs {
   profiles: AgentProfile[];
   /** the skill names skills_suggest ranks for a goal now, best first */
   suggest(goal: string): Promise<string[]>;
+  /** the job ledger's rows (kind and cost of each chat), for the cost-ledger kind card; absent = none */
+  jobs?: () => JobRow[];
+}
+
+/** userData/jobs.jsonl (brain/estimates.ts FileJobStore: the last line of an id wins) as the cards need it. */
+export function readJobs(file: string): JobRow[] {
+  let text = '';
+  try { if (fs.statSync(file).size <= 32 * 1024 * 1024) text = fs.readFileSync(file, 'utf8'); } catch { return []; }
+  const byId = new Map<string, JobRow>();
+  for (const l of text.split(/\r?\n/)) {
+    if (!l.trim()) continue;
+    try {
+      const j = JSON.parse(l) as { id?: unknown; at?: unknown; kind?: unknown; actual?: { usd?: unknown } | null };
+      if (typeof j.id === 'string' && typeof j.kind === 'string') byId.set(j.id, { at: Number(j.at) || 0, kind: j.kind, usd: typeof j.actual?.usd === 'number' ? j.actual.usd : null });
+    } catch { /* a torn line */ }
+  }
+  return [...byId.values()];
 }
 
 /** The ledger's routing predictions of the app's chats (one per chat) and their latest actuals. */
-export function readLedger(root: string | null): { predictions: Prediction[]; actuals: Map<string, Actual> } {
-  const predictions = new Map<string, Prediction>(), actuals = new Map<string, Actual>();
-  if (!root) return { predictions: [], actuals };
+export function readLedger(root: string | null): { predictions: Prediction[]; actuals: Map<string, Actual>; outcomes: Map<string, boolean> } {
+  const predictions = new Map<string, Prediction>(), actuals = new Map<string, Actual>(), outcomes = new Map<string, boolean>();
+  if (!root) return { predictions: [], actuals, outcomes };
   let text = '';
   try { const f = path.join(root, 'ops', 'state', 'improve', 'outcomes.jsonl'); if (fs.statSync(f).size <= 32 * 1024 * 1024) text = fs.readFileSync(f, 'utf8'); } catch { /* no ledger yet */ }
   for (const line of text.split('\n')) {
     if (!line.includes('"routing"')) continue;
     try {
-      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string; area?: string; harness?: string; model?: string | null }; predicted?: { value?: { source?: string } }; actual?: { usd?: number } };
+      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string; area?: string; harness?: string; model?: string | null }; predicted?: { value?: { source?: string } }; actual?: { usd?: number }; outcome?: { known?: unknown; success?: unknown } };
       if (j.domain !== 'routing' || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
       if (j.predicted && j.item && !predictions.has(j.id)) predictions.set(j.id, { id: j.id, at: Number(j.at) || 0, kind: String(j.item.kind ?? 'altro'), area: String(j.item.area ?? ''), harness: String(j.item.harness ?? ''), model: j.item.model ?? null, source: String(j.predicted.value?.source ?? 'table') });
       if (j.actual && Number.isFinite(j.actual.usd)) actuals.set(j.id, { usd: Number(j.actual.usd) });
+      if (j.outcome) { if (j.outcome.known === true && typeof j.outcome.success === 'boolean') outcomes.set(j.id, j.outcome.success); else if (j.outcome.known === false) outcomes.delete(j.id); }
     } catch { /* a torn line */ }
   }
-  return { predictions: [...predictions.values()], actuals };
+  return { predictions: [...predictions.values()], actuals, outcomes };
 }
 
 const areas = (r: RoutingRow): string[] => (r.area === undefined ? [] : Array.isArray(r.area) ? r.area : [r.area]);
@@ -62,22 +82,26 @@ export function weekOf(ms: number): string {
   const y = d.getUTCFullYear(), w = Math.ceil(((d.getTime() - Date.UTC(y, 0, 1)) / 86400e3 + 1) / 7);
   return `${y}-W${String(w).padStart(2, '0')}`;
 }
+/** whoever delegates passes the suggestions scoring at least this (shared/skill-suggest.ts, the Guida) */
+const SKILL_CUT = 60;
 const lastWeeks = (now: number, n: number) => Array.from({ length: n }, (_, i) => weekOf(now - (n - 1 - i) * 7 * 86400e3));
 
 export async function classifiersState(i: ClassifierInputs, now = Date.now()): Promise<ClassifiersState> {
   const table = i.routing.table, routes = table?.routes ?? [];
-  const { predictions, actuals } = readLedger(i.root);
+  const { predictions, actuals, outcomes } = readLedger(i.root);
   const runByChat = new Map(i.runs.map(r => [r.chatId, r]));
   const perRow = routes.map(() => [] as string[]);
   for (const p of predictions) { if (p.source !== 'table') continue; const k = rowOf(routes, p); if (k >= 0) perRow[k]!.push(p.id); }
   const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat) }));
   // skill choice: the latest role runs with their launch's skills
   const name = (id: string) => i.profiles.find(p => p.id === id)?.name ?? id;
-  const recent = i.runs.filter(r => r.tags && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 15);
-  const choices: ClassifierChoice[] = [];
+  // the latest 40 role launches feed the skills card; the page's list shows the 15 newest
+  const recent = i.runs.filter(r => r.tags && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
+  const choices: ClassifierChoice[] = [], launches: Launch[] = [];
   for (const r of recent) {
     const suggested = await i.suggest(r.goal).catch(() => [] as string[]);
-    choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
+    launches.push({ at: r.startedAt, chatId: r.chatId, agentId: r.agentId, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
+    if (choices.length < 15) choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
   }
   // quality by week: per route (its predictions)
   const weeks = lastWeeks(now, 6);
@@ -87,6 +111,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
     routing: { version: table?.version ?? null, appliedAt: table?.appliedAt ?? null, by: table?.by ?? null, routes: rows, error: i.routing.error },
     history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),
     choices, quality,
+    cards: classifierCards({ now, predictions, actuals, outcomes, runs: i.runs, launches, jobs: (() => { try { return i.jobs?.() ?? []; } catch { return []; } })(), skillThreshold: SKILL_CUT }),
     kinds: Object.entries(i.routing.kindStats ?? {}).flatMap(([kind, v]) => (v ? [{ kind, chats: v.chats, known: v.known, ok: v.ok }] : [])).sort((a, b) => b.chats - a.chats || a.kind.localeCompare(b.kind)),
     sources: [...predictions.reduce((m, p) => m.set(p.source, (m.get(p.source) ?? 0) + 1), new Map<string, number>())].map(([source, chats]) => ({ source, chats })).sort((a, b) => b.chats - a.chats),
   };

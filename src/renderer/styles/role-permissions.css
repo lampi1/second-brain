@@ -1,0 +1,50 @@
+/* A role's permissions card (components/RolePermissions.tsx): a header with the status pill and the actions, then its
+   sections; tools in two groups of rows (a narrower class indented under its wider one), the ceiling as four choice
+   tiles. Tokens only (styles/tokens.css): the same look in dark and light. */
+.rp-card{position:relative;overflow:hidden;animation:ad-enter 300ms var(--ease) 60ms both}
+.rp-card::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(var(--tone,var(--blue)),transparent 85%)}
+.rp-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:14px}
+.rp-title{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;min-width:0}
+.rp-title h3{margin:0;font-size:var(--fs-l);font-weight:600;letter-spacing:-.15px}
+.rp-title h3:focus-visible{outline:2px solid var(--focus);outline-offset:3px;border-radius:4px}
+.rp-status{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-xs);font-weight:550;color:var(--amber);border:1px solid var(--amber-line);background:var(--amber-bg);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.rp-status i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.rp-status[data-full=true]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
+.rp-dirty{font-size:var(--fs-xs);color:var(--text-3);font-style:italic}
+.rp-actions{display:flex;flex-wrap:wrap;gap:8px}
+.rp-sections{display:grid;gap:18px}
+.rp-section>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin-bottom:10px}
+.rp-section h4{margin:0;font-size:var(--fs-m);font-weight:600}
+.rp-section>header p{margin:0;font-size:var(--fs-s);color:var(--text-3)}
+.rp-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start}
+.rp-group{display:grid;align-content:start;gap:6px;padding:12px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 40%,var(--surface))}
+.rp-group h5{margin:0 0 2px;font-size:var(--fs-xs);font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)}
+.rp-tool-wrap{display:grid;gap:2px}
+.rp-tool{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px;padding:6px 10px;border:1px solid transparent;border-radius:var(--r-s);background:var(--surface-2);transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.rp-tool[data-on=true]{border-color:color-mix(in srgb,var(--tone,var(--blue)) 28%,var(--border))}
+.rp-tool[data-on=false] .rp-tool-name{color:var(--text-3)}
+.rp-tool-narrow{margin-left:22px;min-height:32px;background:transparent;border-style:dashed;border-color:var(--border)}
+.rp-tool-narrow[data-on=true]{border-color:var(--border-2)}
+.rp-tool-narrow::before{content:"";width:10px;height:10px;margin:-10px -4px 0 -18px;border-left:1px solid var(--border-3);border-bottom:1px solid var(--border-3);border-bottom-left-radius:4px;flex:none}
+.rp-tool-id{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0;flex:1}
+.rp-tool-name{font-size:var(--fs-s);font-weight:550;color:var(--text)}
+.rp-included{font-size:var(--fs-xs);color:var(--text-4)}
+.rp-switch{position:relative;flex:none;width:38px;height:22px;border-radius:11px;border:1px solid var(--border-3);background:var(--surface-4);cursor:pointer;padding:0;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.rp-switch .rp-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--text-2);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform var(--dur) var(--ease),background var(--dur) var(--ease)}
+.rp-switch.on{background:var(--green);border-color:var(--green)}
+.rp-switch.on .rp-knob{transform:translateX(16px);background:var(--on-accent)}
+.rp-switch:disabled{cursor:default;opacity:.55}
+.rp-switch:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.rp-ceilings{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.rp-ceiling{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border-2);border-radius:var(--r-m);background:var(--surface-2);cursor:pointer;transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
+.rp-ceiling:hover{border-color:var(--border-3)}
+.rp-ceiling[data-on=true]{border-color:var(--tone,var(--blue));background:color-mix(in srgb,var(--tone,var(--blue)) 10%,var(--surface-2))}
+.rp-ceiling input{accent-color:var(--tone,var(--blue));margin:0}
+.rp-ceiling input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.rp-ceiling-name{flex:1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:var(--fs-s);font-weight:550}
+.rp-ceiling-name em{font-style:normal;font-size:10.5px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:.5px}
+@media (prefers-reduced-motion:reduce){.rp-card{animation:none}.rp-switch,.rp-switch .rp-knob,.rp-tool,.rp-ceiling{transition:none}}
+/* the card back's permissions line (AgentCatalogCard.tsx) */
+.bm-face-back dd .catalog-perms{display:block;font-weight:550;color:var(--amber)}
+.bm-face-back dd .catalog-perms[data-full=true]{color:var(--green)}
+.bm-face-back dd .catalog-perms+.link-btn{position:relative;z-index:1;font-size:var(--fs-xs)}

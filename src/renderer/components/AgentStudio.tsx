@@ -1,14 +1,15 @@
 // A role's own page (Brain → Agenti → a role) and its editor. The page leads with who the role is (its character at
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
-// instructions it runs with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads
-// at every launch, its versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the
-// editor in place: only the behaviour is editable (instructions, engine, model, tier, tools, ceiling, launches, skills,
-// context); name, summary and character belong to the role. "Ripristina predefinito" goes back to the shipped role
+// permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
+// with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
+// versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
+// behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
+// card); name, summary and character belong to the role. "Ripristina predefinito" goes back to the shipped role
 // after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type ToolClass } from '@shared/agents';
+import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
 import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
@@ -17,7 +18,8 @@ import { sb } from '../sb';
 import { useApp } from '../store/store';
 import { EFFORTS, effortLabel } from '../lib/format';
 import { characterTone } from '../lib/character-art';
-import { forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
+import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
+import { RolePermissions, permissionSummary } from './RolePermissions';
 import { holdUpdate } from '../lib/update-barrier';
 import { go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
@@ -35,13 +37,7 @@ const tierLabel = (tier: ModelTier) => t(`roles.tier.${tier}`);
 const reason = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 
-/** The editable behaviour of a role, from its profile (the editor's starting draft). */
-const draftOf = (p: AgentProfile): AgentDraft => ({
-  name: p.name, purpose: p.purpose, avatar: p.avatar, instructions: p.instructions, engine: p.engine, model: p.model,
-  ...(p.effort ? { effort: p.effort } : {}), tools: p.tools, permissionCeiling: p.permissionCeiling,
-  ...(p.knowhow ? { knowhow: p.knowhow } : {}), ...(p.pack ? { pack: p.pack } : {}),
-  maxContext: p.maxContext ?? null, tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: [...p.launches], skills: [...p.skills],
-});
+const draftOf = agentDraftOf;
 
 /** The run numbers of one role, read like the catalogue's (agents:metrics); null when unavailable. */
 function useAgentMetrics(agentId: string): AgentMetrics | null | undefined {
@@ -113,8 +109,6 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
   const { state: brain } = useBrainModel();
   const [skill, setSkill] = useState('');
   const choice = catalog?.models.find(e => e.engine === draft.engine);
-  const allow = draft.tools?.allow ?? [];
-  const toggleTool = (c: ToolClass) => change({ tools: { ...(draft.tools ?? {}), allow: allow.includes(c) ? allow.filter(x => x !== c) : TOOL_CLASSES.filter(x => x === c || allow.includes(x)) } });
   const toggleLaunch = (id: string) => change({ launches: draft.launches.includes(id) ? draft.launches.filter(x => x !== id) : WORK_ROLE_IDS.filter(x => x === id || draft.launches.includes(x)) });
   const addSkill = () => { const name = skill.trim(); if (!SKILL.test(name) || draft.skills.includes(name) || draft.skills.length >= 40) return; change({ skills: [...draft.skills, name] }); setSkill(''); };
   const listId = `skills-${profile.id}`;
@@ -151,10 +145,7 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
           {tierOk ? <small className="agent-editor-note">{t('studio.tierMaxHint')}</small> : <p role="alert">{t('studio.tierInvalid')}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={draft.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
           <label className="field-check"><input type="checkbox" checked={draft.independent} onChange={e => change({ independent: e.target.checked })} data-testid="agent-independent" /><span>{t('studio.independent')} <small>{t('studio.independentHint')}</small></span></label>
-          <label className="field"><span>{t('studio.ceiling')}</span><Select value={draft.permissionCeiling ?? ''} onChange={e => change({ permissionCeiling: PERMISSION_CEILINGS.find(c => c === e.target.value) ?? null })} data-testid="agent-ceiling">
-            <option value="">{t('studio.ceilingNone')}</option>{PERMISSION_CEILINGS.map(c => <option key={c} value={c}>{t(`studio.ceiling.${c}`)}</option>)}</Select></label>
-          <fieldset className="agent-editor-checks" data-testid="agent-tools"><legend>{t('studio.tools')}</legend><p className="agent-editor-note">{t('studio.toolsHint')}</p>
-            <div className="agent-editor-checkgrid">{TOOL_CLASSES.map(c => <label key={c} className="field-check"><input type="checkbox" checked={allow.includes(c)} onChange={() => toggleTool(c)} /><span>{t(`studio.tool.${c}`)}</span></label>)}</div></fieldset>
+          <p className="agent-editor-note" data-testid="agent-editor-perms-note">{t('perm.editorNote')}</p>
           {profile.id !== PULSE_ID && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
             <div className="agent-editor-checkgrid">{WORK_ROLE_IDS.filter(id => id !== profile.id).map(id => <label key={id} className="field-check"><input type="checkbox" checked={draft.launches.includes(id)} onChange={() => toggleLaunch(id)} /><AgentAvatar avatar={{ kind: 'character', value: id }} name={roleName(id)} size={20} /><span>{roleName(id)}</span></label>)}</div></fieldset>}
           <label className="field"><span>{t('studio.maxContext')}</span><input type="number" inputMode="numeric" min={MAX_CONTEXT_RANGE.min / 1000} max={MAX_CONTEXT_RANGE.max / 1000} step={10}
@@ -230,7 +221,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     [t('studio.tier'), `${tierLabel(profile.tier)} · ${t('studio.tierMax')}: ${tierLabel(profile.tierMax)}`],
     [t('studio.effort'), profile.effort ? effortLabel(profile.effort) ?? profile.effort : t('studio.defaultModel')],
     [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
-    [t('studio.tools'), profile.tools ? profile.tools.allow.map(c => t(`studio.tool.${c}`)).join(', ') || t('agentDetail.toolsNone') : t('agentDetail.toolsAll')],
+    [t('studio.tools'), profile.tools && !profile.tools.allow.length ? t('agentDetail.toolsNone') : permissionSummary(profile).text],
     [t('studio.ceiling'), profile.permissionCeiling ? t(`studio.ceiling.${profile.permissionCeiling}`) : t('studio.ceilingNone')],
     ...(background ? [] : [[t('studio.launches'), profile.launches.map(roleName).join(', ') || t('studio.launchesNone')] as [string, string]]),
     [t('studio.independent'), profile.independent ? '✓' : '—'],
@@ -268,6 +259,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
           <dt>{n.label}</dt><dd>{n.value ?? <><span aria-hidden="true">—</span><span className="sr-only">{unknown}</span></>}</dd>{n.note && n.value && <small>{n.note}</small>}</div>)}
       </dl>
       {editor}
+      {!background && <RolePermissions profile={profile} />}
       <div className="ad-grid">
         <section className="ad-card ad-prompt" aria-labelledby={`ad-prompt-${profile.id}`}>
           <header className="ad-card-head"><h3 id={`ad-prompt-${profile.id}`}>{t('agentDetail.prompt')}</h3>{instructions && <span className="ad-meta">{t('agentDetail.promptSize', { n: instructions.length })}</span>}</header>

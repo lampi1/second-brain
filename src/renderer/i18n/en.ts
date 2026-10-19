@@ -1,6 +1,8 @@
 import { cloudEn } from './areas/cloud.en';
 import { agentPackEn } from './areas/agent-pack.en';
 import { brainModelEn } from './areas/brain-model.en';
+import { memoryEn } from './areas/memory.en';
+import { statsEn } from './areas/stats.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
@@ -11,6 +13,7 @@ import { connectorsEn } from './areas/connectors.en';
 // English, short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestEn } from './areas/genui-request.en';
 import {studioEn}from'./areas/studio.en';
+import { permissionsEn } from './areas/permissions.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { dialogsEn } from './areas/dialogs.en';
@@ -20,6 +23,7 @@ import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import { agentsGridEn } from './areas/agents-grid.en';
+import { explainEn } from './areas/explain.en';
 import { agentDetailEn } from './areas/agent-detail.en';
 import { approvalsEn } from './areas/approvals.en';
 import {settingsEn}from'./areas/settings.en';
@@ -27,6 +31,7 @@ import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
+import { estimateEn } from './areas/estimate.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
 
@@ -44,6 +49,7 @@ export const en: Dict = {
   ...cloudEn,
   ...guideEn,
   ...treeEn,
+  ...estimateEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
@@ -61,9 +67,13 @@ export const en: Dict = {
   'genui.permission.session': "Allow for this session",
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
+  ...permissionsEn,
   ...brainModelEn,
+  ...memoryEn,
+  ...statsEn,
   ...productEn,
   ...agentsGridEn,
+  ...explainEn,
   ...agentDetailEn,
   ...approvalsEn,
   ...settingsEn,

@@ -24,8 +24,6 @@ export const auditExpressionsEn: typeof auditExpressionsIt = {
   "auditExpression.ContextBar.text29": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Context: ${p.v0}${p.v1} tokens${p.v2}`,
   "auditExpression.ContextBar.text30": "estimated ",
   "auditExpression.ContextBar.text31": ", long",
-  "auditExpression.CreateMemory.text32": "Creating…",
-  "auditExpression.CreateMemory.text33": "Choose where to create the folder",
   "auditExpression.FirstInterview.text39": "Loading setup…",
   "auditExpression.FirstInterview.text40": "One per line, for example:\nCheckout and payments\nMobile app",
   "auditExpression.FirstInterview.text41": "For example: prepare quotes, follow up with clients, plan assignments",

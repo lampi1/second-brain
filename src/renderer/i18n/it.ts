@@ -1,6 +1,8 @@
 import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
+import { memoryIt } from './areas/memory.it';
+import { statsIt } from './areas/stats.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -13,6 +15,7 @@ import { connectorsIt } from './areas/connectors.it';
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
 import { genuiRequestIt } from './areas/genui-request.it';
 import {studioIt}from'./areas/studio.it';
+import { permissionsIt } from './areas/permissions.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
@@ -21,6 +24,7 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import { agentsGridIt } from './areas/agents-grid.it';
+import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { approvalsIt } from './areas/approvals.it';
 import {settingsIt}from'./areas/settings.it';
@@ -28,6 +32,7 @@ import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
+import { estimateIt } from './areas/estimate.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
@@ -45,6 +50,7 @@ export const it = {
   ...cloudIt,
   ...guideIt,
   ...treeIt,
+  ...estimateIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
@@ -62,9 +68,13 @@ export const it = {
   'genui.permission.session': "Consenti per questa sessione",
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
+  ...permissionsIt,
   ...brainModelIt,
+  ...memoryIt,
+  ...statsIt,
   ...productIt,
   ...agentsGridIt,
+  ...explainIt,
   ...agentDetailIt,
   ...approvalsIt,
   ...settingsIt,

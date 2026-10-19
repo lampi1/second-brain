@@ -56,7 +56,7 @@ attention management and the memory.
   permissions surface as panels wherever the user is looking, the Orchestrator (the coordinating chat, in a full-height
   column on the right) decides what comes next, and notifications fire only when there is something to do.
 - **Chat management is a core strength, not a thin layer.** Chats are compact strips, collapsed by default, with
-  reliable estimates, expanding on one click, every time. Stop, costs, estimates, the choice of agent and the link with the brain get the
+  reliable estimates from similar past tasks, with their measured accuracy (ADR 0087), expanding on one click, every time. Stop, costs, estimates, the choice of agent and the link with the brain get the
   same care as the brain itself. View state, tile behaviours and key bindings are data, so the user and the AI can
   reshape them live (ADR 0008). Visual templates change without rebuilding features.
 - **The brain is data, the app is product.** The app points to a brain folder: plain Markdown files and small Node
@@ -100,7 +100,7 @@ when they cannot); long chats handed off before the context fills; code blocks r
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
 pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a Task page (pull requests, work items, QA
 status, alerts); quality metrics; full-text search; the Brain section (Agenti, Skill, Regole, Memoria, Classificatori, Mappa) with
-self-maintaining skills and agents and a change log with undo; agents exported with their skills; nine fixed roles with direct parent-to-child delegation in visible chats (permissions only go
+self-maintaining skills and agents and a change log with undo; agents exported with their skills; nine fixed roles (every permission by default, narrowed from their cards, ADR 0085) with direct parent-to-child delegation in visible chats (permissions only go
 down, questions go to the parent first, the user's words in any chat reach the Orchestrator and the parent, each
 request shown once; the delegation tree as thread cards in the Grindhouse and the sidebar; work starts only from the
 Orchestrator, ADR 0083); Fatto, the log of what was done; and one-click updates

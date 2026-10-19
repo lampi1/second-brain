@@ -47,11 +47,13 @@ import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
+import { isWorkRole } from '../../shared/roles';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
-import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
+import { readOnlyTools } from '../agents/read-tools';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
@@ -59,6 +61,7 @@ import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { standings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
@@ -94,6 +97,9 @@ export interface ChatManagerOptions {
   mcpUrlFor?: ((chatId: string) => string | null) | null;
   /** the app-control MCP for the Orchestrator only: its own /mcp/app/o/<id>/<token> */
   appMcpUrl?: ((orchestratorId: string) => string | null) | null;
+  /** the app-managed MCP servers a chat is given (ADR 0086, mcp-servers/service.ts launch): gateway endpoints, and the
+   *  managed ids it may not use (Claude refuses them by name) */
+  extMcp?: ((chatId: string) => { servers: { name: string; url: string }[]; denied: string[] }) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
   maxItems?: number;
@@ -219,6 +225,8 @@ interface Rec {
   /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
    *  assignment (#86, ADR 0084); never persisted */
   report?: { text: string; at: number; blocked?: boolean };
+  /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
+  rootReportAt?: number;
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
   agentInstructions?: string;
@@ -227,6 +235,9 @@ interface Rec {
   skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
+  /** a delegated chat's ancestors' catalog roles (parent first), frozen at its creation and persisted: its managed MCP
+   *  access stays bounded by them after the parent closes or is pruned (ADR 0086) */
+  mcpAncestors?: (string | null)[];
   /** the agent's "Contesto massimo" (tokens): the compaction window of its engine instead of the user's setting (#80) */
   maxContext?: number;
   agentPrimed?: boolean;
@@ -238,6 +249,8 @@ interface Rec {
   autoEnding?: boolean;
   /** last start or message: an idle engine is released this long after it (releaseIdle) */
   activeAt?: number;
+  /** last transcript item: a delegated child's stall check (agents/delegation.ts stalledMin) */
+  eventAt?: number;
   /** its engine is ending because it sat idle: the chat stays 'idle', the next message waits for it, then resumes */
   releasing?: Promise<void> | undefined;
   /** permissionMode null = no choice: the CLI follows the user's settings.json (ADR 0002) */
@@ -402,6 +415,8 @@ export class ChatManager implements ChatService {
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
+  /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
+  private warmChat: string | null = null;
   private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
@@ -481,17 +496,22 @@ export class ChatManager implements ChatService {
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
     const delegator = req.parentId !== undefined ? await this.delegator(req, by, opts.continuation === true) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
-    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews. A root chat the
-    // Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's read-only policy:
-    // the Orchestrator plans, the Artisan it starts writes (ADR 0083)
+    // never wider than the chat it comes from: a fork of its session (and an Orchestrator renewed without a role policy).
+    // A root chat the Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's
+    // policy: the Orchestrator plans, the Artisan it starts writes (ADR 0083)
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
     // a chat from the unauthenticated /mcp/app mount (any local process can call it) runs no wider than the Orchestrator
     const bound = opts.boundByOrchestrator ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined;
     if (opts.boundByOrchestrator && !bound) throw new Error('Senza un Orchestrator aperto questo endpoint non apre chat.');
-    const parent = delegator ?? forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? bound;
-    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes
+    // a new Orchestrator the user starts (Ricomincia, Cambia motore) runs its role as the catalog says now (the user edits
+    // it in Agenti, ADR 0085): the old chat's frozen policy bounds it only when the role has none
+    const renewed = req.orchestrator && by === 'user' && !!agent.policy;
+    const parent = delegator ?? forkSrc ?? (req.replaces && !renewed ? this.chats.get(req.replaces) : undefined) ?? bound;
+    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes. A chat from
+    // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
+    // default is every permission, the mount is any local process)
     const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
-      : narrowest(agent.policy, parent === bound && bound ? bound.policy ?? FAIL_CLOSED : parent?.policy);
+      : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
     if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
@@ -546,6 +566,9 @@ export class ChatManager implements ChatService {
       ...(agent.assets ? { agentAssets: agent.assets } : {}),
       ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
       ...(policy ? { policy } : {}),
+      // a delegated chat freezes its parent's role chain now (a parent with no chain: the child has none either and,
+      // once the parent is gone, no managed MCP server at all)
+      ...(delegator && this.mcpContext(delegator.s.id) ? { mcpAncestors: this.mcpContext(delegator.s.id)!.roles } : {}),
       ...(agent.maxContext ? { maxContext: agent.maxContext } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
@@ -993,8 +1016,12 @@ export class ChatManager implements ChatService {
   runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
     try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
-    return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const runs = this.runs.list(), rollups = this.runs.rolledUp();
+    const metrics = runMetrics(runs, { rollups, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
+    // the card's level and performance are the agent's whole record, whatever the filter
+    const standing = standings(runs, rollups, Date.now());
+    return metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
   }
 
   /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;
@@ -1486,6 +1513,32 @@ export class ChatManager implements ChatService {
     return { parentId, delivered: !!parent };
   }
 
+  /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
+   *  like a delegated chat's and reaches the open Orchestrator as a message (its own chats report to it, ADR 0083 §6);
+   *  the turn's end then settles the assignment as a mailed report does. At most one per assignment. */
+  reportRoot(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean } {
+    const r = this.need(chatId), run = r.s.run;
+    if (r.s.isOrchestrator || r.s.parentId || r.s.delegation || run?.startedBy !== 'orchestrator') throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it.');
+    if (r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result.');
+    const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
+    if (run.endedAt === undefined) {
+      run.report = { at, outcome: result.outcome, verified: !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };
+      this.runSave();
+    }
+    r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    r.rootReportAt = at;
+    this.persist();
+    this.updated(r);
+    const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
+    const role = r.s.agent?.id;
+    if (orchestrator && isWorkRole(role)) {
+      this.send(orchestrator.s.id, resultMessage(role, r.s.title, result), undefined, false, r.s.title)
+        .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
+    }
+    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length } });
+    return { orchestratorId: orchestrator?.s.id ?? null, delivered: !!orchestrator };
+  }
+
   /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
   limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void {
     const r = this.chats.get(chatId);
@@ -1807,7 +1860,7 @@ export class ChatManager implements ChatService {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
-      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
+      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r),
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
@@ -1831,12 +1884,17 @@ export class ChatManager implements ChatService {
     const command = (req.input as { command?: unknown } | null)?.command;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
-    if (readOnlyCommand(command) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
+    if (readOnlyCommand(command, this.readScripts(r)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
     r.session?.answer(req.id, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` });
     return true;
+  }
+
+  /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */
+  private readScripts(r: Rec): ReadScripts {
+    return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
   }
 
   /** Each request once per run, by its id: question, permission or command. */
@@ -1906,6 +1964,7 @@ export class ChatManager implements ChatService {
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
+      ...(c.mcpAncestors ? { mcpAncestors: c.mcpAncestors } : {}),
     };
   }
 
@@ -1934,6 +1993,7 @@ export class ChatManager implements ChatService {
       ...(r.s.route ? { route: r.s.route } : {}),
       ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
+      ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);
   }
@@ -1970,6 +2030,12 @@ export class ChatManager implements ChatService {
     this.opts.emitter.emit('chat:updated', { ...r.s });
   }
 
+  /** When the chat last produced anything: a transcript item, a state change or a send (agents/delegation.ts stalledMin). */
+  lastEventAt(chatId: string): number | undefined {
+    const r = this.chats.get(chatId);
+    return r ? Math.max(r.eventAt ?? 0, r.activeAt ?? 0, r.s.updatedAt) : undefined;
+  }
+
   /** Work time so far (the span in progress included). */
   workMs(chatId: string): number {
     const s = this.chats.get(chatId)?.s;
@@ -1977,6 +2043,7 @@ export class ChatManager implements ChatService {
   }
 
   private addItem(r: Rec, item: ChatItem, replace: boolean): void {
+    r.eventAt = Date.now();
     let rep = false;
     if (replace) {
       for (let i = r.items.length - 1; i >= 0; i--) if (r.items[i]?.id === item.id) { r.items[i] = item; rep = true; break; }
@@ -2077,7 +2144,27 @@ export class ChatManager implements ChatService {
     const servers: Record<string, { type: 'http'; url: string }> = {};
     if (url) servers['second-brain'] = { type: 'http', url };
     if (app) servers['second-brain-app'] = { type: 'http', url: app };
+    for (const ext of this.opts.extMcp?.(chatId).servers ?? []) servers[ext.name] ??= { type: 'http', url: ext.url };
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
+  }
+
+  /** The chat as the MCP access sees it (ADR 0086): its role and each parent's, own first, and its tool policy; null =
+   *  not a chat of this app. A chat whose parent is gone keeps the parent's place as no role (its policy, narrowed at
+   *  start by that parent, still holds). */
+  mcpContext(chatId: string, seen = new Set<string>()): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
+    const r = this.chats.get(chatId);
+    // the warm engine's chat does not exist yet: it is a plain chat (no role, no policy, no parent: warm.ts never serves
+    // an agent with a policy); once adopted, its real role is read at every gateway call
+    if (!r) return this.warmChat === chatId || this.warm.current?.chatId === chatId ? { roles: [null], policy: null } : null;
+    const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
+    if (!r.s.parentId) return { roles: [own], policy };
+    // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the
+    // live parents; a parent that is gone with no frozen chain = fail closed (no managed server), never a wider child
+    if (r.mcpAncestors) return { roles: [own, ...r.mcpAncestors], policy };
+    seen.add(chatId);
+    if (seen.has(r.s.parentId) || seen.size > 16) return null;
+    const up = this.mcpContext(r.s.parentId, seen);
+    return up ? { roles: [own, ...up.roles], policy } : null;
   }
 
   /** the app-control endpoint of an Orchestrator, null for any other chat */
@@ -2132,7 +2219,10 @@ export class ChatManager implements ChatService {
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
-    return this.opts.extraArgs || allowed.length ? [...(this.opts.extraArgs ?? []), ...(allowed.length ? ['--allowedTools', allowed.join(',')] : [])] : null;
+    // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
+    const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];
+    const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : [])];
+    return this.opts.extraArgs || extra.length ? [...(this.opts.extraArgs ?? []), ...extra] : null;
   }
 
   /** An agent's message (from = its sender) never wakes a stopped chat (closed, or its engine released for idleness) on
@@ -2154,6 +2244,7 @@ export class ChatManager implements ChatService {
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {
       userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
+      extMcp: this.opts.extMcp?.(opts.chatId).servers ?? [],
       showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null,
       ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
     });
@@ -2165,6 +2256,12 @@ export class ChatManager implements ChatService {
     if (updateActivity.frozen) return null;
     const chatId = `c_${crypto.randomBytes(5).toString('hex')}`;
     const sessionId = crypto.randomUUID();
+    // its launch asks mcpContext before the pool holds it: the id is known as the warm engine's meanwhile
+    this.warmChat = chatId;
+    try { return this.spawnWarmAs(chatId, sessionId, cwd); } finally { this.warmChat = null; }
+  }
+
+  private spawnWarmAs(chatId: string, sessionId: string, cwd: string): WarmEngine {
     const extraArgs = this.extraArgsFor('claude', chatId, undefined);
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,

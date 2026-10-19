@@ -5,7 +5,68 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- **Agent cards with a level and a performance %** (owner, 2026-10-19): the front shows the character large and centred,
+  a level from the runs it ended (Lv 2 at 5, Lv 3 at 15, Lv 4 at 30: each level asks 5 more; titles from Recluta to
+  Leggenda) with the way to the next one, and a performance gauge (verdicts weighted by who gave them, you or the
+  Judge × 1, the Orchestrator × 0.6, the agent itself × 0.3, and by age, half weight every 30 days; "In rodaggio" below 5
+  judged runs). Each has a "?" with the exact formula and the agent's own numbers (`main/agents/standing.ts`, exposed as
+  `standing` on `agents:metrics`). The demo has a made-up run history so every state shows.
+- **"?" explanations across the app**: the Orchestrator's head (what it is, its states, its collaborators), every
+  strip's facts (cost, work time, context meter, version), the run verdict (how it feeds the performance), the Agenti
+  summary, Settings (system notifications, Judge reviews, model tiers) and the Skill page.
+- **"Ferma dopo" works**: `delegation.stallMin` was declared but never read; now `agent_children` reports a working
+  child silent for that many minutes as `stalled` (with `quietMin`), so its parent can nudge or close it; with a "?" in
+  Impostazioni → Ruoli e deleghe.
+- **MCP servers managed by the app** (ADR 0086, #91): add a server once in Settings → Connettori (a local command or an
+  https address), test it ("Prova": works or not, its tools split read/write, a clear error and fix), or import the ones
+  already in Claude Code, Claude desktop, Cursor and Codex (read only, no token copied). Every Claude, Codex and Cursor
+  chat gets the servers its role may use through the app's MCP gateway, which adds the token (encrypted, write-only)
+  and checks the role's access at every call; by default every role has every server, narrowed per server on the agent
+  card's new "Server MCP" section (all tools, read only, picked, none); a child never more than its parent.
+- **Settings → Connettori redesigned**: accounts and MCP servers as cards in a grid with totals, what each is for, its
+  state, one "Prova" and "?" explanations, in dark and light.
+
 ### Changed
+- **Every role may do everything by default** (ADR 0085, owner 2026-10-19): all tool classes and no permission limit
+  below your own mode, so a fresh install has no refused calls and no flood of popups; each role keeps its job
+  (instructions, skills, tier, the roles it launches). The planners launch Artisan, Sentinel, Herald and Scribe again.
+  Roles you never edited move to the new defaults once (a version "Permessi completi predefiniti"); edited ones stay.
+  A role's **Permessi** card (Brain → Agenti → the role, or "Modifica permessi" on the card's back) narrows it: a
+  switch per tool class, four limits, a "?" on each, saved as a version, "Ripristina predefiniti". A chat from the
+  unauthenticated `/mcp/app` mount still reads only, in plan mode.
+- **Memoria with its numbers** (owner, 2026-10-19): key figures, "Lo sapevi?" (curious facts from the data: the
+  recurring error, the most recalled memory, the forgotten skill, the day with most errors…), weekly growth by kind,
+  lines per agent, the most recalled lines (runs that started with them), stale files, recurring errors grouped by
+  type and area or shared words (count, 12-week trend, agents, the rule each produced) and the skills useful, to
+  review or never used (runs, success, last use); every number has a "?" that says how it is computed. Memory cards
+  show their latest lines as rendered Markdown with date chips and open the real file in the viewer. A clean brain
+  shows what will appear. Zero tokens: files and recorded runs only.
+- **"Manutenzione" button** atop Skill, Regole and Memoria: runs every maintenance job now, then says job by job what
+  it did and lists the changes of that pass, each with "Annulla". Fixes the sideways overflow of those pages.
+- **Statistics you can read**: Brain → Classificatori is a grid of cards, one per classifier, with what it decides
+  and why, runs, verified success, cost, weekly trend, learning progress (20 cases) and a curious fact; a click opens
+  its history. The task estimator (ADR 0087) has its card too, with its weekly backtest. The Dashboard's Errori tab groups recurring errors by cause with count, trend, last seen, where and
+  what to do; Costi gains per-day and per-model charts and facts; every number has a "?" saying how it is computed.
+- **Quick chats and readable estimates** (ADR 0087): the Orchestrator estimates each request from similar past tasks
+  (`task_estimate`: median work time, cost, the middle-half range, how many tasks, confidence, the parts) and takes the
+  fast path: a short question it answers itself, a quick single-part job to ONE agent with no sub-chats, a delegation
+  tree only for work in several parts (`app_create_chat` and `agent_delegate` say so; `app_create_chat` answers with the
+  estimate). The Grindhouse strips show "stima ~4 min · ~0,12 $ · su 12 task simili" with a "?" on how it is computed,
+  and estimate → actual with ✓/✗ once done; under the Orchestrator's head, its plan (the agents it started today, a
+  "via rapida" mark, the sum) and the estimates' weekly accuracy. It replaces the strip's old estimate (the agent's
+  median of all its runs).
+- **First setup, clearer and working** (owner, 2026-10-19): every text field of the setup takes typing again (a modal
+  re-ran its focus handling on each keystroke, so only the first letter landed; fixed for every dialog and popover).
+  The first step no longer asks you to choose between memory options: a new memory by default, or an existing brain
+  through the folder picker; instead it shows your projects folder, found by the app by itself (folders Claude Code
+  and Cursor already worked in, usual places; names and `.git` only) and asked only when it cannot tell, saved as the
+  setting `projectsRoot` (shown in Settings → Il mio spazio, with «Cambia…», «Rileva di nuovo» and a «?») and used as a new memory's repositories folder. After "Collega", an AI and each tool end in a
+  real check shown on the card: "Collegata"/"Connesso come …" with the account and when it was checked (re-checked by
+  itself every few seconds while the sign-in window is open), or "Non connesso" with the reason and what to do. The
+  "Crea una nuova memoria personale" form and the list of found brains are gone from the setup, and with them the
+  app's other way of creating a brain (the installer-based creator and its found-brains search): the setup's new
+  memory is the only one the app makes.
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its
@@ -38,6 +99,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Read-only roles and the brain's node tools** (#93): a role limited to read-only commands runs the node scripts
+  listed in `read-only-tools.md` in the brain (exact path, links resolved; any other script stays refused; only you
+  edit the list). `agent_report` works in a chat the Orchestrator opened with `app_create_chat` (it reports to the
+  Orchestrator). `app_create_chat`, `agent_delegate` and `agent_catalog` warn when a skill needs tools the role lacks.
 - The Scribe can write on Claude again: its brain-write class gives Edit and Write, and each edit is refused unless
   the file's real path is inside the brain folder (no "..", no link or hard link out of it).
 - **Read-only commands are checked strictly** (#89 review): a role that may only read commands no longer runs

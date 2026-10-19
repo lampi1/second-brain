@@ -35,9 +35,11 @@ import { gitBranch } from '../chats/branch';
 import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
-import { agentCatalogTool } from '../agents/discovery';
+import { agentCatalogTool, type SkillToolsSource } from '../agents/discovery';
+import { gapLines, skillGaps } from '../agents/skill-needs';
 import type { ResolvedRole } from '../agents/catalog';
 import { metricsTool, type RunFeedback } from '../agents/run-feedback';
+import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimate';
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
 import type { CloudService } from '../cloud/service';
@@ -73,6 +75,9 @@ export interface AppCtlDeps {
   tasks?: () => TasksState | null;
   /** a role version's results line for its route's reason ("12 run, 9 con esito, 78% riuscite"); absent = none */
   agentStats?: (agentId: string, version: number) => string | null;
+  /** the brain's skills with the tools each calls: app_create_chat and agent_catalog warn about a skill a role lacks
+   *  the tools for (agents/skill-needs.ts, issue #93); absent = no warnings */
+  skillTools?: SkillToolsSource;
   /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
 }
@@ -154,8 +159,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
-    ...(d.agents ? [toolDef(agentCatalogTool(d.agents))] : []),
+    ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
+    ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {
       name: 'app_set_chat_effort',
       description: 'Select the reasoning effort for one running app chat, for this conversation only (a role\'s lasting effort is the user\'s, in Brain → Agenti). Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',
@@ -360,7 +366,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it. `skills` = the brain skills the chat may use (skills_suggest ranks them; without a skill the role cannot use it). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question you can answer yourself needs no chat; a quick single-part job is ONE chat that does the work alone (write in the prompt: do it yourself, no agent_delegate); only work of several independent parts gets a plan (a strategist, or one chat per part). The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it. `skills` = the brain skills the chat may use (skills_suggest ranks them; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do: goal, inputs, constraints, the expected output'),
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
@@ -440,8 +446,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed() });
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
+        // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
+        const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
+        const warnings = known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : [];
+        if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
         // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
-        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(chat.queued ? { status: queuedLine(chat.queued) } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
+        // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
+        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: prompt, agentId: roleId }) : null;
+        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
+          ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
       },
     },
     {

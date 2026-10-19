@@ -46,6 +46,7 @@ export const SYS_IT = {
   'sys.subagentRefused': (p: { type: string }) => `Sotto-agente «${p.type}» rifiutato: il lavoro delegato va in una chat visibile (agent_delegate). Qui solo ricerche veloci (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» non assegnata al ruolo ${p.role}: rifiutata.`,
   'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Scrittura rifiutata: il ruolo ${p.role} può scrivere solo nella cartella del cervello (${p.tool} su «${p.path}»).`,
+  'sys.readToolsList': (p: { tool: string; role: string }) => `Scrittura rifiutata: l’elenco degli strumenti di sola lettura (read-only-tools.md) lo cambi solo tu (${p.tool}, ruolo ${p.role}).`,
   'sys.modelRefusal': 'Il modello ha rifiutato la richiesta.',
 
   // ---- transcript.ts ----
@@ -182,6 +183,7 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.subagentRefused': (p: { type: string }) => `Sub-agent «${p.type}» refused: delegated work goes to a visible chat (agent_delegate). Only quick searches here (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» is not assigned to the ${p.role} role: refused.`,
   'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Write refused: the ${p.role} role may write only inside the brain folder (${p.tool} on «${p.path}»).`,
+  'sys.readToolsList': (p: { tool: string; role: string }) => `Write refused: only you change the list of read-only tools (read-only-tools.md) (${p.tool}, role ${p.role}).`,
   'sys.modelRefusal': 'The model refused the request.',
 
   'sys.compactedPlain': 'Context compacted.',

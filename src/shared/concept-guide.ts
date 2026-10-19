@@ -104,8 +104,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('agent_delegate avvia da 1 a 10 chat figlie insieme, ognuna con un contratto che basta a sé: obiettivo, risultato atteso, criteri di fatto, contesto. Il figlio non legge mai la conversazione del genitore.',
         'agent_delegate starts 1 to 10 child chats at once, each with a self-contained contract: goal, expected output, done-when criteria, context. The child never reads the parent’s conversation.'),
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
-      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Per questo chi pianifica (Strategist, Router) lancia solo chi legge (Scout, Judge): il lavoro che cambia qualcosa lo scrive nel suo risultato e lo avvia l’Orchestrator.',
-        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. That is why a planner (Strategist, Router) launches only the reading roles (Scout, Judge): the work that changes something goes in its result and the Orchestrator starts it.'),
+      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist, Router) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald, Scribe); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
+        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist, Router) also launches the roles that change something (Artisan, Sentinel, Herald, Scribe); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
       // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
@@ -119,8 +119,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
       // src/main/chats/manager.ts reportDelegation; src/shared/delegation.ts resultMessage
-      b('Il figlio chiude con agent_report: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato.',
-        'The child closes with agent_report: the result reaches the parent as a message; the Orchestrator sees only the state.'),
+      b('Il figlio chiude con agent_report: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta con lo stesso agent_report.',
+        'The child closes with agent_report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it with the same agent_report.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e i dubbi passano prima da lui.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and questions go through him first.'),
@@ -135,15 +135,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'agents',
     title: b('I ruoli e il loro editor', 'The roles and their editor'),
-    summary: b('Un ruolo è un profilo fisso con istruzioni, motore, livello di modello, strumenti, tetto dei permessi, ruoli che può avviare e skill di serie.',
-      'A role is a fixed profile with instructions, engine, model tier, tools, permission ceiling, the roles it may launch and its default skills.'),
+    summary: b('Un ruolo è un profilo fisso con istruzioni, motore, livello di modello, ruoli che può avviare e skill di serie; di base può fare tutto, e i suoi permessi li restringi tu dalla sua scheda.',
+      'A role is a fixed profile with instructions, engine, model tier, the roles it may launch and its default skills; by default it may do everything, and you narrow its permissions from its card.'),
     points: [
       // src/shared/roles.ts ROLE_DEFAULTS
       b('Strategist pianifica, Scout cerca e legge, Artisan costruisce, Sentinel verifica, Herald comunica, Router smista lotti, Judge valuta in modo indipendente, Scribe scrive nel brain.',
         'Strategist plans, Scout searches and reads, Artisan builds, Sentinel verifies, Herald communicates, Router triages batches, Judge evaluates independently, Scribe writes to the brain.'),
       // src/renderer/components/AgentStudio.tsx RoleEditor
-      b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, strumenti, tetto, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
-        'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, tools, ceiling, launchable roles and maximum context; name, purpose and character stay the role’s.'),
+      b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
+        'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, launchable roles and maximum context; name, purpose and character stay the role’s.'),
+      // src/renderer/components/RolePermissions.tsx; src/shared/roles.ts ALL_TOOLS, defaultPermissions
+      b('Permessi: di base ogni ruolo ha tutti gli strumenti e nessun limite («Tutto consentito»), così non trovi chiamate rifiutate né popup inutili. La scheda «Permessi» del ruolo (o «Modifica permessi» sul retro della card) li restringe: un interruttore per classe di strumenti e un limite tra quattro, ognuno con il suo «?». Ogni salvataggio è una versione; «Ripristina predefiniti» torna a tutto consentito.',
+        'Permissions: by default every role has every tool and no limit ("Everything allowed"), so you find no refused calls and no useless popups. The role’s "Permissions" card (or "Edit permissions" on the back of its card) narrows them: one switch per tool class and a limit among four, each with its "?". Every save is a version; "Restore defaults" goes back to everything allowed.'),
       // src/main/agents/catalog.ts reset()
       b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma; le skill arrivate da un pacchetto restano.',
         '"Restore default" brings the role back as the app ships it, after a confirmation; skills that came from a pack stay.'),
@@ -153,9 +156,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/model-tier.ts tierModel, independentModel
       b('Il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge prendono un modello diverso da quello del genitore quando c’è.',
         'The tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge take a model other than their parent’s when there is one.'),
-      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand
-      b('Strumenti a classi: Scout ha comandi e browser in sola lettura; un comando che scrive viene rifiutato in chat (se l’ha delegato una chat che può eseguirlo, decidi tu), uno che legge ti arriva come permesso senza «sempre».',
-        'Tools come in classes: Scout has read-only commands and browser; a command that writes is refused in the chat (when a chat that may run it delegated Scout, you decide), one that reads reaches you as a permission without "always".'),
+      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand; src/main/agents/skill-needs.ts
+      b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel cervello, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito (app_create_chat, agent_delegate, agent_catalog).',
+        'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once (app_create_chat, agent_delegate, agent_catalog).'),
       // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
       b('Ogni ruolo ha un personaggio a cartone riconoscibile anche a 16 px: sotto i 24 px restano colore, capigliatura o copricapo e occhi; da 24 px anche viso e attrezzo.',
         'Every role has a cartoon character recognisable even at 16 px: below 24 px the colour, the hair or headwear and the eyes stay; from 24 px the face and the prop too.'),
@@ -163,14 +166,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
     analogy: b('Come le schede dei reparti di un’officina: chi fa cosa, con quali attrezzi e fin dove può spingersi senza chiedere; la scheda si aggiorna, il reparto resta.',
       'Like the department cards of a workshop: who does what, with which tools and how far they may go without asking; the card is updated, the department stays.'),
     tech: [
-      tech(DATA, 'Classi di strumenti: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Tetti: plan, default, acceptEdits.',
-        'Tool classes: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp. Ceilings: plan, default, acceptEdits.'),
+      tech(DATA, 'Classi di strumenti: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp (di base tutte). Tetti: nessuno (predefinito), acceptEdits, default, plan.',
+        'Tool classes: read, edit, shell, shell-read, web, browser, browser-read, mail-draft, calendar-read, brain-write, mcp (all by default). Ceilings: none (default), acceptEdits, default, plan.'),
       // src/main/agents/catalog.ts behaviour()
       tech(LIMITS, 'Istruzioni ≤ 8000 caratteri; al massimo 40 skill di serie; un ruolo non avvia mai sé stesso né l’Orchestrator.',
         'Instructions ≤ 8000 chars; at most 40 default skills; a role never launches itself or the Orchestrator.'),
       tech(WHERE, 'Pagina Agenti (AgentCatalogPage, la pagina del ruolo è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agents page (AgentCatalogPage, the role page is AgentStudio); catalog in the main process (AgentCatalogService).'),
     ],
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
   },
   {
     id: 'skills',
@@ -185,8 +188,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('La pagina Skill mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
         'The Skill page shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
-      b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
-        'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
+      b('La manutenzione gira da sola ogni 6 ore, o subito con il pulsante «Manutenzione» in cima a Skill, Regole e Memoria, che dice cosa ha fatto ogni lavoro: una skill nuova da un lavoro ripetuto, skill doppie unite, ricordi doppi nella memoria condivisa, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
+        'Maintenance runs by itself every 6 hours, or at once with the "Manutenzione" button atop Skill, Regole and Memoria, which says what each job did: a new skill from a repeated task, duplicate skills merged, duplicate memories moved to the shared one, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
       // src/main/brainmodel/changes.ts; src/main/agents/catalog.ts maintain (ADR 0083)
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
@@ -194,14 +197,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è sulla pagina Skill.',
         'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is on the Skill page.'),
       // src/renderer/components/brain-model/
-      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo; Mappa mostra ruolo → skill → regole → memoria.',
-        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role; Map shows role → skills → rules → memory.'),
+      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
+        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/agents/pack/emit.ts, rules.ts
       b('Esportare un ruolo porta il suo testo, le skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importare un pacchetto aggiunge skill e regole al ruolo che scegli, come versione in prova: il ruolo tiene i suoi permessi.',
         'Exporting a role carries its text, skills, the tools list (TOOLS.md) and the rules; never memory. Importing a pack adds skills and rules to the role you pick, as a trial version: the role keeps its permissions.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: la tabella che sceglie il modello con i risultati di ogni riga, le skill suggerite contro quelle date, la qualità per settimana.',
-        'Classifiers, read only: the table that picks the model with each row’s results, the suggested skills versus the ones given, quality by week.'),
+      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, skill, stima dai task simili, stime, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello, le skill suggerite contro quelle date).',
+        'Classifiers, read only: one card per classifier (kind of work, model, skills, estimates, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table, the suggested skills versus the ones given).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
@@ -228,6 +231,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/appctl/tools.ts app_create_chat
       b('Delega con app_create_chat: roleId obbligatorio, un titolo «Area · cosa», il contratto come primo messaggio e le skill scelte con skills_suggest. Il ruolo decide motore e modello; tier chiede un livello più alto fino al massimo del ruolo.',
         'It delegates with app_create_chat: roleId required, an "Area · what" title, the contract as the first message and the skills picked with skills_suggest. The role decides engine and model; tier asks for a higher level up to the role’s maximum.'),
+      // src/main/agents/task-estimate.ts estimateTool; src/main/agents/orchestrator-role.ts (ADR 0087)
+      b('Prima di partire stima la richiesta sui task simili già finiti (task_estimate: tempo, costo, su quanti task, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Sotto la sua testata, il piano: gli agenti avviati oggi con la stima, il segno «via rapida» e la precisione delle stime settimana per settimana.',
+        'Before starting it estimates the request on similar finished tasks (task_estimate: time, cost, how many tasks, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Under its head, the plan: the agents started today with their estimate, the "fast path" mark and the estimates’ accuracy week by week.'),
       // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
       b('Dei figli vede solo lo stato e i numeri (agent_metrics): mai il loro testo. Il risultato gli arriva quando il figlio chiude con agent_report.',
         'Of its children it sees only state and numbers (agent_metrics): never their text. The result reaches it when the child closes with agent_report.'),
@@ -251,7 +257,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
         'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
     ],
-    sources: ['src/main/agents/orchestrator-role.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
+    sources: ['src/main/agents/orchestrator-role.ts', 'src/main/agents/task-estimate.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
   },
   {
     id: 'runs',
@@ -316,8 +322,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/analytics.ts, src/main/agents/collector.ts
       b('Le statistiche della pagina Costi vengono dalle sessioni e dai registri osservati.', 'The Costs page statistics come from observed sessions and ledgers.'),
       // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
-      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; non hanno ancora una vista dedicata.',
-        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; these have no dedicated view yet.'),
+      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
+        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
+      // src/main/agents/standing.ts; src/renderer/components/AgentCatalogCard.tsx
+      b('Ogni carta ha un livello e una performance. Livello: Lv 2 a 5 lavori conclusi, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu o il Giudice × 1, l’Orchestrator × 0,6, l’agente stesso × 0,3) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
+        'Each card has a level and a performance. Level: Lv 2 at 5 ended runs, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you or the Judge × 1, the Orchestrator × 0.6, the agent itself × 0.3) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
@@ -326,7 +335,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/wiring.ts /api/agents/analytics
       tech(WHERE, 'Statistiche delle sessioni: /api/agents/analytics; metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo.', 'Session statistics: /api/agents/analytics; run metrics: agents:metrics IPC, also filtered by skill, app and repo tags.'),
     ],
-    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
+    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
   },
   {
     id: 'errors-rules',
@@ -451,11 +460,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni, redirezioni, sottoespressioni né opzioni che scrivono o eseguono (sort e uniq solo dopo una pipe).',
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
-      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI.',
-        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI.'),
       // src/shared/roles.ts ROLE_DEFAULTS.router
-      b('Smistare un lotto di lavoro (una inbox, una lista di ticket) è il compito del ruolo Router, quando glielo affidi: non è un classificatore che gira da solo.',
-        'Triaging a batch of work (an inbox, a list of tickets) is the Router role’s job, when you hand it one: it is not a classifier that runs by itself.'),
+      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) è invece il compito del ruolo Router, quando glielo affidi.',
+        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Router role’s job, when you hand it one.'),
+      // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
+      b('Brain → Classificatori ne mostra sei come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
+        'Brain → Classifiers shows five of them as cards: decisions, how often they "get it" (kind recognised, skills spot on, cost inside the range), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -469,7 +479,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
       tech(LIMITS, 'Richiesta letta fino a 2000 caratteri; il modello locale ha 2,5 s, poi si risponde a sole parole; nessun token speso.', 'Request read up to 2000 characters; the local model gets 2.5 s, then the answer is words only; no token spent.'),
     ],
-    sources: ['src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -566,9 +576,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/ChildStrips.tsx
       b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro, ciascuno con il nome dell’agente dell’app con cui gira (o «nessun agente»); quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»). Finché un sottoagente lavora, la striscia madre dice «in attesa», non «finito».',
         'Under each strip appear the subagents and commands still at work, each with the name of the app agent it runs as (or "no agent"); finished ones leave at once (the full list stays in "Details and collaborators"). While a subagent works, the parent strip says "waiting", not "finished".'),
-      // src/renderer/lib/agent-estimates.ts
-      b('Una striscia al lavoro di un agente mostra una stima tratteggiata di tempo e costo: è la mediana delle sue esecuzioni concluse (almeno 3), non il tempo né il costo di questa esecuzione.',
-        'A working agent strip shows a dashed estimate of time and cost: the median of its ended runs (at least 3), not this run’s own time or cost.'),
+      // src/renderer/components/RunEstimate.tsx, src/main/agents/task-estimate.ts (ADR 0087)
+      b('Una striscia di un agente mostra una stima tratteggiata, «stima ~4 min · ~0,12 $ · su 12 task simili»: la mediana dei task simili già finiti (stesso agente e stesso tipo, poi stesso tipo, poi stesso agente; almeno 3), mai il tempo né il costo di questa esecuzione. Finito il lavoro diventa «~4 min → 6 min» con ✓ se il reale sta tra la metà e il doppio. Il «?» spiega il calcolo e quanto sono state precise le stime.',
+        'An agent strip shows a dashed estimate, "estimate ~4 min · ~0,12 $ · from 12 similar tasks": the median of similar finished tasks (same agent and kind, then same kind, then same agent; at least 3), never this run’s own time or cost. Once done it becomes "~4 min → 6 min" with ✓ when the actual is between half and double. The "?" explains the computation and how accurate the estimates have been.'),
       // src/main/chats/manager.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0084)
       b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
         'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
@@ -586,7 +596,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
     ],
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
   },
   {
     id: 'dashboard',
@@ -600,10 +610,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
       b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
         'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
-      b('«Costi» per giorno, modello, motore e agente; «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
-        '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
-      b('«Errori» conta ai-errors.md e gli eventi (la lezione di ogni errore è in Memoria); «Spunti» deriva segnali come contesti lunghi e costi alti.',
-        '"Errors" counts ai-errors.md and events (each error’s lesson is in Memory); "Tips" derives signals such as long contexts and high costs.'),
+      b('«Costi» per giorno, modello, motore e agente, in grafici con una riga di curiosità (il giorno più caro, il modello che pesa di più); «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
+        '"Costs" by day, model, engine and agent, as charts under a row of curious facts (the priciest day, the model that weighs most); "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
+      // src/renderer/dashboard/ErrorsTab.tsx, src/renderer/dashboard/errors.ts
+      b('«Errori» raggruppa gli errori che si ripetono in schede: causa in parole semplici (limite d’uso, rete, accesso, contesto pieno…), quante volte, l’andamento su 14 giorni, l’ultima volta, dove (chat, ruolo, skill), cosa vuol dire e cosa fare; sotto, gli errori dell’AI che hai corretto per tipo, con la regola nata e se l’errore è tornato.',
+        '"Errors" groups recurring errors into cards: the cause in plain words (usage limit, network, login, full context…), how many times, the 14-day trend, the last time, where (chat, role, skill), what it means and what to do; below, the AI errors you corrected by type, with the rule produced and whether the error came back.'),
+      b('Ogni numero ha un «?»: dice esattamente come è calcolato. «Spunti» deriva segnali come contesti lunghi e costi alti.',
+        'Every number has a "?": it says exactly how it is computed. "Tips" derives signals such as long contexts and high costs.'),
       b('Ogni pannello ha «Discuti»: mette una bozza all’Orchestrator, non la invia mai da solo.',
         'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
     ],
@@ -613,7 +626,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
       tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/facts.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
   },
   {
     id: 'task-fatto',
@@ -647,10 +660,46 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/renderer/brain/lib/done-log.ts', 'brain-template/ops/tools/day.mjs'],
   },
   {
+    id: 'setup',
+    title: b('La prima configurazione', 'The first setup'),
+    summary: b('Una sola finestra, sette passi: cartelle, la tua IA, gli strumenti, chi sei, il tuo lavoro, la squadra e il riepilogo. Riprendi quando vuoi.',
+      'One window, seven steps: folders, your AI, tools, who you are, your work, the team and the summary. Resume whenever you like.'),
+    points: [
+      // src/renderer/components/SetupFolders.tsx; src/modules/ai-first/default-brain.ts
+      b('Cartelle: nessuna scelta tra opzioni. La memoria è nuova e vuota (creata alla conferma nella cartella dati dell’app) oppure un brain che hai già, indicato con «Usa un brain esistente…».',
+        'Folders: no options to pick. The memory is a new, empty one (created on confirmation in the app’s data folder) or a brain you already have, pointed to with "Use an existing brain…".'),
+      // src/main/brain/projects-folder.ts
+      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova; la cambi o la rilevi di nuovo in Impostazioni → Il mio spazio.',
+        'The app looks for the projects folder by itself: the repositories Claude Code and Cursor already worked in and the usual places (source/repos, Projects, dev…). It asks only when it finds none.'),
+      // src/renderer/components/SetupEngines.tsx; src/renderer/lib/setup-wizard.ts
+      b('La tua IA: «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi, finché la scheda dice «Collegata» con l’account e l’ora della verifica.',
+        'Your AI: "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds, until the card says "Collegata" with the account and the time of the check.'),
+      // src/renderer/components/SetupConnectors.tsx; src/renderer/lib/setup-connectors.ts
+      b('Strumenti (GitHub, Azure DevOps, Jira): ogni accesso finisce con una verifica vera in sola lettura. «Connesso come …» dice l’account e quanti progetti ha letto; «Non connesso» dice il motivo e cosa fare.',
+        'Tools (GitHub, Azure DevOps, Jira): every sign-in ends in a real read-only check. "Connected as …" names the account and how many projects it read; "Not connected" says why and what to do.'),
+      // src/renderer/components/FirstInterview.tsx; src/main/brain/profile.ts
+      b('Nome, ruolo, lingua, aree e stile delle risposte finiscono in me.md alla conferma; ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
+        'Name, role, language, areas and reply style go into me.md on confirmation; every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
+      // src/renderer/components/ui.tsx Modal
+      b('Niente dentro la finestra la chiude da solo: un clic fuori non fa nulla, e la si riapre da Impostazioni → «Configura il mio lavoro».',
+        'Nothing inside the window closes it by itself: a click outside does nothing, and you reopen it from Settings → "Configura il mio lavoro".'),
+    ],
+    analogy: b('Come il primo giorno in un ufficio nuovo: ti mostrano la scrivania, ti danno i badge e controllano che aprano davvero le porte.',
+      'Like the first day at a new office: they show you your desk, hand you the badges and check they really open the doors.'),
+    diagram: { kind: 'flow', steps: [b('Cartelle', 'Folders'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei e lavoro', 'You and your work'), b('Conferma', 'Confirm')] },
+    tech: [
+      tech(WHERE, 'Le scelte stanno in config.json (brainRoot, projectsRoot); la bozza in setup.json; il brain nuovo usa projectsRoot come cartella dei repository (REPOS).',
+        'The choices live in config.json (brainRoot, projectsRoot); the draft in setup.json; a new brain uses projectsRoot as its repositories folder (REPOS).'),
+      tech(LIMITS, 'Ricerca dei progetti: solo nomi di cartelle e presenza di .git, al massimo 300 cartelle note alle CLI; nessun file aperto. Ricontrollo degli accessi: ogni 4 secondi per 3 minuti.',
+        'Projects search: folder names and .git presence only, at most 300 folders known to the CLIs; no file opened. Sign-in re-checks: every 4 seconds for 3 minutes.'),
+    ],
+    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
+  },
+  {
     id: 'brain',
     title: b('Il brain: le note e la memoria', 'The brain: notes and memory'),
-    summary: b('Una cartella di note scelta all’installazione: parte vuota, gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
-      'A folder of notes chosen at setup: it starts empty, agents read and write it, the app shows it live.'),
+    summary: b('Una cartella di note, nuova e vuota alla prima configurazione (o un brain che hai già): gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
+      'A folder of notes, new and empty at the first setup (or a brain you already have): agents read and write it, the app shows it live.'),
     points: [
       // src/main/brain/detect.ts isBrainFolder
       b('Si riconosce da brain.json (un brain nuovo) oppure da AGENTS.md più ops/tools/brain-site.mjs (un brain di prima); il percorso è salvato in config.json (brainRoot).',
@@ -823,6 +872,51 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'The limits’ "ask" mode (stop or continue?) is described but today only adds a note to the alert.'),
     ],
     sources: ['src/renderer/components/UsageBar.tsx', 'src/main/chats/live-cost.ts', 'src/main/brain/budget.ts', 'src/main/brain/usage.ts', 'src/main/brain/settings-schema.ts'],
+  },
+  {
+    id: 'mcp-servers',
+    title: b('Connettori e server MCP', 'Connectors and MCP servers'),
+    summary: b('In Impostazioni → Connettori aggiungi una volta i server MCP: l’app li dà a Claude, Cursor e Codex, con i token cifrati e i limiti di ogni agente.',
+      'In Settings → Connectors you add MCP servers once: the app gives them to Claude, Cursor and Codex, with encrypted tokens and each agent’s limits.'),
+    points: [
+      // src/renderer/components/ConnectorsHub.tsx; src/modules/onboarding/AppScreen.tsx
+      b('Una sola sezione: gli account dell’app (Azure DevOps, GitHub, Jira) e i server MCP come schede, ognuna con stato, uso, strumenti, ruoli e un solo «Prova».',
+        'One section: the app’s accounts (Azure DevOps, GitHub, Jira) and the MCP servers as cards, each with state, use, tools, roles and one "Prova".'),
+      // src/main/mcp-servers/store.ts
+      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato.',
+        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked.'),
+      // src/main/mcp-servers/service.ts test()
+      b('«Prova» apre il server come farebbe una chat, elenca i suoi strumenti (lettura o scrittura) e, se non va, dice l’errore e come sistemarlo.',
+        '"Prova" opens the server as a chat would, lists its tools (read or write) and, when it fails, says the error and how to fix it.'),
+      // src/main/mcp-servers/gateway.ts
+      b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
+        'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
+      // src/shared/mcp-servers.ts chainAllows; src/renderer/components/AgentMcpSection.tsx
+      b('Ogni agente può usare tutti i server; dal retro della sua scheda lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
+        'Every agent may use every server; from the back of its card you narrow it per server: everything, read only, chosen tools or nothing.'),
+      b('Un lavoratore non ha mai più accesso della chat che l’ha avviato, e una modifica vale subito anche per le chat aperte.',
+        'A worker never has more access than the chat that started it, and a change applies at once to open chats too.'),
+      // src/main/mcp-servers/import.ts
+      b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
+        '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
+    ],
+    analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
+      'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),
+    diagram: { kind: 'flow', steps: [b('Chat dell’agente', 'Agent’s chat'), b('Gateway dell’app', 'App gateway'), b('Accesso del ruolo', 'Role access'), b('Server MCP', 'MCP server')] },
+    tech: [
+      tech(FILES, 'userData/mcp-servers.json (server, accesso per ruolo, ultima prova) e mcp-secrets.json (token cifrati con safeStorage).',
+        'userData/mcp-servers.json (servers, per-role access, last test) and mcp-secrets.json (tokens encrypted with safeStorage).'),
+      tech(WHERE, '/mcp/ext/<chat>/<server>/<token>; Claude con --mcp-config, Cursor in ACP session/new, Codex con -c mcp_servers.<id>.url.',
+        '/mcp/ext/<chat>/<server>/<token>; Claude via --mcp-config, Cursor in ACP session/new, Codex via -c mcp_servers.<id>.url.'),
+      tech(DATA, 'Accesso per ruolo e server: all, read, none o un elenco di strumenti; assente = all. «Lettura» = annotations.readOnlyHint.',
+        'Access per role and server: all, read, none or a list of tools; absent = all. "Read" = annotations.readOnlyHint.'),
+    ],
+    target: [
+      b('I server che chiedono un accesso OAuth nel browser e quelli solo SSE (vecchio trasporto) non sono ancora supportati.',
+        'Servers that need an OAuth sign-in in the browser and SSE-only ones (old transport) are not supported yet.'),
+    ],
+    sources: ['src/main/mcp-servers/store.ts', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
+      'src/renderer/components/ConnectorsHub.tsx', 'src/renderer/components/AgentMcpSection.tsx', 'docs/adr/0086-app-managed-mcp-servers.md'],
   },
   {
     id: 'updates',

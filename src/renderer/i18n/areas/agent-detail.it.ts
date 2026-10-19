@@ -1,4 +1,4 @@
-// A role's own page (components/AgentStudio.tsx) and the browser marker and estimate of a strip (ChatTile.tsx), in
+// A role's own page (components/AgentStudio.tsx) and the browser marker of a strip (ChatTile.tsx), in
 // Italian. English counterpart in agent-detail.en.ts (ADR 0057).
 export const agentDetailIt = {
   'agentDetail.back': 'Tutti i ruoli',
@@ -10,7 +10,7 @@ export const agentDetailIt = {
   'agentDetail.config': 'Configurazione',
   'agentDetail.results': 'Risultati osservati',
   'agentDetail.tools': 'Strumenti',
-  'agentDetail.toolsNone': 'Nessuno', 'agentDetail.toolsAll': 'Quelli del motore',
+  'agentDetail.toolsNone': 'Nessuno',
   'agentDetail.ceiling': 'Permessi massimi',
   'agentDetail.ceilingNone': 'Le tue impostazioni',
   'agentDetail.ceiling.plan': 'Solo piano', 'agentDetail.ceiling.default': 'Chiede conferma', 'agentDetail.ceiling.acceptEdits': 'Accetta modifiche',
@@ -19,8 +19,4 @@ export const agentDetailIt = {
   'agentDetail.closeEditor': 'Chiudi senza salvare',
   'agentDetail.browserOn': ({ n }: { n: number }) => n === 1 ? 'Nascondi il browser' : `Nascondi i ${n} browser`,
   'agentDetail.browserOff': ({ n }: { n: number }) => n === 1 ? 'Mostra il browser agganciato' : `Mostra i ${n} browser agganciati`,
-  'agentDetail.estimate': 'stima',
-  'agentDetail.estimateLeft': ({ d }: { d: string }) => `ne restano ~${d}`,
-  'agentDetail.estimateOver': 'oltre la stima',
-  'agentDetail.estimateTip': ({ name, n }: { name: string; n: number }) => `Stima: mediana delle ultime esecuzioni concluse di ${name} (${n}). Non è il tempo né il costo di questa esecuzione: quelli reali sono a sinistra.`,
 };

@@ -125,7 +125,25 @@ export interface VersionMetrics {
   questionsPerRun: Metric; permissionsPerRun: Metric; commandsPerRun: Metric;
   reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
 }
-export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number }
+export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;
+  /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */
+  standing?: AgentStanding }
+/** The agent card's level (from its ended runs) and performance % (verdicts weighted by trust and recency): agents/standing.ts. */
+export interface AgentStanding {
+  /** ended runs counted for the level (kept + rolled up) */
+  runs: number;
+  level: number;
+  /** runs where this level starts, and where the next one does (null at the top level) */
+  levelAt: number; nextAt: number | null;
+  /** 0..1 of the way to the next level (1 at the top) */
+  progress: number;
+  /** 0..1, null while fewer than `minRuns` runs have a verdict ("in rodaggio") */
+  performance: number | null;
+  /** runs with a verdict, and the minimum before the performance is shown */
+  evaluated: number; minRuns: number;
+  /** where the verdicts came from: the user (or reviewed evidence), a Judge review, the Orchestrator, the agent itself */
+  sources: { human: number; judge: number; orchestrator: number; self: number };
+}
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {
   source?: 'chat' | 'oneshot';

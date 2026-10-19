@@ -16,11 +16,11 @@ it('imports and server-renders the default panel in Node without a window or bri
   expect(html).toContain('Caricamento dei collegamenti');
 });
 it('offers official access and an explicit read-only verification; no token/password renderer field', () => {
-  const html = render(); expect(html).toContain('Accedi a Jira Cloud'); expect(html).toContain('Verifica accesso a Jira Cloud'); expect(html).toContain('role="status"'); expect(html).not.toContain('type="password"'); expect(html).not.toContain('Collegato e verificato');
+  const html = render(); expect(html).toContain('Accedi a Jira Cloud'); expect(html).toContain('Prova Jira Cloud'); expect(html).toContain('role="status"'); expect(html).not.toContain('type="password"'); expect(html).not.toContain('Collegato e verificato');
 });
 it('gives Azure the same named actions and explains its existing DevOps integration', () => {
   const html = render({ provider: 'azure' });
-  expect(html).toContain('Accedi a Azure DevOps'); expect(html).toContain('Verifica accesso a Azure DevOps');
+  expect(html).toContain('Accedi a Azure DevOps'); expect(html).toContain('Prova Azure DevOps');
   expect(html).toContain('Azure CLI'); expect(html).toContain('devops-me.mjs');
   expect(html).toContain('btn-primary'); expect(html).not.toContain('type="password"');
 });
@@ -36,7 +36,16 @@ it('shows the pending status once, keeps disconnect on demand and localizes the 
     setLang('en'); const html = render();
     expect(html).toContain('Sign-in pending'); expect(html).toContain('Sign in to Jira Cloud');
     expect(html).not.toContain('Accesso da completare'); expect(html).not.toContain('Accedi');
-    expect(html).toContain('<details>'); expect(html).not.toContain('<details open');
+    expect(html).toContain('<details class="hub-details">'); expect(html).not.toContain('<details open');
     expect(html).not.toContain('type="password"');
   } finally { setLang('it'); }
+});
+it('says what each connector is for and offers one Prova, with the sign-in as the fix', () => {
+  const html = render({ provider: 'github' });
+  expect(html).toContain('server MCP GitHub');
+  expect(html.match(/>Prova</g)).toHaveLength(1);
+  expect(html).toContain('aria-label="Prova GitHub"');
+  expect(html).toContain('Accedi a GitHub');
+  expect(render({ provider: 'azure' })).toContain('Pagina Task');
+  expect(render({ status: 'verified', provider: 'github' })).not.toContain('Accedi a GitHub');
 });

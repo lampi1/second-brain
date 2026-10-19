@@ -127,6 +127,21 @@ describe('agent policy on chats', () => {
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read', 'edit', 'shell', 'browser'] }, ceiling: 'acceptEdits' });
   });
 
+  it('ADR 0085: an Orchestrator with every permission still bounds the /mcp/app chats read-only in plan mode; a renewed one runs its role as it is now', async () => {
+    const f = fixture();
+    const all: AgentPolicy = { tools: { allow: ['read', 'edit', 'shell', 'web', 'browser', 'mcp'] }, ceiling: null };
+    const old = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user', agent({ tools: { allow: ['read'] }, ceiling: 'plan' }));
+    // the user renews it (Ricomincia, Cambia motore) after widening the role: the role's policy, not the old chat's
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, replaces: old.id }, 'user', agent(all));
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: all.tools });
+    expect(f.starts.at(-1)?.ceiling ?? null).toBeNull();
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x', permissionMode: 'bypassPermissions' }, 'agent', agent(all), {}, { boundByOrchestrator: true });
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'plan', permissionMode: 'plan' });
+    // its own mount is not bound: a full role runs in the mode asked
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y', permissionMode: 'bypassPermissions' }, 'agent', agent(all));
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: all.tools, permissionMode: 'bypassPermissions' });
+  });
+
   it('an Orchestrator with no stored policy bounds the /mcp/app chats read-only, in plan mode (fail closed)', async () => {
     const f = fixture();
     await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
