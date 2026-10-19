@@ -1,0 +1,59 @@
+/* The delegation tree (ADR 0083): delegated chats indented under their parent in the Grindhouse, each a thread-like
+   card until opened (DelegationCard.tsx), the parent's fold toggle, a child's request in its parent's chat, and the
+   compact tree under the Grindhouse entry of the sidebar (SidebarTree.tsx). Colours from tokens.css (dark and light). */
+.agent-pane-wrap.tree-child { position:relative; margin-left:calc(var(--depth, 1) * 22px); padding-left:12px; }
+.agent-pane-wrap.tree-child::before { content:''; position:absolute; left:0; top:-8px; bottom:10px; width:2px; border-radius:2px; background:var(--border-2); }
+.agent-pane-wrap.tree-child::after { content:''; position:absolute; left:0; top:22px; width:10px; height:2px; background:var(--border-2); }
+
+.delegation-card { display:flex; flex-direction:column; gap:6px; min-width:0; padding:10px 12px; border:1px solid var(--border-2); border-radius:10px; background:var(--surface); cursor:pointer; transition:border-color var(--dur-fast), background-color var(--dur-fast); }
+.delegation-card:hover { border-color:var(--border-3); background:var(--surface-2); }
+.delegation-card:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.delegation-card[data-state="running"] { border-color:color-mix(in srgb, var(--blue) 35%, var(--border-2)); }
+.delegation-card[data-state="waiting"] { border-color:var(--amber-line); }
+.delegation-card.is-done { border-color:color-mix(in srgb, var(--green) 35%, var(--border-2)); }
+.delegation-card.is-blocked { border-color:color-mix(in srgb, var(--red) 40%, var(--border-2)); }
+.dc-head { display:flex; align-items:center; gap:8px; min-width:0; }
+.dc-title { flex:1; min-width:0; margin:0; font-size:14px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dc-who { display:flex; align-items:center; gap:6px; min-width:0; font-size:var(--fs-s); color:var(--text-2); }
+.dc-role { font-weight:600; color:var(--text); }
+.dc-parent { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-3); }
+.dc-parent::before { content:'·'; margin-right:6px; color:var(--text-4); }
+.dc-steps { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; font-size:12px; color:var(--text-2); }
+.dc-step { display:flex; align-items:center; gap:6px; min-width:0; }
+.dc-step-dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--text-4); }
+.dc-step.is-running .dc-step-dot { background:var(--blue); animation:dc-pulse 1.2s ease-in-out infinite; }
+.dc-step.is-ok .dc-step-dot { background:var(--green); }
+.dc-step.is-error .dc-step-dot { background:var(--red); }
+.dc-step.is-none { color:var(--text-3); font-style:italic; }
+.dc-step-name { flex:none; font-family:var(--mono); font-size:11px; color:var(--text-3); }
+.dc-step-sum { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dc-summary { margin:0; font-size:12.5px; color:var(--text-2); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.dc-result { flex:none; }
+.dc-result.is-done { background:var(--green-bg); color:var(--green); }
+.dc-result.is-partial { background:var(--amber-bg); color:var(--amber); }
+.dc-result.is-blocked { background:var(--red-bg); color:var(--red); }
+@keyframes dc-pulse { 50% { opacity:.35; } }
+@media (prefers-reduced-motion: reduce) { .dc-step.is-running .dc-step-dot { animation:none; } }
+
+.tree-toggle-row { display:flex; align-items:center; gap:8px; margin:6px 0 0 18px; }
+.tree-toggle { display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px 0 6px; border:1px solid var(--border-2); border-radius:99px; background:var(--surface); color:var(--text-2); font-size:12px; cursor:pointer; }
+.tree-toggle:hover { background:var(--surface-2); color:var(--text); }
+.tree-toggle:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+
+.child-requests { border-top:1px dashed var(--border-2); }
+.child-request { display:flex; flex-direction:column; gap:4px; }
+.child-request-from { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--text-2); }
+
+.nav-tree { display:flex; flex-direction:column; gap:1px; margin:2px 0 6px; padding:0; list-style:none; }
+.nav-tree-row { display:flex; align-items:center; gap:2px; min-width:0; padding-left:calc(6px + var(--depth, 0) * 12px); }
+.nav-tree-fold { flex:none; display:grid; place-items:center; width:16px; height:22px; padding:0; border:0; border-radius:4px; background:none; color:var(--text-3); cursor:pointer; }
+.nav-tree-fold:hover { background:var(--surface-2); color:var(--text); }
+.nav-tree-fold.is-leaf { cursor:default; }
+.nav-tree-chat { flex:1; display:flex; align-items:center; gap:6px; min-width:0; height:24px; padding:0 6px 0 2px; border:0; border-radius:var(--r-s); background:none; color:var(--text-2); font-size:12px; text-align:left; cursor:pointer; }
+.nav-tree-chat:hover { background:var(--surface-2); color:var(--text); }
+.nav-tree-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nav-tree-dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--text-4); }
+.nav-tree-dot.tone-run { background:var(--blue); }
+.nav-tree-dot.tone-wait { background:var(--amber); }
+.nav-tree-dot.tone-done { background:var(--green); }
+.nav-tree-dot.tone-err { background:var(--red); }

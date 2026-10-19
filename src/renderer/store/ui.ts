@@ -35,6 +35,8 @@ export interface Prefs {
   chatExpanded:Record<string,boolean>;
   /** an expanded strip shows its browsers beside it only when the user opened them (owner, 18/10: collapsed by default) */
   browserOpen:Record<string,boolean>;
+  /** parents whose delegated children are folded, in the Grindhouse and the sidebar tree alike (lib/chat-tree.ts) */
+  treeCollapsed:Record<string,boolean>;
   density: Density;
   theme: Theme;
   /** the Orchestrator widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
@@ -97,7 +99,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},treeCollapsed:{},
   density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0, pairSplit: 0.42,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
 };
@@ -130,6 +132,7 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       chatPanelsV:p.chatPanelsV===2?2:p.chatPanelsV===1?1:0,
       chatExpanded:flags(p.chatExpanded),
       browserOpen:flags(p.browserOpen),
+      treeCollapsed:flags(p.treeCollapsed),
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
@@ -191,6 +194,12 @@ export function setChatExpanded(id:string,expanded:boolean):void{
 export function setBrowserOpen(id:string,open:boolean):void{
   const {chatExpanded,browserOpen}=ui.get().prefs;
   setPrefs({browserOpen:{...browserOpen,[id]:open},...(open&&chatExpanded[id]!==true?{chatExpanded:{...chatExpanded,[id]:true}}:{})});
+}
+/** Fold or unfold a parent's delegated children (saved: the tree comes back as it was after a restart). */
+export function setTreeCollapsed(id:string,collapsed:boolean):void{
+  const next={...ui.get().prefs.treeCollapsed};
+  if(collapsed)next[id]=true;else delete next[id];
+  setPrefs({treeCollapsed:next});
 }
 // the window closed within the 150 ms (a resize, then ✕): the last change is still saved
 if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer) savePrefs(); });

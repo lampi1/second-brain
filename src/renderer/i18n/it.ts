@@ -27,6 +27,7 @@ import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
+import { treeIt } from './areas/tree.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
@@ -43,6 +44,7 @@ export const it = {
   ...homeIt,
   ...cloudIt,
   ...guideIt,
+  ...treeIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',

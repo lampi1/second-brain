@@ -774,7 +774,9 @@ export interface OrchestratorChatDefaults {
   cursorFast: boolean;
 }
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'pulse'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'pulse' | 'delegation' | 'modelTiers'>> & {
+  delegation?: Partial<DelegationSettings>;
+  modelTiers?: Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
   pulse?: Partial<Omit<PulseSettings, 'headline' | 'types' | 'places'>> & { headline?: { on?: boolean }; types?: Partial<PulseSettings['types']>; places?: Partial<PulseSettings['places']> };
   engines?: Partial<Settings['engines']>;
   tasks?: Partial<Settings['tasks']>;

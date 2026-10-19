@@ -1,6 +1,7 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Skill, Regole, Memoria, Classificatori and the Mappa of their
 // links, each thing shown and edited in one place) and app tools (Dashboard = statistics only, Guida). Role-specific
-// pages exclude destinations already supplied by the shell. Used by App.tsx.
+// pages exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
+// tree (SidebarTree.tsx). Used by App.tsx.
 import type { ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
@@ -14,6 +15,7 @@ import {
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
 import { useApprovalCount } from '../store/agent-approvals';
+import { SidebarTree } from './SidebarTree';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
@@ -72,6 +74,7 @@ export function Sidebar() {
     <nav className="sidebar" aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="nav-group nav-scroll">
         {page1('home')}
+        <SidebarTree />
         {title(t('dialogs.sidebar.work'), 'work')}
         {tasksOn && show('task') && page1('task')}
         {show('fatto')&&page1('fatto')}

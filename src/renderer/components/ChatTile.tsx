@@ -10,6 +10,8 @@
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
 // off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
 // browsers stay folded until it is pressed, then sit beside the chat (on a collapsed strip it expands it too; AgentStrips.tsx).
+// An expanded chat also shows the open requests of the chats it delegated (lib/child-requests.ts), each tagged with the
+// role and task that asks: answering goes to that child, which then goes on (ADR 0083).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
@@ -39,6 +41,7 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
+import { childRequestsFor, type ChildRequest } from '../lib/child-requests';
 import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
 
@@ -50,6 +53,7 @@ export function closeFromX(e: { detail: number }, close: () => void): void {
   close();
 }
 const EMPTY_REQS: readonly PendingRequest[] = [];
+const sameAsks = (a: ChildRequest[], b: ChildRequest[]) => a.length === b.length && a.every((x, i) => x.req === b[i]!.req && x.chat === b[i]!.chat);
 export const pendingOf = (list: readonly PendingRequest[], chatId: string) => {
   const r = list.filter(p => p.chatId === chatId);
   return r.length ? r : EMPTY_REQS;
@@ -72,6 +76,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const chat = useApp(s => s.chats[chatId]);
   const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
+  const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending), sameAsks);
   const inWindow = useApp(questionsModalOn);
   const queued = ui.use(s => s.later);
   const key = `chat:${chatId}`;
@@ -179,6 +184,14 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {expanded && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
           {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
+        </div>
+      ))}
+      {expanded && childReqs.length > 0 && (queued ? <InWindowLine reqs={childReqs.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={childReqs.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} /> : (
+        <div className="tile-requests child-requests">
+          {childReqs.map(({ req, chat: c }) => <div key={`${req.chatId}:${req.id}`} className="child-request" data-testid={`child-request-${req.chatId}`}>
+            <div className="child-request-from"><AgentAvatar avatar={c.agent?.avatar} name={c.agent?.name || c.title} size={16} />{t('tree.asks', { role: c.agent?.name || '', title: c.title })}</div>
+            <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={answerLater} />
+          </div>)}
         </div>
       ))}
       {chat.queued && !chat.closedAt && (

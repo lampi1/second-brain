@@ -1,10 +1,13 @@
 // The agents' strips in the Grindhouse (brain/pages/Home.tsx; SPEC 19: the one place for agents): one column, one
 // strip under the other, in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside a
 // group); each browser tab sits right under the chat that drives it. There is no drag and no saved order (SPEC 10-11):
-// the user expands, maximizes or opens a strip in focus mode, the Orchestrator decides where it goes.
+// the user expands, maximizes or opens a strip in focus mode, the Orchestrator decides where it goes. Delegated chats
+// (ADR 0083) sit indented under the chat that delegated them (lib/chat-tree.ts), each a thread-like card until it is
+// opened (DelegationCard.tsx); a parent folds and unfolds its children, and the fold is kept across restarts.
 import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
 import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
-import { agentOrder, areaOf } from '../lib/agent-order';
+import { areaOf } from '../lib/agent-order';
+import { chatTree, visibleTree, type TreeNode } from '../lib/chat-tree';
 import { schedule } from '../lib/viewports';
 import { useApp } from '../store/store';
 import { sameList } from '../store/state';
@@ -14,6 +17,7 @@ import { t as tr } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
+import { DelegationCard, TreeToggle } from './DelegationCard';
 import { toggleMaximize } from '../actions';
 import { pairOf, pairStyle } from '../lib/pairs';
 import { useCloudIds } from '../store/cloud';
@@ -37,7 +41,11 @@ export function AgentStrips() {
   const expansion = ui.use(s => s.prefs.chatExpanded);
   const browserOpen = ui.use(s => s.prefs.browserOpen);
   const hidden = ui.use(s => s.hidden, sameList), hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
-  const tiles = useApp(s => workspaceTiles(agentOrder(s.order, s.chats), s.chats, s.tabs), equalTiles);
+  const tree = useApp(s => chatTree(s.order, s.chats), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+  const collapsed = ui.use(s => s.prefs.treeCollapsed);
+  const tiles = useApp(s => workspaceTiles(chatTree(s.order, s.chats).map(n => n.id), s.chats, s.tabs), equalTiles);
+  const nodes = new Map<string, TreeNode>(tree.map(n => [n.id, n]));
+  const inTree = new Set(visibleTree(tree, collapsed).map(n => n.id));
   const owners = useApp(s => Object.fromEntries(s.tabs.filter(t => t.ownerChatId).map(t => [t.id, t.ownerChatId!])), (a, b) => JSON.stringify(a) === JSON.stringify(b));
   const areas = useApp(s => tiles.map(t => t.kind === 'chat' ? areaOf(s.chats[t.id] ?? { cwd: '' }) : ''), sameList);
   const pairs = useApp(s => tiles.map(t => t.kind === 'browser' ? pairOf(s, s.tabs.find(tab => tab.id === t.id)?.ownerChatId) : null), sameList);
@@ -53,7 +61,7 @@ export function AgentStrips() {
   // no strip to open).
   const strips = new Set(tiles.filter(t => t.kind === 'chat').map(t => t.id));
   const folded = (t: TileRef) => strips.has(owners[t.id] ?? '') && !(expansion[owners[t.id]!] === true && browserOpen[owners[t.id]!] === true) && !keep.includes(t.id) && maximized !== tileKey(t);
-  const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && !folded(t);
+  const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) && inTree.has(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && (!owners[t.id] || !nodes.has(owners[t.id]!) || inTree.has(owners[t.id]!)) && !folded(t);
   const visible = tiles.filter(isVisible);
   const max = maximized ? visible.find(t => tileKey(t) === maximized) ?? null : null;
   const shown = max ? [max] : visible;
@@ -84,19 +92,23 @@ export function AgentStrips() {
     <div className={`workspace-column${max ? ' workspace-max' : ''}`} {...(max ? { 'data-testid': 'maximized', 'data-key': tileKey(max) } : {})}>
       {rows.map(({ lead, side }, i) => {
         const key = tileKey(lead), area = areas[tiles.indexOf(lead)] ?? '';
-        const firstOfArea = !max && lead.kind === 'chat' && area !== lastArea;
-        if (lead.kind === 'chat') lastArea = area;
+        const node = lead.kind === 'chat' ? nodes.get(lead.id) : undefined, depth = max ? 0 : node?.depth ?? 0;
+        const firstOfArea = !max && lead.kind === 'chat' && depth === 0 && area !== lastArea;
+        if (lead.kind === 'chat' && depth === 0) lastArea = area;
+        // a delegated chat not opened yet is its card; opened, the full strip (writable), indented the same
+        const card = !max && lead.kind === 'chat' && depth > 0 && expansion[lead.id] !== true;
         const accent = side.length ? pairs[tiles.indexOf(side[0]!)] ?? null : lead.kind === 'browser' && !max && owners[lead.id] ? pairs[tiles.indexOf(lead)] ?? null : null;
         const owned = lead.kind === 'browser' && !max && !!owners[lead.id];
         // the strips enter in turn (agent-strips.css, off under reduced motion)
-        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}`} key={key} style={{ '--row-index': Math.min(i, 8), ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
+        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
           {firstOfArea && <h3 className="workspace-area">{area || tr('product.noArea')}</h3>}
           {/* a chat keeps the same parent with or without its browsers beside it: expanding never remounts it */}
-          {lead.kind === 'chat'
+          {card ? <DelegationCard chatId={lead.id} /> : lead.kind === 'chat'
             ? <div className={side.length ? 'strip-pair' : 'strip-solo'} {...(side.length ? { 'data-testid': `strip-pair-${lead.id}` } : {})}>{pane(lead)}{side.length > 0 && <div className="strip-pair-side">{side.map(pane)}</div>}</div>
             : pane(lead)}
           {/* Child activity remains visible when its parent is collapsed, expanded or maximized. */}
           {lead.kind === 'chat' && <ChildStrips chatId={lead.id} />}
+          {!max && node && node.children.length > 0 && <TreeToggle chatId={lead.id} n={node.children.length} working={node.working} />}
         </div>;
       })}
     </div>
