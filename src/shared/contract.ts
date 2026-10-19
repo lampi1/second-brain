@@ -603,6 +603,17 @@ export interface ImprovePromote {
   log: string;                // the output's tail
   version?: string;           // the new release id once promoted
 }
+/** "Aggiorna" from GitHub (ADR 0075): the code folder against GitHub's main, and the one-click update in progress */
+export interface SourceUpdate {
+  state: 'idle' | 'checking' | 'updating' | 'restarting' | 'done' | 'error';
+  /** commits on GitHub's main not in the code folder (null = not checked yet) */
+  behind: number | null;
+  commits: string[];          // "<sha> <subject>", newest first, at most 20
+  message: string;            // Italian, for the user
+  /** the button may run: a code folder on main without local changes, nothing running */
+  canUpdate: boolean;
+  at: number;
+}
 export interface ImproveState {
   repo: string | null;
   repoProblem: string | null; // Italian: why the code folder is missing or unusable
@@ -620,6 +631,7 @@ export interface ImproveState {
   promote: ImprovePromote | null;
   launch: ImproveLaunch | null;
   branches: ImproveBranch[];  // the last 14 days, newest first, at most 20
+  source: SourceUpdate;
   at: number;
 }
 
@@ -1338,6 +1350,10 @@ export interface InvokeMap {
   'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** the restart notice was read */
   'improve:dismissLaunch': [void, ImproveState];
+  /** reads GitHub's main against the code folder (git fetch, nothing changes) */
+  'improve:sourceCheck': [void, ImproveState];
+  /** the user's click on "Aggiorna" (never an agent): pull, build, switch to the new version and restart, no tests */
+  'improve:updateNow': [void, ImproveState];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */
@@ -1460,7 +1476,7 @@ export const INVOKE_CHANNELS = [
   'devops:get', 'devops:refresh', 'devops:markRead', 'chat:branches',
   'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
-  'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch',
+  'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'improve:get', 'improve:promote', 'improve:regia', 'improve:dismissLaunch', 'improve:sourceCheck', 'improve:updateNow',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',

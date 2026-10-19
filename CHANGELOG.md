@@ -21,6 +21,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Pages fade in on every change and progress bars move smoothly, both off under reduced motion.
 
 ### Added
+- Settings → Aggiornamenti: what is new on GitHub, and an "Aggiorna" button that downloads it, rebuilds and restarts
+  the app on it at once, without the test suite (ADR 0075).
 - "Aggiornati": ask the Orchestrator and it brings a developer's clone to the latest `main` from GitHub
   (fast-forward only, dependencies reinstalled only when the lockfile changed, then a build); `npm run pull` does the
   same from a terminal (ADR 0074).

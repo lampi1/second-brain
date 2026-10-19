@@ -8,7 +8,7 @@
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ChatSummary, Harness, ImproveLaunch, ImprovePromote, ImproveState } from '../../shared/contract';
+import type { ChatSummary, Harness, ImproveLaunch, ImprovePromote, ImproveState, SourceUpdate } from '../../shared/contract';
 import type { ChatService } from '../services';
 import { errText, log } from '../log';
 import { createRoutedChat, type RoutedChatDeps } from '../chats/routed';
@@ -16,7 +16,7 @@ import { branchStages, checkAt, launchOutcome, nextSeen, promoteGate, promoteSte
 import { buildImproveEvidence, type ImproveEvidenceSelection } from './evidence';
 
 /** scripts/pull.mjs --json */
-export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean }
+export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean; behind?: number; canUpdate?: boolean }
 
 export interface ImproveDeps {
   /** Production uses the single staged updater; legacy promotion remains only for historical fixtures. */
@@ -35,6 +35,10 @@ export interface ImproveDeps {
   emit: (s: ImproveState) => void;
   /** start the launcher and quit (wiring: the real one; tests: a recorder); failed: the launcher did not start */
   restart: (failed: () => void) => void;
+  /** a dev build run from the code folder starts again on the new build (wiring: app.relaunch + quit; tests: a recorder) */
+  relaunch?: () => void;
+  /** demo and tests on the real checkout: never fetch from GitHub, never pull (wiring: SB_DEMO/SB_TEST without SB_IMPROVE_REPO) */
+  offline?: boolean;
   /** the Node that runs release.mjs (null = none found: "Aggiorna" stays off) */
   node: string | null;
   /** the routing table (ADR 0032): the section's Regia gets its model from it; none (tests) = the engine's default */
@@ -42,6 +46,7 @@ export interface ImproveDeps {
 }
 
 const LOG_MAX = 6000;
+const IDLE_SOURCE: SourceUpdate = { state: 'idle', behind: null, commits: [], message: '', canUpdate: false, at: 0 };
 const git = (cwd: string, args: string[]): Promise<string> => new Promise((resolve, reject) => {
   // core.fsmonitor off: a chat working in the code folder could set it in .git/config and git would run it here, in
   // the app's own process, with no click (security review 2026-10-12)
@@ -78,7 +83,7 @@ export class ImproveService {
   constructor(private readonly d: ImproveDeps) {
     this.st = {
       repo: null, repoProblem: null, running: d.running, stable: d.stable, current: null, previous: null, bad: [], candidate: null,
-      canPromote: false, promoteWhy: '', promote: null, launch: this.detectLaunch(), branches: [], at: 0,
+      canPromote: false, promoteWhy: '', promote: null, launch: this.detectLaunch(), branches: [], source: { ...IDLE_SOURCE }, at: 0,
     };
   }
 
@@ -169,7 +174,7 @@ export class ImproveService {
     this.st = { ...this.st, repo, repoProblem, ...state, candidate, runningAt,
       canPromote: this.d.allowLegacyPromotion !== false && gate.ok,
       promoteWhy: this.d.allowLegacyPromotion === false ? 'Usa il pacchetto preparato nella sezione aggiornamenti.' : gate.why,
-      promote: this.promoteRun, branches, at: Date.now() };
+      promote: this.promoteRun, branches, source: this.st.source, at: Date.now() };
     this.d.emit(this.st);
     return this.st;
   }
@@ -193,7 +198,13 @@ export class ImproveService {
     let s: ImproveState;
     try { s = await this.refresh(); } catch (e) { this.promoting = false; throw e; }
     if (!s.canPromote || !s.repo || !this.d.node) { this.promoting = false; throw new Error(s.promoteWhy || 'Aggiornamento non possibile adesso.'); }
-    const repo = s.repo;
+    this.spawnPromote(s.repo, 'promote');
+    return this.st;
+  }
+
+  /** release.mjs <cmd> in the code folder, its steps in the state, then the restart through the launcher. */
+  private spawnPromote(repo: string, cmd: 'promote' | 'promote-now', on?: { ok(version?: string): void; failed(why: string): void }): void {
+    const s = this.st;
     const run: ImprovePromote = { state: 'running', startedAt: Date.now(), step: 'Avvio', log: '' };
     this.promoteRun = run;
     this.push();
@@ -201,7 +212,7 @@ export class ImproveService {
     // a clean environment: nothing of this running app (release id, userData, port, Electron-as-Node) leaks into the
     // tests and the build the promotion runs
     const env = cleanEnv(process.env);
-    const child = spawn(this.d.node, [path.join(repo, 'scripts', 'release.mjs'), 'promote'], { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(this.d.node!, [path.join(repo, 'scripts', 'release.mjs'), cmd], { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const add = (b: Buffer) => {
       run.log = (run.log + b.toString()).slice(-LOG_MAX);
       const step = promoteStep(run.log);
@@ -218,23 +229,25 @@ export class ImproveService {
         run.step = 'Riavvio sulla versione nuova';
         log.info('improve', 'promoted: restarting', { data: { version: run.version } });
         this.push();
+        on?.ok(run.version);
         setTimeout(() => this.d.restart(() => {
           this.promoting = false;
           run.state = 'error';
           run.step = `Versione ${run.version ?? 'nuova'} pronta, ma il riavvio non è partito: chiudi e riapri l'app`;
           this.push();
+          on?.failed(run.step);
         }), 1500);
       } else {
         this.promoting = false;
         run.state = 'error';
         // say where it stopped (tests, stable test, copy): the log below is npm's, in English
         run.step = `Non aggiornata, fermata a «${run.step.replace(/…$/, '')}»: la versione in uso non è cambiata`;
-        log.warn('improve', 'promotion failed', { cause: `release.mjs promote exit ${code}`, hint: 'read the log tail in the section; run `npm run check` in the code folder' });
+        log.warn('improve', 'promotion failed', { cause: `release.mjs ${cmd} exit ${code}`, hint: 'read the log tail in the section; run `npm run check` in the code folder' });
         this.push();
+        on?.failed(`${run.step}. ${run.log.trim().split('\n').pop() ?? ''}`.slice(0, 400));
         void this.refresh();
       }
     });
-    return this.st;
   }
 
   /** The user's "aggiornati" through the Orchestrator (app_update_code, ADR 0074): scripts/pull.mjs in the code folder
@@ -247,19 +260,83 @@ export class ImproveService {
     if (!this.d.node) throw new Error('Serve Node.js installato per aggiornare il codice.');
     this.pulling = true;
     try {
-      const out = await new Promise<string>((resolve, reject) => {
-        execFile(this.d.node!, [path.join(repo, 'scripts', 'pull.mjs'), '--json'], { cwd: repo, env: cleanEnv(process.env), windowsHide: true, timeout: 15 * 60_000, maxBuffer: 4e6 }, (err, stdout) => {
-          const line = String(stdout).trim().split('\n').pop() ?? '';
-          try { resolve(JSON.stringify(JSON.parse(line))); } catch { reject(new Error(`Aggiornamento del codice non riuscito: ${errText(err ?? new Error('nessuna risposta'))}`.slice(0, 500))); }
-        });
-      });
-      const r = JSON.parse(out) as PullResult;
+      const r = await this.runPull(repo, []);
       log.info('improve', 'code folder update', { data: { ok: r.ok, from: r.from, to: r.to, upToDate: r.upToDate } });
       return r;
     } finally {
       this.pulling = false;
       void this.refresh();
     }
+  }
+
+  private runPull(repo: string, extra: string[]): Promise<PullResult> {
+    return new Promise<PullResult>((resolve, reject) => {
+      execFile(this.d.node!, [path.join(repo, 'scripts', 'pull.mjs'), '--json', ...extra], { cwd: repo, env: cleanEnv(process.env), windowsHide: true, timeout: 15 * 60_000, maxBuffer: 4e6 }, (err, stdout) => {
+        const line = String(stdout).trim().split('\n').pop() ?? '';
+        try { resolve(JSON.parse(line) as PullResult); } catch { reject(new Error(`Aggiornamento del codice non riuscito: ${errText(err ?? new Error('nessuna risposta'))}`.slice(0, 500))); }
+      });
+    });
+  }
+
+  private setSource(patch: Partial<SourceUpdate>): ImproveState {
+    this.st = { ...this.st, source: { ...this.st.source, ...patch, at: Date.now() } };
+    this.push();
+    return this.st;
+  }
+
+  /** Where the code folder stands against GitHub's main (git fetch only): the "Aggiorna" button's count. */
+  async sourceCheck(): Promise<ImproveState> {
+    if (this.pulling || this.st.source.state === 'updating' || this.st.source.state === 'restarting') return this.st;
+    if (this.d.offline) return this.setSource({ state: 'idle', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
+    const repo = this.repo();
+    if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) {
+      return this.setSource({ state: 'idle', behind: null, commits: [], canUpdate: false,
+        message: !repo ? "Questa installazione non viene da un clone del codice: aggiorna con il nuovo installer." : !this.d.node ? 'Serve Node.js installato per aggiornare.' : `In ${repo} manca scripts/pull.mjs: aggiorna a mano una volta (git pull, npm run setup).` });
+    }
+    this.pulling = true;
+    this.setSource({ state: 'checking', message: 'Controllo GitHub…' });
+    try {
+      const r = await this.runPull(repo, ['--check']);
+      // a stable copy may be behind its own code folder even when the folder matches GitHub
+      const st = await this.read();
+      const pending = this.d.stable && !!st.candidate;
+      const canUpdate = r.ok && (!!r.canUpdate || (pending && r.behind === 0 && !st.repoProblem));
+      return this.setSource({ state: 'idle', behind: r.behind ?? null, commits: r.commits ?? [], canUpdate,
+        message: r.ok && r.behind === 0 ? (pending ? 'Il codice ha già la versione nuova: premi «Aggiorna» per passarci.' : 'Hai già l’ultima versione.') : r.message });
+    } catch (e) {
+      return this.setSource({ state: 'error', canUpdate: false, message: errText(e).slice(0, 300) });
+    } finally { this.pulling = false; }
+  }
+
+  /** The user's click on "Aggiorna" (ADR 0075): the latest main from GitHub, built, and the app on it at once, no tests.
+   *  A dev build restarts itself; a stable copy is switched with release.mjs promote-now and restarts through the
+   *  launcher, which falls back to the previous release if the new one does not start. */
+  async updateNow(): Promise<ImproveState> {
+    if (this.pulling || this.promoting) throw new Error('Un aggiornamento è già in corso.');
+    if (this.d.offline) throw new Error('Nella demo l’app non si aggiorna.');
+    const repo = this.repo();
+    if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) { await this.sourceCheck(); throw new Error(this.st.source.message || 'Aggiornamento non possibile adesso.'); }
+    this.pulling = true;
+    this.setSource({ state: 'updating', message: 'Scarico la versione nuova da GitHub…' });
+    let r: PullResult;
+    try { r = await this.runPull(repo, []); } catch (e) { r = { ok: false, message: errText(e) }; } finally { this.pulling = false; }
+    log.info('improve', 'update now: code folder', { data: { ok: r.ok, from: r.from, to: r.to, upToDate: r.upToDate } });
+    if (!r.ok) return this.setSource({ state: 'error', canUpdate: false, message: r.message.slice(0, 400) });
+    if (!this.d.stable) {
+      if (r.upToDate) return this.setSource({ state: 'done', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
+      this.setSource({ state: 'restarting', behind: 0, commits: [], canUpdate: false, message: `Versione nuova pronta (${r.to}): riavvio…` });
+      setTimeout(() => this.d.relaunch?.(), 800);
+      return this.st;
+    }
+    const st = await this.read();
+    if (!st.candidate) return this.setSource({ state: 'done', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
+    this.setSource({ state: 'updating', message: 'Preparo la versione nuova…' });
+    this.promoting = true;
+    this.spawnPromote(repo, 'promote-now', {
+      ok: version => this.setSource({ state: 'restarting', behind: 0, commits: [], canUpdate: false, message: `Versione ${version ?? 'nuova'} pronta: riavvio…` }),
+      failed: why => this.setSource({ state: 'error', canUpdate: false, message: why }),
+    });
+    return this.st;
   }
 
   /** A folder the app's chats may work in: the code folder or one of its git worktrees. */

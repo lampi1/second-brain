@@ -4,6 +4,7 @@
 //                                                      then build → copy out/ (the guard's scanner included,
 //                                                      out/guard/scan.mjs) + package.json to releases/<ver>-<sha>/,
 //                                                      share the Electron runtime, switch current.json, write launch.cmd (launch.sh on macOS/Linux)
+//   node scripts/release.mjs promote-now             the app's "Aggiorna": the same without check and test:stable (ADR 0075)
 //   node scripts/release.mjs rollback                 current ⇄ previous
 //   node scripts/release.mjs status [--json]           what is current/previous, where the launcher is
 //   node scripts/release.mjs launch                    (used by launch.cmd/.sh) start current; if its window does not report
@@ -94,7 +95,10 @@ export function releaseEnginePath(rel, root = base) {
   return engine;
 }
 
-async function promote(staging = false) {
+// quick = "promote-now", the app's "Aggiorna" click (owner, 2026-10-19: "che si passi subito alla nuova versione senza
+// lanciare tutti i test"): the same clean main, build, copy and switch, without `npm run check` and test:stable; the
+// launcher still falls back to the previous release if the new one does not start (ADR 0075)
+async function promote(staging = false, quick = false) {
   if (process.argv.includes('--skip-check') || process.argv.includes('--allow-dirty')) throw new Error('promotion bypass flags are not supported; use stage-test in a disposable directory');
   if (staging) {
     if (!process.env.SB_RELEASES_ROOT || process.env.SB_NO_SYNC !== '1') throw new Error('stage-test requires SB_RELEASES_ROOT and SB_NO_SYNC=1');
@@ -107,6 +111,8 @@ async function promote(staging = false) {
   if (!staging) {
     const branch = execFileSync('git', ['-C', repo, 'branch', '--show-current'], { encoding: 'utf8' }).trim();
     if (branch !== 'main') throw new Error('promotion is only allowed from main');
+  }
+  if (!staging && !quick) {
     say('npm run check …');
     execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'check'], { cwd: repo, stdio: 'inherit', shell: process.platform === 'win32' });
     // and the packaged copy itself, as the user opens it, with the real brain (2026-10-11: dev green, stable broken)
@@ -387,6 +393,7 @@ async function launch() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) try {
   if (cmd === 'promote') await promote();
+  else if (cmd === 'promote-now') await promote(false, true);
   else if (cmd === 'stage-test') await promote(true);
   else if (cmd === 'install') {
     if (path.resolve(fileURLToPath(import.meta.url)) !== path.resolve(base, 'release.mjs')) throw new Error('install must run from the installed payload, never a checkout');
@@ -428,5 +435,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   }
   else if (cmd === 'launch') await launch();
   else if (cmd === 'status') { const s = readState(); const { stagedUpdates } = await import('./update.mjs'); console.log(process.argv.includes('--json') ? JSON.stringify({ base, ...s, writerProtocol: RELEASE_WRITER_PROTOCOL, stateProtocol: s.writerProtocol ?? 0, lock: releaseLockInfo(base), staged: stagedUpdates(base) }) : `base ${base}\ncurrent ${s.current ?? '-'}\nprevious ${s.previous ?? '-'}\nbad ${(s.bad ?? []).join(', ') || '-'}`); }
-  else { console.error('usage: release.mjs promote|rollback|rollback-if <current> <previous>|launch|status|stage-test|install <id>|install-payload <id> <manifest-sha256>|stage-update <payload> <manifest-sha256>|apply-update <id> <manifest-sha256> <current>'); process.exit(3); }
+  else { console.error('usage: release.mjs promote|promote-now|rollback|rollback-if <current> <previous>|launch|status|stage-test|install <id>|install-payload <id> <manifest-sha256>|stage-update <payload> <manifest-sha256>|apply-update <id> <manifest-sha256> <current>'); process.exit(3); }
 } catch (e) { console.error(`release: ${e.message}`); process.exit(1); }

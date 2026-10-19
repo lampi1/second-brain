@@ -1,11 +1,11 @@
 // Settings page (rendered by App.tsx): essential settings only, laid out like the Dashboard: a page header with the
 // search, a row of section links, then one card per group (icon, title, one-line description, rows of text left and
-// control right). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// control right). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
 import type{CliStatus,EngineInfo,SecretsStatus}from'@shared/contract';
-import{IconBell,IconFolder,IconLink,IconMoon,IconSearch,IconTerminal,IconUser}from'./Icons';
+import{IconBell,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconTerminal,IconUser}from'./Icons';
 import{useEngines}from'../lib/engines';
 import{matchesSettingsSearch}from'../lib/settings-page';
 import{useApp,setSetting}from'../store/store';
@@ -17,6 +17,7 @@ import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { CodexAutonomy } from './CodexAutonomy';
+import { AppUpdateSettings } from './AppUpdateSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -46,6 +47,7 @@ export function SettingsPage(){
  if(!settings)return null;
  const groups=[
   {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
+  {id:'update',icon:<IconRefresh size={18}/>,description:t('essential.desc.update'),title:t('update.group'),search:'aggiorna update versione version GitHub',body:<AppUpdateSettings/>},
   {id:'connectors',icon:<IconLink size={18}/>,description:t('essential.desc.connectors'),title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects',body:<AppConnectorScreen/>},
   {id:'accounts',icon:<IconTerminal size={18}/>,description:t('essential.desc.accounts'),title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' ')+' '+t('autonomy.title'),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
   {id:'space',icon:<IconFolder size={18}/>,description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
