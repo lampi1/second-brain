@@ -47,6 +47,17 @@ const BROWSER: Record<string, (i: Obj) => string> = {
   batch: () => 'esegue più azioni nella pagina', handle_dialog: () => 'risponde a un avviso della pagina', handoff_to_user: () => 'ti chiede di agire nella pagina', environments: () => 'elenca gli ambienti', computer: () => 'usa mouse e tastiera nella pagina',
 };
 
+/** The delegation tools of a chat's own endpoint (ADR 0083): who it hands work to, what it hands back. */
+const DELEGATION: Record<string, (i: Obj) => string> = {
+  agent_delegate: i => {
+    const tasks = Array.isArray(i.tasks) ? i.tasks.filter((x): x is Obj => !!x && typeof x === 'object') : [];
+    const names = tasks.slice(0, 3).map(x => `«${cut(str(x.title) || '?', 40)}»${str(x.role) ? ` (${str(x.role).charAt(0).toUpperCase()}${str(x.role).slice(1)})` : ''}`);
+    return tasks.length ? `Delega ${names.join(', ')}${tasks.length > 3 ? ` e altre ${tasks.length - 3}` : ''}` : 'Delega parti del lavoro';
+  },
+  agent_report: i => (str(i.summary) ? `Consegna il risultato: ${cut(str(i.summary), 80)}` : 'Consegna il risultato a chi ha delegato'),
+  agent_children: () => 'Controlla le chat delegate',
+};
+
 const VERBS: Record<string, string> = {
   get: 'legge', read: 'legge', list: 'elenca', show: 'mostra', create: 'crea', add: 'aggiunge', new: 'crea', update: 'aggiorna', set: 'imposta', edit: 'modifica',
   delete: 'elimina', remove: 'rimuove', trash: 'cestina', search: 'cerca', query: 'interroga', find: 'cerca', send: 'invia', reply: 'risponde a', forward: 'inoltra',
@@ -73,6 +84,7 @@ function mcp(name: string, input: Obj): Explained | null {
   const m = /^mcp__(.+?)__(.+)$/.exec(name);
   if (!m) return null;
   const server = m[1]!, tool = m[2]!;
+  if (server === 'second-brain' && Object.hasOwn(DELEGATION, tool)) return { line: DELEGATION[tool]!(input), raw: tool };
   const t = tool.replace(/^browser_/, '');
   const browserish = /browser|chrome|second-brain|^Claude_Browser$/i.test(server);
   const action = browserish ? (Object.hasOwn(BROWSER, t) ? BROWSER[t]!(input) : null) ?? actionWords(t) : actionWords(tool);

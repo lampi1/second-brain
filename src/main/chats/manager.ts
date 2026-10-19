@@ -549,7 +549,9 @@ export class ChatManager implements ChatService {
     if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
-      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt)) : this.send(id, prompt)); } catch (e) {
+      // a delegated chat's contract says who sent it (the parent's title), like mail between chats
+      const from = delegator?.s.title;
+      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from)) : this.send(id, prompt, undefined, false, from)); } catch (e) {
         if (!r.s.lastError) r.s.lastError = errText(e);
         this.updated(r);
       }

@@ -40,6 +40,10 @@ describe('explainTool', () => {
     expect(explainTool('mcp__my-devops__repo_get_pull_request_by_id', {}).line).toBe('Azure DevOps: legge pull request');
     expect(explainTool('mcp__second-brain__navigate', { url: 'https://test.example.com/x' }).line).toBe('Browser dell’app: apre test.example.com');
     expect(explainTool('mcp__second-brain__screenshot', {}).line).toBe('Browser dell’app: fa uno screenshot');
+    // the delegation tools say who gets the work and what comes back, never "Browser" (ADR 0083)
+    expect(explainTool('mcp__second-brain__agent_delegate', { tasks: [{ role: 'scout', title: 'Log errori' }, { role: 'sentinel', title: 'Test' }] }).line).toBe('Delega «Log errori» (Scout), «Test» (Sentinel)');
+    expect(explainTool('mcp__second-brain__agent_report', { summary: 'Trovati 3 errori' }).line).toBe('Consegna il risultato: Trovati 3 errori');
+    expect(explainTool('mcp__second-brain__agent_children', {}).line).toBe('Controlla le chat delegate');
     expect(explainTool('mcp__claude_ai_Gmail__search_threads', { query: 'fattura' })).toEqual({ line: 'Gmail: cerca threads', raw: 'search_threads · fattura' });
     expect(explainTool('mcp__sb-browser__browser_click', {}).line).toBe('Browser dell’app: clicca nella pagina');
   });
