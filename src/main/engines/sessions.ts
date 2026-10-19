@@ -27,6 +27,8 @@ export interface EngineContext {
   /** the chat's browser MCP endpoint and, for an Orchestrator, the app-control one (ACP passes them in session/new) */
   mcpUrl: string | null;
   appMcpUrl: string | null;
+  /** the app-managed MCP servers this chat may use: their gateway endpoints (ADR 0086); absent = none */
+  extMcp?: { name: string; url: string }[];
   /** show the past an ACP engine replays when a session is loaded (a chat restored after a restart has no items) */
   showReplay: boolean;
   appVersion?: string;
@@ -59,7 +61,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
       const agentPolicy = opts.toolPolicy || opts.ceiling ? { tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null } : null;
-      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
+      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
       return new CodexSession({
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: opts.readOnly ? [] : opts.agentAssets ? [opts.agentAssets.skillRoot] : launch.skillRoots,
@@ -75,7 +77,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
       const key = engine.keyEnv ? boundKey() : null;
       return new AcpSession({
         brainInstructions: acpRules(opts.readOnly),
-        ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, showReplay: ctx.showReplay,
+        ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: opts.readOnly ? [] : ctx.extMcp ?? [], showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,

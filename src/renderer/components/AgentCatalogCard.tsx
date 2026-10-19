@@ -1,7 +1,7 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): on the front the character large and centred, its name and what
 // it is for, engine and model tier, a live status, its level (from ended runs) and performance % (verdicts weighted by
 // trust and recency, main/agents/standing.ts), each with a "?" giving the formula, and three compact run metrics; a click anywhere on the card flips it in 3D (#81)
-// to the back: the role's instructions, the skills it loads at every launch, its memory, the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
+// to the back: the role's instructions, the skills it loads at every launch, the MCP servers it may use (AgentMcpSection, ADR 0086), its memory, the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
 // keyboard and screen readers only reach the visible one. Under prefers-reduced-motion the faces fade instead of turning.
 // Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash with "Non
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
@@ -14,6 +14,7 @@ import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { HelpTip } from './HelpTip';
+import { AgentMcpSection } from './AgentMcpSection';
 
 type Value = { text: string | null; samples?: string };
 
@@ -154,6 +155,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
             : <span key={s} className="bm-chip">{s}</span>)}</div>
             : <p>{t('bm.card.noSkills')}</p>}
         </section>
+        {profile.scope === 'role' && <AgentMcpSection roleId={profile.id} roleName={profile.name} mcpClass={!profile.tools || profile.tools.allow.includes('mcp')} />}
         <dl>
           <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
           <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>

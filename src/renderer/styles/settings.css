@@ -180,22 +180,8 @@
 .st-autonomy-confirm { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--blue-line); border-radius: var(--r-m); background: var(--blue-bg); }
 .st-autonomy-confirm .btn { justify-self: start; }
 
-/* Strumenti e progetti: the onboarding connector cards inside the group (their own title is the group's) */
-.st-card > .app-connectors { padding: 16px 20px 20px; gap: 14px; }
-.st-card > .app-connectors > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.st-card > .app-connectors > p { color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
-.st-card > .app-connectors > small { color: var(--text-3); font-size: var(--fs-xs); }
-.st-card > .app-connectors .app-connector-list { gap: 12px; }
-.st-card > .app-connectors .app-connector-card { background: var(--surface-2); border-color: var(--border); border-radius: var(--r-m); padding: 16px; gap: 12px; transition: border-color var(--dur) var(--ease); }
-.st-card > .app-connectors .app-connector-card:hover { border-color: var(--border-3); }
-.st-card > .app-connectors .app-connector-card h3 { font-size: var(--fs-l); font-weight: 600; }
-.st-card > .app-connectors .app-connector-card p { font-size: var(--fs-s); color: var(--text-2); }
-.st-card > .app-connectors .app-connector-icon { background: var(--blue-bg); color: var(--blue); border-radius: 9px; }
-.st-card > .app-connectors .app-connector-card header [role=status] { color: var(--text-3); }
-.st-card > .app-connectors .app-connector-card header [data-status=verified] { color: var(--green); }
-.st-card > .app-connectors .app-connector-card header [data-status=failed] { color: var(--red); }
-.st-card > .app-connectors .app-connector-card details { color: var(--text-3); }
-.st-card > .app-connectors .app-connector-card summary { cursor: pointer; color: var(--text-2); }
+/* Connettori: the hub (ConnectorsHub.tsx) has its own styles, styles/connectors-hub.css */
+.st-card > .hub { padding: 18px 20px 22px; }
 
 /* Aspetto e lingua: the appearance preview (AppearancePreview.tsx) */
 .st-card .appearance-picker { margin: 0; }

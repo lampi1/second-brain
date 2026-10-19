@@ -95,6 +95,9 @@ export interface ChatManagerOptions {
   mcpUrlFor?: ((chatId: string) => string | null) | null;
   /** the app-control MCP for the Orchestrator only: its own /mcp/app/o/<id>/<token> */
   appMcpUrl?: ((orchestratorId: string) => string | null) | null;
+  /** the app-managed MCP servers a chat is given (ADR 0086, mcp-servers/service.ts launch): gateway endpoints, and the
+   *  managed ids it may not use (Claude refuses them by name) */
+  extMcp?: ((chatId: string) => { servers: { name: string; url: string }[]; denied: string[] }) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
   maxItems?: number;
@@ -2091,7 +2094,23 @@ export class ChatManager implements ChatService {
     const servers: Record<string, { type: 'http'; url: string }> = {};
     if (url) servers['second-brain'] = { type: 'http', url };
     if (app) servers['second-brain-app'] = { type: 'http', url: app };
+    for (const ext of this.opts.extMcp?.(chatId).servers ?? []) servers[ext.name] ??= { type: 'http', url: ext.url };
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
+  }
+
+  /** The chat as the MCP access sees it (ADR 0086): its role and each parent's, own first, and its tool policy; null =
+   *  not a chat of this app. A chat whose parent is gone keeps the parent's place as no role (its policy, narrowed at
+   *  start by that parent, still holds). */
+  mcpContext(chatId: string): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
+    const r = this.chats.get(chatId);
+    if (!r) return null;
+    const roles: (string | null)[] = [];
+    const seen = new Set<string>();
+    for (let c: Rec | undefined = r; c && !seen.has(c.s.id) && roles.length < 16; c = c.s.parentId ? this.chats.get(c.s.parentId) : undefined) {
+      seen.add(c.s.id);
+      roles.push(c.s.agent?.source === 'catalog' ? c.s.agent.id : null);
+    }
+    return { roles, policy: r.policy ?? null };
   }
 
   /** the app-control endpoint of an Orchestrator, null for any other chat */
@@ -2146,7 +2165,10 @@ export class ChatManager implements ChatService {
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
-    return this.opts.extraArgs || allowed.length ? [...(this.opts.extraArgs ?? []), ...(allowed.length ? ['--allowedTools', allowed.join(',')] : [])] : null;
+    // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
+    const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];
+    const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : [])];
+    return this.opts.extraArgs || extra.length ? [...(this.opts.extraArgs ?? []), ...extra] : null;
   }
 
   /** An agent's message (from = its sender) never wakes a stopped chat (closed, or its engine released for idleness) on
@@ -2168,6 +2190,7 @@ export class ChatManager implements ChatService {
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {
       userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
+      extMcp: this.opts.extMcp?.(opts.chatId).servers ?? [],
       showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null,
       ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
     });

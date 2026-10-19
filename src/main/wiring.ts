@@ -56,6 +56,8 @@ import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
 import { readOrchestratorMail } from './brain/brain-settings';
 import { EndpointTokens } from './mcp/tokens';
+import { McpServersService } from './mcp-servers/service';
+import type { ChatMcpContext } from './mcp-servers/access';
 import { createDemoServices } from './demo-wiring';
 import { forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
@@ -126,6 +128,8 @@ export interface Wired {
   skills: SkillsApi;
   /** The local MCP server: browser routes, /mcp/app (app control). */
   mcp: McpServer;
+  /** the MCP servers the user added in Settings → Connettori, given to each chat by role (ADR 0086) */
+  mcpServers?: McpServersService;
   /** code blocks run by the user's click ("Esegui"), output streamed back (run:updated) */
   runner: CommandRunner;
   /** shell blocks a chat left for the user, as open requests ("Comando da eseguire", run/asks.ts) */
@@ -408,6 +412,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the Orchestrator's app-control endpoint carries an unguessable token: the URL names the caller, whose engine decides the
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
+  // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
+  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
@@ -445,6 +451,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // 2026-10-13); never with the fake CLI of the e2e tests; SB_PREWARM=0 turns it off
     prewarm: !process.env.SB_CLAUDE_PATH && process.env.SB_PREWARM !== '0',
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
+    extMcp: chatId => mcpServers.launch(chatId, browser.mcpUrlFor(null).replace(/\/mcp$/, '')),
     // agents' new chats and turns wait while the machine is busy (ADR 0036); SB_LOAD_FORCE="cpu,freeRam" fixes the load
     // for the e2e suite
     admission: {
@@ -700,6 +707,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   return {
     brainModel,
+    mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
@@ -708,7 +716,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

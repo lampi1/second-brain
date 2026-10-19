@@ -18,6 +18,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **"Ferma dopo" works**: `delegation.stallMin` was declared but never read; now `agent_children` reports a working
   child silent for that many minutes as `stalled` (with `quietMin`), so its parent can nudge or close it; with a "?" in
   Impostazioni → Ruoli e deleghe.
+- **MCP servers managed by the app** (ADR 0086, #91): add a server once in Settings → Connettori (a local command or an
+  https address), test it ("Prova": works or not, its tools split read/write, a clear error and fix), or import the ones
+  already in Claude Code, Claude desktop, Cursor and Codex (read only, no token copied). Every Claude, Codex and Cursor
+  chat gets the servers its role may use through the app's MCP gateway, which adds the token (encrypted, write-only)
+  and checks the role's access at every call; by default every role has every server, narrowed per server on the agent
+  card's new "Server MCP" section (all tools, read only, picked, none); a child never more than its parent.
+- **Settings → Connettori redesigned**: accounts and MCP servers as cards in a grid with totals, what each is for, its
+  state, one "Prova" and "?" explanations, in dark and light.
 
 ### Changed
 - **Memoria with its numbers** (owner, 2026-10-19): key figures, "Lo sapevi?" (curious facts from the data: the

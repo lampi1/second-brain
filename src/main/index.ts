@@ -136,6 +136,7 @@ app.whenReady().then(async () => {
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
+    const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh());
     await connectors.ready;
     const handlers: Handlers = {
@@ -145,6 +146,16 @@ app.whenReady().then(async () => {
       'connectors:probe': a => connectors.service.probe(a?.provider),
       'connectors:select': a => connectors.service.select(a?.provider, a?.projects),
       'connectors:disconnect': a => connectors.service.disconnect(a?.provider),
+      // the user's MCP servers (ADR 0086): the user's clicks only; a token goes in once and never comes back
+      'mcpservers:state': () => mcpServers().state(),
+      'mcpservers:save': a => mcpServers().save(a),
+      'mcpservers:remove': a => mcpServers().remove(a?.id),
+      'mcpservers:setSecret': a => mcpServers().setSecret(a),
+      'mcpservers:deleteSecret': a => mcpServers().deleteSecret(a),
+      'mcpservers:setAccess': a => mcpServers().setAccess(a),
+      'mcpservers:test': a => mcpServers().test(a?.id),
+      'mcpservers:importScan': () => mcpServers().importScan(),
+      'mcpservers:importApply': a => mcpServers().importApply(a?.keys),
       'update:get': () => updates.state(),
       'update:apply': a => updates.apply(a?.id),
       'update:checkpointAnswer': a => updates.answer(a),

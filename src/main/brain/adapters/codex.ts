@@ -1,6 +1,6 @@
 // The Codex adapter (ADR 0060): what one `codex app-server` launch gets from the app and the brain, never written into
 // the user's ~/.codex (repo rule 6): `-c key=value` overrides on its command line (approval policy, sandbox, the app's
-// MCP servers), the domains' AGENTS.md as the thread's developer instructions, the domains' skill folders for
+// MCP servers and the app-managed ones through the gateway, ADR 0086), the domains' AGENTS.md as the thread's developer instructions, the domains' skill folders for
 // skills/extraRoots/set. With the brain switched off (Settings) only the app's own part stays (approval, sandbox, MCP).
 // CLI 0.163.0-alpha.10.2 accepted these -c overrides and reported the streamable HTTP URL via `mcp get` (18/10).
 // Native approval keys follow the official config reference; live model/tool approval behavior is not verified.
@@ -30,6 +30,8 @@ export interface CodexLaunchInput {
   cwd?: string;
   mcpUrl: string | null;
   appMcpUrl: string | null;
+  /** the app-managed MCP servers (ADR 0086): gateway endpoints, one `mcp_servers.<id>.url` each; absent = none */
+  extMcp?: { name: string; url: string }[];
   readOnly?: boolean;
   /** absent: from launchRules() (wiring.ts) */
   domains?: BrainDomain[];
@@ -50,6 +52,13 @@ function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app'
   if (!appEndpoint(raw)) return;
   config.push(`mcp_servers.${server}.default_tools_approval_mode=${server === 'second-brain-app' ? 'approve' : 'prompt'}`);
   if (server === 'second-brain') for (const tool of APP_CHAT_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
+}
+
+/** An app-managed server through the gateway (ADR 0086): only its URL, which carries no secret (the gateway adds the
+ *  token); its tools ask first, like any MCP tool. Ids and URLs are plain (MCP_ID, a loopback URL): never quoted. */
+function attachExt(config: string[], id: string, url: string): void {
+  if (!/^[a-z0-9-]{1,40}$/.test(id) || id.startsWith('second-brain') || !PLAIN.test(url) || !appEndpoint(url)) return;
+  config.push(`mcp_servers.${id}.url=${url}`, `mcp_servers.${id}.default_tools_approval_mode=prompt`);
 }
 
 /** Without a product brain (ADR 0062) the joined AGENTS.md of every domain, exactly as before (`{domain:x}` resolves
@@ -77,6 +86,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   if (!i.readOnly) {
     attachMcp(c, 'second-brain', i.mcpUrl);
     attachMcp(c, 'second-brain-app', i.appMcpUrl);
+    for (const ext of i.extMcp ?? []) attachExt(c, ext.name, ext.url);
   }
   if (brain && !domains.length) log.info('brain', 'codex chat starts without the brain\'s rules: no brain domain', { ...(i.chatId ? { chat: i.chatId } : {}), hint: 'choose the brain folder in Settings (or switch off «Regole del cervello alle chat Codex»)' });
   return {

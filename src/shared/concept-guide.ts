@@ -871,6 +871,51 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/components/UsageBar.tsx', 'src/main/chats/live-cost.ts', 'src/main/brain/budget.ts', 'src/main/brain/usage.ts', 'src/main/brain/settings-schema.ts'],
   },
   {
+    id: 'mcp-servers',
+    title: b('Connettori e server MCP', 'Connectors and MCP servers'),
+    summary: b('In Impostazioni → Connettori aggiungi una volta i server MCP: l’app li dà a Claude, Cursor e Codex, con i token cifrati e i limiti di ogni agente.',
+      'In Settings → Connectors you add MCP servers once: the app gives them to Claude, Cursor and Codex, with encrypted tokens and each agent’s limits.'),
+    points: [
+      // src/renderer/components/ConnectorsHub.tsx; src/modules/onboarding/AppScreen.tsx
+      b('Una sola sezione: gli account dell’app (Azure DevOps, GitHub, Jira) e i server MCP come schede, ognuna con stato, uso, strumenti, ruoli e un solo «Prova».',
+        'One section: the app’s accounts (Azure DevOps, GitHub, Jira) and the MCP servers as cards, each with state, use, tools, roles and one "Prova".'),
+      // src/main/mcp-servers/store.ts
+      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato.',
+        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked.'),
+      // src/main/mcp-servers/service.ts test()
+      b('«Prova» apre il server come farebbe una chat, elenca i suoi strumenti (lettura o scrittura) e, se non va, dice l’errore e come sistemarlo.',
+        '"Prova" opens the server as a chat would, lists its tools (read or write) and, when it fails, says the error and how to fix it.'),
+      // src/main/mcp-servers/gateway.ts
+      b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
+        'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
+      // src/shared/mcp-servers.ts chainAllows; src/renderer/components/AgentMcpSection.tsx
+      b('Ogni agente può usare tutti i server; dal retro della sua scheda lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
+        'Every agent may use every server; from the back of its card you narrow it per server: everything, read only, chosen tools or nothing.'),
+      b('Un lavoratore non ha mai più accesso della chat che l’ha avviato, e una modifica vale subito anche per le chat aperte.',
+        'A worker never has more access than the chat that started it, and a change applies at once to open chats too.'),
+      // src/main/mcp-servers/import.ts
+      b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
+        '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
+    ],
+    analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
+      'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),
+    diagram: { kind: 'flow', steps: [b('Chat dell’agente', 'Agent’s chat'), b('Gateway dell’app', 'App gateway'), b('Accesso del ruolo', 'Role access'), b('Server MCP', 'MCP server')] },
+    tech: [
+      tech(FILES, 'userData/mcp-servers.json (server, accesso per ruolo, ultima prova) e mcp-secrets.json (token cifrati con safeStorage).',
+        'userData/mcp-servers.json (servers, per-role access, last test) and mcp-secrets.json (tokens encrypted with safeStorage).'),
+      tech(WHERE, '/mcp/ext/<chat>/<server>/<token>; Claude con --mcp-config, Cursor in ACP session/new, Codex con -c mcp_servers.<id>.url.',
+        '/mcp/ext/<chat>/<server>/<token>; Claude via --mcp-config, Cursor in ACP session/new, Codex via -c mcp_servers.<id>.url.'),
+      tech(DATA, 'Accesso per ruolo e server: all, read, none o un elenco di strumenti; assente = all. «Lettura» = annotations.readOnlyHint.',
+        'Access per role and server: all, read, none or a list of tools; absent = all. "Read" = annotations.readOnlyHint.'),
+    ],
+    target: [
+      b('I server che chiedono un accesso OAuth nel browser e quelli solo SSE (vecchio trasporto) non sono ancora supportati.',
+        'Servers that need an OAuth sign-in in the browser and SSE-only ones (old transport) are not supported yet.'),
+    ],
+    sources: ['src/main/mcp-servers/store.ts', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
+      'src/renderer/components/ConnectorsHub.tsx', 'src/renderer/components/AgentMcpSection.tsx', 'docs/adr/0086-app-managed-mcp-servers.md'],
+  },
+  {
     id: 'updates',
     title: b('Aggiornamenti', 'Updates'),
     summary: b('Tu usi una copia stabile e congelata. «Aggiorna» in Impostazioni → Aggiornamenti la porta all’ultima versione con un clic.',
