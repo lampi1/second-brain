@@ -2,11 +2,12 @@
 // a Skill call is allowed at once when the launch gave that skill (the user's standing grant through the role) and
 // refused otherwise; an engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
 // any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
-// delegated chat whose tool class goes beyond its parent's permissions is refused. Everything else passes to the user
-// as before (a request beyond the role but within the parent is the user's call). Refusals are visible in the chat.
+// delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
+// commands, a command that does not only read goes beyond it too). Everything else passes to the user as before (a
+// request beyond the role but within the parent is the user's call). Refusals are visible in the chat.
 // Pure: used by chats/manager.ts; pinned by test/unit/agents/role-gate.test.ts.
 import type { SysCode, SysParams } from '../../shared/sys';
-import { allowsClass, toolClassOf, type AgentPolicy } from './tool-policy';
+import { allowsClass, shellWithin, toolClassOf, type AgentPolicy } from './tool-policy';
 
 export interface GateRequest { type: string; tool: string; input?: unknown }
 export interface GateChat {
@@ -48,7 +49,7 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
       message: `Sub-agent «${type}» refused: hand delegated work to another role with agent_delegate (a visible chat). Engine sub-agents are only for a quick read-only search (${SEARCH_SUBAGENT}).` };
   }
   const cls = toolClassOf(req.tool);
-  if (chat.parent && cls && !allowsClass(chat.parent.policy, cls)) {
+  if (chat.parent && cls && (cls === 'shell' ? !shellWithin(chat.parent.policy, req.tool, req.input) : !allowsClass(chat.parent.policy, cls))) {
     return { kind: 'deny', code: 'aboveParent', params: { tool: req.tool, parent: chat.parent.title },
       message: `${req.tool} goes beyond the permissions of the chat that delegated you («${chat.parent.title}»): it was refused. Do it within your permissions, or report to your parent with agent_report what you need.` };
   }

@@ -50,7 +50,7 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
-import { aboveCeiling, belowParent, browserAccess, claudeDefaultMode, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
@@ -1798,12 +1798,15 @@ export class ChatManager implements ChatService {
   }
 
   /** A role that may only read commands (shell-read): a command it asks to run that does not only read is refused at
-   *  once, visibly, and never reaches the user; one that reads reaches the user without "always" (a rule would let
-   *  later commands through unchecked). */
+   *  once, visibly, and never reaches the user, unless a delegating chat that may run any command is above it (beyond
+   *  the role, within the parent: the user's call; one beyond the parent never got here, gated). One that reads, or
+   *  that the user decides, reaches the user without "always" (a rule would let later commands through unchecked). */
   private refusedCommand(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
-    if (req.type !== 'permission' || req.tool !== 'Bash' && req.tool !== 'PowerShell' && req.tool !== 'Shell' || !commandsReadOnly(r.policy)) return false;
+    if (req.type !== 'permission' || !COMMAND_TOOLS.includes(req.tool) || !commandsReadOnly(r.policy)) return false;
     const command = (req.input as { command?: unknown } | null)?.command;
-    if (readOnlyCommand(command)) { req.noAlways = true; delete req.alwaysRules; return false; }
+    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
+    if (readOnlyCommand(command) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
