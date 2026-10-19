@@ -213,6 +213,28 @@ describe('app control tools', () => {
     cross = true;
     await t('app_continue_chat').run({ chatId: 'cl' });
     expect(calls.at(-1)![2].allowStart).toBe(false);
+    // a delegated chat's hand-off is its content: only its parent reads it, and it goes on under its parent (ADR 0083)
+    list.push({ id: 'kid', harness: 'claude', state: 'idle', title: 'Scout', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'segreto', parentId: 'cl' } as typeof list[number]);
+    const before = calls.length;
+    await expect(Promise.resolve().then(() => t('app_handoff_chat').run({ chatId: 'kid' }))).rejects.toThrow(/delegata/);
+    await expect(Promise.resolve().then(() => t('app_continue_chat').run({ chatId: 'kid' }))).rejects.toThrow(/delegata/);
+    expect(calls).toHaveLength(before);
+  });
+
+  it('app_digest leaves out the commands run in delegated chats (state only, never their content)', async () => {
+    const list = [
+      { id: 'root', harness: 'claude', state: 'idle', title: 'Root', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '' },
+      { id: 'kid', harness: 'claude', state: 'idle', title: 'Kid', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '', parentId: 'root' },
+    ];
+    const at = Date.now();
+    const runs = [{ id: 'x1', chatId: 'root', itemId: 'i', code: 'npm test', cwd: '/w', state: 'ok', exitCode: 0, output: '', startedAt: at, endedAt: at },
+      { id: 'x2', chatId: 'kid', itemId: 'i', code: 'cat kid-secret.txt', cwd: '/w', state: 'ok', exitCode: 0, output: '', startedAt: at, endedAt: at }];
+    const chats = { list: () => list, pending: () => [] } as unknown as ChatService;
+    const brain = { settings: () => ({ contextWarnTokens: 200_000 }) } as unknown as BrainService;
+    const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', runs: () => runs } as unknown as Parameters<typeof appControlTools>[0]);
+    const out = JSON.stringify(await tools.find(x => x.name === 'app_digest')!.run({}));
+    expect(out).toContain('npm test');
+    expect(out).not.toContain('kid-secret');
   });
 
   it('app_routing reads the table; app_routing_save writes a new version by itself, signed, with reason and data; hard rules hold', async () => {

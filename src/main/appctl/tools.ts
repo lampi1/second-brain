@@ -220,7 +220,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         lastDigest.set(key, now);
         return digest({
           chats: d.chats.list().filter(mine).map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
-          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId)), tasks: d.tasks?.() ?? null,
+          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
       },
@@ -466,7 +466,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       description: 'A chat writes its hand-off note now (state, files and worktree, decisions, tried and dropped, next step), saved by the app; returns the note and its path. Refused while the chat works or waits for the user. A stopped Cursor chat is never started: the app builds the note itself.',
       inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
       run: async a => {
-        const target = need(String(a.chatId));
+        // a delegated chat's note is its content: only its parent reads it (ADR 0083)
+        const target = need(contentOf(String(a.chatId)));
         // an engine switched off in the settings is never started for this: the app builds the note itself
         const allowStart = crossRule(target, 'leggere') && agentsMayOpen(d.brain.settings(), target.harness);
         const h = await d.chats.handoff(target.id, { reason: 'manual', allowStart });
@@ -479,7 +480,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       description: '"Riprendi": explicitly opens a NEW chat on the same engine and folder from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use only for an intentional new task/session or requested handoff, never merely because context is long. The engine manages native compaction. Not for the Orchestrator.',
       inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
       run: async a => {
-        const target = need(String(a.chatId));
+        // a delegated chat goes on under its parent, which reads its hand-off (ADR 0083): not the Orchestrator's to continue
+        const target = need(contentOf(String(a.chatId)));
         // the engine first (on, and the Orchestrators allowed there), then the rule across engines with the engine named
         const st = d.brain.settings();
         if (!agentsMayOpen(st, target.harness)) throw new Error(`bloccato: ${openRefusal(st, target.harness, target.harness)}`);

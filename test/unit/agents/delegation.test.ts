@@ -187,6 +187,26 @@ describe('agent_delegate', () => {
     expect(again.list().find(c => c.id === child)).toMatchObject({ parentId: parent.id, delegation: { role: 'scout', goal: 'Goal of Persistente' } });
   });
 
+  it('"Riprendi" on a delegated chat goes on as the same child: under its parent, with its contract, its policy and its skills', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log', { skills: ['logs'] })] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    await f.m.ensureHandoff(kid.id, { ask: false }); // the token-free note (the fake engine writes none)
+    const next = await f.m.continueChat(kid.id, { allowStart: false });
+    expect(next.id).not.toBe(kid.id);
+    const cont = f.m.list().find(c => c.id === next.id)!;
+    expect(cont).toMatchObject({ parentId: parent.id, delegation: { role: 'scout', goal: 'Goal of Ordini · Log', doneWhen: ['criterion A'] } });
+    expect(cont.run?.parentRunId).toBe(parent.run?.runId);
+    expect(f.starts.get(next.id)?.toolPolicy).toEqual(f.starts.get(kid.id)?.toolPolicy);
+    // the skill its launch gave still works there, as in the 'a skill works only when the launch gave it' test
+    f.sinks.get(next.id)!.pending({ id: 'k1', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'logs' }, at: 1 });
+    expect(f.answers.find(a => a.id === 'k1')?.answer).toMatchObject({ allow: true });
+    // its result still goes to the parent
+    const r = await f.call('agent_report', next.id, { outcome: 'done', summary: 'ok', output: 'x', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'e' }] });
+    expect(r).toMatchObject({ reported: true, parentId: parent.id });
+  });
+
   it('only a role chat delegates, never the Orchestrator or a plain chat', async () => {
     const f = fixture();
     const plain = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'plain' }, 'user');

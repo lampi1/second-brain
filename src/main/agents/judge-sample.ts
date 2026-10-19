@@ -1,5 +1,6 @@
 // The Judge's sampled reviews (ADR 0083, the app owns the improvement loop): a few times a day the app picks finished
-// role runs nobody judged yet (no verdict of the user, of a Judge, or of the parent that read the result), starts a
+// root role runs nobody judged yet (no verdict of the user or of a Judge; a delegated child's run is never sampled:
+// its content belongs to its parent, which judged the result when it read it), starts a
 // Judge chat on each (a root chat linked to the run with reviewOf, on another model when the catalog has one), and
 // when that review ends turns its verdict into the run's feedback (run-feedback.ts recordFeedback: it counts as
 // reviewed evidence only when the Judge verified it on a model other than the run's). At most
@@ -40,13 +41,14 @@ const dayOf = (t: number): string => new Date(t).toISOString().slice(0, 10);
 const UNJUDGED = new Set(['self-report', 'unknown']);
 
 /** The runs to review now: finished with a report in the last week, not a Judge's own, not judged by anyone, not
- *  reviewed already; a stable pseudo-random order per day, so the sample is spread over roles and not just the newest. */
+ *  reviewed already, not a delegated child's (its content is its parent's: a root Judge chat would show it to the
+ *  Orchestrator, ADR 0083; the parent judged its result when it read it); a stable pseudo-random order per day, so the sample is spread over roles and not just the newest. */
 export function pickSamples(runs: readonly AgentRun[], reviewed: ReadonlySet<string>, now: number, n: number): AgentRun[] {
   if (n <= 0) return [];
   const day = dayOf(now);
   const hasReview = new Set(runs.flatMap(r => r.reviewOf ? [r.reviewOf] : []));
   return runs.filter(r => r.endedAt !== undefined && r.endReason === 'completed' && now - r.endedAt <= SAMPLE_WINDOW_MS
-      && r.source !== 'oneshot' && r.agentId !== 'judge' && isWorkRole(r.agentId) && !!r.report
+      && r.source !== 'oneshot' && !r.parentRunId && r.agentId !== 'judge' && isWorkRole(r.agentId) && !!r.report
       && (!r.outcome || UNJUDGED.has(r.outcome.basis)) && !hasReview.has(r.runId) && !reviewed.has(r.runId))
     .map(r => ({ r, k: createHash('sha256').update(`${day}:${r.runId}`).digest('hex') }))
     .sort((a, b) => a.k.localeCompare(b.k)).slice(0, n).map(x => x.r);
@@ -103,7 +105,7 @@ export class JudgeSampler {
       let started = 0;
       for (const run of pickSamples(this.d.runs(), new Set(this.state.reviews.map(r => r.runId)), now, left)) {
         const chat = this.d.chat(run.chatId);
-        if (!chat) continue;
+        if (!chat || chat.parentId) continue;
         try {
           const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: 'judge', reviewOf: run.runId,
             goal: `Independent verdict on «${chat.title}»`, independentOf: { engine: chat.harness, model: run.model ?? null }, prompt: reviewPrompt(run, chat) });

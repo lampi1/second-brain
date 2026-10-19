@@ -32,6 +32,7 @@ describe('pickSamples', () => {
       run('8', { outcome: { verdict: 'success', basis: 'orchestrator-opinion', by: 'p', at: 1 } }), // its parent did
       run('9', { report: undefined }),
       run('10'), run('11', { reviewOf: 'r_000000000010', agentId: 'judge' }),                // reviewed already
+      run('13', { parentRunId: 'r_000000000099' }),                                          // a delegated child's: its parent's content
     ];
     const picked = pickSamples(runs, new Set(['r_000000000002']), NOW, 5).map(r => r.runId);
     expect(picked).toEqual(['r_000000000001']);
@@ -49,11 +50,11 @@ describe('pickSamples', () => {
 });
 
 describe('JudgeSampler', () => {
-  const make = (runs: AgentRun[], daily = 2, refusal: string | null = null) => {
+  const make = (runs: AgentRun[], daily = 2, refusal: string | null = null, chatOf: (id: string) => ChatSummary = chat) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
     const created: NewChat[] = [], fed: [AgentFeedbackArgs, string][] = [];
     let now = NOW, n = 0;
-    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat: id => chat(id),
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat: id => chatOf(id),
       create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; }, daily: () => daily, judgeEngine: () => 'codex',
       refusal: () => refusal, feedback: async (a, by) => { fed.push([a, by]); }, now: () => now });
     return { s, created, fed, later: (ms: number) => { now += ms; } };
@@ -67,6 +68,11 @@ describe('JudgeSampler', () => {
     later(86_400_000);
     expect(await s.tick()).toBe(1);                 // the one left, never one reviewed already
     expect(new Set(created.map(c => c.reviewOf)).size).toBe(3);
+  });
+  it('never puts a delegated child\'s answer in a root Judge chat (the Orchestrator would read it)', async () => {
+    const { s, created } = make([run('1')], 2, null, id => ({ ...chat(id), parentId: 'c_parent' }));
+    expect(await s.tick()).toBe(0);
+    expect(created).toEqual([]);
   });
   it('starts nothing when off or when the engine is refused', async () => {
     expect(await make([run('1')], 0).s.tick()).toBe(0);
