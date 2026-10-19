@@ -293,7 +293,7 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
-    tierModel: (engine, tier, avoid) => independentModel(engine, tier, avoid, brain.routingInfo().registry, brain.settings().modelTiers),
+    tierModel: (engine, tier, avoid, max) => independentModel(engine, tier, avoid, brain.routingInfo().registry, brain.settings().modelTiers, max),
     pulsePreset: () => {
       const choices = engineInfos();
       let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
@@ -509,6 +509,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       const tool = root ? path.join(root, 'ops', 'tools', 'mem.mjs') : null;
       return tool && fs.existsSync(tool) ? tool : null;
     },
+    brainRoot: () => brain.info().brainRoot,
   });
   const jobs = new Map<string, { usd: number; turns: number; prompt: string | undefined }>();
   // a routed chat's totals already in the ledger when this run first saw it (after a restart, or its predecessor's)

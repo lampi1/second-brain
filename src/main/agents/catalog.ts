@@ -39,8 +39,8 @@ export interface AgentCatalogDeps {
   /** Pulse's engine, model and effort (Impostazioni → Pulse) */
   pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
   /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); `avoid` = the
-   *  parent's model for an independent role */
-  tierModel?: (engine: Harness, tier: ModelTier, avoid: string | null) => { model: string | null; independent: boolean };
+   *  parent's model for an independent role; `max` = the role's tierMax, the highest tier it may move up to */
+  tierModel?: (engine: Harness, tier: ModelTier, avoid: string | null, max: ModelTier) => { model: string | null; independent: boolean };
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -377,7 +377,7 @@ export class AgentCatalogService {
     if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);
     const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
-    const picked = p.model !== null ? { model: p.model, independent: req.independentOf?.model !== p.model } : this.d.tierModel?.(p.engine, tier, p.independent ? req.independentOf?.model ?? null : null) ?? { model: null, independent: false };
+    const picked = p.model !== null ? { model: p.model, independent: req.independentOf?.model !== p.model } : this.d.tierModel?.(p.engine, tier, p.independent ? req.independentOf?.model ?? null : null, p.tierMax) ?? { model: null, independent: false };
     const effort = p.effort ?? req.effort;
     const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
     const r = ROLE_DEFAULTS[p.id as RoleId];

@@ -133,6 +133,9 @@ const CLAUDE_TOOLS: Partial<Record<ToolClass, readonly string[]>> = {
   // the same command tools; every command the engine asks to run is checked by readOnlyCommand (manager.ts)
   'shell-read': ['Bash', 'PowerShell', 'BashOutput'],
   web: ['WebFetch', 'WebSearch'],
+  // edits limited to the brain folder: every Edit/Write request of a role without 'edit' is checked by the role gate
+  // (agents/role-gate.ts insideBrain: real path inside the brain, no "..", no link out)
+  'brain-write': ['Edit', 'Write'],
 };
 export function claudeTools(tools: AgentToolPolicy): string[] {
   return [...new Set([...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? [])])];
@@ -141,8 +144,21 @@ export function claudeTools(tools: AgentToolPolicy): string[] {
 /** Commands only (shell-read without shell): a command request is shown to the user only when it reads, else it is
  *  refused with this reason. */
 export const commandsReadOnly = (p: AgentPolicy | null | undefined): boolean => !!p?.tools && p.tools.allow.includes('shell-read') && !p.tools.allow.includes('shell');
+/** The engines' tools that run a command (input.command); BashOutput/TaskOutput only read a running command's output. */
+export const COMMAND_TOOLS: readonly string[] = ['Bash', 'PowerShell', 'Shell', 'Command'];
+const OUTPUT_TOOLS: readonly string[] = ['BashOutput', 'TaskOutput'];
+/** True when the policy lets this command-class request through: any with 'shell'; with shell-read only, a command that
+ *  only reads (readOnlyCommand) or reading a command's output; nothing else (killing, monitoring, an unreadable input). */
+export function shellWithin(p: AgentPolicy | null | undefined, tool: string, input: unknown): boolean {
+  if (!allowsClass(p, 'shell')) return false;
+  if (!commandsReadOnly(p)) return true;
+  if (OUTPUT_TOOLS.includes(tool)) return true;
+  return COMMAND_TOOLS.includes(tool) && readOnlyCommand((input as { command?: unknown } | null)?.command);
+}
+
+// sort and uniq are not here: they read stdin only (STDIN_ONLY), their operands are files they may write
 const READ_COMMANDS = new Set(['ls', 'dir', 'cat', 'type', 'head', 'tail', 'grep', 'rg', 'findstr', 'wc', 'pwd', 'stat', 'file', 'tree', 'du', 'df', 'which', 'whoami',
-  'sort', 'uniq', 'cut', 'get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-item', 'get-location', 'test-path', 'resolve-path', 'measure-object']);
+  'cut', 'get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-item', 'get-location', 'test-path', 'resolve-path', 'measure-object']);
 const READ_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep']);
 /** `git branch`, `git tag`, `git remote` only list with these flags; any other argument creates, moves or deletes. */
 const GIT_LISTS: Record<string, ReadonlySet<string>> = {
@@ -150,18 +166,94 @@ const GIT_LISTS: Record<string, ReadonlySet<string>> = {
   tag: new Set(['-l', '--list']),
   remote: new Set(['-v', '--verbose']),
 };
-const WRITING_FLAG = /^(?:-o|-O|--output.*|--pre(?:=.*)?|--ext-diff|--open-files-in-pager.*|--exec.*|-exec|-execdir|-ok|-okdir|-delete|-fprint0?|-fprintf|-fls)$/;
-/** One read-only command: a known reader, `git` reading or listing, `find` without actions; no chaining, redirection or
- *  substitution, and a pipe only into another reader. Anything else is not read-only (refused under shell-read). */
+/** Long options that write a file or run a program (git, rg, file); refused also abbreviated (`--out=x`: git and GNU
+ *  tools take any unambiguous prefix) and `--output-*`. */
+const WRITING_LONG = ['output', 'open-files-in-pager', 'ext-diff', 'pre', 'hostname-bin', 'exec', 'execdir', 'compile'];
+/** find's actions that write, delete or run (single dash, never abbreviated). */
+const FIND_ACTIONS = new Set(['-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf', '-fls']);
+/** Short options that write or run, per command, also inside a cluster (`-iO`, `-ao`): git grep -O<pager>, sort -o,
+ *  tree -o <file> and -R (writes 00Tree.html in every folder), file -C (compiles a magic file). */
+const WRITING_SHORT: Record<string, string> = { git: 'O', tree: 'oR', file: 'C' };
+/** Readers whose options a file name could inject through an unquoted glob (`find *` with a file named -delete). */
+const NO_GLOB = new Set(['find', 'git', 'rg', 'tree', 'file', 'sort', 'uniq']);
+/** sort and uniq: only as a later pipe stage (stdin), with options that neither write nor name a file. */
+interface StdinRule { flags: RegExp; withArg: RegExp; long: ReadonlySet<string> }
+const STDIN_ONLY: Record<string, StdinRule> = {
+  sort: { flags: /^-[bdfghinMrRsuVz]+$/, withArg: /^-[bdfghinMrRsuVz]*[kt]/,
+    long: new Set(['--reverse', '--numeric-sort', '--unique', '--ignore-case', '--human-numeric-sort', '--version-sort', '--general-numeric-sort', '--month-sort', '--stable', '--ignore-leading-blanks', '--dictionary-order', '--zero-terminated']) },
+  uniq: { flags: /^-[cdiuzD]+$/, withArg: /^-[cdiuzD]*[fsw]/,
+    long: new Set(['--count', '--repeated', '--unique', '--ignore-case', '--zero-terminated', '--all-repeated']) },
+};
+
+interface Word { text: string; glob: boolean }
+/** Splits a command line into pipe stages of words, quotes removed (a quoted `|` or space stays in its word; a
+ *  backslash is dropped, so `-e\xec` reads as `-exec`). null = an unterminated quote. */
+function stages(raw: string): Word[][] | null {
+  let stage: Word[] = [];
+  const out: Word[][] = [stage];
+  let word: Word | null = null, quote: '"' | "'" | null = null;
+  const end = () => { if (word) stage.push(word); word = null; };
+  for (const ch of raw) {
+    if (quote) { if (ch === quote) quote = null; else if (ch !== '\\') word!.text += ch; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; word ??= { text: '', glob: false }; continue; }
+    if (/\s/.test(ch)) { end(); continue; }
+    if (ch === '|') { end(); stage = []; out.push(stage); continue; }
+    if (ch === '\\') { word ??= { text: '', glob: false }; continue; }
+    word ??= { text: '', glob: false };
+    word.text += ch;
+    if (ch === '*' || ch === '?' || ch === '[') word.glob = true;
+  }
+  if (quote) return null;
+  end();
+  return out;
+}
+const writingLong = (w: string): boolean => {
+  if (!w.startsWith('--') || w === '--') return false;
+  const name = (w.slice(2).split('=')[0] ?? '').toLowerCase();
+  return WRITING_LONG.some(d => d.startsWith(name) || name.startsWith(`${d}-`));
+};
+const writingShort = (cmd: string, w: string): boolean => {
+  const letters = WRITING_SHORT[cmd];
+  return !!letters && /^-[^-]/.test(w) && [...letters].some(l => w.includes(l));
+};
+/** sort/uniq after another stage: known options only, no operand (an operand is a file to read or to write). */
+function stdinOnly(rule: StdinRule, args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i] ?? '';
+    if (rule.long.has(w) || rule.flags.test(w)) continue;
+    const m = rule.withArg.exec(w);
+    if (!m) return false;
+    // the option's value: the rest of the word, or the next word (a field list, a separator, a count)
+    if (w.length === m[0].length) { if (++i >= args.length) return false; }
+  }
+  return true;
+}
+
+/** One read-only command: a known reader, `git` reading or listing, `find` without actions, `sort`/`uniq` on stdin;
+ *  no chaining, redirection, substitution, subexpression or script block, and a pipe only into another reader. Anything
+ *  else is not read-only (refused under shell-read). Both shells count: bash and PowerShell (`(`, `@(`, `{`, `&`). */
 export function readOnlyCommand(raw: unknown): boolean {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return false;
-  if (/[;&<>`\r\n]|\$\(|\$\{/.test(raw)) return false;
-  return raw.split('|').every(part => {
-    const words = part.trim().split(/\s+/).filter(Boolean);
-    const cmd = words[0]?.toLowerCase().replace(/\.exe$/, '');
-    if (!cmd || words.some(w => WRITING_FLAG.test(w))) return false;
+  // chaining, redirection, substitution (bash $( ${ backtick <( >(, PowerShell $( @( ( { and its ` escape), quoted or
+  // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it
+  const plain = raw.replace(/@\{[A-Za-z0-9_.:/-]*\}/g, '');
+  if (/[;&<>`(){}\r\n]|\$\(|\$\{/.test(plain)) return false;
+  // an escaped quote: bash keeps \" inside a double-quoted word, PowerShell ends it there; the two would split the line
+  // differently, so neither reading is trusted
+  if (/\\["']/.test(raw)) return false;
+  const parts = stages(raw);
+  if (!parts) return false;
+  return parts.every((words, stage) => {
+    const cmd = words[0]?.text.toLowerCase().replace(/\.exe$/, '');
+    if (!cmd) return false;
+    const args = words.slice(1);
+    if (NO_GLOB.has(cmd) && args.some(w => w.glob)) return false;
+    const texts = args.map(w => w.text);
+    if (texts.some(w => writingLong(w) || writingShort(cmd, w) || FIND_ACTIONS.has(w.toLowerCase()))) return false;
+    const stdin = STDIN_ONLY[cmd];
+    if (stdin) return stage > 0 && stdinOnly(stdin, texts);
     if (cmd === 'git') {
-      const [sub, ...rest] = words.slice(1);
+      const [sub, ...rest] = texts;
       if (!sub) return false;
       const lists = GIT_LISTS[sub];
       return lists ? rest.every(w => lists.has(w)) : READ_GIT.has(sub);
@@ -208,8 +300,9 @@ export function unenforced(kind: EngineKind, p: AgentPolicy): (ToolClass | 'ceil
       // brain-write is an edit: allowed edits reach the brain folder too; commands reach files and the network. A named
       // MCP list is not narrowed (claudeMcp).
       // read-only commands: the app refuses a writing command it is asked about, but one the user's own allow rules
-      // approve never reaches it
+      // approve never reaches it; the same for brain-write's Edit/Write outside the brain (role-gate.ts)
       const gaps = reachable(c => (c === 'edit' || c === 'brain-write' || c === 'web') && can('shell') ? false : c === 'brain-write' ? !can('edit')
+        : c === 'edit' ? !can('brain-write')
         : c === 'shell' ? !can('shell-read') : c === 'shell-read' ? !can('shell') : (c === 'mail-draft' || c === 'calendar-read' || c === 'mcp') ? !connectors : true);
       return p.tools?.mcp?.length ? [...gaps, 'mcp'] : gaps;
     }

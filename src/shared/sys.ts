@@ -45,6 +45,7 @@ export const SYS_IT = {
   'sys.aboveParent': (p: { tool: string; parent: string }) => `Permesso rifiutato: ${p.tool} va oltre i permessi di «${p.parent}», la chat che ha delegato questa.`,
   'sys.subagentRefused': (p: { type: string }) => `Sotto-agente «${p.type}» rifiutato: il lavoro delegato va in una chat visibile (agent_delegate). Qui solo ricerche veloci (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» non assegnata al ruolo ${p.role}: rifiutata.`,
+  'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Scrittura rifiutata: il ruolo ${p.role} può scrivere solo nella cartella del cervello (${p.tool} su «${p.path}»).`,
   'sys.modelRefusal': 'Il modello ha rifiutato la richiesta.',
 
   // ---- transcript.ts ----
@@ -180,6 +181,7 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.aboveParent': (p: { tool: string; parent: string }) => `Permission refused: ${p.tool} goes beyond the permissions of «${p.parent}», the chat that delegated this one.`,
   'sys.subagentRefused': (p: { type: string }) => `Sub-agent «${p.type}» refused: delegated work goes to a visible chat (agent_delegate). Only quick searches here (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» is not assigned to the ${p.role} role: refused.`,
+  'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Write refused: the ${p.role} role may write only inside the brain folder (${p.tool} on «${p.path}»).`,
   'sys.modelRefusal': 'The model refused the request.',
 
   'sys.compactedPlain': 'Context compacted.',

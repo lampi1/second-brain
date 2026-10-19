@@ -14,6 +14,7 @@
 import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun } from '../../shared/agents';
 import { canLaunch, isWorkRole, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
+import { oneLine } from '../../shared/agent-label';
 import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import type { McpTool } from '../mcp/server';
@@ -165,8 +166,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!options) throw new Error(`agent_ask_parent: options = up to ${OPTIONS_MAX} short texts.`);
     const why = typeof a.why === 'string' ? a.why.trim().slice(0, 500) : '';
     const role = ROLE_DEFAULTS[self.delegation.role].name;
-    const text = [`[domanda · ${role} «${self.title}» · chatId ${self.id}] ${question}`,
-      ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${o}`).join(' · ')}`] : []), ...(why ? [`Perché: ${why}`] : []),
+    // the label first, and what the child wrote flattened to one line: it cannot forge a line of the app or the user
+    const text = [d.label, '', `[domanda · ${role} «${oneLine(self.title)}» · chatId ${self.id}] ${oneLine(question)}`,
+      ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${oneLine(o)}`).join(' · ')}`] : []), ...(why ? [`Perché: ${oneLine(why)}`] : []),
       `Rispondi con agent_answer_child (chatId "${self.id}", answer) da ciò che sai del compito. Se serve una persona (un permesso, un'azione irreversibile o esterna, una scelta che cambia l'obiettivo) o non lo sai, agent_answer_child con askUser: true: chiederà all'utente.`].join('\n');
     await d.chats.send(parent.id, text, undefined, false, self.title);
     log.info('agents', 'child asked its parent', { chat: callerId, data: { parent: parent.id, options: options.length } });
@@ -182,8 +184,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const askUser = a.askUser === true;
     const answer = typeof a.answer === 'string' ? a.answer.trim() : '';
     if (!askUser && (!answer || answer.length > ANSWER_MAX)) throw new Error(`agent_answer_child: answer = 1 to ${ANSWER_MAX} characters, or askUser: true.`);
-    const head = `[risposta di ${parent.agent?.name ?? 'Chat'} «${parent.title}»]`;
-    const text = askUser ? `${head} Non posso deciderlo io: chiedilo all'utente (una domanda chiara, con le opzioni).${answer ? ` ${answer.slice(0, ANSWER_MAX)}` : ''}` : `${head} ${answer}`;
+    // labelled and flattened like the question: the parent is an agent too, never the user nor the app
+    const head = `${d.label}\n\n[risposta di ${oneLine(parent.agent?.name ?? 'Chat')} «${oneLine(parent.title)}»]`;
+    const said = oneLine(answer.slice(0, ANSWER_MAX));
+    const text = askUser ? `${head} Non posso deciderlo io: chiedilo all'utente (una domanda chiara, con le opzioni).${said ? ` ${said}` : ''}` : `${head} ${said}`;
     await d.chats.send(child.id, text, undefined, false, parent.title);
     return { answered: child.title, askUser };
   }
