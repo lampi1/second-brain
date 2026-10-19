@@ -196,6 +196,15 @@ Classificatori (how the app picks model and agent, and how it is going) and Mapp
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
 Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
 
+### Scripts and a changelog for your brain
+
+![The Script page: tested, reusable scripts as cards](docs/screenshots/brain-scripts.webp)
+
+The scripts your agents wrote and tested live in the brain's `scripts/` folder, each with what it does, how to run it
+and its last test. Every chat can look them up before writing a new one; the Orchestrator adds, fixes and deletes them
+on its own, and every change to the brain (scripts, rules, skills, notes) lands in `changelog.md`. Both have their own
+page in the Brain section (ADR 0076). Nothing in the app runs a script.
+
 ### Task in one page
 
 ![The Task page: mentions, pull requests, reviews and work items](docs/screenshots/task.webp)

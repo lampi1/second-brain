@@ -15,7 +15,7 @@ export interface AutoCloseCandidate {
   /** False for Orchestrator/app/coordinating agents, active delivery/mail/tools/children/pending/errors or uncertain telemetry. */
   eligible: boolean;
   reason?: string;
-  /** what a held chat waits for (ADR 0076): shown as "In attesa di…" on its tile */
+  /** what a held chat waits for (ADR 0084): shown as "In attesa di…" on its tile */
   waitingFor?: AutoCloseWaiting;
 }
 export interface AutoCloseReservation { generation: number; deadline: number; stamp: string }

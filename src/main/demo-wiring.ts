@@ -1,5 +1,5 @@
 // Builds the demo services (SB_DEMO=1; SB_DEMO_FREEZE=1 = deterministic) from demo.ts (chats, brain) and
-// demo-browser.ts (tabs as real WebContentsViews), DevOps from tasks/demo.ts (fixture JSON through the real service), with the real settings store and a real local MCP server where the
+// demo-browser.ts (tabs as real WebContentsViews), Task data from tasks/demo.ts (fixture JSON through the real service), with the real settings store and a real local MCP server where the
 // app-control tools are mounted (/mcp/app), so agents can drive the demo like the app. Why: one entry point for
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
@@ -15,6 +15,9 @@ import { BrainModelService } from './brainmodel/service';
 import { classifyByWords } from './agents/classifier';
 import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
+import { writeDemoScripts } from './brain/scripts-demo';
+import { BrainScripts } from './brain/scripts';
+import { BrainChangelog } from './brain/changelog';
 import { gitBranches } from './chats/branch';
 import path from 'node:path';
 import { log, errText } from './log';
@@ -94,6 +97,13 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
   agentAuthoring.onApplied = change => brainModel.recordAgentChange(change);
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
+  // the Script and Changelog pages (ADR 0076): made-up scripts and changelog read by the real readers
+  const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now());
+  const demoChangelog = new BrainChangelog(() => scriptsDir);
+  const demoScripts = new BrainScripts(() => scriptsDir, demoChangelog);
+  brain.serveApi('/api/scripts', () => demoScripts.list());
+  brain.serveApi('/api/script', q => demoScripts.get(q.get('id') ?? ''));
+  brain.serveApi('/api/changelog', () => demoChangelog.list());
   brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });

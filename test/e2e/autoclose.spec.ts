@@ -25,7 +25,7 @@ test('a real backend deadline is visible with an accessible keep-open action, an
   } finally { await app.close(); }
 });
 
-// #86 (ADR 0076): a held work chat says what it waits for, on its strip, from the status main sends.
+// #86 (ADR 0084): a held work chat says what it waits for, on its strip, from the status main sends.
 test('a held work chat shows what it waits for on its strip', async () => {
   const { app, page } = await launchDemo();
   try {

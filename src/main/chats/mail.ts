@@ -430,7 +430,7 @@ export interface MailToolDeps {
   /** the class of a mail to an Orchestrator (the brain's words): the answer says when it arrives */
   classify?: () => MailClassifier;
   /** a message went (sender id, the app chat it went to or null, its text): a worker's report to its Orchestrator
-   *  completes its assignment (ChatManager.noteMail, ADR 0076) */
+   *  completes its assignment (ChatManager.noteMail, ADR 0084) */
   sent?: (fromId: string, toId: string | null, text: string) => void;
 }
 

@@ -1,4 +1,4 @@
-// Finished workers close by themselves (#86, ADR 0076): a worker that mails its final report to its Orchestrator (or ends
+// Finished workers close by themselves (#86, ADR 0084): a worker that mails its final report to its Orchestrator (or ends
 // with a run-report block) and goes idle gets its assignment completed and its agent run ended "completed", then the
 // main scheduler archives it with closedBy "auto". A worker that waits for the user (question, permission, its report's
 // words), for colleagues or for background work stays open, and the scheduler names what it waits for ("In attesa di…").

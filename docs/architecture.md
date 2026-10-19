@@ -38,7 +38,7 @@
 - **A question or permission**: CLI `control_request can_use_tool` → `PendingRequest` (`pending:added`) → shown as a
   panel in front of everything (and on the agent's strip) → the user clicks → `chat:answer` → `control_response`. This click is the user's own
   answer: the app is the harness (unlike mail between chats, which never counts as their ok).
-- **A finished worker closes by itself** (ADR 0076): its `send_to_chat` to its Orchestrator (or a `run-report` block)
+- **A finished worker closes by itself** (ADR 0084): its `send_to_chat` to its Orchestrator (or a `run-report` block)
   is its final report; at the next clean idle turn end ChatManager completes its assignment (`work: completed`) and
   ends its agent run `completed`, unless the report or the last answer waits for the user or colleagues
   (`waitsOn`, `shared/waiting.ts`), a question/permission is open or background work runs. The main AutoCloseService

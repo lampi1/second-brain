@@ -40,6 +40,9 @@ import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { CloudService } from '../cloud/service';
 import { isCloudEngine } from '../../shared/cloud';
+import type { BrainScripts } from '../brain/scripts';
+import type { BrainChangelog } from '../brain/changelog';
+import { scriptWriteTools } from '../brain/scripts-tools';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -67,6 +70,8 @@ export interface AppCtlDeps {
   tasks?: () => TasksState | null;
   /** an agent version's results line for its route's reason ("12 run, 9 con esito, 78% riuscite"); absent = none */
   agentStats?: (agentId: string, version: number) => string | null;
+  /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
+  brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
 }
 
 /** agent_learn_propose on the app endpoints: a lesson, or (with the authoring service) an agent's "Contesto massimo" as
@@ -135,6 +140,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const tools: ToolDef[] = [
     ...(d.agentAuthoring && unified() && callerId ? authoringTools(d.agentAuthoring, callerId, unified, () => d.agents?.().profiles.filter(p => p.origin.kind === 'preset' && p.status === 'active' && p.routable !== false && p.id !== ORCHESTRATOR_AGENT_ID).map(p => p.id) ?? []) : []),
     ...(d.agentLearning ? [learnTool(d, callerId)] : []),
+    ...(d.brainScripts && unified() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [{ name: 'agent_catalog', description: agentCatalogTool(d.agents).description, inputSchema: agentCatalogTool(d.agents).inputSchema, run: (a: Record<string, unknown>) => discoverRankedAgents(d.agents!, a, d.classifyAgents) }] : []),
     {
       name: 'app_set_chat_effort',

@@ -96,7 +96,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Grindhouse: a worker that sent its final report to the Orchestrator (send_to_chat or a run-report block) and is
   idle gets its assignment completed and its agent run ended "completed", then closes by itself after the delay set in
   Settings (now also 2 minutes), with closedBy "auto". One waiting for the user, a permission, colleagues or background
-  tasks stays open with an "In attesa di…" label; an open browser tab alone no longer holds it (ADR 0076).
+  tasks stays open with an "In attesa di…" label; an open browser tab alone no longer holds it (ADR 0084).
 - Agent screenshots everywhere (issue #83, ADR 0081): the file viewer renders HTML reports (sanitized, in their own
   shadow root, no scripts or external loads) and Markdown reports with their images (base64 or local files under the
   allowed folders), a click opens one large; chat messages show bare image paths, links to images and path-only code

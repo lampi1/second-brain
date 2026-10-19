@@ -5,7 +5,7 @@
 // signal, for every harness: a chat that says "Aspetto la QA…" is never closed, released or moved to a fresh session.
 // Used by the manager (turnEnded sets ChatSummary.waitsOnWork) and read by the auto-close (renderer/lib/autoclose.ts),
 // the archive's re-check, the idle engine release and the continuity rules (chats/continuity.ts).
-// waitsForPeople (below): the same reading for a wait on the user or on colleagues (#86, ADR 0076).
+// waitsForPeople (below): the same reading for a wait on the user or on colleagues (#86, ADR 0084).
 // Tests: test/unit/waiting.test.ts.
 
 // "aspetto / attendo / in attesa di / waiting for" whose object (the clause right after it) is something that runs on its own.
@@ -35,7 +35,7 @@ export function waitsForWork(text: string | null | undefined): boolean {
   return false;
 }
 
-// Waits for people (#86, ADR 0076): a report or final answer that says it waits for the user (or the Orchestrator's
+// Waits for people (#86, ADR 0084): a report or final answer that says it waits for the user (or the Orchestrator's
 // decision) or for a colleague (another chat, a named agent) keeps the chat open with an "In attesa di…" label, while
 // a worker that just delivered its report closes by itself. Same sentence/clause reading as waitsForWork.
 const AWAIT = /(?:^|[^\p{L}])(?:aspetto|attendo|sto aspettando|stiamo aspettando|resto in attesa|rimango in attesa|in attesa d[ie'’]\w*|waiting (?:for|on)|awaiting|i'?ll wait for|wait(?:ing)? until|blocked on|bloccat[oa] (?:su|in attesa d\w*))(?![\p{L}])/iu;

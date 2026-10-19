@@ -30,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'script' | 'changelog' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -43,6 +43,9 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('idee', 'G I'),
   page('costi', 'G C'),
   page('qualita', 'G Q'),
+  // rendered by the app (App.tsx PageFrame) in the Dashboard's look: the brain's scripts and its changelog (ADR 0076)
+  page('script', 'G T'),
+  page('changelog', 'G N'),
   page('confronto', 'G M'),
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
   page('skill', 'G S'),
@@ -102,7 +105,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'qualita': page = <Qualita arg={cur.arg} nav={nav} />; break;
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'changelog': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'task': page = <TaskPage nav={nav} />; break;
   }
   return (

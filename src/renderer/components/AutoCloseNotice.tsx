@@ -1,5 +1,5 @@
 // Discreet countdown from the authoritative backend deadline. Also listed globally for off-screen agents.
-// A held work chat shows instead what it waits for ("In attesa di…", #86, ADR 0076): main names it, never the renderer.
+// A held work chat shows instead what it waits for ("In attesa di…", #86, ADR 0084): main names it, never the renderer.
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNow } from '../lib/clock';

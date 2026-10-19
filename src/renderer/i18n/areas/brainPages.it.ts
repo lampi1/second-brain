@@ -9,6 +9,8 @@ export const brainPagesIt = {
   'brainPages.nav.idee': 'Idee',
   'brainPages.nav.costi': 'Costi',
   'brainPages.nav.qualita': 'Qualità',
+  'brainPages.nav.script': 'Script',
+  'brainPages.nav.changelog': 'Changelog',
   'brainPages.nav.confronto': 'Confronto modelli',
   'brainPages.nav.agenti': 'Agenti',
   'brainPages.nav.skill': 'Skill',
@@ -45,8 +47,8 @@ export const brainPagesIt = {
   'brainPages.day.copyBtn': 'Copia',
   'brainPages.day.copied': 'Frasi copiate',
   'brainPages.day.copyFailed': 'Copia non riuscita: seleziona il testo',
-  'brainPages.day.loading': 'Preparo le frasi (DevOps e diario)…',
-  'brainPages.day.note': (p: { hasDevops: boolean }) => `Fatto dal diario, dalle chat${p.hasDevops ? ' e da DevOps' : ''}; da fare dal brief e dai fili aperti.`,
+  'brainPages.day.loading': 'Preparo le frasi (Azure DevOps e diario)…',
+  'brainPages.day.note': (p: { hasDevops: boolean }) => `Fatto dal diario, dalle chat${p.hasDevops ? ' e da Azure DevOps' : ''}; da fare dal brief e dai fili aperti.`,
 
   // Esplora.tsx
 
@@ -81,7 +83,7 @@ export const brainPagesIt = {
   'brainPages.fatto.summary': (p: { days: number }) => `Ultimi ${p.days} giorni`,
   'brainPages.fatto.note': "PR, work item ed esiti del diario sono tuoi; una chat porta il nome dell'agente o del motore. I link di Azure DevOps si aprono fuori dall'app, quelli delle chat le aprono qui.",
   'brainPages.fatto.count': (p: { n: number }) => (p.n === 1 ? '1 esito' : `${p.n} esiti`),
-  'brainPages.fatto.preparing': (p: { isToday: boolean }) => `Preparo il giorno: leggo DevOps e le chat (${p.isToday ? "pochi secondi" : "fino a 40 secondi per un giorno passato"} la prima volta)…`,
+  'brainPages.fatto.preparing': (p: { isToday: boolean }) => `Preparo il giorno: leggo Azure DevOps e le chat (${p.isToday ? "pochi secondi" : "fino a 40 secondi per un giorno passato"} la prima volta)…`,
   'brainPages.fatto.empty': 'Nessun esito registrato in questo giorno.',
   'brainPages.fatto.emptyHint': 'Gli esiti arrivano da PR, work item, righe «fatto» o «decisione» del diario e chat concluse.',
   'brainPages.fatto.more': 'Mostra altri giorni',

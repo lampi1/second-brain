@@ -103,6 +103,8 @@ export function brainClient(): BrainClient {
   client = new BrainClient(path => window.sb.invoke('brain:api', { path }));
   // a brain file changed (idea, error, diary, now.md…): the tables are stale
   try { window.sb.on('feed:events', () => client?.invalidate('/api/tables')); } catch { /* no bridge (tests) */ }
+  // a script of the brain or its changelog changed (main's brain watcher): the Script and Changelog pages
+  try { window.sb.on('scripts:changed', () => { client?.invalidate('/api/script'); client?.invalidate('/api/changelog'); }); } catch { /* no bridge (tests) */ }
   return client;
 }
 

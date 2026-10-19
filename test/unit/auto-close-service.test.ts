@@ -93,7 +93,7 @@ describe('backend automatic-close warning', () => {
     f.advance(1_000); f.presence({ touchedAt: 1 });
     expect(f.service.state()[0]!.deadline).toBe(previous + 1_000);
   });
-  it('names what a held chat waits for, and drops the label once it is eligible or kept open (ADR 0076)', () => {
+  it('names what a held chat waits for, and drops the label once it is eligible or kept open (ADR 0084)', () => {
     const f = fixture();
     f.change({ eligible: false, waitingFor: 'user', reason: 'In attesa dell’utente' }); f.presence();
     expect(f.service.state()[0]).toMatchObject({ deadline: null, waitingFor: 'user', reason: 'In attesa dell’utente' });

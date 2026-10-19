@@ -11,6 +11,8 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.idee': 'Ideas',
   'brainPages.nav.costi': 'Costs',
   'brainPages.nav.qualita': 'Quality',
+  'brainPages.nav.script': 'Scripts',
+  'brainPages.nav.changelog': 'Changelog',
   'brainPages.nav.confronto': 'Model comparison',
   'brainPages.nav.agenti': 'Agents',
   'brainPages.nav.skill': 'Skills',
@@ -47,8 +49,8 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.day.copyBtn': 'Copy',
   'brainPages.day.copied': 'Sentences copied',
   'brainPages.day.copyFailed': 'Copy failed: select the text',
-  'brainPages.day.loading': 'Preparing sentences (DevOps and diary)…',
-  'brainPages.day.note': (p: { hasDevops: boolean }) => `From diary, chats${p.hasDevops ? ' and DevOps' : ''}; to do from brief and open threads.`,
+  'brainPages.day.loading': 'Preparing sentences (Azure DevOps and diary)…',
+  'brainPages.day.note': (p: { hasDevops: boolean }) => `From diary, chats${p.hasDevops ? ' and Azure DevOps' : ''}; to do from brief and open threads.`,
 
   // Esplora.tsx
 
@@ -83,7 +85,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.fatto.summary': (p: { days: number }) => `Last ${p.days} days`,
   'brainPages.fatto.note': "PRs, work items and diary outcomes are yours; a chat carries its agent's or engine's name. Azure DevOps links open outside the app, chat links open the chat here.",
   'brainPages.fatto.count': (p: { n: number }) => (p.n === 1 ? '1 outcome' : `${p.n} outcomes`),
-  'brainPages.fatto.preparing': (p: { isToday: boolean }) => `Preparing the day: reading DevOps and chats (${p.isToday ? "a few seconds" : "up to 40 seconds for a past day"} the first time)…`,
+  'brainPages.fatto.preparing': (p: { isToday: boolean }) => `Preparing the day: reading Azure DevOps and chats (${p.isToday ? "a few seconds" : "up to 40 seconds for a past day"} the first time)…`,
   'brainPages.fatto.empty': 'No outcome recorded on this day.',
   'brainPages.fatto.emptyHint': 'Outcomes come from PRs, work items, "fatto" or "decisione" diary lines and finished chats.',
   'brainPages.fatto.more': 'Show more days',

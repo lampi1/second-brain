@@ -33,7 +33,7 @@ it('uses elapsed performance time rather than the mutable wall clock for the dis
   try { await Promise.resolve(); mono += 5_000; expect(autoCloseRemaining(autoCloseState.get()[0]!)).toBe(115_000); }
   finally { off(); spy.mockRestore(); }
 });
-it('accepts a known waiting label and refuses an unknown one (ADR 0076)', async () => {
+it('accepts a known waiting label and refuses an unknown one (ADR 0084)', async () => {
   let event!: (rows: AutoCloseStatus[]) => void;
   const off = connectAutoClose({ get: async () => [], presence: async () => {}, keep: async () => {}, listen: accept => { event = accept; return () => {}; } });
   await Promise.resolve(); await Promise.resolve();

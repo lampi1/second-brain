@@ -7,7 +7,7 @@ export interface AutoCloseStatus {
   generation: number;
   keptOpen: boolean;
   reason: string | null;
-  /** what the chat waits for while it stays open (ADR 0076): the tile shows "In attesa di…" (absent = nothing) */
+  /** what the chat waits for while it stays open (ADR 0084): the tile shows "In attesa di…" (absent = nothing) */
   waitingFor?: AutoCloseWaiting;
   /** Main clock sample paired with deadline; renderer calculates remaining time with its own monotonic elapsed clock. */
   clockAt: number;

@@ -119,4 +119,9 @@ test('README screenshots', async () => {
   await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('quality');
+
+  // 7. Script: the brain's tested, reusable scripts as cards (ADR 0076)
+  await page.getByTestId('nav-script').click();
+  await expect(page.getByTestId('bs-script-card')).toHaveCount(4, { timeout: 30_000 });
+  await save('brain-scripts');
 });

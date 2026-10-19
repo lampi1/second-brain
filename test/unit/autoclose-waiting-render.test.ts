@@ -1,4 +1,4 @@
-// The "In attesa di…" label of a held work chat (#86, ADR 0076): AutoCloseNotice renders what main says it waits for,
+// The "In attesa di…" label of a held work chat (#86, ADR 0084): AutoCloseNotice renders what main says it waits for,
 // in place of the countdown, and nothing for a chat that waits for nothing. Rendered without a browser.
 import { createElement } from 'react';
 import type { AutoCloseStatus } from '../../src/shared/auto-close';

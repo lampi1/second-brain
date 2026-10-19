@@ -360,7 +360,7 @@ describe('mail to an idle Regia', () => {
     expect(await mail.tick()).toBe(1); // right after that turn, not 30 minutes after the send
     expect(sent).toHaveLength(1);
   });
-  it('send_to_chat tells the manager who wrote to whom (a worker\'s report completes its assignment, ADR 0076)', () => {
+  it('send_to_chat tells the manager who wrote to whom (a worker\'s report completes its assignment, ADR 0084)', () => {
     const { call, reports } = setup([chat('w', 'Ricerca'), chat('o', 'Orchestrator', { isRegia: true })]);
     call('send_to_chat', 'w', { to: 'Orchestrator', text: 'Report finale: fatto.' });
     expect(reports).toEqual([['w', 'o', 'Report finale: fatto.']]);

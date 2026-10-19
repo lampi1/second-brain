@@ -1,4 +1,4 @@
-# ADR 0076 · Finished workers close by themselves; held ones say what they wait for
+# ADR 0084 · Finished workers close by themselves; held ones say what they wait for
 
 Date: 2026-10-19 · Status: accepted (owner, issue #86: "When a worker chat has sent its final report to the
 Orchestrator and is idle, the app marks its work as done and closes it by itself") · Builds on: the main-owned

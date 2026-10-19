@@ -220,7 +220,7 @@ interface Rec {
   s: ChatSummary;
   createdAt: number;
   /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
-   *  assignment (#86, ADR 0076); never persisted */
+   *  assignment (#86, ADR 0084); never persisted */
   report?: { text: string; at: number; blocked?: boolean };
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
@@ -1529,7 +1529,7 @@ export class ChatManager implements ChatService {
     return answer;
   }
 
-  /** A chat sent mail (send_to_chat): to its own Orchestrator it is its report (#86, ADR 0076), read at its turn's end. */
+  /** A chat sent mail (send_to_chat): to its own Orchestrator it is its report (#86, ADR 0084), read at its turn's end. */
   noteMail(chatId: string, toChatId: string | null, text: string): void {
     const r = this.chats.get(chatId), to = toChatId ? this.chats.get(toChatId) : undefined;
     if (!r || !to || r.s.isRegia || !(to.s.isRegia || to.s.orchestrator)) return;
@@ -1541,7 +1541,7 @@ export class ChatManager implements ChatService {
   }
 
   /** At a clean turn end: who its last answer and report say it waits for (waitsOn) and, for an assigned worker that
-   *  reported and waits for nobody, its assignment completed and its agent run ended "completed" (#86, ADR 0076). The
+   *  reported and waits for nobody, its assignment completed and its agent run ended "completed" (#86, ADR 0084). The
    *  auto-close then closes it after the delay (closedBy "auto"); a question, permission or background task holds it. */
   private settleReport(r: Rec, item?: Extract<ChatItem, { kind: 'result' }>): void {
     const answer = lastAnswer(r.items), report = r.report;

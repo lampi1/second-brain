@@ -59,3 +59,4 @@ test/fixtures/cloud/remotes.txt internal-host sha256:af86953a27a80122223b0278056
 # README screenshots renamed to today's words (ADR 0082): the Grindhouse and the Orchestrator, same bytes as mosaic/regia.webp
 docs/screenshots/grindhouse.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
 docs/screenshots/orchestrator.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e
+docs/screenshots/brain-scripts.webp binary-media sha256:58b9acb3edf67057daed5066a7215013f1b4a81be7ece1e9deef7ace13f9a9e9

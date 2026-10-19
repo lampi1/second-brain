@@ -165,7 +165,7 @@ export interface ChatSummary {
    *  never auto-closed, released or moved to a fresh session until a later turn says otherwise (any harness) */
   waitsOnWork?: boolean;
   /** its last report or final answer says it waits for the user (or a decision from above) or for a colleague (another
-   *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0076) */
+   *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0084) */
   waitsOn?: 'user' | 'colleagues';
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
@@ -970,6 +970,21 @@ export type CompareState = { ok: true; experiments: CompareExperiment[] } | { ok
 export type LearnAction = { action: 'apply' | 'reject'; id: string } | { action: 'rollback'; domain: string };
 export type LearnResult = { ok: true; message: string } | { ok: false; error: string };
 
+/** One script of the brain's Script page (main brain/scripts.ts, /api/scripts): a reusable, tested script kept in the
+ *  brain's `scripts/` folder (ADR 0076). Its description comes from the `@title` / `@description` / `@usage` / `@tags` /
+ *  `@tested` lines of its header comment; `tested` = the last run the Orchestrator recorded (`untested` when none). */
+export interface BrainScriptSummary {
+  id: string; file: string; title: string; description: string; usage: string; language: string; tags: string[];
+  tested: { state: 'ok' | 'failed' | 'untested'; at: string | null; note: string };
+  changedAt: string | null; bytes: number;
+}
+/** /api/script?id=…: the script's code with every line that may hold a credential replaced (`masked` lines). */
+export interface BrainScript extends BrainScriptSummary { path: string; code: string; masked: number }
+/** One line of the brain's changelog (`changelog.md`, main brain/changelog.ts, /api/changelog): who changed what in the
+ *  brain, newest first. `at` = local "YYYY-MM-DD HH:MM". */
+export type ChangelogKind = 'script' | 'rule' | 'procedure' | 'note' | 'agent' | 'skill' | 'other';
+export type ChangelogAction = 'added' | 'edited' | 'fixed' | 'deleted' | 'restored';
+export interface ChangelogEntry { at: string; kind: ChangelogKind; action: ChangelogAction; target: string; by: string; summary: string }
 /** Per engine, the models its CLI offered at its last session (ACP's availableModels), kept in userData; absent = none
  *  seen yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
 export type ModelsSeen = Partial<Record<Harness, { ids: { id: string; name: string }[]; at: number }>>;
@@ -1443,6 +1458,8 @@ export interface EventMap {
   'search:status': SearchIndexStatus;
   /** a skill, rule, memory file or agent link changed (a maintenance job, a rollback, the brain on disk) */
   'brainmodel:changed': void;
+  /** a script of the brain or its changelog changed on disk (brain watcher): the Script and Changelog pages reload */
+  'scripts:changed': void;
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
@@ -1494,6 +1511,7 @@ export const EVENT_CHANNELS = [
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
   'regia:heldChanged',
+  'scripts:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;
