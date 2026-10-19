@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
-import { MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type RoleMcpAccess } from '../../shared/mcp-servers';
+import { MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type RoleMcpAccess } from '../../shared/mcp-servers';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
@@ -56,8 +56,9 @@ export function checkDef(raw: unknown): McpServerDef {
     if (SHELL_CHARS.test(command)) throw new Error('Comando: un nome (npx, node) o un percorso completo, senza virgolette né caratteri della shell.');
     if (!Array.isArray(d.args ?? []) || ((d.args ?? []) as unknown[]).length > 64) throw new Error('Argomenti: non validi.');
     const args = ((d.args ?? []) as unknown[]).map((a, i) => str(a, 1000, `Argomento ${i + 1}`)!);
+    args.forEach((a, i) => { if (secretLooking(a)) throw new Error(`Argomento ${i + 1}: sembra contenere un token (Bearer, Authorization: …): mettilo nel campo Token, che lo cifra.`); });
     const env = record(d.env, ENV_NAME, 'Variabili');
-    for (const [k, v] of Object.entries(env ?? {})) if (SECRET_NAME.test(k) && v) throw new Error(`La variabile ${k} sembra un segreto: mettila nel campo Token, che la cifra.`);
+    for (const [k, v] of Object.entries(env ?? {})) if (SECRET_NAME.test(k) && v || secretLooking(v)) throw new Error(`La variabile ${k} sembra un segreto: mettila nel campo Token, che la cifra.`);
     return { ...base, command, args, ...(env ? { env } : {}) };
   }
   const urlText = str(d.url, 2000, 'Indirizzo')!.trim();
@@ -71,7 +72,7 @@ export function checkDef(raw: unknown): McpServerDef {
   const headers = record(d.headers, HEADER_NAME, 'Intestazioni');
   for (const k of Object.keys(headers ?? {})) {
     if (FORBIDDEN_HEADERS.has(k.toLowerCase())) throw new Error(`Intestazione ${k}: la imposta l’app.`);
-    if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization') throw new Error(`L’intestazione ${k} sembra un segreto: mettila nel campo Token, che la cifra.`);
+    if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization' || secretLooking(headers![k]!)) throw new Error(`L’intestazione ${k} sembra un segreto: mettila nel campo Token, che la cifra.`);
   }
   return { ...base, url: url.toString(), ...(headers ? { headers } : {}) };
 }

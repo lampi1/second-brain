@@ -34,6 +34,11 @@ describe('checkDef', () => {
     expect(() => checkDef({ ...http, url: 'http://example.com/mcp' })).toThrow(/https/);
     expect(() => checkDef({ ...http, secrets: [{ where: 'env', name: 'X' }] })).toThrow(/intestazione/);
     expect(() => checkDef({ ...stdio, args: ['a\nb'] })).toThrow(/Argomento 1/);
+    expect(() => checkDef({ ...stdio, args: ['mcp-remote', '--header', 'Authorization: Bearer sk_live_9f8e7d6c5b4a39281706aBcD'] })).toThrow(/Argomento 3.*token/);
+    expect(() => checkDef({ ...stdio, args: ['--header=Authorization: x'] })).toThrow(/token/);
+    expect(() => checkDef({ ...stdio, env: { GH_HEADER: 'Bearer abc' } })).toThrow(/segreto/);
+    expect(() => checkDef({ ...http, headers: { 'X-Team': 'Bearer abc' } })).toThrow(/segreto/);
+    expect(checkDef({ ...stdio, args: ['-y', '@scope/pkg-2024-release-candidate-9', 'C:\\tools\\server2024build-final-x64.js', 'https://example.com/v1/mcp'] }).args).toHaveLength(4);
   });
 });
 

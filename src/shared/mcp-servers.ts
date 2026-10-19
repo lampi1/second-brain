@@ -71,6 +71,18 @@ export const MCP_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const slotKey = (s: McpSecretSlot): string => `${s.where}:${s.name}`;
 /** A variable or header name that carries a credential (an imported value under such a name is never copied). */
 export const SECRET_NAME = /(token|secret|password|passwd|pass\b|pat\b|_pat|api[_-]?key|apikey|auth|credential|cookie|session|private)/i;
+/** A long mix of letters and digits: the shape of a token (a path or an npm scope is never one, see secretLooking). */
+export const TOKENISH = /^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9_\-.=+/:]{24,}$/;
+/** A value (an argument, an env value, a header value) that carries a credential: "Bearer …", "Authorization: …",
+ *  "X-Api-Key: …", or a token-shaped piece once split on spaces and colons (`--header "Authorization: Bearer <tok>"`,
+ *  the mcp-remote pattern; `GH_HEADER="Bearer <tok>"`). A `--flag=value` argument is read by its value too. */
+export function secretLooking(value: string): boolean {
+  const vals = [value.trim()];
+  const eq = /^--?[\w-]+=/.exec(vals[0]!);
+  if (eq) vals.push(vals[0]!.slice(eq[0].length).trim());
+  return vals.some(v => /^bearer\s/i.test(v) || /^basic\s/i.test(v) || /^(authorization|[\w-]*(token|key|secret))\s*:/i.test(v)
+    || v.split(/[\s:]+/).some(p => TOKENISH.test(p) && !/[\\/]/.test(p) && !p.startsWith('@')));
+}
 
 /** A free label → a valid server id ("Azure DevOps" → "azure-devops"). */
 export function idFrom(label: string): string {
