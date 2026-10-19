@@ -61,7 +61,7 @@ for (const f of srcFiles) {
   const name = field('name') || f.replace(/\.md$/, '');
   const tools = field('tools'); // no tools line = every tool in Claude, so not read-only
   // readonly only without write tools AND without a shell: Cursor runs a readonly subagent in Ask mode, which blocks
-  // every shell command, so a reviewer could not even run `git diff` (seen 2026-10-10; Owner: readonly false for them).
+  // every shell command, so a review agent could not even run `git diff` (seen 2026-10-10; Owner: readonly false for them).
   const readonly = tools !== '' && !/\b(Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell)\b/.test(tools);
   const cursor = [
     '---',

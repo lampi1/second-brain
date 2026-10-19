@@ -13,10 +13,10 @@ Durable knowledge lives in this folder, **not** in agent-private memory, so ever
    Claude Stop hook `auto-commit.mjs`; other agents run `git -C {{BRAIN}} add -A && git -C {{BRAIN}} commit -m "<area>: <what>"`.
 4. Never search the home folder recursively: it walks cloud folders and downloads cloud-only files.
 5. **Text with backslashes (paths, regex, \n in code) goes into files via Write/Edit**, never via shell heredocs.
-6. **Code changes**: `reviewer` on the diff before "done" or a commit (`code.md`).
+6. **Code changes**: the `code-review` skill on the diff before "done" or a commit (`code.md`).
 7. **Chats get abandoned without warning**: keep your thread's `now.md` line current (state + next step) whenever it
    changes, with `node {{BRAIN}}/ops/tools/mem.mjs now me --label "<chat>" --text "<where · state · next>"`.
-8. **Every AI error gets logged at once**: when {{OWNER}} corrects you, a reviewer proves a claim wrong, or you find
+8. **Every AI error gets logged at once**: when {{OWNER}} corrects you, a review proves a claim wrong, or you find
    your own mistake, append one line to `ai-errors.md` with `mem.mjs error` (format there).
 
 ## Read on demand

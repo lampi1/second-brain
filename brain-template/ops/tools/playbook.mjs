@@ -1,11 +1,11 @@
-// playbook: one notebook per specialist agent (reviewer, code-investigator, prod-log-reader, qa, devops-writer), so each one gets better run after run without growing everyone's context (D3 of
+// playbook: one notebook per specialist agent the owner adds (prod-log-reader, qa, devops-writer), so each one gets better run after run without growing everyone's context (D3 of
 // reviews/2026-10-10-architettura-agenti.md, {{OWNER}} 2026-10-10: "taccuino per specialista"). ACE format (Zhang et al.
 // 2025): numbered points, each citing the error or praise it comes from, helpful/harmful counters, only small edits
 // (add / edit / remove / vote one point), never a rewrite of the whole notebook (that is what collapses a context).
 // Files: playbooks/<agent>.md in the MAIN checkout (from worktrees too), read only by that specialist at its start.
 // A point enters "Punti" only after {{OWNER}}'s yes: a chat or agent `propose`s it (→ "Proposti"), the Orchestrator asks him
 // in a panel, `accept` moves it. Votes are free: the chat that launched the specialist votes the points the
-// specialist says it used (helpful when the result held, harmful when {{OWNER}}/reviewer/QA proved it wrong).
+// specialist says it used (helpful when the result held, harmful when {{OWNER}}, a review or QA proved it wrong).
 // Limits (Hermes: a hard cap forces consolidation): a point ≤ 300 chars, "Punti" ≤ 2500 chars per notebook, a
 // near-duplicate of an existing point is refused (edit that one instead), a proposal without a source is refused.
 // Usage (--file = text written with the Write tool):
@@ -23,7 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const AGENTS = { reviewer: 'RV', 'code-investigator': 'CI', 'prod-log-reader': 'PL', 'qa': 'QA', 'devops-writer': 'DW' };
+export const AGENTS = { 'prod-log-reader': 'PL', 'qa': 'QA', 'devops-writer': 'DW' };
 export const MAX_POINT = 300, MAX_PUNTI = 2500;
 const SECTIONS = ['Punti', 'Proposti', 'Tolti'];
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());

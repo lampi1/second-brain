@@ -497,7 +497,7 @@
     } else if (sub === 'bug') {
       const areas = countBy(t.bugs, 'area');
       body.append(table({ name: 'bug-log', rows: [...t.bugs].reverse(), filters: ['area'],
-        explain: { find: areas[0] ? `L'area con più bug: <b>${E(areas[0][0])} (${areas[0][1]})</b>.` : '', next: areas[0] ? 'prima di una review in quell\'area, guarda questi bug: gli schemi si ripetono' : '', says: 'ogni bug confermato, con il suo schema.', why: 'gli schemi che tornano diventano controlli del reviewer.' },
+        explain: { find: areas[0] ? `L'area con più bug: <b>${E(areas[0][0])} (${areas[0][1]})</b>.` : '', next: areas[0] ? 'prima di una review in quell\'area, guarda questi bug: gli schemi si ripetono' : '', says: 'ogni bug confermato, con il suo schema.', why: 'gli schemi che tornano diventano controlli della review.' },
         cols: [{ key: 'data', label: 'Data', nowrap: true }, { key: 'area', label: 'Area' }, { key: 'bug', label: 'Bug', clip: true }, { key: 'pattern', label: 'Schema', help: 'Il tipo di errore ricorrente (review-catalog.md)' }, { key: 'fonte', label: 'Trovato da', clip: true }, { key: 'rif', label: 'Rif.', clip: true }] }));
     }
   });

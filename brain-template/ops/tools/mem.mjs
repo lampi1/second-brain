@@ -200,7 +200,7 @@ export function runOfLine(rest, { appDir = APP_DIR } = {}) {
 
 const errorCmd = (text, agent, work, run) => {
   if (text === undefined) fail('--text or --file is required');
-  if (agent !== undefined && !/^[\w-]{1,40}$/.test(agent)) fail('--agent: the sub-agent type (reviewer, general-purpose, Explore…)');
+  if (agent !== undefined && !/^[\w-]{1,40}$/.test(agent)) fail('--agent: the sub-agent type (general-purpose, Explore…)');
   if (agent !== undefined && / · agente: /.test(text)) fail('--agent given and the text already has "· agente:"');
   if (work !== undefined && !WORK_KEY.test(work)) fail('--work: wi:<id>, branch:<repo>/<branch> or chat:<id>');
   if (/ · lavoro: /.test(text)) fail('the text already has "· lavoro:": pass it with --work');
@@ -354,7 +354,7 @@ const main = () => {
   const [cmd, sub] = argv;
   if (cmd === 'now') return nowCmd(sub, text);
   // --agent needs its type: a forgotten one would write an untagged line and the sub-agent would close as a success
-  if (cmd === 'error' && argv.includes('--agent') && !/^[^-]/.test(arg('--agent') ?? '')) fail('--agent needs the sub-agent type (reviewer, general-purpose, Explore…)');
+  if (cmd === 'error' && argv.includes('--agent') && !/^[^-]/.test(arg('--agent') ?? '')) fail('--agent needs the sub-agent type (general-purpose, Explore…)');
   if (cmd === 'error' && argv.includes('--work') && !/^[^-]/.test(arg('--work') ?? '')) fail('--work needs its key (wi:<id>, branch:<repo>/<branch>)');
   if (cmd === 'error' && argv.includes('--run') && !/^[^-]/.test(arg('--run') ?? '')) fail('--run needs the agent run id (r_…)');
   if (cmd === 'error') return errorCmd(text, arg('--agent'), arg('--work'), arg('--run'));

@@ -1,6 +1,6 @@
 // App-owned copy of the template utilities for product brains (ADR 0062): the brain holds personal content only, the
 // app renders the scripts of its own release per brain under userData. Legacy brains keep running their own copy.
-// For a fresh brain (rules.appRules, ADR 0072) the copy also holds the product's text: the topic rules, the agents,
+// For a fresh brain (rules.appRules, ADR 0072) the copy also holds the product's text: the topic rules, the
 // skills and output styles the Claude plugin loads, and the model and price table, so a clean install shows the owner
 // an empty brain. Used by rules/new-brain.ts, the launch adapters (brain/adapters/*), brain/api.ts and brain/routing.ts.
 import fs from 'node:fs';
@@ -15,15 +15,14 @@ import { read } from './storage';
 /** Template code the app owns for a product brain; everything else in the template is personal content. */
 export const isTemplateCode = (rel: string): boolean =>
   /^(?:ops\/tools\/brain-site\/|ops\/tools\/[^/]+\.m?js$|harness\/(?:claude|cursor|compare)\/[^/]+\.m?js$|\.claude\/hooks\/[^/]+\.mjs$)/.test(rel);
-/** Template text a fresh brain gets from this copy, never in its folder: Claude agents, the shipped skills (the
- * `{{BRAIN_NAME}}` skill is only the entry from ~/.claude, which the app never wires), output styles, the model and
- * price table. Topic rules (any template .md with `when:` frontmatter) are found by content (appFiles). */
-const APP_TEXT = /^(?:\.claude\/agents\/[^/]+\.md|harness\/claude\/skills\/(?:explain|create-agent|brain-edit|flow-review)\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
+/** Template text a fresh brain gets from this copy, never in its folder: the shipped skills (the `{{BRAIN_NAME}}`
+ * skill is only the entry from ~/.claude, which the app never wires), output styles, the model and price table. The
+ * template ships no sub-agents: the know-how is skills, loaded by the roles (issue #89). Topic rules (any template .md with `when:` frontmatter) are found by content (appFiles). */
+const APP_TEXT = /^(?:harness\/claude\/skills\/(?!\{\{)[^/]+\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
 const TOPIC = /^---\r?\nwhen: /;
 /** Where the Claude plugin finds the app's own parts inside the copy (claude-plugin.ts), as plugin folders. */
 export const APP_PLUGIN_PARTS: readonly { from: string; to: string }[] = [
   { from: 'harness/claude/skills', to: 'skills' },
-  { from: '.claude/agents', to: 'agents' },
   { from: 'harness/claude/output-styles', to: 'output-styles' },
 ];
 /** Values the installer rendered that are not derived from the brain folder; stored in brain.json `template`. */

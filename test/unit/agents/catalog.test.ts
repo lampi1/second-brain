@@ -41,7 +41,7 @@ describe('role catalog', () => {
     expect(make().list().profiles.find(p => p.id === 'scout')).toEqual(saved);
     expect(catalog.save(edit(saved, {}), 'scout').version).toBe(2); // nothing changed: same version
     const reset = catalog.reset('scout');
-    expect(reset).toMatchObject({ instructions: ROLE_DEFAULTS.scout.instructions, skills: [], tier: ROLE_DEFAULTS.scout.tier, userLocked: false, version: 3 });
+    expect(reset).toMatchObject({ instructions: ROLE_DEFAULTS.scout.instructions, skills: ROLE_DEFAULTS.scout.skills, tier: ROLE_DEFAULTS.scout.tier, userLocked: false, version: 3 });
     expect(catalog.history('scout').map(v => v.version).sort()).toEqual([1, 2, 3]);
     expect(catalog.restoreVersion('scout', 2).instructions).toBe('Search the repo first.');
   });

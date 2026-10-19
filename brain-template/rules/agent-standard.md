@@ -12,7 +12,7 @@ vorrei fossero troppo"). Sources and measures: `reviews/2026-10-10-agenti.md`.
 - An agent is worth it when a job repeats (≥ 3 times in different chats), needs a **clean context** (big reads, a
   browser session, fresh eyes on a diff) and returns a **short result**. Otherwise: a rule, a skill or a script.
 - **Few agents** (7 on 2026-10-10). Before adding one, check whether an existing agent can take the job as one more
-  mode; an agent with no runs in 10 days is merged or removed (`fix-packager`, 0 runs, merged into `code-investigator`).
+  mode; an agent with no runs in 10 days is merged or removed.
 - An agent is a fixed prompt **plus** six levers; set each on purpose: `description` (who calls it), `tools` (what it
   can do), `model` + `effort`, clean context, notebook (`playbooks/<name>.md`), report format.
 
@@ -57,4 +57,4 @@ effort: medium         # harness/models.md: every Opus run medium; high/xhigh on
 
 `node harness/cursor/sync-agents.mjs` (pointers; then `--check`), new or removed agent → `AGENTS` in
 `ops/tools/playbook.mjs` + its notebook, `node ops/tools/brain-lint.mjs`, one real task of these days before/after,
-`reviewer` on the diff, a line in `proposals.md`.
+the `code-review` skill on the diff, a line in `proposals.md`.

@@ -5,7 +5,7 @@ passati a torto, fatti inventati. **Storico permanente**: non si sfoltisce e non
 corregge, non si toglie.
 
 - **Read when:** la skill `flow-review` o una revisione (per primo); "che errori fa l'IA?".
-- **Write when:** {{OWNER}} corregge un agente, un reviewer dimostra falsa un'affermazione, o l'agente scopre di aver
+- **Write when:** {{OWNER}} corregge un agente, una review dimostra falsa un'affermazione, o l'agente scopre di aver
   sbagliato. Scrive **subito la chat che lo riceve**, con
   `node {{BRAIN}}/ops/tools/mem.mjs error --text "<riga>"`. Mai segreti o dati di terzi.
 - **Seconda volta = proposta di regola**: stesso tipo e stessa area già nel registro → proposta all'Orchestrator

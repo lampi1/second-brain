@@ -362,7 +362,7 @@ export const SHORT = {
   owner: 'decide e lancia lui la produzione', colleghi: 'QA e colleghi, chi taggare',
   'chat:orchestrator-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:orchestrator-cursor': 'la stessa Orchestrator dentro Cursor',
   'chat:lavoro': 'una chat per ogni lavoro', 'harness:claude': 'le chat Claude e i loro hook', 'harness:cursor': 'le chat Cursor, stesse regole',
-  'agent:reviewer': 'controlla un diff prima del merge', 'agent:code-investigator': 'trova la causa di un bug nel codice',
+  'skill:code-review': 'controlla un diff prima del merge', 'skill:code-investigation': 'trova la causa di un bug nel codice',
   'agent:prod-log-reader': 'legge log e stato di produzione', 'agent:qa': 'prova i test case del prodotto nel browser',
   'agent:devops-writer': 'scrive bug e commenti DevOps', 'skill:brain-edit': 'cambia le regole quando lo chiedi',
   'skill:flow-review': 'trova dove il flusso perde tempo',

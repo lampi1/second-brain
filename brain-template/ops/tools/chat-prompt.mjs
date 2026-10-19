@@ -34,10 +34,10 @@ export const READ = {
   research: ['map.md'],
 };
 const KIND_RULES = {
-  code: 'Lavoro sul codice con code workflow nel repo indicato; prima di dire "fatto" o di un commit, il sotto-agente `reviewer` sul diff (code.md). A che punto è il ramo (status, base, commit, merge in corso): `node "{{BRAIN}}/ops/tools/repo-state.mjs" <cartella>`, una chiamata.',
+  code: 'Lavoro sul codice con code workflow nel repo indicato; prima di dire "fatto" o di un commit, la skill `code-review` sul diff (code.md). A che punto è il ramo (status, base, commit, merge in corso): `node "{{BRAIN}}/ops/tools/repo-state.mjs" <cartella>`, una chiamata.',
   qa: 'QA: scenario esatto dei test case, mai cambiato per aggirare un bug (resta Blocked); risultati sul tracker solo dopo l\'ok di {{OWNER}}.',
   prod: 'Produzione: proponi i comandi, li lancia {{OWNER}}; query sui DB di prod solo dall’Orchestrator (gli mandi il percorso del `.sql`); log e `az` in sola lettura li leggi tu (me.md "Safety").',
-  os: 'Cervello: niente segreti nei file; permessi, settings e hook solo con l\'ok esplicito di {{OWNER}}; testo con backslash solo via Write/Edit; il contesto fisso non cresce; test offline, `reviewer` sul diff e `node ops\\tools\\brain-lint.mjs` prima del merge in main.',
+  os: 'Cervello: niente segreti nei file; permessi, settings e hook solo con l\'ok esplicito di {{OWNER}}; testo con backslash solo via Write/Edit; il contesto fisso non cresce; test offline, la skill `code-review` sul diff e `node ops\\tools\\brain-lint.mjs` prima del merge in main.',
   research: 'Solo ricerca e proposta: non cambiare niente finché {{OWNER}} non dice sì; fonti con data per ogni affermazione.',
 };
 
