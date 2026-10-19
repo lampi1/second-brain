@@ -347,8 +347,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: a => {
         const action = String(a.action);
         if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette)`);
-        // Every worker and its browser can be maximized in the Grindhouse.
-        if (action === 'maximize' && a.value !== undefined) { const v = String(a.value); const tab = d.browser.list().find(t => t.id === v); guard(tab?.ownerChatId ?? v); }
+        // a root chat and its browser can be maximized; a delegated chat's (or its browser's) cannot: maximize then
+        // app_screenshot would show the Orchestrator its content (ADR 0083: it sees only the state)
+        if (action === 'maximize' && a.value !== undefined) {
+          const v = String(a.value).replace(/^(chat|browser):/, '');
+          const tab = d.browser.list().find(t => t.id === v);
+          contentOf(tab?.ownerChatId ?? v);
+        }
         d.emitUi({ action, value: a.value === undefined ? undefined : String(a.value) });
         return 'ok';
       },

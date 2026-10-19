@@ -175,6 +175,19 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
+  it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {
+    const ui: unknown[] = [];
+    const list = [{ id: 'c_root', title: 'Root', isOrchestrator: false }, { id: 'c_kid', parentId: 'c_root', title: 'Kid', isOrchestrator: false }];
+    const chats = { list: () => list } as unknown as ChatService;
+    const browser = { list: () => [{ id: 'tab-kid', ownerChatId: 'c_kid' }, { id: 'tab-root', ownerChatId: 'c_root' }] } as unknown as BrowserService;
+    const ui_ = appControlTools({ chats, browser, brain: {} as BrainService, window: () => null, emitUi: c => ui.push(c), version: '0' }, 'o').find(x => x.name === 'app_ui')!;
+    for (const value of ['c_kid', 'chat:c_kid', 'tab-kid', 'browser:tab-kid']) expect(() => ui_.run({ action: 'maximize', value })).toThrow(/delegata/);
+    expect(ui).toEqual([]);
+    expect(ui_.run({ action: 'maximize', value: 'c_root' })).toBe('ok');
+    expect(ui_.run({ action: 'maximize', value: 'tab-root' })).toBe('ok');
+    expect(ui).toHaveLength(2);
+  });
+
   it('app_create_chat on the plain /mcp/app mount (any local process) asks for a chat bound by the Orchestrator; its own mount does not', async () => {
     const opts: unknown[] = [];
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }],
