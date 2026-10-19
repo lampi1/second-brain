@@ -1,0 +1,2 @@
+git@github.com:acme/shop.git
+https://dev.azure.com/org/proj/_git/repo

@@ -31,6 +31,9 @@ import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
+import { CloudService, cloudFile } from './cloud/service';
+import { realExec, realHttp } from './cloud/exec';
+import { CURSOR_CLOUD_KEY } from './cloud/cursor';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
@@ -88,6 +91,8 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
+  cloud?: CloudService;
   agentAuthoring?: AgentAuthoring;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
   agentLifecycle?: LifecycleApi;
@@ -349,6 +354,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
+  // cloud agents (ADR 0080): the vendors' lists polled only while the window is on screen; tests never reach a vendor
+  const cloud = new CloudService({
+    file: cloudFile(ctx.userData), emit: st => ctx.emitter.emit('cloud:changed', st), exec: realExec,
+    http: process.env.SB_TEST || process.env.VITEST ? () => Promise.reject(new Error('i test non chiamano Cursor')) : realHttp,
+    cursorKey: () => engines.keyFor(CURSOR_CLOUD_KEY), engineOn: h => engineOn(brain.settings(), h),
+    budget: () => { const b = brain.settings().budget; return { limitUsd: b.enabled && b.cursor.mode !== 'off' ? b.cursor.dailyUsd : null, localTodayUsd: brain.usage().cursorTodayUsd ?? 0 }; },
+    addSpend: usd => engines.addSpend(CURSOR_CLOUD_KEY, usd),
+    visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
+  });
+  cloud.startPolling();
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
@@ -581,7 +596,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
+  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get(), cloud }, improve, false, regiaTokens);
 
   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
@@ -637,7 +652,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    cloud, chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -646,7 +661,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

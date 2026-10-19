@@ -40,11 +40,15 @@ import type { AgentCatalog } from '../../shared/agents';
 import { agentCatalogTool, discoverRankedAgents, type ClassifyAgents } from '../agents/discovery';
 import { authoringTools, type AgentAuthoring } from '../agents/authoring';
 import { agentLearnTool, type AgentPackLearning } from '../agents/pack/learning';
+import type { CloudService } from '../cloud/service';
+import { isCloudEngine } from '../../shared/cloud';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
+  /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
+  cloud?: CloudService;
   agentAuthoring?: AgentAuthoring;
   agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
@@ -181,6 +185,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
           closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
+          // agents in the vendors' clouds (ADR 0080): status and page only; follow them on their vendor's page
+          ...(d.cloud ? { cloud: d.cloud.state().agents.slice(0, 30).map(a => ({ id: a.id, engine: a.engine, title: a.title, status: a.status, repo: a.repo, ...(a.branch ? { branch: a.branch } : {}), url: a.url, ...(a.summary ? { summary: a.summary.slice(0, 200) } : {}), ...(a.costUsd !== undefined ? { costUsd: a.costUsd } : {}), updatedAt: new Date(a.updatedAt).toISOString() })) } : {}),
         };
       },
     },
@@ -354,6 +360,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         effort: str('optional reasoning effort: low | medium | high | xhigh | max (max only when the user asked); omit it to let the routing table decide'),
         reason: str('why, when harness/model/effort differ from what the table says (required then)'),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
+        where: str('optional: "local" (default) or "cloud" = an agent in the vendor\'s cloud (harness cursor | codex | claude, default cursor; cwd must be a GitHub checkout on a branch already pushed; it pushes only its own cursor/… codex/… claude/… branch; Cursor bills at API prices and is blocked over the Cursor daily budget). Only when the user asked for a cloud agent.'),
+        env: str('optional, where "cloud" + harness codex: the Codex cloud environment id (remembered per repo)'),
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Regia (one at a time: a new one would take the role from the agent's own chat)
@@ -379,6 +387,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a former Regia's title is the Orchestrator's mail box: a new chat may not take its mail
         if (claimsAlias(title, d.chats.list())) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
+        if (a.where !== undefined && a.where !== 'local' && a.where !== 'cloud') throw new Error('where: local | cloud');
+        if (a.where === 'cloud') {
+          if (!d.cloud) throw new Error('agenti cloud non disponibili');
+          const engine = a.harness === undefined || a.harness === null || a.harness === '' ? 'cursor' : a.harness;
+          if (!isCloudEngine(engine)) throw new Error('where "cloud": harness cursor | codex | claude');
+          const refused = openRefusal(s, caller()?.harness ?? 'claude', engine);
+          if (refused) throw new Error(`bloccato: ${refused}`);
+          const agent = await d.cloud.start({ engine, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...(typeof a.model === 'string' && a.model ? { model: a.model } : {}), ...(typeof a.env === 'string' ? { env: a.env } : {}) }, 'agent');
+          log.info('appctl', 'agent started a cloud agent', { data: { engine, title, id: agent.id, repo: agent.repo } });
+          return { cloudAgentId: agent.id, engine, title: agent.title, status: agent.status, repo: agent.repo, ...(agent.branch ? { branch: agent.branch } : {}), url: agent.url };
+        }
         const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
         const kind = text(a.kind);
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);

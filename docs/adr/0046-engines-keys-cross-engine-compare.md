@@ -92,7 +92,8 @@ quest app voglio farla cross OS").
   the CLI's own login files today. An API engine has no such way.
 - AGENTS.md rule 2 becomes: "credentials never handled by the app, except the API keys the user types in Settings →
   Motori: encrypted with safeStorage, write-only from the UI, given only to their own engine's process env or HTTP
-  header (ADR 0046)".
+  header (ADR 0046)". ADR 0080 adds one key that is not an engine's: the Cursor Cloud Agents key (id `cursor-cloud`,
+  bound to `https://api.cursor.com/v1`, sent only as the Authorization header of the cloud agents' requests).
 
 ### 3. One cross-engine switch
 - Settings → "Motori", three protected switches read by one module, `src/main/engines/policy.ts`:

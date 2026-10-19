@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- Cloud agents in the Grindhouse (ADR 0080, #79): Cursor Cloud Agents (REST API: start, list, live messages,
+  follow-up, stop, spend in the Cursor budget), Codex cloud tasks (start, list, `codex apply`) and Claude Code cloud
+  sessions (start, follow-up, link) as strips with a "cloud" badge, grouped by repository; "Nuovo agente" gets
+  "Dove: Locale / Cloud" gated by each engine's readiness; `app_create_chat` takes `where: 'cloud'`; "Porta in locale"
+  into a new worktree; the Cursor Cloud Agents key in Settings → Motori → Cursor; fake cloud agents in the demo.
+  GitHub repos only; the app never pushes.
+
 ### Changed
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed

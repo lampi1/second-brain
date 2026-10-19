@@ -137,6 +137,16 @@ a floating layer, wherever you are in the app): answer with one key, with the co
 Strips are grouped by area and ordered by the Orchestrator; each expands inline, maximizes or opens in focus mode,
 and the browser an agent drives sits right under it.
 
+### Cloud agents next to the local ones
+
+Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going
+with the PC asleep and cost no local CPU. Start one from **Nuovo agente → Dove: Cloud** (or let the Orchestrator do it)
+on a GitHub repository whose branch is already pushed: it gets its own strip in the Grindhouse, grouped by repository,
+with a "cloud" badge. Cursor streams its messages, takes follow-ups and stops from the app (its cloud runs at API
+prices, counted in the Cursor spending limit; the key goes in Settings → Motori → Cursor); Codex and Claude open their
+own page for what their CLIs do not offer. "Porta in locale" brings the result into a new worktree. The agent pushes
+only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pushes (ADR 0080).
+
 ### The Orchestrator: one chat that coordinates the others
 
 ![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/regia.webp)

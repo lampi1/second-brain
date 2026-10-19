@@ -2,13 +2,16 @@
 // the strips of the agents at work (components/AgentStrips.tsx), grouped and ordered by the Orchestrator
 // (lib/agent-order.ts: by area, start order inside a group; never by the user). Brother, 18/10: «le striscioline devono
 // essere il cuore della grindhouse nessun altra informazione»: no greeting, no headline (it is the Dashboard's, SPEC 18),
-// no counts, no "Aspetta te" list; a decision waiting shows as a pill on its own strip (ChatTile.tsx).
+// no counts, no "Aspetta te" list; a decision waiting shows as a pill on its own strip (ChatTile.tsx). Agents that run
+// in a vendor's cloud follow as their own strips, grouped by area too (components/CloudStrips.tsx, ADR 0080).
 import { AgentStrips, AgentStripsActions } from '../../components/AgentStrips';
+import { CloudStrips } from '../../components/CloudStrips';
 import './home.css';
 
 export function Home(_: { nav: (target: string) => void }) {
   return <div className="home-page" data-testid="home">
     <AgentStripsActions />
     <AgentStrips />
+    <CloudStrips />
   </div>;
 }
