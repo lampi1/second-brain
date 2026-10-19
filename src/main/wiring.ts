@@ -82,6 +82,7 @@ import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
+import { JudgeSampler } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
@@ -613,7 +614,18 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list() }));
-  loopRef.current = { ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run) };
+  // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
+  // user's stable app outside tests (or with SB_JUDGE_SAMPLE=1), at most delegation.judgeDaily a day
+  const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
+    chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
+    daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
+    judgeEngine: () => agents.list().profiles.find(p => p.id === 'judge')?.engine ?? 'claude',
+    refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
+    feedback: (a, by) => runFeedback.recordFeedback(a, by) });
+  loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };
+  const judgeTimer = (releaseId() && !process.env.SB_TEST) || process.env.SB_JUDGE_SAMPLE === '1'
+    ? setInterval(() => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); }, 30 * 60_000) : null;
+  judgeTimer?.unref();
   const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
   lifecycleTimer?.unref();
   // a role chat's route says how its active version has done so far

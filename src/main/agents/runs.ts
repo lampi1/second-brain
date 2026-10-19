@@ -83,7 +83,8 @@ function readReport(v: unknown): AgentRunReport | null {
   if (!['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
     || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
   return { at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
-    ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}) };
+    ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
+    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}) };
 }
 function readCorrections(v: unknown): AgentRunCorrections | null {
   const c = v as Partial<AgentRunCorrections> | null;

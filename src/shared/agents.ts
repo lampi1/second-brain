@@ -99,7 +99,9 @@ export interface AgentRunOutcome {
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
 export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
 /** The run's agent_report (agents/delegation.ts): the child's self-report of its delegation contract. */
-export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number }
+export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number;
+  /** a Judge review's verdict on the run it reviews (agents/judge-sample.ts) */
+  verdict?: 'success' | 'partial' | 'fail' }
 /** The user's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) a reopen of a run whose agent had
  *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
 export interface AgentRunCorrections { tagged: number; afterReport: number }

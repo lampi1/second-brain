@@ -9,6 +9,7 @@ export const SUMMARY_MAX = 140;
 const FENCE = /^[ \t]*```[ \t]*run-report[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t]*$/gm;
 const OUTCOMES = ['done', 'partial', 'blocked'] as const;
 const VERIFIED = ['yes', 'partial', 'no'] as const;
+const VERDICTS = ['success', 'partial', 'fail'] as const;
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 
 export type ParsedReport = { status: 'missing' } | { status: 'garbage'; reason: string } | { status: 'ok'; report: AgentRunReport };
@@ -34,6 +35,7 @@ export function parseRunReport(text: string, at: number): ParsedReport {
     at, outcome: o.outcome as typeof OUTCOMES[number], verified: o.verified as typeof VERIFIED[number],
     summary: summary.length > SUMMARY_MAX ? `${summary.slice(0, SUMMARY_MAX - 1)}…` : summary,
     ...(count(o.findings) ? { findings: o.findings } : {}), ...(count(o.blocking) ? { blocking: o.blocking } : {}),
+    ...(VERDICTS.includes(o.verdict as never) ? { verdict: o.verdict as typeof VERDICTS[number] } : {}),
   } };
 }
 

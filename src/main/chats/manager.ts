@@ -445,7 +445,8 @@ export class ChatManager implements ChatService {
   }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
-  async create(req: NewChat, by: 'user' | 'agent' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; maxContext?: number }, links: RunLinks = {}): Promise<ChatSummary> {
+  /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; maxContext?: number }, links: RunLinks = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
@@ -504,11 +505,11 @@ export class ChatManager implements ChatService {
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const prompt = req.prompt?.trim() ? req.prompt : null;
-    const viaQueue = by === 'agent' && !!prompt && !!this.admission;
+    const viaQueue = by !== 'user' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
         agent: agent.owner,
-        ...(by === 'agent' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
+        ...(by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
         effortStatus: initialEffort(caps.effort, req.effort ?? null),
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
         model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
@@ -533,7 +534,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
+    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     this.chats.set(id, r);
     if (old) {
@@ -561,7 +562,7 @@ export class ChatManager implements ChatService {
 
   /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
    *  Orchestrator opens root chats with app_create_chat), and the child's folder lies inside the parent's. */
-  private delegator(req: NewChat, by: 'user' | 'agent'): Rec {
+  private delegator(req: NewChat, by: 'user' | 'agent' | 'app'): Rec {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
     if (by !== 'agent' || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     if (!within(parent.s.cwd, typeof req.cwd === 'string' ? req.cwd.trim() : '')) throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}).`);
