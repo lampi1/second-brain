@@ -22,7 +22,7 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', on
     async bootstrap() {
       // Persist first: creating memory must not make a restarted new install appear already configured.
       await persist(initial.status === 'new' && !preferences.guide ? { stage: 'choosing' } : undefined);
-      await sb.invoke('app:createBrain', { automatic: true, name: '', role: '', language, harness: 'none', folderName: '' }).catch(() => null);
+      await sb.invoke('app:createBrain', { language, harness: 'none' }).catch(() => null);
       await refreshInfo();
       const info = await sb.invoke('app:info', undefined);
       const choices = await Promise.all(engines.map(async id => {

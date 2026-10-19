@@ -18,6 +18,7 @@ import{WorkProfilePreferences}from'./WorkProfilePreferences';
 import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
+import { ProjectsFolderSetting } from './ProjectsFolderSetting';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudKeySetting } from './CloudKeySetting';
@@ -58,9 +59,10 @@ export function SettingsPage(){
   {id:'connectors',icon:<IconLink size={18}/>,description:t('essential.desc.connectors'),title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects',body:<AppConnectorScreen/>},
   {id:'accounts',icon:<IconTerminal size={18}/>,description:t('essential.desc.accounts'),title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' ')+' '+t('autonomy.title'),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
   {id:'roles',icon:<IconBranch size={18}/>,description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth parallelo parallel Judge modelli models livelli tiers',body:<DelegationSettings/>},
-  {id:'space',icon:<IconFolder size={18}/>,description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),'ruolo role Dev QA PO CTO'].join(' '),body:<>
+  {id:'space',icon:<IconFolder size={18}/>,description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('essential.archive'),t('setup.settings.projects'),'ruolo role Dev QA PO CTO progetti projects repository'].join(' '),body:<>
    <WorkProfilePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost btn-m" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>
+   <ProjectsFolderSetting/>
    <Row title={t('essential.archive')} description={t('essential.archiveHint')}><Select aria-label={t('essential.archive')} value={settings.autoCloseMin} onChange={event=>void setSetting({autoCloseMin:Number(event.target.value)})}>{[...new Set([0,2,5,10,30,settings.autoCloseMin])].sort((a,b)=>a-b).map(count=><option key={count} value={count}>{count?t('essential.minutes',{count}):t('essential.never')}</option>)}</Select></Row>
    <Row title={t('essential.setupTitle')} description={t('essential.setupHint')}><button type="button" className="btn btn-ghost btn-m" onClick={()=>openModal('setup')}>{t('essential.setup')}</button></Row>
   </>},

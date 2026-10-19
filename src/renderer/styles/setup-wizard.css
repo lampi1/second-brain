@@ -1,4 +1,4 @@
-/* The first-run setup wizard (components/FirstInterview.tsx, components/SetupEngines.tsx): one fixed-size modal with a
+/* The first-run setup wizard (components/FirstInterview.tsx, SetupFolders.tsx, SetupEngines.tsx, SetupConnectors.tsx): one fixed-size modal with a
    step rail on the left and the current step on the right, in the Dashboard's look (eyebrow, display titles, cards on
    the shared tokens, light and dark). The modal keeps its size between steps so moving on never feels like a new
    window; only the step body scrolls. Motion is off for reduced-motion users. Scoped under .sw / .modal-setup. */
@@ -103,8 +103,44 @@
 .sw-engines { display: flex; flex-direction: column; gap: 14px; animation: sw-in 220ms var(--ease) both; }
 .sw-engines-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
-/* ---- tools: the shared connector screen, without its own title (the step has one); its look elsewhere is untouched */
-.sw-connectors .app-connectors > h2, .sw-connectors .app-connectors > h2 + p { display: none; }
+/* ---- folders: the memory and the projects folder, one card each */
+.sw-folder { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); }
+.sw-folder[data-state="ask"] { border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
+.sw-folder-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-m); background: var(--blue-bg); color: var(--blue); }
+.sw-folder-icon.is-ok { background: var(--green-bg); color: var(--green); }
+.sw-folder-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.sw-folder-text p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-3); }
+.sw-folder-text code { align-self: flex-start; max-width: 100%; padding: 3px 8px; border-radius: var(--r-xs); background: var(--surface-3); }
+.sw-folder-kicker { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 650; color: var(--text-3); }
+.sw-folder-warn { display: flex; gap: 6px; align-items: flex-start; color: var(--amber) !important; }
+.sw-folder-warn svg { flex: none; margin-top: 2px; }
+.sw-folder > .btn { flex: none; }
+
+/* ---- tools: one row per connector, its state always the outcome of a real check */
+.sw-tools { display: flex; flex-direction: column; gap: 12px; }
+.sw-tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sw-tool { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.sw-tool.is-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
+.sw-tool.is-wait { border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
+.sw-tool.is-bad { border-color: color-mix(in srgb, var(--red) 40%, var(--border-2)); }
+.sw-tool-mark { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-s); background: var(--surface-3); font-weight: 700; font-size: 12px; color: var(--text-2); }
+.sw-tool.is-ok .sw-tool-mark { background: var(--green-bg); color: var(--green); }
+.sw-tool-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.sw-tool-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.sw-tool-hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+.sw-tool-ok, .sw-tool-bad { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-radius: var(--r-m); font-size: 12.5px; line-height: 1.5; }
+.sw-tool-ok { background: var(--green-bg); color: var(--text); }
+.sw-tool-bad { background: var(--red-bg); color: var(--text); }
+.sw-tool-ok p, .sw-tool-bad p { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-weight: 600; }
+.sw-tool-ok p svg { flex: none; margin-top: 2px; color: var(--green); }
+.sw-tool-bad p svg { flex: none; margin-top: 2px; color: var(--red); }
+.sw-tool-ok small, .sw-tool-bad small { color: var(--text-2); overflow-wrap: anywhere; }
+.sw-tool-projects { font-size: 12px; color: var(--text-2); }
+.sw-tool-projects summary { cursor: pointer; }
+.sw-tool-project-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 14px; margin-top: 8px; max-height: 160px; overflow-y: auto; }
+.sw-tool-actions { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 132px; }
+.sw-tool-actions .btn { justify-content: center; }
+.sw-pill-bad { color: var(--red); background: var(--red-bg); border-color: transparent; }
 
 /* ---- summary */
 .sw-summary { margin: 0; border: 1px solid var(--border-2); border-radius: var(--r-l); overflow: hidden; background: var(--surface-2); }
@@ -116,7 +152,7 @@
 .sw-edit:hover:not(:disabled) { background: var(--blue-bg); }
 
 @keyframes sw-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .sw-stack, .sw-engines { animation: none; } .sw-step, .sw-choice, .sw-engine { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sw-stack, .sw-engines { animation: none; } .sw-step, .sw-choice, .sw-engine, .sw-tool { transition: none; } }
 
 /* ---- narrow windows: the rail becomes a row of numbered steps above the step */
 @media (max-width: 760px) {
@@ -129,6 +165,8 @@
   .sw-step:not(.is-current) .sw-step-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .sw-head, .sw-body, .sw-foot { padding-left: 16px; padding-right: 16px; }
   .sw-grid2, .sw-choices { grid-template-columns: 1fr; }
+  .sw-folder, .sw-tool { flex-wrap: wrap; }
+  .sw-tool-actions { flex-direction: row; min-width: 0; }
   .sw-summary-row { grid-template-columns: 1fr auto; }
   .sw-summary-row dd { grid-column: 1 / -1; grid-row: 2; }
 }

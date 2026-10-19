@@ -91,7 +91,9 @@
 - App chats are persisted in `userData/chats.json` (id, harness, cwd, sessionId, title, model…), so they come back
   after a restart as `closed` and resume on the first message. CLI transcripts stay where each CLI keeps them.
   API chats also persist user and assistant messages as plaintext in `userData/api-chats/<chatId>.json`.
-- Settings in `userData/config.json` (brain folder, ports, mutes, Task reading). Never secrets.
+- Settings in `userData/config.json` (brain folder, projects folder, ports, mutes, Task reading). Never secrets. The
+  projects folder (`projectsRoot`) is found read-only by `main/brain/projects-folder.ts` (CLI folder names, usual places)
+  and asked by the first setup only when it cannot tell.
 - API key ciphertext and masks are in `userData/secrets.json`, protected by the OS-backed Electron secret store;
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data

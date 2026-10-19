@@ -37,6 +37,17 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   and estimate → actual with ✓/✗ once done; under the Orchestrator's head, its plan (the agents it started today, a
   "via rapida" mark, the sum) and the estimates' weekly accuracy. It replaces the strip's old estimate (the agent's
   median of all its runs).
+- **First setup, clearer and working** (owner, 2026-10-19): every text field of the setup takes typing again (a modal
+  re-ran its focus handling on each keystroke, so only the first letter landed; fixed for every dialog and popover).
+  The first step no longer asks you to choose between memory options: a new memory by default, or an existing brain
+  through the folder picker; instead it shows your projects folder, found by the app by itself (folders Claude Code
+  and Cursor already worked in, usual places; names and `.git` only) and asked only when it cannot tell, saved as the
+  setting `projectsRoot` (shown in Settings → Il mio spazio, with «Cambia…», «Rileva di nuovo» and a «?») and used as a new memory's repositories folder. After "Collega", an AI and each tool end in a
+  real check shown on the card: "Collegata"/"Connesso come …" with the account and when it was checked (re-checked by
+  itself every few seconds while the sign-in window is open), or "Non connesso" with the reason and what to do. The
+  "Crea una nuova memoria personale" form and the list of found brains are gone from the setup, and with them the
+  app's other way of creating a brain (the installer-based creator and its found-brains search): the setup's new
+  memory is the only one the app makes.
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its

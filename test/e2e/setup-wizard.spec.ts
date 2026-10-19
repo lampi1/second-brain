@@ -1,7 +1,7 @@
 // End-to-end: the first-run setup wizard (components/FirstInterview.tsx) on a temporary fixture brain (SB_BRAIN, never
 // the user's) rendered from the real me.md template with the default brain's placeholders: seven steps in one modal, the
 // answers land in me.md on confirm (name, role, work areas, reply style; the chat language already known is prefilled),
-// the connectors sit in the tools step and no separate connectors modal follows. Screenshot: test-results/shots/setup-wizard-*.png.
+// the connectors (SetupConnectors.tsx) sit in the tools step and no separate connectors modal follows. Screenshot: test-results/shots/setup-wizard-*.png.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,7 @@ test('setup wizard: seven steps, answers written into me.md on confirm', async (
     const next = () => setup.getByRole('button', { name: 'Continua', exact: true }).click();
     await expect(setup.getByText('Passo 1 di 7')).toBeVisible();
     await next(); await next();
-    await expect(setup.getByTestId('app-connectors')).toBeVisible();
+    await expect(setup.getByTestId('setup-connectors')).toBeVisible();
     await next();
     await expect(setup.getByText('Passo 4 di 7')).toBeVisible();
     await expect(setup.getByTestId('setup-language')).toHaveValue('italiano');

@@ -8,9 +8,9 @@ export interface BrainRulesConfig {
   nowLineLimit: number;
   autoCommit: boolean;
   /** Product brains get the per-launch Claude plugin even with the app-wide launch-rules switch off (no ~/.claude wiring
-   * duplicates it: BrainCreator never edits global settings). false = the owner opted this brain out. */
+   * duplicates it: the app never edits global settings when it creates one). false = the owner opted this brain out. */
   claudeLaunch: boolean;
-  /** true = a fresh brain (BrainCreator, the automatic memory): the app supplies the boot instructions, the topic rules,
+  /** true = a fresh brain (the first setup's automatic memory): the app supplies the boot instructions, the topic rules,
    * the agents and skills from its own copy (rules/tools.ts), the brain holds only what the owner wrote. false = a
    * migrated legacy brain, whose own AGENTS.md and topic files are its rules. */
   appRules: boolean;
