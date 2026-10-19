@@ -13,6 +13,7 @@
 │            usage · costs · budget · estimates · quality · model defaults      │
 │   tasks/   Task page (brain script, read only) · run/ "Esegui" shell blocks   │
 │   search/  Ctrl+K index · skills/ skills page · update/ Aggiorna (Settings)   │
+│   brainmodel/ Brain section: skills, rules, memory, jobs + undo (ADR 0077)    │
 │   cloud/   cloud agents: Cursor REST v1 · codex cloud · claude --cloud (0080) │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │

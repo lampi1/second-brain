@@ -60,7 +60,9 @@ attention management and the memory.
   reshape them live (ADR 0008). Visual templates change without rebuilding features.
 - **The brain is data, the app is product.** The app points to a brain folder: plain Markdown files and small Node
   tools that the agents read and write (open threads, journal, ideas, errors and the rules learned from them), organized
-  by industry standards for agent memory. A new user starts from an empty template that fills up by use.
+  by industry standards for agent memory. A new user starts from an empty template that fills up by use. Two
+  concepts only: agents (who works) and skills (how a job is done); agents declare their skills, and the brain keeps
+  itself in order with logged, undoable maintenance, asking only for what reaches the outside world (ADR 0077).
 - **Measured, not claimed.** Costs, estimates and quality metrics come from real logs with their source and dates on
   screen; an agent says "done" only after it has looked at the result.
 - **Safe by default.** Electron's security baseline, a local-only MCP server, no credentials handled by the app, no

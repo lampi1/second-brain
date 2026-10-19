@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Fixed
-- Brain map (2D, Dashboard → Mappa brain): the nodes no longer clump off centre. The layout spreads with the node
+- Brain map (2D, now Mappa → Note del brain): the nodes no longer clump off centre. The layout spreads with the node
   count and is fitted to the panel's own size and aspect (centred, filling it, re-fitted on resize); labels are placed
   at their real size and a minor label with no free spot is hidden instead of overlapping; "Adatta" re-fits the whole
   map (issue #77).
@@ -21,6 +21,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   GitHub repos only; the app never pushes.
 
 ### Changed
+- **Agents and skills only** (ADR 0077, #84): procedures are gone (page, IPC, API, MCP, docs); every former runbook and
+  routine becomes a skill once, linked to the right agents, with a report. A new **Brain** menu section: Agenti,
+  Skill (cards with who uses each skill, link toggles), Regole, Memoria (knowledge, what happened, one memory per
+  agent, the logged errors), Classificatori (read-only routing table with runs, success and cost per row, history,
+  agent suggested vs used, quality by week) and Mappa (agent → skills → rules → memory, plus the brain notes map).
+  Maintenance jobs (repeated task → skill, duplicate skills, corrections, duplicate memories) apply changes without
+  approval, each logged with "Annulla". Export adds TOOLS.md and the brain's rules, never memory. The Dashboard keeps
+  statistics only.
+- Agent cards (#81): no "Avvia" or "Dettagli"; a click flips the card in 3D to its details and skills (a fade with
+  reduced motion); Esc or a second click turns it back.
 - DevOps is now **Task** everywhere (menu, page, settings, IPC, MCP views, alerts): it still imports from Azure
   DevOps automatically when the read is on; saved settings, mutes, role pages and old links move to the new name by
   themselves. The page has the look of Agenti and Guida. **Fatto** is a log: newest first, grouped by day, each entry

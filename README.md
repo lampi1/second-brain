@@ -182,8 +182,11 @@ passwords.
 
 Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
-(ADR 0072). The dashboard shows it as pages, as a 2D map of its connections that fills the panel at any size, and as a 3D map
-that lights up the files, tools and agents at work.
+(ADR 0072). The Brain section of the menu shows it as two concepts only, agents and skills (ADR 0077): Agenti, Skill
+(who uses each skill, linked with one click), Regole, Memoria (knowledge, what happened, one memory per agent),
+Classificatori (how the app picks model and agent, and how it is going) and Mappa (agent → skills → rules → memory, the
+notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
+Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
 
 ### Task in one page
 
