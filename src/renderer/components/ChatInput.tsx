@@ -7,7 +7,7 @@
 // with the message (also queued ones), up to IMAGE_MAX_COUNT; a paste with no image item asks main for the clipboard's
 // image (lib/images.ts pasteKind). Drafts and their images survive view switches and
 // remounts (kept per chat in memory); setDraft puts a ready text in a chat's input from elsewhere (a brain page's
-// "Discutine"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
+// "Discuti"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
 // list opens. An Orchestrator's input also has "Nuova chat" (ADR 0034): on, the message goes with the line that asks her to
 // open a new work chat for it (shared/newchat.ts); Ctrl+Shift+Invio sends that way at once; it resets after a send.

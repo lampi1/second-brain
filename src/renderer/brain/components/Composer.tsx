@@ -119,25 +119,3 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
     </div>
   );
 }
-
-/** "Discutiamone": a ready message to the Orchestrator, confirmed inline. Hidden reasonably when no Orchestrator is open. */
-export function DiscussButton({ title, text, orchestrator }: { title: string; text: string; orchestrator: ChatSummary | null }) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  if (!orchestrator) return <span className="small muted" title={t('brainPages.composer.discussButtonTitle')}>{t('brainPages.composer.discussButtonClosed')}</span>;
-  return (
-    <div style={{ display: 'grid', gap: 6 }}>
-      {!open ? <button type="button" className="bx-btn s" onClick={() => setOpen(true)} style={{ justifySelf: 'start' }}>{t('brainPages.composer.discussOpenBtn')}</button> : (
-        <div className="bx-confirm">
-          <p className="small"><b>{t('brainPages.composer.discussConfirmBold')}</b> {t('brainPages.composer.discussConfirmQuote', { title })}</p>
-          {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
-          <div className="bx-row">
-            <button type="button" className="bx-btn primary s" disabled={busy} onClick={() => { setBusy(true); setErr(null); window.sb.invoke('chat:send', { chatId: orchestrator.id, text }).then(() => { toast(t('brainPages.composer.discussSent')); setOpen(false); }, e => setErr(String(e?.message ?? e))).finally(() => setBusy(false)); }}>{t('brainPages.composer.discussConfirmBtn')}</button>
-            <button type="button" className="bx-btn s" onClick={() => setOpen(false)}>{t('brainPages.composer.discussCancelBtn')}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

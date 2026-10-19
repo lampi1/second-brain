@@ -1,10 +1,10 @@
-// Unit tests of the "Discutine" / "Apri una chat" texts and records (src/renderer/brain/lib/discuss.ts): the idea's
-// line in ideas.md, the Orchestrator draft (file + line, fields, opening question by state, the state rule), the work chat's
-// title and first message, and the "discussa" store (bad storage, dedup, caps).
+// Unit tests of the "Discuti" texts and records (src/renderer/brain/lib/discuss.ts): the idea's line in ideas.md, the
+// Orchestrator draft (file + line, fields, opening question by state, the state rule), and the "discussa" store (bad
+// storage, dedup, caps, an old record of a work chat still read).
 import { describe, expect, it } from 'vitest';
 import type { Idea, Reflection } from '../../../src/renderer/brain/types';
 import {
-  addDiscussed, chatPrompt, chatTitle, discussText, lineOf, openingQuestion, readDiscussed, topicKey, writeDiscussed, type KV, type Topic,
+  addDiscussed, discussText, lineOf, openingQuestion, readDiscussed, topicKey, writeDiscussed, type KV, type Topic,
 } from '../../../src/renderer/brain/lib/discuss';
 
 const idea = (o: Partial<Idea> = {}): Idea => ({
@@ -68,21 +68,6 @@ describe('openingQuestion', () => {
     expect(openingQuestion(I({ stato: 'scartata' }))).toMatch(/ruled/);
     expect(openingQuestion(I({ stato: 'in corso' }))).toMatch(/next/);
     expect(openingQuestion(R)).toMatch(/agree/);
-  });
-});
-
-describe('work chat', () => {
-  it('title "Idea · <titolo>", shortened', () => {
-    expect(chatTitle(I())).toBe('Idea · Diario vocale');
-    expect(chatTitle(I({ titolo: 'a'.repeat(80) })).length).toBeLessThanOrEqual(51);
-    expect(chatTitle(R)).toBe('Riflessione · Troppo centralino');
-  });
-  it('first message points at the file and line and asks for a plan first', () => {
-    const p = chatPrompt(I(), 10);
-    expect(p).toContain("Let's work on the idea «Diario vocale» (ideas.md, line 10");
-    expect(p).toContain('from line 10');
-    expect(p).toContain('Only the Orchestrator');
-    expect(chatPrompt(I(), null)).not.toContain('from line');
   });
 });
 

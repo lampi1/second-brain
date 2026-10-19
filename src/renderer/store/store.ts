@@ -411,7 +411,7 @@ export async function createChat(req: NewChat): Promise<ChatSummary | null> {
   } catch (e) { fail('Chat non creata')(e); return null; }
 }
 
-/** A chat whose engine, model and effort the routing table picks in main (DevOps "Apri chat", ADR 0032). */
+/** A chat whose engine, model and effort the routing table picks in main ("Nuova chat", a new Orchestrator; ADR 0032). */
 export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary | null> {
   try {
     const c = await sb.invoke('chat:createRouted', req);

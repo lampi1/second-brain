@@ -7,7 +7,7 @@
 // onNavigate receives "<page>[/<arg>]" ("esplora/now.md", "costi/30", "fatto/2026-10-09", "idee/ia",
 // "qualita") or "mappa" / "mappa/tutto" for the map. Without onNavigate a page follows its own links and opens the
 // map itself, so it also works alone (test route: brain/testRoute.tsx). `bridge` (DiscussBridge) gives the pages the
-// app's Orchestrator and chats for "Discutine" / "Apri una chat" (Idee). Old "spunti[/x]" targets (the AI's ideas, now inside Idee) open "idee/ia". Built in feat/brain-ui.
+// app's Orchestrator and chats for "Discuti" (to the Orchestrator, never a work chat directly). Old "spunti[/x]" targets (the AI's ideas, now inside Idee) open "idee/ia". Built in feat/brain-ui.
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import './brain.css';
 import { Toaster } from './components/ui';

@@ -1,8 +1,8 @@
 // Idee: every idea of the brain in one place, yours and the AI's, with three filters at the top (Tutte / Mie /
 // Dall'IA; the page arg "mie" / "ia", old "spunti" links land on "ia"). One table with filters by state, area, who
 // and, for the AI, for whom; the "riprendere" date (red when it has come); clic on a row → the side panel with the whole
-// text, the AI's reasoning (Ho notato / Penso / Sicurezza / Non so / Cosa fare), "Discutine" (the Orchestrator with a ready
-// draft) and "Apri una chat" (components/Discuss); a discussed idea is marked in the table. "Dall'IA" also lists the
+// text, the AI's reasoning (Ho notato / Penso / Sicurezza / Non so / Cosa fare), "Discuti" (the Orchestrator with a ready
+// draft; components/Discuss); a discussed idea is marked in the table. "Dall'IA" also lists the
 // AI's reflections on itself (ai-reflections.md) as cards with the same buttons. Data: /api/tables.
 import type { ReactNode } from 'react';
 import { normTables, type Idea, type Reflection } from '../types';

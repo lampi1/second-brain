@@ -5,6 +5,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- One "Discuti" button (EN "Discuss") replaces every "Apri chat" / "Apri una chat" entry point: Task records (work
+  items, pull requests, test plans and test cases), Idee, Qualità, Costi, Confronto, the charts, Script, Changelog and
+  the Dashboard. It puts a ready draft (title, source, link, numbers, folder hint) in the Orchestrator's input, never
+  sent by itself, and never creates a work chat: the Orchestrator decides and delegates. A discussed Task record shows
+  "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
+  chat".
 ### Fixed
 - Security review fixes: a work chat's lessons (agent_learn_propose) apply only to its own agent, never as a rule for
   every agent, and wait until the Orchestrator accepts them with you; agent changes check the Orchestrator inside the

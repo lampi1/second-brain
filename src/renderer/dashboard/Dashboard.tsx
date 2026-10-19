@@ -29,9 +29,9 @@ type Weight = 'primary' | 'ghost' | 'quiet';
 const weightClass: Record<Weight, string> = { primary: 'btn-primary', ghost: 'btn-ghost', quiet: 'btn-subtle' };
 export function Discuss({ title, facts, source, weight = 'quiet' }: { title: string; facts: string; source: string; weight?: Weight }) {
   const [missing, setMissing] = useState(false);
-  return <><button type="button" className={`btn ${weightClass[weight]} btn-s dash-discuss dash-discuss-${weight}`} aria-label={`${copy('Discutine', 'Discuss')}: ${title}`} onClick={() => {
+  return <><button type="button" className={`btn ${weightClass[weight]} btn-s dash-discuss dash-discuss-${weight}`} aria-label={`${copy('Discuti', 'Discuss')}: ${title}`} onClick={() => {
     setMissing(!brainBridge.draftToOrchestrator(`${title}\n${copy('Fonte', 'Source')}: ${source}\n${facts}\n\n${copy('Analizziamo questi dati e il prossimo passo?', 'Can we analyse these data and the next step?')}`, () => {}));
-  }}><span aria-hidden="true">↗</span> {copy('Discutine', 'Discuss')}</button>{missing && <span role="status" className="dash-note">{copy('Apri un Orchestrator per discutere questi dati.', 'Open an Orchestrator to discuss these data.')}</span>}</>;
+  }}><span aria-hidden="true">↗</span> {copy('Discuti', 'Discuss')}</button>{missing && <span role="status" className="dash-note">{copy('Apri un Orchestrator per discutere questi dati.', 'Open an Orchestrator to discuss these data.')}</span>}</>;
 }
 
 export function Panel({ title, note, children, facts, source = 'Dashboard' }: { title: string; note?: string; children: ReactNode; facts?: string; source?: string }) {
@@ -139,7 +139,7 @@ export function Dashboard() {
             const ratio = contextRatio(c), level = contextLevel(c, warn), high = level === 'above';
             const value = c.contextTokens === undefined ? copy('Non riportato', 'Not reported') : `${c.contextEstimated ? '≈ ' : ''}${number(c.contextTokens)}${c.contextMaxTokens ? ` / ${number(c.contextMaxTokens)}` : ''}`;
             return <div className={`dash-context-row ${high ? 'warn' : ''}`} key={c.id}><div className="dash-row"><div><b>{chatName(c)}</b><small>{c.harness} · {c.model ?? '—'}{high ? ` · ${copy('sopra soglia', 'above threshold')}` : ''}</small></div><strong>{value}</strong><Discuss title={chatName(c)} facts={`Context: ${value}; ${ratio === null ? 'window unknown' : `${Math.round(ratio * 100)}%`}; ${level === 'unknown' ? 'threshold status unknown (context not reported)' : `${level} configured threshold`}`} source="chat:list · contextTokens / contextMaxTokens" /></div>{ratio !== null && <div className="dash-track" role="meter" aria-label={`${chatName(c)}: ${copy('contesto', 'context')}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(ratio * 100))}><i style={{ width: `${Math.min(100, ratio * 100)}%` }} /></div>}</div>;
-          }) : <Empty>{copy('Apri una chat per seguirne il contesto.', 'Open a chat to follow its context.')}</Empty>}
+          }) : <Empty>{copy('Nessuna chat aperta: il contesto appare qui quando ne parte una.', 'No open chat: its context shows here once one starts.')}</Empty>}
         </Panel>
       </>}
       {tab === 'errors' && <>

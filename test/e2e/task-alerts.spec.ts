@@ -1,13 +1,13 @@
-// E2E of the Task alerts and "Apri chat" (ADR 0029), in the demo (tasks/demo.ts: no network, no tokens): the first
+// E2E of the Task alerts and "Discuti" (ADR 0029), in the demo (tasks/demo.ts: no network, no tokens): the first
 // "Aggiorna ora" is the baseline (no alert, no chime); the second brings a new mention, which shows a Task toast in
 // the global layer and plays the chime once on arrival (counted on <html data-chimes>; a hidden run is muted); the page's head
-// turns the sound off. "Apri chat" on a work item row starts a work chat "Shop · <title>" in one click (the row does not
-// open) with a toast "Chat aperta: …", its engine, model and effort from the routing table (a bug: the bug-fix row); PRs
-// and test plans have the same button. Screenshots in test-results/shots/.
+// turns the sound off. "Discuti" on a work item row (the row does not open) puts a ready draft about the record in the
+// Orchestrator's input, not sent, and creates no work chat (owner, 2026-10-19: the Orchestrator delegates); sent, the
+// row shows "Discusso". PRs, test plans and test cases have the same button. Screenshots in test-results/shots/.
 import { expect, test } from '@playwright/test';
 import { launchDemo, layerPage, shot, windowShot } from './helpers';
 
-test('Task: a new mention alerts with a chime (never on the first read); Apri chat starts a chat from a record', async () => {
+test('Task: a new mention alerts with a chime (never on the first read); Discuti on a record drafts to the Orchestrator and opens no work chat', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1000 });
   try {
     await page.getByTestId('nav-task').click();
@@ -34,27 +34,35 @@ test('Task: a new mention alerts with a chime (never on the first read); Apri ch
     await sound.getByRole('button', { name: 'Spento' }).click();
     await expect(sound.getByRole('button', { name: 'Spento' })).toHaveAttribute('aria-pressed', 'true');
 
-    // "Apri chat": every kind of record has it; one click on a work item row starts the chat, the row stays closed
-    await expect(dv.getByTestId('task-chat-pr-812').first()).toBeVisible();
-    await expect(dv.getByTestId('task-qa').getByTestId('task-chat-testplan-7000')).toBeVisible();
+    // "Discuti": every kind of record has it; one click on a work item row drafts to the Orchestrator, the row stays closed
+    await expect(dv.getByTestId('task-discuss-pr-812').first()).toBeVisible();
+    await expect(dv.getByTestId('task-qa').getByTestId('task-discuss-testplan-7000')).toBeVisible();
+    await expect(dv.getByRole('button', { name: /^Apri chat$/ })).toHaveCount(0);
     const row = dv.getByTestId('task-assigned').getByTestId('task-item-4711');
-    const btn = row.getByTestId('task-chat-workitem-4711');
+    const btn = row.getByTestId('task-discuss-workitem-4711');
+    await expect(btn).toHaveText('Discuti');
     await btn.scrollIntoViewIfNeeded();
     await btn.hover();
-    await shot(page, 'task-apri-chat');
+    await shot(page, 'task-discuti');
+    const before = (await page.evaluate(() => window.sb.invoke('chat:list', undefined))).map(c => c.id).sort();
     await btn.click();
-    await expect(page.getByTestId('toasts')).toContainText('Chat aperta: Shop · Il totale del rimborso ignora lo sconto applicato');
     await expect(row).not.toHaveAttribute('open', '');
-    const chats = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
-    const made = chats.find(c => c.title === 'Shop · Il totale del rimborso ignora lo sconto applicato');
-    expect(made).toBeTruthy();
-    // through the routing table (ADR 0032): a bug is bug-fix, the demo table's row says Opus, high effort, and the chat
-    // carries the route for the ledger (before: the last "Nuova chat" choice, no route)
-    expect(made).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high', route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'Shop', version: 3 } });
-    await shot(page, 'task-apri-chat-toast');
-    await page.getByTestId('toasts').getByRole('button', { name: 'Vai alla chat' }).click();
-    await expect(page.getByTestId(`chat-sub-${made!.id}`)).toContainText('Opus');
-    await shot(page, 'task-apri-chat-routed');
+    const input = page.getByTestId('orchestrator-input');
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(/^Let's discuss this bug from Azure DevOps: «Il totale del rimborso ignora lo sconto applicato»\.\nLink: /);
+    await expect(input).toHaveValue(/Area: Shop/);
+    await expect(input).toHaveValue(/open a work chat yourself \(«Shop · Il totale del rimborso ignora lo sconto applicato»\)/);
+    await expect(dv).toBeVisible(); // the page stays
+    await expect(row.getByTestId('task-discuss-workitem-4711-mark')).toHaveCount(0); // not sent yet
+    await shot(page, 'task-discuti-draft');
+    // sent with Enter: the Orchestrator gets it; still no new chat (the Orchestrator decides and delegates)
+    await page.keyboard.press('Enter');
+    await expect(input).toHaveValue('');
+    await expect(row.getByTestId('task-discuss-workitem-4711-mark')).toContainText('Discusso');
+    await expect(page.getByTestId('orchestrator-overlay')).toContainText('Il totale del rimborso ignora lo sconto applicato');
+    const after = (await page.evaluate(() => window.sb.invoke('chat:list', undefined))).map(c => c.id).sort();
+    expect(after).toEqual(before);
+    await shot(page, 'task-discuti-sent');
   } finally {
     await app.close();
   }

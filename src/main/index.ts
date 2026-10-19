@@ -248,7 +248,7 @@ app.whenReady().then(async () => {
     'chat:items': a => s.chats.items(a.chatId),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
     'chat:create': a => s.chats.create(a),
-    // a chat from a record (DevOps "Apri chat"): the routing table picks the engine, model and effort (ADR 0032)
+    // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },

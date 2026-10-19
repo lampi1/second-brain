@@ -55,8 +55,8 @@ test('a command left by a chat waits in its tile and runs from there; an example
   await expect(card).toHaveAttribute('aria-label', /App · Mappa 3D/);
   await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
   await expect(card.getByRole('button', { name: 'Copia' })).toBeVisible();
-  // "Apri chat" only where the chat is not already around the card (Orchestrator card and layer: the tests below)
-  await expect(card.getByRole('button', { name: /Apri chat/ })).toHaveCount(0);
+  // "Vai alla chat" only where the chat is not already around the card (Orchestrator card and layer: the tests below)
+  await expect(card.getByRole('button', { name: /Vai alla chat/ })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Non serve' })).toBeVisible();
   await page.mouse.move(2, 2);
   await shot(page, 'command-ask-lane');
@@ -134,7 +134,7 @@ test('on a page the command floats in the request layer and Esegui there runs it
   await expect(card).toContainText('App · Mappa 3D');
   await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
   await expect(card.locator('.cmd-lead')).toHaveText('Fatto: il fix è in main. Ora lancia il controllo:'); // in the layer too
-  await expect(card.getByRole('button', { name: /Apri chat/ })).toBeVisible();
+  await expect(card.getByRole('button', { name: /Vai alla chat/ })).toBeVisible();
   await windowShot(app, 'command-ask-layer');
   await card.getByRole('button', { name: /Esegui/ }).click();
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);

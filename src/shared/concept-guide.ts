@@ -2,7 +2,7 @@
 // English, written for a developer who wants to understand how the app works without reading the code. Every card names
 // the source files its claims come from (`sources`, checked to exist by test/unit/concept-guide.test.ts) and a comment
 // beside each part cites the file it was read from; a statement about what the app does NOT do yet goes in `target`,
-// never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discutine»:
+// never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discuti»:
 // the text that carries a card into a chat (discussText) and the message «Discuti» sends to the Orchestrator
 // (orchestratorText).
 
@@ -563,7 +563,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
       b('«Errori» conta ai-errors.md e gli eventi (la lezione di ogni errore è in Memoria); «Spunti» deriva segnali come contesti lunghi e costi alti.',
         '"Errors" counts ai-errors.md and events (each error’s lesson is in Memory); "Tips" derives signals such as long contexts and high costs.'),
-      b('Ogni pannello ha «Discutine»: mette una bozza all’Orchestrator, non la invia mai da solo.',
+      b('Ogni pannello ha «Discuti»: mette una bozza all’Orchestrator, non la invia mai da solo.',
         'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
     ],
     analogy: b('Come il quadro strumenti dell’auto: non guida, ma ti dice com’è la situazione adesso.',
@@ -585,8 +585,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '"Tasks" reads your PRs, reviews, work items and mentions with the brain’s script devops-me.mjs: read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
-      b('Ogni record ha «Apri chat»: una chat di lavoro su quel ticket o quella PR in un clic.',
-        'Every record has "Open chat": a work chat on that ticket or PR in one click.'),
+      b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
+        'Every record has "Discuss": the Orchestrator gets a draft with title, link, state and folder; if work is needed, it opens and briefs the chat itself.'),
       // src/renderer/brain/pages/Fatto.tsx, src/renderer/brain/lib/done-log.ts
       b('«Fatto» elenca per giorno, dal più recente, PR, work item, righe «fatto» e «decisione» del diario e chat concluse.',
         '"Done" lists by day, newest first, PRs, work items, "fatto" and "decisione" diary lines and finished chats.'),

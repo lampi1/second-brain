@@ -1,7 +1,7 @@
 // End-to-end: the «Guida» page (components/GuidePage.tsx, content in src/shared/concept-guide.ts) in the frozen demo.
 // It opens from the left rail and from Ctrl+K, shows the prominent card «Ogni compito passa da un agente» first as a
 // hero and the other cards in a multi-column grid (not full-width strips), a card opens a reading panel with its
-// numbered points, analogy, technical details and sources that Esc closes (focus back on the card), and «Discutine»
+// numbered points, analogy, technical details and sources that Esc closes (focus back on the card), and «Discuti»
 // (no explainer agent in the demo catalog) docks the Orchestrator with a draft that carries the card and the Explainer
 // instruction, NOT sent.
 // Screenshots: test-results/shots/concept-guide-*.png.
@@ -58,7 +58,7 @@ test('a card opens a panel with points, analogy, technical details and sources; 
   await page.getByTestId('guide-filter').fill('');
 });
 
-test('«Discutine» docks the Orchestrator with the card as an unsent draft and the Explainer instruction', async () => {
+test('«Discuti» docks the Orchestrator with the card as an unsent draft and the Explainer instruction', async () => {
   await page.getByTestId('guide-discuss-runs').click();
   const input = page.getByTestId('orchestrator-input');
   await expect(input).toBeFocused();

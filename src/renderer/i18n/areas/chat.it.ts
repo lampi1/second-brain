@@ -150,7 +150,7 @@ export const chatIt = {
   'chat.command.execWithKey': 'Esegui',
   'chat.command.execConfirm': (p: { warning: string }) => `Confermi? ${p.warning}`,
   'chat.command.copy': 'Copia',
-  'chat.command.openChat': 'Apri chat',
+  'chat.command.openChat': 'Vai alla chat',
   'chat.command.later': 'Rispondi dopo',
   'chat.command.dismiss': 'Non serve',
   'chat.command.dismissTip': 'Toglie la richiesta: il blocco resta nella chat con il suo Esegui',

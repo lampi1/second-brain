@@ -731,8 +731,10 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .qa-points li { display: flex; gap: 8px; align-items: flex-start; padding-top: 6px; border-top: 1px solid var(--bx-border); }
 .qa-points li > .bx-pill { flex: none; min-width: 92px; justify-content: center; }
 .qa-point-main { display: grid; gap: 2px; min-width: 0; flex: 1; }
-/* "Apri chat" on a DevOps record (components/RecordChatButton.tsx): small, never wraps, quiet until hovered */
-.dv-chat { flex: none; white-space: nowrap; }
+/* "Discuti" on a DevOps record (components/RecordDiscussButton.tsx): small, never wraps; the "Discusso" mark beside it */
+.dv-chat { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+.dv-chat .bx-btn > svg { flex: none; }
+.dv-discussed { display: inline-flex; align-items: center; gap: 4px; color: var(--bx-green); }
 .dv-item > summary .dv-chat { margin-top: -3px; }
 .dv-pr-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .dv-pr-head h3 { flex: 1; min-width: 0; }

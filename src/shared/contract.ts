@@ -355,9 +355,10 @@ export interface NewChat {
   app?: string;
 }
 
-/** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Orchestrator
- *  from Ricomincia / Cambia motore / Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
- *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). "Nuova chat" too. */
+/** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /
+ *  Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
+ *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). The brain pages never
+ *  start one: their "Discuti" goes to the Orchestrator (2026-10-19). */
 export interface RoutedNewChat {
   /** empty = from the prompt (the Orchestrator: "Orchestrator"), as chat:create */
   title: string;
@@ -372,13 +373,6 @@ export interface RoutedNewChat {
   /** the Orchestrator (`replaces` the one it takes over); its kind of work is `orchestrator` */
   orchestrator?: boolean;
   replaces?: string;
-  /** the kind of work when the record says it (a bug → bug-fix, a PR → review, a test → qa-run); else read from the
-   *  title and `routeText` by the brain's rules */
-  kind?: TaskKind;
-  /** the record's area (its project or repo); else the title's label */
-  area?: string;
-  /** what the kind is read from besides the title (default: the prompt, whose fixed lines can mislead the rules) */
-  routeText?: string;
   /** what starts when no row matches: the user's last "Nuova chat" choice */
   defaults: { harness: Harness; model?: string; effort?: Effort };
   permissionMode?: PermissionMode;
@@ -542,8 +536,8 @@ export interface TasksState {
   qa: QaReport[];
   /** the QA read failed (the rest of the page read fine): the last good qa stays */
   qaError: string | null;
-  /** repo name → its local clone (<home>/source/repos/<repo>), for the repos of the PRs on the page: "Apri chat" starts
-   *  a PR's chat there; a repo with no clone is missing */
+  /** repo name → its local clone (<home>/source/repos/<repo>), for the repos of the PRs on the page: "Discuti" names it
+   *  to the Orchestrator as the folder of a PR's work; a repo with no clone is missing */
   repoDirs: Record<string, string>;
 }
 

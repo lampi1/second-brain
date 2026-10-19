@@ -58,7 +58,7 @@ const weekTrend = (g: ErrorGroup): Trend => (quiet(g)
 export function patternQuote(g: ErrorGroup): Quote {
   const r = g.rules[0];
   return {
-    id: `err|${g.type}`, what: 'errore', title: typeLabel(g.type), source: 'ai-errors.md', inBrain: true,
+    id: `err|${g.type}`, what: 'errore', title: typeLabel(g.type), source: 'ai-errors.md',
     facts: [
       `${g.count} volte dal ${fmt.day(g.first)} al ${fmt.day(g.last)}; ${quiet(g) ? 'nessuno nelle ultime 2 settimane' : `ultimi 7 giorni ${g.week}, i 7 prima ${g.prevWeek}`}`,
       g.byOwner ? `trovati da me: ${g.byOwner} su ${g.count}${g.byOwner < g.count ? '; gli altri da reviewer, QA, hook o dall\'agente stesso' : ''}` : '',
@@ -130,7 +130,7 @@ export function PatternsHelp() {
       <p><b>Regola.</b> La regola nata dall'errore (campo «regola:» o il conteggio del cervello): «la regola non è bastata»
         = lo stesso tipo è tornato entro 14 giorni.</p>
       <p><b>Cosa farne.</b> Un tipo che si ripete chiede una cosa sola: una regola più chiara o un controllo automatico.
-        «Discutine» manda all’Orchestrator una bozza con questi numeri; «Apri una chat» ne apre una dedicata.</p>
+        «Discuti» mette all’Orchestrator una bozza con questi numeri: se serve lavoro, è lui ad aprire la chat giusta.</p>
     </Help>
   );
 }
