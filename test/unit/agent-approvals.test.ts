@@ -193,7 +193,7 @@ describe('AgentApprovalsView', () => {
       { key: 'work:x', kind: 'split', agentIds: ['writer'], reason: 'Due ruoli', evidence: [], at: 30, state: 'pending' },
     ] } });
     const html = renderToStaticMarkup(createElement(AgentApprovalsView, { ...props, state: await gatherApprovals(f.client) }));
-    for (const label of ['Ritorno alla v1', 'Le prossime esecuzioni useranno la v1 invece della v2.', 'Chiedi la bozza', 'Ignora', 'Prepara nell’editor', 'seconda approvazione']) expect(html).toContain(label);
+    for (const label of ['Ritorno alla v1', 'Le prossime esecuzioni useranno la v1 invece della v2.', 'Chiedi la bozza', 'Ignora', 'Prepara nell’editor', 'versione in prova, con «Annulla»']) expect(html).toContain(label);
     expect(html).not.toContain('Modifica prima di approvare'); // a rollback is not edited, only approved or rejected
     expect(html.match(/>Ignora</g)).toHaveLength(2); // the trial's advice and the suggestion
   });

@@ -1,7 +1,12 @@
 // Authenticated Orchestrator operations; persistent reservations, proposals and feedback never grant human authority.
+// Agent definition changes (agent_update, agent_propose, agent_rollback, agent_archive, agent_restore) apply at once,
+// logged with an undo (ADR 0082, issue #84 point 6): a behavioural change opens a trial version against the active one.
+// Only what reaches past the agent waits for the user in Agenti → Da approvare: its permissions (tool classes, MCP
+// servers, permission ceiling), its engine (another provider's account and spend, governed by Settings → Motori) and
+// its name and look (the user's identity of it). New agents still need the user's word (agent_create, agent_suggest).
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, TOOL_CLASSES, type AgentEvidenceRef, type AgentProfile, type AgentRun, type AgentRunOutcome } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, TOOL_CLASSES, type AgentDraft, type AgentEvidenceRef, type AgentProfile, type AgentRun, type AgentRunOutcome } from '../../shared/agents';
 import { AGENT_PROPOSAL_OPS, type AgentProposal, type AgentProposalOp, type AgentUndo } from '../../shared/agent-authoring';
 import { AGENT_FEEDBACK_SCHEMA, DEFINITION_GAPS, RUN_ID_DESCRIPTION, parseAgentFeedbackArgs, parseEvidence, type AgentFeedback, type AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatItem, FeedAction } from '../../shared/contract';
@@ -22,6 +27,19 @@ interface Store { version: 1; used: string[]; human?: string[]; answers?: { key:
 const FRESH_MS = 30 * 60_000;
 /** A panel answer that says no: it never approves a creation. */
 const DECLINED = /^\s*(no|non|annulla|rifiut|nessun|cancel|decline|don'?t|stop|lascia perdere)\b/i;
+/** The fields of a definition only the user changes (ADR 0082): permissions and the engine. */
+export const USER_ONLY_FIELDS = ['tools', 'permissionCeiling', 'engine'] as const;
+const norm = (v: unknown): unknown => Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, norm((v as Record<string, unknown>)[k])])) : v ?? null;
+/** The user-only fields that differ between two definitions. */
+export function userOnlyChanges(before: AgentDraft, after: AgentDraft): string[] {
+  return USER_ONLY_FIELDS.filter(k => JSON.stringify(norm(before[k])) !== JSON.stringify(norm(after[k])));
+}
+/** One applied change, for the brain model's change log (brainmodel/changes.ts; wiring.ts sets AgentAuthoring.onApplied). */
+export interface AppliedAgentChange {
+  agentId: string; name: string; op: AgentProposalOp; reason: string; evidence: string[];
+  version?: { before: number; after: number };
+  status?: { before: 'active' | 'archived'; after: 'active' | 'archived' };
+}
 interface Deps {
   userData: string; catalog: AgentCatalogService; runs: AgentRunStore;
   items: (chatId: string) => readonly ChatItem[];
@@ -52,6 +70,8 @@ export class AgentAuthoring {
   private readonly file: string;
   private state: Store = { version: 1, used: [], proposals: [], feedback: [] };
   private problem: string | null = null;
+  /** Called after an Orchestrator change was applied directly: the brain model logs it with "Annulla" (wiring.ts). */
+  onApplied?: (change: AppliedAgentChange) => void;
   constructor(private readonly d: Deps) {
     this.file = path.join(d.userData, 'agent-authoring.json');
     try {
@@ -236,28 +256,28 @@ export class AgentAuthoring {
       catch (error) { this.write({ ...this.state, used: this.state.used.filter(k => k !== key) }); throw error; }
       this.event('agent-created', reason, p.id, { kind: 'agent-undo', undo: { agentId: p.id, expectedRevision: p.updatedAt, operation: 'archive' } }, evidence(a.evidence ?? [])); return p;
     }
-    if (name === 'agent_suggest' || name === 'agent_propose') {
+    if (name === 'agent_suggest') {
       const spend = this.d.suggestionSpend();
-      if (name === 'agent_suggest' && (spend === null || !Number.isFinite(spend) || spend < 0 || spend >= 0.5)) {
+      if ((spend === null || !Number.isFinite(spend) || spend < 0 || spend >= 0.5)) {
         this.event('budget', 'Suggerimenti sospesi: budget giornaliero esaurito o non verificabile.');
         throw new Error('Daily suggestion budget unavailable or exhausted ($0.50).');
       }
       if (this.state.proposals.filter(p => p.state === 'pending').length >= 128) throw new Error('Too many pending proposals.');
-      const before = name === 'agent_propose' ? this.profile(a.agentId) : undefined;
-      const draft = catalog.validateDraft(before ? { ...before, ...withoutPackFields(object(a.patch)) } : withoutPackFields(a.draft));
+      const draft = catalog.validateDraft(withoutPackFields(a.draft));
       checkPermissionInstructions(draft);
-      const p: AgentProposal = { id: randomUUID(), at: this.now(), kind: before ? 'proposal' : 'suggestion', ...(before ? { agentId: before.id, baseRevision: before.updatedAt, before } : {}), draft, reason, expectedEffect: text(a.expectedEffect), evidence: evidence(a.evidence ?? []), state: 'pending' };
+      const p: AgentProposal = { id: randomUUID(), at: this.now(), kind: 'suggestion', draft, reason, expectedEffect: text(a.expectedEffect), evidence: evidence(a.evidence ?? []), state: 'pending' };
       this.write({ ...this.state, proposals: [...this.state.proposals, p] });
-      this.event(before ? 'agent-proposal' : 'agent-suggested', reason, before?.id, { kind: 'agent-proposals' }, p.evidence); return structuredClone(p);
+      this.event('agent-suggested', reason, undefined, { kind: 'agent-proposals' }, p.evidence); return structuredClone(p);
     }
-    // agent_update / agent_rollback / agent_archive / agent_restore: never applied by an agent (the owner, 2026-10-18:
-    // "sempre sotto approvazione"). Each queues one proposal the user accepts or rejects in Agenti (agents:proposalDecide).
-    if (!['agent_update', 'agent_rollback', 'agent_archive', 'agent_restore'].includes(name)) throw new Error('Unknown authoring operation.');
+    // agent_propose is agent_update with an expected effect (the same path, the same exceptions)
+    if (name === 'agent_propose') text(a.expectedEffect);
+    // agent_update / agent_rollback / agent_archive / agent_restore: applied at once with a logged undo (ADR 0082: "no
+    // user approval for skill/agent changes", the owner, 2026-10-19), except what only the user changes (USER_ONLY_FIELDS,
+    // a name or look of its own): that one queues a proposal the user accepts or rejects in Agenti (agents:proposalDecide).
+    if (!['agent_update', 'agent_propose', 'agent_rollback', 'agent_archive', 'agent_restore'].includes(name)) throw new Error('Unknown authoring operation.');
     const p = this.profile(a.agentId);
-    if (this.state.proposals.filter(x => x.state === 'pending').length >= 128) throw new Error('Too many pending proposals.');
-    if (this.state.proposals.some(x => x.state === 'pending' && x.agentId === p.id && (x.op ?? 'update') === name.slice(6))) throw new Error('A proposal of this kind is already waiting for the user on this agent.');
     let draft: AgentProposal['draft'], toVersion: number | undefined;
-    const op = name.slice(6) as AgentProposalOp;
+    const op = (name === 'agent_propose' ? 'update' : name.slice(6)) as AgentProposalOp;
     if (op === 'update') {
       draft = catalog.validateDraft({ ...p, ...withoutPackFields(object(a.patch)) });
       checkPermissionInstructions(draft);
@@ -271,12 +291,39 @@ export class AgentAuthoring {
       if (op === 'archive' ? p.status !== 'active' : p.status !== 'archived') throw new Error(op === 'archive' ? 'The agent is not active.' : 'The agent is not archived.');
       draft = catalog.validateDraft(p);
     }
+    const ev = evidence(a.evidence ?? []);
+    const gated = op === 'update' || op === 'rollback' ? userOnlyChanges(catalog.validateDraft(p), draft) : [];
+    const identityOnly = op === 'update' && !gated.length && sameBehaviour(p, draft);
+    if (!gated.length && !identityOnly) return this.applyNow(p, op, draft, toVersion, reason, ev);
+    if (this.state.proposals.filter(x => x.state === 'pending').length >= 128) throw new Error('Too many pending proposals.');
+    if (this.state.proposals.some(x => x.state === 'pending' && x.agentId === p.id && (x.op ?? 'update') === op)) throw new Error('A proposal of this kind is already waiting for the user on this agent.');
     const proposal: AgentProposal = { id: randomUUID(), at: this.now(), kind: 'proposal', agentId: p.id, baseRevision: p.updatedAt, before: catalog.validateDraft(p), draft, op,
       ...(toVersion !== undefined ? { toVersion } : {}), reason, expectedEffect: typeof a.expectedEffect === 'string' && a.expectedEffect.trim() ? text(a.expectedEffect) : reason,
-      evidence: evidence(a.evidence ?? []), state: 'pending' };
+      evidence: ev, state: 'pending' };
     this.write({ ...this.state, proposals: [...this.state.proposals, proposal] });
     this.event('agent-proposal', reason, p.id, { kind: 'agent-proposals' }, proposal.evidence);
-    return structuredClone(proposal);
+    return { ...structuredClone(proposal), applied: false, waitsForUser: gated.length ? gated : ['name or look'] };
+  }
+  /** An Orchestrator change applied without the user's approval (ADR 0082): a behavioural update opens a trial version
+   *  (catalog.approveTrial: measured, "Annulla" rejects it), a rollback makes the earlier version active (the open trial's
+   *  baseline rejects the trial), archive / restore move it out of / back into the launch list. Logged in the feed with
+   *  the undo button and in the brain model's change log (onApplied). */
+  private applyNow(p: AgentProfile, op: AgentProposalOp, draft: AgentDraft, toVersion: number | undefined, reason: string, ev: AgentEvidenceRef[]): unknown {
+    const catalog = this.d.catalog, before = p.activeVersion;
+    let after: AgentProfile;
+    if (op === 'update') after = catalog.approveTrial(p.id, draft, reason);
+    else if (op === 'rollback') after = p.trial && p.trial.version === p.activeVersion && p.trial.baseline === toVersion ? catalog.resolveTrial(p.id, 'rollback') : catalog.maintainRestore(p.id, toVersion!, p.activeVersion);
+    else after = op === 'archive' ? catalog.archive(p.id) : catalog.restore(p.id);
+    const undo: AgentUndo = op === 'archive' ? { agentId: p.id, expectedRevision: after.updatedAt, operation: 'restore' }
+      : op === 'restore' ? { agentId: p.id, expectedRevision: after.updatedAt, operation: 'archive' }
+        : { agentId: p.id, expectedRevision: after.updatedAt, operation: 'version', version: before };
+    this.event(`agent-${op === 'update' ? 'updated' : op === 'rollback' ? 'rolled-back' : op === 'archive' ? 'archived' : 'restored'}`, reason, p.id, { kind: 'agent-undo', undo }, ev);
+    try {
+      this.onApplied?.({ agentId: p.id, name: p.name, op, reason, evidence: ev.map(e => `${e.kind}:${e.ref}`),
+        ...(op === 'update' || op === 'rollback' ? { version: { before, after: after.activeVersion } } : { status: { before: p.status, after: after.status } }) });
+    } catch (error) { log.warn('agents', 'agent change not logged', { cause: errText(error), hint: 'the change is applied; its undo is the feed button (Annulla modifica) or the agent\'s version history' }); }
+    log.info('agents', 'agent change applied', { data: { agentId: p.id, op, before, after: after.activeVersion, trial: !!after.trial } });
+    return { applied: true, op, agent: structuredClone(after), ...(after.trial ? { trial: { version: after.trial.version, baseline: after.trial.baseline } } : {}) };
   }
   private metrics(a: Record<string, unknown>): unknown {
     const period = a.period === undefined ? undefined : object(a.period);
@@ -328,8 +375,10 @@ export class AgentAuthoring {
 function createGuide(presets: readonly string[] = []): string {
   return `Creates an agent when no catalog agent fits, after the user approved it: propose it first in a panel (AskUserQuestion: name, what it does, engine), then call this; requestItemId is optional (default: the user's most recent fresh approval, a typed message or the panel answer; "answer:<requestId>" names a panel answer). A call refused for a wrong value does not use up the approval: fix and retry. Then start it with app_create_chat agentId. Required: presetId = an active preset to start from${presets.length ? ` (${presets.join(' | ')})` : ' (agent_list, origin "preset")'}; draft = { name ≤80, purpose ≤400, instructions ≤8000, role? ≤160, category: ${AGENT_CATEGORIES.join(' | ')}, engine, model (id or null = engine default), effort?: low | medium | high | xhigh (max only on request), avatar: { kind: "symbol", value: ${AGENT_SYMBOLS.join(' | ')}, tone?: ${AGENT_TONES.join(' | ')} }, tools: { allow: [${TOOL_CLASSES.join(' | ')}] , mcp?: [enabled server names] } (a subset of the preset's), permissionCeiling: plan | default, manifest?: { whenToUse, whenNotToUse }, maxContext?: tokens 100000-1000000 }; reason; probation?: true (on trial until its runs keep it).`;
 }
-/** The tools that only queue a proposal for the user's decision (agents:proposalDecide). */
-const QUEUED = ['agent_suggest', 'agent_propose', 'agent_update', 'agent_rollback', 'agent_archive', 'agent_restore'];
+/** A new agent: only queued for the user's decision (agents:proposalDecide). */
+const QUEUED = ['agent_suggest'];
+/** Changes of an existing agent: applied at once with an undo, except the user-only fields (ADR 0082). */
+const APPLIED = ['agent_propose', 'agent_update', 'agent_rollback', 'agent_archive', 'agent_restore'];
 /** The caller check runs on every invocation, so a former coordinator cannot retain write authority. */
 export function authoringTools(service: AgentAuthoring, callerId: string, authenticated: () => boolean, presets: () => readonly string[] = () => []): ToolDef[] {
   const names = ['agent_list', 'agent_get', 'agent_create', 'agent_suggest', 'agent_update', 'agent_propose', 'agent_archive', 'agent_restore', 'agent_rollback', 'agent_feedback', 'agent_run_report', 'agent_metrics'];
@@ -345,7 +394,7 @@ export function authoringTools(service: AgentAuthoring, callerId: string, authen
     inputSchema: AGENT_FEEDBACK_SCHEMA,
     run: async (a: Record<string, unknown>) => { if (!authenticated()) throw new Error('Authenticated unified Orchestrator required.'); return await service.call(name, a, callerId) as object; },
   } : ({
-    name, description: `${name}: bounded agent management. Definitions never grant permissions. ${QUEUED.includes(name) ? `Queues a proposal for the user (Agenti → Da approvare); nothing changes until the user accepts it, and an accepted behavioural change runs as a trial against the current version.${name === 'agent_update' ? ' patch may change model, effort, instructions, manifest.whenToUse or maxContext (tokens 100000-1000000, null = app setting; only Claude engines apply it).' : ''}` : name === 'agent_create' ? createGuide(presets()) : 'Read only.'}`,
+    name, description: `${name}: bounded agent management. Definitions never grant permissions. ${QUEUED.includes(name) ? 'Queues a new agent for the user (Agenti → Da approvare); nothing is created until the user accepts it.' : APPLIED.includes(name) ? `Applies at once, without asking the user, logged with an undo (the feed and the Skill page's change log); a behavioural change runs as a trial version against the current one, so its results are measured (an open trial must end first). Exception: a change of tools, MCP servers, permissionCeiling or engine (or only of the name or look) is queued for the user (Agenti → Da approvare); the result says applied: true or false.${name === 'agent_update' || name === 'agent_propose' ? ' patch may change model, effort, instructions, manifest.whenToUse or maxContext (tokens 100000-1000000, null = app setting; only Claude engines apply it).' : ''}` : name === 'agent_create' ? createGuide(presets()) : 'Read only.'}`,
     inputSchema: { type: 'object', required: required[name] ?? [], properties: {
       agentId: string, presetId: string, draft: record, patch: record, requestItemId: string, reason: string, expectedEffect: string,
       evidence: { type: 'array', items: record }, runId: { type: 'string', description: RUN_ID_DESCRIPTION }, verdict: { type: 'string', enum: ['success', 'partial', 'fail', 'unknown'] },

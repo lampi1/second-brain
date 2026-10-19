@@ -104,7 +104,7 @@ export function compatibleOwner(engine: string, model: string | null, legacy = f
   const key = createHash('sha256').update(`${engine}\n${model ?? ''}`).digest('hex').slice(0, 12);
   return { id: `${legacy ? 'legacy' : 'routed'}-${key}`, name: 'Assistente', purpose: legacy ? 'Sessione esistente, configurazione conservata' : 'Assistente per questa attività', avatar: { kind: 'symbol', value: 'briefcase' }, engine, model, revision: 1, source: legacy ? 'legacy' : 'routed' };
 }
-/** A Regia's owner: the session's engine/model with the Orchestrator profile's face (name, purpose, avatar); still no
+/** An Orchestrator's owner: the session's engine/model with the Orchestrator profile's face (name, purpose, avatar); still no
  *  catalog run. Without the profile, the preset's own face. Chats saved before this fix carry the "Assistente" one. */
 export function orchestratorOwner(base: AgentOwnerSnapshot, p?: Pick<AgentProfile, 'name' | 'purpose' | 'avatar'>): AgentOwnerSnapshot {
   return { ...base, name: p?.name ?? 'Orchestrator', purpose: p?.purpose ?? ORCHESTRATOR_PURPOSE, avatar: p ? structuredClone(p.avatar) : { kind: 'symbol', value: 'compass' } };
@@ -649,10 +649,11 @@ export class AgentCatalogService {
     this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
-  /** The user's approval of a proposed behavioural change (an Orchestrator draft, a cheaper-model trial): a new version on
-   *  trial against the active one, measured by the lifecycle (trials.ts) until the user keeps it or rolls it back. Only
-   *  sender-checked UI decisions reach it (AgentAuthoring.decide, the lifecycle's decide); know-how and pack identity are
-   *  never taken from the proposal. */
+  /** A behavioural change applied as a trial (an Orchestrator agent_update, applied at once since ADR 0082 unless it touches
+   *  tools, permissions or the engine; a cheaper-model trial; the user's approval of a queued proposal): a new version on
+   *  trial against the active one, measured by the lifecycle (trials.ts) until it is kept or rolled back. Callers:
+   *  AgentAuthoring (applyNow, decide) and the lifecycle's decide; know-how and pack identity are never taken from the
+   *  proposal. */
   approveTrial(id: string, value: unknown, reason: string): AgentProfile {
     this.writable();
     const old = this.find(id);
@@ -751,7 +752,8 @@ export class AgentCatalogService {
   }
   /** A maintenance job's change (ADR 0077: no approval for agent changes, every change logged with a rollback by
    *  brainmodel/changes.ts): only the role text (a lesson from the user's corrections) or the declared skills
-   *  (know-how). Tools, permissions, engine and model are never changed here: those stay under the user's approval.
+   *  (know-how). Tools, permissions, engine and model are never changed here (tools, permissions and engine are the user's,
+   *  ADR 0082; model and effort change through the Orchestrator's agent_update, as a trial).
    *  A new active version authored "maintenance"; null when nothing changes. Refused during an open trial. */
   maintain(id: string, patch: { instructions?: string; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
     this.writable();

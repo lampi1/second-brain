@@ -1,5 +1,6 @@
 // The "Da approvare" inbox's read model and decisions (pure, no window): it gathers every pending change to an agent
-// (Orchestrator definition proposals and update/rollback/archive/restore requests, learned-rule proposals, open version
+// (new-agent suggestions and the Orchestrator changes only the user decides: tools, permissions, engine, name or look
+// (ADR 0082; the rest applies at once), open version
 // trials, agents in probation, lifecycle suggestions, a new threshold for the agent classifier) from the typed IPC channels and the lifecycle queue into one list,
 // and maps each user decision to its one channel (agents:lifecycleDecide for the queue's own entries).
 // Nothing here decides by itself: every write runs only from a click in components/AgentApprovals.tsx.

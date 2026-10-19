@@ -11,13 +11,13 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.changed': (p: { at: string }) => `changed ${p.at}`,
 
   'bm.job.migration': 'Migration', 'bm.job.corrections': 'Corrections', 'bm.job.repeated-task': 'Repeated task',
-  'bm.job.merge-skills': 'Duplicate skills', 'bm.job.merge-memory': 'Duplicate memories', 'bm.job.user': 'You',
+  'bm.job.merge-skills': 'Duplicate skills', 'bm.job.merge-memory': 'Duplicate memories', 'bm.job.user': 'You', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `By: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Rule', 'bm.kind.memory': 'Memory',
 
   'bm.maint.title': 'Automatic maintenance',
-  'bm.maint.lead': 'Agents, skills, rules and memory keep themselves up to date without asking you: new skills from the work you repeat, duplicates merged, your corrections applied. Every change is here, with its reason and "Undo".',
-  'bm.maint.approvalNote': 'It still asks you only for production actions, permissions, settings and hooks, and texts for colleagues or external systems.',
+  'bm.maint.lead': 'Agents, skills, rules and memory keep themselves up to date without asking you: new skills from the work you repeat, duplicates merged, your corrections applied, the Orchestrator’s changes to an agent (model, effort, instructions, as a trial version). Every change is here, with its reason and "Undo".',
+  'bm.maint.approvalNote': 'It still asks you only for production actions, permissions (an agent\'s tools and permission ceiling), settings and hooks (an agent\'s engine included), and texts for colleagues or external systems.',
   'bm.maint.run': 'Run now', 'bm.maint.running': 'Running…',
   'bm.maint.last': (p: { at: string }) => `Last pass: ${p.at}`,
   'bm.maint.never': 'No pass yet: it starts by itself.',

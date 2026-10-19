@@ -69,7 +69,7 @@ function world() {
 }
 
 describe('the improvement loop, end to end', () => {
-  it('run end → batched feedback request → gap proposal → Orchestrator draft → user approves → trial → keep proposal → user keeps', async () => {
+  it('run end → batched feedback request → gap proposal → user approves → Orchestrator applies a trial → keep proposal → user keeps', async () => {
     const w = world();
     const a = w.catalog.save(draft());
     // ten baseline runs judged by the user (corrections 2 each)
@@ -107,12 +107,11 @@ describe('the improvement loop, end to end', () => {
     expect(w.send).toHaveBeenCalledTimes(2);
     expect(w.send.mock.calls[1]![1]).toMatch(/agent_propose/);
     expect(JSON.stringify(w.catalog.list().profiles)).toBe(before);
-    // the draft: a queued proposal, applied only by the user's decision, as a trial against v1
-    const proposal = await w.authoring.call('agent_update', { agentId: a.id, patch: { instructions: 'Report observations and run the tests.' }, reason: 'Missed the tests', expectedEffect: 'Fewer corrections' }, 'orch') as { id: string };
-    expect(w.loop.api.read({}).drafts!.map(d => d.id)).toEqual([proposal.id]);
-    expect(w.agent(a.id).activeVersion).toBe(1);
+    // the draft applies at once (ADR 0082), as a trial against v1; no second approval
     w.t += 1000;
-    expect(w.authoring.decide(proposal.id, true)).toMatchObject({ activeVersion: 2, trial: { version: 2, baseline: 1 } });
+    const applied = await w.authoring.call('agent_update', { agentId: a.id, patch: { instructions: 'Report observations and run the tests.' }, reason: 'Missed the tests', expectedEffect: 'Fewer corrections' }, 'orch');
+    expect(applied).toMatchObject({ applied: true, agent: { activeVersion: 2, trial: { version: 2, baseline: 1 } } });
+    expect(w.loop.api.read({}).drafts).toEqual([]);
     // five trial runs: each with its routing snapshot (the parent v1 would also have won them), fewer corrections
     const trialRuns: AgentRun[] = [];
     for (let i = 0; i < 5; i++) { w.t += 1000; const r = await w.start(a.id, `trial-${i}`); trialRuns.push(r); w.end(r, { corrections: { tagged: 1, afterReport: 0 } }); }
@@ -294,16 +293,17 @@ describe('sub-agent runs', () => {
 });
 
 describe('approval surfaces', () => {
-  it('the Orchestrator drafts are in the read, and reading applies nothing', async () => {
+  it('the Orchestrator drafts that wait for the user are in the read, and reading applies nothing', async () => {
     const w = world();
     const a = w.catalog.save(draft());
     const loop = createAgentLoop({ userData: w.userData, catalog: w.catalog, runs: w.runs, authoring: w.authoring, classify: async () => { throw new Error('none'); },
       chats: { list: () => [], send: vi.fn() }, engineOn: () => true, userWaiting: () => false, wakeEnabled: () => false, idle: () => false });
-    await w.authoring.call('agent_archive', { agentId: a.id, reason: 'Unused' }, 'orch');
+    // a permission change waits for the user (ADR 0082)
+    await w.authoring.call('agent_update', { agentId: a.id, patch: { permissionCeiling: 'plan' }, reason: 'Read only' }, 'orch');
     const snap = loop.api.read({ agentId: a.id });
     expect('learned' in snap).toBe(false);
-    expect(snap.drafts!.map(d => d.op)).toEqual(['archive']);
-    expect(w.agent(a.id).status).toBe('active');
+    expect(snap.drafts!.map(d => d.op)).toEqual(['update']);
+    expect(w.agent(a.id).permissionCeiling).toBe('default');
   });
   it('a stored run keeps its routing snapshot across restarts; a malformed one makes the file unreadable', async () => {
     const w = world();

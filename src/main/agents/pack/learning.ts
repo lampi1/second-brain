@@ -52,10 +52,10 @@ export class AgentPackLearning {
   }
 }
 
-/** The lessons tool. With `setting`, it also takes a "Contesto massimo" change (maxContext, issue #80): a setting, so
- *  queued as an agent_update proposal for the user (Agenti → Da approvare), never applied by itself. */
+/** The lessons tool. With `setting`, it also takes a "Contesto massimo" change (maxContext, issue #80): an agent_update,
+ *  applied at once as a trial version with an undo (ADR 0082: part of the agent's profile, not an app setting). */
 export function agentLearnTool(service: AgentPackLearning, setting?: (agentId: string, patch: { maxContext: number | null }, evidence: string, callerChatId: string | undefined) => unknown): McpTool {
-  return { name: 'agent_learn_propose', description: `Record one lesson from the user's corrections, with evidence (run ids). The app applies it at once, without asking the user, and logs it with an undo: target "role" (default) adds it to the agent's role, "skill" to the named skill (how a job is done), "rule" to the brain's rules (applies to every agent). Never for permissions, settings or hooks.${setting ? ' To propose the agent\'s maximum context instead, pass maxContext (tokens, 100000-1000000, or null for the app setting) with evidence and no rule: it is a setting, so it becomes a proposal in Agenti → Da approvare (only Claude engines apply it).' : ''}`,
+  return { name: 'agent_learn_propose', description: `Record one lesson from the user's corrections, with evidence (run ids). The app applies it at once, without asking the user, and logs it with an undo: target "role" (default) adds it to the agent's role, "skill" to the named skill (how a job is done), "rule" to the brain's rules (applies to every agent). Never for permissions, settings or hooks.${setting ? ' To propose the agent\'s maximum context instead, pass maxContext (tokens, 100000-1000000, or null for the app setting) with evidence and no rule: it is part of the agent’s profile, so it applies at once as a trial version, logged with an undo (only Claude engines apply it).' : ''}`,
     inputSchema: { type: 'object', properties: { agentId: { type: 'string' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill', 'rule'] }, skill: { type: 'string' }, ...(setting ? { maxContext: { type: ['integer', 'null'], minimum: 100000, maximum: 1000000 } } : {}) }, required: setting ? ['agentId', 'evidence'] : ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (args, ctx) => {

@@ -12,6 +12,7 @@ import type { BrainModelState, ClassifiersState, MaintenanceJobId, MaintenanceRu
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
+import type { AppliedAgentChange } from '../agents/authoring';
 import type { AgentPackFlows } from '../agents/pack/flows';
 import { portableId } from '../agents/pack/flows';
 import type { AgentPackLearning } from '../agents/pack/learning';
@@ -67,7 +68,14 @@ export class BrainModelService {
   private restorer(): AgentRestorer {
     return {
       activeVersion: id => this.profiles().find(p => p.id === id)?.activeVersion ?? null,
-      restore: (id, version, expected) => { this.d.catalog.maintainRestore(id, version, expected); },
+      // an Orchestrator update opened a trial (ADR 0082): undoing it rejects the trial, as the feed's undo does
+      restore: (id, version, expected) => {
+        const p = this.profiles().find(x => x.id === id);
+        if (p?.trial && p.trial.version === expected && p.activeVersion === expected && p.trial.baseline === version) this.d.catalog.rejectTrial(id, version);
+        else this.d.catalog.maintainRestore(id, version, expected);
+      },
+      status: id => { try { const c = this.d.catalog.list(); return [...c.profiles, ...c.archived].find(p => p.id === id)?.status ?? null; } catch { return null; } },
+      setStatus: (id, status) => { if (status === 'archived') this.d.catalog.archive(id); else this.d.catalog.restore(id); },
     };
   }
   private writer(): AgentWriter {
@@ -98,6 +106,17 @@ export class BrainModelService {
       classify: async text => (await this.d.top(text, this.profiles()))?.id ?? null,
       now: () => this.now(),
     };
+  }
+  /** An agent change the Orchestrator applied without approval (AgentAuthoring.onApplied, ADR 0082): one entry of the
+   *  change log, undone like a job's. */
+  recordAgentChange(c: AppliedAgentChange): void {
+    const summary = c.op === 'update' ? `${c.name}: nuova versione v${c.version?.after} in prova (era v${c.version?.before})`
+      : c.op === 'rollback' ? `${c.name}: di nuovo la v${c.version?.after} (era v${c.version?.before})`
+        : c.op === 'archive' ? `${c.name}: archiviato` : `${c.name}: di nuovo attivo`;
+    const version = c.version ?? { before: 0, after: 0 };
+    this.log.record({ job: 'orchestrator', kind: 'agent', action: c.op === 'archive' ? 'archive' : c.op === 'restore' ? 'restore' : 'update', target: c.agentId,
+      summary, reason: c.reason, evidence: c.evidence }, [], { id: c.agentId, ...version, ...(c.status ? { status: c.status } : {}) });
+    this.d.emit();
   }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
   private lastRun(): MaintenanceRun | null { try { return (readLocal(this.runFile) as MaintenanceRun | undefined) ?? null; } catch { return null; } }

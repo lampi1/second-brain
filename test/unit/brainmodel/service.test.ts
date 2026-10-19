@@ -189,3 +189,25 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
   });
 });
+
+describe('the Orchestrator\'s agent changes (ADR 0082)', () => {
+  it('are logged with an undo: a trial version is rejected, an archive is restored', () => {
+    const w = world();
+    const p = w.catalog.save({ name: 'Reader', purpose: 'Read files', instructions: 'Report observations.', engine: 'claude', model: null, avatar: { kind: 'symbol', value: 'eye' }, tools: { allow: ['read'] }, permissionCeiling: 'default' });
+    const trial = w.catalog.approveTrial(p.id, { ...p, instructions: 'Report briefly.' }, 'Shorter');
+    w.service.recordAgentChange({ agentId: p.id, name: p.name, op: 'update', reason: 'Shorter', evidence: ['run:r_1'], version: { before: 1, after: trial.activeVersion } });
+    let change = w.service.state().changes[0]!;
+    expect(change).toMatchObject({ job: 'orchestrator', kind: 'agent', target: p.id, canRollback: true, evidence: ['run:r_1'] });
+    expect(change.summary).toMatch(/v2 in prova/);
+    w.service.rollback(change.id);
+    expect(w.agent(p.id)).toMatchObject({ activeVersion: 1, instructions: 'Report observations.' });
+    expect(w.agent(p.id).trial).toBeUndefined();
+    w.catalog.archive(p.id);
+    w.service.recordAgentChange({ agentId: p.id, name: p.name, op: 'archive', reason: 'Unused', evidence: [], status: { before: 'active', after: 'archived' } });
+    change = w.service.state().changes[0]!;
+    expect(change).toMatchObject({ action: 'archive', canRollback: true });
+    w.service.rollback(change.id);
+    expect(w.catalog.list().profiles.find(x => x.id === p.id)?.status).toBe('active');
+    expect(w.service.state().changes[0]!.canRollback).toBe(false);
+  });
+});

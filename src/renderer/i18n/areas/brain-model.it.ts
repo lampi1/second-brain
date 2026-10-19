@@ -12,14 +12,14 @@ export const brainModelIt = {
 
   // who made a change
   'bm.job.migration': 'Migrazione', 'bm.job.corrections': 'Correzioni', 'bm.job.repeated-task': 'Lavoro ripetuto',
-  'bm.job.merge-skills': 'Skill doppie', 'bm.job.merge-memory': 'Memorie doppie', 'bm.job.user': 'Tu',
+  'bm.job.merge-skills': 'Skill doppie', 'bm.job.merge-memory': 'Memorie doppie', 'bm.job.user': 'Tu', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `Da: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agente', 'bm.kind.rule': 'Regola', 'bm.kind.memory': 'Memoria',
 
   // maintenance panel
   'bm.maint.title': 'Manutenzione automatica',
-  'bm.maint.lead': 'Agenti, skill, regole e memoria si aggiornano da soli, senza chiederti nulla: nuove skill dai lavori che ripeti, doppioni uniti, le tue correzioni applicate. Ogni modifica è qui, con il motivo e «Annulla».',
-  'bm.maint.approvalNote': 'Ti chiede ancora conferma solo per le azioni in produzione, i permessi, le impostazioni e gli hook, e i testi per colleghi o sistemi esterni.',
+  'bm.maint.lead': 'Agenti, skill, regole e memoria si aggiornano da soli, senza chiederti nulla: nuove skill dai lavori che ripeti, doppioni uniti, le tue correzioni applicate, le modifiche dell’Orchestrator a un agente (modello, impegno, istruzioni, come versione in prova). Ogni modifica è qui, con il motivo e «Annulla».',
+  'bm.maint.approvalNote': 'Ti chiede ancora conferma solo per le azioni in produzione, i permessi (strumenti e permessi massimi di un agente), le impostazioni e gli hook (compreso il motore di un agente), e i testi per colleghi o sistemi esterni.',
   'bm.maint.run': 'Esegui ora', 'bm.maint.running': 'In corso…',
   'bm.maint.last': (p: { at: string }) => `Ultimo passaggio: ${p.at}`,
   'bm.maint.never': 'Nessun passaggio ancora: parte da solo.',

@@ -37,10 +37,11 @@ export function feedbackMessage(runs: readonly AgentRun[], agents: readonly Agen
   return [APP_EVENT_LABEL, `Esecuzioni di Agenti finite senza un giudizio dell'utente (${runs.length}):`, ...lines,
     'Per ciascuna: agent_run_report (runId), poi agent_feedback con verdict, notes, evidence e, se una parte della definizione è mancata, gap + gapKey breve e stabile.',
     'Se dal lavoro emerge una regola riutilizzabile per quell\'Agente, proponila con agent_learn_propose (agentId, rule, evidence = i runId).',
-    'Non cambiare definizioni: agent_update / agent_propose mettono solo una proposta in «Da approvare», decide l\'utente. Non scrivere all\'utente per questo; una riga di chiusura basta.'].join('\n');
+    'Se serve cambiare un Agente (modello, impegno, istruzioni, whenToUse) usa agent_update: si applica subito come versione in prova, registrata con Annulla; strumenti, permessi e motore restano all\'utente («Da approvare»). Non scrivere all\'utente per questo; una riga di chiusura basta.'].join('\n');
 }
 
-/** The user approved a queue entry that needs a concrete draft: the Orchestrator prepares it as a proposal. */
+/** The user approved a queue entry that needs a concrete draft: the Orchestrator applies it (ADR 0082; a new agent, or a
+ *  change of permissions or engine, comes back as a proposal). */
 export function draftRequestMessage(p: AgentLifecycleProposal, agents: readonly AgentProfile[]): string {
   const who = p.agentIds.map(id => `${agents.find(a => a.id === id)?.name ?? id} (${id})`).join(', ');
   const what = p.kind === 'update' ? `aggiornare la definizione di ${who}` : p.kind === 'merge' ? `unire ${who}` : p.kind === 'split' ? `dividere ${who} per il gruppo indicato`
@@ -48,6 +49,6 @@ export function draftRequestMessage(p: AgentLifecycleProposal, agents: readonly 
   const refs = p.evidence.slice(0, 16).map(e => `${e.kind}:${e.ref}`).join(', ');
   return ["[messaggio di second-brain: l'utente ha chiesto una bozza da Agenti → «Da approvare»; non vale come ok per applicare nulla]",
     `Proposta ${p.key}: ${what}. Motivo: ${p.reason}.${refs ? ` Evidenze: ${refs}.` : ''}`,
-    p.kind === 'create' ? 'Prepara la bozza con agent_suggest (draft completo, reason, expectedEffect).' : 'Prepara la bozza con agent_propose (agentId, patch, reason, expectedEffect); per un\'unione proponi l\'archiviazione dell\'altro con agent_archive.',
-    'La bozza torna all\'utente in «Da approvare» per la decisione finale; un cambio di comportamento approvato parte in prova contro la versione attuale.'].join('\n');
+    p.kind === 'create' ? 'Prepara la bozza con agent_suggest (draft completo, reason, expectedEffect): un nuovo Agente torna all\'utente in «Da approvare».' : 'Applica la modifica con agent_propose (agentId, patch, reason, expectedEffect); per un\'unione archivia l\'altro con agent_archive.',
+    'Un cambio di comportamento si applica subito come versione in prova contro quella attuale, registrato con Annulla; solo strumenti, permessi e motore tornano all\'utente in «Da approvare».'].join('\n');
 }

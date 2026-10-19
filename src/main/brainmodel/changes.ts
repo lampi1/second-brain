@@ -12,9 +12,15 @@ import type { BrainChange } from '../../shared/brain-model';
 import { readLocal, writeLocal } from '../agents/local-store';
 
 export interface FileSnapshot { file: string; before: string | null; after: string | null }
-export interface AgentSnapshot { id: string; before: number; after: number }
+/** An agent's version before and after; `status` = an archive or restore (the version stays, the status moves). */
+export interface AgentSnapshot { id: string; before: number; after: number; status?: { before: AgentStatus; after: AgentStatus } }
+type AgentStatus = 'active' | 'archived';
 export interface StoredChange extends Omit<BrainChange, 'canRollback'> { files: FileSnapshot[]; agent?: AgentSnapshot }
-export interface AgentRestorer { activeVersion(id: string): number | null; restore(id: string, version: number, expected: number): void }
+export interface AgentRestorer {
+  activeVersion(id: string): number | null; restore(id: string, version: number, expected: number): void;
+  /** archive / restore changes (the Orchestrator's, ADR 0082); absent = such a change cannot be undone here */
+  status?(id: string): AgentStatus | null; setStatus?(id: string, status: AgentStatus): void;
+}
 
 const MAX = 400, SNAP = 256 * 1024;
 const read = (file: string): string | null => { try { return fs.readFileSync(file, 'utf8'); } catch { return null; } };
@@ -68,6 +74,7 @@ export class ChangeLog {
   canRollback(c: StoredChange, agents: AgentRestorer): boolean {
     if (c.rolledBackAt) return false;
     if (c.files.some(f => read(f.file) !== f.after)) return false;
+    if (c.agent?.status) return !!agents.status && !!agents.setStatus && agents.status(c.agent.id) === c.agent.status.after;
     if (c.agent && agents.activeVersion(c.agent.id) !== c.agent.after) return false;
     return true;
   }
@@ -79,7 +86,8 @@ export class ChangeLog {
     const c = this.entries.find(e => e.id === id);
     if (!c) throw new Error('Modifica non trovata.');
     if (!this.canRollback(c, agents)) throw new Error('Questa modifica non si può più annullare: è già annullata, o il file o l’agente sono cambiati dopo. Annulla prima la modifica più recente.');
-    if (c.agent) agents.restore(c.agent.id, c.agent.before, c.agent.after);
+    if (c.agent?.status) agents.setStatus!(c.agent.id, c.agent.status.before);
+    else if (c.agent) agents.restore(c.agent.id, c.agent.before, c.agent.after);
     for (const f of [...c.files].reverse()) writeText(f.file, f.before);
     c.rolledBackAt = this.now();
     this.persist();

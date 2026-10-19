@@ -91,6 +91,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     runs: () => [], routing: () => brain.routingInfo(), now,
     top: async (text, profiles) => { const c = await classifyByWords(text, profiles); const best = c.candidates[0]; return best && !c.noneCloseEnough && best.score >= c.threshold ? { id: best.id, score: best.score } : null; },
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
+  agentAuthoring.onApplied = change => brainModel.recordAgentChange(change);
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
   brain.serveApi('/api/improve', () => brain.learnApi());
 
@@ -98,7 +99,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // "Esegui" runs for real in the demo too (only on the user's click): the e2e tests run a harmless Write-Output
   const runner = commandRunner(ctx, chats);
   const asks = attachCommandAsks(ctx, runner, brain, now);
-  // the demo's scripted Regia answers every message: only an e2e test that asks for it gets the news
+  // the demo's scripted Orchestrator answers every message: only an e2e test that asks for it gets the news
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && process.env.SB_REGIA_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
@@ -149,14 +150,14 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     clearThumbs: () => browser.clearThumbs(),
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),
-    /** show_ui as the chat would call it (e2e: a visual in the chat, in its Regia, on its next question); the error text on a wrong call */
+    /** show_ui as the chat would call it (e2e: a visual in the chat, in its Orchestrator, on its next question); the error text on a wrong call */
     show: (chatId: string, args: Record<string, unknown>) => { try { return artifacts.show(chatId, args); } catch (e) { return `Error: ${errText(e)}`; } },
     /** a new request from a chat (e2e: the global layer must show it without stealing focus) */
     ask: (chatId: string, req: Omit<PendingRequest, 'id' | 'chatId' | 'at'>) => { void chats.ask(chatId, req, new AbortController().signal).catch(() => {}); },
     /** a tool call of a chat, running or finished (e2e: the live brain map); the same id again updates it */
     tool: (chatId: string, t: { id: string; name: string; input: unknown; summary?: string; status?: 'running' | 'ok' | 'error' }) =>
       chats.upsert(chatId, { kind: 'tool', id: t.id, at: now(), name: t.name, summary: t.summary ?? t.name, input: t.input, status: t.status ?? 'running' }),
-    /** "Eventi alla Regia": the chats whose news waits (`chat:kind`), and how much of it a busy Regia holds (e2e: regia-wake) */
+    /** "Eventi all'Orchestrator": the chats whose news waits (`chat:kind`), and how much of it a busy Orchestrator holds (e2e: regia-wake) */
     wake: () => ({ queued: wake.queued().map(e => `${e.chatId}:${e.kind}`), held: wake.held() }),
     asks: () => ({ reads: asks.reads, pending: asks.pending().map(r => r.chatId) }),
   };

@@ -22,7 +22,7 @@ export interface BrainSkill {
   lines: number;
   changedAt: number | null;
   /** who made it, when known from the change log ("migration", a job, the user) */
-  madeBy: MaintenanceJobId | 'user' | null;
+  madeBy: BrainChange['job'] | null;
 }
 
 /** A rule of the brain: a topic file (brain.json rules.topicFiles, injected when it matches) or a file of `rules/`. */
@@ -60,13 +60,13 @@ export interface MemoryFile {
 export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration';
 export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory'];
 
-/** One change a maintenance job (or the user's link toggle) made. target: a skill name, an agent id, a rule or memory
+/** One change a maintenance job, the Orchestrator (an agent definition change, ADR 0082) or the user's link toggle made. target: a skill name, an agent id, a rule or memory
  *  file. canRollback false = undone already, or what it changed moved on since (a newer change on the same target). */
 export interface BrainChange {
   id: string; at: number;
-  job: MaintenanceJobId | 'user';
+  job: MaintenanceJobId | 'user' | 'orchestrator';
   kind: 'skill' | 'agent' | 'rule' | 'memory';
-  action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove';
+  action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove' | 'archive' | 'restore';
   target: string;
   /** what changed, one line (Italian, shown as is) */
   summary: string;

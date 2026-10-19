@@ -174,13 +174,14 @@ describe('"Contesto massimo" (#80)', () => {
     expect(catalog.resolve({ agentId: a.id, harness: 'claude', cwd: '/' })).not.toHaveProperty('maxContext');
   });
 
-  it('is accepted by agent_update as a proposal, and by agent_learn_propose through the setting path', async () => {
+  it('is applied by agent_update as a trial version with an undo (ADR 0082), and by agent_learn_propose through the setting path', async () => {
     const userData = tmp(), catalog = new AgentCatalogService({ userData, models });
     const a = catalog.save(draft());
     const service = new AgentAuthoring({ userData, catalog, runs: new AgentRunStore(userData), items: () => [], suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
-    const proposal = await service.call('agent_update', { agentId: a.id, patch: { maxContext: 300_000 }, reason: 'long repo reads' }, 'orch') as { draft: AgentDraft; state: string };
-    expect(proposal).toMatchObject({ state: 'pending', draft: { maxContext: 300_000 } });
-    expect(catalog.list().profiles.find(p => p.id === a.id)).not.toHaveProperty('maxContext');
+    const done = await service.call('agent_update', { agentId: a.id, patch: { maxContext: 300_000 }, reason: 'long repo reads' }, 'orch') as { applied: boolean };
+    expect(done).toMatchObject({ applied: true, agent: { maxContext: 300_000, trial: { baseline: 1 } } });
+    expect(catalog.list().profiles.find(p => p.id === a.id)).toMatchObject({ maxContext: 300_000 });
+    expect(service.proposals()).toEqual([]);
   });
 
   it('does not let a model-less profile be overridden but lets the chat bring the table\'s model', () => {
