@@ -230,6 +230,9 @@ interface Rec {
   skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
+  /** a delegated chat's ancestors' catalog roles (parent first), frozen at its creation and persisted: its managed MCP
+   *  access stays bounded by them after the parent closes or is pruned (ADR 0086) */
+  mcpAncestors?: (string | null)[];
   /** the agent's "Contesto massimo" (tokens): the compaction window of its engine instead of the user's setting (#80) */
   maxContext?: number;
   agentPrimed?: boolean;
@@ -405,6 +408,8 @@ export class ChatManager implements ChatService {
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
+  /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
+  private warmChat: string | null = null;
   private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
@@ -549,6 +554,9 @@ export class ChatManager implements ChatService {
       ...(agent.assets ? { agentAssets: agent.assets } : {}),
       ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
       ...(policy ? { policy } : {}),
+      // a delegated chat freezes its parent's role chain now (a parent with no chain: the child has none either and,
+      // once the parent is gone, no managed MCP server at all)
+      ...(delegator && this.mcpContext(delegator.s.id) ? { mcpAncestors: this.mcpContext(delegator.s.id)!.roles } : {}),
       ...(agent.maxContext ? { maxContext: agent.maxContext } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
       ...(forkOf ? { forkFrom: forkOf } : {}),
@@ -1909,6 +1917,7 @@ export class ChatManager implements ChatService {
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
+      ...(c.mcpAncestors ? { mcpAncestors: c.mcpAncestors } : {}),
     };
   }
 
@@ -1937,6 +1946,7 @@ export class ChatManager implements ChatService {
       ...(r.s.route ? { route: r.s.route } : {}),
       ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
+      ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);
   }
@@ -2087,16 +2097,20 @@ export class ChatManager implements ChatService {
   /** The chat as the MCP access sees it (ADR 0086): its role and each parent's, own first, and its tool policy; null =
    *  not a chat of this app. A chat whose parent is gone keeps the parent's place as no role (its policy, narrowed at
    *  start by that parent, still holds). */
-  mcpContext(chatId: string): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
+  mcpContext(chatId: string, seen = new Set<string>()): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
     const r = this.chats.get(chatId);
-    if (!r) return null;
-    const roles: (string | null)[] = [];
-    const seen = new Set<string>();
-    for (let c: Rec | undefined = r; c && !seen.has(c.s.id) && roles.length < 16; c = c.s.parentId ? this.chats.get(c.s.parentId) : undefined) {
-      seen.add(c.s.id);
-      roles.push(c.s.agent?.source === 'catalog' ? c.s.agent.id : null);
-    }
-    return { roles, policy: r.policy ?? null };
+    // the warm engine's chat does not exist yet: it is a plain chat (no role, no policy, no parent: warm.ts never serves
+    // an agent with a policy); once adopted, its real role is read at every gateway call
+    if (!r) return this.warmChat === chatId || this.warm.current?.chatId === chatId ? { roles: [null], policy: null } : null;
+    const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
+    if (!r.s.parentId) return { roles: [own], policy };
+    // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the
+    // live parents; a parent that is gone with no frozen chain = fail closed (no managed server), never a wider child
+    if (r.mcpAncestors) return { roles: [own, ...r.mcpAncestors], policy };
+    seen.add(chatId);
+    if (seen.has(r.s.parentId) || seen.size > 16) return null;
+    const up = this.mcpContext(r.s.parentId, seen);
+    return up ? { roles: [own, ...up.roles], policy } : null;
   }
 
   /** the app-control endpoint of an Orchestrator, null for any other chat */
@@ -2188,6 +2202,12 @@ export class ChatManager implements ChatService {
     if (updateActivity.frozen) return null;
     const chatId = `c_${crypto.randomBytes(5).toString('hex')}`;
     const sessionId = crypto.randomUUID();
+    // its launch asks mcpContext before the pool holds it: the id is known as the warm engine's meanwhile
+    this.warmChat = chatId;
+    try { return this.spawnWarmAs(chatId, sessionId, cwd); } finally { this.warmChat = null; }
+  }
+
+  private spawnWarmAs(chatId: string, sessionId: string, cwd: string): WarmEngine {
     const extraArgs = this.extraArgsFor('claude', chatId, undefined);
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,
