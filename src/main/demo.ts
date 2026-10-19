@@ -138,9 +138,15 @@ export function seed(E: number): Seed {
   const settled = chats.find(c => c.id === 'mappa')!;
   settled.agent = { id: 'artisan', name: 'Artisan', purpose: ROLE_DEFAULTS.artisan.summary, avatar: { kind: 'character', value: 'artisan' },
     engine: settled.harness, model: settled.model, revision: 1, version: 1, source: 'catalog' };
-  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'artisan', version: 1, goal: settled.title,
+  settled.run = { runId: 'r_000000000001', chatId: settled.id, agentId: 'artisan', version: 1, goal: 'Aggiungi la vista 3D alla pagina Mappa',
     startedBy: 'orchestrator', startedAt: E - 30 * MIN, costUsd: settled.costUsd, tokens: null,
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: settled.contextTokens ?? null } };
+  // three runs at work the Orchestrator started (one a quick single-agent job), for the strips' estimates and its plan (ADR 0087; history: agents/run-estimates.ts)
+  for (const [id, agentId, goal, ago] of [['qa', 'sentinel', 'Esegui i test case dei rimborsi in ambiente di test e fammi il report.', 26], ['sms', 'sentinel', 'Riproduci il bug degli SMS nelle attività del cliente, in ambiente di test 2.', 6], ['feedback', 'scout', 'Cerca nei log gli errori 500 del modulo feedback di oggi', 3]] as const) {
+    const c = chats.find(x => x.id === id)!;
+    c.run = { runId: `r_00000000000${id === 'qa' ? 2 : id === 'sms' ? 3 : 4}`, chatId: id, agentId, version: 1, goal, startedBy: 'orchestrator', startedAt: E - ago * MIN, costUsd: c.costUsd || null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } };
+  }
   const items: Record<string, ChatItem[]> = {
     orchestrator: [
       // not typed by the user: mail from a work chat and an Esegui result fold to one line (renderer lib/foreign.ts)

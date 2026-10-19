@@ -145,6 +145,14 @@ its final report to the Orchestrator and went idle closes by itself after a shor
 conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
 work stays open with an "In attesa di…" label.
 
+**Quick chats and readable estimates** (ADR 0087): before it starts work the Orchestrator estimates the request from
+similar past tasks (same agent and same kind first; time, cost, how many tasks it rests on, its confidence, the parts
+of the request). A short question it answers itself; a quick single-part job goes to one agent with no sub-chats;
+only work in several parts becomes a delegation tree, which costs more tokens. Every strip reads "stima ~4 min ·
+~0,12 $ · su 12 task simili" and, once done, "~4 min → 6 min ✓"; its "?" explains how the figure is computed. The
+Orchestrator's plan lists the agents it started today with their estimates, a "via rapida" mark on quick jobs, the
+sum, and how accurate the estimates have been week by week (each finished task re-estimated from the ones before it).
+
 ### Cloud agents next to the local ones
 
 Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going

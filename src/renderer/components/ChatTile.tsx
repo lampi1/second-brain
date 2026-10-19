@@ -6,7 +6,8 @@
 // (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
 // A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by the agents' strips in the
 // Grindhouse (AgentStrips.tsx) and the focus view. A strip (Brother, 18/10): a click anywhere on it expands it, a click on
-// the head of an expanded one collapses it; the key facts (model, cost, work time, context; the effort is the agent profile's, #75) stay on screen
+// the head of an expanded one collapses it; the key facts (model, cost, work time, context, the task estimate from similar
+// tasks with its "?" and, once ended, estimate → actual: RunEstimate.tsx, ADR 0087; the effort is the agent profile's, #75) stay on screen
 // collapsed too, and a decision waiting is one "Ti aspetta" pill that opens it in the questions window (popups on or
 // off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
 // browsers stay folded until it is pressed, then sit beside the chat (on a collapsed strip it expands it too; AgentStrips.tsx).
@@ -14,20 +15,20 @@
 // role and task that asks: answering goes to that child, which then goes on (ADR 0083).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
-import type { ChatSummary, PendingRequest } from '@shared/contract';
+import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
 import { callQuestions, setBrowserOpen, setFocused, setFocusMode, setChatExpanded, ui } from '../store/ui';
-import {locale,t}from'../i18n';
+import {t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
 import { answerLater, openQueue } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
 import { selectedHere } from '../lib/strip-click';
-import { estimateOf, useAgentMetricsAll } from '../lib/agent-estimates';
+import { StripEstimate } from './RunEstimate';
 import { ChatLinkChips } from './ChatLinkChips';
 import { AgentIdentity } from './AgentIdentity';
 import { AgentAvatar } from './AgentAvatar';
@@ -109,7 +110,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const browsers = useApp(s => s.tabs.filter(tab => tab.ownerChatId === chatId).length);
   const browserShown = ui.use(s => s.prefs.browserOpen[chatId] === true && s.prefs.chatExpanded[chatId] === true);
   const now = useNow(15_000); // the running work span grows on screen
-  const agentMetrics = useAgentMetricsAll();
   useEffect(() => {
     if (!focusReq) return;
     reveal(true);
@@ -171,7 +171,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
           {chat.run && <RunChips run={chat.run} />}
           <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
-          {(busy || chat.state === 'waiting') && <RunEstimateChip chat={chat} estimate={estimateOf(chat.run, agentMetrics, now)} />}
+          {chat.run && <StripEstimate chat={chat} busy={busy || chat.state === 'waiting'} workMs={work} />}
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
           <HelpTip title={t('explain.strip.title')} className="strip-help" testid={`chat-help-${chatId}`}><p>{t('explain.strip.p1')}</p><p>{t('explain.strip.p2')}</p><p>{t('explain.strip.p3')}</p><p>{t('explain.strip.p4')}</p></HelpTip>
@@ -224,16 +224,3 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     </section>
   );
 });
-
-/** The live estimate of an agent run still at work (lib/agent-estimates.ts): dashed and labelled "stima" so it never
- *  reads as the run's own time or cost, which the facts beside it show. */
-function RunEstimateChip({ chat, estimate }: { chat: ChatSummary; estimate: ReturnType<typeof estimateOf> }) {
-  if (!estimate) return null;
-  const usd = estimate.costUsd === null ? null : `~${new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: estimate.costUsd < 1 ? 2 : 1 }).format(estimate.costUsd)}`;
-  const time = estimate.timeMs === null ? null : `~${minutes(estimate.timeMs)}`;
-  const left = estimate.over ? t('agentDetail.estimateOver') : estimate.leftMs !== null ? t('agentDetail.estimateLeft', { d: minutes(estimate.leftMs) }) : null;
-  const tip = t('agentDetail.estimateTip', { name: chat.agent?.name || chat.title, n: Math.max(estimate.timeRuns, estimate.costRuns) });
-  return <span className={`th-estimate${estimate.over ? ' over' : ''}`} data-testid={`chat-estimate-${chat.id}`} data-tip={tip} aria-label={`${t('agentDetail.estimate')}: ${[time, usd, left].filter(Boolean).join(', ')}. ${tip}`}>
-    <span className="th-estimate-label">{t('agentDetail.estimate')}</span>{[time, usd].filter(Boolean).join(' · ')}{left && <span className="th-estimate-left">{left}</span>}
-  </span>;
-}

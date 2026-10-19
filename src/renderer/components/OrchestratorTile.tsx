@@ -8,7 +8,8 @@
 // "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator); above its input, "N novità in attesa"
 // (HeldNews.tsx, #88: what the app holds back for it; it replaced the "Novità" feed, which stays in the bell). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci". With no Orchestrator yet it offers to create
-// one. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+// one. Under its head, its plan (RunEstimate.tsx OrchestratorPlan, ADR 0087): the agents it started today with their
+// estimates and the estimator's accuracy. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, prettyModel } from '../lib/format';
 import { engineName } from '../lib/engines';
@@ -26,6 +27,7 @@ import { AgentIdentity } from './AgentIdentity';
 import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
+import { OrchestratorPlan } from './RunEstimate';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -143,6 +145,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       </header>
       {/* the Orchestrator's own sub-agents (its background Agent tools): visible here, it sits outside the strips */}
       <ChildStrips chatId={chat.id} />
+      {/* the agents it started today, with the estimate it had for each (ADR 0087) */}
+      <OrchestratorPlan />
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" /> : null} />
       {queued && reqs.length > 0 && <InWindowLine reqs={open} queued testid="orchestrator-queued" />}
       {!queued && inWindow && reqs.length > 0 && <InWindowLine reqs={reqs} testid="orchestrator-in-window" />}

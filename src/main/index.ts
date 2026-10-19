@@ -34,6 +34,7 @@ import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
+import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
 import { systemLang } from './lang';
 import { BrainCreator } from './brain/create';
 import { BrainCreationController } from './brain/create-controller';
@@ -200,6 +201,12 @@ app.whenReady().then(async () => {
       const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
       return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
+    },
+    // the strips' and the Orchestrator plan's estimates (ADR 0087); the demo brings its own run history
+    'agents:estimates': a => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
+      return estimatesState(runs, checkRunIds(a?.runIds), now);
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'setup:get': () => s.setup.get(),

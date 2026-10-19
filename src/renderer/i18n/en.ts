@@ -29,6 +29,7 @@ import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
+import { estimateEn } from './areas/estimate.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
 
@@ -46,6 +47,7 @@ export const en: Dict = {
   ...cloudEn,
   ...guideEn,
   ...treeEn,
+  ...estimateEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',

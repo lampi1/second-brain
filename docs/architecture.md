@@ -56,6 +56,13 @@
   result to the parent. The renderer builds the tree from `parentId` (`lib/chat-tree.ts`), the steps from the
   transcript (`lib/run-steps.ts`) and picks the one view that shows a request (`lib/child-requests.ts`). The user's
   message in a work chat (`chat:send` → `userWrote`) is quiet news for the Orchestrator and a note for the parent.
+- **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
+  classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with
+  3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The
+  Orchestrator reads it with `task_estimate` and in `app_create_chat`'s answer; IPC `agents:estimates`
+  (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
+  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for the Dashboard / Classificatori);
+  `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
 - **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip

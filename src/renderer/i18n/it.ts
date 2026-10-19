@@ -30,6 +30,7 @@ import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
+import { estimateIt } from './areas/estimate.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
@@ -47,6 +48,7 @@ export const it = {
   ...cloudIt,
   ...guideIt,
   ...treeIt,
+  ...estimateIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',

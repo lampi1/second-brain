@@ -29,6 +29,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   shows what will appear. Zero tokens: files and recorded runs only.
 - **"Manutenzione" button** atop Skill, Regole and Memoria: runs every maintenance job now, then says job by job what
   it did and lists the changes of that pass, each with "Annulla". Fixes the sideways overflow of those pages.
+- **Quick chats and readable estimates** (ADR 0087): the Orchestrator estimates each request from similar past tasks
+  (`task_estimate`: median work time, cost, the middle-half range, how many tasks, confidence, the parts) and takes the
+  fast path: a short question it answers itself, a quick single-part job to ONE agent with no sub-chats, a delegation
+  tree only for work in several parts (`app_create_chat` and `agent_delegate` say so; `app_create_chat` answers with the
+  estimate). The Grindhouse strips show "stima ~4 min · ~0,12 $ · su 12 task simili" with a "?" on how it is computed,
+  and estimate → actual with ✓/✗ once done; under the Orchestrator's head, its plan (the agents it started today, a
+  "via rapida" mark, the sum) and the estimates' weekly accuracy. It replaces the strip's old estimate (the agent's
+  median of all its runs).
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its
