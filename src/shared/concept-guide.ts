@@ -316,8 +316,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/analytics.ts, src/main/agents/collector.ts
       b('Le statistiche della pagina Costi vengono dalle sessioni e dai registri osservati.', 'The Costs page statistics come from observed sessions and ledgers.'),
       // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
-      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; non hanno ancora una vista dedicata.',
-        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; these have no dedicated view yet.'),
+      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
+        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
+      // src/main/agents/standing.ts; src/renderer/components/AgentCatalogCard.tsx
+      b('Ogni carta ha un livello e una performance. Livello: Lv 2 a 5 lavori conclusi, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu o il Giudice × 1, l’Orchestrator × 0,6, l’agente stesso × 0,3) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
+        'Each card has a level and a performance. Level: Lv 2 at 5 ended runs, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you or the Judge × 1, the Orchestrator × 0.6, the agent itself × 0.3) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
@@ -326,7 +329,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/wiring.ts /api/agents/analytics
       tech(WHERE, 'Statistiche delle sessioni: /api/agents/analytics; metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo.', 'Session statistics: /api/agents/analytics; run metrics: agents:metrics IPC, also filtered by skill, app and repo tags.'),
     ],
-    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
+    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
   },
   {
     id: 'errors-rules',

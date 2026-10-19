@@ -13,6 +13,7 @@ import { refreshAgents, useAgents } from '../store/agents';
 import { useApp } from '../store/store';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
+import { HelpTip } from './HelpTip';
 import { AgentStudio } from './AgentStudio';
 import { ContextPulse } from './ContextPulse';
 import { useBrainModel } from '../store/brain-model';
@@ -55,7 +56,8 @@ export function AgentCatalogPage() {
     <div className="catalog-summary" data-testid="catalog-summary">
       <p className="catalog-count"><strong>{t('agentsGrid.count', { n: profiles.filter(p => p.scope === 'role').length })}</strong>
         {working > 0 && <span data-state="working"><i aria-hidden="true" />{t('agentsGrid.workingCount', { n: working })}</span>}
-        {trial > 0 && <span data-state="trial"><i aria-hidden="true" />{t('agentsGrid.trialCount', { n: trial })}</span>}</p>
+        {trial > 0 && <span data-state="trial"><i aria-hidden="true" />{t('agentsGrid.trialCount', { n: trial })}</span>}
+        <HelpTip title={t('explain.team.title')} testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p></HelpTip></p>
       <p className="catalog-note">{t('catalog.note')}</p>
     </div>
     <div className="catalog-grid">{profiles.map((p, index) => {

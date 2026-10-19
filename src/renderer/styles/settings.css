@@ -51,6 +51,7 @@
 .st-row { flex-wrap: wrap; }
 .st-text { flex: 1 1 240px; min-width: 0; display: grid; gap: 3px; }
 .st-title { font-weight: 600; color: var(--text); font-size: var(--fs-m); }
+.st-title-line { display: flex; align-items: center; min-width: 0; } /* a title and its "?" (HelpTip) on one line */
 .st-desc { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; }
 .st-desc b { color: var(--text-2); font-weight: 600; }
 .st-meta { color: var(--text-4); font-size: var(--fs-xs); margin-top: 4px; font-variant-numeric: tabular-nums; }

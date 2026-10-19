@@ -5,6 +5,17 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- **Agent cards with a level and a performance %** (owner, 2026-10-19): the front shows the character large and centred,
+  a level from the runs it ended (Lv 2 at 5, Lv 3 at 15, Lv 4 at 30: each level asks 5 more; titles from Recluta to
+  Leggenda) with the way to the next one, and a performance gauge (verdicts weighted by who gave them, you or the
+  Judge × 1, the Orchestrator × 0.6, the agent itself × 0.3, and by age, half weight every 30 days; "In rodaggio" below 5
+  judged runs). Each has a "?" with the exact formula and the agent's own numbers (`main/agents/standing.ts`, exposed as
+  `standing` on `agents:metrics`). The demo has a made-up run history so every state shows.
+- **"?" explanations across the app**: the Orchestrator's head (what it is, its states, its collaborators), every
+  strip's facts (cost, work time, context meter, version), the run verdict (how it feeds the performance), the Agenti
+  summary, Settings (system notifications, Judge reviews, model tiers) and the Skill page.
+
 ### Changed
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import type { MdIssue, SkillCatalog, SkillEntry, SkillPlace } from '@shared/contract';
 import { checkMd, DESC_MAX, field, newMd, parseMd, setBody, setFields, template } from '@shared/skillmd';
 import { PageHead } from '../brain/components/States';
+import { HelpTip } from './HelpTip';
 import { Seg } from '../brain/components/ui';
 import { brainBridge } from '../actions';
 import { askConfirm, toast, ui } from '../store/ui';
@@ -272,6 +273,7 @@ export function SkillsPage() {
       <div className="bm-toolbar" data-testid="sk-list">
         <input className="sk-input sk-search" type="search" placeholder={t('bm.skills.search')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('bm.skills.searchLabel')} />
         <Seg items={[{ id: 'all', label: t('bm.skills.filter.all') }, { id: 'used', label: t('bm.skills.filter.used') }, { id: 'unused', label: t('bm.skills.filter.unused') }]} value={filter} onChange={setFilter} label={t('bm.skills.filterLabel')} />
+        <HelpTip title={t('explain.skills.title')} wide testid="sk-help"><p>{t('explain.skills.p1')}</p><p>{t('explain.skills.p2')}</p></HelpTip>
       </div>
       {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
         : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>

@@ -9,6 +9,7 @@ import { useApp, setSetting } from '../store/store';
 import { useEngines } from '../lib/engines';
 import { t } from '../i18n';
 import { Select } from './Select';
+import { HelpTip } from './HelpTip';
 
 const KEYS = ['maxDepth', 'maxParallel', 'stallMin', 'judgeDaily'] as const satisfies readonly (keyof Limits)[];
 const range = (k: keyof Limits): number[] => { const r = DELEGATION_RANGE[k]; return Array.from({ length: r.max - r.min + 1 }, (_, i) => r.min + i); };
@@ -20,13 +21,13 @@ export function DelegationSettings() {
   if (!limits) return null;
   return <>
     {KEYS.map(k => <div className="st-row" key={k}>
-      <div className="st-text"><label className="st-title" htmlFor={`st-delegation-${k}`}>{t(`delegation.${k}`)}</label><p className="st-desc">{t(`delegation.${k}.hint`)}</p></div>
+      <div className="st-text"><span className="st-title-line"><label className="st-title" htmlFor={`st-delegation-${k}`}>{t(`delegation.${k}`)}</label>{k === 'judgeDaily' && <HelpTip title={t('explain.judge.title')} testid="st-judge-help"><p>{t('explain.judge.p1')}</p><p>{t('explain.judge.p2')}</p></HelpTip>}</span><p className="st-desc">{t(`delegation.${k}.hint`)}</p></div>
       <div className="st-ctl"><Select id={`st-delegation-${k}`} data-testid={`st-delegation-${k}`} value={limits[k]} onChange={e => void setSetting({ delegation: { [k]: Number(e.target.value) } })}>
         {range(k).map(n => <option key={n} value={n}>{k === 'judgeDaily' && n === 0 ? t('delegation.off') : n}</option>)}
       </Select></div>
     </div>)}
     <div className="st-row st-row-block">
-      <div className="st-text"><b className="st-title">{t('delegation.tiers')}</b><p className="st-desc">{t('delegation.tiers.hint')}</p></div>
+      <div className="st-text"><b className="st-title">{t('delegation.tiers')}<HelpTip title={t('explain.tiers.title')} testid="st-tiers-help"><p>{t('explain.tiers.p1')}</p><p>{t('explain.tiers.p2')}</p></HelpTip></b><p className="st-desc">{t('delegation.tiers.hint')}</p></div>
       <div className="st-tiers" role="table" aria-label={t('delegation.tiers')}>
         <div className="st-tiers-row st-tiers-head" role="row"><span role="columnheader" />{MODEL_TIERS.map(tier => <span role="columnheader" key={tier}>{t(`delegation.tier.${tier}`)}</span>)}</div>
         {engines.map(e => <div className="st-tiers-row" role="row" key={e.id}><span role="rowheader" className="st-tiers-engine">{e.name}</span>

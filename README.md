@@ -168,10 +168,14 @@ since when and why it waits, at no token cost.
 
 ### Agents that improve by themselves, reversibly
 
-![The Agenti page: the catalog of agents as cards, with runs, success and cost](docs/screenshots/agents.webp)
+![The Agenti page: the catalog of agents as cards, each with its character, level, performance, runs and cost](docs/screenshots/agents.webp)
 
-Each agent is a card with its role, engine, model and observed results (runs, success, cost); a click flips it to its
-details and the skills it uses. Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
+Each agent is a card with its character large in the middle, its role, engine, model, a **level** (it grows with the
+runs it ended: Lv 2 at 5, Lv 3 at 15, Lv 4 at 30…) and a **performance %** (the average of the verdicts on its runs,
+weighted by who gave them, you or the Judge more than the Orchestrator or the agent itself, and by how recent they are;
+"in rodaggio" until 5 runs are judged), plus runs and median cost; a click flips it to its details and the skills it
+uses. A "?" next to every number gives its exact formula, here and across the app (the Orchestrator, a strip's facts,
+Settings, the Skill page). Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
 for the Scout, a judge in a wig…), recognisable from the 16 px tree to the 96 px role page. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
 maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
 the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in

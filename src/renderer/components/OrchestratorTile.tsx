@@ -23,6 +23,7 @@ import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { AgentIdentity } from './AgentIdentity';
+import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
 import { pendingOf, useFlash } from './ChatTile';
@@ -128,6 +129,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title orchestrator-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
           <StatePill chat={chat} testid="orchestrator-state" />
+          <HelpTip title={t('explain.orch.title')} testid="orchestrator-help"><p>{t('explain.orch.p1')}</p><p>{t('explain.orch.p2')}</p><p>{t('explain.orch.p3')}</p></HelpTip>
           <span className="sp" />
           <IconButton label={t('dialogs.orchestrator.statusLabel')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openModal('stato')} testid="orchestrator-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}

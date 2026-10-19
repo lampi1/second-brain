@@ -34,6 +34,7 @@ import { AgentAvatar } from './AgentAvatar';
 import { RunChips, RunOutcomeControl } from './RunSurface';
 import { AutoCloseNotice } from './AutoCloseNotice';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
+import { HelpTip } from './HelpTip';
 import { turnActivity, Typing } from './ChatItems';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -173,6 +174,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           {(busy || chat.state === 'waiting') && <RunEstimateChip chat={chat} estimate={estimateOf(chat.run, agentMetrics, now)} />}
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
+          <HelpTip title={t('explain.strip.title')} className="strip-help" testid={`chat-help-${chatId}`}><p>{t('explain.strip.p1')}</p><p>{t('explain.strip.p2')}</p><p>{t('explain.strip.p3')}</p><p>{t('explain.strip.p4')}</p></HelpTip>
         </div>
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}

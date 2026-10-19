@@ -13,6 +13,7 @@ import{useApp,setSetting}from'../store/store';
 import{ui,setPrefs,openModal,toast}from'../store/ui';
 import{t}from'../i18n';
 import{AppearancePreview}from'./AppearancePreview';
+import{HelpTip}from'./HelpTip';
 import{WorkProfilePreferences}from'./WorkProfilePreferences';
 import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
@@ -24,7 +25,7 @@ import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
 }
-function Row({title,children,description}:{title:string;children:ReactNode;description?:string}){return <div className="st-row"><div className="st-text"><label className="st-title">{title}</label>{description&&<p className="st-desc">{description}</p>}</div><div className="st-ctl">{children}</div></div>;}
+function Row({title,children,description,help}:{title:string;children:ReactNode;description?:string;help?:ReactNode}){return <div className="st-row"><div className="st-text">{help?<span className="st-title-line"><label className="st-title">{title}</label>{help}</span>:<label className="st-title">{title}</label>}{description&&<p className="st-desc">{description}</p>}</div><div className="st-ctl">{children}</div></div>;}
 function ToolConnection({engine}:{engine:EngineInfo}){
  const roots=useApp(s=>s.settings?.codexAutonomyRoots??[]);
  const enabled=useApp(s=>s.settings?.engineOn[engine.id]===true),policy=useApp(s=>s.settings?.engines[engine.id]===true);
@@ -69,7 +70,7 @@ export function SettingsPage(){
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
-  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:t('essential.toasts'),body:<Row title={t('essential.toasts')} description={t('essential.notificationsHint')}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row>},
+  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:t('essential.toasts'),body:<Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.search));
  const jump=(id:string)=>{const target=document.getElementById(`st-section-${id}`);target?.scrollIntoView({block:'start',behavior:'smooth'});target?.focus({preventScroll:true});};
