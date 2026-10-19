@@ -11,8 +11,8 @@
 │            /mcp/app, /mcp/app/r/<id>/<token> (app control per Regia, ADR 0021)│
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
 │            usage · costs · budget · estimates · quality · model routing       │
-│   devops/  DevOps page (brain script, read only) · run/ "Esegui" shell blocks │
-│   search/  Ctrl+K index · skills/ skills page · improve/ "Migliora l'app"     │
+│   tasks/   Task page (brain script, read only) · run/ "Esegui" shell blocks   │
+│   search/  Ctrl+K index · skills/ skills page · update/ Aggiorna (Settings)   │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │
 └───────────────▲──────────────────────────────────────────┬────────────────────┘

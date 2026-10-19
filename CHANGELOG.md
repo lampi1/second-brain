@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- DevOps is now **Task** everywhere (menu, page, settings, IPC, MCP views, alerts): it still imports from Azure
+  DevOps automatically when the read is on; saved settings, mutes, role pages and old links move to the new name by
+  themselves. The page has the look of Agenti and Guida. **Fatto** is a log: newest first, grouped by day, each entry
+  with what, who, when and its link; "Mostra altri giorni" goes further back (ADR 0079).
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
   in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
@@ -30,6 +34,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   GitHub Actions off (ADR 0074). The README lists every version with its installer and source downloads.
 - Texts for colleagues (blocks tagged md, mail, teams, comment) show formatted in the chat, and Copia copies them
   formatted: bold, lists and links survive a paste into Outlook, Teams or DevOps (ADR 0043).
+
+### Removed
+- "Migliora l'app" ("Personalizza l'app"): its page, menu entry, chat preset, `/mcp/improve` and texts are gone.
+  Updating stays in Settings → Aggiornamenti («Aggiorna», ADR 0075) and through the Orchestrator (ADR 0074);
+  `npm run promote` and `npm run rollback` are unchanged (ADR 0079).
 
 ## [0.1.0] - 2026-10-13
 

@@ -30,13 +30,13 @@ the user's frozen release vs. anything run from this repo; **Aggiorna** (the but
 | Logs | `npm run logs -- --level warn --since 1h [--scope chats] [--chat <id>] [--grep x] [--json]`; files in `%APPDATA%/second-brain-dev/logs/` (dev, `--dev`) or `%APPDATA%/second-brain/logs/` (stable) |
 | Demo data (no CLIs, no tokens) | `npm run demo` (build + fake chats, tabs and a synthetic brain; `-- --frozen` fixed clock, `-- --hidden` for agents); bare: `SB_DEMO=1 npm start` (brain pages empty), deterministic: `SB_DEMO_FREEZE=1` |
 | README screenshots | `npm run shots` (frozen demo → `docs/screenshots/*.webp`, < 300 KB each); look at them before committing |
-| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each work Regia calls its own `/mcp/app/r/<regiaId>/<token>` (ADR 0021); the app's own Regia ("Migliora l'app") gets `/mcp/improve`: same tools on its own chats + `app_improve_state` (ADR 0020) |
+| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui`, `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. Each work Regia calls its own `/mcp/app/r/<regiaId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
 
 **Stable vs dev (ADR 0007).** The user's cockpit is a frozen release in `%LOCALAPPDATA%/second-brain/releases/`
 started by `%LOCALAPPDATA%/second-brain/launch.cmd` (userData `second-brain`, MCP 4319). Anything run from this repo
 is the dev instance (userData `second-brain-dev`, MCP 4329; `npm run doctor -- --dev`, `npm run logs -- --dev`).
 Chats may start, test and kill the dev instance; never the stable one. Promotion (`npm run promote`: needs a clean
-tree and a green `npm run check`) is triggered by the user from the app ("Aggiorna" in "Migliora l'app", ADR 0020);
+tree and a green `npm run check`) is triggered by the user from the app ("Aggiorna" in Settings → Aggiornamenti, ADR 0075, 0079);
 `npm run rollback` by the user from a terminal; neither by agents.
 
 How an agent verifies a change by itself: on its branch `npm run check:branch` (no e2e there; the e2e runs only in the

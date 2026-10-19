@@ -1,6 +1,6 @@
 # ADR 0016 · One DevOps page with the content inside; Oggi and Adesso removed
 
-Date: 2026-10-12 · Status: accepted
+Date: 2026-10-12 · Status: accepted · amended by ADR 0079 (the DevOps page is now "Task": page id task, settings tasks.*, IPC tasks:*)
 
 ## Context
 The brain had three "what's going on" pages: Oggi (tiles: chats waiting and working, spend, AI ideas; done today;

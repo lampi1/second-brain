@@ -1,6 +1,6 @@
 # ADR 0029 · DevOps alerts with a sound, and "Apri chat" on every DevOps record
 
-Date: 2026-10-13 · Status: accepted
+Date: 2026-10-13 · Status: accepted · amended by ADR 0079 (the DevOps page is now "Task": page id task, settings tasks.*, IPC tasks:*)
 
 ## Context
 The user (13/10): "vorrei che ... mi notificasse quando qualcuno mi ha taggato o qualcosa cambia, senza spendere token,

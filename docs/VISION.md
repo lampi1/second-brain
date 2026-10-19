@@ -94,9 +94,9 @@ Open ideas (not decided):
 Chats as tiles with streaming, tools and diffs; questions and permissions as panels with their context; one or more
 Regie; mail between chats; long chats handed off before the context fills; code blocks run with one click and their
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
-pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a DevOps page (pull requests, work items, QA
-status, alerts); quality metrics; full-text search; per-task model routing; and "Migliora l'app", where the app's own
-Regia improves the app on branches and the user promotes a tested build.
+pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a Task page (pull requests, work items, QA
+status, alerts); quality metrics; full-text search; per-task model routing; Fatto, the log of what was done; and one-click updates
+from Settings → Aggiornamenti, where the user moves the app to main's tip.
 
 ## Horizon (designed for, not built yet)
 

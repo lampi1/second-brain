@@ -28,9 +28,9 @@ Appearance/theme/density and panel expansion use the existing sb.prefs.v1 namesp
 | dndUntil | technical | diagnostics-or-feature-context | yes |
 | dnd | technical | diagnostics-or-feature-context | yes |
 | mute.* | technical | diagnostics-or-feature-context | yes |
-| devops.enabled | technical | diagnostics-or-feature-context | yes |
-| devops.everyMin | technical | diagnostics-or-feature-context | no |
-| devops.sound | technical | diagnostics-or-feature-context | yes |
+| tasks.enabled | technical | diagnostics-or-feature-context | yes |
+| tasks.everyMin | technical | diagnostics-or-feature-context | no |
+| tasks.sound | technical | diagnostics-or-feature-context | yes |
 | budget.enabled | technical | diagnostics-or-feature-context | yes |
 | budget.claude.mode | technical | diagnostics-or-feature-context | yes |
 | budget.claude.dailyUsd | technical | diagnostics-or-feature-context | yes |

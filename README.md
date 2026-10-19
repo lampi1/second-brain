@@ -100,8 +100,8 @@ Where things are:
 | `test/unit`, `test/e2e` | Vitest for every module, Playwright driving the real app for every visible feature. |
 | `docs/adr/` | Every decision, numbered, with its reason. |
 
-Or let the app change itself: open **Migliora l'app** and describe what you want; its Orchestrator prepares the change
-on a branch, runs the checks and shows you the result before anything is merged.
+Or let the app change itself: ask the Orchestrator for the change and give it the app's code folder; it opens a chat
+there that works on a branch and runs the checks before anything is merged.
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, ADRs, a map of the modules). AI agents working on the
 repo read [AGENTS.md](AGENTS.md).
@@ -169,12 +169,14 @@ Your brain is a folder of Markdown notes the agents read and write: open threads
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
 (ADR 0072). The dashboard shows it as pages and as a 3D map that lights up the files, tools and agents at work.
 
-### DevOps in one page
+### Task in one page
 
-![The DevOps page: mentions, pull requests, reviews and work items](docs/screenshots/devops.webp)
+![The Task page: mentions, pull requests, reviews and work items](docs/screenshots/task.webp)
 
 Mentions, comments and votes on your pull requests, reviews waiting for you, stuck work items, failed builds and the QA
-status of each pull request, read on demand (zero tokens, read only). Every item opens its agent in one click.
+status of each pull request, imported from Azure DevOps on demand or automatically (zero tokens, read only). Every item
+opens its agent in one click. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
+what, who (you, or the agent or engine of a chat), when and its link.
 
 ### Quality you can measure
 
