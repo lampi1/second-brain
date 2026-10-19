@@ -57,6 +57,50 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-stats dd>[aria-hidden=true]{color:var(--text-4);font-weight:500}
 @container (max-width:290px){.catalog-stats{grid-template-columns:1fr 1fr}.catalog-stats>div:nth-child(3){border-left:0}.catalog-stats>div:nth-child(n+3){border-top:1px solid var(--border)}}
 
+/* the front (owner, 19/10: "l'icona più grande e centrale"): origin and status on top, the character large and centred
+   on a soft halo in its colour, the level as a medal on the badge, then name, purpose, chips, level and performance */
+.catalog-front-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;margin-bottom:-6px}
+.agent-overview .catalog-origin{font-size:var(--fs-xs);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:0}
+.catalog-hero-avatar{position:relative;display:grid;place-items:center;width:132px;height:132px;margin-bottom:4px;border-radius:50%;
+  background:radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--tone) 26%,transparent),color-mix(in srgb,var(--tone) 7%,transparent) 62%,transparent 71%)}
+.catalog-hero-avatar::before{content:"";position:absolute;inset:8px;border-radius:50%;border:1px dashed color-mix(in srgb,var(--tone) 38%,transparent);pointer-events:none}
+.catalog-hero-avatar>.agent-avatar{filter:drop-shadow(0 10px 18px color-mix(in srgb,var(--tone) 35%,transparent));transition:transform var(--dur-slow) var(--ease)}
+.bm-face-front:hover .catalog-hero-avatar>.agent-avatar{transform:translateY(-2px) scale(1.03)}
+.catalog-level-medal{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);display:grid;place-items:center;height:24px;padding:0 10px;box-sizing:border-box;border-radius:12px;white-space:nowrap;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--tone) 92%,#000),color-mix(in srgb,var(--tone) 68%,#000));color:#fff;font-weight:700;font-size:var(--fs-s);letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  border:2px solid var(--surface);box-shadow:0 4px 10px -4px rgba(0,0,0,.5);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.catalog-hero h3 button{text-align:center;margin:auto}
+.agent-overview .catalog-hero .catalog-purpose{margin:0;max-width:34ch}
+.catalog-hero+.catalog-chips{justify-content:center}
+
+/* level and performance, side by side (stacked in a narrow card) */
+.catalog-standing{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px}
+.catalog-standing>section{min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.catalog-standing h4{display:flex;align-items:center;margin:0;font-size:var(--fs-xs);font-weight:600;color:var(--text-3)}
+.catalog-standing .help-tip{z-index:1;margin-left:5px}
+.agent-overview .catalog-standing p{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-standing b{font-size:var(--fs-xl);font-weight:650;letter-spacing:-.3px;font-variant-numeric:tabular-nums;color:var(--text)}
+.catalog-standing p span{font-size:var(--fs-s);color:var(--text-2)}
+.catalog-standing small{display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-3);line-height:1.35}
+.catalog-level-bar{height:6px;margin-top:7px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.catalog-level-bar>i{display:block;height:100%;min-width:3px;border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--tone) 65%,var(--surface)),var(--tone));transition:width 600ms var(--ease)}
+.catalog-perf{display:flex;align-items:center;gap:10px}
+.catalog-perf-text{min-width:0;flex:1}
+.catalog-gauge{flex:none;width:46px;height:46px}
+.catalog-gauge circle{fill:none;stroke-width:6}
+.catalog-gauge .track{stroke:var(--surface-3)}
+.catalog-gauge .fill{stroke:var(--perf,var(--text-4));stroke-linecap:round;transition:stroke-dasharray 600ms var(--ease)}
+.catalog-perf[data-band=top]{--perf:var(--green)}.catalog-perf[data-band=good]{--perf:var(--blue)}
+.catalog-perf[data-band=fair]{--perf:var(--amber)}.catalog-perf[data-band=low]{--perf:var(--red)}
+.catalog-perf[data-band=warmup] .fill{stroke:var(--text-3)}
+.catalog-perf[data-band] p span{color:var(--perf,var(--text-2));font-weight:550}
+.catalog-perf .warmup{font-size:var(--fs-m)!important;color:var(--text-2)!important}
+.catalog-stats dt .help-tip{position:relative;z-index:1;margin-left:4px}
+.catalog-stats:has(>div:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr))}
+.help-bubble .catalog-help-now{padding-top:6px;margin-top:7px!important;border-top:1px solid var(--border);color:var(--text)}
+@container (max-width:440px){.catalog-standing{grid-template-columns:1fr;gap:8px}}
+
 /* footer: Avvia (CatalogRun) on the left, Dettagli on the right; the run form and the details open full width below */
 .catalog-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .catalog-run{display:contents}
@@ -93,4 +137,4 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 @keyframes catalog-beat{50%{opacity:.45}}
 .run-confirmed .run-mark{display:inline-block;animation:run-check 220ms ease-out}
 @keyframes run-check{from{transform:scale(.6) rotate(-20deg);opacity:.3}to{transform:scale(1) rotate(0);opacity:1}}
-@media(prefers-reduced-motion:reduce){.catalog-card,.catalog-details,.run-confirmed .run-mark,[data-state=working]>i{animation:none}.catalog-card,.catalog-card:hover,.catalog-card:focus-within{transform:none}.catalog-more-chevron{transition:none}}
+@media(prefers-reduced-motion:reduce){.catalog-level-bar>i,.catalog-gauge .fill,.catalog-hero-avatar>.agent-avatar{transition:none}.catalog-card,.catalog-details,.run-confirmed .run-mark,[data-state=working]>i{animation:none}.catalog-card,.catalog-card:hover,.catalog-card:focus-within{transform:none}.catalog-more-chevron{transition:none}}

@@ -67,6 +67,9 @@ export function Segmented<T extends string>({ value, options, onChange, label, t
 export function Popover({ anchor, open, onClose, children, align = 'end', testid, width,kind='menu',label }: { anchor: RefObject<HTMLElement | null>; open: boolean; onClose: () => void; children: ReactNode; align?: 'start' | 'end'; testid?: string; width?: number;kind?:'menu'|'dialog';label?:string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  // the latest onClose (callers pass fresh arrows): a new one must not re-run the effect below, which moves the focus
+  const close = useRef(onClose);
+  close.current = onClose;
   // placed below the anchor, else above, else clamped inside the window (max-height in CSS)
   useLayoutEffect(() => {
     if (!open || !anchor.current || !ref.current) return;
@@ -86,11 +89,11 @@ export function Popover({ anchor, open, onClose, children, align = 'end', testid
     if (!open) return;
     const down = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node) || anchor.current?.contains(e.target as Node) || inSelectList(e.target)) return;
-      onClose();
+      close.current();
     };
     const key = (e: KeyboardEvent) => {
       if (inSelectList(e.target)) return;
-      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); anchor.current?.focus(); }
+      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close.current(); anchor.current?.focus(); }
       if(kind==='dialog'){
         if(e.key==='Tab'){
           const items=[...(ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]),select:not([disabled]),input:not([disabled]),textarea:not([disabled]),a[href]')??[])].filter(item=>item.offsetParent!==null);
@@ -113,7 +116,7 @@ export function Popover({ anchor, open, onClose, children, align = 'end', testid
     window.addEventListener('keydown', key, true);
     const first = setTimeout(() => ref.current?.querySelector<HTMLElement>(kind==='dialog'?'button:not([disabled]),select:not([disabled]),input:not([disabled])':'[role^="menuitem"][aria-checked="true"], [role^="menuitem"]:not([disabled])')?.focus(), 0);
     return () => { window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key, true); clearTimeout(first); };
-  }, [open, onClose, anchor,kind]);
+  }, [open, anchor,kind]);
   if (!open) return null;
   return createPortal(
     <div ref={ref} className="popover" role={kind} aria-label={label} data-testid={testid} style={{ left: pos?.x ?? -9999, top: pos?.y ?? -9999, width }}>
@@ -143,6 +146,10 @@ export const MenuSep = () => <div className="menu-sep" role="separator" />;
 export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true }: { onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean; backdropCloses?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
+  // the latest onClose, read at the event: callers often pass a fresh arrow each render, and the focus effect below must
+  // run once per opening (re-running it on every keystroke restored the old focus and the typing lost all but one letter)
+  const close = useRef(onClose);
+  close.current = onClose;
   // Local modals also cover native WebContentsViews, independently of the global ui.modal flag.
   useLayoutEffect(() => backdrop.current ? registerOverlay(backdrop.current) : undefined, []);
   useEffect(() => {
@@ -154,7 +161,7 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
       if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled]), [autofocus]:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])') ?? el).focus();
     }, 0);
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { if (inSelectList(e.target)) return; e.preventDefault(); e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Escape') { if (inSelectList(e.target)) return; e.preventDefault(); e.stopPropagation(); close.current(); return; }
       if (e.key !== 'Tab' || !el) return;
       const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.hasAttribute('disabled') && x.offsetParent !== null);
       if (!f.length) return;
@@ -166,9 +173,9 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
     };
     window.addEventListener('keydown', key, true);
     return () => { clearTimeout(t); window.removeEventListener('keydown', key, true); if (prev?.isConnected) prev.focus(); };
-  }, [onClose]);
+  }, []);
   return createPortal(
-    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) onClose(); }}>
+    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) close.current(); }}>
       <div ref={ref} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1}>
         {children}
       </div>

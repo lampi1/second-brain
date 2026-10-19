@@ -41,6 +41,7 @@ export const permissionsEn: typeof permissionsIt = {
   'perm.tool.mail-draft': 'Prepares e-mail drafts with the mail connectors. You approve every send.',
   'perm.tool.calendar-read': 'Reads calendar events from the connectors; creates and changes nothing.',
   'perm.tool.mcp': 'Uses the configured external MCP servers (e.g. DevOps or GitHub). The app\'s own servers (browser, mail between chats) always stay.',
+  'perm.sec.mcp.hint': 'For each server added in Settings → Connectors, what the role may use. Saved at once; turn "MCP servers" off in the tools to remove them all.',
   'perm.sec.ceiling': 'Permission limit',
   'perm.sec.ceiling.hint': 'The highest mode the role may work in. A mode above the limit is brought back to it.',
   'perm.ceiling.none': 'No limit',

@@ -35,7 +35,7 @@ is in its instructions, skills and launches; the narrow policy added friction, n
    Accetta modifiche, Chiede conferma, Solo piano), each with a HelpTip saying what it allows, a status pill («Tutto
    consentito» or «Ristretto · n di 11 strumenti · limite …»). Saving is a role edit (`agents:save`): a version like any
    other, `userLocked`; "Ripristina predefiniti" saves the defaults. The card is a list of sections
-   (`PERMISSION_SECTIONS`) over one draft, so a further permission (a role's MCP servers) is one more section. The role
+   (`PERMISSION_SECTIONS`: tools, limit, and the role's MCP servers of ADR 0086, `AgentMcpSection`, saved at once per server and greyed while the "Server MCP" class is off). The role
    editor no longer carries tools and ceiling.
 5. **Migration** (`agents/role-migrate.ts`, at catalog start): a role the user never edited (not `userLocked`, last
    written by the default or the maintenance, no trial) whose tools, ceiling and launches are exactly ADR 0083's

@@ -74,13 +74,27 @@ From the clone above, three commands take you from the code to your own running 
 ```powershell
 npm run setup      # once (and again only if package-lock.json changes: `npm run pull` does that for you)
 npm run build      # main + preload with esbuild, the React interface with Vite → out/
-npm start          # opens the app; on first start a short setup window creates or links your brain
+npm start          # opens the app; on first start one setup window walks you through seven short steps
 ```
 
 To use real agents, install and log in to at least one CLI yourself:
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), Codex (`codex`) and/or the Cursor CLI
 (`agent`). The app never asks for your passwords. `npm run doctor` tells you what is still missing (Electron, build,
 CLIs, logins, brain, MCP port).
+
+**The first setup** is one window that never closes by itself (a click outside does nothing; "Più tardi" or Esc saves
+it as a draft and it reopens on the same step, also from Settings → "Configura il mio lavoro"):
+
+1. **Folders**: no options to pick. Your memory is a new, empty one, created on confirmation in the app's data folder,
+   or a brain you already have ("Use an existing brain…", the system folder picker). Below it, your **projects
+   folder**: the app finds it by itself from the repositories Claude Code and Cursor already worked in and the usual
+   places (`source/repos`, `Projects`, `dev`, …), reading only folder names and `.git`; it asks you only when it finds
+   none. It is saved in the setting `projectsRoot` (Settings → Il mio spazio → Cartella dei progetti: change it or detect it again), and a new memory points its repositories there.
+2. **Your AI**: "Collega" opens the CLI's official sign-in in its own window; the card checks again by itself every
+   few seconds (no tokens) until it says "Collegata" with the account and the time of the check.
+3. **Tools** (GitHub, Azure DevOps, Jira Cloud): every sign-in ends in a real read-only check. The row says
+   "Connesso come …" with the account and how many projects were read, or "Non connesso" with the reason and what to do.
+4. **Who you are, your work, the team, the summary**: written into your `me.md` when you confirm.
 
 ### Change it
 
@@ -145,6 +159,14 @@ its final report to the Orchestrator and went idle closes by itself after a shor
 conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
 work stays open with an "In attesa di…" label.
 
+**Quick chats and readable estimates** (ADR 0087): before it starts work the Orchestrator estimates the request from
+similar past tasks (same agent and same kind first; time, cost, how many tasks it rests on, its confidence, the parts
+of the request). A short question it answers itself; a quick single-part job goes to one agent with no sub-chats;
+only work in several parts becomes a delegation tree, which costs more tokens. Every strip reads "stima ~4 min ·
+~0,12 $ · su 12 task simili" and, once done, "~4 min → 6 min ✓"; its "?" explains how the figure is computed. The
+Orchestrator's plan lists the agents it started today with their estimates, a "via rapida" mark on quick jobs, the
+sum, and how accurate the estimates have been week by week (each finished task re-estimated from the ones before it).
+
 ### Cloud agents next to the local ones
 
 Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going
@@ -168,10 +190,14 @@ since when and why it waits, at no token cost.
 
 ### Agents that improve by themselves, reversibly
 
-![The Agenti page: the catalog of agents as cards, with runs, success and cost](docs/screenshots/agents.webp)
+![The Agenti page: the catalog of agents as cards, each with its character, level, performance, runs and cost](docs/screenshots/agents.webp)
 
-Each agent is a card with its role, engine, model and observed results (runs, success, cost); a click flips it to its
-details and the skills it uses. Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
+Each agent is a card with its character large in the middle, its role, engine, model, a **level** (it grows with the
+runs it ended: Lv 2 at 5, Lv 3 at 15, Lv 4 at 30…) and a **performance %** (the average of the verdicts on its runs,
+weighted by who gave them, you or the Judge more than the Orchestrator or the agent itself, and by how recent they are;
+"in rodaggio" until 5 runs are judged), plus runs and median cost; a click flips it to its details and the skills it
+uses. A "?" next to every number gives its exact formula, here and across the app (the Orchestrator, a strip's facts,
+Settings, the Skill page). Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
 for the Scout, a judge in a wig…), recognisable from the 16 px tree to the 96 px role page. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
 maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
 the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in
@@ -195,10 +221,16 @@ Your brain is a folder of Markdown notes the agents read and write: open threads
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
 (ADR 0072). The Brain section of the menu shows it as two concepts only, agents and skills (ADR 0077): Agenti, Skill
 (who uses each skill, linked with one click), Regole (the brain's rules and, once the brain has some, the rules it
-learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent),
-Classificatori (how the app picks model and agent, and how it is going) and Mappa (agent → skills → rules → memory, the
+learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent, each
+file rendered and opening in the viewer, plus its numbers: lines per agent, weekly growth, the most recalled memories,
+stale files, recurring errors with their trend, skills useful or never used, and curious facts, each with a "?" that
+says how it is computed),
+Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
+how far it has learned, a curious fact from the data, and a detail view with its history; the task estimator's card
+shows week by week how often its estimate held) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
-Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
+Maintenance jobs keep skills, agents, rules and memory tidy by themselves; the "Manutenzione" button atop Skill, Regole
+and Memoria runs them now and says what each did; every change is logged with "Annulla".
 
 ### Scripts and a changelog for your brain
 
@@ -219,13 +251,29 @@ has **Discuti**: one click puts a ready message about it (title, link, state, fo
 Orchestrator decides and opens the work chat. Every page works the same way: no page opens a work chat by itself. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
 what, who (you, or the agent or engine of a chat), when and its link.
 
+### MCP servers in one place, for every engine
+
+![Settings → Connettori: accounts and MCP servers as cards](docs/screenshots/connectors.webp)
+
+Settings → **Connettori** is one section for everything the app connects to: the app's own accounts (Azure DevOps for
+the Task page, GitHub, Jira) and the **MCP servers your agents use** (ADR 0086). Add a server once (a local command such
+as `npx -y @azure-devops/mcp contoso`, or an https address), press **Prova** to see whether it works and which tools it
+has (reading and writing), or import the ones you already have in Claude Code, Claude desktop, Cursor and Codex (their
+files are only read, never changed, and no token is copied). Every Claude, Codex and Cursor chat then gets the servers
+its role may use, through the app's local MCP gateway: the gateway adds the server's token (encrypted with the OS
+keyring, typed once, shown only as a mask) and checks the role's access at every call. By default every role has every
+server; on an agent's card (Brain → Agenti, the back) you narrow each server to its reading tools, a chosen few or
+none, and a delegated chat never gets more than its parent. The engines' own config files are never written.
+
 ### Quality you can measure
 
 ![The Qualità page: four metrics with their source and dates](docs/screenshots/quality.webp)
 
 Four metrics computed from real logs, each with its source and the days it covers: errors you had to catch yourself
 per 100 turns, rules that did not stop their error, pull requests held by QA or builds, bugs reopened after a fix.
-Costs, budgets and estimates per agent and per day sit next to them.
+Costs, budgets and estimates per agent and per day sit next to them, with charts per day and per model and a few
+facts drawn from the numbers. The Errori tab groups recurring errors by cause, with how often, the trend, when last
+seen, which chats, roles and skills, what it means and what to do. Every number has a "?" that says how it is computed.
 
 ### And more
 
@@ -284,7 +332,8 @@ Details: [docs/architecture.md](docs/architecture.md); every decision: [docs/adr
   by local processes: this is not a boundary between programs on the same computer.
 - Browser tabs live in their own partition, apart from the app.
 - Each CLI owns its login. API keys you type in Settings are encrypted with the OS secret store and decrypted only in
-  main. App-owned conversation history is stored as plain text in your local profile: treat profile backups as private.
+  main. MCP server tokens (Settings → Connettori) too: the app's MCP gateway adds them to that server's own process or
+  request only, so no token reaches an engine's command line, a chat, a file or a log (ADR 0086). App-owned conversation history is stored as plain text in your local profile: treat profile backups as private.
 - No production access is wired in: no database, deploy or write-cloud commands.
 - Dependencies: exact versions, well-known packages, published at least 14 days before they are installed; npm install
   scripts are off (`.npmrc`). A git hook scans every commit for secrets and personal data before it leaves your PC.
@@ -307,7 +356,7 @@ Review the draft on GitHub, publish it, and add its row to the [Download](#downl
 ## Roadmap
 
 - Linux and macOS proved on real machines; installers (.dmg, .AppImage) with signing.
-- More connectors behind the same interface (issue trackers beyond Azure DevOps).
+- More connectors behind the same interface (issue trackers beyond Azure DevOps); MCP servers that sign in with OAuth.
 - Team features: handing a to-do to a colleague, a shared team layer next to each person's brain.
 
 ## Limits

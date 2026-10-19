@@ -56,7 +56,7 @@ attention management and the memory.
   permissions surface as panels wherever the user is looking, the Orchestrator (the coordinating chat, in a full-height
   column on the right) decides what comes next, and notifications fire only when there is something to do.
 - **Chat management is a core strength, not a thin layer.** Chats are compact strips, collapsed by default, with
-  reliable estimates, expanding on one click, every time. Stop, costs, estimates, the choice of agent and the link with the brain get the
+  reliable estimates from similar past tasks, with their measured accuracy (ADR 0087), expanding on one click, every time. Stop, costs, estimates, the choice of agent and the link with the brain get the
   same care as the brain itself. View state, tile behaviours and key bindings are data, so the user and the AI can
   reshape them live (ADR 0008). Visual templates change without rebuilding features.
 - **The brain is data, the app is product.** The app points to a brain folder: plain Markdown files and small Node

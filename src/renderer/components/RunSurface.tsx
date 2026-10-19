@@ -4,6 +4,7 @@ import type { AgentRun } from '@shared/agents';
 import { useAgents } from '../store/agents';
 import { sb } from '../sb';
 import { t } from '../i18n';
+import { HelpTip } from './HelpTip';
 import '../styles/run-surface.css';
 
 export function RunChips({ run }: { run: AgentRun }) {
@@ -29,7 +30,7 @@ export function RunOutcomeControl({ run, disabled }: { run: AgentRun; disabled: 
     finally { working.current = false; setBusy(false); }
   };
   return <footer className="run-outcome" data-testid="run-outcome">
-    <span>{t('runs.outcome')}</span>
+    <span>{t('runs.outcome')}<HelpTip title={t('explain.outcome.title')} testid="run-outcome-help"><p>{t('explain.outcome.p1')}</p><p>{t('explain.outcome.p2')}</p></HelpTip></span>
     {(['success', 'partial', 'fail'] as const).map(verdict => <button type="button" className="btn btn-ghost btn-s" key={verdict}
       disabled={disabled || busy} aria-pressed={outcome?.basis === 'human' && outcome.verdict === verdict}
       onClick={() => void mark(verdict)} data-testid={`run-outcome-${verdict}`}>

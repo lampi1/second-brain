@@ -103,6 +103,31 @@ describe('pages', () => {
     expect(renderToStaticMarkup(createElement(RulesPage))).toContain('When relevant');
     expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('Customers');
   });
+  it('renders the Memoria statistics with their explanations, and a clean brain says what will appear', () => {
+    const stats: NonNullable<BrainModelState['memoryStats']> = {
+      at: 0, weeks: ['2026-10-12', '2026-10-19'], totals: { files: 4, entries: 8, agents: 2, agentsWithMemory: 1, shared: 1, runs: 3 },
+      perAgent: [{ agentId: 'a1', name: 'Revisione', file: 'agents/a1/memory.md', exists: true, entries: 3, recalls: 3, lastAt: 1 }, { agentId: 'a2', name: 'Indagine', file: 'agents/a2/memory.md', exists: false, entries: 0, recalls: 0, lastAt: null }],
+      growth: [{ kind: 'agent', values: [1, 2] }, { kind: 'errors', values: [0, 2] }], topRecalled: [{ text: 'usa pnpm', owner: 'Revisione', file: 'agents/a1/memory.md', date: '2026-10-12', recalls: 3 }],
+      stale: [{ file: 'areas/clienti/acme.md', title: 'Acme', kind: 'knowledge', days: 40 }], staleDays: 30, duplicates: 0, oldest: null, busiestDay: null,
+      errors: { total: 2, last30: 2, prev30: 0, weekly: [0, 2], weekday: [2, 0, 0, 0, 0, 0, 0], topWord: null, byAgent: [{ agent: 'Revisione', count: 2 }],
+        groups: [{ key: 'w:0', label: 'Diff troppo grande', count: 2, agents: ['Revisione'], first: '2026-10-13', last: '2026-10-19', trend: [0, 2], sample: 'diff di 900 righe', rule: 'diff piccoli' }],
+        items: [{ date: '2026-10-19', time: null, agent: 'Revisione', area: null, type: null, text: 'diff di 900 righe', rule: 'diff piccoli', group: 'w:0' }] },
+      skills: [{ name: 'code-review', rel: '.claude/skills/code-review/SKILL.md', uses: 3, known: 3, ok: 3, success: 1, lastUse: 1, usedBy: 2, verdict: 'useful' },
+        { name: 'deploy-check', rel: null, uses: 0, known: 0, ok: 0, success: null, lastUse: null, usedBy: 0, verdict: 'unused' }],
+    };
+    brainModel.set(() => ({ state: { ...state, memoryStats: stats }, error: null, busy: false }));
+    setLang('it');
+    const it = renderToStaticMarkup(createElement(MemoryPage));
+    for (const s of ['Manutenzione', 'Lo sapevi?', 'Errore ricorrente', 'Diff troppo grande', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'I ricordi più richiamati', 'File fermi', 'ricorrente ×2', 'in 3 run']) expect(it).toContain(s);
+    expect(it.match(/class="help-tip/g)!.length).toBeGreaterThan(15); // a "?" on every number
+    setLang('en');
+    const en = renderToStaticMarkup(createElement(MemoryPage));
+    for (const s of ['Maintenance', 'Did you know?', 'Recurring errors', 'Never used']) expect(en).toContain(s);
+    setLang('it');
+    const clean = { ...stats, totals: { ...stats.totals, entries: 0, runs: 0 }, errors: { ...stats.errors, total: 0 } };
+    brainModel.set(() => ({ state: { ...state, memoryStats: clean }, error: null, busy: false }));
+    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('La memoria è ancora vuota');
+  });
   it('lists only the given kinds, with Annulla only where it can still undo', () => {
     brainModel.set(() => ({ state, error: null, busy: false }));
     setLang('it');

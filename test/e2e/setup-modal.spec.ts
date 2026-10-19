@@ -30,7 +30,7 @@ test('setup wizard: one modal, sign-in waits in place, resumable', async () => {
 
     // 1 memory
     await expect(setup.getByText('Passo 1 di 7')).toBeVisible();
-    await expect(title).toHaveText('Dove vive la tua memoria');
+    await expect(title).toHaveText('La tua memoria e i tuoi progetti');
     await expect(setup.getByTestId('setup-memory')).toBeVisible();
     await shot(page, 'setup-modal-1-memory');
 
@@ -73,7 +73,7 @@ test('setup wizard: one modal, sign-in waits in place, resumable', async () => {
     // 3 tools
     await next();
     await expect(title).toHaveText('Collega i tuoi strumenti');
-    await expect(setup.getByTestId('app-connectors')).toBeVisible();
+    await expect(setup.getByTestId('setup-connectors')).toBeVisible();
     await shot(page, 'setup-modal-3-tools');
 
     // 4 about you

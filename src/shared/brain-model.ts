@@ -54,6 +54,8 @@ export interface MemoryFile {
   entries: number;
   /** the latest few entries, plain text */
   preview: string[];
+  /** the same latest entries as written (inline Markdown, without the list marker), for the rendered card */
+  previewMd?: string[];
   changedAt: number | null;
 }
 
@@ -103,6 +105,100 @@ export interface BrainModelState {
   changes: BrainChange[];
   migration: MigrationReport | null;
   lastRun: MaintenanceRun | null;
+  /** the Memoria page's statistics (brainmodel/memory-stats.ts); missing without a brain */
+  memoryStats?: MemoryStats;
+}
+
+// ── Memoria statistics (read-only, zero tokens): computed from the memory files, ai-errors.md and the agent runs ──────
+/** growth kinds: agents' memories (with the shared one), logged errors, journal lines, knowledge notes */
+export type MemoryGrowthKind = 'agent' | 'errors' | 'journal' | 'knowledge';
+export interface MemoryLine {
+  /** inline Markdown as written, without the list marker and the date */
+  text: string;
+  /** who holds it: the agent's name, "Condivisa", or the file's title */
+  owner: string;
+  file: string;
+  /** the line's own date (YYYY-MM-DD), or null when it has none */
+  date: string | null;
+  /** runs that started with this line in their memory (every run of the agent since the line's date) */
+  recalls: number;
+}
+export interface AgentMemoryStat {
+  agentId: string; name: string; file: string;
+  /** false = the agent has not written its memory yet */
+  exists: boolean;
+  entries: number;
+  /** runs of the agent that started with its memory loaded (since its oldest dated line; all runs when undated) */
+  recalls: number;
+  /** the newest dated line, or the file's change time */
+  lastAt: number | null;
+}
+export interface ErrorEntry {
+  date: string | null; time: string | null;
+  /** the chat or agent named on the line */
+  agent: string;
+  area: string | null; type: string | null;
+  /** what really happened (vero) or the whole correction, inline Markdown */
+  text: string;
+  rule: string | null;
+  /** the recurring group it belongs to (ErrorGroup.key) */
+  group: string;
+}
+export interface ErrorGroup {
+  key: string;
+  /** "tipo · area" when the line has them, else the words its lines share */
+  label: string;
+  count: number;
+  agents: string[];
+  first: string | null; last: string | null;
+  /** errors per week, the same weeks as MemoryStats.weeks */
+  trend: number[];
+  sample: string;
+  rule: string | null;
+}
+export type SkillVerdict = 'useful' | 'mixed' | 'weak' | 'few' | 'unused' | 'new';
+export interface SkillUse {
+  name: string; rel: string | null;
+  /** runs that had it (tagged at start or loaded by the engine while open) */
+  uses: number;
+  /** of those, runs with a known verdict (success, partial or fail) and the successful ones */
+  known: number; ok: number;
+  /** ok / known, null with no known verdict */
+  success: number | null;
+  lastUse: number | null;
+  /** agents that declare it */
+  usedBy: number;
+  verdict: SkillVerdict;
+}
+export interface MemoryStats {
+  at: number;
+  /** Monday (YYYY-MM-DD) of each of the last 12 weeks, oldest first */
+  weeks: string[];
+  totals: { files: number; entries: number; agents: number; agentsWithMemory: number; shared: number; runs: number };
+  perAgent: AgentMemoryStat[];
+  /** new lines per week and kind (a line without a date counts in the week its file last changed) */
+  growth: { kind: MemoryGrowthKind; values: number[] }[];
+  topRecalled: MemoryLine[];
+  /** files not changed for STALE_DAYS or more, oldest first (the journal aside: days do not go stale) */
+  stale: { file: string; title: string; kind: MemoryKind; days: number }[];
+  staleDays: number;
+  /** the same line in two or more agents' memories (what "Unisci i doppioni" moves) */
+  duplicates: number;
+  oldest: MemoryLine | null;
+  busiestDay: { date: string; n: number } | null;
+  errors: {
+    total: number; last30: number; prev30: number;
+    /** errors per week, the same weeks as `weeks` */
+    weekly: number[];
+    groups: ErrorGroup[];
+    byAgent: { agent: string; count: number }[];
+    /** Monday first */
+    weekday: number[];
+    topWord: { word: string; n: number } | null;
+    /** newest first, at most 200 */
+    items: ErrorEntry[];
+  };
+  skills: SkillUse[];
 }
 
 // ── Classificatori (read-only): how the app's automatic choices work today ───────────────────────────────────────
@@ -131,4 +227,33 @@ export interface ClassifiersState {
   sources: { source: string; chats: number }[];
   /** success and cost per route, by week; a row without runs has no data yet */
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
+  /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
+  cards?: ClassifierCard[];
 }
+// ── Classifier cards: each classifier's numbers, its weeks and its slices, for the Classificatori grid ───────────────
+/** A share with the count it rests on; value null = no case yet (never zero). */
+export interface ClassifierStat { value: number | null; n: number }
+/** One ISO week of a classifier: its decisions, how many it "got" (its own hit measure), the verified outcomes. */
+export interface ClassifierWeek { week: string; decisions: number; hits: number; known: number; ok: number; avgCostUsd: number | null }
+/** One value it decided (a kind, a model, a skill): how often, with what outcome and cost, and who ran it most. */
+export interface ClassifierSlice { key: string; count: number; known: number; ok: number; avgCostUsd: number | null; top?: { key: string; count: number } }
+export type ClassifierCardId = 'kind' | 'model' | 'skills' | 'jobkind';
+export interface ClassifierCard {
+  id: ClassifierCardId;
+  decisions: number;
+  /** its own measure: kind/jobkind = recognised (not "altro"); skills = the launch used only suggested skills; model = decided by the table */
+  hit: ClassifierStat;
+  /** verified success of the chats it decided (the user's or a review's verdict; never a self-report) */
+  success: ClassifierStat;
+  avgCostUsd: number | null;
+  /** the score cut in force, when the classifier has one (0-100) */
+  threshold: number | null;
+  /** last 8 ISO weeks, oldest first */
+  weeks: ClassifierWeek[];
+  slices: ClassifierSlice[];
+  /** success when it hit versus when it missed (null: no verified case on either side) */
+  compare: { hit: ClassifierStat; miss: ClassifierStat } | null;
+  lastAt: number | null;
+}
+/** Verified outcomes a classifier needs before its numbers can calibrate anything (the loop's MIN_CAL). */
+export const CLASSIFIER_NEED = 20;

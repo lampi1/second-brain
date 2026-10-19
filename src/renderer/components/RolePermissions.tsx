@@ -12,6 +12,7 @@ import { ALL_TOOLS, ROLE_DEFAULTS, defaultPermissions, isRoleId } from '@shared/
 import { saveAgent, useAgents } from '../store/agents';
 import { toast, ui } from '../store/ui';
 import { agentDraftOf } from '../lib/agent-drafts';
+import { AgentMcpSection } from './AgentMcpSection';
 import { t } from '../i18n';
 import { HelpTip } from './HelpTip';
 import '../styles/role-permissions.css';
@@ -89,7 +90,14 @@ const ceilingSection: PermissionSection = {
 };
 
 /** The card's sections, in order. Append a section to give a role another permission to edit (it edits the same draft). */
-export const PERMISSION_SECTIONS: PermissionSection[] = [toolsSection, ceilingSection];
+/** The MCP servers the role may use (AgentMcpSection, ADR 0086): saved at once per server, not with the draft; it
+ *  follows the "Server MCP" toggle above (off: no server reaches the role). */
+const mcpSection: PermissionSection = {
+  id: 'mcp', title: () => t('agentMcp.title'), hint: () => t('perm.sec.mcp.hint'),
+  render: ({ profile, draft }) => <AgentMcpSection embedded roleId={profile.id} roleName={profile.name} mcpClass={(draft.tools?.allow ?? ALL_TOOLS).includes('mcp')} />,
+};
+
+export const PERMISSION_SECTIONS: PermissionSection[] = [toolsSection, ceilingSection, mcpSection];
 
 const draftOf = (p: AgentProfile): PermissionDraft => ({ tools: p.tools ? structuredClone(p.tools) : null, permissionCeiling: p.permissionCeiling });
 const sameDraft = (a: PermissionDraft, b: PermissionDraft) => JSON.stringify(a) === JSON.stringify(b);

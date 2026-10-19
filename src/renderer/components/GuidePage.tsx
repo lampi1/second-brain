@@ -25,6 +25,7 @@ function discuss(card: ConceptCard, l: GuideLang): void {
 /** A small line glyph per concept (24×24, stroke = currentColor): the card's picture, drawn here, no package. */
 const GLYPHS: Record<string, ReactNode> = {
   'every-task-agent': <><circle cx="12" cy="12" r="3" /><circle cx="5" cy="5" r="2" /><circle cx="19" cy="5" r="2" /><circle cx="12" cy="20" r="2" /><path d="M6.5 6.5l3.4 3.4M17.5 6.5l-3.4 3.4M12 15v3" /></>,
+  'mcp-servers': <><rect x="3" y="4" width="7" height="7" rx="2" /><rect x="14" y="4" width="7" height="7" rx="2" /><rect x="8.5" y="14" width="7" height="7" rx="2" /><path d="M6.5 11v1.5h11V11M12 12.5V14" /></>,
   agents: <><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M3 13v2M21 13v2" /><circle cx="9.5" cy="13.5" r="1" /><circle cx="14.5" cy="13.5" r="1" /></>,
   skills: <><path d="M7 4h10v16l-5-3-5 3z" /><path d="M10 9h4M10 12h4" /></>,
   orchestrator: <><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="5.5" r="2.5" /><circle cx="18" cy="18.5" r="2.5" /><path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4" /></>,
@@ -37,6 +38,7 @@ const GLYPHS: Record<string, ReactNode> = {
   questions: <><path d="M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3.5v-3.5H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" /><path d="M10 9a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2M12 14v.2" /></>,
   grindhouse: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   dashboard: <><path d="M3.5 17a8.5 8.5 0 0 1 17 0" /><path d="M12 17l4.5-5.5" /><circle cx="12" cy="17" r="1.3" /></>,
+  setup: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12l3 3 5-6" /></>,
   brain: <><path d="M12 5.5a3 3 0 0 0-5.5-1.2A3 3 0 0 0 4 8.5a3.2 3.2 0 0 0 0 5.5A3 3 0 0 0 7 19a3 3 0 0 0 5 .5z" /><path d="M12 5.5a3 3 0 0 1 5.5-1.2A3 3 0 0 1 20 8.5a3.2 3.2 0 0 1 0 5.5A3 3 0 0 1 17 19a3 3 0 0 1-5 .5" /><path d="M12 5.5v14" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.3-4.3" /></>,
   'file-viewer': <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M10 13h6M10 17h4" /></>,

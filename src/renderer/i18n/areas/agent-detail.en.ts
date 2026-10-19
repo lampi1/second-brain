@@ -19,8 +19,4 @@ export const agentDetailEn: typeof agentDetailIt = {
   'agentDetail.closeEditor': 'Close without saving',
   'agentDetail.browserOn': ({ n }) => n === 1 ? 'Hide the browser' : `Hide the ${n} browsers`,
   'agentDetail.browserOff': ({ n }) => n === 1 ? 'Show the attached browser' : `Show the ${n} attached browsers`,
-  'agentDetail.estimate': 'estimate',
-  'agentDetail.estimateLeft': ({ d }) => `~${d} left`,
-  'agentDetail.estimateOver': 'past the estimate',
-  'agentDetail.estimateTip': ({ name, n }) => `Estimate: median of ${name}'s ended runs (${n}). Not this run's time or cost: the real ones are on the left.`,
 };

@@ -10,8 +10,10 @@ import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contra
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
-import { writeDemoBrain } from './brainmodel/demo';
+import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
+import type { AgentRun } from '../shared/agents';
 import { BrainModelService } from './brainmodel/service';
+import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
 import { SkillSuggester } from './skills/suggest';
 import type { SkillSuggestions } from '../shared/skill-suggest';
 import { demoDevopsRun } from './tasks/demo';
@@ -23,6 +25,7 @@ import { gitBranches } from './chats/branch';
 import path from 'node:path';
 import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
+import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
 import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
 import { attachHeldNews } from './chats/held-news';
@@ -97,9 +100,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   mountLifecycleApi(brain, agentLifecycle);
   // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
   // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
+  // the Classificatori grid's eight weeks of made-up history (demo-classifiers.ts), written on the first read
+  let demoCls: DemoClassifierData | undefined;
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
-  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: () => [], routing: () => brain.routingInfo(), now,
+  const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
+    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name))).runs], routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
@@ -113,6 +118,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
+  // made-up MCP servers for Settings → Connettori and the agent cards (ADR 0086): no process, no network
+  const mcpServers = demoMcpServers({ userData: ctx.userData, mcp, emit: st => ctx.emitter.emit('mcpservers:changed', st), now });
   // "Esegui" runs for real in the demo too (only on the user's click): the e2e tests run a harmless Write-Output
   const runner = commandRunner(ctx, chats);
   const asks = attachCommandAsks(ctx, runner, brain, now);
@@ -186,7 +193,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
   return {
-    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

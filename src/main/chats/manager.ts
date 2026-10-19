@@ -61,6 +61,7 @@ import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { standings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
@@ -96,6 +97,9 @@ export interface ChatManagerOptions {
   mcpUrlFor?: ((chatId: string) => string | null) | null;
   /** the app-control MCP for the Orchestrator only: its own /mcp/app/o/<id>/<token> */
   appMcpUrl?: ((orchestratorId: string) => string | null) | null;
+  /** the app-managed MCP servers a chat is given (ADR 0086, mcp-servers/service.ts launch): gateway endpoints, and the
+   *  managed ids it may not use (Claude refuses them by name) */
+  extMcp?: ((chatId: string) => { servers: { name: string; url: string }[]; denied: string[] }) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
   maxItems?: number;
@@ -242,6 +246,8 @@ interface Rec {
   autoEnding?: boolean;
   /** last start or message: an idle engine is released this long after it (releaseIdle) */
   activeAt?: number;
+  /** last transcript item: a delegated child's stall check (agents/delegation.ts stalledMin) */
+  eventAt?: number;
   /** its engine is ending because it sat idle: the chat stays 'idle', the next message waits for it, then resumes */
   releasing?: Promise<void> | undefined;
   /** permissionMode null = no choice: the CLI follows the user's settings.json (ADR 0002) */
@@ -1002,8 +1008,12 @@ export class ChatManager implements ChatService {
   runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
     try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
-    return runMetrics(this.runs.list(), { rollups: this.runs.rolledUp(), ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const runs = this.runs.list(), rollups = this.runs.rolledUp();
+    const metrics = runMetrics(runs, { rollups, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
+    // the card's level and performance are the agent's whole record, whatever the filter
+    const standing = standings(runs, rollups, Date.now());
+    return metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
   }
 
   /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;
@@ -2010,6 +2020,12 @@ export class ChatManager implements ChatService {
     this.opts.emitter.emit('chat:updated', { ...r.s });
   }
 
+  /** When the chat last produced anything: a transcript item, a state change or a send (agents/delegation.ts stalledMin). */
+  lastEventAt(chatId: string): number | undefined {
+    const r = this.chats.get(chatId);
+    return r ? Math.max(r.eventAt ?? 0, r.activeAt ?? 0, r.s.updatedAt) : undefined;
+  }
+
   /** Work time so far (the span in progress included). */
   workMs(chatId: string): number {
     const s = this.chats.get(chatId)?.s;
@@ -2017,6 +2033,7 @@ export class ChatManager implements ChatService {
   }
 
   private addItem(r: Rec, item: ChatItem, replace: boolean): void {
+    r.eventAt = Date.now();
     let rep = false;
     if (replace) {
       for (let i = r.items.length - 1; i >= 0; i--) if (r.items[i]?.id === item.id) { r.items[i] = item; rep = true; break; }
@@ -2117,7 +2134,23 @@ export class ChatManager implements ChatService {
     const servers: Record<string, { type: 'http'; url: string }> = {};
     if (url) servers['second-brain'] = { type: 'http', url };
     if (app) servers['second-brain-app'] = { type: 'http', url: app };
+    for (const ext of this.opts.extMcp?.(chatId).servers ?? []) servers[ext.name] ??= { type: 'http', url: ext.url };
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
+  }
+
+  /** The chat as the MCP access sees it (ADR 0086): its role and each parent's, own first, and its tool policy; null =
+   *  not a chat of this app. A chat whose parent is gone keeps the parent's place as no role (its policy, narrowed at
+   *  start by that parent, still holds). */
+  mcpContext(chatId: string): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
+    const r = this.chats.get(chatId);
+    if (!r) return null;
+    const roles: (string | null)[] = [];
+    const seen = new Set<string>();
+    for (let c: Rec | undefined = r; c && !seen.has(c.s.id) && roles.length < 16; c = c.s.parentId ? this.chats.get(c.s.parentId) : undefined) {
+      seen.add(c.s.id);
+      roles.push(c.s.agent?.source === 'catalog' ? c.s.agent.id : null);
+    }
+    return { roles, policy: r.policy ?? null };
   }
 
   /** the app-control endpoint of an Orchestrator, null for any other chat */
@@ -2172,7 +2205,10 @@ export class ChatManager implements ChatService {
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
-    return this.opts.extraArgs || allowed.length ? [...(this.opts.extraArgs ?? []), ...(allowed.length ? ['--allowedTools', allowed.join(',')] : [])] : null;
+    // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
+    const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];
+    const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : [])];
+    return this.opts.extraArgs || extra.length ? [...(this.opts.extraArgs ?? []), ...extra] : null;
   }
 
   /** An agent's message (from = its sender) never wakes a stopped chat (closed, or its engine released for idleness) on
@@ -2194,6 +2230,7 @@ export class ChatManager implements ChatService {
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {
       userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
+      extMcp: this.opts.extMcp?.(opts.chatId).servers ?? [],
       showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null,
       ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
     });

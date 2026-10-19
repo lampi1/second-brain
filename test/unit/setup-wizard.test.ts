@@ -69,7 +69,7 @@ describe('AI sign-in in place', () => {
     expect(linkFromStatus(status({ found: false })).phase).toBe('missing');
     expect(linkFromStatus(status({ loggedIn: false })).phase).toBe('signedOut');
     expect(linkFromStatus(status({ loggedIn: null })).phase).toBe('unknown');
-    expect(linkFromStatus(status({ loggedIn: true, account: 'demo-account' }))).toEqual({ phase: 'connected', account: 'demo-account' });
+    expect(linkFromStatus(status({ loggedIn: true, account: 'demo-account' }))).toEqual({ phase: 'connected', account: 'demo-account', checkedAt: expect.any(Number) });
     expect(canSignIn({ phase: 'signedOut' })).toBe(true);
     expect(canSignIn({ phase: 'missing' })).toBe(false);
     expect(canSignIn({ phase: 'connected' })).toBe(false);
@@ -97,7 +97,7 @@ describe('AI sign-in in place', () => {
   });
 
   it('"Verifica" connects a finished sign-in, keeps waiting on an unfinished one, never guesses', async () => {
-    expect(await verifySignIn(port({ status: async () => status({ loggedIn: true, account: 'a' }) }), 'claude')).toEqual({ phase: 'connected', account: 'a' });
+    expect(await verifySignIn(port({ status: async () => status({ loggedIn: true, account: 'a' }) }), 'claude')).toEqual({ phase: 'connected', account: 'a', checkedAt: expect.any(Number) });
     expect(await verifySignIn(port({ status: async () => status({ loggedIn: false }) }), 'claude')).toEqual({ phase: 'waiting', note: 'notYet' });
     expect(await verifySignIn(port({ status: async () => status({ loggedIn: null }) }), 'claude')).toEqual({ phase: 'unknown', note: 'unverifiable' });
     expect(await verifySignIn(port({ status: async () => status({ found: false }) }), 'claude')).toEqual({ phase: 'missing' });

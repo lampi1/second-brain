@@ -40,6 +40,7 @@ export const permissionsIt = {
   'perm.tool.mail-draft': 'Prepara bozze di email con i connettori di posta. Ogni invio lo approvi tu.',
   'perm.tool.calendar-read': 'Legge gli eventi del calendario dai connettori; non crea e non modifica nulla.',
   'perm.tool.mcp': 'Usa i server MCP esterni configurati (per esempio DevOps o GitHub). I server dell’app (browser, posta tra chat) restano sempre.',
+  'perm.sec.mcp.hint': 'Per ogni server aggiunto in Impostazioni → Connettori, cosa può usare il ruolo. Si salva subito; spegni «Server MCP» negli strumenti per toglierli tutti.',
   'perm.sec.ceiling': 'Limite dei permessi',
   'perm.sec.ceiling.hint': 'La modalità più alta in cui il ruolo può lavorare. Una modalità sopra il limite viene riportata al limite.',
   'perm.ceiling.none': 'Nessun limite',

@@ -1,6 +1,6 @@
 // E2E of the Brain section (ADR 0077, #84, #81) on the frozen demo, whose made-up brain has the former runbook and
 // routines sections already migrated into skills: the Skill page (cards, migration report, a link toggle logged in the
-// maintenance panel and undone), Regole, Memoria, Classificatori (read-only, "nessun dato ancora" where there is none)
+// maintenance panel and undone), Regole, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
 // and Mappa (agent → skills → rules → memory, plus the notes view), then the agent card's 3D flip (click, Esc back) and
 // its fade under reduced motion. Screenshots dark and light in test-results/shots/brain-*.png.
 import { expect, test, type Page } from '@playwright/test';
@@ -64,10 +64,16 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     // ── Classificatori: read only, "nessun dato ancora" where nothing was measured
     await goPage(page, 'classificatori');
     const cls = page.getByTestId('bm-classifiers-page');
-    for (const p of ['routing', 'kinds', 'choices', 'quality']) await expect(cls.getByTestId(`bm-cls-${p}`)).toBeVisible();
-    await expect(cls.getByText('nessun dato ancora').first()).toBeVisible();
+    // a grid of cards (stats-cards.spec.ts covers them); the tables of before live in each classifier's detail
+    await expect(cls.getByTestId('cls-grid')).toBeVisible();
     await expect(cls.locator('input, textarea, select')).toHaveCount(0);
     await shot(page, 'brain-classifiers-dark');
+    for (const [card, tables] of [['model', ['routing', 'quality']], ['kind', ['kinds']], ['skills', ['choices']]] as const) {
+      await cls.getByTestId(`cls-card-${card}`).locator('h3 button').click();
+      for (const p of tables) await expect(cls.getByTestId(`bm-cls-${p}`)).toBeVisible();
+      if (card === 'model') await expect(cls.getByText('nessun dato ancora').first()).toBeVisible();
+      await cls.getByTestId('cls-back').click();
+    }
 
     // ── Mappa: agent → skills → rules → memory, with an inspector
     await goPage(page, 'collegamenti');
@@ -125,7 +131,7 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await expect(page.getByTestId('bm-memory-page')).toBeVisible();
     await shot(page, 'brain-memory-light');
     await goPage(page, 'classificatori');
-    await expect(page.getByTestId('bm-cls-routing')).toBeVisible();
+    await expect(page.getByTestId('cls-grid')).toBeVisible();
     await shot(page, 'brain-classifiers-light');
     await goPage(page, 'collegamenti');
     await expect(page.getByTestId('bm-map-graph').locator('.dash-node').first()).toBeVisible();

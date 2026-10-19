@@ -1,7 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
-import { findBrainCandidates } from './brain/detect';
+import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
-import { engineInfos, engineOf } from './engines/registry';
+import { engineInfos } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
@@ -34,11 +34,9 @@ import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
+import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
 import { systemLang } from './lang';
-import { BrainCreator } from './brain/create';
-import { BrainCreationController } from './brain/create-controller';
 import { ProfileService } from './brain/profile';
-import { electronNode } from './brain/node';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
@@ -107,16 +105,8 @@ app.whenReady().then(async () => {
     if (channel === 'settings:changed' && payload && typeof payload === 'object' && 'key' in payload && payload.key === 'brainRoot') brainChoiceRevision++;
     emitBeforeBrainChoice(channel, payload);
   };
-  const brainCreation = new BrainCreationController({
-    creator: new BrainCreator({ appPath: app.getAppPath(), node: electronNode() }), disabled: demo,
-    chooseParent: async folderName => {
-      const result = win ? await dialog.showOpenDialog(win, { title: `Dove creare la nuova cartella «${folderName}»`, buttonLabel: 'Crea qui', properties: ['openDirectory'] }) : null;
-      return result && !result.canceled ? result.filePaths[0] ?? null : null;
-    }, currentRoot: () => s.brain.settings().brainRoot, selectionRevision: () => brainChoiceRevision, engineKnown: id => !!engineOf(id),
-    connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
-  });
   const profile = new ProfileService({ root: () => s.brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() });
-  const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); } });
+  const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); }, projects: () => s.brain.settings().projectsRoot ?? null });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
@@ -146,6 +136,7 @@ app.whenReady().then(async () => {
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
+    const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh());
     await connectors.ready;
     const handlers: Handlers = {
@@ -155,14 +146,31 @@ app.whenReady().then(async () => {
       'connectors:probe': a => connectors.service.probe(a?.provider),
       'connectors:select': a => connectors.service.select(a?.provider, a?.projects),
       'connectors:disconnect': a => connectors.service.disconnect(a?.provider),
+      // the user's MCP servers (ADR 0086): the user's clicks only; a token goes in once and never comes back
+      'mcpservers:state': () => mcpServers().state(),
+      'mcpservers:save': a => mcpServers().save(a),
+      'mcpservers:remove': a => mcpServers().remove(a?.id),
+      'mcpservers:setSecret': a => mcpServers().setSecret(a),
+      'mcpservers:deleteSecret': a => mcpServers().deleteSecret(a),
+      'mcpservers:setAccess': a => mcpServers().setAccess(a),
+      'mcpservers:test': a => mcpServers().test(a?.id),
+      'mcpservers:importScan': () => mcpServers().importScan(),
+      'mcpservers:importApply': a => mcpServers().importApply(a?.keys),
       'update:get': () => updates.state(),
       'update:apply': a => updates.apply(a?.id),
       'update:checkpointAnswer': a => updates.answer(a),
       'update:recovery': () => updates.recovery(),
       'update:recoveryAck': a => updates.acknowledge(a?.id),
-    'app:brainCreation': () => brainCreation.capability(),
-    'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
-    'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
+    // read only: folder names and .git presence (projects-folder.ts); SB_HOME isolates it in trials, like the candidates
+    'app:projectsFolder': () => ({ saved: s.brain.settings().projectsRoot ?? null, detected: detectProjectsFolder({ home: process.env.SB_HOME, exclude: [s.brain.settings().brainRoot, app.getPath('userData')] }), newMemoryIn: app.getPath('userData') }),
+    'app:pickProjects': async () => {
+      const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella dei tuoi progetti', properties: ['openDirectory'] }) : null;
+      const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
+      if (dir) await s.brain.setSettings({ projectsRoot: dir });
+      return dir;
+    },
+    // the first setup's new memory, in the app's data folder (the only way the app creates one)
+    'app:createBrain': a => defaultBrain.ensure(a?.language, a?.harness),
     'progress:get': () => s.progress.get(),
     'progress:setHidden': a => s.progress.setHidden(a?.hidden),
     'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),
@@ -200,6 +208,12 @@ app.whenReady().then(async () => {
       const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
       return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
+    },
+    // the strips' and the Orchestrator plan's estimates (ADR 0087); the demo brings its own run history
+    'agents:estimates': a => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
+      return estimatesState(runs, checkRunIds(a?.runIds), now);
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'setup:get': () => s.setup.get(),

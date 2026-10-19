@@ -1,14 +1,15 @@
 // The "La tua IA" step of the first-run setup wizard (FirstInterview.tsx): one card per built-in engine (Claude Code,
 // Codex, Cursor) with what this computer says about it, a "Collega" that opens the engine's official sign-in in its own
-// window (typed IPC engines:trust + cli:login) and then WAITS on this same step with a "Verifica" (cli:status, no
-// tokens) and a reopen; coming back to the window checks again by itself. Why: the owner clicked the old "Collega la tua
+// window (typed IPC engines:trust + cli:login) and then WAITS on this same step, checking by itself every few seconds
+// and on coming back to the window (cli:status, no tokens), with a "Verifica" and a reopen; a connected card says when
+// and how it was checked. Why: the owner clicked the old "Collega la tua
 // IA" and the setup closed (2026-10-18); here nothing navigates away or closes the modal. Credentials never pass here.
 import { useEffect, useRef, useState } from 'react';
 import { sb } from '../sb';
-import { t } from '../i18n';
+import { locale, t } from '../i18n';
 import { useApp } from '../store/store';
 import { HarnessMark, IconAlert, IconCheck, IconRefresh, IconShield, IconSpinner } from './Icons';
-import { SETUP_ENGINES, canSignIn, linkFromStatus, openSignIn, verifySignIn } from '../lib/setup-wizard';
+import { ENGINE_POLL_MS, ENGINE_POLL_TRIES, SETUP_ENGINES, canSignIn, linkFromStatus, openSignIn, verifySignIn } from '../lib/setup-wizard';
 import type { EngineLink, EngineLinkPort, SetupEngineId } from '../lib/setup-wizard';
 
 const NAMES: Record<SetupEngineId, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
@@ -36,6 +37,7 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
   useEffect(() => { if (defined) scan(); }, [!!defined]);
   const connected = (engine: SetupEngineId, link: EngineLink) => { set(engine, link); if (link.phase === 'connected' && !engines.includes(engine)) onUse(engine, true); };
   const connect = async (engine: SetupEngineId) => {
+    tries.current[engine] = 0;
     set(engine, { phase: 'opening' });
     set(engine, await openSignIn(port, engine));
   };
@@ -43,14 +45,26 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
     set(engine, { ...links[engine], phase: 'verifying' });
     connected(engine, await verifySignIn(port, engine));
   };
-  // back from the sign-in window: check the waiting ones once by themselves (Verifica stays for an explicit check)
+  // while a sign-in window is open: checked by itself every few seconds and when the owner comes back to this window,
+  // so "Collegata" appears without a click (Verifica stays for an explicit check); applied only while it still waits
   const waiting = SETUP_ENGINES.filter(e => links[e]?.phase === 'waiting');
-  const verifyRef = useRef(verify); verifyRef.current = verify;
+  const tries = useRef<Partial<Record<SetupEngineId, number>>>({});
+  const poll = useRef((_e: SetupEngineId) => {});
+  poll.current = (engine: SetupEngineId) => {
+    const n = (tries.current[engine] ?? 0) + 1; tries.current[engine] = n;
+    if (n > ENGINE_POLL_TRIES) return;
+    void verifySignIn(port, engine).then(link => {
+      if (!live.current) return;
+      setLinks(l => l[engine]?.phase === 'waiting' ? { ...l, [engine]: link } : l);
+      if (link.phase === 'connected' && !engines.includes(engine)) onUse(engine, true);
+    });
+  };
   useEffect(() => {
     if (!waiting.length) return;
-    const back = () => { for (const e of waiting) void verifyRef.current(e); };
-    window.addEventListener('focus', back);
-    return () => window.removeEventListener('focus', back);
+    const tick = () => { for (const e of waiting) poll.current(e); };
+    const timer = setInterval(tick, ENGINE_POLL_MS);
+    window.addEventListener('focus', tick);
+    return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
   }, [waiting.join(',')]);
   const busy = SETUP_ENGINES.some(e => ['checking', 'opening', 'verifying'].includes(links[e]?.phase ?? 'checking'));
   return <div className="sw-engines" data-testid="setup-engines">
@@ -63,6 +77,7 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
           <div className="sw-engine-name"><b>{name}</b><span className={`sw-pill sw-pill-${TONE[link.phase]}`} role="status">{pending ? <IconSpinner size={12}/> : link.phase === 'connected' ? <IconCheck size={12}/> : <i aria-hidden="true"/>}{t(`setup.ai.status.${link.phase}`)}</span></div>
         </header>
         {link.account && <p className="sw-engine-account">{t('setup.ai.account', { account: link.account })}</p>}
+        {link.phase === 'connected' && link.checkedAt && <p className="sw-engine-account" data-testid={`setup-engine-${engine}-checked`}>{t('setup.ai.checked', { at: new Date(link.checkedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }), name })}</p>}
         {link.phase === 'missing' && <p className="sw-engine-note">{t('setup.ai.missingHint')}</p>}
         {(link.phase === 'waiting' || link.phase === 'verifying') && <div className="sw-callout" data-testid={`setup-engine-${engine}-waiting`}>
           <p>{t('setup.ai.waiting', { name })}</p>

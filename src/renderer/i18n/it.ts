@@ -1,6 +1,8 @@
 import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
+import { memoryIt } from './areas/memory.it';
+import { statsIt } from './areas/stats.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -22,6 +24,7 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import { agentsGridIt } from './areas/agents-grid.it';
+import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { approvalsIt } from './areas/approvals.it';
 import {settingsIt}from'./areas/settings.it';
@@ -29,6 +32,7 @@ import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
+import { estimateIt } from './areas/estimate.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
@@ -46,6 +50,7 @@ export const it = {
   ...cloudIt,
   ...guideIt,
   ...treeIt,
+  ...estimateIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
@@ -65,8 +70,11 @@ export const it = {
   ...studioIt,
   ...permissionsIt,
   ...brainModelIt,
+  ...memoryIt,
+  ...statsIt,
   ...productIt,
   ...agentsGridIt,
+  ...explainIt,
   ...agentDetailIt,
   ...approvalsIt,
   ...settingsIt,

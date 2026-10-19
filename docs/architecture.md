@@ -9,6 +9,8 @@
 │   mcp/     MCP server 127.0.0.1 (Streamable HTTP): /mcp (external clients),    │
 │            /mcp/chat/<id>/<token> (one per app chat: its own tabs)            │
 │            /mcp/app, /mcp/app/o/<id>/<token> (per Orchestrator, ADR 0021)     │
+│            /mcp/ext/<chat>/<server>/<token> (managed MCP servers, 0086)       │
+│   mcp-servers/ store (+ tokens) · gateway · client · import (ADR 0086)        │
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
 │            usage · costs · budget · estimates · quality · model defaults      │
 │   tasks/   Task page (brain script, read only) · run/ "Esegui" shell blocks   │
@@ -62,6 +64,13 @@
   catalog's policy goes to the chat, narrowed by its parent's; under shell-read `refusedCommand` and the role gate pass
   `node` of a script listed in the brain's `read-only-tools.md` (`agents/read-tools.ts`); `agents/skill-needs.ts` turns a
   passed skill's tools into launch warnings.
+- **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
+  classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with
+  3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The
+  Orchestrator reads it with `task_estimate` and in `app_create_chat`'s answer; IPC `agents:estimates`
+  (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
+  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for the Dashboard / Classificatori);
+  `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
 - **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
@@ -79,6 +88,9 @@
   `agent_rollback` / `agent_archive` / `agent_restore` apply at once; each change is a `BrainChange` in
   `userData/brain-changes.json` with "Annulla" (`brainmodel/changes.ts`), a behavioural agent change as a trial version.
   Tools, permissions and the engine of an agent wait for the user in Agenti → Da approvare (`agents:proposalDecide`).
+  The "Manutenzione" button atop Skill, Regole and Memoria runs every job now (`brainmodel:maintain`) and shows what
+  each did. Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
+  memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.
 - **Live brain**: `fs.watch` on the brain folder + periodic `chats.mjs list` → diffed into `FeedEvent`s →
   `feed:events`; urgent ones also as a Windows toast when the window is not focused.
 
@@ -87,7 +99,13 @@
 - App chats are persisted in `userData/chats.json` (id, harness, cwd, sessionId, title, model…), so they come back
   after a restart as `closed` and resume on the first message. CLI transcripts stay where each CLI keeps them.
   API chats also persist user and assistant messages as plaintext in `userData/api-chats/<chatId>.json`.
-- Settings in `userData/config.json` (brain folder, ports, mutes, Task reading). Never secrets.
+- Settings in `userData/config.json` (brain folder, projects folder, ports, mutes, Task reading). Never secrets. The
+  projects folder (`projectsRoot`) is found read-only by `main/brain/projects-folder.ts` (CLI folder names, usual places)
+  and asked by the first setup only when it cannot tell.
+- App-managed MCP servers (ADR 0086): definitions, per-role access and last tests in `userData/mcp-servers.json`;
+  their tokens encrypted (safeStorage) in `userData/mcp-secrets.json`, each bound to its server's command or origin.
+  Chats reach them only through the gateway (`/mcp/ext/…`), which opens the real server in main with its tokens and
+  checks the chat's role chain at every call; the engines' own MCP configs are only read (import), never written.
 - API key ciphertext and masks are in `userData/secrets.json`, protected by the OS-backed Electron secret store;
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data

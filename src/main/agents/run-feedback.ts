@@ -88,6 +88,9 @@ export class RunFeedback {
     const result = runMetrics(this.d.runs.list(), { ...(since !== undefined ? { since: since as number } : {}), rollups: this.d.runs.rolledUp(), filter });
     return result.filter(m => a.agentId === undefined || m.agentId === a.agentId).map(m => a.version === undefined ? m : { ...m, all: null, versions: m.versions.filter(v => v.version === a.version) });
   }
+  /** Every kept run, for the task estimate (task_estimate, app_create_chat's answer; ADR 0087): numbers are read from it,
+   *  never a goal is shown. */
+  runList(): AgentRun[] { return this.d.runs.list(); }
   private unknownRun(id: string): Error { return unknownRunError(id, this.d.runs.list(), this.d.chat); }
   /** A role's records, oldest first (the lifecycle's FeedbackSource). */
   feedbackOf(agentId: string): AgentFeedback[] { return structuredClone(this.state.feedback.filter(f => f.agentId === agentId)); }

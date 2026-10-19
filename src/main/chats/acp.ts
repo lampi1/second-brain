@@ -80,6 +80,8 @@ export interface AcpOptions extends SessionOptions {
   mcpUrl?: string | null;
   /** the Orchestrator only: the app-control MCP endpoint (/mcp/app: app_create_chat, app_state…), passed as second-brain-app */
   appMcpUrl?: string | null;
+  /** the app-managed MCP servers (ADR 0086): gateway endpoints on the app's own MCP, given in session/new like ours */
+  extMcp?: { name: string; url: string }[];
   /** app version for clientInfo */
   appVersion?: string;
   /** show the past that session/load replays (a chat restored after an app restart has no items yet) */
@@ -453,6 +455,7 @@ export class AcpSession implements HarnessSession {
     const list: Obj[] = [];
     if (this.opts.mcpUrl) list.push({ type: 'http', name: 'second-brain', url: this.opts.mcpUrl, headers: [] });
     if (this.opts.appMcpUrl) list.push({ type: 'http', name: 'second-brain-app', url: this.opts.appMcpUrl, headers: [] });
+    for (const ext of this.opts.extMcp ?? []) if (!list.some(x => x.name === ext.name)) list.push({ type: 'http', name: ext.name, url: ext.url, headers: [] });
     return list;
   }
 

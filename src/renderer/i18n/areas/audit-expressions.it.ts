@@ -22,8 +22,6 @@ export const auditExpressionsIt = {
   "auditExpression.ContextBar.text29": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Contesto ${p.v0}${p.v1} token${p.v2}`,
   "auditExpression.ContextBar.text30": "stimato ",
   "auditExpression.ContextBar.text31": ", lungo",
-  "auditExpression.CreateMemory.text32": "Creazione in corso…",
-  "auditExpression.CreateMemory.text33": "Scegli dove creare la cartella",
   "auditExpression.FirstInterview.text39": "Caricamento della configurazione…",
   "auditExpression.FirstInterview.text40": "Una per riga, per esempio:\nCheckout e pagamenti\nApp mobile",
   "auditExpression.FirstInterview.text41": "Per esempio: preparare offerte, seguire i clienti, pianificare gli incarichi",

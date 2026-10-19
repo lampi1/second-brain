@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import type { MdIssue, SkillCatalog, SkillEntry, SkillPlace } from '@shared/contract';
 import { checkMd, DESC_MAX, field, newMd, parseMd, setBody, setFields, template } from '@shared/skillmd';
 import { PageHead } from '../brain/components/States';
+import { HelpTip } from './HelpTip';
 import { Seg } from '../brain/components/ui';
 import { brainBridge } from '../actions';
 import { askConfirm, toast, ui } from '../store/ui';
@@ -20,6 +21,7 @@ import { t } from '../i18n';
 import { useBrainModel, linkSkill, refreshBrainModel } from '../store/brain-model';
 import { filterSkills, skillRows, type SkillFilter, type SkillRow } from '../lib/brain-model-view';
 import { MaintenancePanel, MigrationReportPanel, when } from './brain-model/MaintenancePanel';
+import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import '../styles/skills.css';
 import '../styles/agent-catalog.css';
 import '../styles/brain-model.css';
@@ -259,7 +261,7 @@ export function SkillsPage() {
     <div className="sk-page bm-page agent-overview" data-testid="skills-page">
       <PageHead title={t('bm.skills.title')} onRefresh={() => void load()}
         lead={cat || state ? t('bm.skills.lead', { n: rows.length, used }) : t('tools.skillsPage.loadingFolders')}
-        actions={<button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button>} />
+        actions={<><MaintenanceButton /><button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button></>} />
       {err && <p className="sk-refused" role="alert">{t('tools.skillsPage.loadError')} {err}</p>}
       {draft && <div className="bm-editor" ref={editor}>
         <div className="bm-editor-bar"><button type="button" className="btn btn-ghost btn-s" onClick={close} data-testid="sk-close">{t('bm.skills.close')}</button></div>
@@ -272,6 +274,7 @@ export function SkillsPage() {
       <div className="bm-toolbar" data-testid="sk-list">
         <input className="sk-input sk-search" type="search" placeholder={t('bm.skills.search')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('bm.skills.searchLabel')} />
         <Seg items={[{ id: 'all', label: t('bm.skills.filter.all') }, { id: 'used', label: t('bm.skills.filter.used') }, { id: 'unused', label: t('bm.skills.filter.unused') }]} value={filter} onChange={setFilter} label={t('bm.skills.filterLabel')} />
+        <HelpTip title={t('explain.skills.title')} wide testid="sk-help"><p>{t('explain.skills.p1')}</p><p>{t('explain.skills.p2')}</p></HelpTip>
       </div>
       {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
         : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>
