@@ -21,6 +21,7 @@ import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from '
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+import type { RunEstimates } from './task-estimate';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -1183,6 +1184,9 @@ export interface InvokeMap {
   /** the §5 metrics per agent and version (A6); since = only runs ended from then on; skill/app/repo = only runs with that
    *  tag (untagged runs never match) */
   'agents:metrics': [AgentMetricsFilter | undefined, AgentMetrics[]];
+  /** the task estimates of these runs (estimate made before each started, actual once ended) and the estimator's weekly
+   *  accuracy (ADR 0087, src/main/agents/run-estimates.ts) */
+  'agents:estimates': [{ runIds?: string[] } | undefined, RunEstimates];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
@@ -1478,7 +1482,7 @@ export const INVOKE_CHANNELS = [
   'app:brainCreation', 'app:createBrain', 'app:brainCandidates',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
