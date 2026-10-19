@@ -6,13 +6,14 @@
 //   scroll inside the report, any other href is dropped;
 // - its CSS (<style> blocks and style attributes) scrubbed (report-images.ts scrubCss: no url(), no @import), so a style
 //   can never fetch; it lives in a shadow root, so it never restyles the app, and the host contains layout and paint
-//   (a position:fixed element stays inside the report's box);
+//   (a position:fixed element stays inside the report's box): that containment is the host's inline style, and the
+//   report's :host / :host-context rules are dropped (stripHostSelectors), so a report cannot lift it;
 // - its images through ReportImages.tsx (data: rasters, local files read by main under the allowed folders, never a
 //   remote URL), each one opening large on a click.
 // The CSP (img-src 'self' data:, no remote script or connect) still applies on top. Used by FileViewer.tsx.
 import {useLayoutEffect,useMemo,useState} from 'react';
 import DOMPurify from 'dompurify';
-import {scrubCss} from '../lib/report-images';
+import {scrubCss,stripHostSelectors} from '../lib/report-images';
 import {localizeImagesIn,useReportImages} from './ReportImages';
 
 let purify:ReturnType<typeof DOMPurify>|null=null;
@@ -40,7 +41,7 @@ const FORBID_TAGS=['script','style','form','input','button','textarea','select',
  *  body stays a DOM fragment, cloned into the page as nodes (never serialized and parsed again). */
 export function cleanReport(html:string,file:string):{css:string;body:DocumentFragment}{
   const doc=new DOMParser().parseFromString(html,'text/html');
-  const css=[...doc.querySelectorAll('style')].map(s=>scrubCss(s.textContent??'')).join('\n')
+  const css=stripHostSelectors([...doc.querySelectorAll('style')].map(s=>scrubCss(s.textContent??'')).join('\n'))
     // the document's own :root/html/body rules apply to the report's root box
       .replace(/(^|[\s,{}>+~])(?::root|html|body)(?=[\s,{.:#[>+~]|$)/gi,'$1.sb-report-root');
   const body=sanitizer().sanitize(doc.body?.innerHTML??'',{USE_PROFILES:{html:true,svg:true},FORBID_TAGS,FORBID_ATTR:['srcset','formaction','action','xlink:href','background','poster','ping','usemap'],ALLOW_DATA_ATTR:false,RETURN_DOM_FRAGMENT:true}) as unknown as DocumentFragment;
@@ -49,7 +50,9 @@ export function cleanReport(html:string,file:string):{css:string;body:DocumentFr
 }
 
 /** The look a report gets when it sets none: a white page of readable text (reports are made to be printed). */
-const BASE=`:host{display:block;margin-top:10px;contain:layout paint;overflow:auto;max-height:75vh;border:1px solid var(--bx-border,#d0d4dc);border-radius:10px;background:#fff;color:#1d2330;color-scheme:light}
+/** The host's containment, as its inline style: no report rule can reach it (its :host rules are dropped). */
+const HOST_STYLE={display:'block',contain:'layout paint',overflow:'auto',maxHeight:'75vh'} as const;
+const BASE=`:host{margin-top:10px;border:1px solid var(--bx-border,#d0d4dc);border-radius:10px;background:#fff;color:#1d2330;color-scheme:light}
 .sb-report-root{padding:20px 24px;font:14px/1.55 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;overflow-wrap:anywhere}
 img{max-width:100%;height:auto}
 img.sb-img{cursor:zoom-in;border-radius:4px}
@@ -84,5 +87,5 @@ export function ReportHtml({text,path}:{text:string;path:string}){
     return()=>{root.removeEventListener('click',go);root.removeEventListener('keydown',go);};
   },[root]);
   const zoom=useReportImages(root,report);
-  return <><div ref={setHost} className="bx-report" data-testid="viewer-report" role="document"/>{zoom}</>;
+  return <><div ref={setHost} className="bx-report" data-testid="viewer-report" role="document" style={HOST_STYLE}/>{zoom}</>;
 }

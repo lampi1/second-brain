@@ -38,7 +38,7 @@ function world() {
   const userData = tmp(), now = () => t;
   const catalog = new AgentCatalogService({ userData, models, now, approvedRoots: () => [userData] });
   const runs = new AgentRunStore(userData);
-  const authoring = new AgentAuthoring({ userData, catalog, runs, items: () => [], now, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
+  const authoring = new AgentAuthoring({ userData, catalog, runs, items: () => [], now, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined), isOrchestrator: () => true });
   const chats: ChatSummary[] = [];
   const send = vi.fn(async (_id: string, _text: string, ..._rest: unknown[]) => undefined);
   /** the classifier: the agent whose instructions mention "observations" ranks first; anything else ranks second */

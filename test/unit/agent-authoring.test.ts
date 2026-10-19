@@ -5,7 +5,7 @@ import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import { AgentRunStore } from '../../src/main/agents/runs';
-import { AgentAuthoring, authoringTools, userOnlyChanges } from '../../src/main/agents/authoring';
+import { AgentAuthoring, authoringTools, userOnlyChanges, identityChanges } from '../../src/main/agents/authoring';
 import { SuggestionBudget } from '../../src/main/agents/suggestion-budget';
 import { checkAgentCwd, checkAuthorPolicy, checkCreationRequest } from '../../src/main/agents/author-policy';
 import type { AgentDraft, AgentModelChoice } from '../../src/shared/agents';
@@ -23,7 +23,7 @@ function fixture(extra: Partial<ConstructorParameters<typeof AgentAuthoring>[0]>
   const userData = tmp(), now = Date.now(), items: ChatItem[] = [{ kind: 'user', id: 'task', text: 'Create a reader', at: now }];
   const catalog = new AgentCatalogService({ userData, models, now: () => now, approvedRoots: () => [userData] });
   const runs = new AgentRunStore(userData), publish = vi.fn(), send = vi.fn(async () => undefined);
-  const deps = { userData, catalog, runs, items: () => items, now: () => now, suggestionSpend: () => 0, publish, send };
+  const deps = { userData, catalog, runs, items: () => items, now: () => now, suggestionSpend: () => 0, publish, send, isOrchestrator: (_id: string) => true };
   const service = new AgentAuthoring({ ...deps, ...extra });
   service.rememberHumanMessage('orch', 'Create a reader');
   const create = () => service.call('agent_create', { draft: draft(), presetId: 'default-research', requestItemId: 'task', reason: 'User task' }, 'orch');
@@ -138,13 +138,28 @@ describe('MCP authoring boundary', () => {
     expect(tools).toMatchObject({ applied: false, state: 'pending', op: 'update', waitsForUser: ['tools'] });
     await expect(f.service.call('agent_update', { agentId: user.id, patch: { permissionCeiling: 'plan' }, reason: 'Safer' }, 'orch')).rejects.toThrow(/already waiting/);
     const name = await f.service.call('agent_propose', { agentId: other.id, patch: { name: 'Lettore' }, reason: 'Italian', expectedEffect: 'Clearer' }, 'orch');
-    expect(name).toMatchObject({ applied: false, waitsForUser: ['name or look'] });
+    expect(name).toMatchObject({ applied: false, waitsForUser: ['name'] });
     expect(JSON.stringify(f.catalog.list())).toBe(before);
     expect(applied).not.toHaveBeenCalled();
     await expect(f.service.call('agent_update', { agentId: other.id, patch: { engine: 'cursor' }, reason: 'Cheaper' }, 'orch')).rejects.toThrow();
     expect(f.publish.mock.calls.map(c => c[0][0].kind)).toEqual(['agent-proposal', 'agent-proposal']);
     // the user's click: the change opens a trial against v1
     expect(f.service.decide((tools as unknown as { id: string }).id, true)).toMatchObject({ activeVersion: 2, tools: { allow: ['read', 'edit'] }, trial: { version: 2, baseline: 1 } });
+  });
+  it('a name, look or category bundled with a behaviour change still waits for the user', async () => {
+    const f = fixture(), a = f.catalog.save(draft());
+    const before = JSON.stringify(f.catalog.list());
+    const r = await f.service.call('agent_update', { agentId: a.id, patch: { name: 'Admin', avatar: { kind: 'symbol', value: 'shield' }, instructions: 'Read more carefully.' }, reason: 'Better' }, 'orch') as { applied: boolean; waitsForUser: string[] };
+    expect(r).toMatchObject({ applied: false, waitsForUser: ['name', 'avatar'] });
+    expect(JSON.stringify(f.catalog.list())).toBe(before);
+    expect(identityChanges({ ...draft(), category: 'development' }, { ...draft(), category: 'other' })).toEqual(['category']);
+  });
+  it('checks the authenticated Orchestrator inside call() for every write, not only in the tool wrapper', async () => {
+    const f = fixture({ isOrchestrator: id => id === 'orch' }), a = f.catalog.save(draft());
+    for (const [name, args] of [['agent_update', { agentId: a.id, patch: { instructions: 'x' }, reason: 'r' }], ['agent_archive', { agentId: a.id, reason: 'r' }], ['agent_suggest', { draft: draft(), reason: 'r', expectedEffect: 'e' }], ['agent_create', { draft: draft(), presetId: 'default-research', reason: 'r' }], ['agent_feedback', { runId: 'x', verdict: 'fail', notes: 'n', evidence: [] }]] as const)
+      await expect(f.service.call(name, args, 'c_work')).rejects.toThrow(/Authenticated Orchestrator/);
+    await expect(f.service.call('agent_list', {}, 'c_work')).resolves.toBeTruthy();
+    await expect(f.service.call('agent_update', { agentId: a.id, patch: { instructions: 'Read twice.' }, reason: 'r' }, 'orch')).resolves.toMatchObject({ applied: true });
   });
   it('names the user-only fields a change touches', () => {
     expect(userOnlyChanges(draft(), { ...draft(), engine: 'cursor', model: 'x', instructions: 'y' })).toEqual(['engine']);
@@ -155,7 +170,7 @@ describe('MCP authoring boundary', () => {
     let t = Date.now();
     const userData = tmp(), catalog = new AgentCatalogService({ userData, models, now: () => t, approvedRoots: () => [userData] });
     const runs = new AgentRunStore(userData);
-    const service = new AgentAuthoring({ userData, catalog, runs, items: () => [], now: () => t, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined) });
+    const service = new AgentAuthoring({ userData, catalog, runs, items: () => [], now: () => t, suggestionSpend: () => 0, publish: vi.fn(), send: vi.fn(async () => undefined), isOrchestrator: () => true });
     const p = catalog.save(draft());
     t += 1000;
     const trial = catalog.approveTrial(p.id, { ...p, instructions: 'Report observations briefly.' }, 'Shorter reports');

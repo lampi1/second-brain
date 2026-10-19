@@ -1,7 +1,6 @@
-// The unified Orchestrator (SPEC point 16): one coordinator for work and for the app's own code. Pinned here: the migration of
-// persisted Orchestrators (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
-// OrchestratorService (concurrent ensure), the tool scope only for the authenticated canonical caller, news of every chat (the app's code too)
-// and mail reaching it, and the updater's apply staying hard off.
+// The Orchestrator: one coordinator for work and for the app's own code. Pinned here: the singleton in ChatManager and in
+// OrchestratorService (concurrent ensure), the role text on its first message, the tool scope only for the authenticated
+// caller, news of every chat reaching it, and the updater's apply staying hard off.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -52,7 +51,7 @@ function fixture(stored?: StoredChat[]) {
   return { m, dir, sent, agents, file: () => JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] } };
 }
 
-describe('ChatManager with the unified Orchestrator', () => {
+describe('ChatManager with the Orchestrator', () => {
   it('restores the saved Orchestrator once and a second start changes nothing', async () => {
     const f = fixture([row({ id: 'w1', harness: 'anthropic', title: 'Orchestrator', isOrchestrator: true }), row({ id: 'kid', harness: 'anthropic', createdAt: 4 })]);
     expect(f.m.list().filter(c => c.isOrchestrator).map(c => c.id)).toEqual(['w1']);

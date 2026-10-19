@@ -72,7 +72,7 @@ describe('reported case: the Orchestrator passes a chat id to agent_feedback', (
     // eslint-disable-next-line prefer-const
     let authoring: AgentAuthoring;
     const api = createLifecycleApi(lifecycle, id => runs.get(id), (a, c) => authoring.recordFeedback(a, c), id => unknownRunError(id, runs.list(), chat));
-    authoring = new AgentAuthoring({ userData, catalog, runs, items: () => [], publish: () => {}, suggestionSpend: () => 0, send: async () => undefined, feedback: (a, c) => api.feedback(a, c), chat, now: () => now });
+    authoring = new AgentAuthoring({ userData, catalog, runs, items: () => [], publish: () => {}, suggestionSpend: () => 0, send: async () => undefined, feedback: (a, c) => api.feedback(a, c), chat, now: () => now, isOrchestrator: () => true });
     return { authoring, work };
   }
   it('names the run to use instead of a bare "Unknown run."', async () => {

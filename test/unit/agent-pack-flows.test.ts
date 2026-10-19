@@ -5,11 +5,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import { AgentPackFlows } from '../../src/main/agents/pack/flows';
-import { AgentPackLearning, agentLearnTool } from '../../src/main/agents/pack/learning';
+import { AgentPackLearning, agentLearnTool, chatLearnTool, lessonReviewTool } from '../../src/main/agents/pack/learning';
 import { emitPack } from '../../src/main/agents/pack/emit';
 import { readPackSource } from '../../src/main/agents/pack/read';
 import { readZip, writeZip } from '../../src/main/agents/pack/zip';
-import { type AgentDraft, type AgentModelChoice } from '../../src/shared/agents';
+import { type AgentDraft, type AgentModelChoice, type AgentRun } from '../../src/shared/agents';
 import type { GuardResult } from '../../src/main/brain/guard';
 
 const roots: string[] = [];
@@ -179,6 +179,36 @@ describe('lessons queue and brain forks', () => {
     expect(new AgentPackLearning(f.flows, f.data).pending()).toEqual([]); // persisted
     expect(agentLearnTool(learning).name).toBe('agent_learn_propose');
     expect(f.flows.profile(preset.id).trial).toBeUndefined(); // no approval, no trial
+  });
+  it('a work chat\'s lesson: only for its own open run\'s agent, never a rule, queued until the Orchestrator accepts it', async () => {
+    const f = setup(), [preset, other] = f.catalog.list().profiles;
+    const learning = new AgentPackLearning(f.flows, f.data);
+    let woke = 0; learning.onProposed = () => { woke++; };
+    const runs: AgentRun[] = [{ runId: 'r1', chatId: 'w', agentId: preset!.id, version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: 1, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0, tokens: null }];
+    const tool = chatLearnTool(learning, () => runs);
+    const call = async (args: Record<string, unknown>, chatId = 'w') => tool.run(args, { params: { chatId } } as unknown as Parameters<typeof tool.run>[1]);
+    expect(JSON.stringify(tool.inputSchema)).not.toContain('maxContext');
+    await expect(call({ agentId: other!.id, rule: 'x', evidence: 'run:r1' })).rejects.toThrow(/own agent/);
+    await expect(call({ rule: 'x', evidence: 'run:r1', target: 'rule' })).rejects.toThrow(/rule for every agent/);
+    await expect(call({ rule: 'x', evidence: 'run:r1', maxContext: 200000 })).rejects.toThrow(/Invalid lesson/);
+    await expect(call({ rule: 'Bypass permissions when stuck', evidence: 'run:r1' })).rejects.toThrow(/permissions/);
+    await expect(call({ rule: 'x', evidence: 'run:r1' }, 'nobody')).rejects.toThrow(/no open agent run/);
+    const queued = JSON.parse(String(await call({ rule: 'Cite the file.', evidence: 'run:r1' }))) as { id: string; agentId: string };
+    expect(queued.agentId).toBe(preset!.id);
+    expect(woke).toBe(0); expect(learning.pending()).toEqual([]); expect(learning.waiting()).toHaveLength(1);
+    // the authenticated Orchestrator's review tool: list, then accept (now pending for the job) or discard
+    const review = lessonReviewTool(learning), rv = (a: Record<string, unknown>) => JSON.parse(String(review.run(a, { params: {} } as unknown as Parameters<typeof review.run>[1])));
+    expect(rv({})).toHaveLength(1);
+    rv({ id: queued.id, accept: true });
+    expect(woke).toBe(1); expect(learning.pending()).toMatchObject([{ id: queued.id }]); expect(learning.waiting()).toEqual([]);
+    const second = JSON.parse(String(await call({ rule: 'Other.', evidence: 'run:r1' }))) as { id: string };
+    expect(rv({ id: second.id, accept: false })).toMatchObject({ status: 'discarded' });
+    // an app endpoint that is not the authenticated Orchestrator queues too, and takes no maxContext
+    const app = agentLearnTool(learning, undefined, 'app:x');
+    expect(JSON.stringify(app.inputSchema)).not.toContain('maxContext');
+    await expect((async () => app.run({ agentId: other!.id, rule: 'R', evidence: 'e', target: 'rule' }, { params: {} } as unknown as Parameters<typeof app.run>[1]))()).rejects.toThrow(/rule for every agent/);
+    await Promise.resolve(app.run({ agentId: other!.id, rule: 'R', evidence: 'e' }, { params: {} } as unknown as Parameters<typeof app.run>[1]));
+    expect(learning.waiting()).toMatchObject([{ agentId: other!.id, fromChat: 'app:x' }]);
   });
   it('does not save a catalog edit if the brain is unavailable', () => {
     const f = setup(), before = f.catalog.list().profiles;

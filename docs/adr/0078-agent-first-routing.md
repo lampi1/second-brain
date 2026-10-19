@@ -44,7 +44,9 @@ user's message. Agents had no per-agent context limit.
 - **Workers start catalog sub-agents.** `agent_start_subagent` on each chat's own endpoint: the caller is the chat
   the token names; it needs an open agent run; the child is created by the worker's Orchestrator's own
   `app_create_chat` (same checks) with `parentRunId` = the worker's run, answers to that Orchestrator and is told to
-  send its result to the worker; at most 3 open children per run, 2 levels deep. `agent_children` /
+  send its result to the worker; at most 3 open children per run (reserved before the chat is created), 2 levels deep;
+  the child profile's tools, MCP servers and ceiling must fit inside the worker's effective policy, and its folder is
+  the worker's or one of its git worktrees (security review, 2026-10-19). `agent_children` /
   `agent_child_feedback` already list and judge them. The Orchestrator's role and every work chat's first prompt say
   the path exists.
 - **Legacy profiles get guidance.** Imports carry a "when to use" and short instructions from their row's kind and

@@ -253,8 +253,17 @@ export class AppSourceService {
     }
     const st = await this.read();
     if (!st.candidate) return this.setSource({ state: 'done', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
-    this.setSource({ state: 'updating', message: 'Preparo la versione nuova…' });
     this.promoting = true;
+    // right before promoting: nothing on HEAD that GitHub's main does not have (a local commit is never promoted untested)
+    const ahead = await git(repo, ['rev-list', '--count', 'refs/remotes/origin/main..HEAD']).then(o => Number(o.trim()), () => Number.NaN);
+    if (ahead !== 0) {
+      this.promoting = false;
+      log.warn('update', 'switch refused: HEAD is not on origin/main', { cause: Number.isFinite(ahead) ? `${ahead} local commits` : 'origin/main unreadable', hint: 'promote local commits with npm run promote (tests), or reset the code folder to origin/main' });
+      return this.setSource({ state: 'error', canUpdate: false, message: Number.isFinite(ahead)
+        ? `La cartella del codice ha ${ahead} commit locali che GitHub non ha: «Aggiorna» non li promuove senza test. Usa npm run promote.`
+        : 'Non riesco a confrontare la cartella del codice con GitHub (origin/main): «Aggiorna» non promuove senza questo controllo.' });
+    }
+    this.setSource({ state: 'updating', message: 'Preparo la versione nuova…' });
     this.spawnPromote(repo, {
       ok: version => this.setSource({ state: 'restarting', behind: 0, commits: [], canUpdate: false, message: `Versione ${version ?? 'nuova'} pronta: riavvio…` }),
       failed: why => this.setSource({ state: 'error', canUpdate: false, message: why }),
