@@ -10,7 +10,7 @@
 │            /mcp/chat/<id>/<token> (one per app chat: its own tabs)            │
 │            /mcp/app, /mcp/app/r/<id>/<token> (app control per Regia, ADR 0021)│
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
-│            usage · costs · budget · estimates · quality · model routing       │
+│            usage · costs · budget · estimates · quality · model defaults      │
 │   devops/  DevOps page (brain script, read only) · run/ "Esegui" shell blocks │
 │   search/  Ctrl+K index · skills/ skills page · improve/ "Migliora l'app"     │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │

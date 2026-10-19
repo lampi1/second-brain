@@ -923,17 +923,24 @@ export interface RoutingTable {
 export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
 /** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
  *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
-/** How a chat's engine was chosen: table = its row; default = no row, the user's "Chat aperte dalla Regia"; override =
- *  the agent named something else, with a reason. */
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[];
+  /** per kind: the app's chats in the ledger, how many have a known outcome, how many succeeded (ADR 0078) */
+  kindStats?: Partial<Record<TaskKind, { chats: number; known: number; ok: number }>> }
+/** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
+ *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
+ *  "Chat aperte dalla Regia"; override = the agent named something else, with a reason. */
 export interface RouteDecision {
-  policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore';
+  policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore' | 'agent';
   reason: string | null; kind: TaskKind; area: string; at: number;
+  /** source agent: which agent, who picked it (the Orchestrator by agentId, the classifier, a worker for its sub-agent,
+   *  Generale as the fallback) and, when the classifier ranked it, its score against the threshold in force (ADR 0078) */
+  agent?: RouteAgent;
   /** a chat that continues a routed one ("Riprendi"): the ledger id of the first chat, so one job keeps one outcome */
   ledgerId?: string;
   /** how many hand-offs led to this chat */
   handoffs?: number;
 }
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'classifier' | 'parent' | 'fallback'; score?: number; threshold?: number; mode?: 'hybrid' | 'words'; modelFrom?: 'profile' | 'table' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };

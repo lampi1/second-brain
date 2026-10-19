@@ -55,7 +55,7 @@ attention management and the memory.
   permissions surface as panels wherever the user is looking, a Regia (a coordinating chat, always at the top, full
   width) decides what comes next, and notifications fire only when there is something to do.
 - **Chat management is a core strength, not a thin layer.** Chats are compact strips, collapsed by default, with
-  reliable estimates, expanding smoothly. Stop, costs, estimates, model routing and the link with the brain get the
+  reliable estimates, expanding smoothly. Stop, costs, estimates, the choice of agent and the link with the brain get the
   same care as the brain itself. View state, tile behaviours and key bindings are data, so the user and the AI can
   reshape them live (ADR 0008). Visual templates change without rebuilding features.
 - **The brain is data, the app is product.** The app points to a brain folder: plain Markdown files and small Node
@@ -95,7 +95,9 @@ Chats as tiles with streaming, tools and diffs; questions and permissions as pan
 Regie; mail between chats; long chats handed off before the context fills; code blocks run with one click and their
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
 pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a DevOps page (pull requests, work items, QA
-status, alerts); quality metrics; full-text search; per-task model routing; and "Migliora l'app", where the app's own
+status, alerts); quality metrics; full-text search; agent-first delegation (the Orchestrator or the local classifier picks a catalog
+agent, whose profile sets engine, model, effort and maximum context; workers start catalog sub-agents; the routing
+table only fills a model a profile leaves open, ADR 0078); and "Migliora l'app", where the app's own
 Regia improves the app on branches and the user promotes a tested build.
 
 ## Horizon (designed for, not built yet)

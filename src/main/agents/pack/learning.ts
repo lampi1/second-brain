@@ -52,11 +52,17 @@ export class AgentPackLearning {
   }
 }
 
-export function agentLearnTool(service: AgentPackLearning): McpTool {
-  return { name: 'agent_learn_propose', description: 'Record one lesson from the user\'s corrections, with evidence (run ids). The app applies it at once, without asking the user, and logs it with an undo: target "role" (default) adds it to the agent\'s role, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every agent). Never for permissions, settings or hooks.',
-    inputSchema: { type: 'object', properties: { agentId: { type: 'string' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill', 'rule'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
+/** The lessons tool. With `setting`, it also takes a "Contesto massimo" change (maxContext, issue #80): a setting, so
+ *  queued as an agent_update proposal for the user (Agenti → Da approvare), never applied by itself. */
+export function agentLearnTool(service: AgentPackLearning, setting?: (agentId: string, patch: { maxContext: number | null }, evidence: string, callerChatId: string | undefined) => unknown): McpTool {
+  return { name: 'agent_learn_propose', description: `Record one lesson from the user's corrections, with evidence (run ids). The app applies it at once, without asking the user, and logs it with an undo: target "role" (default) adds it to the agent's role, "skill" to the named skill (how a job is done), "rule" to the brain's rules (applies to every agent). Never for permissions, settings or hooks.${setting ? ' To propose the agent\'s maximum context instead, pass maxContext (tokens, 100000-1000000, or null for the app setting) with evidence and no rule: it is a setting, so it becomes a proposal in Agenti → Da approvare (only Claude engines apply it).' : ''}`,
+    inputSchema: { type: 'object', properties: { agentId: { type: 'string' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill', 'rule'] }, skill: { type: 'string' }, ...(setting ? { maxContext: { type: ['integer', 'null'], minimum: 100000, maximum: 1000000 } } : {}) }, required: setting ? ['agentId', 'evidence'] : ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    run: args => {
+    run: (args, ctx) => {
+      if (setting && args.maxContext !== undefined) {
+        if (Object.keys(args).some(k => !['agentId', 'evidence', 'maxContext'].includes(k)) || typeof args.agentId !== 'string' || typeof args.evidence !== 'string' || !(args.maxContext === null || Number.isSafeInteger(args.maxContext))) throw new Error('Invalid maximum-context proposal: agentId, evidence and maxContext (integer or null), no rule');
+        return Promise.resolve(setting(args.agentId, { maxContext: args.maxContext as number | null }, args.evidence, ctx?.params?.chatId)).then(r => JSON.stringify(r));
+      }
       if (Object.keys(args).some(k => !['agentId', 'rule', 'evidence', 'target', 'skill'].includes(k)) || typeof args.agentId !== 'string' || typeof args.rule !== 'string' || typeof args.evidence !== 'string'
         || (args.target !== undefined && typeof args.target !== 'string') || (args.skill !== undefined && typeof args.skill !== 'string')) throw new Error('Invalid lesson');
       return JSON.stringify(service.propose(args.agentId, args.rule, args.evidence, args.target as LessonTarget | undefined, args.skill as string | undefined));

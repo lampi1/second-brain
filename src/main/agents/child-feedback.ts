@@ -1,6 +1,6 @@
 // The sub-agent half of the improvement loop, on every chat's own MCP endpoint (/mcp/chat/:chatId/:token): an agent that
 // had a catalog sub-agent started for it (a run whose parentRunId is one of its runs: the Orchestrator's app_create_chat
-// with parentRunId, the "request" path) lists those runs with agent_children and gives its opinion of them with
+// with parentRunId, or the agent's own agent_start_subagent, agents/subagent-tool.ts) lists those runs with agent_children and gives its opinion of them with
 // agent_child_feedback, which writes through the same lifecycle facade as the Orchestrator's agent_feedback (the one
 // feedback store, the metrics, the repeated-gap proposals, the trial evaluation). Why: the owner (2026-10-18) wants the
 // agents that use sub-agents to go through the same request and feedback as the Orchestrator. The caller is the chat the
@@ -20,7 +20,7 @@ export function childFeedbackTools(api: Pick<LifecycleApi, 'childFeedback' | 'ch
   const { sendToRun: _s, ...properties } = AGENT_FEEDBACK_SCHEMA.properties; void _s;
   return [{
     name: 'agent_children',
-    description: 'Your agent run ids and the catalog sub-agent runs started for you (parentRunId = one of your runs), with their runId, agent, version, state and outcome. To get a sub-agent, ask the Orchestrator with send_to_chat (agent, goal, and your runId as parentRunId); when its run ends, judge it with agent_child_feedback.',
+    description: 'Your agent run ids and the catalog sub-agent runs started for you (parentRunId = one of your runs), with their runId, agent, version, state and outcome. To get a sub-agent, start one from the catalog with agent_start_subagent (or ask the Orchestrator with send_to_chat); when its run ends, judge it with agent_child_feedback.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => {
