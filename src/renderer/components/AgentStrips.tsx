@@ -16,6 +16,7 @@ import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
 import { toggleMaximize } from '../actions';
 import { pairOf, pairStyle } from '../lib/pairs';
+import { useCloudIds } from '../store/cloud';
 import '../styles/agent-strips.css';
 
 /** Below this column width a chat and its browser stack instead of sitting side by side. */
@@ -42,6 +43,7 @@ export function AgentStrips() {
   const pairs = useApp(s => tiles.map(t => t.kind === 'browser' ? pairOf(s, s.tabs.find(tab => tab.id === t.id)?.ownerChatId) : null), sameList);
   const maximized = ui.use(s => s.maximized);
   const keep = useHandoffTabs();
+  const clouds = useCloudIds().length; // cloud agents' strips follow (CloudStrips.tsx, ADR 0080): not an empty Grindhouse
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
   // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs from before v2 expanded them all
   useEffect(() => { if (ready && panelsVersion !== 2) setPrefs({ chatPanelsV: 2, chatExpanded: {} }); }, [ready, panelsVersion]);
@@ -77,7 +79,7 @@ export function AgentStrips() {
       <div className="agent-pane-content">{tile.kind === 'chat' ? <ChatTile chatId={tile.id} index={chatIndices.get(key)} maximized={!!max} /> : <BrowserTile tabId={tile.id} maximized={!!max} />}</div>
     </div>;
   };
-  if (!shown.length) return <p className="home-calm" data-testid="agents-empty">{tr('home.emptyAgents')}</p>;
+  if (!shown.length) return clouds ? null : <p className="home-calm" data-testid="agents-empty">{tr('home.emptyAgents')}</p>;
   return <div className={`agent-strips${narrow ? ' is-narrow' : ''}`} data-testid="view-agents" ref={setColumn}>
     <div className={`workspace-column${max ? ' workspace-max' : ''}`} {...(max ? { 'data-testid': 'maximized', 'data-key': tileKey(max) } : {})}>
       {rows.map(({ lead, side }, i) => {

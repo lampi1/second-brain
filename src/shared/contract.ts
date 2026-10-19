@@ -19,6 +19,8 @@ import type { AppProposal, ProposalAvailability, ProposalPublication } from './i
 import type { BrainCreationCapability, CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
+import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
@@ -51,6 +53,8 @@ export interface EngineCaps {
   preAllow: boolean;
   /** the engine works with tools (files, shell, MCP: the browser, the app's tools); false = text only (api) */
   tools: boolean;
+  /** the engine's cloud agents (ADR 0080; shared/cloud.ts CLOUD_CAPS): absent = none */
+  cloud?: CloudCaps;
 }
 /** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
 export interface EngineInfo {
@@ -1382,6 +1386,20 @@ export interface InvokeMap {
   'pulse:runNow': [void, PulseResult];
   'approvals:list': [{ agentId?: string }, ApprovalItem[]];
   'approvals:decide': [ApprovalDecision, PulseResult];
+  /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
+  'cloud:list': [{ refresh?: boolean } | void, CloudState];
+  /** the user's click (or app_create_chat where:'cloud'): fails closed with the reason (not signed in, no GitHub remote…) */
+  'cloud:start': [CloudStartRequest, CloudAgent];
+  'cloud:followUp': [{ id: string; text: string }, CloudAgent];
+  'cloud:stop': [{ id: string }, CloudAgent];
+  /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
+  'cloud:apply': [{ id: string }, CloudApplyResult];
+  /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
+  'cloud:watch': [{ id: string | null }, void];
+  /** whether each engine can start a cloud agent from this folder now (key, sign-in, GitHub remote, pushed branch) */
+  'cloud:readiness': [{ cwd: string }, Record<string, { ok: boolean; why?: string }>];
+  /** forget a finished agent (the vendor keeps it) */
+  'cloud:dismiss': [{ id: string }, CloudState];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
@@ -1454,6 +1472,7 @@ export interface EventMap {
   'headline:changed': HeadlineState;
   'pulse:changed': void;
   'approvals:changed': void;
+  'cloud:changed': CloudState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1484,6 +1503,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
+  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'pulse:changed', 'approvals:changed',
@@ -1494,6 +1514,7 @@ export const EVENT_CHANNELS = [
   'agents:changed', 'agents:lifecycleChanged',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
+  'cloud:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

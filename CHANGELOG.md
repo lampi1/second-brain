@@ -10,6 +10,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   count and is fitted to the panel's own size and aspect (centred, filling it, re-fitted on resize); labels are placed
   at their real size and a minor label with no free spot is hidden instead of overlapping; "Adatta" re-fits the whole
   map (issue #77).
+### Added
+- Cloud agents in the Grindhouse (ADR 0080, #79): Cursor Cloud Agents (REST API: start, list, live messages,
+  follow-up, stop, spend in the Cursor budget), Codex cloud tasks (start, list, `codex apply`) and Claude Code cloud
+  sessions (start, follow-up, link) as strips with a "cloud" badge, grouped by repository; "Nuovo agente" gets
+  "Dove: Locale / Cloud" gated by each engine's readiness; `app_create_chat` takes `where: 'cloud'`; "Porta in locale"
+  into a new worktree; the Cursor Cloud Agents key in Settings → Motori → Cursor; fake cloud agents in the demo.
+  GitHub repos only; the app never pushes.
 
 ### Changed
 - Grindhouse strips: a click expands an agent every time again (text selected elsewhere, such as an Orchestrator

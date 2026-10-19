@@ -1,3 +1,4 @@
+import { cloudEn } from './areas/cloud.en';
 import { agentPackEn } from './areas/agent-pack.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
@@ -41,6 +42,7 @@ export const en: Dict = {
   ...reviewedContextEn,
   ...setupEn,
   ...homeEn,
+  ...cloudEn,
   ...guideEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',

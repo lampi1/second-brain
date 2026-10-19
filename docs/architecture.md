@@ -13,6 +13,7 @@
 │            usage · costs · budget · estimates · quality · model routing       │
 │   devops/  DevOps page (brain script, read only) · run/ "Esegui" shell blocks │
 │   search/  Ctrl+K index · skills/ skills page · improve/ "Migliora l'app"     │
+│   cloud/   cloud agents: Cursor REST v1 · codex cloud · claude --cloud (0080) │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │
 └───────────────▲──────────────────────────────────────────┬────────────────────┘
@@ -42,6 +43,11 @@
   (`waitsOn`, `shared/waiting.ts`), a question/permission is open or background work runs. The main AutoCloseService
   archives it after the `autoCloseMin` delay and its warning (`closedBy: 'auto'`); a held chat carries `waitingFor`
   in `chat:autoCloseStatus` and its strip shows "In attesa di…".
+- **A cloud agent** (ADR 0080): "Nuovo agente → Dove: Cloud" or `app_create_chat where:'cloud'` → `cloud:start` →
+  CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
+  starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
+  (`CloudStrips.tsx`). The vendors' lists are polled only while the window is visible (30 s while running, back-off to
+  10 min); the strip the user opens streams its run (Cursor SSE); Cursor's usage goes to `engines/spend.ts`.
 - **Stop**: `chat:stop` → control `interrupt` (Claude) / `session/cancel` (Cursor); `chat:stopAll` = every running
   chat.
 - **A browser action by an agent**: CLI calls the MCP tool on its own endpoint → BrowserService acts on that chat's

@@ -3,7 +3,8 @@
 // the text-only calls on the user's Anthropic API key (text.ts, ADR 0052). The renderer reaches it only through the
 // secrets:*, engines:trust and engines:spend channels (index.ts), which only the app's own page can call; no MCP tool
 // reaches the keys (the text endpoint, text-mcp.ts, gets only answers). keyFor is for main alone: the chat manager hands
-// a key to its own engine's process or request. Used by wiring.ts and demo-wiring.ts.
+// a key to its own engine's process or request. One key is not an engine's: the Cursor Cloud Agents key (ADR 0080,
+// CLOUD_KEYS), bound to Cursor's API host and given only to cloud/cursor.ts. Used by wiring.ts and demo-wiring.ts.
 import path from 'node:path';
 import type { ApiSpendInfo, Harness, SecretsStatus, SettingChange, Settings, SettingsPatch } from '../../shared/contract';
 import { BrainEngines } from '../brain/engines';
@@ -13,6 +14,10 @@ import { SecretStore, type SecretCipher } from './secrets';
 import { ApiSpend } from './spend';
 import { TextModel } from './text';
 import { EngineTrust } from './trust';
+
+/** Keys that belong to a vendor's cloud API, not to an engine's start (ADR 0080): id → what the key is bound to. */
+export const CLOUD_KEYS: Readonly<Record<string, string>> = { 'cursor-cloud': 'cloud:https://api.cursor.com/v1' };
+const cloudBound = (id: Harness): string | undefined => (Object.hasOwn(CLOUD_KEYS, id) ? CLOUD_KEYS[id] : undefined);
 
 export interface EnginesApi {
   secretsStatus(): SecretsStatus;
@@ -50,7 +55,7 @@ export function createEngines(d: EnginesDeps): EnginesApi {
   const offEngines = onEnginesChanged(() => d.emitter.emit('engines:changed', engineInfos()));
   const offSettings = d.settings.onSettingChange(c => trust.onSetting(c));
   brain.start(d.everyMs);
-  const boundOf = (id: Harness): string | null => { const e = engineOf(id); return e ? fingerprint(e) : null; };
+  const boundOf = (id: Harness): string | null => { const c = cloudBound(id); if (c) return c; const e = engineOf(id); return e ? fingerprint(e) : null; };
   const takesKey = (id: Harness) => {
     const e = engineOf(id);
     if (!e) throw new Error(`Motore sconosciuto: ${id}`);
@@ -58,12 +63,13 @@ export function createEngines(d: EnginesDeps): EnginesApi {
     return e;
   };
   function keyFor(id: Harness): string | null {
+    const c = cloudBound(id); if (c) return secrets.get(id, c);
     const e = engineOf(id);
     return e && e.key !== 'none' ? secrets.get(id, fingerprint(e)) : null;
   }
   return {
     secretsStatus: () => secrets.status(boundOf),
-    setSecret: (id, key) => { const e = takesKey(id); secrets.set(id, key, fingerprint(e)); return secrets.status(boundOf); },
+    setSecret: (id, key) => { secrets.set(id, key, cloudBound(id) ?? fingerprint(takesKey(id))); return secrets.status(boundOf); },
     deleteSecret: id => { secrets.delete(id); return secrets.status(boundOf); },
     trust: async id => {
       if (!engineOf(id)) throw new Error(`Motore sconosciuto: ${id}`);
