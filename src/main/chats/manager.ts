@@ -462,7 +462,7 @@ export class ChatManager implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
-  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean } = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; continuation?: boolean } = {}): Promise<ChatSummary> {
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
@@ -479,7 +479,7 @@ export class ChatManager implements ChatService {
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
-    const delegator = req.parentId !== undefined ? await this.delegator(req, by) : undefined;
+    const delegator = req.parentId !== undefined ? await this.delegator(req, by, opts.continuation === true) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
     // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews. A root chat the
     // Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's read-only policy:
@@ -583,9 +583,10 @@ export class ChatManager implements ChatService {
 
   /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
    *  Orchestrator opens root chats with app_create_chat), and the child's folder lies inside the parent's. */
-  private async delegator(req: NewChat, by: 'user' | 'agent' | 'app'): Promise<Rec> {
+  /** continuation: "Riprendi" of a delegated chat, by whoever clicks it: the successor is the same child of the same parent */
+  private async delegator(req: NewChat, by: 'user' | 'agent' | 'app', continuation = false): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
-    if (by !== 'agent' || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     // the parent's folder, or a worktree of its repository (agents/worktrees.ts); git is asked only when it matters, and
     // the parent may have closed meanwhile
@@ -1184,19 +1185,17 @@ export class ChatManager implements ChatService {
     // a delegated chat goes on as the same child: under its parent, with its contract, its result still the parent's
     // (never a root chat that escapes the limits or that the Orchestrator could read, ADR 0083)
     const parentRec = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    if (r.s.parentId && !parentRec) throw new Error('La chat che l’ha delegata non c’è più: questa non si riprende da sola.');
     const c = await this.create({
       harness: r.s.harness, cwd: r.s.cwd, title: nextTitle(r.s.title, taken),
       ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}), ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
+      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
     }, 'user', { owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    parentRec?.s.run ? { parentRunId: parentRec.s.run.runId } : {});
+    {}, { continuation: !!parentRec });
     const nr = this.chats.get(c.id);
-    if (nr && r.s.parentId) {
-      nr.s.parentId = r.s.parentId;
-      if (r.s.delegation) nr.s.delegation = structuredClone(r.s.delegation);
-    }
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     // the agent's work goes on in a new run: the old one counts as reworked (§5)

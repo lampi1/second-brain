@@ -28,7 +28,7 @@ const catalog = (): AgentCatalog => ({ problem: null, archived: [], models: [], 
     launches: r.launches, skills: r.skills, tools: { allow: r.tools }, permissionCeiling: r.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles: () => AgentCatalog = catalog) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles: () => AgentCatalog = catalog, onSend?: (chatId: string) => void) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string } }[] = [];
@@ -43,7 +43,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
     sessionFactory: (_h, o, s) => {
       starts.set(o.chatId, o); sinks.set(o.chatId, s);
       return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
-        start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), text]); },
+        start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), text]); onSend?.(o.chatId); },
         close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {},
         answer: (id: string, answer: { allow?: boolean; message?: string }) => { answers.push({ chat: o.chatId, id, answer }); return true; },
         rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
@@ -257,13 +257,16 @@ describe('agent_delegate', () => {
   });
 
   it('"Riprendi" on a delegated chat goes on as the same child: under its parent, with its contract, its policy and its skills', async () => {
-    const f = fixture();
+    // never a root chat, not even for a moment: when its first message reaches the engine it is already the child
+    const parentAtSend = new Map<string, string | undefined>();
+    const f: ReturnType<typeof fixture> = fixture({}, undefined, catalog, id => { if (!parentAtSend.has(id)) parentAtSend.set(id, f.m.list().find(c => c.id === id)?.parentId); });
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log', { skills: ['logs'] })] });
     const kid = f.m.list().find(c => c.parentId === parent.id)!;
     await f.m.ensureHandoff(kid.id, { ask: false }); // the token-free note (the fake engine writes none)
     const next = await f.m.continueChat(kid.id, { allowStart: false });
     expect(next.id).not.toBe(kid.id);
+    expect(parentAtSend.get(next.id)).toBe(parent.id);
     const cont = f.m.list().find(c => c.id === next.id)!;
     expect(cont).toMatchObject({ parentId: parent.id, delegation: { role: 'scout', goal: 'Goal of Ordini · Log', doneWhen: ['criterion A'] } });
     expect(cont.run?.parentRunId).toBe(parent.run?.runId);
