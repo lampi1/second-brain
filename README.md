@@ -235,6 +235,8 @@ Costs, budgets and estimates per agent and per day sit next to them.
   each with its tools, permission ceiling, model tier and skills, editable in Brain → Agenti. A role delegates parts of
   its task to the roles it may launch (`agent_delegate`) as visible child chats with a self-contained contract; a
   child never gets more permissions than its parent, works in its folder, and reports once (`agent_report`). The
+  planners (Strategist, Router) launch only Scout and Judge: what must change goes in their report and the
+  Orchestrator starts it, so every change starts from the Orchestrator. The
   depth and the children at once are your limits (Impostazioni → Ruoli e deleghe). The Orchestrator sees only their
   state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day on
   another model.

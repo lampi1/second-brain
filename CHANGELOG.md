@@ -9,7 +9,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,
   Herald, Router, Judge and Scribe replace the agent catalog, its Italian presets and the routed profiles; each role's
   tools, permission ceiling, model tier and model are edited in Brain → Agenti, and a role uses only the skills its
-  launch gave it. A role delegates to the roles it may launch with `agent_delegate`: visible child chats with a
+  launch gave it. A role delegates to the roles it may launch, only those that fit within its own tools (the
+  planners Strategist and Router launch Scout and Judge; changes go back to the Orchestrator), with `agent_delegate`: visible child chats with a
   self-contained contract, never more permissions than the parent, inside its folder, within your limits (Impostazioni
   → Ruoli e deleghe: depth, children at once); each reports once with `agent_report`. No hidden sub-agents: an
   engine's own sub-agent only for a quick read-only search. A child's permission above its parent's is refused and said

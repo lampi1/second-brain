@@ -103,9 +103,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/delegation.ts agent_delegate; src/shared/delegation.ts delegationPrompt
       b('agent_delegate avvia da 1 a 10 chat figlie insieme, ognuna con un contratto che basta a sé: obiettivo, risultato atteso, criteri di fatto, contesto. Il figlio non legge mai la conversazione del genitore.',
         'agent_delegate starts 1 to 10 child chats at once, each with a self-contained contract: goal, expected output, done-when criteria, context. The child never reads the parent’s conversation.'),
-      // src/main/agents/delegation.ts allowsClass, within; src/main/agents/role-gate.ts aboveParent
-      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella; una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat.',
-        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder; a request beyond the parent’s permissions is refused and says so in the chat.'),
+      // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
+      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Per questo chi pianifica (Strategist, Router) lancia solo chi legge (Scout, Judge): il lavoro che cambia qualcosa lo scrive nel suo risultato e lo avvia l’Orchestrator.',
+        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. That is why a planner (Strategist, Router) launches only the reading roles (Scout, Judge): the work that changes something goes in its result and the Orchestrator starts it.'),
       // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),

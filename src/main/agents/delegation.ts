@@ -13,7 +13,7 @@
 // parent's chat. A child may run on another engine only when the user allows chats across engines. Used by wiring.ts.
 import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun } from '../../shared/agents';
-import { canLaunch, isWorkRole, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
+import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
 import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
@@ -96,11 +96,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
-      if (!canLaunch(own.launches, role)) throw new Error(`tasks[${i}]: ${own.name} may not launch ${ROLE_DEFAULTS[role].name} (it launches ${own.launches.join(', ') || 'none'}).`);
+      if (!canLaunch(own.launches, role)) throw new Error(`tasks[${i}]: ${own.name} may not launch ${ROLE_DEFAULTS[role].name} (it launches ${own.launches.join(', ') || 'none'}). Put this part in your report as a ready contract (role, goal, done-criteria): the Orchestrator starts it.`);
       const profile = catalog.profiles.find(p => p.id === role);
       if (!profile) throw new Error(`tasks[${i}]: ${role} is not in the catalog.`);
-      // a child is narrowed by its parent: a Scribe under a parent without brain-write could edit nothing
-      if (role === 'scribe' && !allowsClass(parentPolicy, 'brain-write')) throw new Error(`tasks[${i}]: a Scribe needs brain-write, which you do not have; say in your report what the brain should record and the Orchestrator starts a Scribe.`);
+      // a child is narrowed by its parent: a role that needs a class the parent lacks (read-only ones aside) could not
+      // do its job, so the parent reports that work and the Orchestrator starts it as a root chat (ADR 0083)
+      const gap = launchGap(profile.tools?.allow ?? [], parentPolicy?.tools ? parentPolicy.tools.allow : null);
+      if (gap.length) throw new Error(`tasks[${i}]: ${profile.name} needs ${gap.join(', ')}, which you do not have, so under you it could not do its job. Put this part in your report as a ready contract (role, goal, done-criteria): the Orchestrator starts it.`);
       const title = typeof t.title === 'string' ? t.title.trim() : '';
       if (!title || title.length > TITLE_MAX) throw new Error(`tasks[${i}].title: 1 to ${TITLE_MAX} characters ("Area · what").`);
       if (title.toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`tasks[${i}].title: «${title}» is reserved for the Orchestrator.`);

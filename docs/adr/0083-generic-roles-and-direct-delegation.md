@@ -33,9 +33,11 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
      and a child's permission request beyond its parent's is refused and said in its chat (`sys.aboveParent`).
    - A root chat the Orchestrator opens runs its own role's tools and ceiling within the user's defaults, never the
      Orchestrator's read-only policy (the Orchestrator plans; the Artisan it starts writes).
-   - The Scribe is launched only by a role with `brain-write` (none of the defaults but the Orchestrator): under a
-     Strategist or a Router it would be narrowed to read-only and edit nothing, so `agent_delegate` refuses it and the
-     parent puts what the brain should record in its report; the Orchestrator starts the Scribe as a root chat.
+   - A role launches only roles that fit within its own tools (`shared/roles.ts` `launchGap`: every class the child
+     role needs, the read-only ones aside, must be the parent's): a child needing more could not do its job, so
+     `agent_delegate` refuses it and tells the parent to put that part in its report as a ready contract; the
+     Orchestrator starts it as a root chat. The planners (Strategist, Router) launch only Scout and Judge (owner,
+     2026-10-19: planners stay planners, all work starts from the Orchestrator).
    - Limits are the user's (Impostazioni → Ruoli e deleghe: depth 2, 5 children at once by default); the slots are
      reserved synchronously; a refusal is a line in the parent's chat and a "Limite" pill on its tree.
    - `agent_report` is the child's one result (outcome, summary, output, every criterion with met and evidence; a goal
@@ -72,11 +74,11 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
   do not conflict. A child changes only within its parent's permissions and folder.
 - A user's custom agents from the old catalog do not carry over (no conversion code, by the owner's rule): export them
   as packs from the previous stable first.
-- The same narrowing holds for every child: an Artisan or a Sentinel delegated by the read-only Strategist runs with
-  the Strategist's tools (read, web) and ceiling (plan), so it investigates and proposes rather than edits; a change
-  that must be made goes back in the report and the Orchestrator starts the Artisan as a root chat. Open point for the
-  owner: give the Strategist (and the Router) a ceiling wide enough for the children they launch, or keep them
-  planners whose writing children stay read-only.
+- The planners stay planners: a Strategist or a Router never launches an Artisan, a Sentinel, a Herald or a Scribe
+  (under them they would be narrowed to read-only and change nothing). Their report carries those parts as ready
+  contracts and the Orchestrator starts them as root chats, so every change starts from the Orchestrator, as the
+  owner wants. A Scout under a planner keeps reading but loses its read-only commands and browser (the planner has
+  neither); an Artisan's Scout keeps them (shell and browser include their read-only variants).
 - The Orchestrator never reads a delegated chat's content by any path: its items, hand-off, continuation, the
   commands it ran (app_digest) and the Judge's samples (only root runs are sampled).
 - Cursor's skill limit is advisory; the Claude skill and sub-agent gates rest on fixtures until a live run confirms

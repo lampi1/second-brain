@@ -12,7 +12,7 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
-import { ROLE_DEFAULTS, ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
+import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import { checkContract, checkResult, delegationPrompt, depthOf, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
@@ -59,13 +59,13 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 }
 
 describe('agent_delegate', () => {
-  it('a Strategist launches a Scout and a Sentinel at once: two children under it, each with its contract only, and their results come back', async () => {
+  it('a Strategist launches a Scout and a Judge at once: two children under it, each with its contract only, and their results come back', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('sentinel', 'Ordini · Test')] });
-    expect(out.children.map((c: { role: string }) => c.role)).toEqual(['scout', 'sentinel']);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('judge', 'Ordini · Verdetto')] });
+    expect(out.children.map((c: { role: string }) => c.role)).toEqual(['scout', 'judge']);
     const kids = f.m.list().filter(c => c.parentId === parent.id);
-    expect(kids.map(k => k.delegation?.role)).toEqual(['scout', 'sentinel']);
+    expect(kids.map(k => k.delegation?.role)).toEqual(['scout', 'judge']);
     for (const k of kids) {
       const first = f.sent.get(k.id)?.[0] ?? '';
       expect(first).toContain(`Goal of ${k.title}`);
@@ -121,9 +121,9 @@ describe('agent_delegate', () => {
 
   it('refuses beyond the depth limit, visibly', async () => {
     const f = fixture({ maxDepth: 2 });
-    const root = await f.root('strategist');
-    const one = (await f.call('agent_delegate', root.id, { tasks: [f.task('artisan', 'Livello 1')] })).children[0].chatId;
-    const two = (await f.call('agent_delegate', one, { tasks: [f.task('sentinel', 'Livello 2')] })).children[0].chatId;
+    const root = await f.root('artisan');
+    const one = (await f.call('agent_delegate', root.id, { tasks: [f.task('sentinel', 'Livello 1')] })).children[0].chatId;
+    const two = (await f.call('agent_delegate', one, { tasks: [f.task('scout', 'Livello 2')] })).children[0].chatId;
     expect(depthOf(two, id => f.m.list().find(c => c.id === id)?.parentId)).toBe(2);
     await expect(f.call('agent_delegate', two, { tasks: [f.task('scout', 'Livello 3')] })).rejects.toThrow(/depth limit 2/);
     expect(f.m.list().filter(c => c.parentId === two)).toHaveLength(0);
@@ -135,15 +135,17 @@ describe('agent_delegate', () => {
     const f = fixture();
     const sub = path.join(f.dir, 'repo'); fs.mkdirSync(sub);
     const parent = await f.root('strategist');
-    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix', { tools: ['edit'] })] })).rejects.toThrow(/edit goes beyond your own permissions/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Cerca', { tools: ['shell-read'] })] })).rejects.toThrow(/shell-read goes beyond your own permissions/);
     await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: os.tmpdir() }] })).rejects.toThrow(/inside yours/);
     await expect(f.m.create({ harness: 'claude', cwd: os.tmpdir(), roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/dentro quella del genitore/);
-    const ok = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('artisan', 'Fix'), cwd: sub }] });
+    // a planner never launches a writing role: the work goes in its report, for the Orchestrator
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*the Orchestrator starts it/);
+    const ok = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Leggi'), cwd: sub }] });
     const child = ok.children[0];
     expect(child.chatId).toBeTruthy();
-    // the Artisan's own edit tools are cut to the Strategist's (read only), its ceiling to the Strategist's
+    // the Scout's read-only commands and browser are cut to the Strategist's tools, its ceiling to the Strategist's
     const start = f.starts.get(child.chatId)!;
-    expect(start.toolPolicy?.allow).not.toContain('edit');
+    expect([...(start.toolPolicy?.allow ?? [])].sort()).toEqual(['read', 'web']);
     expect(start.ceiling).toBe(ROLE_DEFAULTS.strategist.ceiling);
     const scout = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'S')] })).children[0].chatId;
     await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/may not launch Artisan/);
@@ -156,8 +158,19 @@ describe('agent_delegate', () => {
     expect([...(f.starts.get(kid)?.toolPolicy?.allow ?? [])].sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
   });
 
-  it('no default role launches a Scribe without brain-write; one the user allowed is refused at launch, visibly', async () => {
-    for (const id of ROLE_IDS) if (id !== 'orchestrator' && ROLE_DEFAULTS[id].launches.includes('scribe')) expect(ROLE_DEFAULTS[id].tools).toContain('brain-write');
+  it('every default launch fits within the parent\'s tools; a role the user let a planner launch is refused when it needs more, visibly', async () => {
+    for (const id of WORK_ROLE_IDS) for (const kid of ROLE_DEFAULTS[id].launches) expect([id, kid, launchGap(ROLE_DEFAULTS[kid].tools, ROLE_DEFAULTS[id].tools)]).toEqual([id, kid, []]);
+    expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'judge']);
+    expect(ROLE_DEFAULTS.router.launches).toEqual(['scout', 'judge']);
+    // read-only classes are narrowed away, never a reason to refuse; a writing class is
+    expect(launchGap(['read', 'web', 'shell-read', 'browser-read'], ['read'])).toEqual([]);
+    expect(launchGap(['read', 'edit', 'shell'], ['read', 'web'])).toEqual(['edit', 'shell']);
+    expect(launchGap(['read', 'brain-write'], ['read', 'edit'])).toEqual([]);
+    expect(launchGap(['mail-draft', 'mcp'], null)).toEqual([]);
+    const edited = fixture({}, undefined, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('artisan'); return c; });
+    const planner = await edited.root('strategist');
+    await expect(edited.call('agent_delegate', planner.id, { tasks: [edited.task('artisan', 'Fix')] })).rejects.toThrow(/Artisan needs edit, shell, browser.*the Orchestrator starts it/);
+    expect(edited.m.list().filter(c => c.parentId === planner.id)).toEqual([]);
     const f = fixture({}, undefined, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('scribe'); return c; });
     const parent = await f.root('strategist');
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scribe', 'Brain · Nota')] })).rejects.toThrow(/brain-write/);
@@ -182,7 +195,8 @@ describe('agent_delegate', () => {
   it('a child asking for a permission beyond its parent is refused visibly; a hidden sub-agent too; a search is fine', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const child = (await f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).children[0].chatId;
+    // an Artisan under a planner (agent_delegate never launches one; the manager's own guard still holds)
+    const child = (await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', parentId: parent.id, title: 'Fix', prompt: 'x' }, 'agent')).id;
     f.sinks.get(child)!.pending({ id: 'e1', type: 'permission', tool: 'Edit', title: 'Edit src/a.ts', detail: '', input: { file_path: 'src/a.ts' }, at: 1 });
     expect(f.answers.find(a => a.id === 'e1')?.answer).toMatchObject({ allow: false });
     expect(f.m.pending().some(p => p.id === 'e1')).toBe(false);

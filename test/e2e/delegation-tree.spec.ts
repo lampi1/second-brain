@@ -1,5 +1,5 @@
 // Direct parent-to-child delegation in the real app (ADR 0083), with the fake Claude CLI calling the chat's own MCP
-// endpoint (agent_delegate, agent_report) as the real CLI would: a Strategist launches a Scout and a Sentinel, both show
+// endpoint (agent_delegate, agent_report) as the real CLI would: a Strategist launches a Scout and a Judge, both show
 // as thread cards under it in the Grindhouse (expanding in place into their chat, "Vai alla chat" opening focus mode)
 // and in the sidebar tree (a row brings its card on screen), their results come back to it as messages,
 // and the fold of the tree survives a restart; a child's question shows in the parent's open chat and the child goes on
@@ -46,7 +46,7 @@ async function skipSetup(page: Page) {
 const strategist = (page: Page, cwd: string, prompt: string, title = 'Piano rilascio'): Promise<ChatSummary> =>
   page.evaluate(([dir, p, t]) => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: p, title: t, roleId: 'strategist' }), [cwd, prompt, title] as const);
 
-test('a Strategist launches a Scout and a Sentinel: indented children, results back, the fold survives a restart', async () => {
+test('a Strategist launches a Scout and a Judge: indented children, results back, the fold survives a restart', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const first = await start();
   const userData = first.userData;
@@ -56,21 +56,21 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await closeSetup(page);
     const parent = await strategist(page, cwd, delegate([
       task('scout', 'Log errori', reportGoal('Cerca nei log di ieri.', 'Trovati 3 errori nel servizio ordini', 'Elenco degli errori con la riga'), 'Elenco degli errori con la riga'),
-      task('sentinel', 'Controllo test', reportGoal('Controlla la suite.', 'La suite passa: 42 su 42', 'Esito della suite'), 'Esito della suite'),
+      task('judge', 'Controllo test', reportGoal('Controlla la suite.', 'La suite passa: 42 su 42', 'Esito della suite'), 'Esito della suite'),
     ]));
     expect(parent.agent).toMatchObject({ id: 'strategist', name: 'Strategist' });
     await expect.poll(async () => (await childrenOf(page, parent.id)).length, { timeout: 20000 }).toBe(2);
     const kids = await childrenOf(page, parent.id);
-    const scout = kids.find(c => c.agent?.id === 'scout')!, sentinel = kids.find(c => c.agent?.id === 'sentinel')!;
+    const scout = kids.find(c => c.agent?.id === 'scout')!, judge = kids.find(c => c.agent?.id === 'judge')!;
     expect(scout).toMatchObject({ title: 'Log errori', delegation: { role: 'scout', doneWhen: ['Elenco degli errori con la riga'] } });
     expect(scout.run?.startedBy).toBe('parent');
-    expect(sentinel.title).toBe('Controllo test');
+    expect(judge.title).toBe('Controllo test');
 
     // both results come back to the parent as messages, and each child carries its own
     await expect.poll(async () => (await items(page, parent.id)).filter(i => i.kind === 'user' && textOf(i).includes('[risultato · ')).length, { timeout: 20000 }).toBe(2);
     const back = (await items(page, parent.id)).filter(i => i.kind === 'user').map(textOf).join('\n');
     expect(back).toContain('[risultato · Scout «Log errori»] Trovati 3 errori nel servizio ordini');
-    expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
+    expect(back).toContain('[risultato · Judge «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
     // the Grindhouse: the children right under the parent, on thread lines, as thread cards with their result
@@ -81,7 +81,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
     await expect(card).toContainText('esito inviato a Strategist');
     await expect(card).toContainText('Scout');
-    await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toContainText('La suite passa');
+    await expect(page.getByTestId(`delegation-card-${judge.id}`)).toContainText('La suite passa');
     const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, cBox = (await card.boundingBox())!;
     expect(cBox.x).toBeGreaterThan(pBox.x + 8);
     expect(cBox.y).toBeGreaterThan(pBox.y);
@@ -90,7 +90,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`nav-tree-${sentinel.id}`)).toHaveAttribute('data-depth', '1');
+    await expect(page.getByTestId(`nav-tree-${judge.id}`)).toHaveAttribute('data-depth', '1');
     await page.mouse.move(2, 2);
     await shot(page, 'delegation-tree-dark');
     await theme(page, 'light');
@@ -104,9 +104,9 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await card.locator('.dc-title').click();
     await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toHaveCount(0);
     // a row of the sidebar tree brings its card on screen, expanded
-    await page.getByTestId(`nav-tree-${sentinel.id}`).locator('.tn-main').click();
-    await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toHaveAttribute('data-open', 'true');
-    await expect(page.getByTestId(`chat-input-${sentinel.id}`)).toBeVisible();
+    await page.getByTestId(`nav-tree-${judge.id}`).locator('.tn-main').click();
+    await expect(page.getByTestId(`delegation-card-${judge.id}`)).toHaveAttribute('data-open', 'true');
+    await expect(page.getByTestId(`chat-input-${judge.id}`)).toBeVisible();
     // "Vai alla chat" opens it in focus mode
     await page.getByTestId(`delegation-open-${scout.id}`).click();
     await expect(page.getByTestId('focus-view')).toBeVisible();
@@ -116,7 +116,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     // folding the parent hides its children in both views
     await page.getByTestId(`tree-toggle-${parent.id}`).click();
     await expect(page.getByTestId(`tile-chat-${scout.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`delegation-card-${judge.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await shot(page, 'delegation-tree-folded');
 
@@ -131,7 +131,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`delegation-card-${sentinel.id}`)).toBeVisible();
+    await expect(page.getByTestId(`delegation-card-${judge.id}`)).toBeVisible();
   } finally {
     await app.close();
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
@@ -145,19 +145,19 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
   try {
     await closeSetup(page);
     const parent = await strategist(page, cwd, delegate([
-      task('sentinel', 'Scelta ambiente', reportGoal('Prima ask, poi riferisci.', 'Ambiente scelto e verificato', 'Ambiente scelto'), 'Ambiente scelto'),
+      task('judge', 'Scelta ambiente', reportGoal('Prima ask, poi riferisci.', 'Ambiente scelto e verificato', 'Ambiente scelto'), 'Ambiente scelto'),
       task('scout', 'Comando', reportGoal('Lancia bash, poi riferisci.', 'Fatto senza shell', 'Esito'), 'Esito'),
     ]));
     await expect.poll(async () => (await childrenOf(page, parent.id)).length, { timeout: 20000 }).toBe(2);
     const kids = await childrenOf(page, parent.id);
-    const asker = kids.find(c => c.agent?.id === 'sentinel')!, shell = kids.find(c => c.agent?.id === 'scout')!;
+    const asker = kids.find(c => c.agent?.id === 'judge')!, shell = kids.find(c => c.agent?.id === 'scout')!;
 
     // the Scout's Bash is above the Strategist's own permissions: refused by the app, said in its chat, never asked
     await expect.poll(async () => (await items(page, shell.id)).some(i => i.kind === 'system' && i.code === 'aboveParent' && (i.params as { parent?: string } | undefined)?.parent === 'Piano rilascio'), { timeout: 20000 }).toBe(true);
     const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
     expect(pending.filter(p => p.chatId === shell.id)).toEqual([]);
 
-    // the Sentinel's question shows in the parent's open chat, tagged with who asks; the child waits
+    // the Judge's question shows in the parent's open chat, tagged with who asks; the child waits
     await page.getByTestId('nav-home').click();
     // shown once: with no chat open it is on the child's card only
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toBeVisible({ timeout: 20000 });
@@ -170,7 +170,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     const key = (await ask.locator('[data-request-key]').first().getAttribute('data-request-key'))!;
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(1);
     await expect(page.locator(`[data-orchestrator-overlay] [data-request-key="${key}"], [data-testid^="tile-orchestrator"] [data-request-key="${key}"]`)).toHaveCount(0);
-    await expect(ask).toContainText('Sentinel');
+    await expect(ask).toContainText('Judge');
     await expect(ask).toContainText('Che colore?');
     await page.mouse.move(2, 2);
     await shot(page, 'delegation-child-question');
@@ -179,7 +179,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     await page.getByTestId(`${base}-opt-1`).click();
     await expect(ask).toHaveCount(0);
     // it goes on after the answer and reports to its parent
-    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
+    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Judge «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
     await page.getByTestId(`delegation-card-${shell.id}`).locator('.dc-title').click();
