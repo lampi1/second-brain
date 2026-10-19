@@ -11,6 +11,8 @@ vi.mock('../../src/renderer/store/store',()=>({useApp:(select:(state:Record<stri
 // The app is client-only: supply an explicit frozen preference seed for SSR, without altering production stores.
 vi.mock('../../src/renderer/store/ui',()=>({BRAIN_PAGES:[],ui:{use:(select:(state:typeof mock.ui)=>unknown)=>select(mock.ui)},setPrefs:vi.fn(),savePrefs:vi.fn(),openModal:vi.fn(),toast:vi.fn()}));
 vi.mock('../../src/renderer/store/agents',()=>({useAgents:()=>({catalog:null,error:null})}));
+// Aggiornamenti (ADR 0075): no state yet and no GitHub check on render
+vi.mock('../../src/renderer/store/improve',()=>({useImprove:(select:(state:null)=>unknown)=>select(null),checkSource:vi.fn(),askUpdateNow:vi.fn()}));
 import{SettingsPage}from'../../src/renderer/components/SettingsPage';
 beforeEach(()=>{mock.setSetting.mockClear();mock.state={settings:{...defaults(),engineOn:{claude:false},engines:{claude:false}},info:{engines:[{id:'claude',name:'Claude Code',kind:'claude',trusted:true,key:'none'}]}};setLang('it');});
 it('inventories every current schema setting without changing protection or defaults',()=>{
@@ -23,7 +25,7 @@ it('inventories every current schema setting without changing protection or defa
 });
 it('renders four essential groups with no model routing, per-engine policy wall or settings mutation',()=>{
  const before=JSON.stringify(mock.state),html=renderToStaticMarkup(createElement(SettingsPage));
- expect(html).toContain('Account e strumenti');expect(html).toContain('Il mio spazio');expect(html).toContain('Aspetto e lingua');expect(html).toContain('Notifiche');
+ expect(html).toContain('Account e strumenti');expect(html).toContain('Aggiornamenti');expect(html).toContain('Il mio spazio');expect(html).toContain('Aspetto e lingua');expect(html).toContain('Notifiche');
  expect(html).not.toContain('Le Regie possono usare');expect(html).not.toContain('Instradamento modelli');expect(html).not.toContain('brainrules');
  expect(mock.setSetting).not.toHaveBeenCalled();expect(JSON.stringify(mock.state)).toBe(before);
 });

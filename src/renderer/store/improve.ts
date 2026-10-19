@@ -2,10 +2,12 @@
 // read of git, every step of a promotion, the restart notice); this store starts itself on first use (the section or
 // the restart banner), loads 'improve:get' and keeps the last value. Actions: refresh, "Aggiorna" (after the user's
 // confirm), dismiss the restart notice (the Orchestrator handles app improvements: orchestrator:ensure, store.ts); plus which app chat the section shows open.
-// Used by components/ImprovePage.tsx, components/LaunchBanner.tsx and actions.ts.
+// Settings → Aggiornamenti: the GitHub check and the one-click update (checkSource, askUpdateNow; ADR 0075).
+// Used by components/ImprovePage.tsx, components/LaunchBanner.tsx, components/AppUpdateSettings.tsx and actions.ts.
 import type { ImproveState } from '@shared/contract';
 import { createStore } from './createStore';
 import { askConfirm, toast } from './ui';
+import { t } from '../i18n';
 
 export const improve = createStore<ImproveState | null>(null);
 /** the app chat open next to the section's Regia (null = none) */
@@ -59,4 +61,24 @@ export function askPromote(s: ImproveState): void {
 export function dismissLaunch(): void {
   improve.set(s => (s ? { ...s, launch: null } : s));
   void window.sb.invoke('improve:dismissLaunch', undefined).then(s => improve.set(s), () => {});
+}
+
+/** Settings → Aggiornamenti (ADR 0075): what GitHub has that this copy does not (git fetch only). */
+export function checkSource(): void {
+  void window.sb.invoke('improve:sourceCheck', undefined).then(s => improve.set(s), () => {});
+}
+
+/** "Aggiorna" in Settings: one confirm, then pull, build and restart on the new version, no tests (ADR 0075). */
+export function askUpdateNow(stable: boolean): void {
+  askConfirm({
+    title: t('update.confirmTitle'),
+    body: t('update.confirmBody'),
+    items: [t('update.confirmChats'), t('update.confirmLocal'), stable ? t('update.confirmFallback') : t('update.confirmDevFail')],
+    confirmLabel: t('update.confirmOk'),
+    onConfirm: () => {
+      const cur = improve.get();
+      if (cur) improve.set({ ...cur, source: { ...cur.source, state: 'updating', canUpdate: false } });
+      void window.sb.invoke('improve:updateNow', undefined).then(st => improve.set(st), e => { toast(`${t('update.failed')}: ${errText(e)}`, 'err'); checkSource(); });
+    },
+  });
 }

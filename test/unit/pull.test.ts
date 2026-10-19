@@ -41,8 +41,8 @@ describe('scripts/pull.mjs on a temp clone', () => {
     g(up, 'add', '-A'); g(up, 'commit', '-q', '-m', 'first'); g(up, 'push', '-q', 'origin', 'main');
     g(root, 'clone', '-q', remote, me);
     const push = (msg: string) => { fs.writeFileSync(path.join(up, `${msg}.txt`), msg); g(up, 'add', '-A'); g(up, 'commit', '-q', '-m', msg); g(up, 'push', '-q', 'origin', 'main'); };
-    const run = () => {
-      try { return JSON.parse(execFileSync(process.execPath, [path.join(me, 'scripts', 'pull.mjs'), '--json', '--no-build'], { cwd: me, encoding: 'utf8' }).trim()); }
+    const run = (...extra: string[]) => {
+      try { return JSON.parse(execFileSync(process.execPath, [path.join(me, 'scripts', 'pull.mjs'), '--json', '--no-build', ...extra], { cwd: me, encoding: 'utf8' }).trim()); }
       catch (e) { return JSON.parse(String((e as { stdout?: string }).stdout).trim()); }
     };
     return { root, me, push, run };
@@ -56,6 +56,26 @@ describe('scripts/pull.mjs on a temp clone', () => {
     expect(r).toMatchObject({ ok: true, upToDate: false, behind: 2, depsReinstalled: false, built: false });
     expect(r.commits.map((c: string) => c.split(' ')[1])).toEqual(['third', 'second']);
     expect(g(t.me, 'log', '-1', '--format=%s')).toBe('third');
+    fs.rmSync(t.root, { recursive: true, force: true });
+  });
+
+  it('--check counts what GitHub has and changes nothing (ADR 0075)', () => {
+    const t = setup();
+    expect(t.run('--check')).toMatchObject({ ok: true, check: true, behind: 0, canUpdate: false });
+    t.push('news');
+    const before = g(t.me, 'rev-parse', 'HEAD');
+    const r = t.run('--check');
+    expect(r).toMatchObject({ ok: true, behind: 1, canUpdate: true, message: expect.stringContaining('1 aggiornamento') });
+    expect(r.commits[0]).toMatch(/ news$/);
+    expect(g(t.me, 'rev-parse', 'HEAD')).toBe(before);
+    expect(r.depsChanged).toBe(false);
+    // an untracked file: fine for a dev pull, a change for a stable copy's promotion (--strict)
+    fs.writeFileSync(path.join(t.me, 'stray.txt'), 'x');
+    expect(t.run('--check')).toMatchObject({ ok: true, canUpdate: true });
+    expect(t.run('--check', '--strict')).toMatchObject({ ok: false, message: expect.stringContaining('non salvate') });
+    fs.rmSync(path.join(t.me, 'stray.txt'));
+    fs.writeFileSync(path.join(t.me, 'a.txt'), 'changed');
+    expect(t.run('--check')).toMatchObject({ ok: false, message: expect.stringContaining('non salvate') });
     fs.rmSync(t.root, { recursive: true, force: true });
   });
 

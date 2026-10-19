@@ -250,6 +250,13 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
     userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(), allowLegacyPromotion: false,
     appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(), ...(routing ? { routing } : {}),
     emit: st => ctx.emitter.emit('improve:state', st),
+    offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_IMPROVE_REPO,
+    relaunch: () => {
+      if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('improve', 'relaunch asked (test run: not relaunching)'); return; }
+      log.info('improve', 'relaunching the dev build on the new code');
+      app.relaunch();
+      app.quit();
+    },
     restart: failed => {
       if (!real) { recorder.restarts++; log.info('improve', 'restart asked (test run: not restarting)'); return; }
       // the launcher starts the new current release (and falls back by itself) once this process is gone: this app

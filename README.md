@@ -108,10 +108,11 @@ repo read [AGENTS.md](AGENTS.md).
 
 ## Update
 
-**From a clone (developers): just ask the app.** Write "aggiornati" (update yourself) to the Orchestrator. It brings
-your clone to the latest `main` from GitHub, only by fast-forward (your local commits and uncommitted work are never
-merged, moved or dropped: it stops and tells you), reinstalls the dependencies only if they changed, and rebuilds.
-Then restart the app. The same from a terminal:
+**From a clone (developers): one click.** Open **Impostazioni → Aggiornamenti**: it shows what is new on GitHub's
+`main`, and **Aggiorna** downloads it, rebuilds and restarts the app on it, with no test suite. It only fast-forwards:
+your local commits and uncommitted work are never merged, moved or dropped (it stops and tells you), and the
+dependencies are reinstalled only when they changed. You can also write "aggiornati" to the Orchestrator, or from a
+terminal:
 
 ```powershell
 npm run pull       # fetch main, fast-forward, `npm ci` only when the lockfile changed, build
@@ -122,8 +123,9 @@ Your brain, chats and settings live outside the install folder and are never rem
 updater that prepares the package in the background and asks you once is built, and is switched on after its Windows
 restart test passes ([update integration](docs/update-integration-evidence.md)).
 
-**Your stable copy from a clone** (`npm run promote`, ADR 0007): after `npm run pull`, run `npm run promote` to test
-and switch it (it runs the full checks first), `npm run rollback` to go back.
+**Your stable copy from a clone** (ADR 0007): the same **Aggiorna** switches it to the new version at once; if the new
+version does not open, the launcher goes back to the previous one. `npm run promote` does it with the full checks
+first, `npm run rollback` goes back by hand.
 
 ## Features
 

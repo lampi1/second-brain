@@ -348,6 +348,8 @@ app.whenReady().then(async () => {
     'orchestrator:get': () => orchestrator.get(),
     'orchestrator:ensure': a => orchestrator.ensure(a),
     'improve:dismissLaunch': () => s.improve.dismissLaunch(),
+    'improve:sourceCheck': () => s.improve.sourceCheck(),
+    'improve:updateNow': () => s.improve.updateNow(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },

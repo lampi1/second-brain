@@ -173,15 +173,15 @@ function repoWithHistory(): { dir: string; base: string; m1: string; m2: string;
 function service(o: { dir: string; base: string; running: string; stable?: boolean; env?: Record<string, string>; restartFails?: boolean; routing?: ImproveDeps['routing']; allowLegacyPromotion?: boolean }) {
   const states: ImproveState[] = [];
   const created: NewChat[] = [];
-  let restarts = 0;
+  let restarts = 0, relaunches = 0;
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ud-'));
   const s = new ImproveService({
-    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: null, ...(o.allowLegacyPromotion !== undefined ? { allowLegacyPromotion: o.allowLegacyPromotion } : {}),
+    userData, releasesBase: o.base, running: o.running, stable: o.stable ?? true, appRepo: () => o.dir, devRepo: o.dir, ...(o.allowLegacyPromotion !== undefined ? { allowLegacyPromotion: o.allowLegacyPromotion } : {}),
     chats: { list: () => [] as ChatSummary[], create: async (r: NewChat) => { created.push(r); return { id: 'x', harness: r.harness } as ChatSummary; } },
-    emit: st => states.push(st), restart: failed => { restarts++; if (o.restartFails) failed(); }, node: process.execPath,
+    emit: st => states.push(st), restart: failed => { restarts++; if (o.restartFails) failed(); }, relaunch: () => { relaunches++; }, node: process.execPath,
     ...(o.routing ? { routing: o.routing } : {}),
   });
-  return { s, states, created, restarts: () => restarts, userData };
+  return { s, states, created, restarts: () => restarts, relaunches: () => relaunches, userData };
 }
 
 // one repo for every test (git on Windows takes a few seconds for the ~20 commands); promotions never change it
@@ -201,6 +201,32 @@ describe('ImproveService', { timeout: 30_000 }, () => {
     const first = s.pull();
     await expect(s.pull()).rejects.toThrow(/già in corso/);
     expect(await first).toEqual({ ok: true, message: 'Aggiornata', from: 'a', to: 'b' });
+  });
+
+  it('Aggiorna in Settings (ADR 0075): the check counts, a dev build pulls and relaunches, nothing new says so', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-update-now-'));
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    // a fake pull.mjs: --check says 2 news, the pull says what UPTODATE asks
+    fs.writeFileSync(path.join(dir, 'scripts', 'pull.mjs'), "const c = process.argv.includes('--check'); const u = process.env.UPTODATE === '1'; console.log(JSON.stringify(c ? { ok: true, check: true, behind: 2, canUpdate: true, commits: ['abc1234 Uno', 'def5678 Due'], message: '2 aggiornamenti su GitHub.' } : { ok: true, upToDate: u, from: 'aaa', to: u ? 'aaa' : 'bbb', message: 'ok' }));\n");
+    const r = fresh();
+    const { s, relaunches } = service({ dir, base: r.base, running: 'dev', stable: false });
+    const checked = await s.sourceCheck();
+    expect(checked.source).toMatchObject({ state: 'idle', behind: 2, canUpdate: true, commits: ['abc1234 Uno', 'def5678 Due'] });
+    const after = await s.updateNow();
+    expect(after.source).toMatchObject({ state: 'restarting', canUpdate: false });
+    await new Promise(res => setTimeout(res, 1000));
+    expect(relaunches()).toBe(1);
+    process.env.UPTODATE = '1';
+    try { expect((await s.updateNow()).source).toMatchObject({ state: 'done', message: expect.stringContaining('ultima versione') }); }
+    finally { delete process.env.UPTODATE; }
+    expect(relaunches()).toBe(1);
+  });
+
+  it('Aggiorna without a code folder explains and does nothing', async () => {
+    const r = fresh();
+    const { s } = service({ dir: path.join(os.tmpdir(), 'sb-missing-xyz'), base: r.base, running: 'dev', stable: false });
+    expect((await s.sourceCheck()).source).toMatchObject({ canUpdate: false, message: expect.stringContaining('pull.mjs') });
+    await expect(s.updateNow()).rejects.toThrow(/pull\.mjs/);
   });
 
   it('refuses legacy promotion when the single staged updater owns updates', async () => {

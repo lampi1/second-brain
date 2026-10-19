@@ -221,3 +221,6 @@
 }
 @media (prefers-reduced-motion: reduce) { .st-chip, .st-group, .st-search-line > .st-input { transition: none; } }
 
+/* Aggiornamenti (AppUpdateSettings.tsx): the new commits from GitHub */
+.st-update-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
+.st-update-list code { font-size: 12px; opacity: .75; margin-right: 4px; }
