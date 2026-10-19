@@ -23,7 +23,7 @@ function make() {
   const sent: { chatId: string; text: string }[] = [];
   const w = new RegiaWake({ send: async (chatId, text) => { sent.push({ chatId, text }); }, enabled: () => true, groupMs: 1000, perChatMs: 10_000, now: () => Date.now() });
   const emitted: HeldNewsState[] = [];
-  const hub = attachHeldNews({ emit: (ch, p) => { if (ch === 'heldNews:changed') emitted.push(p as HeldNewsState); } }, w);
+  const hub = attachHeldNews({ emit: (ch, p) => { if (ch === 'regia:heldChanged') emitted.push(p as HeldNewsState); } }, w);
   const up = (p: Partial<ChatSummary> & { id: string }) => w.observe('chat:updated', chat(p));
   const finish = (id: string, lastText: string) => { up({ id, state: 'running' }); up({ id, state: 'idle', lastText }); };
   up({ id: 'regia', isRegia: true, title: 'Orchestrator', state: 'idle' });

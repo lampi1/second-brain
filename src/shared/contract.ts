@@ -1354,7 +1354,7 @@ export interface InvokeMap {
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
-  'heldNews:get': [void, HeldNewsState];
+  'regia:held': [void, HeldNewsState];
   'pulse:list': [{ place: PulsePlace }, PulseList];
   'pulse:status': [void, PulseStatus];
   'pulse:seen': [{ ids: string[] }, void];
@@ -1448,7 +1448,7 @@ export interface EventMap {
   /** a new headline (or the same after a failed refresh, source previous) */
   'headline:changed': HeadlineState;
   /** what the app holds back for the Orchestrators changed (main/chats/held-news.ts, #88) */
-  'heldNews:changed': HeldNewsState;
+  'regia:heldChanged': HeldNewsState;
   'pulse:changed': void;
   'approvals:changed': void;
   'cloud:changed': CloudState;
@@ -1481,7 +1481,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
-  'heldNews:get',
+  'regia:held',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
@@ -1493,7 +1493,7 @@ export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
-  'heldNews:changed',
+  'regia:heldChanged',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

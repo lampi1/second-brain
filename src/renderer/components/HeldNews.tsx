@@ -4,7 +4,7 @@
 // question or a permission, left a command, or mail to it, not delivered yet because the Orchestrator waits for the
 // user, groups news for a few seconds, or lets quiet news ride along with the next delivery. Hidden when nothing waits;
 // hover names the first ones, a click lists them all (chat, kind, since when, why it waits) and a row opens its chat.
-// Reading it spends nothing: main sends the list ('heldNews:get', 'heldNews:changed', main/chats/held-news.ts).
+// Reading it spends nothing: main sends the list ('regia:held', 'regia:heldChanged', main/chats/held-news.ts).
 // Used by RegiaTile.tsx.
 import { useEffect, useState } from 'react';
 import type { HeldNewsItem, HeldNewsKind, HeldNewsState, HeldNewsWhy } from '@shared/contract';
@@ -22,8 +22,8 @@ export function useHeldNews(): HeldNewsState {
     let alive = true;
     let off = () => {};
     try {
-      window.sb.invoke('heldNews:get', undefined).then(s => { if (alive) setState(s); }, () => {});
-      off = window.sb.on('heldNews:changed', s => { if (alive) setState(s); });
+      window.sb.invoke('regia:held', undefined).then(s => { if (alive) setState(s); }, () => {});
+      off = window.sb.on('regia:heldChanged', s => { if (alive) setState(s); });
     } catch { /* no bridge (tests) */ }
     return () => { alive = false; off(); };
   }, []);
